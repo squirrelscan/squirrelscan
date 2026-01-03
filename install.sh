@@ -17,10 +17,10 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-log() { echo -e "${GREEN}==>${NC} $1"; }
-warn() { echo -e "${YELLOW}Warning:${NC} $1"; }
-error() { echo -e "${RED}Error:${NC} $1"; exit 1; }
-info() { echo -e "${BLUE}::${NC} $1"; }
+log() { echo -e "${GREEN}==>${NC} $1" >&2; }
+warn() { echo -e "${YELLOW}Warning:${NC} $1" >&2; }
+error() { echo -e "${RED}Error:${NC} $1" >&2; exit 1; }
+info() { echo -e "${BLUE}::${NC} $1" >&2; }
 
 # Check for required commands
 check_deps() {
@@ -72,26 +72,40 @@ detect_platform() {
 
 # Get latest release version
 get_latest_version() {
-  local channel="${1:-stable}"
+  local channel="${1:-beta}"
   local api_url="https://api.github.com/repos/${REPO}/releases"
   local response
+  local http_code
 
-  response=$(curl -fsSL "$api_url" 2>/dev/null) || error "Failed to fetch releases from GitHub"
+  info "Fetching releases from GitHub (channel: $channel)..."
 
+  # Fetch with error details
+  response=$(curl -fsSL "$api_url" 2>&1) || {
+    error "Failed to fetch releases from GitHub API\n  URL: $api_url\n  Response: $response"
+  }
+
+  # Check for empty response
+  if [ -z "$response" ] || [ "$response" = "[]" ]; then
+    error "No releases found in repository: ${REPO}\n  Check: https://github.com/${REPO}/releases"
+  fi
+
+  local version=""
   if [ "$USE_JQ" = true ]; then
     if [ "$channel" = "stable" ]; then
-      echo "$response" | jq -r '[.[] | select(.prerelease == false)] | .[0].tag_name // empty'
+      version=$(echo "$response" | jq -r '[.[] | select(.prerelease == false)] | .[0].tag_name // empty')
     else
-      echo "$response" | jq -r '.[0].tag_name // empty'
+      version=$(echo "$response" | jq -r '.[0].tag_name // empty')
     fi
   else
     # Grep fallback - less reliable but works without jq
     if [ "$channel" = "stable" ]; then
-      echo "$response" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4
+      version=$(echo "$response" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
     else
-      echo "$response" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4
+      version=$(echo "$response" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
   fi
+
+  echo "$version"
 }
 
 # Download and verify binary
@@ -108,8 +122,9 @@ download_and_install() {
 
   # Download manifest
   log "Downloading manifest..."
-  curl -fsSL "${release_url}/manifest.json" -o "$tmpdir/manifest.json" 2>/dev/null || \
-    error "Failed to download manifest.json"
+  local manifest_url="${release_url}/manifest.json"
+  curl -fsSL "$manifest_url" -o "$tmpdir/manifest.json" 2>&1 || \
+    error "Failed to download manifest.json\n  URL: $manifest_url\n  Ensure the release exists at: https://github.com/${REPO}/releases/tag/${version}"
 
   # Extract binary info from manifest
   local filename sha256
@@ -123,13 +138,14 @@ download_and_install() {
   fi
 
   if [ -z "$filename" ] || [ -z "$sha256" ]; then
-    error "No binary available for platform: $platform"
+    error "No binary available for platform: $platform\n  Available platforms can be found at: https://github.com/${REPO}/releases/tag/${version}"
   fi
 
   # Download binary
   log "Downloading squirrel ${version}..."
-  curl -fsSL "${release_url}/${filename}" -o "$tmpdir/squirrel" 2>/dev/null || \
-    error "Failed to download binary"
+  local binary_url="${release_url}/${filename}"
+  curl -fsSL "$binary_url" -o "$tmpdir/squirrel" 2>&1 || \
+    error "Failed to download binary\n  URL: $binary_url"
 
   # Verify checksum
   log "Verifying checksum..."
@@ -200,7 +216,7 @@ check_path() {
 }
 
 main() {
-  local channel="${SQUIRREL_CHANNEL:-stable}"
+  local channel="${SQUIRREL_CHANNEL:-beta}"
 
   echo ""
   echo "  ____              _                _   ____"
@@ -221,9 +237,13 @@ main() {
 
   version=$(get_latest_version "$channel")
   if [ -z "$version" ]; then
-    error "Could not find any releases"
+    if [ "$channel" = "stable" ]; then
+      error "No stable releases found. Try: SQUIRREL_CHANNEL=beta curl -fsSL ... | bash"
+    else
+      error "No releases found for channel '$channel'\n  Check: https://github.com/${REPO}/releases"
+    fi
   fi
-  log "Latest version: $version"
+  log "Latest version: $version (channel: $channel)"
 
   download_and_install "$version" "$platform"
 
