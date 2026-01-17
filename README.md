@@ -138,4 +138,4 @@ Proprietary - Closed Source
 - [Documentation](https://docs.squirrelscan.com)
 - [AI Agent Skills](https://github.com/squirrelscan/skills)
 - [Report Issues](https://github.com/squirrelscan/squirrelscan/issues)
-- [Twitter/X](https://x.com/squirrelscan)
+- [Twitter/X](https://x.com/squirrelscan_)
