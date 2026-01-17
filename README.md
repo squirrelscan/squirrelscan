@@ -128,14 +128,11 @@ See [AI Agent Integration docs](https://docs.squirrelscan.com/agents) for advanc
 
 squirrelscan is in **active beta**. Expect rapid iteration and breaking changes. Feedback and issue reports welcome!
 
-## License
-
-Proprietary - Closed Source
-
 ## Links
 
 - [Website](https://squirrelscan.com)
 - [Documentation](https://docs.squirrelscan.com)
 - [AI Agent Skills](https://github.com/squirrelscan/skills)
-- [Report Issues](https://github.com/squirrelscan/squirrelscan/issues)
+- [Share Feedback](https://squirrelscan.com/feedback)
+- [Bugs, Issues & Feature Requests](https://github.com/squirrelscan/squirrelscan/issues)
 - [Twitter/X](https://x.com/squirrelscan_)
