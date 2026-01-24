@@ -2,13 +2,15 @@
 
 /**
  * postinstall script for squirrelscan npm package
- * Downloads the platform-specific binary from GitHub releases
+ * Downloads binary and runs native self-install
  */
 
 const https = require("https");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
+const { spawnSync } = require("child_process");
 const { getPlatform, getBinaryExtension } = require("../lib/platform");
 
 const REPO = "squirrelscan/squirrelscan";
@@ -32,13 +34,10 @@ const error = (msg) => {
 
 /**
  * HTTPS GET with redirect following
- * @param {string} url
- * @returns {Promise<{data: Buffer, statusCode: number}>}
  */
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
     const request = https.get(url, { headers: { "User-Agent": "squirrelscan-npm" } }, (res) => {
-      // Follow redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return httpsGet(res.headers.location).then(resolve).catch(reject);
       }
@@ -64,9 +63,6 @@ function httpsGet(url) {
 
 /**
  * Fetch with retry
- * @param {string} url
- * @param {number} attempts
- * @returns {Promise<Buffer>}
  */
 async function fetchWithRetry(url, attempts = 3) {
   for (let i = 1; i <= attempts; i++) {
@@ -85,9 +81,7 @@ async function fetchWithRetry(url, attempts = 3) {
 }
 
 /**
- * Compute SHA256 hash of buffer
- * @param {Buffer} buffer
- * @returns {string}
+ * Compute SHA256 hash
  */
 function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
@@ -95,16 +89,11 @@ function sha256(buffer) {
 
 async function main() {
   const platform = getPlatform();
-  const binDir = path.join(__dirname, "..", "bin");
-  const binaryName = `squirrel${getBinaryExtension()}`;
-  const binaryPath = path.join(binDir, binaryName);
+  const ext = getBinaryExtension();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "squirrelscan-"));
+  const binaryPath = path.join(tmpDir, `squirrel${ext}`);
 
   log(`Installing squirrelscan ${VERSION} for ${platform}...`);
-
-  // Ensure bin directory exists
-  if (!fs.existsSync(binDir)) {
-    fs.mkdirSync(binDir, { recursive: true });
-  }
 
   // Fetch manifest
   const releaseUrl = `https://github.com/${REPO}/releases/download/${VERSION}`;
@@ -146,7 +135,7 @@ async function main() {
   }
   info(`Checksum verified: ${expectedSha256.slice(0, 16)}...`);
 
-  // Write binary
+  // Write binary to temp
   fs.writeFileSync(binaryPath, binaryData);
 
   // Make executable (Unix only)
@@ -154,8 +143,26 @@ async function main() {
     fs.chmodSync(binaryPath, 0o755);
   }
 
+  // Run self install
+  info("Running self install...");
+  const result = spawnSync(binaryPath, ["self", "install"], {
+    stdio: "inherit",
+    windowsHide: true,
+  });
+
+  // Cleanup temp
+  try {
+    fs.rmSync(tmpDir, { recursive: true });
+  } catch {
+    // ignore cleanup errors
+  }
+
+  if (result.status !== 0) {
+    error("Self install failed");
+  }
+
   log("Installation complete!");
-  info(`Binary: ${binaryPath}`);
+  info("Run 'squirrel --help' to get started");
 }
 
 main().catch((err) => {

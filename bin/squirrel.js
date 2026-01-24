@@ -2,22 +2,45 @@
 
 /**
  * squirrel CLI wrapper
- * Executes the platform-specific binary downloaded during npm install
+ * Executes the natively installed binary
  */
 
-const { execFileSync, spawnSync } = require("child_process");
+const { spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
-const { getBinaryExtension } = require("../lib/platform");
+const os = require("os");
 
-const binaryName = `squirrel${getBinaryExtension()}`;
-const binaryPath = path.join(__dirname, binaryName);
+// Native install locations
+const homeDir = os.homedir();
+const isWindows = process.platform === "win32";
 
-// Check if binary exists
-if (!fs.existsSync(binaryPath)) {
+const binaryLocations = isWindows
+  ? [
+      path.join(homeDir, "AppData", "Local", "squirrel", "bin", "squirrel.exe"),
+      path.join(homeDir, ".local", "bin", "squirrel.exe"),
+    ]
+  : [
+      path.join(homeDir, ".local", "bin", "squirrel"),
+      "/usr/local/bin/squirrel",
+      "/opt/homebrew/bin/squirrel",
+    ];
+
+// Find binary
+let binaryPath = null;
+for (const loc of binaryLocations) {
+  if (fs.existsSync(loc)) {
+    binaryPath = loc;
+    break;
+  }
+}
+
+if (!binaryPath) {
   console.error("Error: squirrelscan binary not found.");
   console.error("");
-  console.error("The binary should have been downloaded during npm install.");
+  console.error("The binary should have been installed during npm install.");
+  console.error("Expected locations:");
+  binaryLocations.forEach((loc) => console.error(`  - ${loc}`));
+  console.error("");
   console.error("Try reinstalling: npm install -g squirrelscan");
   console.error("");
   console.error("Or install directly:");
@@ -29,18 +52,15 @@ if (!fs.existsSync(binaryPath)) {
 const args = process.argv.slice(2);
 
 try {
-  // Use spawnSync for proper signal handling and stdio inheritance
   const result = spawnSync(binaryPath, args, {
     stdio: "inherit",
     windowsHide: true,
   });
 
-  // Forward exit code
   if (result.status !== null) {
     process.exit(result.status);
   }
 
-  // Handle signal termination
   if (result.signal) {
     process.kill(process.pid, result.signal);
   }
