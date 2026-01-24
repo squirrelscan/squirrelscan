@@ -1,0 +1,8 @@
+# Downloaded binaries (created by postinstall)
+bin/squirrel
+bin/squirrel.exe
+bin/squirrel-*
+
+# npm
+node_modules/
+*.tgz

@@ -1,0 +1,50 @@
+{
+  "name": "squirrelscan",
+  "version": "0.0.17",
+  "description": "CLI website audits for humans, agents and LLMs",
+  "bin": {
+    "squirrel": "bin/squirrel.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/squirrelscan/squirrelscan.git"
+  },
+  "homepage": "https://squirrelscan.com",
+  "bugs": {
+    "url": "https://github.com/squirrelscan/squirrelscan/issues"
+  },
+  "keywords": [
+    "seo",
+    "audit",
+    "cli",
+    "website",
+    "llm",
+    "accessibility",
+    "performance",
+    "security",
+    "crawler"
+  ],
+  "author": "squirrelscan",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "lib/",
+    "scripts/",
+    "README.md"
+  ]
+}

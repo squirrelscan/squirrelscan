@@ -8,7 +8,7 @@ A comprehensive website audit tool for SEO, performance, accessibility, content,
 
 ## Features
 
-- **140+ Audit Rules** across 20 categories (SEO, accessibility, performance, security, E-E-A-T)
+- **149+ Audit Rules** across 20 categories (SEO, accessibility, performance, security, E-E-A-T)
 - **AI-Native Design** with LLM-optimized output formats for Claude Code, Cursor, and other agents
 - **Smart Incremental Crawling** with ETag, Last-Modified, and content hashing
 - **Multiple Output Formats** including console, JSON, HTML reports, and text for piping to LLMs
@@ -49,6 +49,16 @@ Use the audit-website skill to audit this site and fix all issues
 
 ## Installation
 
+**npm (all platforms):**
+```bash
+npm install -g squirrelscan
+```
+
+Or run without installing:
+```bash
+npx squirrelscan audit example.com
+```
+
 **macOS / Linux:**
 ```bash
 curl -fsSL https://squirrelscan.com/install | bash
@@ -88,7 +98,7 @@ squirrel audit https://example.com -m 10
 | **Core SEO** | Meta tags, canonical URLs, h1, robots meta |
 | **Accessibility** | ARIA labels, focus indicators, landmarks |
 | **Performance** | Core Web Vitals (LCP, CLS, INP) |
-| **Security** | HTTPS, CSP, security headers |
+| **Security** | HTTPS, CSP, leaked secrets (96 patterns) |
 | **E-E-A-T** | Author bylines, expertise signals, trust indicators |
 | **Content** | Word count, readability, freshness |
 | **Images** | Alt text, modern formats, lazy loading |
