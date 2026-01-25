@@ -4,7 +4,7 @@
 
 **CLI Website Audits for Humans, Agents & LLMs**
 
-A comprehensive website audit tool for SEO, performance, accessibility, content, and more. Built from the ground up for AI coding agents and developer workflows.
+[squirrelscan](https://squirrelscan.com) is a comprehensive website audit tool for SEO, performance, accessibility, content, and more. Built from the ground up for AI coding agents and developer workflows.
 
 ## Features
 
@@ -26,15 +26,7 @@ Run audits directly in your terminal:
 squirrel audit example.com
 ```
 
-### 2. Pipe to AI
-
-Pipe clean output to any AI assistant:
-
-```bash
-squirrel audit example.com --format text | claude
-```
-
-### 3. AI Agent Skill
+### 2. AI Coding Agent Skill
 
 Install the skill for autonomous workflows:
 
@@ -42,10 +34,28 @@ Install the skill for autonomous workflows:
 npx skills install squirrelscan/skills
 ```
 
-Then prompt your AI agent:
+Use the slash command:
+
 ```
-Use the audit-website skill to audit this site and fix all issues
+/audit-website
 ```
+
+Or prompt your AI agent more specifically:
+
+```
+Use the audit-website skill to audit this site and fix all issues but only crawl 10 pages
+```
+
+More information [in the skills repository](https://github.com/squirrelscan/skills) and our [Getting started with AI Agents](https://docs.squirrelscan.com/agents) documentation.
+
+### 3. Pipe to AI agent
+
+Pipe clean output to any AI assistant:
+
+```bash
+squirrel audit example.com --format llm | claude
+```
+
 
 ## Installation
 
@@ -79,7 +89,7 @@ squirrel audit https://example.com
 squirrel audit https://example.com -f html -o report.html
 
 # Pipe to Claude for AI analysis
-squirrel audit https://example.com --format text | claude
+squirrel audit https://example.com --format llm | claude
 
 # Limit pages for faster results
 squirrel audit https://example.com -m 10
@@ -106,7 +116,7 @@ squirrel audit https://example.com -m 10
 | **Schema** | JSON-LD structured data validation |
 | **Mobile** | Viewport, tap targets, responsive design |
 
-And 10 more categories covering video, analytics, i18n, local SEO, and more.
+And 10 more categories covering video, analytics, i18n, local SEO, and more. See the [rules reference](https://docs.squirrelscan.com/rules) on the documentation website.
 
 ## AI Agent Integration
 
@@ -133,6 +143,7 @@ See [AI Agent Integration docs](https://docs.squirrelscan.com/agents) for advanc
 | HTML | `-f html` | Visual reports for sharing |
 | Markdown | `-f markdown` | Documentation, GitHub |
 | Text | `-f text` | Clean output for piping to LLMs |
+| LLM | `-f llm` | LLM optimized output |
 
 ## Development Status
 
