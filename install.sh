@@ -7,7 +7,7 @@ set -euo pipefail
 #
 # Environment variables:
 #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
-#   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: beta)
+#   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
 #   SQUIRREL_BIN_DIR   - Override bin directory for symlink
 
 REPO="squirrelscan/squirrelscan"
@@ -200,7 +200,7 @@ json_get_nested() {
 
 # Get latest release version
 get_latest_version() {
-  local channel="${1:-beta}"
+  local channel="${1:-stable}"
   local api_url="https://api.github.com/repos/${REPO}/releases"
   local response
 
@@ -362,7 +362,7 @@ print_path_instructions() {
 }
 
 main() {
-  local channel="${SQUIRREL_CHANNEL:-beta}"
+  local channel="${SQUIRREL_CHANNEL:-stable}"
 
   echo ""
   echo "  ____              _                _   ____"

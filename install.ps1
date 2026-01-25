@@ -4,7 +4,7 @@
 #
 # Environment variables:
 #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
-#   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: beta)
+#   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
 
 $ErrorActionPreference = "Stop"
 
@@ -17,7 +17,7 @@ function Write-Warn { param($Message) Write-Host "Warning: " -ForegroundColor Ye
 function Write-Err { param($Message) Write-Host "Error: " -ForegroundColor Red -NoNewline; Write-Host $Message; exit 1 }
 
 function Get-LatestVersion {
-    param([string]$Channel = "beta")
+    param([string]$Channel = "stable")
 
     Write-Info "Fetching releases (channel: $Channel)..."
 
@@ -119,7 +119,7 @@ function Main {
 
     Write-Log "Installing SquirrelScan..."
 
-    $channel = if ($env:SQUIRREL_CHANNEL) { $env:SQUIRREL_CHANNEL } else { "beta" }
+    $channel = if ($env:SQUIRREL_CHANNEL) { $env:SQUIRREL_CHANNEL } else { "stable" }
 
     # Get version
     if ($env:SQUIRREL_VERSION) {

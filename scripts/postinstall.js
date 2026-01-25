@@ -3,6 +3,10 @@
 /**
  * postinstall script for squirrelscan npm package
  * Downloads binary and runs native self-install
+ *
+ * Environment variables:
+ *   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
+ *   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
  */
 
 const https = require("https");
@@ -14,8 +18,6 @@ const { spawnSync } = require("child_process");
 const { getPlatform, getBinaryExtension } = require("../lib/platform");
 
 const REPO = "squirrelscan/squirrelscan";
-const pkg = require("../package.json");
-const VERSION = `v${pkg.version}`;
 
 // Colors for terminal output
 const supportsColor = process.stdout.isTTY;
@@ -87,16 +89,60 @@ function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+/**
+ * Get latest version from GitHub releases
+ */
+async function getLatestVersion(channel) {
+  const apiUrl = `https://api.github.com/repos/${REPO}/releases`;
+  info(`Fetching releases (channel: ${channel})...`);
+
+  let releases;
+  try {
+    const data = await fetchWithRetry(apiUrl);
+    releases = JSON.parse(data.toString());
+  } catch (err) {
+    error(`Failed to fetch releases: ${err.message}\n  URL: ${apiUrl}`);
+  }
+
+  if (!releases || releases.length === 0) {
+    error(`No releases found. Check: https://github.com/${REPO}/releases`);
+  }
+
+  let release;
+  if (channel === "stable") {
+    release = releases.find((r) => !r.prerelease);
+  } else {
+    release = releases[0];
+  }
+
+  if (!release) {
+    error(`No releases found for channel '${channel}'`);
+  }
+
+  return release.tag_name;
+}
+
 async function main() {
   const platform = getPlatform();
   const ext = getBinaryExtension();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "squirrelscan-"));
   const binaryPath = path.join(tmpDir, `squirrel${ext}`);
 
-  log(`Installing squirrelscan ${VERSION} for ${platform}...`);
+  // Determine version: pinned, channel-based, or package default
+  let version;
+  if (process.env.SQUIRREL_VERSION) {
+    version = process.env.SQUIRREL_VERSION;
+    log(`Installing pinned version: ${version}`);
+  } else {
+    const channel = process.env.SQUIRREL_CHANNEL || "stable";
+    version = await getLatestVersion(channel);
+    log(`Latest version: ${version} (channel: ${channel})`);
+  }
+
+  log(`Installing squirrelscan ${version} for ${platform}...`);
 
   // Fetch manifest
-  const releaseUrl = `https://github.com/${REPO}/releases/download/${VERSION}`;
+  const releaseUrl = `https://github.com/${REPO}/releases/download/${version}`;
   const manifestUrl = `${releaseUrl}/manifest.json`;
 
   info("Fetching manifest...");
@@ -111,7 +157,7 @@ async function main() {
   // Get binary info for platform
   const binaryInfo = manifest.binaries?.[platform];
   if (!binaryInfo) {
-    error(`No binary available for platform: ${platform}\n  See: https://github.com/${REPO}/releases/tag/${VERSION}`);
+    error(`No binary available for platform: ${platform}\n  See: https://github.com/${REPO}/releases/tag/${version}`);
   }
 
   const { filename, sha256: expectedSha256 } = binaryInfo;
