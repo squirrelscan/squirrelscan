@@ -10,19 +10,25 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 
-// Native install locations
+// Native install locations (checked first) + npm package fallback (checked last)
 const homeDir = os.homedir();
 const isWindows = process.platform === "win32";
+const ext = isWindows ? ".exe" : "";
+
+// Local npm package binary (fallback if self install failed)
+const localBinary = path.join(__dirname, `squirrel${ext}`);
 
 const binaryLocations = isWindows
   ? [
       path.join(homeDir, "AppData", "Local", "squirrel", "bin", "squirrel.exe"),
       path.join(homeDir, ".local", "bin", "squirrel.exe"),
+      localBinary,
     ]
   : [
       path.join(homeDir, ".local", "bin", "squirrel"),
       "/usr/local/bin/squirrel",
       "/opt/homebrew/bin/squirrel",
+      localBinary,
     ];
 
 // Find binary

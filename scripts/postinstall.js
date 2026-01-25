@@ -11,7 +11,6 @@
 
 const https = require("https");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const { spawnSync } = require("child_process");
@@ -125,8 +124,10 @@ async function getLatestVersion(channel) {
 async function main() {
   const platform = getPlatform();
   const ext = getBinaryExtension();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "squirrelscan-"));
-  const binaryPath = path.join(tmpDir, `squirrel${ext}`);
+
+  // Write to npm package's bin/ directory (for squirrel.js wrapper fallback)
+  const binDir = path.join(__dirname, "..", "bin");
+  const binaryPath = path.join(binDir, `squirrel${ext}`);
 
   // Determine version: pinned, channel-based, or package default
   let version;
@@ -181,7 +182,12 @@ async function main() {
   }
   info(`Checksum verified: ${expectedSha256.slice(0, 16)}...`);
 
-  // Write binary to temp
+  // Ensure bin directory exists
+  if (!fs.existsSync(binDir)) {
+    fs.mkdirSync(binDir, { recursive: true });
+  }
+
+  // Write binary to npm's bin/ (serves as fallback for squirrel.js wrapper)
   fs.writeFileSync(binaryPath, binaryData);
 
   // Make executable (Unix only)
@@ -189,22 +195,17 @@ async function main() {
     fs.chmodSync(binaryPath, 0o755);
   }
 
-  // Run self install
+  // Run self install to set up native layout (~/.local/bin/squirrel, ~/.squirrel/releases/)
   info("Running self install...");
   const result = spawnSync(binaryPath, ["self", "install"], {
     stdio: "inherit",
     windowsHide: true,
   });
 
-  // Cleanup temp
-  try {
-    fs.rmSync(tmpDir, { recursive: true });
-  } catch {
-    // ignore cleanup errors
-  }
-
+  // Don't fail npm install if self install fails - binary still works via wrapper fallback
   if (result.status !== 0) {
-    error("Self install failed");
+    warn("Native install setup failed, but npm install succeeded");
+    warn("Run 'squirrel self install' manually for full functionality");
   }
 
   log("Installation complete!");
