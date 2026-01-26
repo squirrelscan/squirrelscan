@@ -209,6 +209,22 @@ async function main() {
   }
 
   log("Installation complete!");
+
+  // Install skill if npx available
+  log("Installing audit-website skill...");
+  const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
+  const skillResult = spawnSync(npxCmd, ["skills", "add", "squirrelscan/skills", "--skill", "audit-website", "-y", "-g"], {
+    stdio: "pipe",
+    windowsHide: true,
+  });
+
+  if (skillResult.status === 0) {
+    info("Skill installed globally");
+  } else {
+    warn("Skill installation skipped (npx not available or failed)");
+    info("Install manually: npx skills add squirrelscan/skills --skill audit-website -y -g");
+  }
+
   info("Run 'squirrel --help' to get started");
 }
 

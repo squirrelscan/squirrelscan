@@ -107,6 +107,22 @@ function Install-Squirrel {
     }
 }
 
+function Install-Skill {
+    $npxPath = Get-Command npx -ErrorAction SilentlyContinue
+    if ($npxPath) {
+        Write-Log "Installing audit-website skill..."
+        try {
+            & npx skills add squirrelscan/skills --skill audit-website -y -g 2>$null
+            Write-Info "Skill installed globally"
+        } catch {
+            Write-Warn "Skill installation failed (optional)"
+        }
+    } else {
+        Write-Info "npm not found, skipping skill install"
+        Write-Info "Install manually: npx skills add squirrelscan/skills --skill audit-website -y -g"
+    }
+}
+
 function Main {
     Write-Host ""
     Write-Host "  ____              _                _   ____"
@@ -143,6 +159,9 @@ function Main {
 
     Write-Host ""
     Write-Log "Installation complete!"
+
+    # Install skill
+    Install-Skill
 
     # Check PATH
     $binDir = Join-Path $env:LOCALAPPDATA "squirrel\bin"

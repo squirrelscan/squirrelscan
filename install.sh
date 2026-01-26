@@ -327,6 +327,21 @@ detect_shell_config() {
   fi
 }
 
+# Install audit-website skill if npm available
+install_skill() {
+  if command -v npx >/dev/null 2>&1; then
+    log "Installing audit-website skill..."
+    if npx skills add squirrelscan/skills --skill audit-website -y -g 2>/dev/null; then
+      info "Skill installed globally"
+    else
+      warn "Skill installation failed (optional)"
+    fi
+  else
+    info "npm not found, skipping skill install"
+    info "Install manually: npx skills add squirrelscan/skills --skill audit-website -y -g"
+  fi
+}
+
 # Print shell profile instructions
 print_path_instructions() {
   local bin_dir="$1"
@@ -407,6 +422,9 @@ main() {
 
   echo ""
   log "Installation complete!"
+
+  # Install skill if npx available
+  install_skill
 
   # Print PATH instructions if needed
   if [ "$needs_path_update" = true ]; then
