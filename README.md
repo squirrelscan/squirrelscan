@@ -2,9 +2,9 @@
 
 # squirrelscan
 
-**CLI Website Audits for Humans, Agents & LLMs**
+**Website audit tool built for your agent workflow**
 
-[squirrelscan](https://squirrelscan.com) is a comprehensive website audit tool for SEO, performance, accessibility, content, and more. Built from the ground up for AI coding agents and developer workflows.
+Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows.
 
 ## Features
 
