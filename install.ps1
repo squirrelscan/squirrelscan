@@ -22,7 +22,7 @@ function Get-LatestVersion {
     Write-Info "Fetching releases (channel: $Channel)..."
 
     try {
-        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -TimeoutSec 30
+        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -Headers @{"User-Agent"="squirrelscan-installer"} -TimeoutSec 30
     } catch {
         Write-Err "Failed to fetch releases: $_"
     }
@@ -195,6 +195,7 @@ function Main {
     }
 
     Write-Host ""
+    exit 0
 }
 
 Main
