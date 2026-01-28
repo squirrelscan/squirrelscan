@@ -206,7 +206,7 @@ get_latest_version() {
 
   info "Fetching releases (channel: $channel)..."
 
-  if ! response=$(curl -fsSL --connect-timeout 10 --max-time 30 "$api_url" 2>&1); then
+  if ! response=$(curl -fsSL -H "User-Agent: squirrelscan-installer" --connect-timeout 10 --max-time 30 "$api_url" 2>&1); then
     error "Failed to fetch releases\n  URL: $api_url\n  Response: $response"
   fi
 
