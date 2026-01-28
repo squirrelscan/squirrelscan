@@ -2,19 +2,19 @@
 
 # squirrelscan
 
-**Website audit tool built for your agent workflow**
+**Website audit tool built for your coding agent**
 
-Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows.
+Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows. 150+ rules, LLM-optimized reports, single binary install.
 
 ## Features
 
-- **149+ Audit Rules** across 20 categories (SEO, accessibility, performance, security, E-E-A-T)
-- **AI-Native Design** with LLM-optimized output formats for Claude Code, Cursor, and other agents
-- **Smart Incremental Crawling** with ETag, Last-Modified, and content hashing
-- **Multiple Output Formats** including console, JSON, HTML reports, and text for piping to LLMs
-- **Single Binary** with zero dependencies
-- **Shell Completions** for bash, zsh, fish
-- **Self-Updating** with built-in version management
+- **150+ Rules, 20 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **AI-Native Design** - LLM-optimised output for Claude Code, Cursor, and any AI assistant
+- **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
+- **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
+- **E-E-A-T Auditing** - Dedicated rules for Experience, Expertise, Authority, Trust
+- **Crawl History & Changes** - Track site evolution, compare crawls, spot regressions
+- **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
 
 ## Three Ways to Use
 
@@ -59,16 +59,6 @@ squirrel audit example.com --format llm | claude
 
 ## Installation
 
-**npm (all platforms):**
-```bash
-npm install -g squirrelscan
-```
-
-Or run without installing:
-```bash
-npx squirrelscan audit example.com
-```
-
 **macOS / Linux:**
 ```bash
 curl -fsSL https://squirrelscan.com/install | bash
@@ -77,6 +67,16 @@ curl -fsSL https://squirrelscan.com/install | bash
 **Windows:**
 ```powershell
 iwr -useb https://squirrelscan.com/install.ps1 | iex
+```
+
+**npm (all platforms):**
+```bash
+npm install -g squirrelscan
+```
+
+**npx (run without installing):**
+```bash
+npx squirrelscan audit example.com
 ```
 
 ## Quick Start
@@ -103,20 +103,31 @@ squirrel audit https://example.com -m 10
 
 ## Rule Categories
 
-| Category | Examples |
-|----------|----------|
-| **Core SEO** | Meta tags, canonical URLs, h1, robots meta |
-| **Accessibility** | ARIA labels, focus indicators, landmarks |
-| **Performance** | Core Web Vitals (LCP, CLS, INP) |
-| **Security** | HTTPS, CSP, leaked secrets (96 patterns) |
-| **E-E-A-T** | Author bylines, expertise signals, trust indicators |
-| **Content** | Word count, readability, freshness |
-| **Images** | Alt text, modern formats, lazy loading |
-| **Links** | Broken links, redirect chains, anchor text |
-| **Schema** | JSON-LD structured data validation |
-| **Mobile** | Viewport, tap targets, responsive design |
+| Category | Rules | Focus |
+|----------|-------|-------|
+| Crawlability | 16 | Robots.txt, sitemaps, indexability |
+| E-E-A-T | 15 | Authority, trust, expertise signals |
+| Links | 14 | Broken links, redirects, anchor text |
+| Security | 14 | HTTPS, CSP, leaked secrets (96 patterns) |
+| Content | 13 | Readability, freshness, word count |
+| Accessibility | 13 | ARIA, contrast, landmarks, focus |
+| Core SEO | 12 | Meta tags, canonical, robots |
+| Images | 12 | Alt text, formats, lazy loading |
+| Performance | 12 | Core Web Vitals, render blocking |
+| Structured Data | 11 | JSON-LD, schema validation |
+| URL Structure | 9 | Length, format, parameters |
+| Mobile | 7 | Viewport, tap targets, responsive |
+| Social Media | 5 | Open Graph, Twitter Cards |
+| Local SEO | 4 | NAP, geo tags, service areas |
+| Legal | 4 | Privacy policy, cookie consent |
+| Video | 4 | Schema, captions, thumbnails |
+| Analytics | 3 | GTM, consent mode |
+| Internationalization | 3 | Hreflang, lang attribute |
+| Adblock Detection | 3 | Blocked elements, tracking |
 
-And 10 more categories covering video, analytics, i18n, local SEO, and more. See the [rules reference](https://docs.squirrelscan.com/rules) on the documentation website.
+**Total: 153 rules across 20 categories**
+
+See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
 ## AI Agent Integration
 
@@ -128,9 +139,11 @@ npx skills install squirrelscan/skills
 ```
 
 Example AI prompts:
-- "Use the audit-website skill to audit example.com and fix all high-severity issues"
-- "Audit this site, enter plan mode, and create a comprehensive fix strategy"
-- "Use audit-website skill to check for regressions after my recent changes"
+- "Audit example.com and fix all critical issues"
+- "Check for SEO regressions after my recent changes"
+- "Generate a comprehensive audit report and enter plan mode to fix issues"
+- "Audit only the /blog section and focus on E-E-A-T signals"
+- "Run a security-focused audit and check for leaked secrets"
 
 See [AI Agent Integration docs](https://docs.squirrelscan.com/agents) for advanced workflows.
 
