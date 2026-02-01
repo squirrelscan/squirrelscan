@@ -4,11 +4,11 @@
 
 **Website audit tool built for your coding agent**
 
-Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows. 150+ rules, LLM-optimized reports, single binary install.
+Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows. 230+ rules, LLM-optimized reports, single binary install.
 
 ## Features
 
-- **150+ Rules, 20 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **232 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **AI-Native Design** - LLM-optimised output for Claude Code, Cursor, and any AI assistant
 - **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
 - **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
@@ -105,27 +105,29 @@ squirrel audit https://example.com -m 10
 
 | Category | Rules | Focus |
 |----------|-------|-------|
-| Crawlability | 16 | Robots.txt, sitemaps, indexability |
-| E-E-A-T | 15 | Authority, trust, expertise signals |
-| Links | 14 | Broken links, redirects, anchor text |
-| Security | 14 | HTTPS, CSP, leaked secrets (96 patterns) |
-| Content | 13 | Readability, freshness, word count |
-| Accessibility | 13 | ARIA, contrast, landmarks, focus |
-| Core SEO | 12 | Meta tags, canonical, robots |
-| Images | 12 | Alt text, formats, lazy loading |
-| Performance | 12 | Core Web Vitals, render blocking |
+| Accessibility | 56 | ARIA, button/input names, landmarks, lists, tables, focus |
+| Performance | 24 | Core Web Vitals, compression, caching, JS optimization |
+| Crawlability | 15 | Robots.txt, sitemaps, indexability |
+| Security | 15 | HTTPS, CSP, cookies, leaked secrets (96 patterns) |
+| Links | 15 | Broken links, redirects, anchor text |
+| Images | 15 | Alt text, formats, lazy loading, optimization |
+| Content | 15 | Readability, freshness, word count |
+| E-E-A-T | 14 | Authority, trust, expertise signals |
+| Core | 13 | Meta tags, canonical, doctype, charset |
 | Structured Data | 11 | JSON-LD, schema validation |
-| URL Structure | 9 | Length, format, parameters |
-| Mobile | 7 | Viewport, tap targets, responsive |
-| Social Media | 5 | Open Graph, Twitter Cards |
-| Local SEO | 4 | NAP, geo tags, service areas |
-| Legal | 4 | Privacy policy, cookie consent |
-| Video | 4 | Schema, captions, thumbnails |
-| Analytics | 3 | GTM, consent mode |
-| Internationalization | 3 | Hreflang, lang attribute |
-| Adblock Detection | 3 | Blocked elements, tracking |
+| URL Structure | 8 | Length, format, parameters |
+| Mobile | 6 | Viewport, tap targets, responsive |
+| Social Media | 4 | Open Graph, Twitter Cards |
+| SEO | 4 | Meta robots, indexability |
+| Video | 3 | Schema, captions, thumbnails |
+| Local SEO | 3 | NAP, geo tags, service areas |
+| Legal | 3 | Privacy policy, cookie consent |
+| Internationalization | 2 | Hreflang, lang attribute |
+| Analytics | 2 | GTM, consent mode |
+| AI Detection | 2 | AI content signals |
+| Adblock Detection | 2 | Blocked elements, tracking |
 
-**Total: 153 rules across 20 categories**
+**Total: 232 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
