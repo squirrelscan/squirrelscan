@@ -9,6 +9,7 @@ set -euo pipefail
 #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
 #   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
 #   SQUIRREL_BIN_DIR   - Override bin directory for symlink
+#   GITHUB_TOKEN       - GitHub token to avoid API rate limits (optional)
 
 REPO="squirrelscan/squirrelscan"
 
@@ -206,7 +207,13 @@ get_latest_version() {
 
   info "Fetching releases (channel: $channel)..."
 
-  if ! response=$(curl -fsSL -H "User-Agent: squirrelscan-installer" --connect-timeout 10 --max-time 30 "$api_url" 2>&1); then
+  # Build curl args - add auth header if GITHUB_TOKEN is set (avoids rate limits)
+  local curl_args=(-fsSL -H "User-Agent: squirrelscan-installer" --connect-timeout 10 --max-time 30)
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    curl_args+=(-H "Authorization: token $GITHUB_TOKEN")
+  fi
+
+  if ! response=$(curl "${curl_args[@]}" "$api_url" 2>&1); then
     error "Failed to fetch releases\n  URL: $api_url\n  Response: $response"
   fi
 
