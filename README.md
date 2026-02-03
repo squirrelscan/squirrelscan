@@ -4,11 +4,11 @@
 
 **Website audit tool built for your coding agent**
 
-Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows. 200+ rules, LLM-optimized reports, single binary install.
+Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows. 230+ rules, LLM-optimized reports, single binary install.
 
 ## Features
 
-- **200+ Rules, 20 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **230+ Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **AI-Native Design** - LLM-optimised output for Claude Code, Cursor, and any AI assistant
 - **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
 - **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
@@ -127,7 +127,7 @@ squirrel audit https://example.com -m 10
 | AI Detection | 2 | AI content signals |
 | Adblock Detection | 2 | Blocked elements, tracking |
 
-**Total: 200+ rules across 20 categories**
+**Total: 230+ rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
