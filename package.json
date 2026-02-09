@@ -1,6 +1,6 @@
 {
   "name": "squirrelscan",
-  "version": "0.0.33",
+  "version": "0.0.34",
   "description": "Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows.",
   "bin": {
     "squirrel": "bin/squirrel.js"
