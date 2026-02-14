@@ -195,7 +195,6 @@ function Main {
     }
 
     Write-Host ""
-    exit 0
 }
 
 Main
