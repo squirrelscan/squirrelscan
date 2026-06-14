@@ -132,6 +132,43 @@ detect_platform() {
   echo "${os}-${arch}${libc}"
 }
 
+# Ensure the musl C++ runtime is present.
+# bun's musl --compile binary dynamically links libstdc++.so.6 + libgcc_s.so.1,
+# which a bare Alpine image lacks — without them the binary can't even run
+# `self install`. Auto-install as root via apk; otherwise print the exact
+# command and exit cleanly (better than a wall of relocation errors).
+ensure_musl_runtime() {
+  # Already resolvable by the musl loader (/lib or /usr/lib)?
+  if ls /usr/lib/libstdc++.so.6 >/dev/null 2>&1 ||
+    ls /lib/libstdc++.so.6 >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v apk >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    log "Installing required runtime library (libstdc++)..."
+    if apk add --no-cache libstdc++ >/dev/null 2>&1; then
+      info "Installed libstdc++"
+      return 0
+    fi
+    warn "Auto-install of libstdc++ failed"
+  fi
+
+  # Non-root, no apk, or apk failed → clear, actionable instructions.
+  warn "squirrel needs libstdc++ to run on Alpine/musl."
+  if command -v apk >/dev/null 2>&1; then
+    if [ "$(id -u)" = "0" ]; then
+      echo "  Install it, then re-run the installer:" >&2
+      echo "      apk add libstdc++" >&2
+    else
+      echo "  Install it, then re-run the installer:" >&2
+      echo "      sudo apk add libstdc++" >&2
+    fi
+  else
+    echo "  Install libstdc++ (and libgcc) with your package manager, then re-run." >&2
+  fi
+  error "Missing libstdc++ (required by the musl build)"
+}
+
 # Find a writable bin directory that's in PATH
 find_bin_dir() {
   # If user explicitly set bin dir, use it
@@ -402,6 +439,11 @@ main() {
   local platform version bin_dir needs_path_update=false
   platform=$(detect_platform)
   log "Detected platform: $platform"
+
+  # musl builds need libstdc++ at runtime — ensure it before we exec the binary.
+  case "$platform" in
+    *-musl) ensure_musl_runtime ;;
+  esac
 
   # Find writable bin directory in PATH
   if ! bin_dir=$(find_bin_dir); then
