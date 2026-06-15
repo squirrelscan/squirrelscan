@@ -107,20 +107,12 @@ function Install-Squirrel {
     }
 }
 
-function Install-Skill {
-    $npxPath = Get-Command npx -ErrorAction SilentlyContinue
-    if ($npxPath) {
-        Write-Log "Installing audit-website skill..."
-        try {
-            & npx skills add squirrelscan/skills --skill audit-website -y -g 2>$null
-            Write-Info "Skill installed globally"
-        } catch {
-            Write-Warn "Skill installation failed (optional)"
-        }
-    } else {
-        Write-Info "npm not found, skipping skill install"
-        Write-Info "Install manually: npx skills add squirrelscan/skills --skill audit-website -y -g"
-    }
+function Show-SkillHint {
+    # Coding agents (Claude Code, Cursor, …) can drive squirrel via a skill. We
+    # don't install it automatically — show how to add it so the choice is explicit.
+    Write-Host ""
+    Write-Log "Using a coding agent? Add the audit skill so it can run squirrel:"
+    Write-Info "npx skills add squirrelscan/skills --skill audit-website -y -g"
 }
 
 function Main {
@@ -160,8 +152,8 @@ function Main {
     Write-Host ""
     Write-Log "Installation complete!"
 
-    # Install skill
-    Install-Skill
+    # Remind (don't auto-run) how to add the skill for coding agents.
+    Show-SkillHint
 
     # Check PATH
     $binDir = Join-Path $env:LOCALAPPDATA "squirrel\bin"

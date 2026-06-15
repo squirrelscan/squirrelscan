@@ -371,19 +371,12 @@ detect_shell_config() {
   fi
 }
 
-# Install audit-website skill if npm available
-install_skill() {
-  if command -v npx >/dev/null 2>&1; then
-    log "Installing audit-website skill..."
-    if npx skills add squirrelscan/skills --skill audit-website -y -g 2>/dev/null; then
-      info "Skill installed globally"
-    else
-      warn "Skill installation failed (optional)"
-    fi
-  else
-    info "npm not found, skipping skill install"
-    info "Install manually: npx skills add squirrelscan/skills --skill audit-website -y -g"
-  fi
+# Coding agents (Claude Code, Cursor, …) can drive squirrel via a skill. We don't
+# install it automatically — print how to add it so the choice stays explicit.
+print_skill_hint() {
+  echo ""
+  log "Using a coding agent? Add the audit skill so it can run squirrel:"
+  info "npx skills add squirrelscan/skills --skill audit-website -y -g"
 }
 
 # Print shell profile instructions
@@ -472,8 +465,8 @@ main() {
   echo ""
   log "Installation complete!"
 
-  # Install skill if npx available
-  install_skill
+  # Remind (don't auto-run) how to add the skill for coding agents.
+  print_skill_hint
 
   # Print PATH instructions if needed
   if [ "$needs_path_update" = true ]; then
