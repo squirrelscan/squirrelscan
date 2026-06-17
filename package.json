@@ -1,7 +1,7 @@
 {
   "name": "squirrelscan",
   "version": "0.0.51",
-  "description": "Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows.",
+  "description": "Website audit tool built for AI agents. 240+ SEO, performance & security rules from the CLI, your coding agent, the cloud, or MCP.",
   "bin": {
     "squirrel": "bin/squirrel.js"
   },
