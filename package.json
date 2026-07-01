@@ -1,6 +1,6 @@
 {
   "name": "squirrelscan",
-  "version": "0.0.60",
+  "version": "0.0.61",
   "description": "Website audit tool built for AI agents. 240+ SEO, performance & security rules from the CLI, your coding agent, the cloud, or MCP.",
   "bin": {
     "squirrel": "bin/squirrel.js"
