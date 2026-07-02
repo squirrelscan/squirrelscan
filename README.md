@@ -61,12 +61,12 @@ squirrel audit example.com --format llm | claude
 
 **macOS / Linux:**
 ```bash
-curl -fsSL https://squirrelscan.com/install | bash
+curl -fsSL https://install.squirrelscan.com | bash
 ```
 
 **Windows:**
 ```powershell
-iwr -useb https://squirrelscan.com/install.ps1 | iex
+iwr -useb https://install.squirrelscan.com/install.ps1 | iex
 ```
 
 **npm (all platforms):**

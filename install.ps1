@@ -1,5 +1,5 @@
 # SquirrelScan Windows installer
-# Usage: iwr -useb https://squirrelscan.com/install.ps1 | iex
+# Usage: iwr -useb https://install.squirrelscan.com/install.ps1 | iex
 # Or: iwr -useb https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.ps1 | iex
 #
 # Environment variables:

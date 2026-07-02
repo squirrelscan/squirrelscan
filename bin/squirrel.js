@@ -50,7 +50,7 @@ if (!binaryPath) {
   console.error("Try reinstalling: npm install -g squirrelscan");
   console.error("");
   console.error("Or install directly:");
-  console.error("  curl -fsSL https://squirrelscan.com/install | bash");
+  console.error("  curl -fsSL https://install.squirrelscan.com | bash");
   process.exit(1);
 }
 
