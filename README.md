@@ -4,7 +4,7 @@
 
 **Website audit tool built for AI agents**
 
-240+ SEO, performance & security rules — run them from the CLI, inside your coding agent, in the cloud, or over MCP. LLM-optimized reports, single binary install. Local audits are always free.
+249+ SEO, performance & security rules — run them from the CLI, inside your coding agent, in the cloud, or over MCP. LLM-optimized reports, single binary install. Local audits are always free.
 
 ## Features
 
@@ -127,7 +127,7 @@ squirrel audit https://example.com -m 10
 | AI Detection | 2 | AI content signals |
 | Adblock Detection | 2 | Blocked elements, tracking |
 
-**Total: 240+ rules across 21 categories**
+**Total: 249+ rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
