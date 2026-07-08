@@ -2,9 +2,9 @@
 
 # squirrelscan
 
-**Website audit tool built for AI agents**
+**The website QA tool for your coding agent**
 
-249+ SEO, performance & security rules — run them from the CLI, inside your coding agent, in the cloud, or over MCP. LLM-optimized reports, single binary install. Local audits are always free.
+squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP. Local audits are always free.
 
 ## Features
 
