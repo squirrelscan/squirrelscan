@@ -26,8 +26,96 @@ fi
 
 log() { echo -e "${GREEN}==>${NC} $1" >&2; }
 warn() { echo -e "${YELLOW}Warning:${NC} $1" >&2; }
-error() { echo -e "${RED}Error:${NC} $1" >&2; exit 1; }
+error() {
+  echo -e "${RED}Error:${NC} $1" >&2
+  LAST_ERROR_MSG="$1"
+  # Also persist to a file: error() often runs inside a command-substitution
+  # subshell (e.g. version=$(get_latest_version)), where the LAST_ERROR_MSG
+  # assignment can't reach the parent that runs the EXIT trap.
+  [ -n "${ERROR_MSG_FILE:-}" ] && printf '%s' "$1" >"$ERROR_MSG_FILE" 2>/dev/null || true
+  exit 1
+}
 info() { echo -e "${BLUE}::${NC} $1" >&2; }
+
+# --- Failure reporting ----------------------------------------------------
+# On failure, fire a tiny anonymous report to the installer worker (→ Sentry)
+# so we can see when installs break in the field. Strictly opt-out via
+# NO_TELEMETRY (mirrors the CLI, apps/cli/src/self/telemetry.ts), fire-and-
+# forget (never blocks or fails the install), and carries only coarse context
+# (os/arch/step/exit code) — never paths, env, hostname, or secrets. #1013
+INSTALLER_REPORT_VERSION="1"
+ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
+CURRENT_STEP="init"
+LAST_ERROR_MSG=""
+TMPDIR_TO_CLEAN=""
+# Survives command-substitution subshells where LAST_ERROR_MSG can't (see error()).
+ERROR_MSG_FILE="$(mktemp 2>/dev/null || true)"
+
+# Make a value safe inside a JSON string: keep only printable ASCII (drops
+# control chars incl. ESC from ANSI colour codes, AND non-ASCII bytes — either
+# would make the JSON invalid and the worker would reject the whole report),
+# then escape backslashes and double-quotes.
+json_escape() {
+  printf '%s' "$1" | LC_ALL=C tr -cd '\40-\176' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+report_error() {
+  local step="$1" code="$2" line="${3:-}"
+  # NO_TELEMETRY (any non-empty value) disables ALL install-script reporting.
+  [ -n "${NO_TELEMETRY:-}" ] && return 0
+  command -v curl >/dev/null 2>&1 || return 0
+
+  local os arch scrubbed=""
+  os=$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  arch=$(uname -m 2>/dev/null)
+
+  if [ -n "$line" ]; then
+    # Reduce to printable ASCII (control chars incl. newlines AND non-ASCII bytes
+    # → space) BEFORE truncating, so `cut -c` can't split a multibyte char into
+    # invalid UTF-8. Scrub $HOME → '~' so no local path leaks. The worker
+    # re-clamps and redacts too.
+    local tilde="~"
+    scrubbed=$(printf '%s' "$line" | LC_ALL=C tr -c '\40-\176' ' ')
+    [ -n "${HOME:-}" ] && scrubbed=${scrubbed//"$HOME"/$tilde}
+    scrubbed=$(printf '%s' "$scrubbed" | cut -c1-200)
+  fi
+
+  local payload
+  payload=$(printf '{"script":"sh","script_version":"%s","channel":"%s","os":"%s","arch":"%s","step":"%s","exit_code":%s,"error_line":"%s"}' \
+    "$(json_escape "$INSTALLER_REPORT_VERSION")" \
+    "$(json_escape "${SQUIRREL_CHANNEL:-stable}")" \
+    "$(json_escape "$os")" \
+    "$(json_escape "$arch")" \
+    "$(json_escape "$step")" \
+    "${code:-1}" \
+    "$(json_escape "$scrubbed")")
+
+  # Fire-and-forget: run the POST in a DETACHED subshell so it never blocks the
+  # installer. `( cmd & )` backgrounds curl and lets the subshell exit
+  # immediately (non-blocking); curl is reparented to init so it still gets to
+  # finish after the script exits. Tight timeouts are the backstop; stdio
+  # discarded so a closed pipe can't SIGPIPE it.
+  ( curl -fsS -m 3 --connect-timeout 2 -X POST \
+      -H 'Content-Type: application/json' \
+      --data "$payload" "$ERROR_ENDPOINT" >/dev/null 2>&1 & ) 2>/dev/null || true
+}
+
+# Single EXIT trap: cleans the temp dir and reports genuine failures. Replaces
+# the per-call tmpdir trap (a second `trap ... EXIT` would clobber this one).
+report_on_exit() {
+  local code=$?
+  set +e  # cleanup/reporting must never derail the exit path
+  [ -n "$TMPDIR_TO_CLEAN" ] && rm -rf "$TMPDIR_TO_CLEAN"
+  # Prefer the in-process message; fall back to the file for subshell failures.
+  local msg="$LAST_ERROR_MSG"
+  if [ -z "$msg" ] && [ -n "${ERROR_MSG_FILE:-}" ] && [ -f "$ERROR_MSG_FILE" ]; then
+    msg=$(cat "$ERROR_MSG_FILE" 2>/dev/null)
+  fi
+  [ -n "${ERROR_MSG_FILE:-}" ] && rm -f "$ERROR_MSG_FILE"
+  [ "$code" -eq 0 ] && return 0
+  report_error "$CURRENT_STEP" "$code" "$msg"
+}
+trap report_on_exit EXIT
 
 # --- Banner ---------------------------------------------------------------
 # Blocky lowercase "squirrelscan" wordmark, matching the CLI's own banner
@@ -324,11 +412,14 @@ download_and_install() {
   local tmpdir
 
   tmpdir=$(mktemp -d)
-  trap "rm -rf '$tmpdir'" EXIT
+  # Cleaned by the EXIT trap (report_on_exit) — do NOT set a local EXIT trap
+  # here or it clobbers the failure-reporting trap.
+  TMPDIR_TO_CLEAN="$tmpdir"
 
   local release_url="https://github.com/${REPO}/releases/download/${version}"
 
   # Download manifest to get binary filename and checksum
+  CURRENT_STEP="download_manifest"
   log "Downloading manifest..."
   local manifest_url="${release_url}/manifest.json"
   if ! fetch_with_retry "$manifest_url" "$tmpdir/manifest.json"; then
@@ -354,6 +445,7 @@ download_and_install() {
   fi
 
   # Download binary
+  CURRENT_STEP="download_binary"
   log "Downloading squirrel ${version}..."
   local binary_url="${release_url}/${filename}"
   if ! fetch_with_retry "$binary_url" "$tmpdir/squirrel"; then
@@ -361,6 +453,7 @@ download_and_install() {
   fi
 
   # Verify checksum
+  CURRENT_STEP="verify_checksum"
   log "Verifying checksum..."
   local actual_sha256
   actual_sha256=$(compute_sha256 "$tmpdir/squirrel")
@@ -373,6 +466,7 @@ download_and_install() {
   # Make executable and run self install with bin dir
   chmod +x "$tmpdir/squirrel"
 
+  CURRENT_STEP="self_install"
   log "Running self install..."
   "$tmpdir/squirrel" self install --bin-dir "$bin_dir"
 }
@@ -485,18 +579,21 @@ main() {
 
   log "Installing squirrel..."
 
+  CURRENT_STEP="check_deps"
   check_deps
 
   local platform version bin_dir needs_path_update=false
+  CURRENT_STEP="detect_platform"
   platform=$(detect_platform)
   log "Detected platform: $platform"
 
   # musl builds need libstdc++ at runtime — ensure it before we exec the binary.
   case "$platform" in
-    *-musl) ensure_musl_runtime ;;
+    *-musl) CURRENT_STEP="musl_runtime"; ensure_musl_runtime ;;
   esac
 
   # Find writable bin directory in PATH
+  CURRENT_STEP="find_bin_dir"
   if ! bin_dir=$(find_bin_dir); then
     needs_path_update=true
   fi
@@ -507,6 +604,7 @@ main() {
     version="$SQUIRREL_VERSION"
     log "Installing pinned version: $version"
   else
+    CURRENT_STEP="fetch_releases"
     version=$(get_latest_version "$channel")
     if [ -z "$version" ]; then
       if [ "$channel" = "stable" ]; then

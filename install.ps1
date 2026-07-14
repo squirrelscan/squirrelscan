@@ -14,7 +14,64 @@ $Platform = "windows-x64"
 function Write-Log { param($Message) Write-Host "==> " -ForegroundColor Green -NoNewline; Write-Host $Message }
 function Write-Info { param($Message) Write-Host ":: " -ForegroundColor Blue -NoNewline; Write-Host $Message }
 function Write-Warn { param($Message) Write-Host "Warning: " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
-function Write-Err { param($Message) Write-Host "Error: " -ForegroundColor Red -NoNewline; Write-Host $Message; exit 1 }
+function Write-Err { param($Message) Write-Host "Error: " -ForegroundColor Red -NoNewline; Write-Host $Message; Send-ErrorReport -Step $script:CurrentStep -ExitCode 1 -Line "$Message"; exit 1 }
+
+# --- Failure reporting -------------------------------------------------
+# On failure, fire a tiny anonymous report to the installer worker (→ Sentry)
+# so we can see when installs break in the field. Opt-out: NO_TELEMETRY (any
+# non-empty value, mirroring install.sh and apps/cli/src/self/telemetry.ts).
+# Fire-and-forget: never blocks or fails the install; carries only coarse
+# context (os/arch/step/exit code), never paths/env/hostname/secrets. #1013
+$InstallerReportVersion = "1"
+$ErrorEndpoint = if ($env:SQUIRREL_ERROR_ENDPOINT) { $env:SQUIRREL_ERROR_ENDPOINT } else { "https://install.squirrelscan.com/error" }
+$script:CurrentStep = "init"
+
+function Send-ErrorReport {
+    param([string]$Step, [int]$ExitCode = 1, [string]$Line = "")
+    # NO_TELEMETRY (any non-empty value) disables ALL install-script reporting.
+    if ($env:NO_TELEMETRY) { return }
+    try {
+        $scrubbed = ""
+        if ($Line) {
+            # Reduce to printable ASCII (control chars AND non-ASCII -> space) so
+            # truncation can't split a surrogate/multibyte char, scrub the home
+            # path -> '~' so no local path leaks, then hard-truncate. The worker
+            # re-clamps and redacts too.
+            $scrubbed = $Line -replace '[^\x20-\x7E]', ' '
+            if ($env:USERPROFILE) { $scrubbed = $scrubbed.Replace($env:USERPROFILE, "~") }
+            if ($HOME) { $scrubbed = $scrubbed.Replace($HOME, "~") }
+            if ($scrubbed.Length -gt 200) { $scrubbed = $scrubbed.Substring(0, 200) }
+        }
+        $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
+            "AMD64" { "x64" }
+            "ARM64" { "arm64" }
+            default { "$($env:PROCESSOR_ARCHITECTURE)" }
+        }
+        $channel = if ($env:SQUIRREL_CHANNEL) { $env:SQUIRREL_CHANNEL } else { "stable" }
+        $payload = @{
+            script         = "ps1"
+            script_version = $InstallerReportVersion
+            channel        = $channel
+            os             = "windows"
+            arch           = $arch
+            step           = $Step
+            exit_code      = $ExitCode
+            error_line     = $scrubbed
+        } | ConvertTo-Json -Compress
+        # Fire-and-forget: run the POST in a background job so it never blocks
+        # the installer. Not awaited; the 3s timeout inside is the backstop and
+        # failures are swallowed.
+        Start-Job -ScriptBlock {
+            param($Uri, $Body)
+            try {
+                Invoke-RestMethod -Uri $Uri -Method Post -Body $Body `
+                    -ContentType "application/json" -TimeoutSec 3 | Out-Null
+            } catch {}
+        } -ArgumentList $ErrorEndpoint, $payload | Out-Null
+    } catch {
+        # Reporting must never surface or fail the install.
+    }
+}
 
 # --- Banner ------------------------------------------------------------
 # Blocky lowercase "squirrelscan" wordmark, matching the CLI's own banner
@@ -77,6 +134,7 @@ function Show-Banner {
 function Get-LatestVersion {
     param([string]$Channel = "stable")
 
+    $script:CurrentStep = "fetch_releases"
     Write-Info "Fetching releases (channel: $Channel)..."
 
     try {
@@ -105,6 +163,7 @@ function Get-LatestVersion {
 function Get-Manifest {
     param([string]$Version)
 
+    $script:CurrentStep = "download_manifest"
     $manifestUrl = "https://github.com/$Repo/releases/download/$Version/manifest.json"
     Write-Log "Downloading manifest..."
 
@@ -138,10 +197,12 @@ function Install-Squirrel {
         $binaryPath = Join-Path $tempDir "squirrel.exe"
         $binaryUrl = "https://github.com/$Repo/releases/download/$Version/$filename"
 
+        $script:CurrentStep = "download_binary"
         Write-Log "Downloading squirrel $Version..."
         Invoke-WebRequest -Uri $binaryUrl -OutFile $binaryPath -TimeoutSec 120
 
         # Verify checksum
+        $script:CurrentStep = "verify_checksum"
         Write-Log "Verifying checksum..."
         $actualHash = (Get-FileHash -Path $binaryPath -Algorithm SHA256).Hash.ToLower()
 
@@ -151,6 +212,7 @@ function Install-Squirrel {
         Write-Info "Checksum verified: $($expectedHash.Substring(0, 16))..."
 
         # Run self install
+        $script:CurrentStep = "self_install"
         Write-Log "Running self install..."
         & $binaryPath self install
 
@@ -251,4 +313,12 @@ function Main {
     exit 0
 }
 
-Main
+try {
+    Main
+} catch {
+    # A terminating error that didn't route through Write-Err (e.g. an
+    # unexpected cmdlet failure under $ErrorActionPreference = "Stop").
+    Send-ErrorReport -Step $script:CurrentStep -ExitCode 1 -Line "$($_.Exception.Message)"
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
