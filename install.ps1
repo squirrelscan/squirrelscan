@@ -16,6 +16,64 @@ function Write-Info { param($Message) Write-Host ":: " -ForegroundColor Blue -No
 function Write-Warn { param($Message) Write-Host "Warning: " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
 function Write-Err { param($Message) Write-Host "Error: " -ForegroundColor Red -NoNewline; Write-Host $Message; exit 1 }
 
+# --- Banner ------------------------------------------------------------
+# Blocky lowercase "squirrelscan" wordmark, matching the CLI's own banner
+# (apps/cli/src/cli/banner.ts) instead of the old camel-case ASCII art.
+# $BannerArtColor is a precomputed copy of that file's gradient-string
+# output for the autumn palette (#CD853F -> #D2691E -> #8B4513 -> #A0522D) --
+# this installer has no Node/gradient-string available at iwr|iex time.
+$BannerArtPlain = @'
+ ▄█▀ ▄▀█ █ █ █ █▀▄ █▀▄ █▀▀ █   ▄█▀ ▄▀▀ ▄▀█ █▄ █
+ ▀▄  █ █ █ █ █ ██▀ ██▀ █▀  █   ▀▄  █   █▀█ █ ▀█
+ █▄▀ ▀▀█ ▀▄▀ █ █ █ █ █ █▄▄ █▄▄ █▄▀ ▀▄▄ █ █ █  █
+'@
+
+$BannerArtColor = @'
+ [38;2;205;133;63m▄[39m[38;2;205;132;62m█[39m[38;2;205;131;61m▀[39m [38;2;206;130;60m▄[39m[38;2;206;129;58m▀[39m[38;2;206;128;57m█[39m [38;2;206;127;56m█[39m [38;2;206;126;55m█[39m [38;2;206;125;54m█[39m [38;2;207;124;53m█[39m[38;2;207;123;52m▀[39m[38;2;207;122;50m▄[39m [38;2;207;121;49m█[39m[38;2;207;120;48m▀[39m[38;2;207;119;47m▄[39m [38;2;208;119;46m█[39m[38;2;208;118;45m▀[39m[38;2;208;117;44m▀[39m [38;2;208;116;43m█[39m   [38;2;208;115;41m▄[39m[38;2;208;114;40m█[39m[38;2;209;113;39m▀[39m [38;2;209;112;38m▄[39m[38;2;209;111;37m▀[39m[38;2;209;110;36m▀[39m [38;2;209;109;35m▄[39m[38;2;209;108;33m▀[39m[38;2;210;107;32m█[39m [38;2;210;106;31m█[39m[38;2;210;105;30m▄[39m [38;2;207;104;30m█[39m
+ [38;2;205;102;29m▀[39m[38;2;202;101;29m▄[39m  [38;2;200;100;28m█[39m [38;2;197;99;28m█[39m [38;2;195;97;28m█[39m [38;2;192;96;27m█[39m [38;2;190;95;27m█[39m [38;2;187;93;26m█[39m[38;2;185;92;26m█[39m[38;2;182;91;26m▀[39m [38;2;180;90;25m█[39m[38;2;177;88;25m█[39m[38;2;175;87;25m▀[39m [38;2;172;86;24m█[39m[38;2;169;84;24m▀[39m  [38;2;167;83;23m█[39m   [38;2;164;82;23m▀[39m[38;2;162;81;23m▄[39m  [38;2;159;79;22m█[39m   [38;2;157;78;22m█[39m[38;2;154;77;21m▀[39m[38;2;152;75;21m█[39m [38;2;149;74;21m█[39m [38;2;147;73;20m▀[39m[38;2;144;72;20m█[39m
+ [38;2;142;70;19m█[39m[38;2;139;69;19m▄[39m[38;2;140;69;20m▀[39m [38;2;141;70;21m▀[39m[38;2;141;70;22m▀[39m[38;2;142;71;23m█[39m [38;2;143;71;24m▀[39m[38;2;144;72;25m▄[39m[38;2;144;72;26m▀[39m [38;2;145;73;26m█[39m [38;2;146;73;27m█[39m [38;2;147;74;28m█[39m [38;2;147;74;29m█[39m [38;2;148;75;30m█[39m [38;2;149;75;31m█[39m[38;2;150;76;32m▄[39m[38;2;150;76;33m▄[39m [38;2;151;76;34m█[39m[38;2;152;77;35m▄[39m[38;2;153;77;36m▄[39m [38;2;153;78;37m█[39m[38;2;154;78;38m▄[39m[38;2;155;79;39m▀[39m [38;2;156;79;39m▀[39m[38;2;156;80;40m▄[39m[38;2;157;80;41m▄[39m [38;2;158;81;42m█[39m [38;2;159;81;43m█[39m [38;2;159;82;44m█[39m  [38;2;160;82;45m█[39m
+'@
+
+$BannerTextFallback = 'squirrelscan'
+
+# Half-block glyphs need a UTF-8 console to render correctly; the classic
+# Windows console defaults to codepage 437/850 unless configured otherwise.
+function Test-Utf8Console {
+    try {
+        return [Console]::OutputEncoding.CodePage -eq 65001
+    } catch {
+        return $false
+    }
+}
+
+function Test-ColorSupported {
+    if ($env:NO_COLOR) { return $false }
+    try {
+        if ([Console]::IsOutputRedirected) { return $false }
+    } catch {
+        return $false
+    }
+    # A non-redirected console isn't enough -- it also needs to actually
+    # process raw ANSI/VT escapes, or the truecolor codes print literally.
+    # Windows Terminal and PowerShell 7+ do this by default; classic
+    # Windows PowerShell 5.1 in conhost.exe often doesn't (codex review,
+    # #1029), so only opt in for hosts known to handle it.
+    if ($env:WT_SESSION -or $env:TERM_PROGRAM) { return $true }
+    return $PSVersionTable.PSVersion.Major -ge 7
+}
+
+function Show-Banner {
+    Write-Host ""
+    if (-not (Test-Utf8Console)) {
+        Write-Host "  $BannerTextFallback"
+    } elseif (Test-ColorSupported) {
+        Write-Host $BannerArtColor
+    } else {
+        Write-Host $BannerArtPlain
+    }
+    Write-Host ""
+}
+
 function Get-LatestVersion {
     param([string]$Channel = "stable")
 
@@ -107,25 +165,30 @@ function Install-Squirrel {
     }
 }
 
-function Show-SkillHint {
-    # Coding agents (Claude Code, Cursor, …) can drive squirrel via a skill. We
-    # don't install it automatically — show how to add it so the choice is explicit.
+function Show-Epilogue {
+    # Get-started epilogue: one scannable next-steps block instead of the old
+    # "Installation complete!" + skill-hint tail (#1029). "squirrel skills
+    # install" is the canonical path (installs both skills, no --skill
+    # filter); the npx fallback line stays copy-paste-able for docs/agents.
+    param([string]$Version)
+
     Write-Host ""
-    Write-Log "Using a coding agent? Add the audit skill so it can run squirrel:"
-    Write-Info "npx skills add squirrelscan/skills --skill audit-website -y -g"
+    Write-Host "squirrel $Version installed" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Get started:"
+    Write-Host "  1. Run your first audit:   squirrel audit https://your-site.com"
+    Write-Host "  2. Add agent skills:       squirrel skills install   (Claude Code, Cursor, Codex, ...)"
+    Write-Host "                             or: npx skills add squirrelscan/skills -y -g"
+    Write-Host "  3. Unlock cloud audits:    squirrel auth login       -> https://squirrelscan.com/login"
+    Write-Host "  Shell completions:         squirrel self completion <bash|zsh|fish>"
+    Write-Host "  Docs: https://docs.squirrelscan.com"
+    Write-Host ""
 }
 
 function Main {
-    Write-Host ""
-    Write-Host "  ____              _                _   ____"
-    Write-Host " / ___|  __ _ _   _(_)_ __ _ __ ___| | / ___|  ___ __ _ _ __"
-    Write-Host " \___ \ / _`` | | | | | '__| '__/ _ \ | \___ \ / __/ _`` | '_ \"
-    Write-Host "  ___) | (_| | |_| | | |  | | |  __/ |  ___) | (_| (_| | | | |"
-    Write-Host " |____/ \__, |\__,_|_|_|  |_|  \___|_| |____/ \___\__,_|_| |_|"
-    Write-Host "           |_|"
-    Write-Host ""
+    Show-Banner
 
-    Write-Log "Installing SquirrelScan..."
+    Write-Log "Installing squirrel..."
 
     $channel = if ($env:SQUIRREL_CHANNEL) { $env:SQUIRREL_CHANNEL } else { "stable" }
 
@@ -149,11 +212,7 @@ function Main {
     $manifest = Get-Manifest -Version $version
     Install-Squirrel -Version $version -Manifest $manifest
 
-    Write-Host ""
-    Write-Log "Installation complete!"
-
-    # Remind (don't auto-run) how to add the skill for coding agents.
-    Show-SkillHint
+    Show-Epilogue -Version $version
 
     # Check PATH
     $binDir = Join-Path $env:LOCALAPPDATA "squirrel\bin"
@@ -184,6 +243,8 @@ function Main {
         Write-Host "Or add to session temporarily:"
         Write-Host ""
         Write-Host "  `$env:Path += ';$binDir'"
+        Write-Host ""
+        Write-Host "After updating PATH, verify with: squirrel self doctor"
     }
 
     Write-Host ""

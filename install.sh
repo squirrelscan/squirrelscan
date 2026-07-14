@@ -29,6 +29,49 @@ warn() { echo -e "${YELLOW}Warning:${NC} $1" >&2; }
 error() { echo -e "${RED}Error:${NC} $1" >&2; exit 1; }
 info() { echo -e "${BLUE}::${NC} $1" >&2; }
 
+# --- Banner ---------------------------------------------------------------
+# Blocky lowercase "squirrelscan" wordmark, matching the CLI's own banner
+# (apps/cli/src/cli/banner.ts) instead of the old camel-case figlet art.
+# BANNER_ART_COLOR is a precomputed copy of that file's gradient-string
+# output for the autumn palette (#CD853F -> #D2691E -> #8B4513 -> #A0522D) --
+# this installer has no Node/gradient-string available at curl|bash time.
+BANNER_ART_PLAIN=' ▄█▀ ▄▀█ █ █ █ █▀▄ █▀▄ █▀▀ █   ▄█▀ ▄▀▀ ▄▀█ █▄ █
+ ▀▄  █ █ █ █ █ ██▀ ██▀ █▀  █   ▀▄  █   █▀█ █ ▀█
+ █▄▀ ▀▀█ ▀▄▀ █ █ █ █ █ █▄▄ █▄▄ █▄▀ ▀▄▄ █ █ █  █'
+
+BANNER_ART_COLOR=$' \033[38;2;205;133;63m▄\033[39m\033[38;2;205;132;62m█\033[39m\033[38;2;205;131;61m▀\033[39m \033[38;2;206;130;60m▄\033[39m\033[38;2;206;129;58m▀\033[39m\033[38;2;206;128;57m█\033[39m \033[38;2;206;127;56m█\033[39m \033[38;2;206;126;55m█\033[39m \033[38;2;206;125;54m█\033[39m \033[38;2;207;124;53m█\033[39m\033[38;2;207;123;52m▀\033[39m\033[38;2;207;122;50m▄\033[39m \033[38;2;207;121;49m█\033[39m\033[38;2;207;120;48m▀\033[39m\033[38;2;207;119;47m▄\033[39m \033[38;2;208;119;46m█\033[39m\033[38;2;208;118;45m▀\033[39m\033[38;2;208;117;44m▀\033[39m \033[38;2;208;116;43m█\033[39m   \033[38;2;208;115;41m▄\033[39m\033[38;2;208;114;40m█\033[39m\033[38;2;209;113;39m▀\033[39m \033[38;2;209;112;38m▄\033[39m\033[38;2;209;111;37m▀\033[39m\033[38;2;209;110;36m▀\033[39m \033[38;2;209;109;35m▄\033[39m\033[38;2;209;108;33m▀\033[39m\033[38;2;210;107;32m█\033[39m \033[38;2;210;106;31m█\033[39m\033[38;2;210;105;30m▄\033[39m \033[38;2;207;104;30m█\033[39m\n \033[38;2;205;102;29m▀\033[39m\033[38;2;202;101;29m▄\033[39m  \033[38;2;200;100;28m█\033[39m \033[38;2;197;99;28m█\033[39m \033[38;2;195;97;28m█\033[39m \033[38;2;192;96;27m█\033[39m \033[38;2;190;95;27m█\033[39m \033[38;2;187;93;26m█\033[39m\033[38;2;185;92;26m█\033[39m\033[38;2;182;91;26m▀\033[39m \033[38;2;180;90;25m█\033[39m\033[38;2;177;88;25m█\033[39m\033[38;2;175;87;25m▀\033[39m \033[38;2;172;86;24m█\033[39m\033[38;2;169;84;24m▀\033[39m  \033[38;2;167;83;23m█\033[39m   \033[38;2;164;82;23m▀\033[39m\033[38;2;162;81;23m▄\033[39m  \033[38;2;159;79;22m█\033[39m   \033[38;2;157;78;22m█\033[39m\033[38;2;154;77;21m▀\033[39m\033[38;2;152;75;21m█\033[39m \033[38;2;149;74;21m█\033[39m \033[38;2;147;73;20m▀\033[39m\033[38;2;144;72;20m█\033[39m\n \033[38;2;142;70;19m█\033[39m\033[38;2;139;69;19m▄\033[39m\033[38;2;140;69;20m▀\033[39m \033[38;2;141;70;21m▀\033[39m\033[38;2;141;70;22m▀\033[39m\033[38;2;142;71;23m█\033[39m \033[38;2;143;71;24m▀\033[39m\033[38;2;144;72;25m▄\033[39m\033[38;2;144;72;26m▀\033[39m \033[38;2;145;73;26m█\033[39m \033[38;2;146;73;27m█\033[39m \033[38;2;147;74;28m█\033[39m \033[38;2;147;74;29m█\033[39m \033[38;2;148;75;30m█\033[39m \033[38;2;149;75;31m█\033[39m\033[38;2;150;76;32m▄\033[39m\033[38;2;150;76;33m▄\033[39m \033[38;2;151;76;34m█\033[39m\033[38;2;152;77;35m▄\033[39m\033[38;2;153;77;36m▄\033[39m \033[38;2;153;78;37m█\033[39m\033[38;2;154;78;38m▄\033[39m\033[38;2;155;79;39m▀\033[39m \033[38;2;156;79;39m▀\033[39m\033[38;2;156;80;40m▄\033[39m\033[38;2;157;80;41m▄\033[39m \033[38;2;158;81;42m█\033[39m \033[38;2;159;81;43m█\033[39m \033[38;2;159;82;44m█\033[39m  \033[38;2;160;82;45m█\033[39m'
+
+BANNER_TEXT_FALLBACK='squirrelscan'
+
+# Half-block glyphs need a UTF-8 locale to render correctly; CI logs and
+# dumb terminals often run C/POSIX. Fall back to plain text there.
+is_utf8_locale() {
+  local charmap=""
+  if command -v locale >/dev/null 2>&1; then
+    charmap=$(locale charmap 2>/dev/null || true)
+  fi
+  case "$charmap" in
+    *UTF-8*|*utf-8*|*UTF8*|*utf8*) return 0 ;;
+  esac
+  local loc="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
+  case "$loc" in
+    *UTF-8*|*utf-8*|*UTF8*|*utf8*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+print_banner() {
+  echo ""
+  if ! is_utf8_locale; then
+    echo "  $BANNER_TEXT_FALLBACK"
+  elif [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    printf '%s\n' "$BANNER_ART_COLOR"
+  else
+    printf '%s\n' "$BANNER_ART_PLAIN"
+  fi
+  echo ""
+}
+
 # Check for required commands
 check_deps() {
   command -v curl >/dev/null 2>&1 || error "curl is required but not installed"
@@ -371,12 +414,31 @@ detect_shell_config() {
   fi
 }
 
-# Coding agents (Claude Code, Cursor, …) can drive squirrel via a skill. We don't
-# install it automatically — print how to add it so the choice stays explicit.
-print_skill_hint() {
+# Get-started epilogue: one scannable next-steps block instead of the old
+# scattered "Tip:"/"Installation complete!"/skill-hint tail (#1029).
+# "squirrel skills install" is the canonical path (installs both skills,
+# no --skill filter); the npx fallback line stays copy-paste-able for
+# docs/agents that can't shell out to the freshly-installed binary.
+print_epilogue() {
+  local version="$1"
+  # Same UTF-8 gate as the banner -- CI logs / dumb terminals shouldn't get
+  # mojibake from the checkmark/arrow glyphs either (codex review, #1029).
+  local check="✓" arrow="→"
+  if ! is_utf8_locale; then
+    check="v"
+    arrow="->"
+  fi
   echo ""
-  log "Using a coding agent? Add the audit skill so it can run squirrel:"
-  info "npx skills add squirrelscan/skills --skill audit-website -y -g"
+  echo -e "${GREEN}${check}${NC} squirrel ${version} installed"
+  echo ""
+  echo "Get started:"
+  echo "  1. Run your first audit:   squirrel audit https://your-site.com"
+  echo "  2. Add agent skills:       squirrel skills install   (Claude Code, Cursor, Codex, ...)"
+  echo "                             or: npx skills add squirrelscan/skills -y -g"
+  echo "  3. Unlock cloud audits:    squirrel auth login       ${arrow} https://squirrelscan.com/login"
+  echo "  Shell completions:         squirrel self completion <bash|zsh|fish>"
+  echo "  Docs: https://docs.squirrelscan.com"
+  echo ""
 }
 
 # Print shell profile instructions
@@ -411,21 +473,17 @@ print_path_instructions() {
       echo "  echo 'export PATH=\"$bin_dir:\$PATH\"' >> $rc_file && source $rc_file"
       ;;
   esac
+
+  echo ""
+  echo "After updating PATH, verify with: squirrel self doctor"
 }
 
 main() {
   local channel="${SQUIRREL_CHANNEL:-stable}"
 
-  echo ""
-  echo "  ____              _                _   ____"
-  echo " / ___|  __ _ _   _(_)_ __ _ __ ___| | / ___|  ___ __ _ _ __"
-  echo " \\___ \\ / _\` | | | | | '__| '__/ _ \\ | \\___ \\ / __/ _\` | '_ \\"
-  echo "  ___) | (_| | |_| | | |  | | |  __/ |  ___) | (_| (_| | | | |"
-  echo " |____/ \\__, |\\__,_|_|_|  |_|  \\___|_| |____/ \\___\\__,_|_| |_|"
-  echo "           |_|"
-  echo ""
+  print_banner
 
-  log "Installing SquirrelScan..."
+  log "Installing squirrel..."
 
   check_deps
 
@@ -462,11 +520,7 @@ main() {
 
   download_and_install "$version" "$platform" "$bin_dir"
 
-  echo ""
-  log "Installation complete!"
-
-  # Remind (don't auto-run) how to add the skill for coding agents.
-  print_skill_hint
+  print_epilogue "$version"
 
   # Print PATH instructions if needed
   if [ "$needs_path_update" = true ]; then
