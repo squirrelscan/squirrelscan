@@ -45,6 +45,8 @@ info() { echo -e "${BLUE}::${NC} $1" >&2; }
 # (os/arch/step/exit code) — never paths, env, hostname, or secrets. #1013
 INSTALLER_REPORT_VERSION="1"
 ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
+# Release metadata (latest version per channel) — R2-backed, no rate limits.
+RELEASES_ENDPOINT="${SQUIRREL_RELEASES_ENDPOINT:-https://install.squirrelscan.com/releases}"
 CURRENT_STEP="init"
 LAST_ERROR_MSG=""
 TMPDIR_TO_CLEAN=""
@@ -367,13 +369,32 @@ json_get_nested() {
     sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/' | head -1
 }
 
-# Get latest release version
+# Get latest release version.
+# Primary: install.squirrelscan.com/releases/{channel} — R2-backed release
+# metadata with no rate limits. Fallback: the GitHub API, which anonymous
+# clients share at 60 req/hr per IP — corporate NAT/VPN/CI egress hits 403s.
 get_latest_version() {
   local channel="${1:-stable}"
   local api_url="https://api.github.com/repos/${REPO}/releases"
-  local response
+  local response version=""
 
   info "Fetching releases (channel: $channel)..."
+
+  if response=$(curl -fsSL -H "User-Agent: squirrelscan-installer" \
+      --connect-timeout 5 --max-time 15 \
+      "${RELEASES_ENDPOINT}/${channel}" 2>/dev/null); then
+    if [ "$USE_JQ" = true ]; then
+      version=$(echo "$response" | jq -r '.version // empty')
+    else
+      version=$(json_get "$response" "version")
+    fi
+    if [ -n "$version" ]; then
+      # Manifest versions are bare ("0.0.73"); release tags carry the v prefix.
+      echo "v${version#v}"
+      return 0
+    fi
+  fi
+  warn "Release metadata endpoint unavailable, falling back to GitHub API..."
 
   # Build curl args - add auth header if GITHUB_TOKEN is set (avoids rate limits)
   local curl_args=(-fsSL -H "User-Agent: squirrelscan-installer" --connect-timeout 10 --max-time 30)
@@ -389,7 +410,7 @@ get_latest_version() {
     error "No releases found\n  Check: https://github.com/${REPO}/releases"
   fi
 
-  local version=""
+  version=""
   if [ "$USE_JQ" = true ]; then
     if [ "$channel" = "stable" ]; then
       version=$(echo "$response" | jq -r '[.[] | select(.prerelease == false)] | .[0].tag_name // empty')

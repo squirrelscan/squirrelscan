@@ -24,6 +24,8 @@ function Write-Err { param($Message) Write-Host "Error: " -ForegroundColor Red -
 # context (os/arch/step/exit code), never paths/env/hostname/secrets. #1013
 $InstallerReportVersion = "1"
 $ErrorEndpoint = if ($env:SQUIRREL_ERROR_ENDPOINT) { $env:SQUIRREL_ERROR_ENDPOINT } else { "https://install.squirrelscan.com/error" }
+# Release metadata (latest version per channel) — R2-backed, no rate limits.
+$ReleasesEndpoint = if ($env:SQUIRREL_RELEASES_ENDPOINT) { $env:SQUIRREL_RELEASES_ENDPOINT } else { "https://install.squirrelscan.com/releases" }
 $script:CurrentStep = "init"
 
 function Send-ErrorReport {
@@ -136,6 +138,19 @@ function Get-LatestVersion {
 
     $script:CurrentStep = "fetch_releases"
     Write-Info "Fetching releases (channel: $Channel)..."
+
+    # Primary: install.squirrelscan.com/releases/{channel} — R2-backed release
+    # metadata with no rate limits. Fallback: the GitHub API, which anonymous
+    # clients share at 60 req/hr per IP — corporate NAT/VPN/CI egress hits 403s.
+    try {
+        $meta = Invoke-RestMethod -Uri "$ReleasesEndpoint/$Channel" -Headers @{"User-Agent"="squirrelscan-installer"} -TimeoutSec 15
+        if ($meta.version) {
+            # Manifest versions are bare ("0.0.73"); release tags carry the v prefix.
+            return "v" + ($meta.version -replace '^v', '')
+        }
+    } catch {
+        Write-Warn "Release metadata endpoint unavailable, falling back to GitHub API..."
+    }
 
     try {
         $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -Headers @{"User-Agent"="squirrelscan-installer"} -TimeoutSec 30
