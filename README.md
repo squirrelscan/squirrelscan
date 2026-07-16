@@ -8,7 +8,7 @@ squirrelscan audits your website for SEO, performance, security, accessibility a
 
 ## Features
 
-- **240+ Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **260+ Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **AI-Native Design** - LLM-optimised output for Claude Code, Cursor, and any AI assistant
 - **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
 - **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
@@ -105,29 +105,29 @@ squirrel audit https://example.com -m 10
 
 | Category | Rules | Focus |
 |----------|-------|-------|
-| Accessibility | 56 | ARIA, button/input names, landmarks, lists, tables, focus |
-| Performance | 24 | Core Web Vitals, compression, caching, JS optimization |
-| Crawlability | 15 | Robots.txt, sitemaps, indexability |
-| Security | 15 | HTTPS, CSP, cookies, leaked secrets (96 patterns) |
-| Links | 15 | Broken links, redirects, anchor text |
+| Accessibility | 59 | ARIA, button/input names, landmarks, lists, tables, focus |
+| Performance | 29 | Core Web Vitals, compression, caching, JS optimization |
+| Crawlability | 17 | Robots.txt, sitemaps, indexability |
+| Agent Experience | 17 | How ready a site is for AI agents to read, discover, operate |
+| Security | 16 | HTTPS, CSP, cookies, leaked secrets |
 | Images | 15 | Alt text, formats, lazy loading, optimization |
-| Content | 15 | Readability, freshness, word count |
-| E-E-A-T | 14 | Authority, trust, expertise signals |
-| Core | 13 | Meta tags, canonical, doctype, charset |
-| Structured Data | 11 | JSON-LD, schema validation |
+| E-E-A-T | 15 | Authority, trust, expertise signals |
+| Links | 14 | Broken links, redirects, anchor text |
+| Core SEO | 13 | Meta tags, canonical, doctype, charset |
+| Content | 12 | Readability, freshness, word count |
+| Structured Data | 10 | JSON-LD, schema validation |
+| Site Integrity | 9 | Injected pages, phishing kits, malware, SEO spam |
 | URL Structure | 8 | Length, format, parameters |
 | Mobile | 6 | Viewport, tap targets, responsive |
 | Social Media | 4 | Open Graph, Twitter Cards |
-| SEO | 4 | Meta robots, indexability |
+| Legal Compliance | 4 | Privacy policy, cookie consent |
 | Video | 3 | Schema, captions, thumbnails |
 | Local SEO | 3 | NAP, geo tags, service areas |
-| Legal | 3 | Privacy policy, cookie consent |
+| Blocking | 3 | Content, links, trackers that ad/privacy blockers block |
 | Internationalization | 2 | Hreflang, lang attribute |
 | Analytics | 2 | GTM, consent mode |
-| AI Detection | 2 | AI content signals |
-| Adblock Detection | 2 | Blocked elements, tracking |
 
-**Total: 249+ rules across 21 categories**
+**Total: 261 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
