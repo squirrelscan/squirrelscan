@@ -251,7 +251,7 @@ detect_platform() {
       error "FreeBSD is not yet supported. See: https://github.com/${REPO}/issues"
       ;;
     mingw*|msys*|cygwin*)
-      error "Windows is not supported via this installer. Download manually from:\n  https://github.com/${REPO}/releases"
+      error "This installer is for macOS/Linux. On Windows, run this in PowerShell instead:\n  powershell -c \"irm https://install.squirrelscan.com/install.ps1 | iex\"\n  Or download manually from: https://github.com/${REPO}/releases"
       ;;
     *) error "Unsupported OS: $os" ;;
   esac
