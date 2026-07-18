@@ -6,6 +6,57 @@
 
 squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP. Local audits are always free.
 
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=squirrelscan&config=eyJ0eXBlIjoiaHR0cCIsInVybCI6Imh0dHBzOi8vbWNwLnNxdWlycmVsc2Nhbi5jb20vbWNwIn0=)
+[![Add to Claude Code](https://img.shields.io/badge/Add%20to-Claude%20Code-d97757)](https://docs.squirrelscan.com/agents)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-000000)](https://registry.modelcontextprotocol.io)
+
+## Add to your coding agent
+
+squirrelscan ships as **skills** (autonomous audit + fix workflows), an **MCP server** (hosted at `mcp.squirrelscan.com`), and a **plugin** for Claude Code and Cursor. Pick your agent:
+
+### Cursor
+
+One click: the **Add to Cursor** badge above, or add the MCP server manually to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "squirrelscan": { "type": "http", "url": "https://mcp.squirrelscan.com/mcp" }
+  }
+}
+```
+
+Skills install with `npx skills add squirrelscan/squirrelscan`.
+
+### Claude Code
+
+Install the plugin (bundles skills + the MCP server):
+
+```
+/plugin marketplace add squirrelscan/squirrelscan
+/plugin install squirrelscan@squirrelscan
+```
+
+Or add just the MCP server:
+
+```bash
+claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
+```
+
+### Any MCP client
+
+squirrelscan is in the [MCP Registry](https://registry.modelcontextprotocol.io) as `com.squirrelscan/squirrelscan`. Point any client at the remote server:
+
+```
+https://mcp.squirrelscan.com/mcp
+```
+
+Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token).
+
+### OpenAI Codex / other agents
+
+Skills follow the [Agent Skills standard](https://agentskills.io). Install with `npx skills add squirrelscan/squirrelscan` (lands in `.agents/skills/`), or clone this repo and symlink the `skills/*` directories.
+
 ## Features
 
 - **260+ Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
@@ -16,48 +67,9 @@ squirrelscan audits your website for SEO, performance, security, accessibility a
 - **Crawl History & Changes** - Track site evolution, compare crawls, spot regressions
 - **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
 
-## Three Ways to Use
+## CLI
 
-### 1. CLI for Humans
-
-Run audits directly in your terminal:
-
-```bash
-squirrel audit example.com
-```
-
-### 2. AI Coding Agent Skill
-
-Install the skill for autonomous workflows:
-
-```bash
-npx skills install squirrelscan/skills
-```
-
-Use the slash command:
-
-```
-/audit-website
-```
-
-Or prompt your AI agent more specifically:
-
-```
-Use the audit-website skill to audit this site and fix all issues but only crawl 10 pages
-```
-
-More information [in the skills repository](https://github.com/squirrelscan/skills) and our [Getting started with AI Agents](https://docs.squirrelscan.com/agents) documentation.
-
-### 3. Pipe to AI agent
-
-Pipe clean output to any AI assistant:
-
-```bash
-squirrel audit example.com --format llm | claude
-```
-
-
-## Installation
+### Installation
 
 **macOS / Linux:**
 ```bash
@@ -79,7 +91,7 @@ npm install -g squirrelscan
 npx squirrelscan audit example.com
 ```
 
-## Quick Start
+### Quick Start
 
 ```bash
 # Audit a website
@@ -95,11 +107,22 @@ squirrel audit https://example.com --format llm | claude
 squirrel audit https://example.com -m 10
 ```
 
-## Resources
+## Skills
 
-- **Website:** [squirrelscan.com](https://squirrelscan.com)
-- **Documentation:** [docs.squirrelscan.com](https://docs.squirrelscan.com)
-- **AI Agent Skills:** [github.com/squirrelscan/skills](https://github.com/squirrelscan/skills)
+Two skills drive agent workflows:
+
+- **`squirrelscan`** - operating the CLI: install, login, keys, credits, running audits, publishing reports, MCP setup, config, troubleshooting.
+- **`audit-website`** - the full fix loop: audit, map issues to source files, fix in batches, re-audit until the site scores well.
+
+```bash
+npx skills add squirrelscan/squirrelscan
+```
+
+Then, in your agent:
+
+```
+Use the audit-website skill to audit this site and fix all issues but only crawl 10 pages
+```
 
 ## Rule Categories
 
@@ -131,24 +154,6 @@ squirrel audit https://example.com -m 10
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
-## AI Agent Integration
-
-squirrelscan is designed for autonomous AI workflows:
-
-```bash
-# Install the skill for Claude Code, Cursor, etc.
-npx skills install squirrelscan/skills
-```
-
-Example AI prompts:
-- "Audit example.com and fix all critical issues"
-- "Check for SEO regressions after my recent changes"
-- "Generate a comprehensive audit report and enter plan mode to fix issues"
-- "Audit only the /blog section and focus on E-E-A-T signals"
-- "Run a security-focused audit and check for leaked secrets"
-
-See [AI Agent Integration docs](https://docs.squirrelscan.com/agents) for advanced workflows.
-
 ## Output Formats
 
 | Format | Flag | Use Case |
@@ -168,7 +173,11 @@ squirrelscan is in **active beta**. Expect rapid iteration and breaking changes.
 
 - [Website](https://squirrelscan.com)
 - [Documentation](https://docs.squirrelscan.com)
-- [AI Agent Skills](https://github.com/squirrelscan/skills)
+- [AI Agent Integration](https://docs.squirrelscan.com/agents)
 - [Share Feedback](https://squirrelscan.com/feedback)
 - [Bugs, Issues & Feature Requests](https://github.com/squirrelscan/squirrelscan/issues)
 - [Twitter/X](https://x.com/squirrelscan_)
+
+## License
+
+The skills, plugin manifests, MCP configuration, and install scripts in this repository are MIT licensed (see [LICENSE](LICENSE)). The squirrelscan CLI binary itself is distributed as a standalone executable and is not open source.

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "squirrelscan",
+  "version": "2.0.0",
+  "description": "Website audit tool built for AI agents. 260+ SEO, performance, security, accessibility & agent experience rules: run audits from the CLI, fix findings in code, publish reports, and connect over MCP.",
+  "author": {
+    "name": "squirrelscan",
+    "url": "https://squirrelscan.com"
+  },
+  "homepage": "https://squirrelscan.com",
+  "repository": "https://github.com/squirrelscan/squirrelscan",
+  "license": "MIT",
+  "keywords": ["seo", "audit", "website", "performance", "security", "accessibility", "crawler", "mcp"]
+}

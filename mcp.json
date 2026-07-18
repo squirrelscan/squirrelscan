@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "squirrelscan": {
+      "type": "http",
+      "url": "https://mcp.squirrelscan.com/mcp"
+    }
+  }
+}
