@@ -6,27 +6,29 @@
 
 squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP. Local audits are always free.
 
-[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=squirrelscan&config=eyJ0eXBlIjoiaHR0cCIsInVybCI6Imh0dHBzOi8vbWNwLnNxdWlycmVsc2Nhbi5jb20vbWNwIn0=)
-[![Add to Claude Code](https://img.shields.io/badge/Add%20to-Claude%20Code-d97757)](https://docs.squirrelscan.com/agents)
-[![MCP Registry](https://img.shields.io/badge/MCP-Registry-000000)](https://registry.modelcontextprotocol.io)
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://squirrelscan.com/add/cursor)
+[![Add to Claude Code](https://img.shields.io/badge/Add_to-Claude_Code-d97757?style=for-the-badge)](https://squirrelscan.com/add/claude)
+[![Add to Codex](https://img.shields.io/badge/Add_to-Codex-000000?style=for-the-badge)](https://squirrelscan.com/add/codex)
+[![Add to opencode](https://img.shields.io/badge/Add_to-opencode-383838?style=for-the-badge)](https://squirrelscan.com/add/opencode)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-1f6feb?style=for-the-badge)](https://registry.modelcontextprotocol.io)
 
 ## Add to your coding agent
 
-squirrelscan ships as **skills** (autonomous audit + fix workflows), an **MCP server** (hosted at `mcp.squirrelscan.com`), and a **plugin** for Claude Code and Cursor. Pick your agent:
+squirrelscan ships as an **MCP server** (hosted at `mcp.squirrelscan.com`), **skills** (autonomous audit + fix workflows), and a **plugin** for Claude Code and Cursor. Cursor installs in one click from the badge above; the rest are a single copy-paste.
 
 ### Cursor
 
-One click: the **Add to Cursor** badge above, or add the MCP server manually to `~/.cursor/mcp.json`:
+Click the **Add to Cursor** badge above, or add it manually to `~/.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
-    "squirrelscan": { "type": "http", "url": "https://mcp.squirrelscan.com/mcp" }
+    "squirrelscan": { "url": "https://mcp.squirrelscan.com/mcp" }
   }
 }
 ```
 
-Skills install with `npx skills add squirrelscan/squirrelscan`.
+Skills: `npx skills add squirrelscan/squirrelscan`
 
 ### Claude Code
 
@@ -43,6 +45,34 @@ Or add just the MCP server:
 claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
 ```
 
+### OpenAI Codex
+
+Add the server to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.squirrelscan]
+url = "https://mcp.squirrelscan.com/mcp"
+```
+
+Codex reads Agent Skills from `~/.agents/skills`, so skills work too: `npx skills add squirrelscan/squirrelscan`
+
+### opencode
+
+Add the server to `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "squirrelscan": {
+      "type": "remote",
+      "url": "https://mcp.squirrelscan.com/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
 ### Any MCP client
 
 squirrelscan is in the [MCP Registry](https://registry.modelcontextprotocol.io) as `com.squirrelscan/squirrelscan`. Point any client at the remote server:
@@ -51,11 +81,7 @@ squirrelscan is in the [MCP Registry](https://registry.modelcontextprotocol.io) 
 https://mcp.squirrelscan.com/mcp
 ```
 
-Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token).
-
-### OpenAI Codex / other agents
-
-Skills follow the [Agent Skills standard](https://agentskills.io). Install with `npx skills add squirrelscan/squirrelscan` (lands in `.agents/skills/`), or clone this repo and symlink the `skills/*` directories.
+Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token). Skills follow the [Agent Skills standard](https://agentskills.io): `npx skills add squirrelscan/squirrelscan` lands them in `.agents/skills/`.
 
 ## Features
 
