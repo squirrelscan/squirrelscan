@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "squirrelscan",
   "displayName": "squirrelscan",
-  "description": "Website audit tool built for AI agents. 260+ SEO, performance, security, accessibility & agent experience rules: run audits from the CLI, fix findings in code, publish reports, and connect over MCP.",
+  "description": "Website QA tool built for coding agents (Claude Code, Cursor). 260+ rules across SEO, performance, security, accessibility & agent experience: audit from the CLI, fix findings in code, publish reports, and connect over MCP.",
   "author": {
     "name": "squirrelscan",
     "url": "https://squirrelscan.com"

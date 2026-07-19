@@ -4,12 +4,12 @@
     "name": "squirrelscan",
     "email": "support@squirrelscan.com"
   },
-  "description": "Official squirrelscan plugins: website audits for AI agents",
+  "description": "Official squirrelscan plugins: website QA for coding agents",
   "plugins": [
     {
       "name": "squirrelscan",
       "source": "./",
-      "description": "Website audit tool built for AI agents. 260+ SEO, performance, security, accessibility & agent experience rules: run audits from the CLI, fix findings in code, publish reports, and connect over MCP.",
+      "description": "Website QA tool built for coding agents (Claude Code, Cursor). 260+ rules across SEO, performance, security, accessibility & agent experience: audit from the CLI, fix findings in code, publish reports, and connect over MCP.",
       "category": "productivity",
       "tags": ["seo", "audit", "website", "performance", "security"]
     }
