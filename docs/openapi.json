@@ -962,7 +962,7 @@
       },
       "AuditReport": {
         "type": "object",
-        "description": "The full audit report payload produced by the squirrelscan engine. Only the high-signal top-level fields are documented here; the complete schema is validated server-side (see `apps/api/src/schemas/audit-report.ts`). Extra top-level fields are accepted but ignored (the server-side schema strips unknown keys rather than rejecting them) — hence `additionalProperties: true`. The documented fields below are still validated and must conform.",
+        "description": "The full audit report payload produced by the squirrelscan engine. Only the high-signal top-level fields are documented here; the complete schema is validated by the hosted API. Extra top-level fields are accepted but ignored, while the documented fields below are validated and must conform.",
         "required": ["baseUrl", "timestamp", "totalPages", "passed", "warnings", "failed", "siteChecks", "summary", "ruleResults"],
         "properties": {
           "baseUrl": { "type": "string", "format": "uri" },

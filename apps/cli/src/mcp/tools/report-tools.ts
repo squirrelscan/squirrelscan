@@ -15,10 +15,8 @@ import { jsonResult } from "../result";
 import { authNote, TOOL_AUTH } from "../scopes";
 
 /**
- * Shape of GET /v1/agent-runs/active's per-run `pageLimitNotice` (#1274,
- * mirrors `PageLimitClampNotice` in apps/api/src/lib/website-run-config.ts —
- * apps/cli can't import that directly, cross-app imports must stay in
- * packages/). Only the fields the one-line warn actually reads.
+ * Public subset of GET /v1/agent-runs/active's per-run `pageLimitNotice`.
+ * Only the fields the one-line warning reads are represented here.
  */
 interface ActiveRunPageLimitNotice {
   requested: number;

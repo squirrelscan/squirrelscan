@@ -441,7 +441,7 @@ export function pickHomepageSummary(
     // Require the root candidate to share the audited origin — a multi-domain
     // crawl (allowedDomains) can include another site's "/" page, and stamping
     // the website with a sibling domain's title/description would be wrong.
-    // Mirrors the server-side picker in apps/api/src/pipeline/helpers.ts.
+    // Mirrors the hosted API's homepage picker.
     const baseOrigin = new URL(report.baseUrl).origin;
     home =
       pages.find((p) => {

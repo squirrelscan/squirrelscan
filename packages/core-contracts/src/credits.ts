@@ -120,8 +120,7 @@ export const CREDIT_PACKS: Record<CreditPackId, { credits: number; priceUsd: num
 // get_audit_status output, and the API audit-detail response. Two sources
 // feed the same shape: the report payload's embedded `cloudSpend` (CLI runs,
 // incl. historical) or the `credit_ledger` debits/refunds tagged with the
-// run id (cloud/container runs + threaded CLI renders). See
-// apps/api/src/lib/audit-cost.ts.
+// run id (cloud/container runs + threaded CLI renders).
 
 /** One feature's charge (and any reversal) for a single audit run. */
 export interface AuditCostLine {

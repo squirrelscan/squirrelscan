@@ -3,8 +3,7 @@
 //   bun run packages/synthetic-site/src/cli.ts --pages 5000 --serve
 //   bun run packages/synthetic-site/src/cli.ts --pages 5000 --write-db ./crawl.sqlite
 //
-// Dev-only tool — never imported by any shipping app (apps/cli, apps/api,
-// apps/worker-agent, ...), so it never enters the compiled CLI binary.
+// Dev-only tool, never imported by the shipping CLI or hosted runtimes.
 
 import { parseArgs } from "node:util";
 

@@ -5,8 +5,8 @@ import type { PlanDefinition, PlanId } from "./index";
  * value actually taking effect. Team's `maxPagesPerAudit` below stays a fixed
  * 5,000 unconditionally — that's the plan's nominal/marketing ceiling, and
  * pricing.tsx always displays it. This flag is a SEPARATE, narrower switch
- * consulted only by the enforcement seam (apps/api's `planMaxPages()`), which
- * uses Pro's 2,000 ceiling for Team instead of the raw 5,000 while this is
+ * consulted only by hosted plan enforcement, which uses Pro's 2,000 ceiling
+ * for Team instead of the raw 5,000 while this is
  * `false`.
  *
  * Why not just gate on `REPORT_LIMITS.maxPages` rising (#1020's original
@@ -91,7 +91,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     scheduledCrawls: true,
     customHeaders: true,
     // #1020 ladder: exceeds today's REPORT_LIMITS.maxPages (2,000) on purpose —
-    // apps/api's planMaxPages() clamps to that cap, so this only takes effect
+    // Hosted plan enforcement clamps to that cap, so this only takes effect
     // once the report/publish ingest ceiling is raised separately (see the
     // maxPagesPerAudit doc comment on PlanDefinition in index.ts).
     maxPagesPerAudit: 5000,

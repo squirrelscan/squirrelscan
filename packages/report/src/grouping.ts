@@ -139,10 +139,9 @@ export function groupIssuesByCategory(
     >();
     // #1135: the "fixed on all pages checked this run" note reads every
     // status (pass included), not just fail/warn — computed via the SAME
-    // shared helper apps/api's run-report.ts calls (a prior codex review
-    // caught this note drifting between two independently-maintained
-    // copies; one implementation in packages/report/src/coverage.ts now
-    // backs both). The loose `ruleResults` union this function accepts
+    // shared helper used by hosted report summaries as well. One implementation
+    // in packages/report/src/coverage.ts backs both surfaces. The loose
+    // `ruleResults` union this function accepts
     // (Map/Record, possibly untyped checks) is why this needs one cast —
     // same idiom as every other field read in this loop.
     const mixedProvenanceNote = ruleMixedProvenanceNote(
