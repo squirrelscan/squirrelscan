@@ -20,6 +20,30 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.80
+
+The CLI is now open source under MIT, with the public repo set up as the canonical
+home for the CLI and docs. This release also hardens the public surface and makes
+sure the telemetry opt-out is honored everywhere.
+
+### Added
+
+- **MIT licensed CLI.** `squirrelscan` is now open source under MIT.
+- **Public repo source of truth.** CLI builds and docs now come from the public
+  repository.
+- **Telemetry opt-out respected everywhere.** `NO_TELEMETRY` is honored by the
+  CLI and install flow.
+
+### Fixed
+
+- **Public-repo hardening.** Release and update paths were tightened to avoid
+  command injection, traversal, unsafe URL handling, and Markdown injection
+  issues.
+- **Parser and sanitizer performance issues.** Several regex-heavy paths were
+  rewritten to avoid ReDoS-style slowdowns.
+- **Secret and scheme filtering tightened.** Unsafe URLs and non-http(s) inputs
+  are now rejected more consistently.
+
 ## v0.0.79
 
 Clearer page limits, more armor for audits of slow or messy sites, and a lot of under-the-hood groundwork for auditing much bigger sites. More on that soon.
