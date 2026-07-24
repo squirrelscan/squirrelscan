@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { localApiHint } from "@/controllers/auth/login";
+import { localApiHint, normalizeBrowserUrl } from "@/controllers/auth/login";
 import { DEFAULT_API_URL } from "@/self/api";
 
 describe("auth/login — localApiHint", () => {
@@ -27,5 +27,22 @@ describe("auth/login — localApiHint", () => {
     ]) {
       expect(localApiHint(url)).toBe("");
     }
+  });
+});
+
+describe("auth/login — browser URL validation", () => {
+  test("accepts HTTP(S) authentication URLs", () => {
+    expect(normalizeBrowserUrl("https://example.com/login?a=1")).toBe(
+      "https://example.com/login?a=1"
+    );
+  });
+
+  test("rejects shell-like and executable URL schemes", () => {
+    expect(() => normalizeBrowserUrl("javascript:alert(1)")).toThrow(
+      "must use HTTP or HTTPS"
+    );
+    expect(() => normalizeBrowserUrl("file:///tmp/payload")).toThrow(
+      "must use HTTP or HTTPS"
+    );
   });
 });

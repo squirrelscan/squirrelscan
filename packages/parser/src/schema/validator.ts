@@ -151,7 +151,7 @@ function validatePropertyType(
   prop: string,
   value: unknown,
   rule: PropertyRule,
-  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void
+  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void,
 ): void {
   if (isMissing(value)) {
     return;
@@ -254,7 +254,7 @@ function normalizeTypes(schema: ParsedSchema): string[] {
 function validateContext(
   schema: ParsedSchema,
   typeName: string,
-  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void
+  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void,
 ): void {
   const context = schema["@context"];
   if (!context) {
@@ -270,7 +270,15 @@ function validateContext(
   const contexts = Array.isArray(context) ? context : [context];
   const hasSchemaOrg = contexts.some((entry) => {
     if (typeof entry !== "string") return false;
-    return entry.includes("schema.org");
+    try {
+      const url = new URL(entry.startsWith("//") ? `https:${entry}` : entry);
+      return (
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        (url.hostname === "schema.org" || url.hostname === "www.schema.org")
+      );
+    } catch {
+      return false;
+    }
   });
   if (!hasSchemaOrg) {
     addIssue({
@@ -286,8 +294,7 @@ function validateSchema(schema: ParsedSchema): SchemaValidationIssue[] {
   const issues: SchemaValidationIssue[] = [];
 
   const baseTypeRaw =
-    (Array.isArray(schema["@type"]) ? schema["@type"][0] : schema["@type"]) ??
-    "Schema";
+    (Array.isArray(schema["@type"]) ? schema["@type"][0] : schema["@type"]) ?? "Schema";
   const baseType = TYPE_ALIASES[baseTypeRaw] ?? baseTypeRaw;
 
   const addIssueForType =
@@ -336,8 +343,6 @@ function validateSchema(schema: ParsedSchema): SchemaValidationIssue[] {
   return issues;
 }
 
-export function validateSchemas(
-  schemas: ParsedSchema[]
-): SchemaValidationIssue[] {
+export function validateSchemas(schemas: ParsedSchema[]): SchemaValidationIssue[] {
   return schemas.flatMap((schema) => validateSchema(schema));
 }

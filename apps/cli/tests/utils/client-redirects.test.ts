@@ -42,6 +42,12 @@ describe("findClientRedirects", () => {
         "<meta http-equiv='refresh' content='0;url=https://target.com/'>";
       expect(findClientRedirects(html, baseUrl)).toBe("https://target.com/");
     });
+
+    test("handles case-insensitive attributes separated by newlines", () => {
+      const html =
+        '<META\nHTTP-EQUIV="REFRESH"\nCONTENT="0; URL=https://target.com/">';
+      expect(findClientRedirects(html, baseUrl)).toBe("https://target.com/");
+    });
   });
 
   describe("JavaScript redirect detection", () => {

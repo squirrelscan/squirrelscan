@@ -3,7 +3,14 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { hasNonHttpScheme, isLoopbackHost, isValidDomain, setReservedNames } from "../src/url";
+import {
+  hasNonHttpScheme,
+  hasUnsafeUrlScheme,
+  isLoopbackHost,
+  isValidDomain,
+  setReservedNames,
+  shouldSkipUrl,
+} from "../src/url";
 
 describe("isLoopbackHost", () => {
   test("matches loopback hosts", () => {
@@ -47,6 +54,29 @@ describe("hasNonHttpScheme", () => {
 
   test("accepts schemeless input", () => {
     expect(hasNonHttpScheme("example.com")).toBe(false);
+  });
+});
+
+describe("crawl URL scheme filtering", () => {
+  test("rejects executable schemes case-insensitively and with embedded URL whitespace", () => {
+    for (const href of [
+      "javascript:alert(1)",
+      " JaVaScRiPt:alert(1)",
+      "java\nscript:alert(1)",
+      "vbscript:x",
+      "DATA:text/html,x",
+    ]) {
+      expect(hasUnsafeUrlScheme(href)).toBe(true);
+      expect(shouldSkipUrl(href)).toBe(true);
+    }
+  });
+
+  test("crawls relative and HTTP(S) URLs but skips other explicit schemes", () => {
+    expect(shouldSkipUrl("/docs")).toBe(false);
+    expect(shouldSkipUrl("HTTPS://example.com/docs")).toBe(false);
+    expect(shouldSkipUrl("mailto:hello@example.com")).toBe(true);
+    expect(shouldSkipUrl("ftp://example.com/file")).toBe(true);
+    expect(shouldSkipUrl(" #section")).toBe(true);
   });
 });
 

@@ -27,6 +27,7 @@ import {
   getSymlinkPath,
   getUpdateLockPath,
   getUnmanagedUpdateHint,
+  isValidReleaseVersion,
   isManagedInstall,
   detectPlatformArch,
 } from "./paths";
@@ -747,14 +748,17 @@ export async function installVersion(
   version: string,
   binaryData: ArrayBuffer
 ): Promise<Result<void>> {
-  const releasePath = getReleasePath(version);
-  const binaryPath = getBinaryPath(version);
-
-  // Write to a temp file and rename into place — a crash mid-write must
-  // never leave a corrupt binary at the path the symlink will point to.
-  const tmpPath = `${binaryPath}.tmp-${process.pid}`;
-
+  let tmpPath: string | null = null;
   try {
+    if (!isValidReleaseVersion(version)) {
+      return err(commandError("INVALID_RELEASE", "Release version is invalid"));
+    }
+    const releasePath = getReleasePath(version);
+    const binaryPath = getBinaryPath(version);
+
+    // Write to a temp file and rename into place — a crash mid-write must
+    // never leave a corrupt binary at the path the symlink will point to.
+    tmpPath = `${binaryPath}.tmp-${process.pid}`;
     if (!existsSync(releasePath)) {
       mkdirSync(releasePath, { recursive: true });
     }
@@ -765,10 +769,12 @@ export async function installVersion(
 
     return ok(undefined);
   } catch (error) {
-    try {
-      unlinkSync(tmpPath);
-    } catch {
-      // tmp never written or already cleaned up
+    if (tmpPath) {
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        // tmp never written or already cleaned up
+      }
     }
     return err(
       commandError(
@@ -787,11 +793,14 @@ export function updateSymlink(
   version: string,
   customBinDir?: string
 ): Result<void> {
-  const binaryPath = getBinaryPath(version);
   const symlinkPath = getSymlinkPath(customBinDir);
   const symlinkDir = dirname(symlinkPath);
 
   try {
+    if (!isValidReleaseVersion(version)) {
+      return err(commandError("INVALID_RELEASE", "Release version is invalid"));
+    }
+    const binaryPath = getBinaryPath(version);
     if (!existsSync(symlinkDir)) {
       mkdirSync(symlinkDir, { recursive: true });
     }

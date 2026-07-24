@@ -9,6 +9,8 @@ export {
   getPathname,
   resolveUrl,
   coerceSchemelessUrl,
+  hasNonCrawlableUrlScheme,
+  hasUnsafeUrlScheme,
   shouldSkipUrl,
   parseUserUrl,
   isLocalhost,
@@ -59,6 +61,8 @@ export { getRandomUserAgent } from "./user-agent";
 export { timingSafeStringEqual } from "./crypto-compare";
 
 export { normalizeHtmlForFingerprint } from "./fingerprint";
+
+export { stripHtmlForText, type HtmlTextOptions } from "./html-text";
 
 export { chunk, mapWithConcurrency } from "./concurrency";
 

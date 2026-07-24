@@ -301,6 +301,22 @@ describe("updater", () => {
       if (!result.ok) expect(result.error.code).toBe("DOWNLOAD_ABORTED");
     });
 
+    test("rejects invalid release paths before downloading", async () => {
+      let fetched = false;
+      globalThis.fetch = (async () => {
+        fetched = true;
+        return new Response("binary");
+      }) as unknown as typeof fetch;
+
+      const result = await downloadBinary(
+        { ...manifest, version: "../../bin" },
+        "darwin-arm64"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("INVALID_RELEASE");
+      expect(fetched).toBe(false);
+    });
+
     test("pre-aborted signal never downloads", async () => {
       let fetched = false;
       globalThis.fetch = ((

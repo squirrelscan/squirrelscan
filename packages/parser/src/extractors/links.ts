@@ -3,11 +3,14 @@
 
 import type { Document, Element } from "linkedom";
 
-import { coerceSchemelessUrl } from "@squirrelscan/utils";
+import { coerceSchemelessUrl, hasNonCrawlableUrlScheme } from "@squirrelscan/utils";
 import { Effect } from "effect";
 
 // Trace stubs (CLI wraps with rich logger)
-const logger = { traceStart: (_n: string) => "", traceEnd: (_id: string, _m?: Record<string, unknown>) => {} };
+const logger = {
+  traceStart: (_n: string) => "",
+  traceEnd: (_id: string, _m?: Record<string, unknown>) => {},
+};
 
 import type { ExtractedLink, LinkPosition } from "./types";
 
@@ -34,8 +37,7 @@ function detectLinkPosition(element: Element): LinkPosition {
     if (tagName === "footer" || role === "contentinfo") return "footer";
     if (tagName === "nav" || role === "navigation") return "nav";
     if (tagName === "aside" || role === "complementary") return "sidebar";
-    if (tagName === "main" || tagName === "article" || role === "main")
-      return "content";
+    if (tagName === "main" || tagName === "article" || role === "main") return "content";
 
     // Class/id pattern groups — only computed when the element actually has a
     // class or id (use getAttribute for className: SVG elements expose an
@@ -46,18 +48,10 @@ function detectLinkPosition(element: Element): LinkPosition {
       const className = rawClass ? rawClass.toLowerCase() : "";
       const id = rawId ? rawId.toLowerCase() : "";
 
-      if (
-        className.includes("header") ||
-        className.includes("masthead") ||
-        id.includes("header")
-      ) {
+      if (className.includes("header") || className.includes("masthead") || id.includes("header")) {
         return "header";
       }
-      if (
-        className.includes("footer") ||
-        className.includes("colophon") ||
-        id.includes("footer")
-      ) {
+      if (className.includes("footer") || className.includes("colophon") || id.includes("footer")) {
         return "footer";
       }
       if (
@@ -68,11 +62,7 @@ function detectLinkPosition(element: Element): LinkPosition {
       ) {
         return "nav";
       }
-      if (
-        className.includes("sidebar") ||
-        className.includes("aside") ||
-        id.includes("sidebar")
-      ) {
+      if (className.includes("sidebar") || className.includes("aside") || id.includes("sidebar")) {
         return "sidebar";
       }
       if (
@@ -109,9 +99,7 @@ function parseRel(rel: string | null): string[] {
  */
 function hasNofollow(relArray: string[]): boolean {
   return (
-    relArray.includes("nofollow") ||
-    relArray.includes("sponsored") ||
-    relArray.includes("ugc")
+    relArray.includes("nofollow") || relArray.includes("sponsored") || relArray.includes("ugc")
   );
 }
 
@@ -130,11 +118,7 @@ export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
     if (!href) continue;
 
     // Skip javascript:, mailto:, tel:, etc.
-    if (href.startsWith("javascript:")) continue;
-    if (href.startsWith("mailto:")) continue;
-    if (href.startsWith("tel:")) continue;
-    if (href.startsWith("data:")) continue;
-    if (href === "#") continue;
+    if (href.trim() === "#" || hasNonCrawlableUrlScheme(href)) continue;
 
     const normalizedHref = coerceSchemelessUrl(href.trim());
 
@@ -166,20 +150,14 @@ export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
 /**
  * Extract internal links only
  */
-export function extractInternalLinks(
-  doc: Document,
-  baseUrl: string
-): ExtractedLink[] {
+export function extractInternalLinks(doc: Document, baseUrl: string): ExtractedLink[] {
   return extractLinks(doc, baseUrl).filter((link) => link.isInternal);
 }
 
 /**
  * Extract external links only
  */
-export function extractExternalLinks(
-  doc: Document,
-  baseUrl: string
-): ExtractedLink[] {
+export function extractExternalLinks(doc: Document, baseUrl: string): ExtractedLink[] {
   return extractLinks(doc, baseUrl).filter((link) => !link.isInternal);
 }
 

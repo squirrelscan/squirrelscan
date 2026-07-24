@@ -33,6 +33,7 @@ import {
   loadAllRules,
   type RuleCloudSpec,
 } from "@squirrelscan/rules";
+import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
 
 import type { ExternalBulkChecker, SiteContextPage } from "@/audit/adapter";
 import type { Config } from "@/config";
@@ -250,12 +251,7 @@ function extractVisibleLinks(doc: Document): { href: string; text?: string }[] {
   for (const anchor of anchors) {
     const href = (anchor as Element).getAttribute("href")?.trim();
     if (!href) continue;
-    if (
-      href.startsWith("#") ||
-      href.startsWith("javascript:") ||
-      href.startsWith("data:")
-    )
-      continue;
+    if (href.trimStart().startsWith("#") || hasUnsafeUrlScheme(href)) continue;
     if (seen.has(href)) continue;
     seen.add(href);
     const text = (anchor as Element).textContent?.trim();

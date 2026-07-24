@@ -119,6 +119,7 @@ async function findAvailablePort(): Promise<number> {
  * Open a URL in the default browser
  */
 async function openBrowser(url: string): Promise<void> {
+  const safeUrl = normalizeBrowserUrl(url);
   const { platform } = process;
 
   let command: string;
@@ -126,14 +127,17 @@ async function openBrowser(url: string): Promise<void> {
 
   if (platform === "darwin") {
     command = "open";
-    args = [url];
+    args = [safeUrl];
   } else if (platform === "win32") {
-    command = "cmd";
-    args = ["/c", "start", "", url];
+    // Do not pass the API-provided URL through cmd.exe: shell metacharacters in
+    // the URL would otherwise be interpreted as commands. Explorer delegates
+    // HTTP(S) URLs to the default browser without invoking a command shell.
+    command = "explorer.exe";
+    args = [safeUrl];
   } else {
     // Linux
     command = "xdg-open";
-    args = [url];
+    args = [safeUrl];
   }
 
   const { spawn } = await import("node:child_process");
@@ -147,6 +151,14 @@ async function openBrowser(url: string): Promise<void> {
     // Don't wait for close - browser stays open
     setTimeout(resolve, 500);
   });
+}
+
+export function normalizeBrowserUrl(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Authentication URL must use HTTP or HTTPS");
+  }
+  return url.toString();
 }
 
 export function fetchSessionStatus(
