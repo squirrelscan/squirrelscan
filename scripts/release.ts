@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun";
-import { inc, type ReleaseType } from "semver";
+import { inc, rcompare, valid, type ReleaseType } from "semver";
 import { createInterface } from "node:readline";
 
 const PACKAGE_JSON = "apps/cli/package.json";
@@ -99,6 +99,20 @@ export function computeNextVersion(
   return inc(current, bump) ?? error(`Cannot compute version from ${current}`);
 }
 
+export function latestTaggedVersion(tags: string[], fallback: string): string {
+  const versions = tags
+    .map((tag) => tag.replace(/^v/, ""))
+    .filter((tag): tag is string => valid(tag) !== null)
+    .sort(rcompare);
+  return versions[0] ?? fallback;
+}
+
+export async function resolveCurrentVersion(fallback: string): Promise<string> {
+  await $`git fetch --tags --force`.quiet();
+  const tags = (await $`git tag --list ${"v*"}`.text()).split(/\r?\n/).filter(Boolean);
+  return latestTaggedVersion(tags, fallback);
+}
+
 // Preflight (#495): release.yml resolves notes by running the SAME extractor over
 // CHANGELOG.md; if the section is missing the release ships a silent minimal body
 // AFTER the bump+tag are already pushed to main. Catch it here, before dispatch.
@@ -153,7 +167,7 @@ async function main(): Promise<void> {
   await checkPrerequisites();
 
   const pkg = await readPackageJson();
-  const currentVersion = pkg.version;
+  const currentVersion = await resolveCurrentVersion(pkg.version);
   const baseVersion = getBaseVersion(currentVersion);
 
   info(`Current version: ${currentVersion}`);
