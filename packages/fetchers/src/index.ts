@@ -1,4 +1,9 @@
 import type { RedirectChain } from "@squirrelscan/core-contracts";
+import {
+  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  headersForRedirect,
+  readBodyCapped,
+} from "@squirrelscan/utils";
 
 export interface FetcherCapabilities {
   jsRendering: boolean;
@@ -115,15 +120,14 @@ interface RenderJobStatusResponse {
 // Expires values contain their own commas — so the Fetch spec keeps them
 // separate). That means `forEach` fires once per Set-Cookie header, and a
 // naive `result[key] = value` assignment overwrites on each call, silently
-// keeping only the LAST cookie a page sets (squirrelscan/repo#973).
+// keeping only the LAST cookie a page sets.
 // `getSetCookie()` returns the exact array of Set-Cookie values kept separate
 // by the Headers object, so we join them with "\n" — a delimiter that can't
 // appear in a header value — instead of the ", " that `.get()` would use,
 // which is ambiguous with the comma inside a cookie's own
 // `Expires=Wed, 09 Jun 2021...` attribute. Downstream cookie parsing
 // (packages/rules/src/security/cookie-flags.ts) splits back into individual
-// cookies on this exact separator, and the cloud render path
-// (apps/crawler-worker/src/index.ts) produces the same shape.
+// cookies on this exact separator; hosted rendering produces the same shape.
 function headersToRecord(headers: Headers): Record<string, string> {
   const result: Record<string, string> = {};
   headers.forEach((value, key) => {
@@ -175,6 +179,7 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
 
       const sourceUrl = req.url;
       let currentUrl = sourceUrl;
+      let requestHeaders = new Headers(req.headers);
       let responseAt = startedAt;
       let finishedAt = startedAt;
 
@@ -200,7 +205,7 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
 
           const requestInit: RequestInit = {
             method: req.method ?? "GET",
-            headers: req.headers,
+            headers: requestHeaders,
             redirect: "manual",
             signal,
           };
@@ -221,7 +226,9 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
               endsInError = true;
               break;
             }
-            currentUrl = new URL(location, currentUrl).toString();
+            const nextUrl = new URL(location, currentUrl).toString();
+            requestHeaders = headersForRedirect(requestHeaders, currentUrl, nextUrl);
+            currentUrl = nextUrl;
             continue;
           }
 
@@ -230,7 +237,7 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
           }
 
           try {
-            finalBody = await response.text();
+            finalBody = await readBodyCapped(response, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
           } catch (error) {
             // Body-time decode failure (large/streamed bodies) — recover the raw body, else keep an empty page.
             if (!isDecompressionError(error)) throw error;
@@ -239,7 +246,7 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
                 ...requestInit,
                 decompress: false,
               } as RequestInit);
-              finalBody = await raw.text();
+              finalBody = await readBodyCapped(raw, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
             } catch {
               finalBody = "";
             }

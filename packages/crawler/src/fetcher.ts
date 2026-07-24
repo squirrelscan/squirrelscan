@@ -9,6 +9,11 @@ import type {
   SecurityHeaders,
 } from "@squirrelscan/core-contracts";
 import { CHROME_SEC_CH_UA } from "@squirrelscan/utils/constants";
+import { headersForRedirect } from "@squirrelscan/utils/headers";
+import {
+  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
 import { detectWafChallengePage } from "@squirrelscan/utils/waf";
 
 export type CrawlErrorType = "timeout" | "network" | "parse" | "blocked" | "rate_limit" | "tls";
@@ -325,9 +330,8 @@ function extractResponseHeaders(headers: Headers): ResponseHeaders {
   // `.get()` which comma-joins duplicates — ambiguous with the comma inside a
   // cookie's own `Expires=Wed, 09 Jun 2021...` attribute. Joined with "\n"
   // (can't appear in a header value), aligned with the CLI fetch path
-  // (packages/fetchers/src/index.ts) and the cloud render path
-  // (apps/crawler-worker/src/index.ts) so rules see one shape regardless of
-  // which fetcher produced the page (squirrelscan/repo#973).
+  // (packages/fetchers/src/index.ts) and the hosted render path so rules see
+  // one shape regardless of which fetcher produced the page.
   const setCookies = headers.getSetCookie();
   return {
     contentType: headers.get("content-type"),
@@ -396,7 +400,7 @@ function headersFromRecord(record: Record<string, string>): Headers {
   for (const [key, value] of Object.entries(record)) {
     if (key.toLowerCase() === "set-cookie") {
       // A DocumentFetcher's `headers["set-cookie"]` is "\n"-joined, one entry
-      // per real Set-Cookie header (squirrelscan/repo#973). `setHeaderSafely`
+      // per real Set-Cookie header. `setHeaderSafely`
       // below strips \r\n (turning it into one space-joined, corrupted
       // cookie), so append each cookie separately instead — `Headers.append`
       // keeps repeated Set-Cookie entries distinct, matching native
@@ -575,13 +579,13 @@ function fetchPageStandard(
   options: FetchOptions,
 ): Effect.Effect<FetchResult, CrawlError, never> {
   return Effect.gen(function* () {
-    const headers = {
+    let headers = new Headers({
       "User-Agent": options.userAgent,
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "en-US,en;q=0.9",
       "Upgrade-Insecure-Requests": "1",
       ...options.headers,
-    };
+    });
 
     const MAX_REDIRECTS = 10;
     const hops: RedirectHop[] = [];
@@ -629,7 +633,9 @@ function fetchPageStandard(
           finalTiming = timing;
           break;
         }
-        currentUrl = new URL(location, currentUrl).toString();
+        const nextUrl = new URL(location, currentUrl).toString();
+        headers = headersForRedirect(headers, currentUrl, nextUrl);
+        currentUrl = nextUrl;
         continue;
       }
 
@@ -660,7 +666,7 @@ function fetchPageStandard(
         let onAbort: (() => void) | undefined;
         try {
           return await Promise.race([
-            finalResponse.text(),
+            readBodyCapped(finalResponse, DEFAULT_MAX_DOCUMENT_BODY_BYTES),
             new Promise<never>((_, reject) => {
               if (signal.aborted) return reject(new Error("aborted"));
               onAbort = () => reject(new Error("aborted"));

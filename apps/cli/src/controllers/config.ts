@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { parse as parseTOML } from "smol-toml";
 
 import { ConfigSchema, type SquirrelScanConfig } from "@/config";
+import { redactValue } from "@/utils/redact";
 
 import { type Result, ok, err, commandError, ErrorCodes } from "./types";
 
@@ -17,6 +18,41 @@ export interface SetConfigResult {
   configPath: string;
   key: string;
   value: unknown;
+}
+
+const REDACTED = "[REDACTED]";
+
+export function isSensitiveConfigPath(key: string): boolean {
+  return (
+    key === "crawler.headers" ||
+    key.startsWith("crawler.headers.") ||
+    /^intel\.providers\.[^.]+\.api_key$/.test(key)
+  );
+}
+
+export function redactConfigValueForDisplay(
+  key: string,
+  value: unknown
+): unknown {
+  return isSensitiveConfigPath(key) ? REDACTED : redactValue(value);
+}
+
+export function redactConfigForDisplay(
+  config: SquirrelScanConfig
+): SquirrelScanConfig {
+  const redacted = redactValue(config) as SquirrelScanConfig;
+
+  redacted.crawler.headers = Object.fromEntries(
+    Object.keys(config.crawler.headers).map((name) => [name, REDACTED])
+  );
+
+  if (redacted.intel?.providers) {
+    for (const provider of Object.values(redacted.intel.providers)) {
+      if (provider?.api_key !== undefined) provider.api_key = REDACTED;
+    }
+  }
+
+  return redacted;
 }
 
 /**

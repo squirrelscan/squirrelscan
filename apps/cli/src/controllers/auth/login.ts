@@ -149,9 +149,19 @@ async function openBrowser(url: string): Promise<void> {
   });
 }
 
-/**
- * Start a local HTTP server to receive the callback
- */
+export function fetchSessionStatus(
+  apiUrl: string,
+  sessionId: string,
+  codeVerifier: string
+): Promise<Response> {
+  return fetch(`${apiUrl}/v1/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ codeVerifier }),
+  });
+}
+
+/** Start a local HTTP server to receive the callback. */
 function startCallbackServer(
   port: number,
   sessionId: string,
@@ -165,9 +175,10 @@ function startCallbackServer(
       // Handle callback request
       if (req.url?.startsWith("/callback")) {
         try {
-          // Poll session status with code_verifier for PKCE verification
-          const statusRes = await fetch(
-            `${apiUrl}/v1/auth/sessions/${sessionId}?code_verifier=${encodeURIComponent(codeVerifier)}`
+          const statusRes = await fetchSessionStatus(
+            apiUrl,
+            sessionId,
+            codeVerifier
           );
           const status = (await statusRes.json()) as SessionStatusResponse;
 

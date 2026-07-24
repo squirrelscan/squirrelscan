@@ -1,7 +1,6 @@
 // ReportSummary (#336): the report header is a single summary block — favicon +
 // title/description + score ring, then the screenshot (half width) beside the
-// category scores. These pin the new data surfaces: favicon (CSS background-image
-// so a missing one shows an empty tile, not a broken <img>), title fallback,
+// category scores. These pin the new data surfaces: offline favicon tile, title fallback,
 // date+TIME generated line, and the footer squirrel version.
 
 import { describe, expect, test } from "bun:test";
@@ -24,12 +23,37 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 }
 
 describe("ReportSummary", () => {
-  test("favicon renders as a background-image div keyed on the host", () => {
+  test("favicon renders as an offline initial tile", () => {
     const html = renderHtml(baseReport());
     expect(html).toContain('class="site-favicon"');
-    expect(html).toContain(
-      "background-image:url(https://icons.duckduckgo.com/ip3/github.com.ico)",
+    expect(html).toContain('class="site-favicon" aria-hidden="true">G</div>');
+    expect(html).not.toContain("icons.duckduckgo.com");
+    expect(html).not.toContain("squirrelscan.com/tech-icons");
+  });
+
+  test("technology badges do not make remote image requests", () => {
+    const html = renderHtml(
+      baseReport({
+        technologies: {
+          items: [
+            {
+              id: "react",
+              name: "React",
+              category: "framework",
+              version: null,
+              confidence: "high",
+              detectedBy: "script",
+              icon: "react",
+            },
+          ],
+          added: [],
+          removed: [],
+          firstScan: true,
+        },
+      }),
     );
+    expect(html).toContain(">React</span>");
+    expect(html).not.toContain("squirrelscan.com/tech-icons");
   });
 
   test("title uses homepage.title, falls back to the host", () => {

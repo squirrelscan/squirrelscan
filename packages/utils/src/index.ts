@@ -26,7 +26,18 @@ export { getAttrCI, hasAttrCI, querySelectorAllByAttrCI, querySelectorByAttrValu
 
 export { isUUID, isShortId } from "./validation";
 
-export { isValidHeaderName, isValidHeaderValue, recordToHeaders } from "./headers";
+export {
+  headersForRedirect,
+  isValidHeaderName,
+  isValidHeaderValue,
+  recordToHeaders,
+} from "./headers";
+
+export {
+  DEFAULT_MAX_BODY_BYTES,
+  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  readBodyCapped,
+} from "./response-body";
 
 export { isPageIndexable, type IndexabilityCheck } from "./indexable";
 

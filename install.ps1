@@ -30,8 +30,8 @@ $script:CurrentStep = "init"
 
 function Send-ErrorReport {
     param([string]$Step, [int]$ExitCode = 1, [string]$Line = "")
-    # NO_TELEMETRY (any non-empty value) disables ALL install-script reporting.
-    if ($env:NO_TELEMETRY) { return }
+    # Presence disables reporting, including an explicitly empty value.
+    if (Test-Path Env:NO_TELEMETRY) { return }
     try {
         $scrubbed = ""
         if ($Line) {

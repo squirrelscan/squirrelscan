@@ -63,8 +63,8 @@ json_escape() {
 
 report_error() {
   local step="$1" code="$2" line="${3:-}"
-  # NO_TELEMETRY (any non-empty value) disables ALL install-script reporting.
-  [ -n "${NO_TELEMETRY:-}" ] && return 0
+  # Presence disables reporting, including an explicitly empty value.
+  [ "${NO_TELEMETRY+x}" = x ] && return 0
   command -v curl >/dev/null 2>&1 || return 0
 
   local os arch scrubbed=""
