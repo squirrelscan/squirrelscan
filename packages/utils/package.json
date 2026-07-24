@@ -27,7 +27,7 @@
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",
     "@squirrelscan/waf-detect": "workspace:*",
-    "user-agents": "^1.1.675"
+    "user-agents": "^2.1.131"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
