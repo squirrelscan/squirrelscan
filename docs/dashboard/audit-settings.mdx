@@ -1,0 +1,57 @@
+---
+title: "Audit Settings"
+description: "Choose which rules run for a website's cloud audits and toggle external link checking"
+icon: "sliders-horizontal"
+---
+
+Cloud audits don't read your local `squirrel.toml`, so the **Website → Settings → Audit** page in the dashboard is where you control which rules run in the cloud for a given website.
+
+Open it at **Dashboard → your website → Settings → Audit**. Owners and admins can edit; other members see a read-only view.
+
+## Rule selection
+
+Every audit rule is **on by default**. The page lists all rules grouped by category (sorted by priority). For each rule you can:
+
+- Toggle it on or off individually.
+- Toggle a whole category with the category master switch (it shows a mixed state when only some rules in the category are on).
+- **Enable all** / **Disable all** across every category.
+- Search by rule name or id to jump to a specific rule.
+
+The header shows how many rules are enabled out of the total. Changes are staged locally: click **Save** to apply them.
+
+This setting is **per website**: it applies to every cloud audit of this website (dashboard-triggered and scheduled). It does **not** affect CLI audits, which keep using your local config.
+
+<Note>
+  The model is "disable-based": the dashboard stores the set of rules you turned
+  off (as patterns like `a11y/*` or `core/meta-title`). A new rule added in a
+  later release is enabled by default, and stays disabled automatically if you'd
+  turned off its whole category.
+</Note>
+
+## Cloud rules
+
+Some rules are powered by [cloud services](/cloud/rules). Most are included in the audit base charge; the opt-in gap rules carry their own charge and are marked with a credit badge. See [Credits](/cloud/credits) for the full pricing.
+
+## External link checking
+
+A separate card toggles **external link checking** for cloud audits. When on, audits verify that outbound links resolve, using the [dead-links service](/rules/links/dead-links). It's **off by default**; the checks are included in the audit base charge. The card links to your org's credit usage.
+
+## Max credits per audit
+
+The **Max credits per audit** card sets a hard spend ceiling for a single cloud audit of this website. Leave it blank for no cap.
+
+- **Manual runs** whose estimate exceeds the cap are blocked: the Run dialog shows an error and the audit doesn't start. Raise the cap (or lower the crawl depth) to proceed.
+- **Scheduled runs** that would exceed the cap are skipped, and you get an in-app notification ("Scheduled audit skipped…") so a recurring audit can never bill-shock.
+- When a run proceeds, the cap is also passed to the cloud worker as a runtime ceiling, so spend stops there even if the actual cost climbs.
+
+The estimate is an upper bound: the audit is billed as it runs (50 credits base plus 2 per rendered page, see [Credits](/cloud/credits)), so most audits cost less than the cap. This setting is **per website**.
+
+## What runs where
+
+| Surface | Honors this website's audit settings? |
+|---------|----------------------------|
+| Dashboard cloud audits | Yes |
+| Scheduled cloud audits | Yes |
+| CLI audits (`squirrel audit`) | No, uses your local `squirrel.toml` |
+
+Per-rule option tuning (thresholds and the like) isn't configurable here yet: it's tracked as a follow-up.

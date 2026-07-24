@@ -1,0 +1,42 @@
+---
+title: "Table Headers"
+description: "Checks that data tables have proper headers"
+---
+
+Checks that data tables have proper headers
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/table-headers` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Data tables need proper headers for screen reader users to understand relationships. Use `<th>` for header cells, not styled `<td>`. Add scope='col' or scope='row' to clarify header direction. For complex tables, use id and headers attributes to associate data cells with headers. Include a `<caption>` to describe the table's purpose. Layout tables should have role='presentation'.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/table-headers"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/table-headers"]
+disable = ["*"]
+```

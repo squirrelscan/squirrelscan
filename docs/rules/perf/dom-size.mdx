@@ -1,0 +1,70 @@
+---
+title: "DOM Size"
+description: "Detects excessive DOM complexity that impacts performance"
+---
+
+Detects excessive DOM complexity that impacts performance
+
+| | |
+|---|---|
+| **Rule ID** | `perf/dom-size` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Large DOMs slow page rendering, increase memory usage, and harm mobile performance. Google recommends keeping total nodes under 1500.
+
+Fixes for large DOMs:
+- Use virtualization for long lists (e.g., react-window)
+- Lazy-load off-screen content
+- Reduce unnecessary wrapper elements
+- Use CSS instead of DOM for visual effects
+- Paginate large content sections
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warn_threshold` | unknown | `undefined` | Warning threshold for total nodes |
+| `error_threshold` | unknown | `undefined` | Error threshold for total nodes |
+| `max_depth` | unknown | `undefined` | Maximum DOM depth |
+| `max_children` | unknown | `undefined` | Maximum children per element |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."perf/dom-size"]
+warn_threshold = undefined
+error_threshold = undefined
+max_depth = undefined
+max_children = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/dom-size"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/dom-size"]
+disable = ["*"]
+```

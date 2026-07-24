@@ -1,0 +1,107 @@
+---
+title: "Web Bot Auth"
+icon: "shield-check"
+description: "Audit bot-protected sites by sending signed Web Bot Auth headers"
+---
+
+Some platforms block unknown crawlers by default. [Web Bot
+Auth](https://datatracker.ietf.org/doc/draft-meunier-web-bot-auth-architecture/)
+is an emerging web standard that fixes this with cryptography instead of
+user-agent strings: the crawler signs its requests using [HTTP Message
+Signatures](https://www.rfc-editor.org/rfc/rfc9421.html) (RFC 9421) and the site
+verifies the signature against a published key. Cloudflare uses it for
+[verified bots](https://blog.cloudflare.com/web-bot-auth/), and Shopify uses it
+to let merchants [authorize custom
+crawlers](https://changelog.shopify.com/posts/authorize-custom-crawlers-and-tools-with-new-crawler-access-keys)
+on their stores.
+
+squirrelscan can attach the signed headers to every crawl request (pages,
+assets, `robots.txt`, sitemaps) via the
+[`[crawler] headers`](/configuration/crawler#headers) map or the repeatable
+`-H` / `--header` CLI flag, so the same recipe works anywhere the scheme is
+accepted.
+
+## The three headers
+
+Whichever platform issued your crawler credentials, the shape is the same:
+
+| Header | Value |
+| --- | --- |
+| `Signature-Input` | which request components are signed, plus the key id and creation time |
+| `Signature` | the signature value |
+| `Signature-Agent` | the quoted signing-agent URI, e.g. `"https://shopify.com"` for Shopify-issued keys |
+
+The signature typically covers only the host (`@authority`) and the
+`signature-agent` header, so one set of values works for a whole crawl of that
+host until the signature expires.
+
+<Note>
+  `Signature-Agent` is a quoted string. Keep the inner double quotes, as in
+  `Signature-Agent: "https://signer.example.com"`. squirrelscan preserves the
+  quoting verbatim end-to-end.
+</Note>
+
+Where the values come from depends on who verifies them:
+
+- **Shopify** issues the header values directly: generate crawler access keys
+  in your store admin (see [Crawling your
+  store](https://help.shopify.com/en/manual/promoting-marketing/seo/crawling-your-store))
+  and paste the three values.
+- **Sites behind Cloudflare or self-hosted verifiers** expect signatures from a
+  key you own: sign with your Ed25519 key per RFC 9421 and publish your key
+  directory as the [architecture
+  draft](https://datatracker.ietf.org/doc/draft-meunier-web-bot-auth-architecture/)
+  describes, then pass the resulting headers the same way.
+
+## CLI
+
+Pass each header with a repeatable `-H` flag:
+
+```bash
+squirrel audit https://store.example.com \
+  -H 'Signature-Input: sig1=("@authority" "signature-agent");keyid="...";created=...' \
+  -H 'Signature: sig1=:BASE64SIG:' \
+  -H 'Signature-Agent: "https://signer.example.com"'
+```
+
+Headers are attached to every request the crawl makes. The audit preamble lists
+the header **names** only; values are treated as secrets and never printed:
+
+```
+Headers   Signature-Input: <redacted>, Signature: <redacted>, Signature-Agent: <redacted>
+```
+
+<Warning>
+  Header values are secrets. Prefer the `-H` flag in CI with values sourced from
+  your secret store rather than committing real signatures to a shared
+  `squirrel.toml`.
+</Warning>
+
+## Project config
+
+To make the headers persistent for a project, add them to the `[crawler]`
+section of your `squirrel.toml`:
+
+```toml
+[crawler]
+headers = { "Signature-Input" = "sig1=(\"@authority\");keyid=\"...\"", "Signature" = "sig1=:BASE64SIG:", "Signature-Agent" = "\"https://signer.example.com\"" }
+```
+
+CLI `-H` flags **merge over** the TOML map, so you can keep a base set in config
+and override a single header per run.
+
+## Cloud audits (Pro)
+
+On the dashboard, set custom headers per-website under **Settings → Crawl →
+Custom request headers**. Applying custom headers to **cloud** audits is a
+**Pro** feature; free plans receive a `403 upgrade_required`. The cloud render
+worker applies the headers to the headless browser before navigation
+(`setExtraHTTPHeaders`), so they ride the initial load and every subresource.
+
+## Related
+
+- [Crawler settings → `headers`](/configuration/crawler#headers)
+- [Browser rendering](/guides/browser-rendering)
+- [Web Bot Auth architecture draft](https://datatracker.ietf.org/doc/draft-meunier-web-bot-auth-architecture/)
+- [Cloudflare: Web Bot Auth for verified bots](https://blog.cloudflare.com/web-bot-auth/)
+- [Shopify: Crawling your store](https://help.shopify.com/en/manual/promoting-marketing/seo/crawling-your-store)

@@ -1,0 +1,42 @@
+---
+title: "ARIA Valid Roles"
+description: "Checks for valid ARIA role values"
+---
+
+Checks for valid ARIA role values
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-roles` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Use only valid ARIA role values as defined in the WAI-ARIA specification. Common mistakes include using made-up roles or misspelling valid roles. Roles are case-sensitive and must be lowercase. Multiple roles can be specified, separated by spaces, but the first valid role is used.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-roles"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-roles"]
+disable = ["*"]
+```

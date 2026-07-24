@@ -1,0 +1,42 @@
+---
+title: "ARIA Labels"
+description: "Checks that interactive elements have accessible names"
+---
+
+Checks that interactive elements have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-labels` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Solution
+
+All interactive elements (buttons, links, inputs) need accessible names for screen readers. Use: visible text content, aria-label for icon-only buttons, aria-labelledby to reference existing text, or the title attribute as a fallback. Icon buttons especially need aria-label: `<button aria-label='Close'>`×`</button>`. Test with a screen reader or browser accessibility inspector.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-labels"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-labels"]
+disable = ["*"]
+```

@@ -1,0 +1,155 @@
+---
+title: "crawl"
+icon: "waypoints"
+description: "Crawl a website without running analysis"
+---
+
+The `crawl` command crawls a website and stores the data without running audit rules. Use this to separate crawling from analysis, or to crawl first and analyze later.
+
+## Usage
+
+```bash
+squirrel crawl <url> [options]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `url` | The URL to crawl (required) |
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--max-pages` | `-m` | Maximum pages to crawl (hard cap 5,000) | coverage default (`quick` = 25) |
+| `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
+| `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
+| `--coverage` | `-C` | Coverage mode: `quick`, `surface`, `full` | `quick` |
+| `--refresh` | `-r` | Ignore cache, fetch all pages fresh | `false` |
+| `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |
+| `--resume` | | Resume interrupted crawl | `false` |
+
+`--concurrency` and `--per-host` also suppress the localhost fast path (see
+[Crawler Configuration](/configuration/crawler)): against your own dev server, `crawl`
+otherwise raises concurrency and drops the per-host delay automatically.
+
+### Coverage Modes
+
+| Mode | Default Pages | Description |
+|------|---------------|-------------|
+| `quick` | 25 | Fast scan - seed URL + sitemaps only, no link discovery |
+| `surface` | 100 | Smart sampling - one page per URL pattern |
+| `full` | 500 | Comprehensive - crawl everything up to the limit |
+
+Unlike [`audit`](/cli/audit#coverage-modes), whose default coverage is auth-aware,
+`crawl` always defaults to `quick`. A plain `squirrel crawl` stops after 25 pages;
+500 is `full` coverage's page budget, not the default.
+
+The page budget resolves as **`--max-pages` / `-m` > non-default `[crawler] max_pages` >
+coverage-mode default**, capped at 5,000 pages either way. Switch modes with
+`--coverage` (or `[crawler] coverage` in config), or override the budget directly
+with `--max-pages`. See [Crawling & Coverage](/crawl) for how each mode behaves.
+
+## Examples
+
+### Basic Crawl
+
+```bash
+squirrel crawl https://example.com
+```
+
+### Comprehensive Crawl
+
+```bash
+squirrel crawl https://example.com -C full
+```
+
+### Crawl More Pages
+
+```bash
+squirrel crawl https://example.com -m 1000
+```
+
+### Fresh Crawl (Ignore Cache)
+
+```bash
+squirrel crawl https://example.com --refresh
+```
+
+### Resume Interrupted Crawl
+
+```bash
+squirrel crawl https://example.com --resume
+```
+
+## Crawl Behavior
+
+The crawl command:
+- Fetches and stores HTML content for each page
+- Extracts and follows internal links (`surface`/`full`; `quick` sticks to the seed URL + sitemap URLs, only falling back to link discovery when the site has no sitemap)
+- Discovers sitemaps (including via robots.txt); robots.txt rules aren't enforced by default (`respect_robots = true` to opt in)
+- Deduplicates URLs automatically
+- Caches page content locally
+
+## Output
+
+```
+Crawling: https://example.com
+Coverage: quick (max 25 pages)
+
+✓ Crawled 18 pages in 6.3s
+
+Crawl ID: a7b3c2d1
+```
+
+After crawling, use `squirrel analyze` to run audit rules on the stored data.
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Error (invalid URL, crawl failed, etc.) |
+
+## Configuration
+
+The crawl command respects settings from `squirrel.toml`:
+
+```toml
+[crawler]
+coverage = "full"
+max_pages = 200
+delay_ms = 200
+timeout_ms = 30000
+include = ["/blog/*"]
+exclude = ["/admin/*"]
+```
+
+Note that `max_pages = 100` (the literal config default) is treated as unset and the
+coverage-mode budget applies instead; any other value overrides it. See
+[Crawler Configuration](/configuration/crawler) for all options.
+
+## Workflow
+
+```bash
+# 1. Crawl the site
+squirrel crawl https://example.com
+
+# 2. Analyze the crawl
+squirrel analyze
+
+# 3. View the report
+squirrel report
+```
+
+This workflow is useful when:
+- You want to crawl once and analyze multiple times
+- Testing different rule configurations
+- Crawling is slow and you want to iterate on analysis
+
+## Related
+
+- [analyze](/cli/analyze) - Analyze stored crawl
+- [audit](/cli/audit) - Crawl + analyze in one command
+- [Configuration](/configuration) - Config file options

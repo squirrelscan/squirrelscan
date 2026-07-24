@@ -1,0 +1,63 @@
+---
+title: "Agent Blocking"
+description: "Probes whether agent user-agents get 403s or challenge pages that browsers don't"
+---
+
+`robots.txt` only tells you what a site *says* it allows. This rule checks what actually happens: it fetches the homepage with a plain browser user-agent, then again as `GPTBot`, then again as `Claude-User`, and compares the results. A site can declare `ChatGPT-User: Allow: /` in `robots.txt` and still WAF-block that same user-agent at the edge — [AI Crawler Access](/rules/ax/ai-crawlers) wouldn't catch that; this rule does.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/agent-blocking` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | error (when a user-action fetcher like Claude-User is blocked; blocking only training crawlers downgrades to a warning) |
+| **Weight** | 3/10 |
+
+<Note>This rule can penalize your score. Blocking training crawlers on purpose is a legitimate, common choice (see [AI Crawler Access](/rules/ax/ai-crawlers)); blocking a user-action fetcher like `Claude-User` breaks a live request a real user is waiting on, which is a genuine defect rather than a policy choice. The rule badge is **warning** either way — a blocked `Claude-User` is the worst case the check flags, called out explicitly in the finding message, but it doesn't carry a separate error-severity badge.</Note>
+
+## What it checks
+
+The audit issues three requests to the homepage: one with a standard browser user-agent, one as `GPTBot`, and one as `Claude-User`. It flags the site when the browser request returns `200` but an agent request comes back as:
+
+- an HTTP `403`,
+- a Cloudflare challenge response (`cf-mitigated: challenge` header, or a body containing `__cf_chl_`), or
+- another bot-challenge pattern that a browser wouldn't hit.
+
+Both cases are reported as a warning-level check:
+
+- **`GPTBot` blocked**: often intentional (opting out of training) but worth surfacing if it wasn't a deliberate choice.
+- **`Claude-User` blocked**: the more serious case — this is a live user-action fetcher, so blocking it breaks a request a real person initiated inside an AI assistant, not a background crawl. The finding message calls this out explicitly, even though the rule's severity badge stays warning.
+
+## Why it matters
+
+Cloudflare has said it will flip AI-crawler blocking on by default for many zones from **September 15, 2026**, and most bot-management products bundle training crawlers, AI-search bots, and user-action fetchers into one "AI bots" toggle. That bundling is the risk: a site owner who intends to opt out of model training can end up blocking the fetcher behind their own customers' AI-assistant requests without knowing it, because a single dashboard switch controls all three categories at once. Whatever policy a site chooses, it should be the one that's actually in effect at the edge, not whatever a bot-management default silently applied.
+
+## Solution
+
+- Check your WAF / bot-management rules for a blanket "block AI bots" or "block AI crawlers" toggle and confirm it's scoped to the crawler classes you actually want to block (see [AI Crawler Access](/rules/ax/ai-crawlers) for the training vs. search vs. user-action breakdown).
+- Explicitly allow-list `ChatGPT-User`, `Claude-User`, and `Perplexity-User` in your edge rules if you want AI-assistant users to be able to browse your site through their tools.
+- Re-run this probe after any change to bot-management, WAF, or CDN configuration.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/agent-blocking"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/agent-blocking"]
+disable = ["*"]
+```

@@ -1,0 +1,49 @@
+---
+title: "Tel & Mailto Links"
+description: "Validates tel: and mailto: link formats"
+---
+
+Validates tel: and mailto: link formats
+
+| | |
+|---|---|
+| **Rule ID** | `links/tel-mailto` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## What it detects
+
+- **Invalid tel: links**, phone numbers missing digits or too short
+- **Invalid mailto: links**, email addresses missing `@` or `.`
+- **Tel href/text mismatch**: the phone number in the `href` doesn't match the displayed text (e.g. `<a href="tel:+15551234567">+15559876543</a>`). Comparison is formatting-insensitive, allows omitted country codes, and treats an E.164 `href` (e.g. `+61414007351`) paired with national-format display text carrying a trunk prefix (e.g. `0414 007 351`) as the same number, which is the recommended markup pattern.
+- **Mailto href/text mismatch**: the email in the `href` doesn't match the displayed text (e.g. `<a href="mailto:sales@example.com">support@example.com</a>`). Comparison is case-insensitive and ignores query parameters.
+
+## Solution
+
+Tel links should use format: tel:+1234567890 (E.164 format preferred, no spaces/dashes). Mailto links should have valid email format: mailto:user@example.com. You can add subject and body parameters: mailto:user@example.com?subject=Hi&body=Hello. Invalid formats may not work on all devices. Ensure the displayed text matches the href: a mismatched phone number or email misleads users and may dial/email the wrong contact.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/tel-mailto"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/tel-mailto"]
+disable = ["*"]
+```

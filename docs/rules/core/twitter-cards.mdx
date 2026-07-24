@@ -1,0 +1,42 @@
+---
+title: "Twitter Cards"
+description: "Validates Twitter Card meta tags"
+---
+
+Validates Twitter Card meta tags
+
+| | |
+|---|---|
+| **Rule ID** | `core/twitter-cards` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Twitter Cards enhance how links appear in tweets. The twitter:card meta tag specifies the card type (summary, summary_large_image, player, or app). Add twitter:card, twitter:title, twitter:description, and twitter:image tags. For large images, use summary_large_image with images at least 800x418 pixels. Validate using Twitter's Card Validator tool.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/twitter-cards"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/twitter-cards"]
+disable = ["*"]
+```

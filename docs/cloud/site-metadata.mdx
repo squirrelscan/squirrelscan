@@ -1,0 +1,67 @@
+---
+title: "Site Metadata"
+description: "Resolve a durable site profile - type, business category, audience, identity, contacts, socials, and domain age - for every cloud audit"
+icon: "id-card"
+---
+
+Every cloud audit resolves a **site profile** for the domain you're auditing: what kind of site it is, who's behind it, where its audience is, how it can be contacted, and how old the domain is. squirrelscan extracts this once per domain and surfaces it as a dedicated **Site profile** section in the report.
+
+It's informational: site metadata **never affects your health score**. It's there to give you - and your agent - context about what you're auditing, and it's the foundation squirrelscan uses to decide which other audit rules are relevant.
+
+## What it detects
+
+A single classification pass over the home page and a few representative pages - their titles, meta tags, JSON-LD, visible links, and `lang`/`hreflang` - plus a public [RDAP](https://about.rdap.org/) domain-registration lookup. The result is one durable record per domain:
+
+| Field | Examples |
+|-------|----------|
+| Site type | blog, news, ecommerce, saas, docs, portfolio, corporate, smb_local, nonprofit, government, … |
+| Business category | legal, healthcare_medical, restaurant, real_estate, fintech, auto_repair, … (~60 GMB-style categories) |
+| Primary country | ISO country code inferred from content and locale signals |
+| Audience scope | global, national, regional, or local |
+| Languages | BCP-47 codes declared or used on the site |
+| Identity | publisher / business name, organization vs. person, canonical URL |
+| Contacts | email, phone, and address - **only** when present on the page |
+| Socials | linked X, Facebook, Instagram, LinkedIn, YouTube, GitHub, … accounts |
+| YMYL / local-business flags | whether the site is "Your Money or Your Life" or has a physical location |
+| Domain facts | registrar, registration date, expiry, and **domain age** (from RDAP) |
+
+A typical result:
+
+```
+SITE PROFILE
+Resolved site context - informational, not part of the score.
+🏷️  Type            smb_local · auto_repair
+🌍  Audience        local · US · en
+🏢  Identity        Riverside Auto Care (organization)
+📇  Contacts        +1 555-0100 · hello@riversideauto.example
+🔗  Socials         Facebook · Instagram
+📅  Domain age      8 years (registered 2017-04-02)
+```
+
+The Site profile appears in **every output format** - console, HTML, Markdown, JSON, XML, and LLM.
+
+<Note>Contacts and socials are **only ever echoed from what's literally on the page** (JSON-LD, `og:`/`twitter:` meta, and visible links). squirrelscan never infers, guesses, or completes a phone number, email, or address. Anything unevidenced is left out.</Note>
+
+## Why it matters
+
+The site profile is **Stage 0** of every cloud audit: squirrelscan resolves it first, then uses it to decide which downstream checks are relevant. A personal blog isn't measured against subprocessor-disclosure rules; a local business gets NAP and `LocalBusiness` schema checks; a YMYL site gets stricter trust/EEAT expectations. Rules that don't apply are shown as a visible **skipped** check, never silently dropped - so a cheaper, more relevant audit, with nothing hidden.
+
+The domain facts (registrar, registration date, domain age) come straight from RDAP and are never fabricated. If a TLD has no RDAP service, those fields are simply blank.
+
+## When it runs
+
+- **Logged in** - the site profile resolves automatically as part of every cloud audit. One resolution per domain, regardless of how many pages you crawl.
+- **Logged out or `--offline`** - skipped, like every other cloud feature. Your local rules still complete, and the audit runs exactly as it would today (no metadata means no rule gating).
+
+Resolution is best-effort and never fails the audit: if the service is unavailable, the Site profile section is simply omitted and you're not charged.
+
+## Cost
+
+**Included in the audit base charge** - a single resolution per domain, not per page. Repeat audits of the same domain within 30 days reuse the cached profile. See [Credits & Pricing](/cloud/credits).
+
+## Caching & change history
+
+The site profile is keyed by domain and **shared**: the resolved profile for a domain is the same for everyone who audits it, so re-audits stay fast and consistent.
+
+- **Current profile** - free, shown on every audit. A fresh profile (resolved in the last 30 days) is served from cache at no cost; after that, the next audit refreshes it. If the domain facts lookup failed (no registrar or domain age resolved), the profile is refreshed sooner, after about 48 hours, so a transient registry failure doesn't leave those facts blank for a month.
+- **Historical timeline** - the full change history for a domain (when its type, identity, contacts, or socials change over time) is available to any signed-in account, free or Pro, in the [dashboard](/dashboard). Domain age is computed from the immutable registration date, so it's never re-fetched.

@@ -1,0 +1,74 @@
+---
+title: "Content Signals"
+description: "Parses Content-Signal lines in robots.txt and flags contradictory AI policy"
+---
+
+Parses [`Content-Signal`](https://contentsignals.org) directives in `robots.txt`: a machine-readable way to declare AI policy per-purpose rather than per-crawler. Instead of allow/disallow-ing named bots one at a time, a site declares intent directly — `search=yes, ai-input=no, ai-train=no` — and lets crawlers that honor the standard resolve their own behavior against it.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/content-signals` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | warning (only when signals contradict or are malformed; otherwise informational) |
+| **Weight** | 2/10 |
+
+<Note>Declaring a policy is optional — a site with no `Content-Signal` line, or a clean one, is never penalized and this rule stays out of the issues list entirely. It only enters your report as a **warning** when a declared signal contradicts the site's own crawler blocks or the line has invalid syntax, since either leaves crawlers to guess which directive wins. The signal's user-agent scope is respected: a `Content-Signal` under one crawler's group is never held against a different crawler's `Disallow`.</Note>
+
+## What it checks
+
+The audit parses any `Content-Signal` line in the site's `robots.txt` and validates its `key=value` syntax against the three defined signals:
+
+- **`search`** — usable for search-result display and answer-engine citation
+- **`ai-input`** — usable as input to an AI system at inference time (e.g. RAG, browsing tools)
+- **`ai-train`** — usable to train or fine-tune a model
+
+Cloudflare's managed robots.txt also emits an auxiliary `use=<immediate|reference|full>` key describing how AI systems may consume collected content. It carries no crawl-permission semantics, but it is valid syntax — the audit recognizes it rather than flagging Cloudflare-managed files as invalid.
+
+Each takes `yes` or `no`. The rule reports:
+
+- **Presence and syntax**: whether a `Content-Signal` line exists, at the wildcard (`User-agent: *`) group or scoped to specific crawlers, and whether it parses cleanly.
+- **Declared policy**: a plain-language summary of what the site has opted into or out of.
+- **Contradictions**: cases where the declared signal disagrees with the crawler-level rules covered by [AI Crawler Access](/rules/ax/ai-crawlers) within the signal's own user-agent scope — for example, `Content-Signal: ai-train=yes` under `User-agent: *` while `Disallow: /` is set for `GPTBot` specifically. A contradiction surfaces as a **warning**, since it leaves crawlers to guess which directive wins. A signal scoped to one crawler's group is not compared against other crawlers' blocks.
+
+## Solution
+
+Add a `Content-Signal` line to `robots.txt` that matches your actual crawler-blocking policy:
+
+```txt robots.txt
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Allow: /
+```
+
+If you block specific training crawlers outright, make sure the signal doesn't claim to allow training generally, or scope the signal to the same user-agent group as the block:
+
+```txt robots.txt
+User-agent: GPTBot
+Content-Signal: ai-train=no
+Disallow: /
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/content-signals"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/content-signals"]
+disable = ["*"]
+```

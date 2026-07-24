@@ -1,0 +1,59 @@
+---
+title: "Hidden Orphan Page"
+description: "Detects crawled pages absent from every sitemap AND linked from nowhere"
+---
+
+Detects crawled pages that are absent from every sitemap **and** have no inbound internal links: a hidden page is a common injected-page signal.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/orphan-page` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## How it differs from `links/orphan-pages`
+
+The SEO rule [`links/orphan-pages`](/rules/links) flags pages with *fewer than N* inbound internal links, a discoverability concern. This integrity rule is about *hidden* pages: zero inbound links **and** absent from the sitemap, which is exactly how injected phishing or spam pages stay invisible to the site owner while remaining live to anyone with the URL.
+
+A lone hidden page is reported as **info**. It escalates to a **failure** only when the hidden page also carries page-level compromise signals: the correlation gating that keeps false positives down.
+
+## Solution
+
+A reachable page that is in no sitemap and linked from nowhere on your site is invisible to you but live to anyone with the URL: exactly how injected phishing/spam pages hide. Confirm you created the page; if not, treat the site as compromised: remove it, audit recently modified files, and review server logs. Legitimate hidden pages (e.g. unlisted landing pages) should at least be in your sitemap if you want them found.
+
+## Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `minPages` | `3` | Minimum crawled pages before hidden-page analysis runs |
+
+```toml squirrel.toml
+[rules."integrity/orphan-page"]
+minPages = 3
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/orphan-page"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/orphan-page"]
+disable = ["*"]
+```

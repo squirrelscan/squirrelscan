@@ -1,0 +1,42 @@
+---
+title: "Reading Level"
+description: "Analyzes content readability using Flesch-Kincaid"
+---
+
+Analyzes content readability using Flesch-Kincaid
+
+| | |
+|---|---|
+| **Rule ID** | `content/reading-level` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Content should match your target audience's reading level. For general audiences, aim for 6th-8th grade level (60-70 Flesch score). Use shorter sentences and simpler words. Break up long paragraphs. Use bullet points and headings. Technical content may have lower readability scores, which is acceptable for expert audiences.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/reading-level"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/reading-level"]
+disable = ["*"]
+```

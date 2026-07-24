@@ -1,0 +1,131 @@
+---
+title: "Public API"
+description: "The stable /v1 REST surface for external clients, agents, and MCP integrations"
+icon: "braces"
+---
+
+squirrelscan exposes a stable, programmatic REST API under `/v1`. It's the
+surface external clients, agent workflows, and MCP integrations can depend on.
+
+<Info>
+The machine-readable contract is published as an [OpenAPI 3.1 spec](/openapi.json).
+Point your client generator, Postman, or an MCP server at it.
+</Info>
+
+## Base URL
+
+```
+https://api.squirrelscan.com
+```
+
+## Authentication
+
+Every request authenticates with a bearer token in the `Authorization` header:
+
+```bash
+curl https://api.squirrelscan.com/v1/credits \
+  -H "Authorization: Bearer <token>"
+```
+
+Programmatic **API keys** are prefixed `sq_` and are the intended public auth
+mechanism (rolling out, see the API-keys epic). Today the same scheme also
+accepts CLI tokens (`sqcli_` prefix, issued by `squirrel auth login`) and
+dashboard session JWTs, so you can start integrating immediately.
+
+## Public surface
+
+These are the external-client-facing routes covered by the contract:
+
+| Resource | Endpoints |
+|----------|-----------|
+| **Audits** | `POST /v1/agent-runs`, `GET /v1/agent-runs`, `GET /v1/agent-runs/{id}`, `GET /v1/agent-runs/{id}/report` |
+| **Reports** | `POST /v1/reports`, `GET /v1/reports`, `GET /v1/reports/{id}`, `PATCH /v1/reports/{id}`, `DELETE /v1/reports/{id}` |
+| **Credits** | `GET /v1/credits` |
+| **Organizations** | `GET /v1/organizations/{id}` |
+
+<Note>
+Internal server-to-server callbacks (`/v1/*/internal/*`), webhook receivers
+(`/v1/webhooks`, `/v1/github`), and admin-only routes (`/v1/admin/*`,
+`/v1/stats`, `/v1/users`) are **not** part of the public contract and may
+change without notice.
+</Note>
+
+## Error envelope
+
+All errors use one stable, typed shape:
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Report not found",
+    "requestId": "8a1f…"
+  }
+}
+```
+
+- `code`: stable, machine-readable (`SCREAMING_SNAKE_CASE`). Match on this.
+  Treat unknown codes as opaque and fall back to `message`.
+- `message`: human-readable; may change. Don't match on it.
+- `requestId`: present when available; quote it to support for log lookups.
+
+Common codes: `UNAUTHORIZED`, `FORBIDDEN`, `NO_ORG`, `NOT_FOUND`,
+`VALIDATION_ERROR`, `INVALID_JSON`, `PAYLOAD_TOO_LARGE`, `SECURITY_VIOLATION`,
+`INSUFFICIENT_CREDITS` (with `error.required` / `error.balance`),
+`DUPLICATE_REQUEST`, `RUN_NOT_ACTIVE`, `UPSTREAM_ERROR` (with `error.reason`),
+`RATE_LIMITED`.
+
+`SECURITY_VIOLATION` (`400`) is returned by `POST /v1/reports` when the report
+payload trips the content security scanner; `error.threats` lists the matched
+patterns.
+
+<Note>
+The shared auth middleware, the org gate, and the credit gate (`402`
+`INSUFFICIENT_CREDITS`, `409` `DUPLICATE_REQUEST`, `409` `RUN_NOT_ACTIVE`) now
+emit the typed envelope like every other documented route. Branch on the HTTP
+status code, then split same-status conditions on `error.code`, not the human
+`message`: a `409` is either `DUPLICATE_REQUEST` (this exact payload was already
+charged) or `RUN_NOT_ACTIVE` (a cloud run was reaped or failed before the charge
+landed, so it was never charged).
+</Note>
+
+`5xx` responses from unhandled server errors (DB/storage failures not caught by
+a handler) are **not guaranteed** to follow the envelope: handle them by status
+code and retry idempotent reads with backoff.
+
+## Rate limiting
+
+Rate limiting is being rolled out. When enforced, throttled requests return
+`429 Too Many Requests` with these headers:
+
+| Header | Meaning |
+|--------|---------|
+| `RateLimit-Limit` | Request quota for the current window |
+| `RateLimit-Remaining` | Requests remaining in the window |
+| `RateLimit-Reset` | Seconds until the window resets |
+| `Retry-After` | Seconds to wait before retrying |
+
+Back off on `Retry-After` and retry idempotent reads.
+
+## Credits
+
+Cloud operations (publishing reports, cloud audits) are priced in
+[credits](/cloud/credits). When an organization runs out, the API returns
+`402` with `code: "INSUFFICIENT_CREDITS"`.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Create an audit" icon="play" href="/api/audits/create">
+    Kick off a cloud audit run
+  </Card>
+  <Card title="Get a report" icon="file-text" href="/api/reports/get">
+    Read published report metadata
+  </Card>
+  <Card title="Credit balance" icon="coins" href="/api/credits/get">
+    Check remaining credits
+  </Card>
+  <Card title="OpenAPI spec" icon="code" href="/openapi.json">
+    Download the machine-readable contract
+  </Card>
+</CardGroup>

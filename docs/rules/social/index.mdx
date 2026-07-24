@@ -1,0 +1,30 @@
+---
+title: "Social Media"
+description: "Open Graph and social sharing metadata"
+---
+
+Open Graph and social sharing metadata
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="OG Image Size" icon="triangle-exclamation" href="/rules/social/og-image-size">
+    Checks og:image meets recommended size (1200x630)
+  </Card>
+  <Card title="OG URL Match" icon="triangle-exclamation" href="/rules/social/og-url-match">
+    Checks that og:url matches canonical URL
+  </Card>
+  <Card title="Share Buttons" icon="circle-info" href="/rules/social/share-buttons">
+    Checks for social sharing buttons on content pages
+  </Card>
+  <Card title="Social Profiles" icon="circle-info" href="/rules/social/social-profiles">
+    Checks for links to social media profiles
+  </Card>
+</CardGroup>
+
+## Disable All Social Media Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["social/*"]
+```

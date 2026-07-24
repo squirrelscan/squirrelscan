@@ -1,0 +1,42 @@
+---
+title: "ARIA Required Children"
+description: "Checks that elements with certain roles have required child roles"
+---
+
+Checks that elements with certain roles have required child roles
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-required-children` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Some ARIA roles require specific child roles. For example, role='list' must contain role='listitem', role='menu' must contain menu items. Add the required child elements with appropriate roles.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-required-children"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-required-children"]
+disable = ["*"]
+```

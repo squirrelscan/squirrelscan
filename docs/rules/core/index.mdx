@@ -1,0 +1,57 @@
+---
+title: "Core SEO"
+description: "Essential meta tags and page structure for search engines"
+---
+
+Essential meta tags and page structure for search engines
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Canonical Header Validation" icon="triangle-exclamation" href="/rules/core/canonical-header">
+    Detects mismatch between HTML canonical tag and Link header
+  </Card>
+  <Card title="Canonical URL" icon="triangle-exclamation" href="/rules/core/canonical">
+    Validates canonical URL presence and format
+  </Card>
+  <Card title="Charset" icon="triangle-exclamation" href="/rules/core/charset">
+    Checks for proper character encoding declaration
+  </Card>
+  <Card title="Doctype" icon="triangle-exclamation" href="/rules/core/doctype">
+    Checks for valid HTML5 doctype declaration
+  </Card>
+  <Card title="Favicon" icon="triangle-exclamation" href="/rules/core/favicon">
+    Checks for favicon presence
+  </Card>
+  <Card title="H1 Tag" icon="circle-exclamation" href="/rules/core/h1">
+    Validates H1 tag presence and uniqueness
+  </Card>
+  <Card title="Meta Description" icon="circle-exclamation" href="/rules/core/meta-description">
+    Validates meta description presence and length
+  </Card>
+  <Card title="Meta Title" icon="circle-exclamation" href="/rules/core/meta-title">
+    Validates page title presence and length
+  </Card>
+  <Card title="Nosnippet Directive" icon="triangle-exclamation" href="/rules/core/nosnippet">
+    Detects pages preventing search engine snippets
+  </Card>
+  <Card title="Open Graph Tags" icon="triangle-exclamation" href="/rules/core/og-tags">
+    Validates Open Graph meta tags for social sharing
+  </Card>
+  <Card title="Robots Meta" icon="triangle-exclamation" href="/rules/core/robots-meta">
+    Checks robots meta tag for indexing directives
+  </Card>
+  <Card title="Title Uniqueness" icon="triangle-exclamation" href="/rules/core/title-unique">
+    Checks that page titles are unique across the site
+  </Card>
+  <Card title="Twitter Cards" icon="circle-info" href="/rules/core/twitter-cards">
+    Validates Twitter Card meta tags
+  </Card>
+</CardGroup>
+
+## Disable All Core SEO Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```

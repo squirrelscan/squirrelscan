@@ -1,0 +1,97 @@
+---
+title: "Coding agents"
+sidebarTitle: "Overview"
+description: "Run squirrelscan audits from Claude Code, Cursor, Codex, ChatGPT, opencode, and any MCP client: setup, MCP, skills, and the fix loop."
+icon: "bot"
+---
+
+squirrelscan is built for coding agents. Point your agent at squirrelscan and it can audit a site, read the findings as structured tool output, and fix them in your codebase, without you copy-pasting reports around.
+
+## Pick your agent
+
+<CardGroup cols={2}>
+  <Card title="Claude Code" icon="terminal" href="/developers/agents/claude-code">
+    Plugin (skills + MCP in one), or `claude mcp add`.
+  </Card>
+  <Card title="Cursor" icon="mouse-pointer-click" href="/developers/agents/cursor">
+    One-click install, or a two-line `mcp.json`.
+  </Card>
+  <Card title="OpenAI Codex" icon="square-terminal" href="/developers/agents/codex">
+    `codex mcp add` or `~/.codex/config.toml`.
+  </Card>
+  <Card title="ChatGPT" icon="message-square" href="/developers/agents/chatgpt">
+    Add squirrelscan as a developer-mode connector.
+  </Card>
+  <Card title="opencode" icon="code" href="/developers/agents/opencode">
+    Remote MCP in `opencode.json`.
+  </Card>
+  <Card title="Any MCP client" icon="plug" href="/developers/mcp-clients">
+    VS Code, Windsurf, Gemini CLI, and the raw endpoint.
+  </Card>
+</CardGroup>
+
+## Three ways to connect
+
+Every agent uses one or more of these. The per-agent pages above show the exact steps.
+
+<CardGroup cols={3}>
+  <Card title="MCP server" icon="plug">
+    The deepest integration. The hosted server at `mcp.squirrelscan.com` exposes audits, rules, issues, and reports as native tools, no shell piping. See [Hosted MCP](/developers/mcp).
+  </Card>
+  <Card title="Skills" icon="sparkles">
+    Autonomous audit + fix workflows the agent discovers and runs on its own. Install once: `npx skills add squirrelscan/squirrelscan`.
+  </Card>
+  <Card title="Piping" icon="arrow-right">
+    No integration needed: `squirrel audit example.com --format llm | <agent>`. Works with anything that reads stdin.
+  </Card>
+</CardGroup>
+
+## The skills
+
+The [Agent Skills](https://agentskills.io) standard ships two squirrelscan skills. They install the same way for every agent (`npx skills add squirrelscan/squirrelscan`, landing in `.agents/skills/`); Claude Code can also get them bundled in the [plugin](/developers/agents/claude-code).
+
+| Skill | What it does |
+|-------|--------------|
+| `squirrelscan` | Operate the CLI: install, login, run audits, publish reports, credits, API keys, MCP setup, configuration |
+| `audit-website` | The fix loop: audit a site, map findings to code, fix in batches, re-audit until it scores well |
+
+<Info>For best results, run the skill in **plan mode** if your agent supports it, so it analyzes every issue and proposes a plan before touching your code.</Info>
+
+## The fix loop
+
+Once connected, the pattern is the same everywhere. Ask the agent to audit and fix:
+
+```
+Use the audit-website skill to audit example.com and fix the top issues.
+```
+
+The agent will:
+
+1. Run the audit (MCP tool or CLI).
+2. Group findings by severity and category.
+3. Map each issue to the source file.
+4. Apply fixes in batches.
+5. Re-audit to confirm the score improved.
+
+<Tip>Scope large sites so runs stay fast: `Audit only /blog/* and cap it at 20 pages.` See [configuration for agents](#configuration-for-agents).</Tip>
+
+## Configuration for agents
+
+Drop a `squirrel.toml` in your project so every agent run uses consistent settings:
+
+```toml squirrel.toml
+[crawler]
+max_pages = 50
+respect_robots = false  # default: audits are owner-initiated
+
+[rules]
+disable = ["content/word-count", "content/reading-level"]
+```
+
+See the [configuration reference](/configuration) for all options, and [Fix your site with an AI agent](/guides/fix-your-site-with-an-ai-agent) for a full worked example.
+
+## Related
+
+- [Hosted MCP server](/developers/mcp) - the tool surface, auth, and how credits work
+- [MCP client setup](/developers/mcp-clients) - copy-paste config for every client
+- [`squirrel` CLI](/cli) - the command line the skills wrap

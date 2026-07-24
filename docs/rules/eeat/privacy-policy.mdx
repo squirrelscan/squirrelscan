@@ -1,0 +1,46 @@
+---
+title: "Privacy Policy"
+description: "Checks for privacy policy page linked from footer"
+---
+
+Checks for privacy policy page linked from footer
+
+| | |
+|---|---|
+| **Rule ID** | `eeat/privacy-policy` |
+| **Category** | [E-E-A-T](/rules/eeat) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+A privacy policy is required by law in many jurisdictions (GDPR, CCPA) and signals trustworthiness. Link it from your footer on every page. Cover: what data you collect, how you use it, third-party sharing, user rights, and contact for privacy concerns. Keep it updated when practices change.
+
+## Detection
+
+A crawled page is credited as your privacy policy when its URL matches a known privacy slug (`/privacy`, `/privacy-policy`, `/legal/privacy`, and localized variants) or when its title or h1 reads "Privacy Policy" / "Privacy Notice" (a dated qualifier like "(Updated July 2026)" is fine), so a page with an unusual slug is still recognized.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/privacy-policy"]
+```
+
+### Disable all E-E-A-T rules
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["eeat/privacy-policy"]
+disable = ["*"]
+```

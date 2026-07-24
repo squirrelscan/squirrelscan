@@ -1,0 +1,42 @@
+---
+title: "Schema + Noindex Conflict"
+description: "Detects pages with rich result schema that are blocked from indexing"
+---
+
+Detects pages with rich result schema that are blocked from indexing
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/schema-noindex-conflict` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Pages with rich result schemas (Article, Product, Recipe, Event, etc.) should be indexed so search engines can display rich results. Having schema markup on noindexed pages wastes effort and prevents rich results from appearing. Remove noindex directive or remove schema markup if page shouldn't be indexed.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/schema-noindex-conflict"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/schema-noindex-conflict"]
+disable = ["*"]
+```

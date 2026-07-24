@@ -1,0 +1,15 @@
+{
+  "name": "@squirrelscan/docs",
+  "private": true,
+  "scripts": {
+    "dev": "tangly dev",
+    "build": "tangly build",
+    "check": "tangly check --strict",
+    "preview": "tangly preview",
+    "deploy": "tangly build && wrangler deploy"
+  },
+  "devDependencies": {
+    "tangly": "0.2.4",
+    "wrangler": "^4.20.0"
+  }
+}

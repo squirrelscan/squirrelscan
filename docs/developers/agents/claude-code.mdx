@@ -1,0 +1,118 @@
+---
+title: "squirrelscan for Claude Code"
+sidebarTitle: "Claude Code"
+description: "Set up squirrelscan in Claude Code: install the plugin (skills + MCP), connect the hosted MCP server, and run audits with /audit-website."
+icon: "terminal"
+---
+
+squirrelscan plugs straight into Claude Code. The plugin bundles both skills and the hosted MCP server, so Claude can run audits, read findings as tools, and fix them in your repo, all from one install.
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
+
+## 2. Add squirrelscan
+
+<Tabs>
+  <Tab title="Plugin (recommended)">
+    The plugin bundles both skills plus the hosted MCP server:
+
+    ```
+    /plugin marketplace add squirrelscan/squirrelscan
+    /plugin install squirrelscan@squirrelscan
+    ```
+
+    That's it, skills and MCP tools are both available. Authenticate the MCP server for cloud features (below).
+  </Tab>
+  <Tab title="MCP only">
+    Add just the hosted server (dynamic client registration, no client id needed):
+
+    ```bash
+    claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
+    ```
+
+    Then run `/mcp`, select **squirrelscan**, and choose **Authenticate**. Full options, scopes, and the API-key variant are on the [MCP client setup](/developers/mcp-clients#claude-code) page.
+  </Tab>
+  <Tab title="Skills only">
+    Install the skills without the MCP server:
+
+    ```bash
+    npx skills add squirrelscan/squirrelscan
+    ```
+
+    The skills drive the CLI directly, so free local audits work with no auth.
+  </Tab>
+</Tabs>
+
+<Tip>Prefer a button? [**Add to Claude Code**](https://squirrelscan.com/add/claude) links here.</Tip>
+
+## 3. Authenticate (for cloud)
+
+Local audits need nothing. For hosted crawling, publishing, and credits, sign in once. With the MCP server added, run `/mcp` → **squirrelscan** → **Authenticate**, or from the shell:
+
+```bash
+claude mcp login squirrelscan
+```
+
+Tokens are stored in your OS keychain, never in a config file, so a committed `.mcp.json` stays safe.
+
+## 4. Run an audit
+
+Trigger the skill with a slash command:
+
+```
+/audit-website
+```
+
+Claude detects your project's website, runs the audit, and summarizes issues by severity. Or be explicit:
+
+```
+/audit-website https://example.com focusing on accessibility and performance
+```
+
+Or just ask in natural language:
+
+```
+Use the audit-website skill to audit example.com and fix all high-severity issues.
+```
+
+### Plan mode for big fixes
+
+For larger efforts, let Claude plan before it edits:
+
+```
+Enter plan mode. Use the audit-website skill to audit example.com,
+then create a plan to fix all high and medium severity issues.
+```
+
+Claude runs the audit, groups fixes, orders them by dependency, and waits for your approval before changing code.
+
+### Parallel fixes with subagents
+
+```
+Audit example.com, then spawn subagents to fix in parallel:
+accessibility, SEO meta tags, and performance.
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+    A full worked example of the audit-and-fix loop.
+  </Card>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#claude-code">
+    Scopes, API-key auth, and JSON config.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule and how it's fixed.
+  </Card>
+</CardGroup>

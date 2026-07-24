@@ -1,0 +1,90 @@
+---
+title: "squirrelscan for Cursor"
+sidebarTitle: "Cursor"
+description: "Set up squirrelscan in Cursor: one-click MCP install, add the skills, and run audits from chat or the agent."
+icon: "mouse-pointer-click"
+---
+
+Cursor gets squirrelscan as a one-click MCP install plus the audit skills. Cursor can then run audits, read findings as tools, and fix them across your codebase.
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+<Tabs>
+  <Tab title="One-click (recommended)">
+    Click [**Add to Cursor**](https://squirrelscan.com/add/cursor). Cursor opens, shows an approval dialog, and writes the server into your `mcp.json`.
+  </Tab>
+  <Tab title="Manual">
+    Add it to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (this project). A remote server only needs a `url`, Cursor auto-negotiates the transport:
+
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "url": "https://mcp.squirrelscan.com/mcp"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>Don't add a `"type"` field to a remote (`url`) entry, it's only for stdio servers. API-key auth and CLI details are on the [MCP client setup](/developers/mcp-clients#cursor) page.</Note>
+
+## 3. Authenticate (for cloud)
+
+Local audits need nothing. For hosted crawling, publishing, and credits, open **Settings → Customize** (labelled **Tools & Integrations** in some builds), find **squirrelscan**, and click **Needs login** to run the browser flow. From the Cursor CLI: `agent mcp login squirrelscan`.
+
+## 4. Install the skills
+
+The MCP server exposes tools; the skills add autonomous audit-and-fix workflows. Cursor supports the Agent Skills standard natively, and also loads skills from Claude Code's directories.
+
+```bash
+npx skills add squirrelscan/squirrelscan
+```
+
+## 5. Run an audit
+
+In chat or the agent, trigger the skill:
+
+```
+/audit-website
+```
+
+Cursor detects your project's website and runs the audit. Or be explicit, or use natural language:
+
+```
+/audit-website https://example.com then fix all issues across the codebase
+```
+
+```
+Use the audit-website skill to audit example.com and fix the accessibility issues.
+```
+
+<Tip>Use the agent (composer) for multi-file fixes so Cursor can edit across the codebase in one pass.</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+    A full worked example of the audit-and-fix loop.
+  </Card>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#cursor">
+    Scopes, API-key auth, and JSON config.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule and how it's fixed.
+  </Card>
+</CardGroup>

@@ -1,0 +1,42 @@
+---
+title: "Lazy Loading Above Fold"
+description: "Detects lazy loading on likely above-fold images"
+---
+
+Detects lazy loading on likely above-fold images
+
+| | |
+|---|---|
+| **Rule ID** | `perf/lazy-above-fold` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Don't use loading='lazy' on images that appear above the fold (visible without scrolling). Lazy loading these images delays LCP because the browser waits for layout before fetching. For hero images and LCP candidates: 1) Remove loading='lazy'. 2) Add fetchpriority='high'. 3) Consider preloading with `<link rel='preload' as='image'>`. Only use lazy loading for below-fold images.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/lazy-above-fold"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/lazy-above-fold"]
+disable = ["*"]
+```

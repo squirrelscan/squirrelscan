@@ -1,0 +1,42 @@
+---
+title: "Input Image Alt"
+description: "Checks that input type='image' elements have alt text"
+---
+
+Checks that input type='image' elements have alt text
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/input-image-alt` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Image inputs (input type='image') are submit buttons that use an image. They must have alt text describing the button's action. Example: `<input type='image' src='submit.png' alt='Submit form'>`
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/input-image-alt"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/input-image-alt"]
+disable = ["*"]
+```

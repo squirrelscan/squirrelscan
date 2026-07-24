@@ -1,0 +1,42 @@
+---
+title: "Object Alt Text"
+description: "Checks that object elements have alternative content"
+---
+
+Checks that object elements have alternative content
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/object-alt` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Object elements need alternative content for when the embedded content can't be displayed or for assistive technology. Add content between `<object>` tags as fallback, or use aria-label/aria-labelledby.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/object-alt"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/object-alt"]
+disable = ["*"]
+```

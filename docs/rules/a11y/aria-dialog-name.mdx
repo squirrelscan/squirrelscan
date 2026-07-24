@@ -1,0 +1,42 @@
+---
+title: "ARIA Dialog Name"
+description: "Checks that dialog elements have accessible names"
+---
+
+Checks that dialog elements have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-dialog-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Elements with role='dialog' or role='alertdialog' (and native `<dialog>`) must have an accessible name. Add aria-label with a descriptive label, or use aria-labelledby pointing to a visible heading inside the dialog. A title attribute also works but is less preferred. Without a name, screen reader users won't know the purpose of the dialog.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-dialog-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-dialog-name"]
+disable = ["*"]
+```

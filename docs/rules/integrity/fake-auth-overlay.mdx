@@ -1,0 +1,51 @@
+---
+title: "Fake Authentication Overlay"
+description: "Detects full-viewport credential overlays and off-brand sign-in controls"
+---
+
+Detects full-viewport fixed high-z-index iframe overlays or sign-in controls that send credentials to an off-brand host: a credential-harvesting overlay pattern.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/fake-auth-overlay` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Page |
+| **Severity** | warning |
+| **Weight** | 8/10 |
+
+## How it works
+
+Two patterns trip this rule:
+
+1. A **full-viewport, fixed, high-z-index iframe** pinned to a corner (the injected `#google-auth` overlay from the real incident). A normal fixed cookie banner won't match: it lacks the viewport-filling dimensions.
+2. A **"Sign in with &lt;brand&gt;" control** whose link target is neither the brand's real host nor your own origin (i.e. where the credentials would actually go).
+
+A lone overlay signal is reported as **info**. It escalates to a **failure** only when another compromise signal corroborates on the same page.
+
+## Solution
+
+A full-viewport, fixed, high-z-index iframe that covers the page, or a 'Sign in with Google/Microsoft' control whose target is not the brand's real domain, is a credential-harvesting overlay. If you did not build it, your site is likely compromised: remove the overlay markup/script, audit recently modified files, and rotate credentials. Legitimate sign-in always targets the provider's own host (accounts.google.com, login.microsoftonline.com).
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/fake-auth-overlay"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/fake-auth-overlay"]
+disable = ["*"]
+```

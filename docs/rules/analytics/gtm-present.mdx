@@ -1,0 +1,42 @@
+---
+title: "Analytics Tracking"
+description: "Checks for Google Tag Manager or analytics implementation"
+---
+
+Checks for Google Tag Manager or analytics implementation
+
+| | |
+|---|---|
+| **Rule ID** | `analytics/gtm-present` |
+| **Category** | [Analytics](/rules/analytics) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Analytics tracking helps understand user behavior and measure SEO success. Use Google Tag Manager (GTM) to manage all tags centrally. GTM should be in the `<head>` with a noscript fallback in `<body>`. Alternatives: Google Analytics 4 directly, Plausible, Fathom, or Matomo. Ensure tracking complies with privacy laws.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["analytics/gtm-present"]
+```
+
+### Disable all Analytics rules
+
+```toml squirrel.toml
+[rules]
+disable = ["analytics/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["analytics/gtm-present"]
+disable = ["*"]
+```

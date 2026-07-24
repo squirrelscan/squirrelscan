@@ -1,0 +1,869 @@
+---
+title: "Configuration Examples"
+icon: "code"
+description: "Real-world squirrelscan configurations for common use cases"
+---
+
+Complete configuration examples for different website types and use cases.
+
+## Blog / Content Site
+
+Optimized for long-form content with comprehensive SEO checks.
+
+```toml
+[project]
+name = "myblog"
+domains = []
+
+[crawler]
+max_pages = 500
+delay_ms = 100
+timeout_ms = 30000
+concurrency = 5
+per_host_concurrency = 5
+per_host_delay_ms = 50
+
+# Focus on content, exclude admin
+include = []
+exclude = [
+  "/wp-admin/**",
+  "/wp-content/uploads/**",
+  "/admin/**",
+  "*.pdf",
+  "*.zip"
+]
+
+# Preserve pagination
+allow_query_params = ["page", "p"]
+drop_query_prefixes = ["utm_", "gclid", "fbclid"]
+
+respect_robots = false  # default: this is your own blog
+breadth_first = true
+max_prefix_budget = 0.25
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]  # AI rules require API key
+
+[external_links]
+enabled = true
+cache_ttl_days = 7
+timeout_ms = 10000
+concurrency = 5
+
+[output]
+format = "console"
+
+# Rule options for blog content
+[rule_options."core/meta-title"]
+min_length = 40
+max_length = 60
+
+[rule_options."core/meta-description"]
+min_length = 120
+max_length = 160
+
+[rule_options."content/word-count"]
+min_words = 500
+warn_threshold = 1000
+
+[rule_options."content/article-links"]
+min_external_links = 2
+
+[rule_options."links/orphan-pages"]
+exclude_patterns = ["/404", "/500"]
+```
+
+**Why this works:**
+- Focuses on content quality (word count, citations)
+- Longer titles and descriptions for blog posts
+- Excludes admin areas and media files
+- Preserves pagination parameters
+- Validates external citations
+
+---
+
+## E-commerce Site
+
+Optimized for product pages and conversion paths.
+
+```toml
+[project]
+name = "mystore"
+
+[crawler]
+max_pages = 1000
+delay_ms = 100
+concurrency = 10
+per_host_concurrency = 3
+
+# Focus on products and categories
+include = [
+  "/products/**",
+  "/categories/**",
+  "/collections/**"
+]
+
+exclude = [
+  "/cart/**",
+  "/checkout/**",
+  "/account/**",
+  "/admin/**",
+  "*.pdf"
+]
+
+# Preserve filters and sorting
+allow_query_params = [
+  "category",
+  "sort",
+  "filter",
+  "color",
+  "size",
+  "price",
+  "page"
+]
+
+breadth_first = true
+max_prefix_budget = 0.3  # Allow more per category
+
+[rules]
+enable = ["*"]
+disable = [
+  "ai/*",
+  "content/article-links"     # Products don't cite
+]
+
+[external_links]
+enabled = true
+cache_ttl_days = 14  # Products change less
+
+[rule_options."core/meta-title"]
+min_length = 30
+max_length = 55  # Shorter for mobile
+
+[rule_options."content/word-count"]
+min_words = 150
+warn_threshold = 300  # Products are shorter
+
+[rule_options."links/dead-end-pages"]
+exclude_patterns = [
+  "/thank-you",
+  "/order-confirmation",
+  "/checkout/success"
+]
+
+[rule_options."content/article-links"]
+min_external_links = 0  # Products link internally
+```
+
+**Why this works:**
+- Focuses on product and category pages
+- Excludes cart/checkout (dynamic content)
+- Preserves filter and sort parameters
+- Allows shorter content for products
+- Excludes conversion pages from dead-end check
+- Longer cache for external links (products stable)
+
+---
+
+## Documentation Site
+
+Optimized for technical documentation and cross-referencing.
+
+```toml
+[project]
+name = "docs"
+
+[crawler]
+max_pages = 800
+delay_ms = 50  # Local or fast hosting
+concurrency = 10
+
+include = ["/docs/**", "/api/**", "/guides/**"]
+exclude = ["*.png", "*.jpg", "*.gif"]
+
+# Preserve version in URL
+allow_query_params = ["version", "v"]
+
+breadth_first = true
+max_prefix_budget = 0.2  # Ensure wide coverage
+
+[rules]
+enable = ["*"]
+disable = [
+  "ai/*",
+  "content/article-links",  # Docs link internally
+  "eeat/*"                  # Not needed for docs
+]
+
+[external_links]
+enabled = true
+cache_ttl_days = 3  # Docs change frequently
+
+[rule_options."content/word-count"]
+min_words = 200
+warn_threshold = 400  # Docs can be concise
+
+[rule_options."links/internal-links"]
+min_internal_links = 5  # Heavy cross-referencing
+
+[rule_options."content/keyword-stuffing"]
+density_threshold = 0.05  # Technical terms repeat
+
+[rule_options."links/orphan-pages"]
+exclude_patterns = ["/api/deprecated/**"]
+```
+
+**Why this works:**
+- Focuses on documentation sections
+- Excludes images from crawl
+- Shorter content acceptable (reference material)
+- Expects heavy internal linking
+- Allows technical term repetition
+- Short external link cache (docs update often)
+
+---
+
+## Marketing Landing Pages
+
+Optimized for conversion-focused single pages.
+
+```toml
+[project]
+name = "landing-pages"
+
+[crawler]
+max_pages = 50
+delay_ms = 100
+concurrency = 5
+
+include = ["/lp/**", "/landing/**"]
+exclude = ["/lp/old/**", "/lp/archive/**"]
+
+# Usually no query params
+allow_query_params = []
+
+[rules]
+enable = [
+  "core/*",
+  "security/*",
+  "mobile/*",
+  "performance/*",
+  "social/*"
+]
+disable = [
+  "ai/*",
+  "content/article-links",
+  "links/orphan-pages",
+  "links/dead-end-pages",
+  "crawl/*"
+]
+
+[external_links]
+enabled = false  # Landing pages often have minimal links
+
+[rule_options."content/word-count"]
+min_words = 100
+warn_threshold = 200  # Concise for conversion
+
+[rule_options."links/internal-links"]
+min_internal_links = 1  # Just CTA
+
+[rule_options."core/meta-title"]
+min_length = 30
+max_length = 55
+```
+
+**Why this works:**
+- Small page count (focused audits)
+- Disables citations (not relevant)
+- Disables orphan/dead-end checks (landing pages isolated)
+- Very short content acceptable
+- Minimal internal links (CTA focused)
+- No external link checking (minimal outbound)
+- Focuses on core SEO, mobile, performance
+
+---
+
+## News / Magazine Site
+
+Optimized for frequently updated content.
+
+```toml
+[project]
+name = "news-site"
+
+[crawler]
+max_pages = 1000
+delay_ms = 150  # Polite
+concurrency = 5
+per_host_concurrency = 2
+
+include = [
+  "/news/**",
+  "/articles/**",
+  "/opinion/**"
+]
+
+exclude = [
+  "/news/archive/**",
+  "/breaking/**",  # Changes too fast
+  "*.amp"
+]
+
+# Preserve section and pagination
+allow_query_params = ["section", "page", "topic"]
+
+breadth_first = true
+max_prefix_budget = 0.15  # Balanced coverage
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]
+
+[external_links]
+enabled = true
+cache_ttl_days = 1  # News links change daily
+
+[rule_options."content/word-count"]
+min_words = 400
+warn_threshold = 800
+
+[rule_options."content/article-links"]
+min_external_links = 3  # Journalism requires citations
+
+[rule_options."performance/ttfb"]
+warn_threshold = 400  # News sites need speed
+error_threshold = 800
+```
+
+**Why this works:**
+- Excludes fast-changing breaking news
+- Short external link cache (news changes)
+- Requires citations (journalism)
+- Expects longer content
+- Strict performance requirements
+- Low prefix budget (balanced coverage)
+
+---
+
+## SaaS Marketing Site
+
+Optimized for product marketing and conversion.
+
+```toml
+[project]
+name = "saas-marketing"
+
+[crawler]
+max_pages = 200
+delay_ms = 100
+concurrency = 8
+
+include = [
+  "/",
+  "/features/**",
+  "/pricing",
+  "/about",
+  "/blog/**"
+]
+
+exclude = [
+  "/app/**",      # Logged-in application
+  "/dashboard/**",
+  "/api/**"
+]
+
+allow_query_params = ["plan", "billing"]
+
+[rules]
+enable = ["*"]
+disable = [
+  "ai/*",
+  "content/article-links",  # Marketing doesn't cite
+  "local/*",                # Not local business
+  "video/*"                 # No video content
+]
+
+[external_links]
+enabled = true
+cache_ttl_days = 14
+
+[rule_options."content/word-count"]
+min_words = 200
+warn_threshold = 400
+
+[rule_options."links/dead-end-pages"]
+exclude_patterns = [
+  "/pricing",
+  "/signup",
+  "/demo"
+]
+```
+
+**Why this works:**
+- Excludes logged-in app areas
+- Focuses on marketing pages
+- Shorter content acceptable (marketing)
+- Pricing/signup pages are intentional dead-ends
+- Disables irrelevant categories (local, video)
+
+---
+
+## Local Business Site
+
+Optimized for local SEO and service pages.
+
+```toml
+[project]
+name = "local-business"
+
+[crawler]
+max_pages = 100
+delay_ms = 100
+concurrency = 5
+
+exclude = ["/admin/**", "/wp-admin/**"]
+
+[rules]
+enable = ["*"]
+disable = [
+  "ai/*",
+  "content/article-links",
+  "eeat/citations",
+  "video/*"
+]
+
+[external_links]
+enabled = true
+cache_ttl_days = 30  # Local info stable
+
+[rule_options."content/word-count"]
+min_words = 200
+warn_threshold = 300
+
+[rule_options."core/meta-title"]
+min_length = 35
+max_length = 60  # Include city/state
+
+[rule_options."links/internal-links"]
+min_internal_links = 3
+```
+
+**Why this works:**
+- Small site (100 pages typical)
+- Focuses on local SEO rules
+- Longer title to include location
+- Shorter content acceptable
+- Long external link cache (info stable)
+- Disables citation requirements
+
+---
+
+## CI/CD Pipeline
+
+Fast, focused checks for automated testing.
+
+```toml
+[project]
+name = "ci-checks"
+
+[crawler]
+max_pages = 100
+delay_ms = 0     # Fast for CI
+timeout_ms = 10000
+concurrency = 10
+respect_robots = false  # default
+
+[rules]
+enable = [
+  "core/*",
+  "security/*",
+  "links/broken-links"
+]
+disable = ["*"]  # Only enable specific critical rules
+
+[external_links]
+enabled = false  # Speed priority
+
+[output]
+format = "json"
+path = "reports/audit.json"
+
+[rule_options."core/meta-title"]
+min_length = 1    # Just check presence
+max_length = 200
+
+[rule_options."core/meta-description"]
+min_length = 1
+max_length = 500
+```
+
+**Why this works:**
+- Fast crawl (no delays)
+- Only critical checks
+- No external link validation
+- JSON output for parsing
+- Lenient thresholds (just presence checks)
+- Doesn't enforce robots.txt (default; CI audits your own site)
+
+**CI/CD usage:**
+
+```yaml
+# .github/workflows/audit.yml
+- name: Audit
+  run: squirrel audit https://staging.example.com
+
+- name: Check Score
+  run: |
+    SCORE=$(cat reports/audit.json | jq '.health.score')
+    if [ "$SCORE" -lt 80 ]; then
+      exit 1
+    fi
+```
+
+---
+
+## Multi-Domain Project
+
+Crawl main site and subdomain together.
+
+```toml
+[project]
+name = "multi-domain"
+domains = ["example.com"]  # Includes all subdomains
+
+[crawler]
+max_pages = 1000
+delay_ms = 100
+concurrency = 10
+per_host_concurrency = 2  # Per subdomain
+
+# Crawl across subdomains
+include = []  # Empty = all subdomains allowed
+
+exclude = [
+  "/admin/**",
+  "/api/**"
+]
+
+breadth_first = true
+max_prefix_budget = 0.2
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]
+```
+
+**Crawls:**
+- `example.com`
+- `www.example.com`
+- `blog.example.com`
+- `docs.example.com`
+- `shop.example.com`
+
+**Why this works:**
+- `domains = ["example.com"]` allows all subdomains
+- Higher page limit for multiple domains
+- Per-host concurrency prevents overwhelming single subdomain
+- Balanced prefix budget for diverse coverage
+
+---
+
+## High-Volume Crawl
+
+Large site with thousands of pages.
+
+```toml
+[project]
+name = "large-site"
+
+[crawler]
+max_pages = 5000
+delay_ms = 50
+timeout_ms = 20000
+concurrency = 15
+per_host_concurrency = 5
+per_host_delay_ms = 100
+
+breadth_first = true
+max_prefix_budget = 0.15  # Prevent blog dominance
+
+[rules]
+enable = ["*"]
+disable = [
+  "ai/*",
+  "content/quality",  # Slow on large sites
+  "performance/cls-hints"
+]
+
+[external_links]
+enabled = true
+cache_ttl_days = 14
+timeout_ms = 5000  # Fail fast
+concurrency = 20   # High parallelism
+
+[output]
+format = "json"
+path = "reports/audit-large.json"
+```
+
+**Why this works:**
+- High page limit
+- Aggressive concurrency
+- Low prefix budget (balanced coverage)
+- Disables slow rules
+- Fast external link timeout
+- JSON output for large datasets
+
+---
+
+## Local Development
+
+Fast crawling for localhost testing.
+
+```toml
+[project]
+name = "local-dev"
+
+[crawler]
+max_pages = 100
+delay_ms = 0          # No delay
+timeout_ms = 5000
+concurrency = 10
+respect_robots = false  # default
+
+[rules]
+enable = ["core/*", "links/*", "content/*"]
+disable = [
+  "ai/*",
+  "security/*",  # Localhost is HTTP
+  "crawl/*"      # No robots.txt
+]
+
+[external_links]
+enabled = false  # External links fail on localhost
+
+[output]
+format = "console"
+```
+
+**Usage:**
+
+```bash
+cd myproject
+squirrel audit http://localhost:3000
+```
+
+**Why this works:**
+- No delays (localhost is fast)
+- Disables security checks (localhost is HTTP)
+- No external link checking
+- Console output for quick feedback
+
+---
+
+## Accessibility Audit
+
+Focus on WCAG compliance.
+
+```toml
+[project]
+name = "accessibility"
+
+[crawler]
+max_pages = 300
+
+[rules]
+enable = [
+  "a11y/*",
+  "mobile/*",
+  "core/meta-title",
+  "core/meta-description",
+  "images/alt-text"
+]
+disable = ["*"]  # Only accessibility rules
+
+[external_links]
+enabled = false
+
+[output]
+format = "html"
+path = "reports/accessibility-audit.html"
+```
+
+**Why this works:**
+- Only accessibility and mobile rules
+- Includes image alt text
+- HTML report for visual review
+- Moderate page count
+
+---
+
+## Performance Audit
+
+Focus on Core Web Vitals hints.
+
+```toml
+[project]
+name = "performance"
+
+[crawler]
+max_pages = 200
+delay_ms = 100
+
+[rules]
+enable = [
+  "performance/*",
+  "images/*",
+  "core/preconnect",
+  "core/preload"
+]
+disable = ["*"]
+
+[external_links]
+enabled = false
+
+[rule_options."performance/ttfb"]
+warn_threshold = 300
+error_threshold = 600
+
+[rule_options."performance/dom-size"]
+warn_threshold = 1000
+error_threshold = 2000
+
+[output]
+format = "html"
+```
+
+**Why this works:**
+- Only performance rules
+- Strict TTFB thresholds
+- Strict DOM size limits
+- HTML report for visualization
+
+---
+
+## Security Audit
+
+Focus on HTTPS, headers, and security.
+
+```toml
+[project]
+name = "security"
+
+[crawler]
+max_pages = 500
+
+[rules]
+enable = [
+  "security/*",
+  "crawl/robots-txt",
+  "links/https-downgrade"
+]
+disable = ["*"]
+
+[external_links]
+enabled = true  # Check HTTPS external links
+
+[output]
+format = "json"
+path = "reports/security-audit.json"
+```
+
+**Why this works:**
+- Only security rules
+- Validates external HTTPS
+- JSON for automated security testing
+- Moderate page count
+
+---
+
+## Complete Production Site
+
+Comprehensive audit for production deployment.
+
+```toml
+[project]
+name = "production-site"
+domains = []
+
+[crawler]
+max_pages = 1000
+delay_ms = 150
+timeout_ms = 30000
+concurrency = 5
+per_host_concurrency = 2
+per_host_delay_ms = 300
+
+exclude = [
+  "/admin/**",
+  "/wp-admin/**",
+  "/api/**",
+  "*.pdf",
+  "*.zip"
+]
+
+allow_query_params = ["page", "category", "tag"]
+drop_query_prefixes = ["utm_", "gclid", "fbclid", "mc_", "_ga"]
+
+respect_robots = false  # default: this is your own production site
+breadth_first = true
+max_prefix_budget = 0.2
+follow_redirects = true
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]  # Requires API key
+
+[external_links]
+enabled = true
+cache_ttl_days = 7
+timeout_ms = 10000
+concurrency = 5
+
+[output]
+format = "html"
+path = "reports/production-audit.html"
+
+# Production-quality content
+[rule_options."core/meta-title"]
+min_length = 35
+max_length = 60
+
+[rule_options."core/meta-description"]
+min_length = 120
+max_length = 160
+
+[rule_options."content/word-count"]
+min_words = 300
+warn_threshold = 600
+
+[rule_options."performance/ttfb"]
+warn_threshold = 600
+error_threshold = 1000
+
+[rule_options."links/orphan-pages"]
+exclude_patterns = [
+  "/404",
+  "/500",
+  "/.well-known/**"
+]
+```
+
+**Why this works:**
+- Polite crawling (production site)
+- All rules enabled (comprehensive)
+- External link validation
+- Quality content thresholds
+- HTML report for sharing
+- Browser-like headers for better compatibility
+
+---
+
+## Related
+
+- [Configuration Overview](/configuration) - Understanding config system
+- [Crawler Settings](/configuration/crawler) - Crawl behavior
+- [Rules Configuration](/configuration/rules) - Rule patterns
+- [Rule Options](/configuration/rule-options) - Per-rule config

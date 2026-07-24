@@ -1,0 +1,62 @@
+---
+title: "Technology Detection"
+description: "Identify the tech stack behind any site - CMS, frameworks, CDN, analytics, and more"
+icon: "layers"
+---
+
+Every cloud audit fingerprints the technologies a site is built with - **385 signatures** across CMS, frameworks, CDN & hosting, analytics, tag managers, payment processors, chat widgets, fonts, and security/consent tools - and surfaces them as a dedicated **Technologies** section in the report.
+
+It's informational: technology detection **never affects your health score**. It's there to give you - and your agent - context about what you're auditing.
+
+## What it detects
+
+Detection runs against response headers, HTML, inline and external scripts, cookies, and meta tags, and reports versions where they can be determined. Results are grouped by category:
+
+| Category | Examples |
+|----------|----------|
+| CMS & Ecommerce | WordPress, Shopify, Webflow, Ghost |
+| Frameworks & Libraries | Next.js, Astro, React, Vue, Svelte |
+| Web Servers | nginx, Apache, Caddy |
+| Hosting | Vercel, Netlify, AWS, GitHub Pages |
+| CDN & Edge | Cloudflare, Fastly, Akamai |
+| Analytics | Google Analytics, Plausible, Cloudflare Web Analytics |
+| Tag Managers | Google Tag Manager |
+| Advertising | Google AdSense, ad networks |
+| Payments | Stripe, PayPal, Shopify Payments |
+| Support & Chat | Intercom, Crisp, Zendesk |
+| Security & Consent | OneTrust, reCAPTCHA, hCaptcha |
+| Fonts, Video & Media, Widgets & UI | Google Fonts, YouTube, OneTrust |
+
+A typical result:
+
+```
+TECHNOLOGIES
+Detected tech stack - informational, not part of the score. No changes since last scan.
+🧩 Frameworks & Libraries   Astro 6.3.7
+🌐 CDN & Edge               Cloudflare
+📊 Analytics                Cloudflare Web Analytics
+🏷️ Tag Managers             Google Tag Manager
+🔒 Security & Consent       OneTrust
+```
+
+Technologies appear in **every output format** - console, HTML, Markdown, JSON, XML, and LLM - with logos in the visual formats.
+
+## When it runs
+
+- **Logged in** - detection runs automatically as part of every cloud audit. One detection per domain, regardless of how many pages you crawl.
+- **Logged out or `--offline`** - skipped, like every other cloud feature. Your local rules still complete.
+
+Detection is best-effort and never fails the audit: if the service is unavailable, the Technologies section is simply omitted and you're not charged.
+
+## Cost
+
+**Included in the audit base charge** - a single detection per domain, not per page. See [Credits & Pricing](/cloud/credits).
+
+## Change history
+
+squirrelscan keeps a per-domain record of what it has detected over time, so you can see when a site adopts or drops a technology - a CMS migration, a new analytics vendor, a CDN switch.
+
+- **Current snapshot** - free, shown on every audit. The report notes whether anything changed since the last scan ("No changes since last scan").
+- **Historical timeline** - the full add / remove history for a domain is available to any signed-in account, free or Pro, in the [dashboard](/dashboard).
+
+<Note>Technology data is keyed by domain and shared: the current detected stack for a domain is the same for everyone who audits it, so the snapshot stays fast and consistent across re-audits.</Note>

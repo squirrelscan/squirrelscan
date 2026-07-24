@@ -1,0 +1,877 @@
+---
+title: "Rule Options"
+icon: "sliders-horizontal"
+description: "Configure individual rule thresholds, limits, and behavior"
+---
+
+The `[rule_options]` section allows fine-tuning individual audit rules with custom thresholds and parameters.
+
+## Configuration
+
+```toml
+[rule_options]
+
+[rule_options."core/meta-title"]
+min_length = 30
+max_length = 60
+
+[rule_options."content/word-count"]
+min_words = 300
+warn_threshold = 500
+
+[rule_options."adblock/element-hiding"]
+maxMatchesToReport = 10
+lists = ["easylist", "easyprivacy"]
+```
+
+## How Rule Options Work
+
+### Structure
+
+Rule options use TOML table syntax:
+
+```toml
+[rule_options."<rule-id>"]
+option1 = value1
+option2 = value2
+```
+
+- `<rule-id>` - Full rule ID (e.g., `core/meta-title`, `content/word-count`)
+- Options are rule-specific (each rule defines its own options)
+- All options have defaults (configuration is optional)
+
+### Validation
+
+Rule options are validated against each rule's schema:
+
+```toml
+[rule_options."core/meta-title"]
+min_length = "thirty"  # ❌ Error: expected number
+max_length = 60        # ✓ OK
+```
+
+Run `squirrel config validate` to check for errors.
+
+---
+
+## Common Rule Options
+
+### Core Rules
+
+#### `core/meta-title`
+
+Control title tag length requirements.
+
+**Options:**
+
+```toml
+[rule_options."core/meta-title"]
+min_length = 30   # Minimum title length (characters)
+max_length = 75   # Maximum title length (characters)
+```
+
+**Defaults:**
+- `min_length: 30`
+- `max_length: 75`
+
+**Examples:**
+
+Strict title requirements:
+```toml
+[rule_options."core/meta-title"]
+min_length = 40
+max_length = 55
+```
+
+Lenient title requirements:
+```toml
+[rule_options."core/meta-title"]
+min_length = 20
+max_length = 70
+```
+
+**Why configure:**
+- Different industries have different conventions
+- Brand names may require more characters
+- Mobile SERPs show fewer characters (~50)
+
+---
+
+#### `core/meta-description`
+
+Control meta description length requirements.
+
+**Options:**
+
+```toml
+[rule_options."core/meta-description"]
+min_length = 120   # Minimum description length
+max_length = 160   # Maximum description length
+```
+
+**Defaults:**
+- `min_length: 120`
+- `max_length: 160`
+
+**Examples:**
+
+Google's recommended length:
+```toml
+[rule_options."core/meta-description"]
+min_length = 120
+max_length = 158
+```
+
+Allow longer descriptions:
+```toml
+[rule_options."core/meta-description"]
+min_length = 100
+max_length = 200
+```
+
+**Why configure:**
+- Google truncates ~160 characters
+- Longer descriptions provide more context
+- E-commerce may need more details
+
+---
+
+### Content Rules
+
+#### `content/word-count`
+
+Set minimum word count for content quality.
+
+**Options:**
+
+```toml
+[rule_options."content/word-count"]
+min_words = 300        # Minimum acceptable word count
+warn_threshold = 500   # Optimal word count threshold
+```
+
+**Defaults:**
+- `min_words: 300`
+- `warn_threshold: 500`
+
+**Examples:**
+
+Blog posts (longer content):
+```toml
+[rule_options."content/word-count"]
+min_words = 500
+warn_threshold = 1000
+```
+
+Product pages (shorter acceptable):
+```toml
+[rule_options."content/word-count"]
+min_words = 150
+warn_threshold = 300
+```
+
+Landing pages (minimal):
+```toml
+[rule_options."content/word-count"]
+min_words = 100
+warn_threshold = 200
+```
+
+**Why configure:**
+- Blog posts need more words (800-2000+)
+- Product pages can be shorter (200-500)
+- Landing pages focus on conversion
+
+**Behavior:**
+
+```toml
+min_words = 300
+warn_threshold = 500
+```
+
+- < 300 words → `fail` (thin content)
+- 300-499 words → `info` (could be longer)
+- ≥ 500 words → `pass` (good length)
+
+---
+
+#### `content/keyword-stuffing`
+
+Detect keyword over-optimization.
+
+**Options:**
+
+```toml
+[rule_options."content/keyword-stuffing"]
+density_threshold = 0.03   # Maximum keyword density (3%)
+min_word_count = 100       # Minimum words to check
+```
+
+**Defaults:**
+- `density_threshold: 0.03` (3%)
+- `min_word_count: 100`
+
+**Examples:**
+
+Strict (avoid over-optimization):
+```toml
+[rule_options."content/keyword-stuffing"]
+density_threshold = 0.02   # 2% max
+```
+
+Lenient (allow more repetition):
+```toml
+[rule_options."content/keyword-stuffing"]
+density_threshold = 0.05   # 5% max
+```
+
+**Why configure:**
+- Different content types have different natural repetition
+- Technical docs may repeat terms more
+- E-commerce descriptions can be repetitive
+
+**How density is calculated:**
+
+```
+density = (keyword_occurrences / total_words)
+```
+
+Example:
+- "SEO" appears 30 times
+- Page has 1000 words
+- Density = 30/1000 = 0.03 (3%)
+
+---
+
+#### `content/article-links`
+
+Check for external citations in articles.
+
+**Options:**
+
+```toml
+[rule_options."content/article-links"]
+min_external_links = 2   # Minimum external links
+```
+
+**Default:**
+- `min_external_links: 2`
+
+**Examples:**
+
+Require more citations (journalism):
+```toml
+[rule_options."content/article-links"]
+min_external_links = 5
+```
+
+No requirement:
+```toml
+[rule_options."content/article-links"]
+min_external_links = 0
+```
+
+**Why configure:**
+- Academic/news needs citations
+- Product pages may not need external links
+- E-E-A-T prefers authoritative sources
+
+---
+
+### Link Rules
+
+#### `links/orphan-pages`
+
+Detect pages with no incoming internal links.
+
+**Options:**
+
+```toml
+[rule_options."links/orphan-pages"]
+exclude_patterns = ["/sitemap.xml", "/robots.txt"]
+```
+
+**Default:**
+- `exclude_patterns: []`
+
+**Examples:**
+
+Ignore utility pages:
+```toml
+[rule_options."links/orphan-pages"]
+exclude_patterns = [
+  "/sitemap.xml",
+  "/robots.txt",
+  "/404",
+  "/500",
+  "/.well-known/*"
+]
+```
+
+**Why configure:**
+- Some pages are intentionally unlinked
+- Utility pages don't need internal links
+- Reduce false positives
+
+---
+
+#### `links/dead-end-pages`
+
+Find pages with no outgoing internal links.
+
+**Options:**
+
+```toml
+[rule_options."links/dead-end-pages"]
+exclude_patterns = ["/thank-you", "/confirmation"]
+```
+
+**Default:**
+- `exclude_patterns: []`
+
+**Examples:**
+
+Ignore conversion pages:
+```toml
+[rule_options."links/dead-end-pages"]
+exclude_patterns = [
+  "/thank-you",
+  "/confirmation",
+  "/checkout/success",
+  "/download/complete"
+]
+```
+
+**Why configure:**
+- Conversion pages often have no links (by design)
+- Focus user on one action
+- Reduce false positives
+
+---
+
+#### `links/internal-links`
+
+Control internal linking recommendations.
+
+**Options:**
+
+```toml
+[rule_options."links/internal-links"]
+min_internal_links = 2   # Minimum internal links per page
+```
+
+**Default:**
+- `min_internal_links: 2`
+
+**Examples:**
+
+Require more internal linking:
+```toml
+[rule_options."links/internal-links"]
+min_internal_links = 5
+```
+
+Minimal requirement:
+```toml
+[rule_options."links/internal-links"]
+min_internal_links = 1
+```
+
+**Why configure:**
+- Landing pages may have fewer links
+- Blog posts benefit from more internal links
+- E-commerce categories need many links
+
+---
+
+### Performance Rules
+
+#### `performance/ttfb`
+
+Time to First Byte threshold.
+
+**Options:**
+
+```toml
+[rule_options."performance/ttfb"]
+warn_threshold = 600    # Warning threshold (ms)
+error_threshold = 1000  # Error threshold (ms)
+```
+
+**Defaults:**
+- `warn_threshold: 600`
+- `error_threshold: 1000`
+
+**Examples:**
+
+Strict performance (fast hosting):
+```toml
+[rule_options."performance/ttfb"]
+warn_threshold = 300
+error_threshold = 600
+```
+
+Lenient (slow hosting):
+```toml
+[rule_options."performance/ttfb"]
+warn_threshold = 1000
+error_threshold = 2000
+```
+
+**Why configure:**
+- Shared hosting is slower
+- CDN hosting is faster
+- Geographic distance affects TTFB
+
+**Behavior:**
+
+```toml
+warn_threshold = 600
+error_threshold = 1000
+```
+
+- < 600ms → `pass`
+- 600-999ms → `warn`
+- ≥ 1000ms → `fail`
+
+---
+
+#### `performance/dom-size`
+
+DOM element count limits.
+
+**Options:**
+
+```toml
+[rule_options."performance/dom-size"]
+warn_threshold = 1500   # Warning threshold (elements)
+error_threshold = 3000  # Error threshold (elements)
+```
+
+**Defaults:**
+- `warn_threshold: 1500`
+- `error_threshold: 3000`
+
+**Examples:**
+
+Simple sites:
+```toml
+[rule_options."performance/dom-size"]
+warn_threshold = 800
+error_threshold = 1500
+```
+
+Complex apps:
+```toml
+[rule_options."performance/dom-size"]
+warn_threshold = 2000
+error_threshold = 4000
+```
+
+**Why configure:**
+- Simple pages have fewer elements
+- Complex apps have more elements
+- Mobile performance more sensitive
+
+---
+
+### Accessibility Rules
+
+#### `a11y/skip-link`
+
+Require skip navigation link.
+
+**Options:**
+
+```toml
+[rule_options."a11y/skip-link"]
+required = true   # Require skip link presence
+```
+
+**Default:**
+- `required: true`
+
+**Examples:**
+
+Optional skip link:
+```toml
+[rule_options."a11y/skip-link"]
+required = false
+```
+
+**Why configure:**
+- Simple sites may not need skip links
+- Complex sites benefit from skip links
+- WCAG AA compliance
+
+---
+
+### Security Rules
+
+#### `security/http-to-https`
+
+Allow HTTP links from HTTPS pages.
+
+**Options:**
+
+```toml
+[rule_options."security/http-to-https"]
+allow_localhost = true   # Allow HTTP localhost links
+allow_patterns = []      # Whitelist patterns
+```
+
+**Defaults:**
+- `allow_localhost: true`
+- `allow_patterns: []`
+
+**Examples:**
+
+Allow specific domains:
+```toml
+[rule_options."security/http-to-https"]
+allow_localhost = true
+allow_patterns = [
+  "http://example.com/*",
+  "http://legacy.site.com/*"
+]
+```
+
+Strict (no HTTP allowed):
+```toml
+[rule_options."security/http-to-https"]
+allow_localhost = false
+allow_patterns = []
+```
+
+**Why configure:**
+- Legacy integrations may use HTTP
+- Development environments use HTTP
+- Some APIs don't support HTTPS
+
+---
+
+### Crawl Rules
+
+#### `crawl/all-noindex-pages`
+
+Check if all pages are noindexed.
+
+**Options:**
+
+```toml
+[rule_options."crawl/all-noindex-pages"]
+threshold = 0.9   # Percentage threshold (90%)
+```
+
+**Default:**
+- `threshold: 0.9` (90%)
+
+**Examples:**
+
+Stricter check:
+```toml
+[rule_options."crawl/all-noindex-pages"]
+threshold = 0.5   # Warn if 50%+ noindexed
+```
+
+**Why configure:**
+- Staging sites should be fully noindexed
+- Production sites shouldn't be noindexed
+- Detect misconfiguration
+
+**Behavior:**
+
+```toml
+threshold = 0.9
+```
+
+If 90%+ of crawled pages are noindexed → `warn` (possible misconfiguration)
+
+---
+
+### Blocking Rules
+
+#### `adblock/element-hiding`
+
+Check for adblocker-hidden elements.
+
+**Options:**
+
+```toml
+[rule_options."adblock/element-hiding"]
+maxMatchesToReport = 10   # Max elements to report
+lists = [                  # Filter lists to check
+  "easylist",
+  "easyprivacy",
+  "fanboy-annoyance"
+]
+```
+
+**Defaults:**
+- `maxMatchesToReport: 10`
+- `lists: ["easylist", "easyprivacy", "fanboy-annoyance"]`
+
+**Examples:**
+
+Check more filter lists:
+```toml
+[rule_options."adblock/element-hiding"]
+maxMatchesToReport = 20
+lists = [
+  "easylist",
+  "easyprivacy",
+  "fanboy-annoyance",
+  "fanboy-social"
+]
+```
+
+Only check main list:
+```toml
+[rule_options."adblock/element-hiding"]
+lists = ["easylist"]
+```
+
+**Available lists:**
+- `easylist` - Main adblock list
+- `easyprivacy` - Privacy protection
+- `fanboy-annoyance` - Annoyance elements
+- `fanboy-social` - Social media buttons
+
+**Why configure:**
+- Different lists have different strictness
+- Reduce false positives
+- Focus on specific concerns
+
+---
+
+#### `adblock/blocked-links`
+
+Check for links to blocked tracking domains.
+
+**Options:**
+
+```toml
+[rule_options."adblock/blocked-links"]
+maxMatchesToReport = 10   # Max links to report
+lists = ["easyprivacy"]   # Filter lists
+```
+
+**Defaults:**
+- `maxMatchesToReport: 10`
+- `lists: ["easyprivacy"]`
+
+---
+
+## Finding Rule Options
+
+### View rule schema
+
+Check which options a rule accepts:
+
+```bash
+squirrel rules show core/meta-title
+```
+
+Output:
+```
+core/meta-title - Meta Title
+  Validates page title presence and length
+
+Options:
+  min_length: number (default: 30)
+  max_length: number (default: 75)
+```
+
+### List all rules with options
+
+```bash
+squirrel rules list --with-options
+```
+
+### View config with defaults
+
+```bash
+squirrel config show
+```
+
+Shows effective configuration including rule option defaults.
+
+---
+
+## Configuration Examples
+
+### Blog Site
+
+```toml
+[rule_options."core/meta-title"]
+min_length = 40
+max_length = 60
+
+[rule_options."content/word-count"]
+min_words = 500
+warn_threshold = 1000
+
+[rule_options."content/article-links"]
+min_external_links = 3
+```
+
+**Why:**
+- Blog posts need longer titles
+- Content should be comprehensive
+- External citations improve E-E-A-T
+
+---
+
+### E-commerce Site
+
+```toml
+[rule_options."core/meta-title"]
+min_length = 30
+max_length = 55  # Shorter for mobile
+
+[rule_options."content/word-count"]
+min_words = 150
+warn_threshold = 300  # Product pages are shorter
+
+[rule_options."links/dead-end-pages"]
+exclude_patterns = ["/thank-you", "/checkout/success"]
+
+[rule_options."content/article-links"]
+min_external_links = 0  # Products don't need citations
+```
+
+**Why:**
+- Product titles often shorter
+- Product descriptions concise
+- Conversion pages are dead-ends
+- Products link internally, not externally
+
+---
+
+### Documentation Site
+
+```toml
+[rule_options."content/word-count"]
+min_words = 200
+warn_threshold = 400
+
+[rule_options."links/internal-links"]
+min_internal_links = 5  # Docs should cross-reference
+
+[rule_options."content/keyword-stuffing"]
+density_threshold = 0.05  # Technical terms repeat
+```
+
+**Why:**
+- Docs can be shorter (reference material)
+- Cross-referencing improves UX
+- Technical terms naturally repeat
+
+---
+
+### Landing Pages
+
+```toml
+[rule_options."content/word-count"]
+min_words = 100
+warn_threshold = 200  # Conversion-focused
+
+[rule_options."links/internal-links"]
+min_internal_links = 1  # Focus on CTA
+
+[rule_options."links/dead-end-pages"]
+exclude_patterns = ["/lp/*"]  # Landing pages
+```
+
+**Why:**
+- Landing pages are concise
+- Minimize distractions from CTA
+- Dead-ends by design
+- Single page focus
+
+---
+
+## Validation
+
+Check rule options are valid:
+
+```bash
+squirrel config validate
+```
+
+**Valid config:**
+```
+✓ Config valid: /path/to/squirrel.toml
+```
+
+**Invalid config:**
+```
+✗ Invalid config:
+  rule_options.core/meta-title.min_length: Expected number, received string
+```
+
+Fix and re-validate:
+
+```toml
+# Before (invalid)
+[rule_options."core/meta-title"]
+min_length = "thirty"
+
+# After (valid)
+[rule_options."core/meta-title"]
+min_length = 30
+```
+
+---
+
+## Complete Example
+
+```toml
+[project]
+name = "myblog"
+
+[crawler]
+max_pages = 500
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]
+
+# Rule-specific configuration
+[rule_options."core/meta-title"]
+min_length = 40
+max_length = 60
+
+[rule_options."core/meta-description"]
+min_length = 120
+max_length = 160
+
+[rule_options."content/word-count"]
+min_words = 500
+warn_threshold = 1000
+
+[rule_options."content/article-links"]
+min_external_links = 2
+
+[rule_options."links/orphan-pages"]
+exclude_patterns = ["/404", "/500", "/.well-known/*"]
+
+[rule_options."performance/ttfb"]
+warn_threshold = 600
+error_threshold = 1000
+```
+
+This configuration:
+- Requires longer titles (40-60 chars)
+- Enforces substantial content (500+ words)
+- Expects external citations
+- Ignores utility pages in orphan check
+- Sets strict TTFB thresholds
+
+---
+
+## Related
+
+- [Rules Configuration](/configuration/rules) - Enable/disable rules
+- [Rules Reference](/rules) - All available rules
+- [Examples](/configuration/examples) - Common configurations

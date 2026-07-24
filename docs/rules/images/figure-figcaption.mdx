@@ -1,0 +1,42 @@
+---
+title: "Figure Captions"
+description: "Checks for proper use of figure and figcaption elements"
+---
+
+Checks for proper use of figure and figcaption elements
+
+| | |
+|---|---|
+| **Rule ID** | `images/figure-figcaption` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+Use `<figure>` and `<figcaption>` for images with captions. This provides semantic meaning and accessibility benefits. Screen readers announce figcaption as the image caption. Good for SEO as captions often contain keywords. Example: `<figure>``<img src='...' alt='...'>``<figcaption>`Description`</figcaption>``</figure>`.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/figure-figcaption"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/figure-figcaption"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Color Contrast"
+description: "Checks for color contrast issues in styles and classes"
+---
+
+Checks for color contrast issues in styles and classes
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/color-contrast` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Text must have sufficient contrast with its background for readability. WCAG AA requires 4.5:1 for normal text and 3:1 for large text (18px+ or 14px+ bold). Use tools like WebAIM Contrast Checker to verify. Common issues: light gray text, text over images without overlay. Don't rely on color alone to convey information - add icons or text labels.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/color-contrast"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/color-contrast"]
+disable = ["*"]
+```

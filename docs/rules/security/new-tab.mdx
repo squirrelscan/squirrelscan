@@ -1,0 +1,42 @@
+---
+title: "External Link Security"
+description: "Checks external target=_blank links for noopener (security) and noreferrer (privacy)"
+---
+
+Checks external target=_blank links for noopener (security) and noreferrer (privacy)
+
+| | |
+|---|---|
+| **Rule ID** | `security/new-tab` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+External links with target="_blank" should include rel="noopener noreferrer". noopener prevents the opened page from accessing window.opener (tab-nabbing attacks). noreferrer prevents leaking the referrer URL to the destination site (privacy). Modern browsers default noopener for target="_blank", but explicit attributes ensure compatibility.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/new-tab"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/new-tab"]
+disable = ["*"]
+```

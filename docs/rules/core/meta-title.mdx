@@ -1,0 +1,59 @@
+---
+title: "Meta Title"
+description: "Validates page title presence and length"
+---
+
+Validates page title presence and length
+
+| | |
+|---|---|
+| **Rule ID** | `core/meta-title` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Every page needs a unique, descriptive title tag between 30-75 characters. Titles appear in browser tabs, search results, and social shares. Write titles that accurately describe the page content while including your primary keyword near the beginning. If your title is too short, add more descriptive context. If too long, prioritize the most important information first and trim secondary details. Avoid keyword stuffing or duplicate titles across pages.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_length` | unknown | `undefined` | Minimum title length |
+| `max_length` | unknown | `undefined` | Maximum title length |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."core/meta-title"]
+min_length = undefined
+max_length = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/meta-title"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/meta-title"]
+disable = ["*"]
+```

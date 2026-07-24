@@ -1,0 +1,42 @@
+---
+title: "Content Gaps"
+description: "Finds topic clusters with search demand that lack dedicated coverage"
+---
+
+<Note>**Cloud rule, opt-in** - requires login (`squirrel auth login`), costs **25 credits per audit**, and is **disabled by default**. See [Cloud rules](/cloud/rules).</Note>
+
+Finds topic clusters with search demand around the site's existing content that lack dedicated coverage.
+
+| | |
+|---|---|
+| **Rule ID** | `gaps/content` |
+| **Category** | [Gap Analysis](/rules/gaps) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+| **Default** | Disabled (opt-in) |
+
+## What it checks
+
+Using live search data, the rule maps topic clusters adjacent to what your site already covers and reports clusters with combined search volume that have no dedicated page on your site.
+
+## Solution
+
+Each gap is a topic cluster with combined search volume the site doesn't cover directly. Plan content (guides, comparisons, FAQs) around the highest-volume clusters first - they're adjacent to what you already rank for, so new pages benefit from existing topical authority.
+
+## Options
+
+```toml squirrel.toml
+[rule_options."gaps/content"]
+country = "US"        # ISO country for search data (default US)
+language = "en"       # language code for search data (default en)
+```
+
+## Enable / Disable
+
+This rule is opt-in - enable it explicitly:
+
+```toml squirrel.toml
+[rules]
+enable = ["gaps/content"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Video Thumbnail"
+description: "Checks that videos have poster/thumbnail images"
+---
+
+Checks that videos have poster/thumbnail images
+
+| | |
+|---|---|
+| **Rule ID** | `video/video-thumbnail` |
+| **Category** | [Video](/rules/video) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Video poster images improve perceived performance and user experience. For HTML5 video, use the poster attribute. For embedded videos, thumbnailUrl in VideoObject schema. Thumbnails should be high quality, relevant to content, and properly sized (recommend 1280x720 or higher).
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["video/video-thumbnail"]
+```
+
+### Disable all Video rules
+
+```toml squirrel.toml
+[rules]
+disable = ["video/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["video/video-thumbnail"]
+disable = ["*"]
+```

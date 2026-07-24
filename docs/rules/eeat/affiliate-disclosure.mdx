@@ -1,0 +1,42 @@
+---
+title: "Affiliate Disclosure"
+description: "Checks for affiliate and sponsored content disclosures"
+---
+
+Checks for affiliate and sponsored content disclosures
+
+| | |
+|---|---|
+| **Rule ID** | `eeat/affiliate-disclosure` |
+| **Category** | [E-E-A-T](/rules/eeat) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 4/10 |
+
+## Solution
+
+FTC requires clear disclosure of affiliate relationships and sponsored content. Disclose at the top of pages with affiliate links, not just in footer. Use clear language: 'We earn commissions from purchases' or 'This post is sponsored.' Create a dedicated disclosure page and link to it. Failure to disclose can result in penalties.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/affiliate-disclosure"]
+```
+
+### Disable all E-E-A-T rules
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["eeat/affiliate-disclosure"]
+disable = ["*"]
+```

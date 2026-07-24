@@ -1,0 +1,41 @@
+---
+title: "Privacy Filter Matches"
+description: "Checks for trackers and analytics that privacy filter lists (EasyPrivacy) would block"
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`). All three [adblock rules](/rules/adblock) share a single blocklist check per audit, **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+
+Checks for trackers and analytics that privacy filter lists (EasyPrivacy) would block.
+
+| | |
+|---|---|
+| **Rule ID** | `adblock/privacy-blocked` |
+| **Category** | [Blocking](/rules/adblock) → Privacy blocking |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+| **Default** | Enabled |
+
+## What it checks
+
+The site's scripts, pixels, and request URLs are matched server-side against the full **EasyPrivacy** filter list - the list used by privacy-focused browsers and extensions (uBlock Origin, Brave, Firefox strict mode). Matches are reported with the specific filter rule that would block them.
+
+## Solution
+
+Analytics, session replay, and tracking pixels on matched domains will silently fail for visitors using privacy tooling, skewing your measurement data. Consider first-party or privacy-respecting analytics so measurement survives tracker blocking.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["adblock/privacy-blocked"]
+```
+
+### Disable all Blocking rules
+
+```toml squirrel.toml
+[rules]
+disable = ["adblock/*"]
+```

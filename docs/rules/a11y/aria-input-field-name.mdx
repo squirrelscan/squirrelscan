@@ -1,0 +1,42 @@
+---
+title: "ARIA Input Field Name"
+description: "Checks that input fields have accessible names"
+---
+
+Checks that input fields have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-input-field-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+All input fields need accessible names. Best options: 1) Use `<label for='inputId'>`. 2) Use aria-label or aria-labelledby. 3) Wrap input in `<label>`. Placeholder alone is not sufficient as it disappears when typing.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-input-field-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-input-field-name"]
+disable = ["*"]
+```

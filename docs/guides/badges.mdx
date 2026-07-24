@@ -1,0 +1,95 @@
+---
+title: "Score badges"
+icon: "badge-check"
+description: "Embed your audit score in a README or website with a badge that links back to your latest report"
+---
+
+An audit-score badge shows your website's latest squirrelscan health score and
+links straight to the full report. Drop it in a README, docs site, or footer.
+It is available on every plan, free included.
+
+```md
+[![squirrelscan score](https://reports.squirrelscan.com/b/YOUR_BADGE_ID.svg)](https://reports.squirrelscan.com/b/YOUR_BADGE_ID)
+```
+
+## Enable your badge
+
+1. Open the [dashboard](https://app.squirrelscan.com) and go to your website's
+   **Settings → Badge**.
+2. Toggle **Enable badge**. squirrelscan mints a stable badge id the first time
+   you enable it.
+3. Copy the Markdown, HTML, or URL snippet.
+
+The badge id never changes. If you disable and later re-enable the badge, the
+same link keeps working, so embedded snippets never break.
+
+<Note>
+The badge needs a **public** or **unlisted** report to show a score. CLI audits
+publish an unlisted report by default. If your latest report is private, or you
+have not run an audit yet, the badge routes return 404 until an eligible report
+exists.
+</Note>
+
+## Embed it
+
+Markdown, for a README:
+
+```md
+[![squirrelscan score](https://reports.squirrelscan.com/b/YOUR_BADGE_ID.svg)](https://reports.squirrelscan.com/b/YOUR_BADGE_ID)
+```
+
+HTML, for a website:
+
+```html
+<a href="https://reports.squirrelscan.com/b/YOUR_BADGE_ID">
+  <img src="https://reports.squirrelscan.com/b/YOUR_BADGE_ID.svg" alt="squirrelscan audit score" />
+</a>
+```
+
+The link target `/b/YOUR_BADGE_ID` redirects to your most recent public or
+unlisted report.
+
+## Variants and themes
+
+Add query parameters to the `.svg` URL to change the look.
+
+| Parameter | Values | Default |
+|-----------|--------|---------|
+| `variant` | `full`, `score`, `mascot` | `full` |
+| `theme` | `light`, `dark` | `light` |
+
+```md
+![score](https://reports.squirrelscan.com/b/YOUR_BADGE_ID.svg?variant=score&theme=dark)
+```
+
+- **full**: mascot, wordmark, your domain, and the score.
+- **score**: a compact shields-style chip.
+- **mascot**: the mascot next to the score.
+
+The score color follows the report bands: green at 90 and up, amber from 70 to
+89, and red below 70.
+
+## shields.io endpoint
+
+Prefer to render through [shields.io](https://shields.io)? The badge exposes an
+endpoint payload:
+
+```
+https://img.shields.io/endpoint?url=https://reports.squirrelscan.com/b/YOUR_BADGE_ID/shields.json
+```
+
+The endpoint returns a standard shields payload:
+
+```json
+{ "schemaVersion": 1, "label": "squirrelscan", "message": "92/100", "color": "22c55e" }
+```
+
+## Keep the score fresh
+
+The badge always reflects your latest public or unlisted report, cached at the
+edge for up to an hour. Pair it with
+[scheduled cloud audits](/guides/cloud-audits) so the score updates after every
+run, with no snippet changes on your side.
+
+Try the [badge configurator](https://squirrelscan.com/badge) to preview every
+style and generate your snippet.

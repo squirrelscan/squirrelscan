@@ -1,0 +1,42 @@
+---
+title: "Broken HTML"
+description: "Checks for malformed HTML structure"
+---
+
+Checks for malformed HTML structure
+
+| | |
+|---|---|
+| **Rule ID** | `content/broken-html` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Valid HTML helps search engines parse and understand your content. Common issues: unclosed tags, nested elements incorrectly, invalid attributes. Use an HTML validator to find issues. Modern browsers are forgiving, but search engine parsers may not be. Clean HTML also improves accessibility and maintainability.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/broken-html"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/broken-html"]
+disable = ["*"]
+```

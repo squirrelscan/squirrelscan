@@ -1,0 +1,42 @@
+---
+title: "Lang Attribute"
+description: "Checks for lang attribute on html element"
+---
+
+Checks for lang attribute on html element
+
+| | |
+|---|---|
+| **Rule ID** | `i18n/lang-attribute` |
+| **Category** | [Internationalization](/rules/i18n) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+The lang attribute on the html element declares the page's language, helping browsers, screen readers, and search engines process content correctly. Add lang="xx" to your html tag using a valid ISO 639-1 code (e.g., "en", "es", "fr"). For regional variants, use lang="en-US" or "en-GB". This improves accessibility and helps search engines serve your content to the right audience.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/lang-attribute"]
+```
+
+### Disable all Internationalization rules
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["i18n/lang-attribute"]
+disable = ["*"]
+```

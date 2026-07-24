@@ -1,0 +1,42 @@
+---
+title: "Anchor Text"
+description: "Checks for empty or generic anchor text"
+---
+
+Checks for empty or generic anchor text
+
+| | |
+|---|---|
+| **Rule ID** | `links/anchor-text` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/anchor-text"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/anchor-text"]
+disable = ["*"]
+```

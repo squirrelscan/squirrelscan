@@ -1,0 +1,108 @@
+---
+title: "Continuous Integration"
+icon: "git-branch"
+description: "Gate your CI builds on squirrelscan audits: GitHub Actions, GitLab, and generic runners"
+---
+
+Run squirrelscan in CI to catch audit regressions (performance, security,
+content, and more) before they ship. The audit produces a non-zero exit code
+when results regress, so your pipeline fails like any other check.
+
+## Exit codes
+
+`squirrel audit` uses distinct exit codes so CI can tell a *regression* apart
+from a *broken run*:
+
+| Code | Meaning |
+|------|---------|
+| `0` | Audit ran and every `--fail-on` threshold passed |
+| `2` | Audit ran but a `--fail-on` threshold tripped |
+| `1` | Operational error (bad flags, network failure, etc.) |
+
+Gate your build with [`--fail-on`](/cli/audit); quote each expression, since
+shells treat bare `<`/`>` as redirection:
+
+```bash
+squirrel audit https://example.com --fail-on 'score<90' --fail-on 'severity>=error'
+```
+
+<Note>Deterministic audits run with **no login**. A `SQUIRRELSCAN_API_KEY` is only
+needed for [cloud features](/cloud) (browser rendering, AI summary, tech
+detection). Set it as a CI secret; see [Authentication](#authentication).</Note>
+
+## GitHub Actions
+
+The quickest path is the official [squirrelscan audit action](https://github.com/marketplace/actions/squirrelscan-audit),
+available on the GitHub Marketplace:
+
+```yaml
+name: Audit
+on: [pull_request]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: squirrelscan/audit-action@v1
+        with:
+          url: https://staging.example.com
+          fail-on: "score<90,severity>=error"
+          token: ${{ secrets.SQUIRRELSCAN_API_KEY }}   # optional
+          github-token: ${{ secrets.GITHUB_TOKEN }}   # optional PR comment
+```
+
+Prefer no action? Install the CLI directly:
+
+```yaml
+      - run: |
+          curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"  # resolve squirrel in later steps (self-hosted)
+      - run: squirrel audit https://staging.example.com --fail-on 'score<90'
+        env:
+          SQUIRRELSCAN_API_KEY: ${{ secrets.SQUIRRELSCAN_API_KEY }}
+```
+
+## GitLab CI
+
+```yaml
+audit:
+  image: ubuntu:latest
+  script:
+    - apt-get update && apt-get install -y curl
+    - curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+    - squirrel audit "$AUDIT_URL" --fail-on 'score<90,severity>=error'
+  variables:
+    AUDIT_URL: "https://staging.example.com"
+    SQUIRRELSCAN_API_KEY: $SQUIRRELSCAN_API_KEY   # optional, set in CI/CD variables
+```
+
+## Generic runners
+
+Any runner that can run a shell works:
+
+```bash
+curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+export PATH="$HOME/.local/bin:$PATH"
+
+# JSON report on stdout stays clean — the gate summary goes to stderr.
+squirrel audit https://example.com \
+  --format json --output report.json \
+  --fail-on 'score<90,score:perf<80'
+```
+
+The command exits `2` if a threshold trips, so the script stops on a regression.
+
+## Authentication
+
+Cloud features require a token. The recommended approach is an [API
+key](/cli/keys) (mint one with `squirrel keys create`) stored as a CI secret
+and exposed as `SQUIRRELSCAN_API_KEY`:
+
+- **GitHub Actions**: repo/org secret → `env: SQUIRRELSCAN_API_KEY: ${{ secrets.SQUIRRELSCAN_API_KEY }}`
+- **GitLab**: masked CI/CD variable `SQUIRRELSCAN_API_KEY`
+- **Other**: export `SQUIRRELSCAN_API_KEY` in the job environment
+
+When `SQUIRRELSCAN_API_KEY` is set, the CLI uses it automatically (the older
+`SQUIRREL_API_TOKEN` name still works as a back-compat alias). Without either,
+the audit still runs deterministically; it just skips cloud enrichment.

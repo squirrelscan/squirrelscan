@@ -1,0 +1,42 @@
+---
+title: "Hreflang Tags"
+description: "Checks for hreflang link elements"
+---
+
+Checks for hreflang link elements
+
+| | |
+|---|---|
+| **Rule ID** | `i18n/hreflang` |
+| **Category** | [Internationalization](/rules/i18n) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Hreflang tags tell search engines about language and regional variations of pages, preventing duplicate content issues and ensuring users see the right version. Add hreflang link tags for each language/region version of a page. Include x-default for the fallback. Every page referenced should link back to all variants (bidirectional). Use correct ISO language and country codes.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/hreflang"]
+```
+
+### Disable all Internationalization rules
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["i18n/hreflang"]
+disable = ["*"]
+```

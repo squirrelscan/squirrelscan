@@ -1,0 +1,42 @@
+---
+title: "Redundant Image Alt"
+description: "Checks that image alt text is not redundant with surrounding text"
+---
+
+Checks that image alt text is not redundant with surrounding text
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/image-redundant-alt` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Image alt text should not start with 'image of', 'photo of', 'picture of', etc. Screen readers already announce that it's an image. Alt text should describe the content or function, not state the obvious. Also avoid duplicating adjacent text in the alt.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/image-redundant-alt"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/image-redundant-alt"]
+disable = ["*"]
+```

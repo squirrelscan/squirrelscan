@@ -1,0 +1,42 @@
+---
+title: "FAQ Schema"
+description: "Validates FAQPage schema structure"
+---
+
+Validates FAQPage schema structure
+
+| | |
+|---|---|
+| **Rule ID** | `schema/faq` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+FAQPage schema enables FAQ rich results in search. Structure: FAQPage with mainEntity array of Question items. Each Question needs name (question text) and acceptedAnswer (Answer with text). FAQ content must be visible on the page. Don't use for single Q&A or forums - those have different schema types.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/faq"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/faq"]
+disable = ["*"]
+```

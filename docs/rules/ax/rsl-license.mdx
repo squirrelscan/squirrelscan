@@ -1,0 +1,78 @@
+---
+title: "RSL License"
+description: "Checks for a robots.txt License directive pointing to a valid RSL document"
+---
+
+Checks for a `License:` directive in `robots.txt` pointing to a valid [Really Simple Licensing (RSL)](https://rslstandard.org) document, plus a matching `rel="license"` link on pages. RSL is a machine-readable licensing standard (v1.0, December 2025) that lets a site state usage terms — including AI-training terms and pay-per-crawl pricing — in a format crawlers can parse instead of a prose page a bot can't act on.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/rsl-license` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | warning (only when the declared license reference is broken; otherwise informational) |
+| **Weight** | 1/10 |
+
+<Note>This rule is a **recommendation**: it never penalizes your score. RSL is a young standard; most sites won't have adopted it yet, and that's expected.</Note>
+
+## What it checks
+
+The audit looks for a `License:` line in `robots.txt`:
+
+```txt robots.txt
+License: https://example.com/license.xml
+```
+
+When present, it fetches the referenced document and validates it as well-formed RSL XML per the v1.0 schema (permissions, prohibitions, and optional payment terms). It also checks representative pages for a matching `<link rel="license" href="...">` tag, which gives page-level tooling (not just crawler-level `robots.txt` readers) a path to the same terms.
+
+Reported outcomes:
+
+- No `License:` directive: informational, no license declared.
+- `License:` present but the target doesn't parse as valid RSL: a warning — a declared reference that is broken or malformed misleads the crawlers that honor it.
+- Valid RSL document found: informational summary of the declared terms.
+
+## Solution
+
+Publish an RSL document describing your terms and reference it from `robots.txt`:
+
+```txt robots.txt
+User-agent: *
+License: https://example.com/license.xml
+```
+
+```xml license.xml
+<rsl xmlns="https://rslstandard.org/rsl">
+  <content url="https://example.com/*">
+    <license>
+      <permits type="train-ai">false</permits>
+      <permits type="ai-input">true</permits>
+    </license>
+  </content>
+</rsl>
+```
+
+Add the matching `rel="license"` link to your page templates so both crawler-level and page-level tooling resolve to the same document.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/rsl-license"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/rsl-license"]
+disable = ["*"]
+```

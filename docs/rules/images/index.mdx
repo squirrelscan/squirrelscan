@@ -1,0 +1,63 @@
+---
+title: "Images"
+description: "Image optimization and accessibility"
+---
+
+Image optimization and accessibility
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Broken Images" icon="circle-exclamation" href="/rules/images/broken-images">
+    Checks for images returning 404 errors
+  </Card>
+  <Card title="Figure Captions" icon="circle-info" href="/rules/images/figure-figcaption">
+    Checks for proper use of figure and figcaption elements
+  </Card>
+  <Card title="Image Alt Text" icon="triangle-exclamation" href="/rules/images/alt-text">
+    Validates image alt attributes
+  </Card>
+  <Card title="Image Dimensions" icon="triangle-exclamation" href="/rules/images/dimensions">
+    Checks for width/height attributes (prevents CLS)
+  </Card>
+  <Card title="Image Aspect Ratio Mismatch" icon="triangle-exclamation" href="/rules/images/aspect-mismatch">
+    Flags images whose width/height attributes conflict with their CSS box aspect ratio
+  </Card>
+  <Card title="Image File Size Too Large" icon="circle-exclamation" href="/rules/images/image-file-size">
+    Checks for image files that exceed recommended size limits
+  </Card>
+  <Card title="Image Filename Quality" icon="circle-info" href="/rules/images/filename-quality">
+    Checks for descriptive image filenames
+  </Card>
+  <Card title="Image Optimization" icon="circle-info" href="/rules/images/optimized">
+    Checks for image optimization indicators
+  </Card>
+  <Card title="Inline SVG Size" icon="circle-info" href="/rules/images/svg-inline">
+    Checks for large inline SVGs bloating HTML
+  </Card>
+  <Card title="Lazy Loading" icon="circle-info" href="/rules/images/lazy-loading">
+    Checks for lazy loading on below-fold images
+  </Card>
+  <Card title="Modern Image Formats" icon="circle-info" href="/rules/images/modern-format">
+    Checks for modern image formats like WebP or AVIF
+  </Card>
+  <Card title="Offscreen Image Lazy Loading" icon="triangle-exclamation" href="/rules/images/offscreen-lazy">
+    Checks if offscreen images use lazy loading
+  </Card>
+  <Card title="Picture Element Validation" icon="circle-exclamation" href="/rules/images/picture-element">
+    Validates `<picture>` elements have required `<img>` fallback
+  </Card>
+  <Card title="Responsive Image Size" icon="triangle-exclamation" href="/rules/images/responsive-size">
+    Checks if images are sized appropriately for their display size
+  </Card>
+  <Card title="Responsive Images" icon="circle-info" href="/rules/images/srcset">
+    Checks for responsive images with srcset attribute
+  </Card>
+</CardGroup>
+
+## Disable All Images Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```

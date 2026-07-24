@@ -1,0 +1,42 @@
+---
+title: "Inline SVG Size"
+description: "Checks for large inline SVGs bloating HTML"
+---
+
+Checks for large inline SVGs bloating HTML
+
+| | |
+|---|---|
+| **Rule ID** | `images/svg-inline` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Large inline SVGs increase HTML size and block rendering. Move SVGs >4KB to external files and reference with `<img>` or CSS background. Inline small, critical SVGs (icons, logos) only. Use SVGO to optimize. Consider SVG sprites for icon sets. Inline SVGs can't be cached separately from HTML.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/svg-inline"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/svg-inline"]
+disable = ["*"]
+```

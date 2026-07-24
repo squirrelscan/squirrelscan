@@ -2,7 +2,7 @@
   "name": "squirrelscan-monorepo",
   "private": true,
   "packageManager": "bun@1.3.14",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": ["apps/*", "docs", "packages/*"],
   "scripts": {
     "dev": "cd apps/cli && bun run dev",
     "build": "cd apps/cli && bun run build",
@@ -13,6 +13,8 @@
     "test": "cd apps/cli && bun test",
     "test:engine": "cd packages/audit-engine && bun run test:golden",
     "test:release": "bash scripts/test-changelog-extraction.sh && bun test scripts/release-version.test.ts",
+    "docs:check": "cd docs && bun run check",
+    "docs:build": "cd docs && bun run build",
     "check:psl-freshness": "bun run scripts/check-tldts-freshness.ts",
     "release": "bun run scripts/release.ts"
   },

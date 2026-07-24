@@ -1,0 +1,42 @@
+---
+title: "Geo Meta Tags"
+description: "Checks for geographic meta tags for local targeting"
+---
+
+Checks for geographic meta tags for local targeting
+
+| | |
+|---|---|
+| **Rule ID** | `local/geo-meta` |
+| **Category** | [Local SEO](/rules/local) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+Geo meta tags help indicate your business location for local search. Add: geo.region (country-state code), geo.placename (city name), geo.position (latitude;longitude), and ICBM meta tag. These supplement LocalBusiness schema. Most useful for location-specific landing pages.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["local/geo-meta"]
+```
+
+### Disable all Local SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["local/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["local/geo-meta"]
+disable = ["*"]
+```

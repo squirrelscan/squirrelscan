@@ -1,0 +1,42 @@
+---
+title: "Title Uniqueness"
+description: "Checks that page titles are unique across the site"
+---
+
+Checks that page titles are unique across the site
+
+| | |
+|---|---|
+| **Rule ID** | `core/title-unique` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Each page should have a unique title that accurately describes its content. Duplicate titles confuse search engines and users about which page to display. Use a pattern like 'Page Topic | Brand Name' to ensure uniqueness. CMS often generate duplicate titles - audit and customize them.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/title-unique"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/title-unique"]
+disable = ["*"]
+```

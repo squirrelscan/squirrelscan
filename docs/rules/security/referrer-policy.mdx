@@ -1,0 +1,42 @@
+---
+title: "Referrer-Policy"
+description: "Checks for Referrer-Policy header"
+---
+
+Checks for Referrer-Policy header
+
+| | |
+|---|---|
+| **Rule ID** | `security/referrer-policy` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Referrer-Policy controls what referrer information is sent with requests. Recommended: 'strict-origin-when-cross-origin' (default in modern browsers) sends origin only cross-site. 'no-referrer' for maximum privacy, 'same-origin' to only send referrer to same origin. Avoid 'unsafe-url' which leaks full URLs including paths.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/referrer-policy"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/referrer-policy"]
+disable = ["*"]
+```

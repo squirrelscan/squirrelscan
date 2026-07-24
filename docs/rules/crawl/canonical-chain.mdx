@@ -1,0 +1,42 @@
+---
+title: "Canonical Chain"
+description: "Checks for redirect chains on canonical URLs"
+---
+
+Checks for redirect chains on canonical URLs
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/canonical-chain` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Canonical URLs should point directly to the final destination, not through redirects. Redirect chains waste crawl budget and dilute link equity. If your canonical URL redirects, update it to point to the final URL. Check that canonical URLs use the preferred protocol (https) and www/non-www version. Self-referencing canonicals should match the page URL exactly.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/canonical-chain"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/canonical-chain"]
+disable = ["*"]
+```

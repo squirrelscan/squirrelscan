@@ -1,0 +1,27 @@
+---
+title: "Video"
+description: "Video content markup and accessibility"
+---
+
+Video content markup and accessibility
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Video Accessibility" icon="triangle-exclamation" href="/rules/video/video-accessible">
+    Checks for video captions and transcripts
+  </Card>
+  <Card title="Video Schema" icon="triangle-exclamation" href="/rules/video/video-schema">
+    Checks for VideoObject schema on pages with video
+  </Card>
+  <Card title="Video Thumbnail" icon="circle-info" href="/rules/video/video-thumbnail">
+    Checks that videos have poster/thumbnail images
+  </Card>
+</CardGroup>
+
+## Disable All Video Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["video/*"]
+```

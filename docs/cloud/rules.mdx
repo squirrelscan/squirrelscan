@@ -1,0 +1,71 @@
+---
+title: "Cloud Rules"
+description: "Audit rules powered by cloud services - what they check and what they cost"
+icon: "list-checks"
+---
+
+Cloud rules are regular audit rules that need data your machine doesn't have - AI models, full filter lists, search demand data, or a shared link cache. They run automatically when you're [logged in](/cloud) and report `skipped` when you're not.
+
+## The rules
+
+Everything except the two opt-in gap rules is included in the audit's flat base charge - see [Credits & Pricing](/cloud/credits).
+
+| Rule | What it checks | Cost |
+|------|----------------|------|
+| [`ai/llm-parsability`](/rules/ai/llm-parsability) | How well LLMs can parse and understand each page | included in audit base |
+| [`ai/page-type-match`](/rules/ai/page-type-match) | AI-classified page type agrees with declared structured data | included in audit base (shared with parsability) |
+| [`eeat/authority-signals`](/rules/eeat/authority-signals) | Per-page authorship, citations, and outbound references | included in audit base |
+| [`adblock/element-hiding`](/rules/adblock/element-hiding) | Elements hidden by EasyList cosmetic rules | included in audit base, shared |
+| [`adblock/blocked-links`](/rules/adblock/blocked-links) | Links and resources ad blockers would block | shared with above |
+| [`adblock/privacy-blocked`](/rules/adblock/privacy-blocked) | Trackers that EasyPrivacy filter lists would block | shared with above |
+| [`links/dead-links`](/rules/links/dead-links) | External links verified through a shared global cache | included in audit base |
+| [`gaps/keywords`](/rules/gaps/keywords) | Keywords competitors rank for that you don't | 25 credits per audit, **opt-in** |
+| [`gaps/content`](/rules/gaps/content) | Topic clusters with search demand you don't cover | 25 credits per audit, **opt-in** |
+
+The three [Blocking](/rules/adblock) rules (IDs keep the `adblock/` prefix) share a single blocklist check per audit, included in the audit base charge. They report as warnings in their own report section.
+
+The two gap-analysis rules are **disabled by default** because of their cost. Enable them explicitly:
+
+```toml squirrel.toml
+[rules]
+enable = ["gaps/keywords", "gaps/content"]
+```
+
+## How they run
+
+Cloud rules match rule filters like any other rule - `enable = ["*"]` (the default) includes them. During an audit, a dedicated cloud phase batches all the required service calls, then rules read the results. You'll see the estimate in the start banner and the actual spend in the audit summary:
+
+```
+☁ Cloud credits used: 150 (audit-base 50, render 100)
+```
+
+Pages served from the render cache show as their own `render-cached` line at the same 2-credit rate, e.g. `(audit-base 50, render 70, render-cached 30)`.
+
+## Skip behavior
+
+A cloud rule never fails your audit. When it can't run, it reports `skipped` with a reason:
+
+| Skip reason | Meaning |
+|-------------|---------|
+| `not-authenticated` | Not logged in - run `squirrel auth login` |
+| `insufficient-credits` | Balance too low - top up or lower the page count |
+| `credit-cap-reached` | The audit hit `max_credits_per_audit`; work was truncated at the cap |
+| `service-unavailable` | The cloud service errored; charges for failed calls are refunded |
+
+## Controlling spend
+
+The per-audit cap, confirmation threshold, and `--yes` flag are covered in [Credits & Pricing](/cloud/credits#spend-controls).
+
+To opt out of specific cloud rules while keeping the rest:
+
+```toml squirrel.toml
+[rules]
+disable = ["adblock/*", "links/dead-links"]
+```
+
+Or disable all cloud calls for a project:
+
+```toml squirrel.toml
+[cloud]
+enabled = false
+```

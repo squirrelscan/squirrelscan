@@ -1,0 +1,61 @@
+---
+title: "credits"
+icon: "coins"
+description: "Show cloud credit balance and audit pricing"
+---
+
+The `credits` command shows your [cloud credit](/cloud/credits) balance, plan, and current audit pricing.
+
+## Usage
+
+```bash
+squirrel credits [options]
+```
+
+Requires login - run [`squirrel auth login`](/cli/auth) first.
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON |
+
+## Example
+
+```bash
+squirrel credits
+```
+
+```
+Plan:    Pro
+Balance: 2340 credits (2000 monthly + 340 purchased)
+         monthly credits reset 2026-07-08
+
+Pricing:
+  audit                 50 base + 2 per rendered page
+                           (analysis, tech detection, domain stats, publishing included)
+  content_gaps          25 per run
+  issue_enrich           3 per issue
+  keyword_gaps          25 per run
+
+Top up: https://squirrelscan.com/account/credits
+```
+
+JSON output:
+
+```bash
+squirrel credits --json
+```
+
+```json
+{
+  "balance": { "total": 2340, "monthly": 2000, "pack": 340, "periodEnd": "2026-07-08T00:00:00Z" },
+  "plan": { "id": "starter", "name": "Pro" },
+  "pricing": { "render": { "cost": 2, "per": 1, "unit": "page" } }
+}
+```
+
+## Related
+
+- [Credits & Pricing](/cloud/credits) - how credits work and what an audit costs
+- [auth](/cli/auth) - log in to enable cloud features

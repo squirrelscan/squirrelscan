@@ -1,0 +1,86 @@
+---
+title: "Security"
+description: "The Security score group: transport security, compromise signals, compliance, and blocked content"
+icon: "shield-check"
+---
+
+Security is one of the four score groups on every report. It spans four
+categories: transport and header hardening (this page), signs of compromise,
+legal compliance signals, and content blocked by ad blockers and privacy
+filters.
+
+## Categories
+
+<CardGroup cols={2}>
+  <Card title="Site Integrity" icon="folder" href="/rules/integrity">
+    Signs of compromise: injected pages, phishing kits, malware, SEO spam (9 rules)
+  </Card>
+  <Card title="Legal Compliance" icon="folder" href="/rules/legal">
+    Privacy policy and legal compliance signals (4 rules)
+  </Card>
+  <Card title="Blocking" icon="folder" href="/rules/adblock">
+    Content, links, and trackers blocked by ad blockers and privacy filters (3 rules)
+  </Card>
+</CardGroup>
+
+## Security rules
+
+HTTPS, headers, and safe link practices (16 rules).
+
+<CardGroup cols={2}>
+  <Card title="Content Security Policy" icon="triangle-exclamation" href="/rules/security/csp">
+    Checks for Content-Security-Policy header and validates directives
+  </Card>
+  <Card title="Cookie Flags" icon="triangle-exclamation" href="/rules/security/cookie-flags">
+    Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes
+  </Card>
+  <Card title="External Link Security" icon="triangle-exclamation" href="/rules/security/new-tab">
+    Checks external target=_blank links for noopener (security) and noreferrer (privacy)
+  </Card>
+  <Card title="Form CAPTCHA" icon="triangle-exclamation" href="/rules/security/form-captcha">
+    Checks for CAPTCHA protection on public forms
+  </Card>
+  <Card title="Form HTTPS" icon="triangle-exclamation" href="/rules/security/form-https">
+    Checks that form actions use HTTPS
+  </Card>
+  <Card title="HSTS Header" icon="triangle-exclamation" href="/rules/security/hsts">
+    Checks for HTTP Strict Transport Security header
+  </Card>
+  <Card title="HTTP to HTTPS Redirect" icon="triangle-exclamation" href="/rules/security/http-to-https">
+    Checks whether HTTP URLs redirect to HTTPS
+  </Card>
+  <Card title="HTTPS" icon="circle-exclamation" href="/rules/security/https">
+    Checks for HTTPS usage
+  </Card>
+  <Card title="Leaked Environment Variables" icon="circle-exclamation" href="/rules/security/leaked-secrets">
+    Checks for exposed API keys, secrets, and credentials in HTML/JS
+  </Card>
+  <Card title="Mixed Content" icon="circle-exclamation" href="/rules/security/mixed-content">
+    Checks for HTTP resources on HTTPS pages
+  </Card>
+  <Card title="Permissions-Policy" icon="circle-info" href="/rules/security/permissions-policy">
+    Checks for Permissions-Policy (Feature-Policy) header
+  </Card>
+  <Card title="Referrer-Policy" icon="circle-info" href="/rules/security/referrer-policy">
+    Checks for Referrer-Policy header
+  </Card>
+  <Card title="Subresource Integrity" icon="triangle-exclamation" href="/rules/security/sri">
+    Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)
+  </Card>
+  <Card title="Third-Party Cookies" icon="circle-info" href="/rules/security/third-party-cookies">
+    Detects third-party resources that may set cookies
+  </Card>
+  <Card title="X-Content-Type-Options" icon="circle-info" href="/rules/security/x-content-type">
+    Checks for MIME type sniffing protection
+  </Card>
+  <Card title="X-Frame-Options" icon="triangle-exclamation" href="/rules/security/x-frame-options">
+    Checks for clickjacking protection header
+  </Card>
+</CardGroup>
+
+## Disable All Security Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```

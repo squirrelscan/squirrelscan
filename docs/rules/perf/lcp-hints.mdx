@@ -1,0 +1,42 @@
+---
+title: "LCP Optimization Hints"
+description: "Checks for Largest Contentful Paint optimization opportunities"
+---
+
+Checks for Largest Contentful Paint optimization opportunities
+
+| | |
+|---|---|
+| **Rule ID** | `perf/lcp-hints` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 7/10 |
+
+## Solution
+
+LCP measures when the largest content element becomes visible. Optimize by: 1) Preload your LCP image with `<link rel='preload' as='image'>`. 2) Don't use loading='lazy' on above-fold images as it delays loading. 3) Minimize render-blocking CSS/JS in `<head>`. 4) Use modern image formats (WebP/AVIF) for faster loading. 5) Consider using fetchpriority='high' on the LCP image.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/lcp-hints"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/lcp-hints"]
+disable = ["*"]
+```

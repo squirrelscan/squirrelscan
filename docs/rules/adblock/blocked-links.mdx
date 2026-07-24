@@ -1,0 +1,59 @@
+---
+title: "Blocked Tracking Links"
+description: "Checks for links and resources pointing to blocked tracking domains"
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`). All three [adblock rules](/rules/adblock) share a single blocklist check per audit, **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+
+Checks for links and resources pointing to blocked tracking domains (matched server-side against the full EasyList filter rules)
+
+| | |
+|---|---|
+| **Rule ID** | `adblock/blocked-links` |
+| **Category** | [Blocking](/rules/adblock) → Ad blocking |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## Solution
+
+Links to tracking domains (analytics, pixels, etc.) will be blocked by users with adblockers like uBlock Origin or AdBlock. If these are essential resources, they won't load. If they're analytics, you may get incomplete data from users with adblockers. Consider using first-party analytics or privacy-respecting alternatives.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxMatchesToReport` | unknown | `undefined` | Maximum blocked links to report in detail |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."adblock/blocked-links"]
+maxMatchesToReport = 20
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["adblock/blocked-links"]
+```
+
+### Disable all Blocking rules
+
+```toml squirrel.toml
+[rules]
+disable = ["adblock/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["adblock/blocked-links"]
+disable = ["*"]
+```

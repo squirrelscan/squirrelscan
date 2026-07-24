@@ -1,0 +1,538 @@
+---
+title: "External Links Configuration"
+icon: "external-link"
+description: "Configure external link checking, caching, and timeouts"
+---
+
+The `[external_links]` section controls how squirrelscan validates outbound links during crawls.
+
+## Configuration
+
+```toml
+[external_links]
+enabled = true
+cache_ttl_days = 7
+timeout_ms = 10000
+concurrency = 5
+```
+
+## Options
+
+### `enabled`
+
+**Type:** `boolean`
+**Default:** `true`
+
+Enable external link checking during crawl.
+
+When enabled, squirrelscan validates all external links found during crawling to detect broken outbound links (404s, timeouts, DNS failures).
+
+**Examples:**
+
+Enable (default):
+```toml
+[external_links]
+enabled = true
+```
+
+Disable for faster crawls:
+```toml
+[external_links]
+enabled = false
+```
+
+**When to disable:**
+
+- Local development (localhost URLs)
+- Network restrictions (firewalls, VPNs)
+- Speed priority over external link validation
+- Large sites with many external links
+
+**Impact when disabled:**
+
+- Faster crawls (no external HTTP requests)
+- `links/broken-external-links` rule won't report issues
+- Outbound link quality not validated
+
+---
+
+### `cache_ttl_days`
+
+**Type:** `number`
+**Default:** `7` (days)
+**Range:** `1` to `365` recommended
+
+How long to cache external link check results in days.
+
+External link checks are cached globally per URL to avoid repeatedly checking the same external resources across multiple crawls.
+
+**How caching works:**
+
+1. First crawl checks `https://example.com/article`
+2. Result cached for 7 days (default)
+3. Next crawl within 7 days reuses cached result
+4. After 7 days, link is re-checked
+
+**Examples:**
+
+Short cache (1 day):
+```toml
+[external_links]
+cache_ttl_days = 1
+```
+
+Long cache (30 days):
+```toml
+[external_links]
+cache_ttl_days = 30
+```
+
+No caching (always fresh):
+```toml
+[external_links]
+cache_ttl_days = 0  # Not recommended
+```
+
+**Recommendations:**
+
+| Use Case | Recommended TTL | Reason |
+|----------|----------------|--------|
+| Daily crawls | 1-2 days | Fresh data daily |
+| Weekly crawls | 7 days (default) | Balance freshness/speed |
+| Monthly crawls | 14-30 days | Reduce external requests |
+| CI/CD pipeline | 1 day | Catch issues quickly |
+
+**Cache location:**
+
+```
+~/.squirrel/cache/external-links/
+```
+
+**Clear cache:**
+
+```bash
+rm -rf ~/.squirrel/cache/external-links/
+```
+
+---
+
+### `timeout_ms`
+
+**Type:** `number`
+**Default:** `10000` (10 seconds)
+**Range:** `1000` to `60000` (1-60 seconds)
+
+Timeout for external link checks in milliseconds.
+
+External link checks use HEAD requests by default (faster, no body download). If a site doesn't respond within this timeout, it's marked as failed.
+
+**Examples:**
+
+Fast timeout (5 seconds):
+```toml
+[external_links]
+timeout_ms = 5000
+```
+
+Slow sites tolerance (30 seconds):
+```toml
+[external_links]
+timeout_ms = 30000
+```
+
+Very aggressive (3 seconds):
+```toml
+[external_links]
+timeout_ms = 3000
+```
+
+**When request exceeds timeout:**
+
+- Link marked as "timeout"
+- Reported as broken external link
+- Counted in `links/broken-external-links` rule
+
+**Recommendations:**
+
+| Scenario | Timeout | Reason |
+|----------|---------|--------|
+| Most sites | 10s (default) | Balance speed/reliability |
+| Fast CDN links | 5s | CDNs are fast |
+| Slow sites | 20-30s | Allow slow responses |
+| CI/CD | 5-10s | Fail fast |
+
+---
+
+### `concurrency`
+
+**Type:** `number`
+**Default:** `5`
+**Range:** `1` to `20` recommended
+
+Maximum number of concurrent external link checks.
+
+Controls how many external URLs are validated simultaneously during crawling.
+
+**Examples:**
+
+Sequential (one at a time):
+```toml
+[external_links]
+concurrency = 1
+```
+
+Moderate parallelism (default):
+```toml
+[external_links]
+concurrency = 5
+```
+
+High parallelism:
+```toml
+[external_links]
+concurrency = 15
+```
+
+**Impact:**
+
+**Higher concurrency:**
+- ✓ Faster external link validation
+- ✓ Better for sites with many external links
+- ✗ More network connections
+- ✗ May trigger rate limits
+
+**Lower concurrency:**
+- ✓ Polite to external sites
+- ✓ Less network overhead
+- ✗ Slower external link validation
+
+**Recommendations:**
+
+| Use Case | Concurrency | Reason |
+|----------|-------------|--------|
+| Most sites | 5 (default) | Good balance |
+| Many external links (100+) | 10-15 | Speed up validation |
+| Slow network | 2-3 | Avoid overload |
+| Rate-limited | 1-2 | Avoid 429 errors |
+
+---
+
+## How External Link Checking Works
+
+### Request Strategy
+
+1. **HEAD request first**
+   - Faster (no body download)
+   - Checks if URL responds
+   - Most efficient
+
+2. **GET fallback**
+   - If HEAD fails/not supported
+   - Downloads full response
+   - Slower but more reliable
+
+3. **User agent**
+   - Uses browser-like headers and user agent
+   - Detects WAF/bot protection (Cloudflare, Akamai, etc.)
+   - WAF-blocked 403s reported separately from broken links
+
+### Status Detection
+
+| Status | Meaning | Reported As |
+|--------|---------|-------------|
+| 200-299 | Success | Working link |
+| 300-399 | Redirect | Working (followed) |
+| 400-499 | Client error | Broken link |
+| 500-599 | Server error | Broken link |
+| Timeout | No response | Broken link |
+| DNS failure | Domain not found | Broken link |
+
+### Caching Behavior
+
+**Cached for TTL period:**
+- 200-299 (success)
+- 404 (not found)
+- Redirects (with final destination)
+
+**Not cached:**
+- Timeouts (may be transient)
+- Server errors (5xx - may be temporary)
+- DNS failures (may recover)
+
+---
+
+## Configuration Examples
+
+### Fast Crawl (Disable External Links)
+
+For local development or quick audits:
+
+```toml
+[external_links]
+enabled = false
+```
+
+Skips all external link validation.
+
+---
+
+### Aggressive External Link Checking
+
+For comprehensive link validation:
+
+```toml
+[external_links]
+enabled = true
+cache_ttl_days = 1        # Fresh daily
+timeout_ms = 30000        # 30s tolerance
+concurrency = 15          # High parallelism
+```
+
+**Use cases:**
+- Link quality audits
+- Outbound link monitoring
+- Content freshness validation
+
+---
+
+### Polite External Link Checking
+
+Conservative settings for respectful crawling:
+
+```toml
+[external_links]
+enabled = true
+cache_ttl_days = 30       # Cache longer
+timeout_ms = 15000        # 15s tolerance
+concurrency = 2           # Low parallelism
+```
+
+**Use cases:**
+- Many external links
+- Avoid rate limits
+- Network restrictions
+
+---
+
+### CI/CD Pipeline
+
+Fast feedback with fresh data:
+
+```toml
+[external_links]
+enabled = true
+cache_ttl_days = 1        # Fresh each run
+timeout_ms = 5000         # Fail fast
+concurrency = 10          # Speed up validation
+```
+
+**Use cases:**
+- Automated testing
+- PR checks
+- Daily builds
+
+---
+
+## Performance Impact
+
+External link checking adds overhead to crawls. Typical impact:
+
+**With external links enabled (default):**
+
+```
+100 internal pages
+50 unique external links
+= 100 page fetches + 50 external checks (if not cached)
+= ~150 total HTTP requests
+```
+
+**With external links disabled:**
+
+```
+100 internal pages
+= 100 page fetches
+= ~100 total HTTP requests
+```
+
+**Cache impact:**
+
+First crawl:
+```
+50 external links × 10s timeout = up to 10s total (5 concurrent)
+```
+
+Second crawl (within cache TTL):
+```
+50 external links cached = 0s overhead
+```
+
+---
+
+## External Link Rules
+
+External link configuration affects these rules:
+
+### `links/broken-external-links`
+
+**What it checks:**
+- External links returning 4xx/5xx errors
+- Timeout failures
+- DNS resolution failures
+
+**Requires:**
+```toml
+[external_links]
+enabled = true  # Must be enabled
+```
+
+**Configuration:**
+```toml
+[external_links]
+enabled = true
+timeout_ms = 10000
+
+[rules]
+enable = ["links/broken-external-links"]
+```
+
+---
+
+### `links/https-downgrade`
+
+**What it checks:**
+- HTTPS page linking to HTTP external URL
+- Security downgrade warnings
+
+**Requires:**
+```toml
+[external_links]
+enabled = true  # To validate external URLs
+```
+
+---
+
+## Troubleshooting
+
+### External links all timeout
+
+**Symptoms:**
+- Many "timeout" failures
+- External link checks slow
+
+**Solutions:**
+
+Increase timeout:
+```toml
+[external_links]
+timeout_ms = 20000  # 20 seconds
+```
+
+Reduce concurrency:
+```toml
+[external_links]
+concurrency = 2  # Fewer parallel requests
+```
+
+Check network:
+```bash
+curl -I https://example.com  # Test external access
+```
+
+---
+
+### False positives (working links marked broken)
+
+**Cause:** Some sites block HEAD requests or use WAF/bot protection
+
+**Solution:** External link checker automatically:
+- Falls back to GET requests when HEAD fails
+- Detects WAF/bot protection (Cloudflare, Akamai, etc.)
+- Reports WAF-blocked 403s as "unverifiable" (not broken)
+
+If a site truly blocks bot traffic, the link will be reported as WAF-blocked with the provider name.
+
+---
+
+### Too slow with many external links
+
+**Symptoms:**
+- Crawl takes long time
+- Hundreds of external links
+
+**Solutions:**
+
+Disable external links:
+```toml
+[external_links]
+enabled = false
+```
+
+Or increase concurrency:
+```toml
+[external_links]
+concurrency = 15
+timeout_ms = 5000
+```
+
+---
+
+### Cache not working
+
+**Verify cache location:**
+
+```bash
+ls -la ~/.squirrel/cache/external-links/
+```
+
+**Clear and rebuild:**
+
+```bash
+rm -rf ~/.squirrel/cache/external-links/
+squirrel audit https://example.com  # Rebuild cache
+```
+
+---
+
+## Complete Example
+
+```toml
+[project]
+name = "mysite"
+
+[crawler]
+max_pages = 500
+
+[external_links]
+# Enable external link validation
+enabled = true
+
+# Cache results for 7 days
+cache_ttl_days = 7
+
+# 15 second timeout for slow sites
+timeout_ms = 15000
+
+# Check 10 links concurrently
+concurrency = 10
+
+[rules]
+# Enable broken external link detection
+enable = ["*"]
+disable = ["ai/*"]
+```
+
+Running this config:
+- Crawls up to 500 pages
+- Validates all external links
+- Caches results for 7 days
+- Allows 15s per external link
+- Checks 10 external links in parallel
+- Reports broken external links in audit
+
+---
+
+## Related
+
+- [Crawler Settings](/configuration/crawler) - Request method and user agent
+- [Rules Configuration](/configuration/rules) - Enable link rules
+- [Examples](/configuration/examples) - Common configurations

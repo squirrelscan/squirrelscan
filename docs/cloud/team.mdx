@@ -1,0 +1,56 @@
+---
+title: "Team Plan"
+description: "Per-seat pricing, pooled credits, and roles for multi-person orgs"
+icon: "users"
+---
+
+Team is the multi-person plan: invite teammates into an org, assign roles, and share one pool of cloud credits instead of managing credits per person.
+
+## Pricing
+
+| | |
+|---|---|
+| Price | $29/seat/month, or $290/seat/year (12 months for the price of 10) |
+| Minimum seats | 2 |
+| Credits | 3,000 per seat, pooled across the org |
+| Billing | Monthly or annual; credits arrive monthly either way |
+
+Everything on [Pro](/cloud/credits) carries over: scheduled audits, custom request headers, and render concurrency, raised again to 10 concurrent renders (Pro runs 5). Team's [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit) ceiling is also the highest of the three plans, and rises further as report processing scales up.
+
+Sign in and go to **Settings → Team** in the [dashboard](/dashboard) to upgrade, pick a seat count, and check out.
+
+## Pooled credits
+
+A Team org gets one shared credit pool each billing period: `seats x 3,000`. Every member draws from the same pool, monthly credits included with your plan reset each billing period, same as Free and Pro. See [Credits & Pricing](/cloud/credits) for what each cloud feature costs and how spend controls work.
+
+## Seat billing rules
+
+Seats are billed on **accepted** membership, not on invites sent:
+
+- Sending an invite costs nothing. The seat count (and the pooled credit grant) only changes once the invite is **accepted**.
+- Removing a member drops the seat count by one, floored at the 2-seat minimum - the org is never billed below the minimum even with fewer active members.
+- Seat changes are **prorated**: adding or removing a seat mid-cycle adjusts that period's invoice instead of waiting for renewal.
+
+## Roles
+
+Every member has a role that controls what they can do in an org:
+
+| Role | Access |
+|------|--------|
+| Owner | Full access, including billing and org deletion. One per org. |
+| Admin | Manage members, websites, and settings. Cannot delete the org. |
+| Editor | Create and manage websites and audits. |
+| Viewer | Read-only access to reports and audits. |
+| Billing | Manage subscription and credits only, no website access. |
+
+Admins and owners invite members and set roles from **Settings → Team**.
+
+## Enterprise
+
+Larger teams needing SAML/SCIM, verified-domain auto-join, or a custom contract should [contact us](https://squirrelscan.com/pricing) - these ship as part of an Enterprise plan alongside Team.
+
+## Related
+
+- [Credits & Pricing](/cloud/credits) - how credits work and what cloud features cost
+- [Cloud overview](/cloud) - what cloud adds on top of free local audits
+- [Dashboard](/dashboard) - where team members, billing, and reports live

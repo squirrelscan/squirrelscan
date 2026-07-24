@@ -1,0 +1,42 @@
+---
+title: "Video Accessibility"
+description: "Checks for video captions and transcripts"
+---
+
+Checks for video captions and transcripts
+
+| | |
+|---|---|
+| **Rule ID** | `video/video-accessible` |
+| **Category** | [Video](/rules/video) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Videos need captions for deaf/hard-of-hearing users and transcripts for SEO. Use `<track>` elements for captions. Provide text transcripts on the page. Auto-generated captions should be reviewed for accuracy. Captions also help when audio can't be played. Required by WCAG 2.1 Level A.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["video/video-accessible"]
+```
+
+### Disable all Video rules
+
+```toml squirrel.toml
+[rules]
+disable = ["video/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["video/video-accessible"]
+disable = ["*"]
+```

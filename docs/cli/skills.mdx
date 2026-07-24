@@ -1,0 +1,168 @@
+---
+title: "skills"
+icon: "brain"
+description: "Install squirrelscan skills for coding agents"
+---
+
+The `skills` command installs squirrelscan capabilities into coding agents that support the [Agent Skills](https://agentskills.io/home) standard.
+
+## What are Agent Skills?
+
+Agent Skills are folders of instructions, scripts, and resources that coding agents can discover and use to perform tasks more accurately. Skills give agents access to procedural knowledge they can load on demand.
+
+The Agent Skills format is an open standard supported by many coding agents including:
+
+- **Claude Code** - Anthropic's CLI coding agent
+- **Cursor** - AI-first code editor
+- **VS Code** - With GitHub Copilot
+- **Gemini CLI** - Google's coding agent
+- **OpenAI Codex** - OpenAI's coding agent
+- **Goose** - Block's open source agent
+- **Amp** - Sourcegraph's coding agent
+- **Roo Code** - AI coding assistant
+
+For the full list of supported agents, see [agentskills.io](https://agentskills.io/home).
+
+## The squirrelscan skills
+
+squirrelscan ships these skills from the [skills repository](https://github.com/squirrelscan/squirrelscan):
+
+| Skill | What it does |
+|-------|--------------|
+| `squirrelscan` | Operate the CLI: install, login, run audits, publish reports, credits, API keys, MCP setup, configuration, troubleshooting |
+| `audit-website` | The fix loop: audit a site, map findings to code, fix in batches, re-audit until it scores well |
+
+---
+
+## install
+
+Install the squirrelscan skills for your coding agent.
+
+### Usage
+
+```bash
+squirrel skills install
+```
+
+### What it Does
+
+The command runs `npx skills add` to install all the squirrelscan skills from the [squirrelscan skills repository](https://github.com/squirrelscan/squirrelscan).
+
+Once installed, you can invoke them in your coding agent:
+
+```
+/audit-website
+```
+
+```
+/squirrelscan
+```
+
+### Example
+
+```bash
+$ squirrel skills install
+Installing squirrelscan skills (squirrelscan, audit-website)...
+
+Skills installed! Use /audit-website or /squirrelscan in your agent.
+View skills: https://skills.sh/squirrelscan
+```
+
+### Without npm/npx
+
+If npm/npx is not available, the command displays manual installation instructions:
+
+```bash
+$ squirrel skills install
+npx not found. Install Node.js or run manually:
+
+To run manually:
+  npx skills add https://github.com/squirrelscan/squirrelscan -g
+
+View skills: https://skills.sh/squirrelscan
+```
+
+---
+
+## update
+
+Update the squirrelscan skills to the latest version.
+
+### Usage
+
+```bash
+squirrel skills update
+```
+
+### What it Does
+
+The command runs `npx skills update` to fetch the latest versions of the skills from the [squirrelscan skills repository](https://github.com/squirrelscan/squirrelscan).
+
+### Example
+
+```bash
+$ squirrel skills update
+Updating squirrelscan skills (squirrelscan, audit-website)...
+
+Skills updated!
+View skills: https://skills.sh/squirrelscan
+```
+
+### Without npm/npx
+
+If npm/npx is not available, the command displays manual update instructions:
+
+```bash
+$ squirrel skills update
+npx not found. Install Node.js or run manually:
+
+To run manually:
+  npx skills update https://github.com/squirrelscan/squirrelscan -g
+
+View skills: https://skills.sh/squirrelscan
+```
+
+---
+
+## Claude Code plugin
+
+Claude Code users can install everything (all skills plus the hosted MCP server) as a plugin instead:
+
+```
+/plugin marketplace add squirrelscan/squirrelscan
+/plugin install squirrelscan@squirrelscan
+```
+
+The plugin updates automatically as new commits land in the skills repository.
+
+---
+
+## The audit-website Skill
+
+The `audit-website` skill gives your coding agent the ability to run comprehensive website audits using squirrelscan and drive the findings to fixed code. When invoked, the agent will:
+
+1. Run `squirrel audit` on the target URL
+2. Analyze the results and map issues to your code
+3. Propose and apply fixes, then re-audit
+
+### Invoking the Skill
+
+In Claude Code or other compatible agents:
+
+```
+/audit-website https://example.com
+```
+
+The agent will handle running the audit and interpreting results for you.
+
+## The squirrelscan Skill
+
+The `squirrelscan` skill teaches your agent the CLI itself: installation, authentication, publishing reports, cloud credits, API keys, MCP setup, and configuration. Agents load it whenever a task touches squirrelscan beyond a basic audit, for example "publish this report" or "connect squirrelscan over MCP".
+
+---
+
+## Related
+
+- [Agent Skills Standard](https://agentskills.io/home) - Learn more about Agent Skills
+- [squirrelscan Skills Repository](https://github.com/squirrelscan/squirrelscan) - View our skills source
+- [Using with Agents](/developers/agents) - Full guide to using squirrelscan with coding agents

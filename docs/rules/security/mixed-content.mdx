@@ -1,0 +1,42 @@
+---
+title: "Mixed Content"
+description: "Checks for HTTP resources on HTTPS pages"
+---
+
+Checks for HTTP resources on HTTPS pages
+
+| | |
+|---|---|
+| **Rule ID** | `security/mixed-content` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Mixed content occurs when an HTTPS page loads resources over HTTP, breaking the security chain. Browsers may block these resources. Update all resource URLs to use HTTPS or protocol-relative URLs (//example.com). Check images, scripts, stylesheets, fonts, and iframes. Use Content-Security-Policy: upgrade-insecure-requests to automatically upgrade HTTP to HTTPS.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/mixed-content"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/mixed-content"]
+disable = ["*"]
+```

@@ -1,0 +1,195 @@
+---
+title: "Authentication"
+description: "API keys, scopes, and SQUIRRELSCAN_API_KEY for headless and CI auth"
+icon: "key"
+---
+
+Every cloud call, including the [REST API](/api/index), publishing reports,
+browser rendering, and the [hosted MCP server](/developers/mcp), authenticates
+with a single bearer token in the `Authorization` header. There are two kinds of
+token, and which one you use depends on whether a human or a machine is driving.
+
+```bash
+curl https://api.squirrelscan.com/v1/credits \
+  -H "Authorization: Bearer <token>"
+```
+
+<Info>
+Local, deterministic audits are **free and need no token**. Authentication is
+only for the cloud: the API, publishing, and cloud enrichment.
+</Info>
+
+## Two token types
+
+| Token | Prefix | Scoped to | Best for |
+|-------|--------|-----------|----------|
+| **Org API key** | `sq_…` (`sq_dev_…` in dev) | the **organization** | CI, headless agents, your backend |
+| **CLI login token** | `sqcli_…` | the **user** who logged in | interactive local development |
+
+Both are sent the same way (`Authorization: Bearer <token>`); the API tells
+them apart by prefix.
+
+- **API keys** are created in the dashboard, debit the **org's** credit pool,
+  carry [scopes](#scopes), and get a chosen [expiry](#key-expiry) (default 90
+  days, or **Never**). This is the intended public auth mechanism for anything
+  automated.
+- **CLI login tokens** are minted by [`squirrel auth login`](/cli/auth#login),
+  tied to your user, unscoped (full access), and expire. Best for a developer at
+  a terminal.
+
+<Note>
+The [hosted MCP server](/developers/mcp) takes the same `sq_` API key as a bearer
+token. If you would rather not manage a key, its OAuth sign-in mints a scoped,
+30-day key for you automatically, so most MCP users never create one by hand.
+See [MCP client setup](/developers/mcp-clients) for per-client config.
+</Note>
+
+### Environment-aware prefixes
+
+Keys carry an environment segment so a dev key can't accidentally hit
+production (and vice-versa): the API rejects cross-environment keys with a
+clear error.
+
+| Prefix | Environment |
+|--------|-------------|
+| `sq_…` | production |
+| `sq_dev_…` | development |
+| `sqcli_…` | legacy user login token (browser flow) |
+
+## Scopes
+
+API keys carry per-resource scopes in `resource:action` form. A key may only
+call endpoints covered by its scopes; a request outside them returns a clear
+error naming the missing scope.
+
+| Scope | Grants |
+|-------|--------|
+| `audits:write` | Run audits, submit cloud renders |
+| `audits:read` | Read published reports |
+| `credits:read` | Read credit balance + ledger |
+| `org:read` | Read org details |
+| `org:write` | Manage org (invites, settings) |
+
+Login sessions are unscoped (full access). Scopes only apply to API keys.
+
+### Presets
+
+When creating a key, pick a preset instead of hand-picking scopes:
+
+| Preset | Scopes | Use for |
+|--------|--------|---------|
+| **Full** | all of the above | trusted backends, admin tooling |
+| **Read-only** | `audits:read`, `credits:read`, `org:read` | dashboards, reporting, monitoring |
+| **CI** | `audits:write`, `credits:read` | pipelines that run audits and watch spend |
+
+The **CI** preset is enough for most pipelines. See [CI/CD](/guides/ci).
+
+## Key expiry
+
+Every key is created with an expiry: pick a preset in the create dialog:
+
+| Preset | Best for |
+|--------|----------|
+| **7 days** | short-lived / one-off jobs |
+| **30 days** | rotating CI credentials |
+| **90 days** (default) | standard automation |
+| **Never** | long-lived integrations |
+
+An expired key is **rejected** at the API exactly like a revoked one: the
+request returns an auth error and, in the CLI, the env token
+[fails closed](#its-authoritative-and-fails-closed). The dashboard shows each
+key's expiry (or `never`) and flags expired keys, so rotate before the date to
+avoid a broken pipeline.
+
+## Creating and revoking keys
+
+The fastest path is the terminal: [`squirrel keys create`](/cli/keys) mints a
+key without leaving your shell, and `squirrel keys list` / `squirrel keys
+revoke` manage existing ones. Or use the dashboard at
+[app.squirrelscan.com/settings/api-keys](https://app.squirrelscan.com/settings/api-keys):
+
+1. Open **Settings → API Keys** in your organization.
+2. Click **Create key**, name it (e.g. `CI – production`), pick a
+   [preset](#presets) or specific [scopes](#scopes), and choose an
+   [expiry](#key-expiry).
+3. The **key is shown once**: copy and store it securely. It is never displayed
+   again.
+4. Revoke a key at any time from the same page; revocation is immediate.
+
+<Note>
+API keys are **organization-scoped**. Only organization owners and admins can
+create or revoke them. Treat a key like a password: never commit it; store it
+in your CI provider's secret store.
+</Note>
+
+## Headless auth with `SQUIRRELSCAN_API_KEY`
+
+For CI and headless agents, set the `SQUIRRELSCAN_API_KEY` environment variable
+to an org API key. No `squirrel auth login` is required: the CLI reads the
+token straight from the environment, and the REST API accepts the same value
+as a bearer token.
+
+```bash
+SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx squirrel audit https://example.com
+```
+
+<Note>
+The older `SQUIRREL_API_TOKEN` name still works as a back-compat alias (no
+deprecation warning), but `SQUIRRELSCAN_API_KEY` is the documented name.
+</Note>
+
+### It's authoritative and fails closed
+
+When the CLI needs to authenticate a cloud call it resolves **one** credential,
+highest priority first:
+
+1. **`SQUIRRELSCAN_API_KEY`** (or its back-compat alias `SQUIRREL_API_TOKEN`,
+   checked only when the preferred var is unset) is **authoritative**. It
+   **overrides a logged-in session**, and is **fail-closed**: if the token is
+   invalid (revoked, expired, or minted for a different environment) the CLI
+   **errors** rather than silently falling back to your login session. This
+   keeps CI predictable: the same convention as `gh`, the Stripe CLI, and AWS.
+2. **Logged-in session** (`squirrel auth login`), used only when neither env
+   var is set.
+3. **Unauthenticated**: local / deterministic-only audits.
+
+The env token is **never** written to `~/.squirrel/settings.json`. An empty or
+whitespace-only value is treated as unset (it falls through to the alias, then
+the login session).
+
+<Warning>
+A wrong-environment key fails closed too: a `sq_dev_…` key against production
+(or a `sq_…` key against a dev server) is **rejected**, not ignored. The error
+names the mismatch. Rotate the key for the right environment with
+[`squirrel keys create`](/cli/keys) or the
+[dashboard](https://app.squirrelscan.com/settings/api-keys).
+</Warning>
+
+### GitHub Actions
+
+```yaml
+- name: Audit
+  env:
+    SQUIRRELSCAN_API_KEY: ${{ secrets.SQUIRRELSCAN_API_KEY }}
+  run: squirrel audit https://example.com --fail-on 'score<90' --yes
+```
+
+Store the key as a repository or organization secret. A **CI** preset key is
+enough for most pipelines. See [CI/CD](/guides/ci) for GitLab and generic
+runners.
+
+## Inspecting the active credential
+
+[`squirrel auth status`](/cli/auth#status) (alias `whoami`) prints which
+credential is active: its **source** (login session vs env var), and, for API
+keys, the org and granted scopes. When an env token shadows a logged-in
+session, it says so.
+
+## Related
+
+- [`squirrel keys`](/cli/keys): mint, list, and revoke org API keys from the terminal
+- [CI/CD](/guides/ci): gate builds and wire `SQUIRRELSCAN_API_KEY` into pipelines
+- [REST API](/api/index): the surface these tokens authorize
+- [Hosted MCP server](/developers/mcp) - connect any agent over streamable HTTP with these keys or OAuth
+- [`squirrel auth`](/cli/auth): the CLI commands that manage login sessions
+- [Cloud Credits](/cloud/credits): how authenticated cloud calls are metered

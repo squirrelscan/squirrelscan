@@ -1,0 +1,42 @@
+---
+title: "Zoom Disabled"
+description: "Checks if viewport meta tag disables user zoom"
+---
+
+Checks if viewport meta tag disables user zoom
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/zoom-disabled` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Never disable user zoom - it's critical for users with low vision. Remove user-scalable=no and maximum-scale=1.0 from your viewport meta tag. Good: `<meta name='viewport' content='width=device-width, initial-scale=1'>`. Bad: `<meta name='viewport' content='width=device-width, user-scalable=no, maximum-scale=1.0'>`. Users must be able to zoom up to at least 500% (WCAG 1.4.4 requires 200%, but browsers limit to 500%).
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/zoom-disabled"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/zoom-disabled"]
+disable = ["*"]
+```

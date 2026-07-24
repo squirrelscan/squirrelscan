@@ -1,0 +1,48 @@
+---
+title: "Content Without JavaScript"
+description: "Flags main content that only appears after JavaScript runs, invisible to agents that read raw HTML"
+---
+
+Compares the content in your **raw HTML** against the **JavaScript-rendered DOM** and flags pages where significant main content only exists after JS runs. Many AI agents and crawlers read raw HTML without executing JavaScript, so anything injected client-side is invisible to them.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/content-without-js` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+<Note>This rule is a **recommendation**: it never penalizes your score. It is **cloud + render-backed**: it only produces a result on a cloud audit with browser rendering enabled. CLI-only and non-rendered audits skip it gracefully (no error, no finding).</Note>
+
+## What it checks
+
+The rule needs both versions of the page:
+
+- **Raw HTML**: the initial server response, before any JavaScript runs (what a no-JS agent sees).
+- **Rendered DOM**: the page after the cloud `render` service executes JavaScript in a real browser.
+
+It extracts the visible text from each with the same pipeline and compares word counts. A page is flagged (`info`) only when **all** of the following hold:
+
+- the rendered page has at least **200 words** of content,
+- at least **100 words** exist *only* after JavaScript runs, and
+- the raw HTML covers **60% or less** of the rendered content.
+
+Server-rendered (SSR/SSG) pages, where the raw HTML already carries the content, pass. Single-page-app shells that ship a near-empty `<div id="root">` and hydrate everything client-side are flagged.
+
+## Why it matters
+
+A growing share of traffic comes from agents that fetch raw HTML and never run JavaScript: LLM crawlers, answer engines, link unfurlers, and many automation tools. Content that only appears post-hydration is invisible to all of them: your page may look complete in a browser yet read as empty to an agent. Putting the core content in the initial HTML makes the page legible to both.
+
+## Solution
+
+Server-render or pre-render your primary content so it is present in the initial HTML:
+
+- Use SSR or static generation (SSG) for the main content of each page.
+- Keep purely interactive enhancements client-side: only the core content an agent needs to understand the page has to be in the raw HTML.
+- Verify by fetching the page without JavaScript (e.g. `curl` the URL) and confirming the main content is present.
+
+```bash
+# What a no-JS agent sees — the main content should already be here
+curl -s https://example.com/page | grep -i "your main heading"
+```

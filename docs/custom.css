@@ -1,0 +1,6 @@
+/* squirrelscan docs - link styling */
+
+/* Links use green accent on hover */
+a:hover {
+  color: #22863a;
+}

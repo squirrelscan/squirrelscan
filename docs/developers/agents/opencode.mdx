@@ -1,0 +1,93 @@
+---
+title: "squirrelscan for opencode"
+sidebarTitle: "opencode"
+description: "Set up squirrelscan in opencode: add the hosted MCP server to opencode.json, install the CLI, and run audits."
+icon: "code"
+---
+
+opencode connects to squirrelscan over the hosted MCP server, so it can run audits, read findings as tools, and fix them in your repo.
+
+## 1. Install the CLI
+
+Local audits and the skills run through the `squirrel` binary.
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+Add squirrelscan to your `opencode.json` (project root) or `~/.config/opencode/opencode.json` (global). A remote server uses `type: "remote"`:
+
+<Tabs>
+  <Tab title="OAuth (recommended)">
+    ```json
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "mcp": {
+        "squirrelscan": {
+          "type": "remote",
+          "url": "https://mcp.squirrelscan.com/mcp",
+          "enabled": true
+        }
+      }
+    }
+    ```
+
+    On first connect opencode discovers the authorization server and runs a browser sign-in. Check status with `opencode mcp list`.
+  </Tab>
+  <Tab title="API key">
+    ```json
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "mcp": {
+        "squirrelscan": {
+          "type": "remote",
+          "url": "https://mcp.squirrelscan.com/mcp",
+          "enabled": true,
+          "headers": {
+            "Authorization": "Bearer {env:SQUIRRELSCAN_API_KEY}"
+          }
+        }
+      }
+    }
+    ```
+
+    Export `SQUIRRELSCAN_API_KEY` in your shell or CI. A static header disables the OAuth fallback, which is what you want for headless runs.
+  </Tab>
+</Tabs>
+
+## 3. Run an audit
+
+Ask opencode in natural language, it will call the squirrelscan tools:
+
+```
+Use squirrelscan to audit example.com, then fix the high-severity issues.
+```
+
+Scope large sites to keep runs fast:
+
+```
+Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
+```
+
+<Tip>Prefer no integration? Pipe a report into opencode directly: `squirrel audit example.com --format llm | opencode`.</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+    A full worked example of the audit-and-fix loop.
+  </Card>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients">
+    Config for every other MCP client.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule and how it's fixed.
+  </Card>
+</CardGroup>

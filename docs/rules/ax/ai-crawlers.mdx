@@ -1,0 +1,67 @@
+---
+title: "AI Crawler Access"
+description: "Classifies and reports which training, AI-search, user-action, and archive crawlers robots.txt allows or blocks"
+---
+
+Reports which AI-agent crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, …) your `robots.txt` allows or blocks at the site root, classified into the three purposes those crawlers actually serve. AI assistants and answer engines reach your content through these named user-agents, so blocking them keeps your pages out of those tools — but "AI crawlers" isn't one policy decision, it's three.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/ai-crawlers` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 1/10 |
+
+<Note>The rule badge is **warning**, but training-bot policy stays informational either way: opting out of model training is a legitimate choice and never counts against you. Blocking an AI-search indexer or a user-action fetcher is what actually emits a warning-level check, since that's more often an accidental side effect than a deliberate policy.</Note>
+
+## What it checks
+
+For each well-known AI crawler, the rule reads your parsed `robots.txt` and reports whether the user-agent is **allowed** or **fully blocked** (`Disallow: /` with no re-permitting `Allow: /`). A user-agent with its own group takes precedence over the wildcard `*` group, matching how real crawlers resolve robots.txt.
+
+Crawlers are classified into four purposes, each with a different blocking implication:
+
+- **Training crawlers** — bulk-crawl content to train or fine-tune one vendor's models. Blocking these has no effect on whether an assistant can answer questions about your site right now; it only affects that vendor's future model training, and is reported informationally regardless of policy. Covers `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `Meta-ExternalAgent`, `Bytespider`, `Amazonbot`, `anthropic-ai`, `cohere-ai`, `AI2Bot`, `Diffbot`.
+- **AI-search indexers** — crawl to power AI-generated search results and citations, similar in spirit to a classic search-engine crawler. Blocking one of these emits a warning-level check. Covers `OAI-SearchBot`, `Claude-SearchBot`, `PerplexityBot`, `DuckAssistBot`, `YouBot`.
+- **User-action fetchers** — fetch a specific page on behalf of a live user request inside an AI assistant (someone pasted your URL, or asked the assistant to look something up). Blocking one of these also emits a warning-level check. Covers `ChatGPT-User`, `Claude-User`, `Perplexity-User`, `MistralAI-User`, `Meta-ExternalFetcher`.
+- **Archive crawlers** — feed the shared public archives rather than one vendor: `CCBot` builds the Common Crawl corpus and `ia_archiver` / `archive.org_bot` build the Wayback Machine. Blocking these opts you out of *every* model and pipeline built on those archives at once — a much bigger decision than blocking one training bot — so it emits a warning-level check. See [Archive Indexing](/rules/ax/archive-indexing) for whether the archives actually have you.
+
+**Each of these is a separate user-agent token with its own `robots.txt` group.** Blocking `ClaudeBot` (training) does **not** block `Claude-User` (user-action) — they are unrelated as far as `robots.txt` parsing goes, even though both come from Anthropic. Sites that intend to opt out of training only, but write one blanket rule, often block all three by accident.
+
+<Note>This rule only reads declared policy in `robots.txt`. A crawler can be allowed here and still get blocked in practice by a WAF or bot-challenge page — see [Agent Blocking](/rules/ax/agent-blocking) for the behavioral probe that catches that gap.</Note>
+
+## Solution
+
+Decide policy per crawler class, not per site-wide toggle. To opt out of model training while staying answerable in assistants and AI search, block the training bots but keep AI-search indexers and user-action fetchers allowed:
+
+```txt robots.txt
+# Block training, allow live answer engines
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/ai-crawlers"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/ai-crawlers"]
+disable = ["*"]
+```

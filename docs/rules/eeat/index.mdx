@@ -1,0 +1,63 @@
+---
+title: "E-E-A-T"
+description: "Experience, expertise, authority, trust signals"
+---
+
+Experience, expertise, authority, trust signals
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="About Page" icon="triangle-exclamation" href="/rules/eeat/about-page">
+    Checks for an about/company page with content
+  </Card>
+  <Card title="Affiliate Disclosure" icon="circle-info" href="/rules/eeat/affiliate-disclosure">
+    Checks for affiliate and sponsored content disclosures
+  </Card>
+  <Card title="Author Bylines" icon="triangle-exclamation" href="/rules/eeat/author-byline">
+    Checks for visible author names on content pages
+  </Card>
+  <Card title="Author Expertise" icon="circle-info" href="/rules/eeat/author-expertise">
+    Checks for author credentials and expertise indicators
+  </Card>
+  <Card title="Authority Signals" icon="triangle-exclamation" href="/rules/eeat/authority-signals">
+    AI assessment of authorship, citations, and outbound references (cloud)
+  </Card>
+  <Card title="Citations" icon="circle-info" href="/rules/eeat/citations">
+    Checks for citations to authoritative external sources
+  </Card>
+  <Card title="Contact Page" icon="triangle-exclamation" href="/rules/eeat/contact-page">
+    Checks for contact page with multiple contact methods
+  </Card>
+  <Card title="Content Dates" icon="triangle-exclamation" href="/rules/eeat/content-dates">
+    Checks for published and modified dates on content
+  </Card>
+  <Card title="Disclaimers" icon="circle-info" href="/rules/eeat/disclaimers">
+    Checks for appropriate disclaimers on sensitive content
+  </Card>
+  <Card title="Editorial Policy" icon="circle-info" href="/rules/eeat/editorial-policy">
+    Checks for editorial and content policy pages
+  </Card>
+  <Card title="Physical Address" icon="circle-info" href="/rules/eeat/physical-address">
+    Checks for visible physical address information
+  </Card>
+  <Card title="Privacy Policy" icon="triangle-exclamation" href="/rules/eeat/privacy-policy">
+    Checks for privacy policy page linked from footer
+  </Card>
+  <Card title="Terms of Service" icon="circle-info" href="/rules/eeat/terms-of-service">
+    Checks for terms of service page
+  </Card>
+  <Card title="Trust Signals" icon="circle-info" href="/rules/eeat/trust-signals">
+    Checks for trust badges, certifications, and social proof
+  </Card>
+  <Card title="YMYL Detection" icon="circle-info" href="/rules/eeat/ymyl-detection">
+    Detects Your Money Your Life (YMYL) content
+  </Card>
+</CardGroup>
+
+## Disable All E-E-A-T Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/*"]
+```

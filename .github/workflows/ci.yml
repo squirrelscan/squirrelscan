@@ -61,6 +61,17 @@ jobs:
       - uses: ./.github/actions/setup-bun
       - run: bun run test:release
 
+  docs:
+    name: Docs check and build
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bun
+      - run: bun run docs:check
+      - run: bun run docs:build
+
   build:
     name: Compile CLI
     needs: [cli-tests, engine-tests, release-tooling]

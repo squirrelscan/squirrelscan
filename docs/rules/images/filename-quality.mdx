@@ -1,0 +1,42 @@
+---
+title: "Image Filename Quality"
+description: "Checks for descriptive image filenames"
+---
+
+Checks for descriptive image filenames
+
+| | |
+|---|---|
+| **Rule ID** | `images/filename-quality` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+Use descriptive, keyword-rich filenames for images instead of generic names like IMG_001.jpg or DSC1234.png. Good: 'red-running-shoes-nike.jpg'. Bad: 'IMG_20231015.jpg'. Filenames contribute to image SEO and help search engines understand image content. Use hyphens to separate words.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/filename-quality"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/filename-quality"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Font Size"
+description: "Checks for readable font sizes on mobile"
+---
+
+Checks for readable font sizes on mobile
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/font-size` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Body text should be at least 16px for readability without zooming. Smaller fonts strain eyes on mobile. Use relative units (rem, em) for scalability. Test on actual devices. Google's mobile-friendly test flags font sizes under 12px. Line height should be at least 1.5 for readability.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/font-size"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/font-size"]
+disable = ["*"]
+```

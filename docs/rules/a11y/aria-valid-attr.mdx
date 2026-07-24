@@ -1,0 +1,42 @@
+---
+title: "ARIA Valid Attributes"
+description: "Checks for valid ARIA attribute names"
+---
+
+Checks for valid ARIA attribute names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-valid-attr` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Use only valid ARIA attribute names as defined in the WAI-ARIA specification. Common typos include 'aria-labeledby' (should be 'aria-labelledby'), 'aria-role' (should be 'role'), and 'aria-description' vs 'aria-describedby'. Consult MDN or the WAI-ARIA spec for the complete list of valid attributes.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-valid-attr"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-valid-attr"]
+disable = ["*"]
+```

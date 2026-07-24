@@ -1,0 +1,61 @@
+---
+title: "Unminified JavaScript"
+description: "Detects unminified JavaScript that could be optimized"
+---
+
+Detects unminified JavaScript that could be optimized
+
+| | |
+|---|---|
+| **Rule ID** | `perf/unminified-js` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## What it detects
+
+Unminified JavaScript, based on newline ratio, comment volume, identifier length, indentation, and whitespace. Preserved `/*! ... */` and `//!` license banners (the standard "keep on minify" convention used by Terser, esbuild, Vite, and Webpack) are stripped before analysis, so a fully minified bundle that legitimately retains license comments is not flagged.
+
+## Solution
+
+Minify JavaScript to reduce file size and improve load times. Use build tools like Terser, esbuild, or UglifyJS. Most bundlers (Webpack, Vite, Rollup) minify automatically in production. Minification shortens variable names, removes whitespace, and dead code.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_size_bytes` | unknown | `undefined` | Minimum JS size in bytes to check for minification |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."perf/unminified-js"]
+min_size_bytes = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/unminified-js"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/unminified-js"]
+disable = ["*"]
+```

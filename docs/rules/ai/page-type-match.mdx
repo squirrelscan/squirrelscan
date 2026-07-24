@@ -1,0 +1,45 @@
+---
+title: "Page Type Match"
+description: "Checks that the page's AI-classified type agrees with its declared structured data"
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge** (shared with [LLM Parsability](/rules/ai/llm-parsability) - both read the same analysis). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+
+Checks that the page's AI-classified type agrees with its declared structured data.
+
+| | |
+|---|---|
+| **Rule ID** | `ai/page-type-match` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+| **Default** | Enabled |
+
+## What it checks
+
+The cloud service classifies what each page *is* - the way an AI assistant or search engine reads it (article, product, contact, docs, ...). The rule then compares that classification against the page's declared JSON-LD `@type`:
+
+- **No page-type structured data declared** - passes, reporting the classification for reference.
+- **Classification matches the declared type** (or the classifier isn't confident) - passes.
+- **Page reads as one type but declares another** - warns, e.g. *"Page reads as `product` but declares Article structured data"*.
+
+## Solution
+
+A mismatch between what a page is and what its structured data declares confuses rich-result eligibility and AI answers. Either fix the JSON-LD `@type` to describe the page truthfully, or restructure the page content so its primary purpose is unambiguous.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/page-type-match"]
+```
+
+### Disable all AI rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/*"]
+```

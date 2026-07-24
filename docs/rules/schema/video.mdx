@@ -1,0 +1,42 @@
+---
+title: "Video Schema"
+description: "Validates VideoObject schema for video content"
+---
+
+Validates VideoObject schema for video content
+
+| | |
+|---|---|
+| **Rule ID** | `schema/video` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+VideoObject schema enables video rich results and carousels. Required: name, description, thumbnailUrl, uploadDate. Recommended: duration (ISO 8601), contentUrl, embedUrl. For video courses, use Course with hasCourseInstance. Ensure thumbnailUrl is high quality (min 160x90, max 1920x1080).
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/video"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/video"]
+disable = ["*"]
+```

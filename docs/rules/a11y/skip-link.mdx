@@ -1,0 +1,42 @@
+---
+title: "Skip Link"
+description: "Checks for bypass mechanisms for keyboard navigation"
+---
+
+Checks for bypass mechanisms for keyboard navigation
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/skip-link` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Skip links allow keyboard users to bypass repetitive navigation and jump directly to main content. Add a hidden link at the very beginning of your page: `<a href='#main-content' class='skip-link'>`Skip to main content`</a>`. Style it to become visible on focus. Ensure the target (#main-content) has tabindex='-1' if it's not naturally focusable. Alternative: use landmark roles like `<main>` which screen readers can navigate to directly.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/skip-link"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/skip-link"]
+disable = ["*"]
+```

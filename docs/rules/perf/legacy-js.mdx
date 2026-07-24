@@ -1,0 +1,42 @@
+---
+title: "Legacy JavaScript"
+description: "Detects ES5 polyfills and legacy JavaScript code"
+---
+
+Detects ES5 polyfills and legacy JavaScript code
+
+| | |
+|---|---|
+| **Rule ID** | `perf/legacy-js` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Consider removing legacy polyfills if you don't need to support old browsers. Use differential serving (module/nomodule) to send modern code to modern browsers. Update Babel/TypeScript target to ES2020+ if your audience uses modern browsers. Check browserslist configuration.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/legacy-js"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/legacy-js"]
+disable = ["*"]
+```

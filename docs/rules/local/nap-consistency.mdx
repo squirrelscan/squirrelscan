@@ -1,0 +1,42 @@
+---
+title: "NAP Consistency"
+description: "Checks for consistent Name, Address, Phone across site"
+---
+
+Checks for consistent Name, Address, Phone across site
+
+| | |
+|---|---|
+| **Rule ID** | `local/nap-consistency` |
+| **Category** | [Local SEO](/rules/local) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+NAP consistency is critical for local SEO. Your business name, address, and phone number should be identical everywhere - on your site and across all listings. Use schema.org LocalBusiness markup. Avoid abbreviations inconsistencies (St. vs Street). Include NAP in footer for site-wide visibility.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["local/nap-consistency"]
+```
+
+### Disable all Local SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["local/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["local/nap-consistency"]
+disable = ["*"]
+```

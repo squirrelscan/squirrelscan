@@ -1,0 +1,104 @@
+---
+title: "Credits & Pricing"
+description: "How cloud credits work, what an audit costs, and how to control spend"
+icon: "coins"
+---
+
+Cloud audits are priced in **credits** - small integers, not dollars. Local audits never cost credits.
+
+## Getting credits
+
+| Source | Credits | Notes |
+|--------|---------|-------|
+| Free plan | 500/month | Every account, no card required; resets each calendar month |
+| Pro plan ($19/mo or $190/yr) | 3,000/month | Resets each billing period; unused monthly credits expire |
+| Team plan ($29/seat/mo or $290/seat/yr) | 3,000/seat/month | Pooled across the org; see [Team plan](/cloud/team) for seat billing rules |
+| Credit top-up (min $10) | 100 per $1 | Paid plan only; pick any amount; never expire |
+
+Annual billing is 12 months for the price of 10. Your monthly credits still arrive every month; you just pay once a year.
+
+Monthly credits are spent before purchased top-up credits. Subscribe and top up from the **Billing & Credits** page in the [dashboard](/dashboard).
+
+Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, domain stats, dead-link checking, report publishing) on every plan. Pro and Team just grant more monthly credits and unlock top-ups, scheduled crawls, custom headers, and higher render concurrency - Team adds pooled credits, invites, and roles on top.
+
+### Max pages per cloud audit
+
+Audits triggered from the dashboard - on-demand ("Run now") and [scheduled](/cloud/scheduled-audits) - crawl up to a plan-based page ceiling:
+
+| Plan | Max pages per cloud audit |
+|------|---------------------------|
+| Free | 500 |
+| Pro | 2,000 |
+| Team | 2,000 today, rising to 5,000 as report processing scales up |
+
+A crawl config above your plan's ceiling isn't an error - it's clamped automatically, the same way [`render_concurrency`](/configuration/cloud#render_concurrency) is. This limit is separate from the CLI's own crawl cap: `squirrel audit` run locally on your machine crawls up to **5,000 pages on every plan** - see [Crawl Limits](/configuration/crawler#max_pages).
+
+If you're driving audits through the [REST API](/api/audits/create) or the [MCP server](/developers/mcp), a clamped run's response carries a `notice` field (`type: "page_limit_clamped"`, with the requested and applied page counts and an upgrade hint) so your integration or agent can surface it - the audit still runs normally either way.
+
+## Checking your balance
+
+```bash
+squirrel credits
+```
+
+```
+Plan:    Pro
+Balance: 2340 credits (2000 monthly + 340 purchased)
+         monthly credits reset 2026-07-08
+
+Pricing:
+  audit                 50 base + 2 per rendered page
+                           (analysis, tech detection, domain stats, publishing included)
+  content_gaps          25 per run
+  issue_enrich           3 per issue
+  keyword_gaps          25 per run
+
+Top up: https://squirrelscan.com/account/credits
+```
+
+`squirrel auth status` also shows your balance, and the start banner of every audit shows the estimated spend against it.
+
+## Pricing
+
+Every authed audit has one flat price:
+
+| Item | Cost | Notes |
+|------|------|-------|
+| Audit base | 50 per audit | covers every included service below |
+| Browser rendering | 2 per rendered page | [Cloud rendering](/cloud/rendering); charged whether or not the page hits the render cache |
+
+The base includes everything: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), domain stats, the [editor's summary](/cloud/editor-summary), [dead-link checking](/rules/links/dead-links), and publishing the report. None of these are charged separately.
+
+HTTP-only (non-rendered) page fetches are free, so a `--no-render` audit costs just the 50-credit base.
+
+Opt-in add-ons are the only extra charges:
+
+| Add-on | Cost | Notes |
+|--------|------|-------|
+| Keyword gaps | 25 per audit | [`gaps/keywords`](/rules/gaps/keywords) (opt-in) |
+| Content gaps | 25 per audit | [`gaps/content`](/rules/gaps/content) (opt-in) |
+| Issue enrichment | 3 per issue | AI recommendations in the dashboard |
+| Dead-link render escalation | 2 per link | WAF-blocked links retried via a rendered fetch, billed as rendered requests |
+
+A typical 25-page rendered audit costs **100 credits**: 50 base + 50 for rendering. A 100-page audit costs 250 credits.
+
+## Spend controls
+
+Three guardrails keep an audit from spending more than you expect:
+
+```toml squirrel.toml
+[cloud]
+max_credits_per_audit = 1000  # hard cap per audit; 0 = unlimited
+confirm_threshold = 50        # estimates above this prompt before spending
+enabled = true                # master switch for all cloud features
+```
+
+- **Per-audit cap** - if the estimate exceeds `max_credits_per_audit`, work is truncated deterministically at the cap and remaining rules report `skipped` with reason `credit-cap-reached`.
+- **Confirmation prompt** - in a terminal, an estimate above `confirm_threshold` asks before proceeding. Use `--yes` to skip prompts (e.g. in CI or agent workflows). Non-interactive runs proceed without prompting, bounded by the cap.
+- **Master switch** - `enabled = false` turns off all cloud calls for the project.
+
+See the [cloud configuration reference](/configuration/cloud) for all options.
+
+## When credits run out
+
+Nothing breaks. A cloud audit needs a balance of at least 50 credits (the base) to start: below that, the CLI runs the audit locally instead and tells you so. If credits run out mid-audit, cloud rules report `skipped` with reason `insufficient-credits`, the audit completes with all local rules, and you see a single warning with a top-up link. If an audit fails after you were charged, the charge is automatically refunded.

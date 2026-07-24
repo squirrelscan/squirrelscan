@@ -1,0 +1,42 @@
+---
+title: "JavaScript Redirects"
+description: "Detects JavaScript resources that return 3XX redirects"
+---
+
+Detects JavaScript resources that return 3XX redirects
+
+| | |
+|---|---|
+| **Rule ID** | `perf/js-redirects` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+JavaScript files that redirect add unnecessary latency and increase page load time. Update script src attributes to point directly to the final URL. Common causes: CDN URL changes, versioned script paths, or domain migrations. Check if third-party scripts have updated their recommended URLs.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/js-redirects"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/js-redirects"]
+disable = ["*"]
+```

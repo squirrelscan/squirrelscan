@@ -1,0 +1,57 @@
+---
+title: "Content"
+description: "Text quality, readability, and content structure"
+---
+
+Text quality, readability, and content structure
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Article Link Density" icon="triangle-exclamation" href="/rules/content/article-links">
+    Articles should have appropriate internal and external links based on length
+  </Card>
+  <Card title="Author Info" icon="circle-info" href="/rules/content/author-info">
+    Checks for author markup and attribution
+  </Card>
+  <Card title="Broken HTML" icon="triangle-exclamation" href="/rules/content/broken-html">
+    Checks for malformed HTML structure
+  </Card>
+  <Card title="Content Freshness" icon="circle-info" href="/rules/content/freshness">
+    Checks for last-modified and published date signals
+  </Card>
+  <Card title="Content Quality" icon="circle-info" href="/rules/content/quality">
+    LLM-based content quality analysis for SEO
+  </Card>
+  <Card title="Duplicate Description" icon="triangle-exclamation" href="/rules/content/duplicate-description">
+    Checks for duplicate meta descriptions across the site
+  </Card>
+  <Card title="Duplicate Title" icon="triangle-exclamation" href="/rules/content/duplicate-title">
+    Checks for duplicate title tags across the site
+  </Card>
+  <Card title="Heading Hierarchy" icon="triangle-exclamation" href="/rules/content/heading-hierarchy">
+    Validates heading structure and hierarchy
+  </Card>
+  <Card title="Keyword Stuffing" icon="triangle-exclamation" href="/rules/content/keyword-stuffing">
+    Detects excessive keyword repetition in content
+  </Card>
+  <Card title="Meta Tags in Body" icon="circle-exclamation" href="/rules/content/meta-in-body">
+    Detects meta tags incorrectly placed in document body
+  </Card>
+  <Card title="MIME Type Validation" icon="triangle-exclamation" href="/rules/content/mime-type">
+    Detects Content-Type header mismatches with file extensions
+  </Card>
+  <Card title="Reading Level" icon="circle-info" href="/rules/content/reading-level">
+    Analyzes content readability using Flesch-Kincaid
+  </Card>
+  <Card title="Word Count" icon="triangle-exclamation" href="/rules/content/word-count">
+    Checks content length for thin content issues
+  </Card>
+</CardGroup>
+
+## Disable All Content Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Tap Targets"
+description: "Checks for properly sized touch targets"
+---
+
+Checks for properly sized touch targets
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/tap-targets` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Touch targets (buttons, links) should be at least 44x44 CSS pixels with 8px spacing between them. This ensures users can tap accurately on mobile. Google's mobile-friendly test checks this. Use padding to increase tap area without changing visual size. Pay special attention to navigation links and form inputs.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/tap-targets"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/tap-targets"]
+disable = ["*"]
+```

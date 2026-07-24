@@ -1,0 +1,42 @@
+---
+title: "Form Labels"
+description: "Checks that form inputs have associated labels"
+---
+
+Checks that form inputs have associated labels
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/form-labels` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Solution
+
+Every form input needs an accessible label for screen readers. Options: 1) Use `<label for='inputId'>`Label`</label>` with matching id. 2) Wrap the input inside `<label>`Label `<input>``</label>`. 3) Use aria-label or aria-labelledby for inputs where visible labels aren't feasible. Placeholders are not sufficient substitutes for labels. Hidden inputs, submit buttons, and image buttons don't need labels.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/form-labels"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/form-labels"]
+disable = ["*"]
+```

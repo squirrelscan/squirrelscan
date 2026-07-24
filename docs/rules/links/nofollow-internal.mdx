@@ -1,0 +1,42 @@
+---
+title: "Nofollow Internal"
+description: "Flags internal links with rel=nofollow"
+---
+
+Flags internal links with rel=nofollow
+
+| | |
+|---|---|
+| **Rule ID** | `links/nofollow-internal` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Nofollow on internal links wastes PageRank and is generally bad practice. Internal links should flow link equity freely throughout your site. Remove nofollow from internal links unless you have a specific reason (e.g., user-generated content links). Use nofollow for external links you don't endorse.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/nofollow-internal"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/nofollow-internal"]
+disable = ["*"]
+```

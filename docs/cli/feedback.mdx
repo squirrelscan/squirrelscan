@@ -1,0 +1,111 @@
+---
+title: "feedback"
+icon: "message-square"
+description: "Send feedback to the squirrelscan team"
+---
+
+The `feedback` command lets you send feedback, bug reports, and feature requests directly to the squirrelscan team.
+
+## Usage
+
+```bash
+squirrel feedback
+squirrel feedback --category bug_report
+```
+
+## Options
+
+| Option | Description |
+| ------ | ----------- |
+| `--category` | Feedback category: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other` |
+
+## Interactive Prompts
+
+The command will prompt you for:
+
+1. **Email** - Your email address (cached for future use)
+2. **Feedback** - Your feedback message (minimum 5 characters)
+3. **Category** - An optional category (skipped when `--category` is passed; press Enter to skip)
+
+## Example Session
+
+```bash
+$ squirrel feedback
+Email: you@example.com
+Feedback: Would love to see a PDF export format!
+
+Category (optional):
+  1) Bug report
+  2) Feature request
+  3) Something worked well
+  4) Something was confusing
+  5) Missing data in a report
+  6) Tool ergonomics
+  7) Other
+Category [Enter to skip]: 2
+
+Thank you for your feedback!
+```
+
+## Subsequent Uses
+
+Your email is cached, so you can press Enter to reuse it:
+
+```bash
+$ squirrel feedback
+Email [you@example.com]:
+Feedback: The HTML report looks great!
+
+Thank you for your feedback!
+```
+
+## What to Send
+
+### Bug Reports
+
+Include:
+- What you were doing
+- What you expected
+- What happened instead
+- Error messages if any
+
+```
+Bug: squirrel audit fails on localhost URLs
+Expected: Should crawl localhost
+Got: Error "Invalid URL"
+```
+
+### Feature Requests
+
+Describe the feature and why it would be useful:
+
+```
+Feature request: Add XML sitemap export
+Use case: Want to generate sitemap from crawl results
+```
+
+### General Feedback
+
+Share your experience:
+
+```
+Loving the CLI speed! JSON export is perfect for CI/CD
+```
+
+## Privacy
+
+- Your email is stored locally at `~/.squirrel/settings.json`
+- Feedback is transmitted securely to squirrelscan servers
+- Your install ID is included (anonymous identifier)
+- No crawl data or audit results are transmitted
+
+## Alternative: GitHub Issues
+
+For public bug reports and feature requests, you can also use GitHub:
+
+- Issues: https://github.com/squirrelscan/squirrelscan/issues
+- Discussions: https://github.com/squirrelscan/squirrelscan/discussions
+
+## Related
+
+- [self settings](/cli/self#settings) - Manage stored email and other settings

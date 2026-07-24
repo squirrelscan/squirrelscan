@@ -1,0 +1,36 @@
+---
+title: "Mobile"
+description: "Mobile-friendliness and responsive design"
+---
+
+Mobile-friendliness and responsive design
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Font Size" icon="triangle-exclamation" href="/rules/mobile/font-size">
+    Checks for readable font sizes on mobile
+  </Card>
+  <Card title="Horizontal Scroll" icon="triangle-exclamation" href="/rules/mobile/horizontal-scroll">
+    Checks for elements that may cause horizontal scrolling
+  </Card>
+  <Card title="Interstitials" icon="triangle-exclamation" href="/rules/mobile/interstitials">
+    Detects potentially intrusive mobile interstitials
+  </Card>
+  <Card title="Tap Targets" icon="triangle-exclamation" href="/rules/mobile/tap-targets">
+    Checks for properly sized touch targets
+  </Card>
+  <Card title="Viewport Meta" icon="circle-exclamation" href="/rules/mobile/viewport">
+    Checks for proper viewport meta tag
+  </Card>
+  <Card title="Viewport Zoom" icon="circle-exclamation" href="/rules/mobile/viewport-zoom">
+    Checks that viewport doesn't disable user zoom
+  </Card>
+</CardGroup>
+
+## Disable All Mobile Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```

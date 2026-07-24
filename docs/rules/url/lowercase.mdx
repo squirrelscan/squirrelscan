@@ -1,0 +1,42 @@
+---
+title: "URL Lowercase"
+description: "Checks that URLs are lowercase"
+---
+
+Checks that URLs are lowercase
+
+| | |
+|---|---|
+| **Rule ID** | `url/lowercase` |
+| **Category** | [URL Structure](/rules/url) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+URLs should be lowercase to prevent duplicate content issues. Most servers treat /Page and /page as different URLs, creating duplicates. Always use lowercase URLs and redirect uppercase variants. Configure your server or CMS to auto-lowercase URLs. This also improves URL consistency and readability.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["url/lowercase"]
+```
+
+### Disable all URL Structure rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["url/lowercase"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "MIME Type Validation"
+description: "Detects Content-Type header mismatches with file extensions"
+---
+
+Detects Content-Type header mismatches with file extensions
+
+| | |
+|---|---|
+| **Rule ID** | `content/mime-type` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Incorrect MIME types break resource loading and waste crawl budget. Common issues include .js files served as text/html, images without image/* type, CSS without text/css. Fix server configuration to serve correct Content-Type headers. For Apache use .htaccess, for nginx use mime.types config.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/mime-type"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/mime-type"]
+disable = ["*"]
+```

@@ -1,0 +1,72 @@
+---
+title: "AI Content Detection"
+description: "Detects if content appears to be AI-generated"
+---
+
+<Warning>**Beta Rule** - This rule is experimental and may change significantly in future releases.</Warning>
+
+Detects if content appears to be AI-generated
+
+| | |
+|---|---|
+| **Rule ID** | `ai/ai-content` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+| **Default** | Disabled |
+
+## Prerequisites
+
+This rule requires an OpenRouter API key:
+
+```bash
+export OPENROUTER_API_KEY=your_key_here
+```
+
+## Solution
+
+This rule detects content that may be AI-generated. While AI content isn't inherently bad, search engines may scrutinize it more heavily. If flagged, review the content for quality regardless of how it was created. Ensure it provides genuine value, is factually accurate, and has a human editorial review. Add personal insights, original research, or unique perspectives to differentiate from generic AI output.
+
+## Detection Criteria
+
+The rule analyzes text for signs of AI generation:
+
+- Repetitive sentence structures
+- Overly formal or generic language
+- Lack of personal voice or unique perspective
+- Perfect grammar but bland style
+- Common AI phrases ("In conclusion", "It's important to note", etc.)
+
+## Scoring
+
+| Score | Status | Meaning |
+|-------|--------|---------|
+| 0-40 | Pass | Content appears human-written |
+| 41-60 | Warning | Content may have AI elements |
+| 61-100 | Warning | Content appears AI-generated |
+
+<Note>High AI scores result in warnings, not failures. AI-generated content isn't necessarily bad - this is informational only.</Note>
+
+## Enable / Disable
+
+### Enable this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ai/ai-content"]
+```
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/ai-content"]
+```
+
+### Enable all AI rules
+
+```toml squirrel.toml
+[rules]
+enable = ["ai/*"]
+```

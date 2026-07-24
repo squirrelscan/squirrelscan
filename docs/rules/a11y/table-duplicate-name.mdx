@@ -1,0 +1,42 @@
+---
+title: "Table Duplicate Name"
+description: "Checks that data tables have unique accessible names"
+---
+
+Checks that data tables have unique accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/table-duplicate-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Solution
+
+When a page has multiple data tables, each should have a unique accessible name to help users distinguish between them. Use `<caption>`, aria-label, or aria-labelledby with unique text for each table.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/table-duplicate-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/table-duplicate-name"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Definition List Structure"
+description: "Checks that definition lists contain only dt and dd elements"
+---
+
+Checks that definition lists contain only dt and dd elements
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/definition-list` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Definition lists (`<dl>`) should only contain `<dt>` (term) and `<dd>` (description) elements as direct children. Optionally, they can be wrapped in `<div>` for styling. Do not put other elements like `<p>`, `<span>`, or `<li>` directly inside `<dl>`.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/definition-list"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/definition-list"]
+disable = ["*"]
+```

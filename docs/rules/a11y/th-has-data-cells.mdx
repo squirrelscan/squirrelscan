@@ -1,0 +1,42 @@
+---
+title: "TH Has Data Cells"
+description: "Checks that table headers have associated data cells"
+---
+
+Checks that table headers have associated data cells
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/th-has-data-cells` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Each `<th>` element should be associated with at least one `<td>` data cell in the same row or column. Orphaned header cells without data cells usually indicate the table is being misused for layout purposes. If the table is for layout, add role='presentation'. Otherwise, ensure every header has corresponding data cells.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/th-has-data-cells"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/th-has-data-cells"]
+disable = ["*"]
+```

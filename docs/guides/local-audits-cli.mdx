@@ -1,0 +1,176 @@
+---
+title: "Local audits with the CLI"
+description: "Run a full website audit from your terminal with no account and no credits, then read the report in any format"
+icon: "terminal"
+---
+
+Local audits are free, unlimited, and need no login. The `squirrel` CLI crawls a site on your machine and runs the deterministic audit rules against it, so you can check a live URL or your own localhost dev server without spending a thing. By the end of this guide you will have installed the CLI, run an audit, and read the report in the format that suits you.
+
+<Info>
+Local audits run the deterministic rules only. The cloud-backed rules (AI analysis, technology detection, browser rendering) need an account and credits: see [Cloud audits](/guides/cloud-audits). Everything below works logged out.
+</Info>
+
+## Install the CLI
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+This drops the binary at `~/.local/bin/squirrel` and adds it to your PATH. Confirm it works:
+
+```bash
+squirrel self doctor
+```
+
+Full install detail, including Alpine and musl notes, is in the [Quickstart](/quickstart).
+
+## Run your first audit
+
+Point `squirrel audit` at any URL:
+
+```bash
+squirrel audit https://example.com
+```
+
+You get a crawl and a scored report in the terminal:
+
+```
+✓ Audited 12 pages in 2.1s
+
+──────────────────────────────────────────────────
+SQUIRRELSCAN REPORT
+https://example.com • 12 pages • 72/100 (C)
+──────────────────────────────────────────────────
+
+Core SEO (1 error, 3 warnings)
+  core/meta-description Meta Description (error)
+    ✗ meta-description: Missing meta description
+      → /about
+      → /contact
+
+──────────────────────────────────────────────────
+87 passed • 12 warnings • 3 failed
+──────────────────────────────────────────────────
+```
+
+Logged out, audits default to the `quick` coverage mode: a fast scan of the seed URL plus sitemaps, with no cloud calls and no credit spend. For a wider crawl, raise the page limit or switch coverage:
+
+```bash
+# Crawl up to 200 pages
+squirrel audit https://example.com -m 200
+
+# Smart sampling across URL patterns
+squirrel audit https://example.com -C surface
+```
+
+The three coverage modes are `quick`, `surface`, and `full`. See [`squirrel audit`](/cli/audit#coverage-modes) for what each one crawls.
+
+<Tip>
+Auditing a site you are building? Point it at your dev server: `squirrel audit http://localhost:3000`. Local audits work the same against localhost, so you can catch issues before they ship. See [Projects](/projects) for keeping dev and production histories separate.
+</Tip>
+
+## Set project defaults with a config file
+
+Running the same audit repeatedly? Create a `squirrel.toml` so you do not retype flags:
+
+```bash
+squirrel init
+```
+
+This writes a config with sensible defaults. Edit it to pin the crawl scope and rule selection for the project:
+
+```toml squirrel.toml
+[crawler]
+max_pages = 100
+include = ["/blog/*"]
+exclude = ["/admin/*"]
+
+[rules]
+enable = ["*"]
+disable = ["content/reading-level"]
+```
+
+Now every `squirrel audit` in this folder uses those settings. See the [Configuration reference](/configuration) for all options, and [`squirrel init`](/cli/init) for the command flags.
+
+## Read the report your way
+
+The console output is for humans. For everything else, pick a format with `-f` and, optionally, write it to a file with `-o`:
+
+| Format | Flag | Use it for |
+|--------|------|------------|
+| `console` | (default) | Reading in the terminal |
+| `json` | `-f json` | CI pipelines and scripts |
+| `markdown` | `-f markdown` | Dropping into a README or PR |
+| `llm` | `-f llm` | Feeding an AI agent (compact, token-efficient) |
+| `html` | `-f html` | A visual report you open in a browser |
+| `text` | `-f text` | Plain text for logs and email |
+
+```bash
+# Machine-readable JSON to a file
+squirrel audit https://example.com -f json -o report.json
+
+# A visual HTML report
+squirrel audit https://example.com -f html -o report.html
+```
+
+Every audit is stored in a local database, so you can re-read it later without re-crawling. The [`squirrel report`](/cli/report) command queries that history:
+
+```bash
+squirrel report --list                    # recent audits
+squirrel report example.com               # latest for a domain
+squirrel report --severity error          # errors only
+squirrel report --category core,links     # filter by category
+```
+
+For how the health score and grade are calculated, see [Reports and scoring](/reports).
+
+## Use it inside a coding agent, locally
+
+You do not need the cloud to put audits in front of an agent. Three local options, no login required:
+
+**Pipe the report straight in.** The `llm` format is built for this:
+
+```bash
+squirrel audit https://example.com --format llm | claude "prioritize these fixes"
+```
+
+**Run the local MCP server.** `squirrel mcp` starts a stdio MCP server that runs the audit engine on your machine, so an agent can call audits as tools while working offline:
+
+```bash
+squirrel mcp
+```
+
+Local MCP audits are free and need no account. Setup and the tool list are in [`squirrel mcp`](/cli/mcp) and the [Hosted MCP server](/developers/mcp#local-mcp-server) guide.
+
+**Install the skill.** `squirrel skills install` teaches your agent the audit workflow so a prompt like "audit this site and fix the issues" just works. See [AI agent integration](/developers/agents).
+
+<Tip>
+To fully close the loop, where the agent fixes issues, you redeploy, and it re-audits until they clear, use the hosted MCP with the shared issue tracker: [Fix your website with an AI agent](/guides/fix-your-site-with-an-ai-agent).
+</Tip>
+
+## Gate CI on a local audit
+
+Because it needs no login, a local audit is a clean CI check. `--fail-on` makes the command exit non-zero when a threshold trips:
+
+```bash
+squirrel audit https://staging.example.com --fail-on 'score<90' --fail-on 'severity>=error'
+```
+
+Quote each expression, since shells read bare `<` and `>` as redirection. The full recipe for GitHub Actions, GitLab, and generic runners is in the [CI guide](/guides/ci).
+
+## Related
+
+- [`squirrel audit`](/cli/audit) - every flag and coverage mode
+- [`squirrel report`](/cli/report) - query and export stored audits
+- [Reports and scoring](/reports) - how the health score works
+- [Cloud audits](/guides/cloud-audits) - add AI analysis, rendering, and a shared tracker
+- [AI agent integration](/developers/agents) - pipe, skill, and MCP workflows

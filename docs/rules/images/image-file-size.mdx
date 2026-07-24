@@ -1,0 +1,59 @@
+---
+title: "Image File Size Too Large"
+description: "Checks for image files that exceed recommended size limits"
+---
+
+Checks for image files that exceed recommended size limits
+
+| | |
+|---|---|
+| **Rule ID** | `images/image-file-size` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Large images slow down page loads and impact Core Web Vitals. Compress oversized images, use modern formats (WebP/AVIF), and resize images to the display dimensions. Consider responsive images with srcset to serve smaller files on mobile.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warn_bytes` | number | `204800` (200KB) | Byte size to trigger warning |
+| `error_bytes` | number | `1048576` (1MB) | Byte size to trigger error |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."images/image-file-size"]
+warn_bytes = 204800
+error_bytes = 1048576
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/image-file-size"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/image-file-size"]
+disable = ["*"]
+```

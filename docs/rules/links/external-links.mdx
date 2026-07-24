@@ -1,0 +1,42 @@
+---
+title: "External Links"
+description: "Reports on external link count"
+---
+
+Reports on external link count
+
+| | |
+|---|---|
+| **Rule ID** | `links/external-links` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+External links provide additional resources for users and signal content relevance to search engines. They're normal and healthy for most content pages. This check is informational: external links aren't inherently problematic. Ensure external links go to reputable sources and open in new tabs when appropriate. Use rel="nofollow" for untrusted or paid links. Avoid excessive external links that distract from your content.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/external-links"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/external-links"]
+disable = ["*"]
+```

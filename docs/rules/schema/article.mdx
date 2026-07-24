@@ -1,0 +1,42 @@
+---
+title: "Article Schema"
+description: "Validates Article schema required properties"
+---
+
+Validates Article schema required properties
+
+| | |
+|---|---|
+| **Rule ID** | `schema/article` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Article schema helps search engines understand news and blog content. Required: headline, author (Person with name), datePublished. Recommended: dateModified, image (ImageObject), publisher (Organization). Use Article for general content, NewsArticle for news, BlogPosting for blogs. Ensure author links to real author pages.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/article"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/article"]
+disable = ["*"]
+```

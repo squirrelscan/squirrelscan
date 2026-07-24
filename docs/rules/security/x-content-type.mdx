@@ -1,0 +1,42 @@
+---
+title: "X-Content-Type-Options"
+description: "Checks for MIME type sniffing protection"
+---
+
+Checks for MIME type sniffing protection
+
+| | |
+|---|---|
+| **Rule ID** | `security/x-content-type` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+X-Content-Type-Options: nosniff prevents browsers from MIME-sniffing responses, which could lead to security vulnerabilities. This is especially important for sites that allow file uploads or serve user-generated content. Simply add the header: X-Content-Type-Options: nosniff. This has no downside and improves security.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/x-content-type"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/x-content-type"]
+disable = ["*"]
+```

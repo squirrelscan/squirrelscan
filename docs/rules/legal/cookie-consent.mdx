@@ -1,0 +1,42 @@
+---
+title: "Cookie Consent"
+description: "Checks for cookie consent mechanism"
+---
+
+Checks for cookie consent mechanism
+
+| | |
+|---|---|
+| **Rule ID** | `legal/cookie-consent` |
+| **Category** | [Legal Compliance](/rules/legal) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 4/10 |
+
+## Solution
+
+Cookie consent is required under GDPR and ePrivacy regulations for EU users. Implement a consent banner that: allows users to accept/reject non-essential cookies, doesn't pre-check optional cookies, stores consent preferences, and blocks tracking cookies until consent. Use tools like CookieYes, OneTrust, or Cookiebot.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/cookie-consent"]
+```
+
+### Disable all Legal Compliance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["legal/cookie-consent"]
+disable = ["*"]
+```

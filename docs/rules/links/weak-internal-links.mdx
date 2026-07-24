@@ -1,0 +1,57 @@
+---
+title: "Weak Internal Links"
+description: "Detects pages with only 1 dofollow internal link pointing to them"
+---
+
+Detects pages with only 1 dofollow internal link pointing to them
+
+| | |
+|---|---|
+| **Rule ID** | `links/weak-internal-links` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Solution
+
+Pages with only a single internal link have weak internal linking support and may struggle to rank. Search engines use internal links to understand page importance and distribute link equity. Add contextual links from related content, include in navigation or sidebar, or link from category/hub pages to strengthen internal link profiles.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `excludePatterns` | unknown | `undefined` | URL patterns to exclude from weak link detection |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."links/weak-internal-links"]
+excludePatterns = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/weak-internal-links"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/weak-internal-links"]
+disable = ["*"]
+```

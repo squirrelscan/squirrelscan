@@ -1,0 +1,42 @@
+---
+title: "Noindex in Sitemap"
+description: "Checks for noindexed pages listed in sitemap"
+---
+
+Checks for noindexed pages listed in sitemap
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/noindex-in-sitemap` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Pages with noindex meta tags should not be in your sitemap. Sitemaps tell search engines which pages to index, while noindex tells them not to. Having both sends mixed signals. Remove noindexed pages from your sitemap, or remove the noindex directive if you want them indexed. Use a sitemap generator that respects robots directives.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/noindex-in-sitemap"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/noindex-in-sitemap"]
+disable = ["*"]
+```

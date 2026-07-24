@@ -1,0 +1,80 @@
+---
+title: "Weak Caching (site-wide)"
+description: "Flags sites where most pages lack caching freshness, validators, or compression"
+---
+
+Flags sites where most pages lack caching freshness, validators, or compression.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/bad-caching` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## What it checks
+
+Where [`perf/cache-headers`](/rules/perf/cache-headers) and
+[`perf/compression`](/rules/perf/compression) report per page, this rule looks at
+the **whole site** and flags systemic weakness: caching mistakes that cost you
+on every repeat visit and behind every CDN. Across all crawled HTML responses it
+measures the fraction of pages that:
+
+- declare a caching **freshness lifetime** (`Cache-Control: max-age`/`s-maxage`
+  or `Expires`, and not `no-store`),
+- expose a **validator** (`ETag` or `Last-Modified`) for cheap revalidation, and
+- serve compressible bodies with **gzip/Brotli/zstd** compression.
+
+Each dimension reports `pass`/`warn`/`fail` with the ratio and example pages.
+
+## Solution
+
+Set `Cache-Control` with an appropriate `max-age` on every response (short for
+HTML, long + `immutable` for hashed static assets), expose an `ETag` or
+`Last-Modified` for cheap revalidation, and enable gzip/Brotli for text
+responses. Consistent caching across the whole site cuts repeat-visit load times
+and origin/CDN cost.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_freshness_ratio` | number | `0.6` | Minimum fraction of pages that should declare a freshness lifetime |
+| `min_validator_ratio` | number | `0.6` | Minimum fraction of pages that should expose a validator (ETag or Last-Modified) |
+| `min_compression_ratio` | number | `0.8` | Minimum fraction of compressible responses that should be gzip/Brotli compressed |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."perf/bad-caching"]
+min_freshness_ratio = 0.6
+min_validator_ratio = 0.6
+min_compression_ratio = 0.8
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/bad-caching"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/bad-caching"]
+disable = ["*"]
+```

@@ -1,0 +1,36 @@
+---
+title: "Authority Signals"
+description: "AI assessment of per-page authority signals: authorship, citations, and outbound references"
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+
+AI assessment of per-page authority signals: authorship, citations, and outbound references.
+
+| | |
+|---|---|
+| **Rule ID** | `eeat/authority-signals` |
+| **Category** | [E-E-A-T](/rules/eeat) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+| **Default** | Enabled |
+
+## What it checks
+
+The cloud service reads each page and reports whether an author is attributed, how many claims are backed by citations, and how many outbound references the page makes. A page with **no author attribution and zero citations** warns; otherwise the rule passes and lists the detected signals.
+
+Unlike the pattern-based [`eeat/author-byline`](/rules/eeat/author-byline) and [`eeat/citations`](/rules/eeat/citations) rules, this is a semantic assessment - it understands attribution and sourcing in context rather than matching markup patterns.
+
+## Solution
+
+Pages that demonstrate who wrote them and what their claims rest on earn more trust from readers, search engines, and AI assistants. Add a visible author byline (with credentials where relevant), cite sources for factual claims, and link out to authoritative references.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/authority-signals"]
+```

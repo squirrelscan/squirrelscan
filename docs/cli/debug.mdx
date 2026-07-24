@@ -1,0 +1,166 @@
+---
+title: "Debug & Tracing"
+icon: "bug"
+description: "Configure debug logging and performance tracing"
+---
+
+SquirrelScan writes debug logs to `~/.squirrel/logs/` for diagnosing issues. By default, only errors are logged. Increase the log level for more detail.
+
+## Log Levels
+
+| Level | What's Logged |
+|-------|---------------|
+| `error` | Exceptions, command failures, fatal errors (default) |
+| `warn` | + warnings, recoverable issues |
+| `info` | + command start/end, crawl lifecycle events |
+| `debug` | + every HTTP request, rule execution details |
+
+## Configuration
+
+### Settings File
+
+```bash
+squirrel config set log_level debug
+```
+
+Valid values: `error`, `warn`, `info`, `debug`
+
+### Environment Variable
+
+Override the setting for a single run:
+
+```bash
+SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com
+```
+
+The environment variable takes precedence over the settings file.
+
+## Console Debug Flag
+
+The `--debug` flag shows debug messages in the console, independent of file logging:
+
+```bash
+squirrel audit https://example.com --debug
+```
+
+This is useful for real-time debugging without changing your log level setting.
+
+## Log Files
+
+Logs are written to `~/.squirrel/logs/`:
+
+| File | Contents |
+|------|----------|
+| `debug.log` | Current log file (all enabled levels) |
+| `trace.log` | Performance traces (when `--trace` enabled) |
+| `debug.log.*.gz` | Rotated/compressed old logs |
+
+### Log Format
+
+```
+2025-01-10T14:30:45.123Z [debug] [request] url="https://example.com" status=200 loadTimeMs=120
+2025-01-10T14:30:45.200Z [info] ========== COMMAND END: audit (success, 5432ms) ==========
+```
+
+## Log Rotation
+
+Logs rotate automatically:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `log_compress_after_days` | `14` | Compress `.log` files older than N days |
+| `log_delete_after_days` | `60` | Delete `.gz` files older than N days |
+
+Size-based rotation also triggers at 10MB to prevent runaway growth.
+
+Configure via settings:
+
+```bash
+squirrel config set log_compress_after_days 7
+squirrel config set log_delete_after_days 30
+```
+
+## Performance Tracing
+
+For performance analysis, enable tracing:
+
+```bash
+squirrel audit https://example.com --trace
+```
+
+This writes timing data to `~/.squirrel/logs/trace.log`:
+
+```
+2025-01-10T14:30:45.123Z [trace] [fetch:https://example.com] duration=145.32ms
+2025-01-10T14:30:45.300Z [trace] [rule:meta/title] duration=2.15ms {"checks":1}
+```
+
+Traces include:
+- HTTP request timing
+- Rule execution duration
+- Crawl phase boundaries
+
+## Sensitive Data Redaction
+
+Logs automatically redact sensitive data:
+
+| Pattern | Example Before | Example After |
+|---------|----------------|---------------|
+| URL credentials | `https://user:pass@api.com` | `https://[REDACTED]@api.com` |
+| API keys in URLs | `?api_key=secret123` | `?api_key=[REDACTED]` |
+| Bearer tokens | `Bearer eyJ...` | `Bearer [REDACTED]` |
+| Basic auth | `Basic dXNlcjpwYXNz` | `Basic [REDACTED]` |
+
+Headers like `Authorization`, `Cookie`, and `X-Api-Key` are also redacted.
+
+<Warning>
+While redaction covers common patterns, avoid logging highly sensitive data. Review logs before sharing.
+</Warning>
+
+## Sharing Logs for Support
+
+When reporting issues, include relevant log excerpts:
+
+```bash
+# View recent logs
+tail -100 ~/.squirrel/logs/debug.log
+
+# Copy to clipboard (macOS)
+tail -100 ~/.squirrel/logs/debug.log | pbcopy
+```
+
+For full context, attach the log file to your GitHub issue.
+
+## Examples
+
+### Diagnose a Failed Crawl
+
+```bash
+# Run with debug logging
+SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com
+
+# Check what happened
+cat ~/.squirrel/logs/debug.log | grep -i error
+```
+
+### Profile Slow Audits
+
+```bash
+# Enable tracing
+squirrel audit https://example.com --trace
+
+# Find slow requests
+grep "duration=" ~/.squirrel/logs/trace.log | sort -t= -k2 -rn | head
+```
+
+### Temporary Verbose Mode
+
+```bash
+# One-off debug session
+SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com --debug
+```
+
+## Related
+
+- [Configuration](/configuration) - All settings
+- [squirrel config](/cli/config) - Manage settings

@@ -1,0 +1,42 @@
+---
+title: "Video Schema"
+description: "Checks for VideoObject schema on pages with video"
+---
+
+Checks for VideoObject schema on pages with video
+
+| | |
+|---|---|
+| **Rule ID** | `video/video-schema` |
+| **Category** | [Video](/rules/video) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Add VideoObject schema to pages with video content for rich results. Required: name, description, thumbnailUrl, uploadDate. Recommended: duration, contentUrl, embedUrl. Schema enables video carousels and previews in search results. Test with Google's Rich Results Test.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["video/video-schema"]
+```
+
+### Disable all Video rules
+
+```toml squirrel.toml
+[rules]
+disable = ["video/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["video/video-schema"]
+disable = ["*"]
+```

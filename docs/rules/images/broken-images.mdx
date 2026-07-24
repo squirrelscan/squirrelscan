@@ -1,0 +1,42 @@
+---
+title: "Broken Images"
+description: "Checks for images returning 404 errors"
+---
+
+Checks for images returning 404 errors
+
+| | |
+|---|---|
+| **Rule ID** | `images/broken-images` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Solution
+
+Broken images hurt user experience and can indicate neglected content. Fix 404 images by: updating the src URL, restoring the missing file, or removing the img element. Use automated monitoring to detect broken images. Consider implementing fallback images with onerror handlers.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/broken-images"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/broken-images"]
+disable = ["*"]
+```

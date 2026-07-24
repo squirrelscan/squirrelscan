@@ -1,0 +1,42 @@
+---
+title: "Access Keys"
+description: "Checks that accesskey values are unique"
+---
+
+Checks that accesskey values are unique
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/accesskeys` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Access keys provide keyboard shortcuts for elements. Duplicate access keys cause only one to work, confusing users. Ensure each accesskey value is unique. Consider whether access keys are necessary at all, as they can conflict with browser/OS shortcuts.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/accesskeys"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/accesskeys"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "ARIA Toggle Field Name"
+description: "Checks that toggle fields (checkbox, radio, switch) have accessible names"
+---
+
+Checks that toggle fields (checkbox, radio, switch) have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-toggle-field-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Toggle fields need accessible names to describe what they control. Use `<label for='id'>`, aria-label, aria-labelledby, or wrap in `<label>`. Example: `<label>``<input type='checkbox'>` Subscribe to newsletter`</label>`
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-toggle-field-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-toggle-field-name"]
+disable = ["*"]
+```

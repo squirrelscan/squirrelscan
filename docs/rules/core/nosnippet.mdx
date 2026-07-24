@@ -1,0 +1,49 @@
+---
+title: "Nosnippet Directive"
+description: "Detects pages preventing search engine snippets"
+---
+
+Detects pages preventing search engine snippets
+
+| | |
+|---|---|
+| **Rule ID** | `core/nosnippet` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 7/10 |
+
+## Solution
+
+The nosnippet directive prevents search engines from showing descriptions in search results, severely harming click-through rates.
+
+Found in: `<meta name="robots" content="nosnippet">`
+Or: `<meta name="robots" content="max-snippet:0">`
+
+This is almost always unintentional. Remove unless you specifically need to hide snippets (e.g., login pages, legal content).
+
+Note: max-snippet:N where N > 0 is fine (sets snippet character limit).
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/nosnippet"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/nosnippet"]
+disable = ["*"]
+```

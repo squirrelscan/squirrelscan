@@ -1,0 +1,61 @@
+---
+title: "Dead-End Pages"
+description: "Pages with no outgoing internal links, potentially trapping users"
+---
+
+Pages with no outgoing internal links, potentially trapping users
+
+| | |
+|---|---|
+| **Rule ID** | `links/dead-end-pages` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Solution
+
+Add navigation links or related content links to help users continue browsing. Internal links improve user experience and help search engines discover content.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `excludePatterns` | unknown | `undefined` |  |
+| `minLinks` | unknown | `undefined` |  |
+| `countAnchorLinks` | unknown | `undefined` | Count anchor links (#section) as valid internal links (useful for single-page apps) |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."links/dead-end-pages"]
+excludePatterns = undefined
+minLinks = undefined
+countAnchorLinks = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/dead-end-pages"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/dead-end-pages"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "ARIA Allowed Attributes"
+description: "Checks that ARIA attributes are allowed on their elements"
+---
+
+Checks that ARIA attributes are allowed on their elements
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-allowed-attr` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Some ARIA attributes are not appropriate for certain roles or elements. For example, role='presentation' should not have aria-label since it removes semantic meaning. Remove conflicting attributes or reconsider the element's role.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-allowed-attr"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-allowed-attr"]
+disable = ["*"]
+```

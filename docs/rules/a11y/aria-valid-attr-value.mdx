@@ -1,0 +1,42 @@
+---
+title: "ARIA Valid Attribute Values"
+description: "Checks for valid values in ARIA attributes"
+---
+
+Checks for valid values in ARIA attributes
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-valid-attr-value` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Ensure ARIA attribute values match the expected type. Boolean attributes should be 'true' or 'false'. Enumerated attributes like aria-current have specific allowed values. Numeric attributes like aria-level must be numbers. Check the WAI-ARIA specification for valid values.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-valid-attr-value"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-valid-attr-value"]
+disable = ["*"]
+```

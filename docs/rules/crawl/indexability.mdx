@@ -1,0 +1,42 @@
+---
+title: "Indexability Check"
+description: "Identifies pages blocked from search engine indexing"
+---
+
+Identifies pages blocked from search engine indexing
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/indexability` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+If this page should be indexed by search engines, remove 'noindex' from robots meta tag or X-Robots-Tag header. If the page is intentionally blocked (e.g., admin pages, thank-you pages), this is expected behavior.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/indexability"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/indexability"]
+disable = ["*"]
+```

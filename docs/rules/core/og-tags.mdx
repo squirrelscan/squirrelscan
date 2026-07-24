@@ -1,0 +1,42 @@
+---
+title: "Open Graph Tags"
+description: "Validates Open Graph meta tags for social sharing"
+---
+
+Validates Open Graph meta tags for social sharing
+
+| | |
+|---|---|
+| **Rule ID** | `core/og-tags` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Open Graph tags control how your content appears when shared on Facebook, LinkedIn, and other platforms. Required tags: og:title, og:description, og:image, og:url, and og:type. Add OG tags in your page head. Use images at least 1200x630 pixels for best display. Keep og:title under 60 characters and og:description under 200. Test shares using Facebook's Sharing Debugger tool.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/og-tags"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/og-tags"]
+disable = ["*"]
+```

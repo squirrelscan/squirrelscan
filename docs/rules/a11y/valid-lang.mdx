@@ -1,0 +1,42 @@
+---
+title: "Valid Lang Attributes"
+description: "Checks that all lang attributes on the page have valid values"
+---
+
+Checks that all lang attributes on the page have valid values
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/valid-lang` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+All lang attributes should use valid BCP 47 language tags. This includes lang attributes on any element, not just `<html>`. Use lang to mark up content in a different language from the page default.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/valid-lang"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/valid-lang"]
+disable = ["*"]
+```

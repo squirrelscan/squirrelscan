@@ -1,0 +1,105 @@
+---
+title: "Cloud Settings"
+icon: "cloud"
+description: "Configure cloud features, spend limits, and browser rendering"
+---
+
+The `[cloud]` section of `squirrel.toml` controls [cloud features](/cloud): whether they run, how much an audit may spend, and whether pages are rendered with a cloud browser.
+
+All cloud settings are no-ops when you're not logged in - cloud rules simply report `skipped`.
+
+## Options
+
+```toml squirrel.toml
+[cloud]
+enabled = true                # master switch for all cloud features
+max_credits_per_audit = 1000  # hard spend cap per audit; 0 = unlimited
+confirm_threshold = 50        # estimates above this prompt for confirmation
+batch_size = 20               # pages per cloud service request
+editor_summary = true         # auto-generate an editor's summary (included in the audit base)
+# rendering                   # omit = auto (render when logged in); set "http" or "browser" to force
+render_concurrency = 6        # concurrent browser-render jobs (1-10)
+publish = true                # auto-publish to your dashboard when signed in
+visibility = "unlisted"       # default visibility for published reports
+```
+
+### `enabled`
+
+**Default:** `true`
+
+Master switch. Set to `false` to disable all cloud calls for this project - cloud rules report `skipped`, publishing and rendering are unaffected by other settings.
+
+### `max_credits_per_audit`
+
+**Default:** `1000`
+
+Hard cap on credits a single audit may spend. When the estimate exceeds the cap, cloud work is truncated deterministically and the rules that didn't run report `skipped` with reason `credit-cap-reached`. Set to `0` for unlimited.
+
+### `confirm_threshold`
+
+**Default:** `50`
+
+In an interactive terminal, an estimated spend above this value prompts for confirmation before the cloud phase runs. Set to `0` to always confirm. Non-interactive runs (CI, agents, pipes) never prompt - they proceed bounded by `max_credits_per_audit`. Pass `--yes` to skip the prompt explicitly.
+
+### `batch_size`
+
+**Default:** `20` (also the maximum)
+
+Pages per request to per-page cloud services. Lower it only if you hit request-size limits with very heavy pages.
+
+### `editor_summary`
+
+**Default:** `true`
+
+Auto-generate an [editor's summary](/cloud/editor-summary) - an exec-email-style narrative plus point-form big-ticket items - at the top of the report. Runs on any signed-in plan, free or Pro; included in the audit base charge. Set to `false` to disable it for this project.
+
+### `render`
+
+**Default:** unset (auto)
+
+Render strategy: the canonical control (supersedes `rendering`). Leave it unset and the strategy is decided per coverage: **quick** crawls HTTP-first and renders only what needs it; **surface/full** render every page (logged-in only, after a one-time consent prompt). Set it explicitly to pin behavior:
+
+- `"off"` - plain HTTP only; never render, never spend render credits
+- `"auto"` - **HTTP-first**: render *only* pages detected as client-side-rendered shells; static / server-rendered pages cost zero render credits
+- `"all"` - render every HTML page at **2 credits per page**
+
+`robots.txt`, XML sitemaps, and non-HTML assets are never rendered at any level; `"all"` means every crawled **HTML page**.
+
+```toml squirrel.toml
+[cloud]
+render = "auto"   # only render the pages that actually need a browser
+```
+
+The `--render-mode off|auto|all` flag on `squirrel audit` overrides this for a single run (`--render` / `--http` are shorthands for `all` / `off`). See the [browser rendering guide](/guides/browser-rendering).
+
+### `rendering` (deprecated)
+
+**Default:** unset (auto)
+
+Legacy fetch-mode toggle, kept for back-compat. Maps onto `render`: `"http"` → `off`, `"browser"` → `all`. Prefer `render`; if both are set, `render` wins.
+
+### `render_concurrency`
+
+**Default:** `6` (max `10`)
+
+How many cloud browser-render jobs run at once during a rendered crawl. Render jobs run in squirrelscan's cloud, so the usual per-host politeness delay doesn't apply to job submission - but the render workers do fetch your site, hence the cap. Raise it to speed up large rendered audits; lower it if your origin is sensitive to parallel traffic.
+
+Your plan also caps this value: **Free runs 1 render at a time, Pro runs 5, Team runs 10**. The CLI checks your plan at the start of each rendered crawl and uses the lower of the two - a config value above your plan limit isn't an error, it just gets clamped.
+
+### `publish`
+
+**Default:** `true`
+
+Auto-publish the audit report to your [dashboard](/dashboard) when you're **signed in and online** - independent of cloud rendering or enrichment. **Publishing is included in the audit base charge**, whatever the visibility. Logged-out and `--offline` runs never publish. Set to `false` to never auto-publish for this project; you can still publish a single run with `--publish` (it overrides this). Skip publishing one run with `--no-publish`.
+
+### `visibility`
+
+**Default:** `"unlisted"`
+
+Default visibility for published reports: `"public"` (listed and searchable), `"unlisted"` (accessible via direct link only), or `"private"` (only you, when logged in). Override per-run with `--visibility`. Publishing is included in the audit base charge, whatever the visibility.
+
+## Related
+
+- [Cloud overview](/cloud) - what cloud features add
+- [Credits & Pricing](/cloud/credits) - pricing and spend controls in depth
+- [Cloud rules](/cloud/rules) - which rules use cloud services

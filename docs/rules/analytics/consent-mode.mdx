@@ -1,0 +1,42 @@
+---
+title: "Consent Mode"
+description: "Checks for Google Consent Mode v2 implementation"
+---
+
+Checks for Google Consent Mode v2 implementation
+
+| | |
+|---|---|
+| **Rule ID** | `analytics/consent-mode` |
+| **Category** | [Analytics](/rules/analytics) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 4/10 |
+
+## Solution
+
+Google Consent Mode v2 is required for Google Ads in the EU/EEA (March 2024). It allows Google tags to adjust behavior based on user consent. Implement with `gtag('consent', 'default', {...})` before loading Google tags. Set ad_storage, analytics_storage, ad_user_data, and ad_personalization. Update on user consent.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["analytics/consent-mode"]
+```
+
+### Disable all Analytics rules
+
+```toml squirrel.toml
+[rules]
+disable = ["analytics/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["analytics/consent-mode"]
+disable = ["*"]
+```

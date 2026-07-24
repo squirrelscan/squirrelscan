@@ -1,0 +1,61 @@
+---
+title: "Keyword Stuffing"
+description: "Detects excessive keyword repetition in content"
+---
+
+Detects excessive keyword repetition in content
+
+| | |
+|---|---|
+| **Rule ID** | `content/keyword-stuffing` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Keyword stuffing is repeating words unnaturally to manipulate rankings. Search engines penalize this practice. Write naturally for users first. Use keywords where they fit naturally. Aim for 1-2% keyword density at most. Use synonyms and related terms instead of repeating the exact same phrase. Focus on providing value, not gaming algorithms.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `density_threshold` | unknown | `undefined` | Keyword density percentage threshold |
+| `min_occurrences` | unknown | `undefined` | Minimum word occurrences to flag |
+| `whitelist` | unknown | `undefined` | Words to ignore (e.g., brand name) |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."content/keyword-stuffing"]
+density_threshold = undefined
+min_occurrences = undefined
+whitelist = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/keyword-stuffing"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/keyword-stuffing"]
+disable = ["*"]
+```

@@ -1,0 +1,66 @@
+---
+title: "Image Aspect Ratio Mismatch"
+description: "Flags images whose width/height attributes conflict with their CSS box aspect ratio"
+---
+
+Flags images whose `width`/`height` attributes declare a different aspect ratio than their CSS box, which stretches or squishes the image.
+
+| | |
+|---|---|
+| **Rule ID** | `images/aspect-mismatch` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## What it detects
+
+The rule compares two aspect ratios that are both declared in the HTML:
+
+- The ratio from the `width`/`height` **attributes** (e.g. `1200x1500` = 4:5).
+- The ratio fixed by the **inline CSS**: either an explicit `width` and `height` in `px`, or an `aspect-ratio` property (e.g. `1000x750` / `aspect-ratio: 4/3` = 4:3).
+
+When the two differ by more than the tolerance (default 5%) and no `object-fit: cover/contain/scale-down/none` compensates, the image renders distorted. Images without both attribute dimensions, with only relative CSS units (`%`, `vw`), or with `height: auto` (the recommended responsive pattern) are not flagged.
+
+<Info>
+This rule catches aspect conflicts that are **declared statically** in the markup. Detecting a mismatch between an image file's *intrinsic* dimensions and its display slot (wasted cropped bytes) would require the natural image dimensions, which the audit does not decode, so that case is out of scope.
+</Info>
+
+## Solution
+
+When an image's `width`/`height` attributes describe one aspect ratio but CSS forces a different one, the image is stretched or squished. Set the `width`/`height` attributes to the image's true aspect ratio, and let CSS size it with `height: auto` (or a matching ratio). If cropping is intended, add `object-fit: cover` so the image fills the box without distortion.
+
+## Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `tolerance` | `0.05` | Allowed fractional difference between the attribute and CSS aspect ratios before flagging. |
+
+```toml squirrel.toml
+[rules."images/aspect-mismatch"]
+tolerance = 0.1
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/aspect-mismatch"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/aspect-mismatch"]
+disable = ["*"]
+```

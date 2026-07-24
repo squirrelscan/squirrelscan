@@ -1,0 +1,42 @@
+---
+title: "Charset"
+description: "Checks for proper character encoding declaration"
+---
+
+Checks for proper character encoding declaration
+
+| | |
+|---|---|
+| **Rule ID** | `core/charset` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Add `<meta charset="UTF-8">` as the first element in your `<head>` section. This tells browsers how to interpret the text on your page. UTF-8 is the standard encoding that supports all languages and special characters. Placing it first ensures browsers know the encoding before parsing any other content.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/charset"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/charset"]
+disable = ["*"]
+```

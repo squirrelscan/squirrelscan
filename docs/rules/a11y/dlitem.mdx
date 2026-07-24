@@ -1,0 +1,42 @@
+---
+title: "Definition List Item"
+description: "Checks that dt and dd elements are inside a dl"
+---
+
+Checks that dt and dd elements are inside a dl
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/dlitem` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+The `<dt>` and `<dd>` elements must be contained within a `<dl>` (definition list). Move orphaned dt/dd elements inside a `<dl>` container.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/dlitem"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/dlitem"]
+disable = ["*"]
+```

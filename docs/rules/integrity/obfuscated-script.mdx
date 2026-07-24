@@ -1,0 +1,48 @@
+---
+title: "Obfuscated Inline Script"
+description: "Detects large inline scripts with high entropy and obfuscation markers"
+---
+
+Detects large inline scripts with high entropy and obfuscation markers (eval, char-code arithmetic, anti-tamper strings) typical of injected payloads.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/obfuscated-script` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Page |
+| **Severity** | warning |
+| **Weight** | 8/10 |
+
+## How it works
+
+The rule scores inline `<script>` elements on three axes at once: **length** (the injected kit in the real incident was a single ~152KB inline blob), **Shannon entropy** (packed/encoded payloads are near-random), and **obfuscation markers** (`eval(`, `atob(`, `String.fromCharCode`, hex-mangled `_0x` identifiers, anti-tamper strings). A normal minified bundle is dense but lacks the eval/anti-tamper cues, and a small snippet never trips regardless of markers, so the rule fires only when all three line up.
+
+A lone obfuscated script is reported as **info**. It escalates to a **failure** only when another compromise signal corroborates on the same page.
+
+## Solution
+
+A large, high-entropy inline script using eval/packers or anti-tamper strings is rarely something a legitimate site ships inline. If you did not add it, treat the page as compromised: identify the file serving it, remove the injected script, scan for dropped PHP/JS, and rotate credentials. Legitimate heavy JS should be served as an external, source-mapped bundle, not an obfuscated inline blob.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/obfuscated-script"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/obfuscated-script"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Contact Page"
+description: "Checks for contact page with multiple contact methods"
+---
+
+Checks for contact page with multiple contact methods
+
+| | |
+|---|---|
+| **Rule ID** | `eeat/contact-page` |
+| **Category** | [E-E-A-T](/rules/eeat) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+A contact page with multiple contact methods builds trust. Include: email address or contact form, phone number (if applicable), physical address, and social media links. Make contact information easy to find from any page. For local businesses, include business hours. Response time expectations are also helpful.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/contact-page"]
+```
+
+### Disable all E-E-A-T rules
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["eeat/contact-page"]
+disable = ["*"]
+```

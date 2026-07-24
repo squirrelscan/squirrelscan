@@ -1,0 +1,42 @@
+---
+title: "Author Info"
+description: "Checks for author markup and attribution"
+---
+
+Checks for author markup and attribution
+
+| | |
+|---|---|
+| **Rule ID** | `content/author-info` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Author information supports E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness). Use Person schema to mark up authors with name, url, and credentials. Link to author bio pages. Display author names visibly on content. For YMYL topics (health, finance), include author qualifications. Consider using rel='author' links.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/author-info"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/author-info"]
+disable = ["*"]
+```

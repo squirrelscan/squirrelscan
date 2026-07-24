@@ -1,0 +1,65 @@
+---
+title: "Well-Known Agent Files"
+description: "Detects MCP server cards, A2A agent cards, and agent-skills manifests"
+---
+
+Detects the newer generation of `.well-known` machine-readable agent descriptors: an [MCP server card](https://datatracker.ietf.org/doc/draft-modelcontextprotocol-mcp-server-card/) (SEP-1649), an [A2A agent card](https://a2aprotocol.ai), or an agent-skills manifest. These let an agent discover, without a human in the loop, that a site exposes an MCP endpoint, an A2A-compatible agent, or a packaged set of skills it can use.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/well-known-agent` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+<Note>This is **detect-and-inform only**: adoption of these descriptors sits under 0.01% of sites as of 2026, so absence is never penalized. The rule exists to surface early adoption, not to expect it.</Note>
+
+## What it checks
+
+The audit probes, once per crawl, for:
+
+- **MCP server card**: `/.well-known/mcp/server-card.json`, plus the variants `/.well-known/mcp.json`, `/.well-known/mcp`, and `/.well-known/mcp-server`.
+- **A2A agent card**: `/.well-known/agent-card.json`.
+- **agent-skills manifest**: `/.well-known/agent-skills/index.json`.
+
+For each, it reports presence, whether the body parses as valid JSON, and a summary of declared capabilities where the schema makes that straightforward. It also checks for **`/.well-known/ai-plugin.json`**, the deprecated OpenAI plugin manifest format: if present, it's flagged as stale — the plugin system it described was retired, and a lingering manifest is more likely to confuse a modern agent than help it.
+
+## Solution
+
+If the site backs an MCP server, an A2A-compatible agent, or a packaged skill set, publish the corresponding manifest at its `.well-known` path so agents can discover it without prior knowledge of your API:
+
+```json .well-known/mcp/server-card.json
+{
+  "name": "example-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Example Co's API",
+  "endpoint": "https://example.com/mcp"
+}
+```
+
+Remove any leftover `/.well-known/ai-plugin.json` from the ChatGPT-plugins era — it's dead weight now, not a discoverability signal.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/well-known-agent"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/well-known-agent"]
+disable = ["*"]
+```

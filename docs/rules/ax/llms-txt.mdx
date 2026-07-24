@@ -1,0 +1,77 @@
+---
+title: "llms.txt"
+description: "Detects /llms.txt (and /llms-full.txt) at the domain root and checks its basic Markdown format"
+---
+
+Detects a [`llms.txt`](https://llmstxt.org) file at your domain root (and the optional `llms-full.txt` companion) and checks its basic Markdown shape. `llms.txt` is an emerging standard that gives AI agents and answer engines a curated, machine-readable map of your most useful content: a discoverability signal alongside `robots.txt` and `sitemap.xml`.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/llms-txt` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+<Note>This rule is a **recommendation**: `llms.txt` is optional, and neither its absence nor a formatting nit penalizes your score. The one exception is a fallback-masked `/llms.txt` (see SPA-fallback detection below), which fails the check — that's not a missing-but-optional signal, it's an actively misleading response.</Note>
+
+## What it checks
+
+The audit fetches `/llms.txt` and `/llms-full.txt` from your domain root **once per crawl** (next to `robots.txt`), so the check itself does no extra network requests. It then reports:
+
+- **Presence**: whether `/llms.txt` exists, its size, and whether the optional `/llms-full.txt` is also present.
+- **Alternate paths**: if the root path 404s, the rule also checks `/.well-known/llms.txt` and `/docs/llms.txt` before concluding the file is absent — some sites (especially docs subdomains and monorepo-style deployments) publish it at one of these instead of the domain root.
+- **SPA-fallback detection**: single-page-app hosts commonly rewrite every unmatched path to `index.html` with a `200` status instead of a real `404`. The rule checks the response `Content-Type` and body shape against this pattern; when `/llms.txt` matches it, that's reported as a **failed check**, not as absent — a masquerading `llms.txt` actively misleads agents (it looks present, it returns `200`, but it's the app shell, not content), which is worse than a clean 404.
+- **Format**: basic [llmstxt.org](https://llmstxt.org) conformance of `/llms.txt`:
+  - starts with an H1 title (`# Name`),
+  - contains at least one Markdown link,
+  - every link URL is well-formed (absolute or root-relative).
+
+Format problems (missing H1, no links, malformed URLs) are reported as informational notes and never fail the audit. The SPA-fallback case is the one exception: it's reported as a failed check rather than a note, since it isn't a formatting nit — it's a masquerading file that would actively mislead an agent.
+
+## Solution
+
+Add a concise `/llms.txt` at your domain root. The format is plain Markdown: an H1 title, an optional blockquote summary, then sections of links to your key pages.
+
+<Note>If your site is a single-page app that rewrites unmatched routes to `index.html`, make sure `/llms.txt` is served as a real static file with `Content-Type: text/plain` or `text/markdown` and a genuine `200` — not caught by the SPA fallback. A fallback-masked `/llms.txt` fails this check outright, since it misleads any agent that fetches it into thinking the file exists when it's actually the app shell.</Note>
+
+```markdown llms.txt
+# Example Co
+
+> Short summary of what this site is and who it's for.
+
+## Docs
+
+- [Getting started](https://example.com/docs/start): install and first run
+- [API reference](https://example.com/docs/api): endpoints and types
+
+## About
+
+- [Pricing](https://example.com/pricing): plans and limits
+```
+
+Optionally add `/llms-full.txt` with the full text of those pages inlined, for agents that want everything in one fetch.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/llms-txt"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/llms-txt"]
+disable = ["*"]
+```

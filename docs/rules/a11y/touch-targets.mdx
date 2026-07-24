@@ -1,0 +1,42 @@
+---
+title: "Touch Targets"
+description: "Checks for minimum touch target sizing hints"
+---
+
+Checks for minimum touch target sizing hints
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/touch-targets` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Touch targets (buttons, links) should be at least 44x44 pixels for accessibility (WCAG 2.5.5) and usability. Increase size with padding rather than just increasing font size. Ensure at least 8px spacing between adjacent targets. For inline links in text, provide sufficient line-height. This helps users with motor impairments and improves mobile usability for everyone.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/touch-targets"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/touch-targets"]
+disable = ["*"]
+```

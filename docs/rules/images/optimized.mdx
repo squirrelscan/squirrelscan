@@ -1,0 +1,42 @@
+---
+title: "Image Optimization"
+description: "Checks for image optimization indicators"
+---
+
+Checks for image optimization indicators
+
+| | |
+|---|---|
+| **Rule ID** | `images/optimized` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 4/10 |
+
+## Solution
+
+Optimize images to reduce file sizes without visible quality loss. Use tools like Squoosh, ImageOptim, or TinyPNG. Consider using an image CDN (Cloudinary, Imgix, Cloudflare Images) for automatic optimization and responsive delivery. Modern formats (WebP, AVIF) offer 25-50% better compression.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/optimized"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/optimized"]
+disable = ["*"]
+```

@@ -1,0 +1,237 @@
+---
+title: "Introduction"
+icon: "house"
+description: "The website QA tool for your coding agent"
+---
+
+squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Single binary, zero dependencies.
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Install squirrelscan and run your first audit in under 2 minutes.
+  </Card>
+  <Card
+    title="AI Agent Integration"
+    icon="sparkles"
+    href="/developers/agents"
+  >
+    Use squirrelscan with Claude Code, Cursor, and other AI coding assistants.
+  </Card>
+</CardGroup>
+
+## Four Ways to Run squirrelscan
+
+Same audit engine, same report, four front doors: your terminal, your coding agent, the cloud, or MCP.
+
+<Tabs>
+  <Tab title="CLI">
+    Run audits directly in your terminal with a single binary and zero dependencies:
+
+    ```bash
+    squirrel audit example.com
+    ```
+
+    Perfect for:
+    - Manual audits during development
+    - Quick site health checks
+    - CI/CD pipelines (fail builds on score or severity thresholds)
+  </Tab>
+
+  <Tab title="In your agent">
+    Install the skills for autonomous workflows in Claude Code, Cursor, Codex, and any coding agent:
+
+    ```bash
+    npx skills add squirrelscan/squirrelscan
+    ```
+
+    Then prompt your agent:
+    ```
+    Use the audit-website skill to audit this site and fix all issues
+    ```
+
+    Or pipe LLM-optimized output to any assistant:
+    ```bash
+    squirrel audit example.com --format text | claude
+    ```
+
+    Perfect for:
+    - Autonomous fixing of SEO/accessibility issues
+    - Multi-step AI workflows with plan mode
+    - Ad-hoc AI assistance and custom scripts
+  </Tab>
+
+  <Tab title="Cloud">
+    Log in and squirrelscan enriches each audit in the cloud: browser rendering, AI analysis, technology detection, and shareable reports. Billed in [credits](/cloud/credits):
+
+    ```bash
+    squirrel auth login
+    squirrel audit example.com
+    ```
+
+    Perfect for:
+    - JavaScript-heavy sites and SPAs (real browser rendering)
+    - AI parsability and E-E-A-T authority signals
+    - Shareable dashboard reports with score history
+
+    See the [cloud docs](/cloud) for features and costs.
+  </Tab>
+
+  <Tab title="MCP">
+    Run a local [MCP server](/developers/mcp) so agents call squirrelscan's audit engine and cloud features as tools, no shell glue required:
+
+    ```bash
+    squirrel mcp
+    ```
+
+    Your agent launches it via its MCP config. Perfect for:
+    - Agents and clients that speak MCP
+    - Tool-calling instead of parsing CLI output
+    - Claude Code and Cursor MCP setups
+  </Tab>
+</Tabs>
+
+## Why squirrelscan?
+
+<Columns cols={2}>
+  <Card
+    title="AI-Native Design"
+    icon="microchip"
+  >
+    Built for coding agents. LLM-optimised output works seamlessly with Claude Code, Cursor, and any AI assistant.
+  </Card>
+  <Card
+    title="Developer-First CLI"
+    icon="terminal"
+  >
+    Single binary, zero dependencies. Shell completions, self-update, and CI/CD compatible exit codes.
+  </Card>
+  <Card
+    title="262 Rules, 21 Categories"
+    icon="list-check"
+  >
+    Comprehensive coverage across SEO, accessibility, performance, and security audits.
+  </Card>
+  <Card
+    title="Smart Incremental Crawling"
+    icon="bolt"
+  >
+    ETag, Last-Modified, and content hashing. Skip unchanged pages. Resume interrupted crawls.
+  </Card>
+  <Card
+    title="E-E-A-T Auditing"
+    icon="shield-check"
+  >
+    Dedicated rules for Experience, Expertise, Authority, and Trust: Google's top ranking signals.
+  </Card>
+  <Card
+    title="Multiple Output Formats"
+    icon="files"
+  >
+    Console, JSON, HTML reports, LLM-friendly output. Export exactly what you need.
+  </Card>
+</Columns>
+
+## Works Where You Work
+
+<Columns cols={2}>
+  <Card
+    title="Terminal"
+    icon="terminal"
+  >
+    Run anywhere with a single command.
+  </Card>
+  <Card
+    title="Claude Code"
+    icon="sparkles"
+  >
+    Install the squirrelscan skills for autonomous workflows.
+  </Card>
+  <Card
+    title="Cursor"
+    icon="code"
+  >
+    Native skill integration with composer mode.
+  </Card>
+  <Card
+    title="Any AI Agent"
+    icon="brain"
+  >
+    Pipe text/JSON/markdown to any LLM.
+  </Card>
+  <Card
+    title="Cloud"
+    icon="cloud"
+  >
+    Log in for rendering, AI analysis, and shareable reports.
+  </Card>
+  <Card
+    title="MCP"
+    icon="plug"
+  >
+    Expose the audit engine to any MCP client as tools.
+  </Card>
+  <Card
+    title="CI/CD"
+    icon="git-branch"
+  >
+    Fail pipelines on audit errors with exit codes.
+  </Card>
+  <Card
+    title="Shell Scripts"
+    icon="file-code"
+  >
+    Integrate into your automation workflows.
+  </Card>
+</Columns>
+
+## Rule Categories
+
+squirrelscan runs **262 rules** across **21 categories**, plus opt-in cloud gap analysis:
+
+| Category | Description |
+|----------|-------------|
+| **Accessibility** | ARIA, focus, landmarks |
+| **Agent Experience** | AI crawler access, LLM parsability, page-type, site profile |
+| **Analytics** | GTM, consent mode |
+| **Blocking** | Ad-blocker & privacy-filter blocked content |
+| **Content** | Quality, readability, freshness |
+| **Core SEO** | Meta tags, canonical URLs, h1, favicon |
+| **Crawl** | Robots.txt, sitemap, indexing |
+| **E-E-A-T** | Experience, expertise, trust signals |
+| **Gap Analysis** | Keyword & content gaps (cloud, opt-in) |
+| **i18n** | Hreflang, lang attribute |
+| **Images** | Alt text, dimensions, formats |
+| **Legal** | Privacy, cookies, TOS |
+| **Links** | Internal, external, broken links |
+| **Local SEO** | NAP consistency, geo meta |
+| **Mobile** | Viewport, tap targets |
+| **Performance** | Core Web Vitals, LCP/CLS/INP |
+| **Schema** | JSON-LD structured data |
+| **Security** | HTTPS, CSP, headers |
+| **Site Integrity** | Injected pages, phishing, malware, SEO spam |
+| **Social** | Open Graph, Twitter cards |
+| **URL Structure** | Length, hyphens, keywords |
+| **Video** | VideoObject schema, accessibility |
+
+## Resources
+
+<Columns cols={2}>
+  <Card
+    title="GitHub"
+    icon="git-branch"
+    href="https://github.com/squirrelscan/squirrelscan"
+  >
+    View source, report issues, contribute.
+  </Card>
+  <Card
+    title="Website"
+    icon="globe"
+    href="https://squirrelscan.com"
+  >
+    Learn more about squirrelscan.
+  </Card>
+</Columns>

@@ -1,0 +1,56 @@
+---
+title: "Browser Rendering"
+description: "How cloud browser rendering works under the hood"
+icon: "globe"
+---
+
+A plain HTTP fetch is fast, free, and accurate for server-rendered sites - but sites that build their content with JavaScript (SPAs, client-side frameworks) can look nearly empty to it, which skews every content rule.
+
+Cloud browser rendering fixes that: each page is loaded in a **real headless browser** in the cloud, and the fully rendered DOM is returned to your local crawler. Everything downstream - parsing, rules, reports - works exactly as it does with plain HTTP, just on the post-JavaScript HTML.
+
+<Note>Looking for setup instructions? See the [browser rendering guide](/guides/browser-rendering). This page explains how the service behaves.</Note>
+
+## When it runs
+
+Rendering follows your login state by default:
+
+- **Logged in** - audits render every page in the cloud automatically. The first time this would spend credits, the CLI asks once (`Render pages in the cloud? [Y/n]`) and remembers your choice in `squirrel self settings` - it never asks again.
+- **Logged out, `--offline`, or you declined the prompt** - plain HTTP, no credits.
+
+Override the default any time:
+
+| Want | How |
+|------|-----|
+| Plain HTTP for one run | `squirrel audit <url> --http` |
+| Render for one run | `squirrel audit <url> --render` |
+| Always plain HTTP for a project | `rendering = "http"` in `[cloud]` |
+| Always render for a project | `rendering = "browser"` in `[cloud]` |
+
+Flags win over config, and config wins over the auto default. Non-interactive runs (CI, agents, pipes) never prompt - they render only if you've already consented or set `rendering = "browser"`, otherwise they use plain HTTP.
+
+## Cost
+
+**2 credits per page rendered**, on top of the audit's 50-credit base - the same rate whether or not a page hits the render cache. A 100-page rendered audit costs 250 credits in total, so mind your [per-audit cap](/cloud/credits#spend-controls) - the default cap of 1000 covers rendering for about 475 pages. The crawl progress line shows the rendering spend so far (the 50-credit base appears in the final total, not this counter):
+
+```
+Crawling (cloud-rendered) 34/100 · ~68 credits
+```
+
+## Fallback behavior
+
+Rendering is best-effort and degrades gracefully:
+
+- **Single page fails or times out** - that page falls back to plain HTTP; the crawl continues rendering the rest.
+- **Out of credits, auth error, or service outage** - the crawler switches permanently to plain HTTP for the remainder of the crawl, prints a one-line warning, and notes the fallback in the report metadata.
+
+A render failure never fails the audit.
+
+## When to use it
+
+| Site | Recommendation |
+|------|----------------|
+| Server-rendered (most CMS, SSR frameworks, static sites) | Plain HTTP (default) - rendering adds cost, not accuracy |
+| Client-side SPA (React/Vue/Angular without SSR) | Browser rendering |
+| Mixed - mostly SSR with a few JS-dependent pages | Try plain HTTP first; if content rules report thin/missing content on pages you know have content, switch |
+
+A quick tell: run `squirrel audit` normally, and if word counts or headings look implausibly low on pages that render fine in your browser, the site needs rendering.

@@ -1,0 +1,24 @@
+---
+title: "Analytics"
+description: "Tracking and measurement implementation"
+---
+
+Tracking and measurement implementation
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Analytics Tracking" icon="circle-info" href="/rules/analytics/gtm-present">
+    Checks for Google Tag Manager or analytics implementation
+  </Card>
+  <Card title="Consent Mode" icon="circle-info" href="/rules/analytics/consent-mode">
+    Checks for Google Consent Mode v2 implementation
+  </Card>
+</CardGroup>
+
+## Disable All Analytics Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["analytics/*"]
+```

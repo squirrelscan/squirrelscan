@@ -1,0 +1,45 @@
+---
+title: "Scheduled Audits"
+description: "Re-audit your sites automatically on a daily, weekly, or monthly schedule"
+icon: "calendar-clock"
+---
+
+Scheduled audits re-run a full cloud audit of a website on a fixed cadence - **daily, weekly, or monthly** - with no manual trigger. Each run lands in the [dashboard](/dashboard) alongside your on-demand audits, so you can track score changes and catch regressions over time.
+
+<Note>
+  Scheduled audits are a **Pro** feature. On the free plan the schedule is shown as an upgrade prompt; new free websites are not scheduled.
+</Note>
+
+## Setting a schedule
+
+Schedules are managed from the dashboard, per website:
+
+1. Open the website at `app.squirrelscan.com`.
+2. Use the **Scheduled Audits** card on the website overview (or go to **Settings → Schedule**).
+3. Pick a cadence - **Daily**, **Weekly**, **Monthly**, or **Disabled**.
+
+Scheduling is **off by default** for new websites on every plan, including Pro. Recurring audits are always opt-in: pick a cadence here whenever you want one, and change or disable it at any time.
+
+## How runs behave
+
+- Each scheduled run is a normal cloud audit and **spends [credits](/cloud/credits)** like any other cloud audit. Stay within budget with the same per-audit spend controls.
+- Scheduled runs crawl up to your plan's [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit) ceiling, same as an on-demand dashboard audit.
+- If an audit for the website is already running when the schedule fires, the scheduled run is skipped for that cycle.
+- Results, score deltas, new issues, and notifications appear in the dashboard automatically.
+
+## Audit source
+
+Every audit records where it was triggered from. In the dashboard, audits and reports are tagged with a **source** badge:
+
+- **CLI** - run from the `squirrel` command line
+- **Cloud** - run on demand from the dashboard
+- **Scheduled** - run automatically by a schedule
+- **GitHub** - run from a GitHub pull request or push
+
+This makes it easy to tell an automated weekly run apart from one you kicked off by hand.
+
+## Related
+
+- [Cloud overview](/cloud) - what cloud features add
+- [Credits & Pricing](/cloud/credits) - how scheduled runs are billed
+- [Dashboard](/dashboard) - where scheduled results live

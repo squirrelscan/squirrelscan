@@ -1,0 +1,79 @@
+---
+title: "Markdown Response"
+description: "Checks whether the site serves text/markdown via content negotiation or a .md variant of the homepage"
+---
+
+Checks whether your site can return **Markdown** to an agent instead of rendered HTML, either by honoring `Accept: text/markdown` (content negotiation) on the homepage, or by exposing a `.md` variant (e.g. `/index.md`). AI agents and answer engines parse clean Markdown far more reliably than a full HTML document, so a Markdown representation is an emerging agent-experience signal alongside `llms.txt`.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/markdown-response` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+<Note>This rule is a **recommendation**: it never penalizes your score. Serving Markdown is optional; the rule just surfaces whether an agent can get it.</Note>
+
+## What it checks
+
+The audit probes your **homepage only**, **once per crawl** (next to `robots.txt` / `llms.txt`), so the check itself does minimal extra network requests. It reports:
+
+- **Content negotiation**: the homepage is requested with `Accept: text/markdown`; the rule passes the signal if the response `Content-Type` is `text/markdown`.
+- **`Vary: Accept`**: whether the response declares `Vary: Accept`. Without it, caches (CDN, browser, intermediate proxies) may serve the wrong representation to the next requester with a different `Accept` header — a site can pass the content-negotiation check on a cold request and still fail it in production once a cache is in front of it.
+- **`link rel="alternate"`**: whether the HTML response advertises its Markdown counterpart via `<link rel="alternate" type="text/markdown" href="...">`, letting an agent discover the Markdown variant without guessing a `.md` path or retrying with a different `Accept` header.
+- **`x-markdown-tokens` / `x-original-tokens` fingerprints**: where present, response headers carrying token-count estimates for the Markdown body and the original HTML respectively. The rule uses the pair as a sanity check that the "Markdown" response isn't just the HTML page mislabeled with a different `Content-Type` — a real Markdown conversion should carry a meaningfully lower token count than the HTML original.
+
+If content negotiation is present, the site "serves Markdown for agents" on the homepage. `Vary`, `rel="alternate"`, and the token fingerprints are supporting signals reported alongside it. None are required: this is purely informational.
+
+<Note>This rule checks the homepage's `/index.md` variant and content negotiation only — it does not currently probe per-page `.md` siblings (e.g. `/about` → `/about.md`). Publishing a `.md` mirror for every page is still good practice for agent access; the rule just doesn't verify it site-wide yet.</Note>
+
+## Solution
+
+Give agents a Markdown representation of your key pages:
+
+- **Content negotiation:** when a request carries `Accept: text/markdown`, return the Markdown source instead of HTML, and declare `Vary: Accept` so caches don't serve the wrong representation to the next request.
+- **`.md` variant:** publish a `.md` version of the homepage at `/index.md`. As a recommended practice beyond what this rule checks, consider doing the same for other key pages (e.g. `/about.md`).
+- **Discovery link:** advertise the Markdown variant from the HTML page itself, so an agent that only fetched the HTML can find it.
+
+```http
+GET / HTTP/1.1
+Accept: text/markdown
+
+HTTP/1.1 200 OK
+Content-Type: text/markdown; charset=utf-8
+Vary: Accept
+x-markdown-tokens: 412
+x-original-tokens: 1380
+
+# Example Co
+Short Markdown representation of the page…
+```
+
+```html
+<link rel="alternate" type="text/markdown" href="/index.md">
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/markdown-response"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/markdown-response"]
+disable = ["*"]
+```

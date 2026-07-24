@@ -1,0 +1,59 @@
+---
+title: "HTML Size"
+description: "Checks HTML document size against Googlebot crawl limits"
+---
+
+Checks HTML document size against Googlebot crawl limits
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/html-size` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 5/10 |
+
+## Solution
+
+Googlebot truncates HTML documents at 2MB: content beyond that limit is silently ignored during indexing. Move inline styles and scripts to external files, defer non-critical content, lazy-load below-the-fold sections, and remove unnecessary markup. Keep critical SEO content (title, meta, headings, main body) near the top of the document so it's indexed even if truncation occurs.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warn_bytes` | unknown | `undefined` | Byte size to trigger warning |
+| `error_bytes` | unknown | `undefined` | Byte size to trigger error (Googlebot truncation limit) |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."crawl/html-size"]
+warn_bytes = undefined
+error_bytes = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/html-size"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/html-size"]
+disable = ["*"]
+```

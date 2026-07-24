@@ -1,0 +1,42 @@
+---
+title: "Product Schema"
+description: "Validates Product schema for e-commerce"
+---
+
+Validates Product schema for e-commerce
+
+| | |
+|---|---|
+| **Rule ID** | `schema/product` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Product schema enables rich results in search. Required: name, image. For offers, include price, priceCurrency, availability. Add reviews with AggregateRating for star ratings. Include brand, sku, gtin for product identification. Ensure price and availability are accurate and updated.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/product"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/product"]
+disable = ["*"]
+```

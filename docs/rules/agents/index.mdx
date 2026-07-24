@@ -1,0 +1,39 @@
+---
+title: "Agents"
+description: "The Agents score group: agent experience (AX) across five pillars"
+icon: "bot"
+---
+
+Agents is one of the four score groups on every report, a first-class score
+alongside SEO, Performance, and Security. It measures **agent experience
+(AX)**: whether AI agents can read, reach, discover, and act on your site.
+
+It covers five pillars:
+
+- **Readable** - content without JavaScript, token weight, Markdown responses
+- **Reachable** - AI crawler access, behavioral blocking
+- **Discoverable** - `llms.txt`, `AGENTS.md`, agent manifests
+- **Declared** - Content-Signal, `noai`, RSL licensing
+- **Actionable** - API/OAuth discovery, pay-per-crawl
+
+## Category
+
+<CardGroup cols={2}>
+  <Card title="Agent Experience" icon="folder" href="/rules/ax">
+    Agent experience across five pillars: readable, reachable, discoverable,
+    declared, actionable (17 rules)
+  </Card>
+</CardGroup>
+
+A handful of [cloud rules](/cloud/rules) (LLM parsability, page-type match, AI
+content, site metadata) extend this group with AI analysis when you're logged
+in.
+
+## Disable all agent rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*", "ai/*"]
+```
+
+See the [full rules reference](/rules) for the other score groups.

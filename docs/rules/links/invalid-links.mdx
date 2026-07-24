@@ -1,0 +1,42 @@
+---
+title: "Invalid Links"
+description: "Detects invalid link formats on the page"
+---
+
+Detects invalid link formats on the page
+
+| | |
+|---|---|
+| **Rule ID** | `links/invalid-links` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## Solution
+
+Invalid links (malformed URLs, javascript: links, or broken references) harm user experience and can indicate code issues. Fix or remove invalid links. Replace javascript:void(0) with proper href values or button elements. Ensure all links have valid URL formats. Check for typos in URLs and verify links work correctly. Remove empty href attributes.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/invalid-links"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/invalid-links"]
+disable = ["*"]
+```

@@ -1,0 +1,159 @@
+---
+title: "Projects"
+icon: "folder"
+description: "Organize audits by project for tracking and comparison"
+---
+
+Projects let you group related audits together. Each project stores its crawl history, cached pages, and audit results in a dedicated folder.
+
+## How Projects Work
+
+When you run an audit, squirrelscan creates a project folder to store all data:
+
+```
+~/.squirrel/projects/
+├── example-com/
+│   └── project.db
+├── my-blog/
+│   └── project.db
+└── localhost-3000/
+    └── project.db
+```
+
+By default, the project name is derived from the domain you're auditing. You can override this to:
+- Group multiple domains under one project
+- Track the same site across environments (dev, staging, prod)
+- Keep separate audit histories for different purposes
+
+## Setting the Project Name
+
+### Via Config File
+
+Add a `name` field to the `[project]` section in `squirrel.toml`:
+
+```toml squirrel.toml
+[project]
+name = "my-website"
+domains = ["example.com", "www.example.com"]
+```
+
+<Tip>
+If you don't have a config file, run `squirrel init` to create one.
+</Tip>
+
+### Via Command Line
+
+Use the `--project-name` (or `-n`) flag to override the project name for a single audit:
+
+```bash
+squirrel audit https://example.com --project-name my-website
+```
+
+This is useful for:
+- One-off audits you want to keep separate
+- Testing without affecting your main project history
+- CI/CD pipelines where config files aren't available
+
+## Auditing Local Development Sites
+
+You can audit localhost and other local development servers:
+
+```bash
+# Audit your local dev server
+squirrel audit http://localhost:3000
+
+# Audit with a custom project name
+squirrel audit http://localhost:3000 -n my-app-dev
+```
+
+This is useful for:
+- **Pre-deploy checks** - Catch issues before they go live
+- **Development workflow** - Fix SEO and accessibility issues as you build
+- **CI/CD integration** - Audit preview deployments automatically
+
+<Note>
+Local audits work the same as production audits. All rules run against the local server, and results are stored in the project database for comparison.
+</Note>
+
+### Separating Dev and Production Audits
+
+Use different project names to keep development and production audits separate:
+
+```toml squirrel.toml
+# For local development
+[project]
+name = "my-app-dev"
+```
+
+```bash
+# For production (override via CLI)
+squirrel audit https://my-app.com -n my-app-prod
+```
+
+Or use environment-specific config files:
+- `squirrel.toml` - Development settings
+- `squirrel.prod.toml` - Production settings
+
+## Viewing Project Data
+
+Project data is stored in `~/.squirrel/projects/<project-name>/`:
+
+| File | Contents |
+|------|----------|
+| `project.db` | SQLite database with crawl sessions, pages, and audit results |
+
+You can inspect the database directly or use the CLI:
+
+```bash
+# List recent audits for a project
+squirrel report --list
+
+# View a specific audit
+squirrel report <audit-id>
+```
+
+## Use Cases
+
+### Multi-Environment Tracking
+
+Track the same site across environments:
+
+```bash
+# Development
+squirrel audit http://localhost:3000 -n mysite-dev
+
+# Staging
+squirrel audit https://staging.mysite.com -n mysite-staging
+
+# Production
+squirrel audit https://mysite.com -n mysite-prod
+```
+
+### Multi-Domain Projects
+
+Group related domains under one project:
+
+```toml squirrel.toml
+[project]
+name = "company-sites"
+domains = ["company.com", "blog.company.com", "docs.company.com"]
+```
+
+### Timestamped Snapshots
+
+Create point-in-time snapshots for comparison:
+
+```bash
+squirrel audit https://example.com -n example-2024-01
+squirrel audit https://example.com -n example-2024-02
+```
+
+## Project Storage Location
+
+All projects are stored in:
+
+```
+~/.squirrel/projects/
+```
+
+Each project gets its own subdirectory with a SQLite database containing all crawl and audit data.

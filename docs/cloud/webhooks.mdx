@@ -1,0 +1,115 @@
+---
+title: "Webhooks"
+description: "Subscribe external systems to your squirrelscan audit events"
+icon: "webhook"
+---
+
+Outbound webhooks let your organization push audit events to any HTTPS endpoint you control - a Slack relay, a CI pipeline, your own backend. squirrelscan POSTs a signed JSON payload the moment an event fires, so you can react to completed audits and new issues without polling.
+
+<Note>
+  Webhooks are **organization-scoped** and managed from the dashboard. Only organization **owners and admins** can create, edit, or delete endpoints; other members have read-only access.
+</Note>
+
+## Creating an endpoint
+
+1. Open your organization at `app.squirrelscan.com`.
+2. Go to **Settings → Webhooks**.
+3. Click **Add endpoint**, enter an **HTTPS URL**, and select the [events](#event-types) to subscribe to.
+4. Save. The **signing secret is shown once** - copy and store it securely. It is never displayed again.
+
+Each organization can have up to **20 endpoints**. Toggle an endpoint off at any time to pause delivery without deleting it, and view the **recent deliveries** list to confirm endpoints are healthy.
+
+<Note>
+  Endpoint URLs must use `https://` and may not target localhost, private, link-local, or otherwise reserved addresses.
+</Note>
+
+## Event types
+
+| Event | Fires when |
+|-------|------------|
+| `audit.completed` | A cloud audit finishes (on-demand or CLI-triggered) |
+| `issues.detected` | New issues are detected during an audit |
+| `schedule.completed` | A [scheduled audit](/cloud/scheduled-audits) finishes |
+
+## Payload
+
+Every delivery is a JSON body with a stable, versioned envelope:
+
+```json
+{
+  "version": "1",
+  "event": "audit.completed",
+  "id": "del_01J...",
+  "timestamp": "2026-06-15T12:34:56.000Z",
+  "orgId": "org_01J...",
+  "data": {
+    "websiteId": "...",
+    "auditId": "...",
+    "runId": "...",
+    "reportId": "...",
+    "url": "https://example.com",
+    "domain": "example.com",
+    "healthScore": 87,
+    "errorCount": 2,
+    "warningCount": 5,
+    "passedCount": 120,
+    "totalPages": 25
+  }
+}
+```
+
+- `version` is the contract version. Always check it and ignore envelopes whose version you don't understand - the shape of `data` may grow over time.
+- `event` is one of the [event types](#event-types) above; `data` is the payload for that event.
+- `id` is the delivery's unique ID (also sent in `X-Squirrel-Delivery`) - use it to dedupe retries.
+
+The `data` shape varies by event. `issues.detected` carries `created`/`updated`/`resolved` counts; `schedule.completed` carries the completed run + report identifiers and `healthScore`.
+
+## Headers
+
+| Header | Value |
+|--------|-------|
+| `X-Squirrel-Event` | The event name, e.g. `audit.completed` |
+| `X-Squirrel-Signature` | `sha256=<hex>` HMAC of the raw request body (see below) |
+| `X-Squirrel-Timestamp` | ISO-8601 emission time (matches `timestamp` in the body) |
+| `X-Squirrel-Delivery` | Unique delivery ID (matches `id` in the body) |
+
+## Verifying the signature
+
+squirrelscan signs every delivery with **HMAC-SHA256** over the **raw request body** using your endpoint's signing secret. The hex digest is sent in `X-Squirrel-Signature` with a `sha256=` prefix.
+
+To verify, compute the HMAC over the exact bytes you received (do not re-serialize the parsed JSON - whitespace differences will break the comparison) and compare it to the header value using a **constant-time** comparison to avoid timing side-channels:
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verifyWebhook(rawBody: string, signatureHeader: string, secret: string): boolean {
+  // Header form: "sha256=<hex>"
+  const provided = signatureHeader.startsWith("sha256=")
+    ? signatureHeader.slice("sha256=".length)
+    : signatureHeader;
+
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+
+  // Constant-time compare: bail if lengths differ, then compare bytes.
+  const a = Buffer.from(provided, "hex");
+  const b = Buffer.from(expected, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+Reject any request whose signature does not verify. You can additionally reject deliveries whose `X-Squirrel-Timestamp` is too far from your clock to limit replay of captured deliveries.
+
+## Retries and delivery
+
+- A `2xx` response marks the delivery **delivered**.
+- A `4xx` response is treated as a **permanent failure** - squirrelscan does **not** retry (fix the endpoint, the next event will deliver).
+- A `5xx` response, a network error, or a timeout is **retried** with exponential backoff, up to **3 attempts** total per event.
+- Delivery is **best-effort**: a failing endpoint never blocks the audit pipeline, and endpoints are delivered to in parallel.
+
+Return `2xx` quickly and do heavy work asynchronously so a slow handler doesn't cause a timeout and a retry. Use the `X-Squirrel-Delivery` ID (or the body `id`) to make your handler idempotent across retries.
+
+## Related
+
+- [Scheduled Audits](/cloud/scheduled-audits) - the source of `schedule.completed`
+- [Dashboard](/dashboard) - where webhooks are managed
+- [Cloud Credits](/cloud/credits) - how cloud audits are metered

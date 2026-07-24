@@ -1,0 +1,57 @@
+---
+title: "Redirect Chains"
+description: "Detects multi-hop redirect chains that waste crawl budget"
+---
+
+Detects multi-hop redirect chains that waste crawl budget
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/redirect-chain` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Each redirect hop adds latency and consumes crawl budget. Search engines may stop following after 5+ hops. Consolidate redirect chains to a single hop by updating the source URL to point directly to the final destination. Common causes: HTTP→HTTPS→www→trailing slash combinations, or legacy domain migrations.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxHops` | unknown | `undefined` | Flag redirect chains exceeding this many hops |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."crawl/redirect-chain"]
+maxHops = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/redirect-chain"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/redirect-chain"]
+disable = ["*"]
+```

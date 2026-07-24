@@ -1,0 +1,550 @@
+---
+title: "self"
+icon: "wrench"
+description: "Self-management commands for the CLI"
+---
+
+The `self` command provides subcommands for managing the squirrel CLI itself: installation, updates, diagnostics, and settings.
+
+## Subcommands
+
+- [install](#install) - Bootstrap local installation
+- [update](#update) - Check and apply updates
+- [completion](#completion) - Generate shell completions
+- [doctor](#doctor) - Run health checks
+- [version](#version) - Show version information
+- [settings](#settings) - Manage CLI settings
+- [uninstall](#uninstall) - Remove squirrel from system
+
+---
+
+## install
+
+Bootstrap the local installation by creating necessary directories and symlinking the binary.
+
+### Usage
+
+```bash
+squirrel self install
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--bin-dir` | Custom bin directory for symlink (default: ~/.local/bin) |
+
+### Output
+
+```
+Installed v0.1.0
+  Binary: ~/.local/share/squirrel/releases/0.1.0/squirrel
+  Symlink: ~/.local/bin/squirrel
+```
+
+If `~/.local/bin` is not in your `$PATH`, the command will show:
+
+```
+Add to your shell profile:
+  export PATH="~/.local/bin:$PATH"
+```
+
+### What it Does
+
+- Creates `~/.squirrel/` for settings
+- Creates `~/.local/share/squirrel/releases/` for cached releases
+- Creates symlink at `~/.local/bin/squirrel`
+- Registers installation for update checks
+
+---
+
+## update
+
+Check for and apply updates to the CLI.
+
+### Automatic updates
+
+You usually don't need this command. With `auto_update` enabled (the default), squirrel updates itself: any CLI run checks for a new release in the background, and when one is found a detached background process downloads it, verifies its SHA-256 checksum, and switches over silently. Your next run prints a one-line notice:
+
+```
+✓ squirrel auto-updated v0.0.42 → v0.0.43
+```
+
+The running process is never interrupted - the new version takes effect on the next run. Turn this off with:
+
+```bash
+squirrel self settings set auto_update false
+```
+
+With auto-update off you still get an update notification box (unless `notifications` is also off), and `squirrel self update` applies updates manually.
+
+Automatic updates only run for managed installs (installed via the install script, npm, or `self install`). If you copied the binary somewhere yourself, squirrel tells you how to update instead of touching your setup.
+
+#### Check frequency
+
+The background check runs on CLI invocations but is throttled so it hits the network at most once per interval, no matter how often you run squirrel, so it never adds latency on every start. The default is once per hour; tune it (in hours, fractional allowed, minimum `0.05` ≈ 3 min) to pick up hotfixes faster:
+
+```bash
+squirrel self settings set update_check_interval_hours 0.25   # every 15 min
+```
+
+#### CI and locked-down environments
+
+squirrel makes **no outbound update requests** when it detects CI (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `CIRCLECI`, `BUILDKITE`, `JENKINS_URL`, `TEAMCITY_VERSION`, `TF_BUILD`): neither the check nor the silent install runs, so pipelines stay deterministic. To opt out anywhere else (air-gapped or restricted networks), set:
+
+```bash
+export SQUIRREL_NO_UPDATE=1
+```
+
+Any value other than empty, `0`, or `false` (case-insensitive, surrounding whitespace ignored) enables the opt-out, so an empty or whitespace-only `SQUIRREL_NO_UPDATE=` does **not** suppress updates.
+
+Both CI detection and `SQUIRREL_NO_UPDATE` only suppress the *automatic* paths; an explicit `squirrel self update` still works. (For a fully offline single run, use the `--offline` flag instead.)
+
+### Usage
+
+```bash
+squirrel self update [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--check` | Only check for updates, don't install |
+| `--dismiss` | Dismiss update notification for current version |
+| `--force` | Update even if this binary isn't a managed install |
+
+### Examples
+
+#### Check for Updates
+
+```bash
+squirrel self update --check
+```
+
+Output if update available:
+```
+Update available: v0.2.0
+Run 'squirrel self update' to install
+```
+
+Output if up to date:
+```
+Already on latest version (0.1.0)
+```
+
+#### Install Update
+
+```bash
+squirrel self update
+```
+
+Output:
+```
+Updated to v0.2.0
+See release notes: https://github.com/squirrelscan/squirrelscan/releases/tag/v0.2.0
+```
+
+#### Dismiss Update Notification
+
+```bash
+squirrel self update --dismiss
+```
+
+This dismisses the update notification until the next version is released. A dismissed version is also skipped by automatic updates.
+
+### Update Channels
+
+squirrel has two update channels configured via settings:
+
+- `stable` - Production releases (recommended)
+- `beta` - Pre-release versions with latest features
+
+Change channel:
+
+```bash
+squirrel self settings set channel beta
+```
+
+---
+
+## completion
+
+Generate shell completion scripts for bash, zsh, or fish.
+
+### Usage
+
+```bash
+squirrel self completion <shell>
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `shell` | Shell type: `bash`, `zsh`, or `fish` (required) |
+
+### Examples
+
+#### Bash
+
+Add to `~/.bashrc`:
+
+```bash
+eval "$(squirrel self completion bash)"
+```
+
+#### Zsh
+
+Add to `~/.zshrc`:
+
+```bash
+eval "$(squirrel self completion zsh)"
+```
+
+#### Fish
+
+Add to `~/.config/fish/config.fish`:
+
+```bash
+squirrel self completion fish | source
+```
+
+### What it Provides
+
+Completions include:
+- Command names
+- Subcommand names
+- Option flags
+- File paths for relevant arguments
+
+---
+
+## doctor
+
+Run health checks on your installation.
+
+### Usage
+
+```bash
+squirrel self doctor
+```
+
+### Output
+
+```
+Running health checks...
+
+[OK] Binary: Executable found at ~/.local/bin/squirrel
+[OK] Version: 0.1.0
+[OK] Permissions: Binary is executable
+[OK] Config: Valid squirrel.toml found
+[WARN] Cache: 125MB of cached data at ~/.local/share/squirrel
+[OK] Settings: Valid settings at ~/.squirrel/settings.json
+
+Passed: 5 | Warnings: 1 | Failed: 0
+```
+
+### What it Checks
+
+- Binary installation and permissions
+- Config file validity
+- Settings file validity
+- Cache size and location
+- Update status
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All checks passed (warnings are OK) |
+| `1` | One or more checks failed |
+
+---
+
+## version
+
+Show version information about the CLI.
+
+### Usage
+
+```bash
+squirrel self version [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON |
+
+### Examples
+
+#### Human-Readable
+
+```bash
+squirrel self version
+```
+
+Output:
+```
+squirrel v0.1.0
+  Channel: stable
+  Platform: darwin-arm64
+  Bun: 1.1.38
+```
+
+#### JSON Output
+
+```bash
+squirrel self version --json
+```
+
+Output:
+```json
+{
+  "version": "0.1.0",
+  "channel": "stable",
+  "platform": "darwin-arm64",
+  "bun_version": "1.1.38"
+}
+```
+
+---
+
+## settings
+
+Manage CLI settings stored at `~/.squirrel/settings.json` or `.squirrel/settings.json` (local project).
+
+### Subcommands
+
+- `show` - Display settings
+- `set` - Update a setting
+
+---
+
+### settings show
+
+Display current settings.
+
+#### Usage
+
+```bash
+squirrel self settings show [options]
+```
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `--user` | Show only user settings (~/.squirrel/settings.json) |
+| `--local` | Show only local project settings (.squirrel/settings.json) |
+
+#### Examples
+
+##### Effective Settings (default)
+
+Shows merged settings with source tracking:
+
+```bash
+squirrel self settings show
+```
+
+Output:
+```
+Effective Settings:
+
+  channel                  = stable       (default)
+  auto_update              = true         (user)
+  notifications            = true         (local)
+  log_level                = info         (default)  (read-only)
+
+User:  ~/.squirrel/settings.json
+Local: /path/to/project/.squirrel/settings.json
+```
+
+##### User Settings Only
+
+```bash
+squirrel self settings show --user
+```
+
+Output:
+```
+User Settings (~/.squirrel/settings.json):
+
+  channel              = stable
+  auto_update          = true
+  user_feedback_email  = you@example.com
+```
+
+##### Local Settings Only
+
+```bash
+squirrel self settings show --local
+```
+
+Output:
+```
+Local Settings (/path/to/project/.squirrel/settings.json):
+
+  notifications        = false
+```
+
+---
+
+### settings set
+
+Update a setting value.
+
+#### Usage
+
+```bash
+squirrel self settings set <key> <value> [options]
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `key` | Setting key (required) |
+| `value` | New value (required) |
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `--local` | Set in local project settings (.squirrel/settings.json) |
+| `--user` | Set in user settings (~/.squirrel/settings.json) (default) |
+
+#### Available Settings
+
+| Key | Type | Description | Values |
+|-----|------|-------------|--------|
+| `channel` | string | Update channel | `stable`, `beta` |
+| `auto_update` | boolean | Automatic background updates | `true`, `false` |
+| `update_check_interval_hours` | number | How often the background update check may run (hours) | `>= 0.05` (default `1`) |
+| `notifications` | boolean | Show update notifications | `true`, `false` |
+| `telemetry` | boolean | Send minimal pseudonymous CLI telemetry | `true`, `false` |
+| `tips` | boolean | Show a random tip under the audit preamble | `true`, `false` |
+
+#### Examples
+
+##### Switch to Beta Channel
+
+```bash
+squirrel self settings set channel beta
+```
+
+Output:
+```
+Set channel = beta (user)
+  Written to: ~/.squirrel/settings.json
+```
+
+##### Disable Update Notifications
+
+```bash
+squirrel self settings set notifications false
+```
+
+##### Set Local Project Setting
+
+```bash
+squirrel self settings set notifications false --local
+```
+
+This creates `.squirrel/settings.json` in the current directory and sets the value there.
+
+### Telemetry
+
+Telemetry is enabled by default. The CLI sends only the event name, CLI version, a random install ID, and a bounded error category. It does not send credentials, URLs, report contents, or raw error messages, and telemetry requests are never authenticated.
+
+The CLI shows this disclosure once before its first telemetry-enabled command. Disable telemetry in user settings with:
+
+```bash
+squirrel self settings set telemetry false
+```
+
+For CI, containers, or one-off commands, define `NO_TELEMETRY`. Its presence is the kill switch: any defined value, including an empty value, `0`, or `false`, disables telemetry, install registration, and install-ID creation.
+
+```bash
+NO_TELEMETRY=1 squirrel audit https://example.com
+```
+
+---
+
+## uninstall
+
+Remove squirrel from your system.
+
+### Usage
+
+```bash
+squirrel self uninstall [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--purge` | Also remove user settings |
+| `--force` | Skip confirmation prompt |
+
+### Examples
+
+#### Interactive Uninstall
+
+```bash
+squirrel self uninstall
+```
+
+Output:
+```
+This will remove:
+  - Symlink at ~/.local/bin/squirrel
+  - Cached releases at ~/.local/share/squirrel
+
+User settings at ~/.squirrel/settings.json will be preserved.
+Use --purge to also remove settings.
+
+Continue? [y/N]
+```
+
+#### Uninstall with Settings
+
+```bash
+squirrel self uninstall --purge
+```
+
+This removes:
+- Binary symlink
+- Cached releases
+- User settings
+
+#### Force Uninstall (No Prompt)
+
+```bash
+squirrel self uninstall --force
+```
+
+### What Gets Removed
+
+| Item | Default | With --purge |
+|------|---------|--------------|
+| Binary symlink (`~/.local/bin/squirrel`) | ✓ | ✓ |
+| Cached releases (`~/.local/share/squirrel/`) | ✓ | ✓ |
+| User settings (`~/.squirrel/`) | ✗ | ✓ |
+| Project configs (`squirrel.toml`) | ✗ | ✗ |
+| Audit database (`~/.local/share/squirrel/audits.db`) | ✓ | ✓ |
+
+<Info>
+Project configs (`squirrel.toml`) in your repositories are never removed.
+</Info>
+
+---
+
+## Related
+
+- [Configuration](/configuration) - Project config file options
+- [CLI Reference](/cli) - All CLI commands

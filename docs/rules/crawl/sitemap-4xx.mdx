@@ -1,0 +1,42 @@
+---
+title: "4XX Pages in Sitemap"
+description: "Checks for sitemap URLs returning 4XX status codes"
+---
+
+Checks for sitemap URLs returning 4XX status codes
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/sitemap-4xx` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Sitemaps should only list URLs that return 200 and are intended for indexing. Remove 4XX URLs from the sitemap or fix them by restoring the content or redirecting to a valid page. Keep sitemap entries clean to avoid wasting crawl budget.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/sitemap-4xx"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/sitemap-4xx"]
+disable = ["*"]
+```

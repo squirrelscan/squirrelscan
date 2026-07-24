@@ -1,0 +1,704 @@
+{
+  "$schema": "https://tangly.dev/schema/docs.json",
+  "theme": "tang",
+  "name": "squirrelscan",
+  "siteUrl": "https://docs.squirrelscan.com",
+  "description": "The website QA tool for your coding agent",
+  "colors": {
+    "primary": "#C4530F",
+    "light": "#F7F5F1",
+    "dark": "#0F1216"
+  },
+  "favicon": "/favicon.svg",
+  "fonts": {
+    "heading": {
+      "family": "JetBrains Mono",
+      "weight": 600
+    },
+    "body": {
+      "family": "Inter",
+      "weight": 400
+    }
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs",
+    "codeblocks": {
+      "theme": {
+        "light": "github-light",
+        "dark": "github-dark"
+      }
+    }
+  },
+  "background": {
+    "decoration": "grid",
+    "color": {
+      "light": "#F7F5F1",
+      "dark": "#0F1216"
+    }
+  },
+  "rounded": "none",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Tutorials",
+            "pages": [
+              "guides/fix-your-site-with-an-ai-agent",
+              "guides/local-audits-cli",
+              "guides/cloud-audits"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "projects",
+              "crawl",
+              "reports",
+              "guides/badges",
+              "guides/browser-rendering",
+              "guides/web-bot-auth"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developers",
+        "icon": "code",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "developers/index"
+            ]
+          },
+          {
+            "group": "CI/CD",
+            "pages": [
+              "guides/ci"
+            ]
+          },
+          {
+            "group": "Agents & MCP",
+            "pages": [
+              "developers/agents/index",
+              {
+                "group": "Coding agents",
+                "pages": [
+                  "developers/agents/claude-code",
+                  "developers/agents/cursor",
+                  "developers/agents/codex",
+                  "developers/agents/chatgpt",
+                  "developers/agents/opencode"
+                ]
+              },
+              "developers/mcp",
+              "developers/mcp-clients"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API",
+        "icon": "braces",
+        "groups": [
+          {
+            "group": "REST API",
+            "pages": [
+              "api/index",
+              "api/audits/create",
+              "api/audits/list",
+              "api/audits/get",
+              "api/audits/get-report",
+              "api/reports/publish",
+              "api/reports/list",
+              "api/reports/get",
+              "api/reports/update",
+              "api/reports/delete",
+              "api/credits/get",
+              "api/organizations/get"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "pages": [
+              "cloud/webhooks"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "developers/authentication"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Rules",
+        "icon": "list-checks",
+        "groups": [
+          {
+            "group": "Rules Reference",
+            "pages": [
+              "rules/index"
+            ]
+          },
+          {
+            "group": "SEO",
+            "icon": "search",
+            "expanded": true,
+            "pages": [
+              "rules/seo/index",
+              {
+                "group": "Crawlability",
+                "pages": [
+                  "rules/crawl/index",
+                  "rules/crawl/robots-txt",
+                  "rules/crawl/sitemap-exists",
+                  "rules/crawl/sitemap-valid",
+                  "rules/crawl/robots-meta-conflict",
+                  "rules/crawl/noindex-in-sitemap",
+                  "rules/crawl/canonical-chain",
+                  "rules/crawl/pagination",
+                  "rules/crawl/redirect-chain",
+                  "rules/crawl/all-noindex-pages",
+                  "rules/crawl/indexability",
+                  "rules/crawl/indexability-conflicts",
+                  "rules/crawl/schema-noindex-conflict",
+                  "rules/crawl/sitemap-4xx",
+                  "rules/crawl/sitemap-coverage",
+                  "rules/crawl/sitemap-domain",
+                  "rules/crawl/html-size",
+                  "rules/crawl/pdf-size",
+                  "rules/crawl/soft-404"
+                ]
+              },
+              {
+                "group": "Core SEO",
+                "pages": [
+                  "rules/core/index",
+                  "rules/core/meta-title",
+                  "rules/core/meta-description",
+                  "rules/core/canonical",
+                  "rules/core/canonical-header",
+                  "rules/core/h1",
+                  "rules/core/robots-meta",
+                  "rules/core/nosnippet",
+                  "rules/core/og-tags",
+                  "rules/core/twitter-cards",
+                  "rules/core/favicon",
+                  "rules/core/title-unique",
+                  "rules/core/doctype",
+                  "rules/core/charset"
+                ]
+              },
+              {
+                "group": "Links",
+                "pages": [
+                  "rules/links/index",
+                  "rules/links/internal-links",
+                  "rules/links/external-links",
+                  "rules/links/invalid-links",
+                  "rules/links/broken-links",
+                  "rules/links/broken-external-links",
+                  "rules/links/dead-links",
+                  "rules/links/redirect-chains",
+                  "rules/links/nofollow-internal",
+                  "rules/links/orphan-pages",
+                  "rules/links/weak-internal-links",
+                  "rules/links/dead-end-pages",
+                  "rules/links/anchor-text",
+                  "rules/links/https-downgrade",
+                  "rules/links/tel-mailto"
+                ]
+              },
+              {
+                "group": "Content",
+                "pages": [
+                  "rules/content/index",
+                  "rules/content/heading-hierarchy",
+                  "rules/content/word-count",
+                  "rules/content/duplicate-title",
+                  "rules/content/duplicate-description",
+                  "rules/content/keyword-stuffing",
+                  "rules/content/broken-html",
+                  "rules/content/reading-level",
+                  "rules/content/freshness",
+                  "rules/content/author-info",
+                  "rules/content/meta-in-body",
+                  "rules/content/mime-type",
+                  "rules/content/article-links",
+                  "rules/content/quality"
+                ]
+              },
+              {
+                "group": "Structured Data",
+                "pages": [
+                  "rules/schema/index",
+                  "rules/schema/json-ld-valid",
+                  "rules/schema/article",
+                  "rules/schema/product",
+                  "rules/schema/local-business",
+                  "rules/schema/faq",
+                  "rules/schema/breadcrumb",
+                  "rules/schema/website-search",
+                  "rules/schema/organization",
+                  "rules/schema/video",
+                  "rules/schema/review"
+                ]
+              },
+              {
+                "group": "Images",
+                "pages": [
+                  "rules/images/index",
+                  "rules/images/alt-text",
+                  "rules/images/dimensions",
+                  "rules/images/aspect-mismatch",
+                  "rules/images/modern-format",
+                  "rules/images/srcset",
+                  "rules/images/lazy-loading",
+                  "rules/images/filename-quality",
+                  "rules/images/svg-inline",
+                  "rules/images/broken-images",
+                  "rules/images/figure-figcaption",
+                  "rules/images/picture-element",
+                  "rules/images/image-file-size",
+                  "rules/images/responsive-size",
+                  "rules/images/offscreen-lazy",
+                  "rules/images/optimized"
+                ]
+              },
+              {
+                "group": "Social Media",
+                "pages": [
+                  "rules/social/index",
+                  "rules/social/og-image-size",
+                  "rules/social/og-url-match",
+                  "rules/social/social-profiles",
+                  "rules/social/share-buttons"
+                ]
+              },
+              {
+                "group": "Accessibility",
+                "pages": [
+                  "rules/a11y/index",
+                  "rules/a11y/skip-link",
+                  "rules/a11y/aria-labels",
+                  "rules/a11y/form-labels",
+                  "rules/a11y/color-contrast",
+                  "rules/a11y/focus-visible",
+                  "rules/a11y/touch-targets",
+                  "rules/a11y/landmark-regions",
+                  "rules/a11y/heading-order",
+                  "rules/a11y/link-text",
+                  "rules/a11y/table-headers",
+                  "rules/a11y/video-captions",
+                  "rules/a11y/zoom-disabled",
+                  "rules/a11y/paste-inputs",
+                  "rules/a11y/aria-valid-attr",
+                  "rules/a11y/aria-valid-attr-value",
+                  "rules/a11y/aria-roles",
+                  "rules/a11y/aria-required-attr",
+                  "rules/a11y/aria-required-parent",
+                  "rules/a11y/aria-required-children",
+                  "rules/a11y/aria-allowed-attr",
+                  "rules/a11y/aria-hidden-body",
+                  "rules/a11y/aria-hidden-focus",
+                  "rules/a11y/aria-command-name",
+                  "rules/a11y/aria-dialog-name",
+                  "rules/a11y/aria-input-field-name",
+                  "rules/a11y/aria-meter-name",
+                  "rules/a11y/aria-progressbar-name",
+                  "rules/a11y/aria-toggle-field-name",
+                  "rules/a11y/aria-tooltip-name",
+                  "rules/a11y/aria-text",
+                  "rules/a11y/aria-treeitem-name",
+                  "rules/a11y/button-name",
+                  "rules/a11y/input-image-alt",
+                  "rules/a11y/select-name",
+                  "rules/a11y/frame-title",
+                  "rules/a11y/object-alt",
+                  "rules/a11y/definition-list",
+                  "rules/a11y/dlitem",
+                  "rules/a11y/list-structure",
+                  "rules/a11y/listitem",
+                  "rules/a11y/tabindex",
+                  "rules/a11y/td-headers-attr",
+                  "rules/a11y/th-has-data-cells",
+                  "rules/a11y/duplicate-id-active",
+                  "rules/a11y/duplicate-id-aria",
+                  "rules/a11y/accesskeys",
+                  "rules/a11y/empty-heading",
+                  "rules/a11y/html-lang-valid",
+                  "rules/a11y/valid-lang",
+                  "rules/a11y/meta-refresh",
+                  "rules/a11y/link-in-text-block",
+                  "rules/a11y/form-field-multiple-labels",
+                  "rules/a11y/landmark-one-main",
+                  "rules/a11y/html-xml-lang-mismatch",
+                  "rules/a11y/aria-deprecated-role",
+                  "rules/a11y/image-redundant-alt",
+                  "rules/a11y/identical-links-same-purpose",
+                  "rules/a11y/table-duplicate-name",
+                  "rules/a11y/label-content-name-mismatch"
+                ]
+              },
+              {
+                "group": "Mobile",
+                "pages": [
+                  "rules/mobile/index",
+                  "rules/mobile/viewport",
+                  "rules/mobile/viewport-zoom",
+                  "rules/mobile/tap-targets",
+                  "rules/mobile/font-size",
+                  "rules/mobile/horizontal-scroll",
+                  "rules/mobile/interstitials"
+                ]
+              },
+              {
+                "group": "URL Structure",
+                "pages": [
+                  "rules/url/index",
+                  "rules/url/length",
+                  "rules/url/slug-keywords",
+                  "rules/url/hyphens",
+                  "rules/url/lowercase",
+                  "rules/url/trailing-slash",
+                  "rules/url/parameters",
+                  "rules/url/special-chars",
+                  "rules/url/stop-words"
+                ]
+              },
+              {
+                "group": "Internationalization",
+                "pages": [
+                  "rules/i18n/index",
+                  "rules/i18n/lang-attribute",
+                  "rules/i18n/hreflang"
+                ]
+              },
+              {
+                "group": "E-E-A-T",
+                "pages": [
+                  "rules/eeat/index",
+                  "rules/eeat/author-byline",
+                  "rules/eeat/content-dates",
+                  "rules/eeat/author-expertise",
+                  "rules/eeat/citations",
+                  "rules/eeat/authority-signals",
+                  "rules/eeat/about-page",
+                  "rules/eeat/editorial-policy",
+                  "rules/eeat/contact-page",
+                  "rules/eeat/physical-address",
+                  "rules/eeat/privacy-policy",
+                  "rules/eeat/terms-of-service",
+                  "rules/eeat/trust-signals",
+                  "rules/eeat/ymyl-detection",
+                  "rules/eeat/disclaimers",
+                  "rules/eeat/affiliate-disclosure"
+                ]
+              },
+              {
+                "group": "Local SEO",
+                "pages": [
+                  "rules/local/index",
+                  "rules/local/nap-consistency",
+                  "rules/local/geo-meta",
+                  "rules/local/service-area"
+                ]
+              },
+              {
+                "group": "Video",
+                "pages": [
+                  "rules/video/index",
+                  "rules/video/video-schema",
+                  "rules/video/video-thumbnail",
+                  "rules/video/video-accessible"
+                ]
+              },
+              {
+                "group": "Analytics",
+                "pages": [
+                  "rules/analytics/index",
+                  "rules/analytics/gtm-present",
+                  "rules/analytics/consent-mode"
+                ]
+              },
+              {
+                "group": "Gap Analysis",
+                "pages": [
+                  "rules/gaps/index",
+                  "rules/gaps/keywords",
+                  "rules/gaps/content"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Performance",
+            "icon": "gauge",
+            "expanded": true,
+            "pages": [
+              "rules/performance/index",
+              "rules/perf/index",
+              "rules/perf/lcp-hints",
+              "rules/perf/lcp-fetchpriority",
+              "rules/perf/cls-hints",
+              "rules/perf/inp-hints",
+              "rules/perf/font-loading",
+              "rules/perf/font-delivery",
+              "rules/perf/preconnect",
+              "rules/perf/render-blocking",
+              "rules/perf/lazy-above-fold",
+              "rules/perf/carousel-hidden-eager",
+              "rules/perf/dom-size",
+              "rules/perf/css-file-size",
+              "rules/perf/js-file-size",
+              "rules/perf/ttfb",
+              "rules/perf/js-redirects",
+              "rules/perf/js-libraries",
+              "rules/perf/source-maps",
+              "rules/perf/unminified-css",
+              "rules/perf/unminified-js",
+              "rules/perf/total-byte-weight",
+              "rules/perf/cache-headers",
+              "rules/perf/compression",
+              "rules/perf/bad-caching",
+              "rules/perf/http2",
+              "rules/perf/animated-content",
+              "rules/perf/legacy-js",
+              "rules/perf/duplicate-js",
+              "rules/perf/critical-request-chains",
+              "rules/perf/browser-required"
+            ]
+          },
+          {
+            "group": "Security",
+            "icon": "shield-check",
+            "expanded": true,
+            "pages": [
+              {
+                "group": "Site Integrity",
+                "pages": [
+                  "rules/integrity/index",
+                  "rules/integrity/template-discontinuity",
+                  "rules/integrity/orphan-page",
+                  "rules/integrity/brand-impersonation",
+                  "rules/integrity/obfuscated-script",
+                  "rules/integrity/fake-auth-overlay",
+                  "rules/integrity/seo-doorway",
+                  "rules/integrity/cloaking",
+                  "rules/integrity/kit-signature",
+                  "rules/integrity/known-malicious-url"
+                ]
+              },
+              {
+                "group": "Security",
+                "pages": [
+                  "rules/security/index",
+                  "rules/security/https",
+                  "rules/security/http-to-https",
+                  "rules/security/hsts",
+                  "rules/security/csp",
+                  "rules/security/x-frame-options",
+                  "rules/security/x-content-type",
+                  "rules/security/referrer-policy",
+                  "rules/security/permissions-policy",
+                  "rules/security/mixed-content",
+                  "rules/security/form-https",
+                  "rules/security/form-captcha",
+                  "rules/security/new-tab",
+                  "rules/security/leaked-secrets",
+                  "rules/security/third-party-cookies",
+                  "rules/security/sri",
+                  "rules/security/cookie-flags"
+                ]
+              },
+              {
+                "group": "Legal Compliance",
+                "pages": [
+                  "rules/legal/index",
+                  "rules/legal/privacy-policy",
+                  "rules/legal/cookie-consent",
+                  "rules/legal/terms-of-service",
+                  "rules/legal/subprocessor-disclosure"
+                ]
+              },
+              {
+                "group": "Blocking",
+                "pages": [
+                  "rules/adblock/index",
+                  "rules/adblock/element-hiding",
+                  "rules/adblock/blocked-links",
+                  "rules/adblock/privacy-blocked"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Agents",
+            "icon": "bot",
+            "expanded": true,
+            "pages": [
+              "rules/agents/index",
+              "rules/ax/index",
+              "rules/ax/content-without-js",
+              "rules/ax/token-weight",
+              "rules/ax/markdown-response",
+              "rules/ax/ai-crawlers",
+              "rules/ax/agent-blocking",
+              "rules/ax/llms-txt",
+              "rules/ax/agents-md",
+              "rules/ax/well-known-agent",
+              "rules/ax/content-signals",
+              "rules/ax/noai-signals",
+              "rules/ax/rsl-license",
+              "rules/ax/api-discovery",
+              "rules/ax/archive-indexing",
+              "rules/ax/pay-per-crawl",
+              "rules/ai/llm-parsability",
+              "rules/ai/page-type-match",
+              "rules/ai/ai-content",
+              "rules/ai/site-metadata"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "icon": "terminal",
+        "groups": [
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/index",
+              "cli/audit",
+              "cli/crawl",
+              "cli/analyze",
+              "cli/report",
+              "cli/init",
+              "cli/config",
+              "cli/feedback",
+              "cli/auth",
+              "cli/keys",
+              "cli/credits",
+              "cli/mcp",
+              "cli/self",
+              "cli/skills",
+              "cli/debug"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/index",
+              "configuration/project",
+              "configuration/crawler",
+              "configuration/rules",
+              "configuration/external-links",
+              "configuration/output",
+              "configuration/cloud",
+              "configuration/rule-options",
+              "configuration/examples"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Cloud",
+        "icon": "cloud",
+        "groups": [
+          {
+            "group": "Cloud",
+            "pages": [
+              "cloud/index",
+              "cloud/credits",
+              "cloud/rules",
+              "cloud/technologies",
+              "cloud/site-metadata",
+              "cloud/editor-summary",
+              "cloud/rendering",
+              "cloud/scheduled-audits",
+              "cloud/team"
+            ]
+          },
+          {
+            "group": "Dashboard",
+            "pages": [
+              "dashboard/index",
+              "dashboard/audit-settings",
+              "dashboard/support"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Website",
+        "href": "https://squirrelscan.com"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "GitHub",
+      "href": "https://github.com/squirrelscan/squirrelscan"
+    }
+  },
+  "api": {
+    "openapi": "openapi.json",
+    "codeSamples": {
+      "languages": [
+        "curl",
+        "typescript",
+        "python"
+      ]
+    }
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "claude",
+      "mcp",
+      "cursor"
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/squirrelscan",
+      "x": "https://x.com/squirrelscan_",
+      "linkedin": "https://www.linkedin.com/company/squirrelscan/"
+    }
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "redirects": [
+    {
+      "source": "/rules/content/article-toc",
+      "destination": "/rules/content",
+      "permanent": true
+    },
+    {
+      "source": "/agents",
+      "destination": "/developers/agents",
+      "permanent": true
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+---
+title: "Privacy Policy"
+description: "Checks for privacy policy link presence"
+---
+
+Checks for privacy policy link presence
+
+| | |
+|---|---|
+| **Rule ID** | `legal/privacy-policy` |
+| **Category** | [Legal Compliance](/rules/legal) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+A privacy policy is legally required in many jurisdictions (GDPR, CCPA). Link to your privacy policy from every page, typically in the footer. The policy should explain what data you collect, how it's used, and user rights. Consider using schema.org markup to identify the policy page.
+
+## Detection
+
+This rule credits a privacy policy when the crawl contains a page whose URL matches a known privacy slug (`/privacy`, `/privacy-policy`, `/legal/privacy`, and localized variants) or whose title or h1 reads "Privacy Policy" / "Privacy Notice", or when any page links to one. It shares this acceptance with the E-E-A-T privacy policy rule so both stay consistent.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/privacy-policy"]
+```
+
+### Disable all Legal Compliance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["legal/privacy-policy"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Image Alt Text"
+description: "Validates image alt attributes"
+---
+
+Validates image alt attributes
+
+| | |
+|---|---|
+| **Rule ID** | `images/alt-text` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Alt text describes images for screen readers and displays when images fail to load. It's essential for accessibility and helps with image search SEO. Add descriptive alt text to all meaningful images. Keep it concise (under 125 characters) but descriptive. For decorative images, use empty alt="" to indicate they should be skipped by screen readers. Avoid keyword stuffing in alt text.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/alt-text"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/alt-text"]
+disable = ["*"]
+```

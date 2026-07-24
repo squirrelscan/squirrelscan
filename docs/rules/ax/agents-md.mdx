@@ -1,0 +1,75 @@
+---
+title: "AGENTS.md"
+description: "Detects /AGENTS.md and variants: instructions for coding agents working against the site"
+---
+
+Detects an [`AGENTS.md`](https://agents.md) file: a plain-Markdown instructions file aimed at coding agents (Claude Code, Cursor, Codex, and similar) that work against a repository or a documentation site. Where `llms.txt` curates content for an agent *reading* a site, `AGENTS.md` tells an agent *working on* the underlying project how to build, test, and contribute to it.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/agents-md` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+<Note>This rule is a **recommendation**: it never penalizes your score. `AGENTS.md` is most relevant for product and documentation sites with an associated codebase; a marketing site with no repository behind it has nothing to point one at. The recommendation only appears in your report when the site already publishes an `llms.txt` — the strongest signal a site is developer-oriented; for everyone else, absence is a quiet informational note.</Note>
+
+## What it checks
+
+The audit probes, once per crawl, for `AGENTS.md` at a few conventional locations, in order:
+
+- `/AGENTS.md` (root, canonical casing)
+- `/agents.md` (lowercase)
+- `/.well-known/agents.md`
+- `/docs/AGENTS.md`
+
+It reports which path (if any) responds, and does a basic content sanity check: the response should be plain text or Markdown, non-empty, and not an HTML error or SPA-fallback page mistakenly served with a `200`.
+
+## Solution
+
+If the site has an associated codebase, publish an `AGENTS.md` at the repository root (it will typically be served at `/AGENTS.md` if the site is generated from that repo, or link to it from your docs). Cover what a coding agent needs to be productive without asking:
+
+```markdown AGENTS.md
+# Agent Instructions
+
+## Setup
+Run `bun install` then `bun run dev`.
+
+## Testing
+Run `bun test` before committing. All tests must pass.
+
+## Conventions
+- TypeScript strict mode, no `any`.
+- Components in `src/components`, one per file.
+
+## Do not
+- Do not edit generated files in `src/generated/`.
+- Do not commit directly to `main`.
+```
+
+For a documentation site without its own codebase, `AGENTS.md` is less relevant — prioritize [llms.txt](/rules/ax/llms-txt) instead.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/agents-md"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/agents-md"]
+disable = ["*"]
+```

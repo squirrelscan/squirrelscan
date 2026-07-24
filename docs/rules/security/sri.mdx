@@ -1,0 +1,42 @@
+---
+title: "Subresource Integrity"
+description: "Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)"
+---
+
+Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)
+
+| | |
+|---|---|
+| **Rule ID** | `security/sri` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Cross-origin scripts and stylesheets can be tampered with in transit or at the source (a compromised CDN or third-party host), and the browser has no way to detect it without help. Add an integrity attribute with a sha256/sha384/sha512 hash of the expected file, plus crossorigin="anonymous": `<script src="..." integrity="sha384-..." crossorigin="anonymous"></script>`. Most CDNs (jsDelivr, cdnjs, unpkg) publish the hash alongside the URL. This only works for pinned/versioned assets — scripts that update themselves server-side (analytics, payment SDKs, CAPTCHAs) intentionally don't support it.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/sri"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/sri"]
+disable = ["*"]
+```

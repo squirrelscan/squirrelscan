@@ -1,0 +1,42 @@
+---
+title: "All Non-Indexed Pages"
+description: "Lists all pages blocked from indexing for user audit"
+---
+
+Lists all pages blocked from indexing for user audit
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/all-noindex-pages` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+Review this list to ensure all non-indexed pages are intentionally blocked. Common unintentional blocks: staging directives left in production, overly broad robots.txt rules, CMS defaults. Remove noindex from pages that should be indexed.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/all-noindex-pages"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/all-noindex-pages"]
+disable = ["*"]
+```

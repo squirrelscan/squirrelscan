@@ -1,0 +1,57 @@
+---
+title: "HTTP to HTTPS Redirect"
+description: "Checks whether HTTP URLs redirect to HTTPS"
+---
+
+Checks whether HTTP URLs redirect to HTTPS
+
+| | |
+|---|---|
+| **Rule ID** | `security/http-to-https` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Solution
+
+Ensure all HTTP URLs redirect to their HTTPS equivalents using permanent (301) redirects. This consolidates link equity and avoids mixed indexing. Configure your server to enforce HTTPS globally and verify that both the homepage and key internal URLs redirect correctly. WARNING: This rule makes external HTTP requests to probe redirect behavior.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `sampleLimit` | unknown | `undefined` | Maximum number of pages to probe for HTTP→HTTPS redirects |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."security/http-to-https"]
+sampleLimit = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/http-to-https"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/http-to-https"]
+disable = ["*"]
+```
