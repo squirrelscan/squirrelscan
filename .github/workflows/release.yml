@@ -25,6 +25,7 @@ jobs:
   version:
     name: Version and tag
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     outputs:
@@ -41,7 +42,11 @@ jobs:
           INPUT_BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
-          current=$(jq -r .version apps/cli/package.json)
+          git fetch --tags --force
+          current=$(git tag --list 'v*' | sed 's/^v//' | npx --yes semver | tail -1)
+          if [ -z "$current" ]; then
+            current=$(jq -r .version apps/cli/package.json)
+          fi
           if [ "$INPUT_BUMP" = promote ]; then
             new=$(printf '%s' "$current" | sed -E 's/-(beta|alpha)\.[0-9]+$//')
             prerelease=false
@@ -82,9 +87,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/cli/package.json npm/package.json plugin.json .cursor-plugin/plugin.json .claude-plugin/plugin.json bun.lock
-          git commit -m "chore(release): v${VERSION}"
+          git commit --signoff -m "chore(release): v${VERSION}"
           git tag "$TAG"
-          git push origin HEAD:main "$TAG"
+          git push origin "$TAG"
 
   quality:
     name: Release quality gate
