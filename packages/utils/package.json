@@ -12,6 +12,7 @@
     "./robots-txt": "./src/robots-txt.ts",
     "./validation": "./src/validation.ts",
     "./headers": "./src/headers.ts",
+    "./response-body": "./src/response-body.ts",
     "./user-agent": "./src/user-agent.ts",
     "./client-redirects": "./src/client-redirects.ts",
     "./indexable": "./src/indexable.ts",

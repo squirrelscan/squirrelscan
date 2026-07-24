@@ -19,9 +19,37 @@ export function isValidHeaderValue(value: string): boolean {
   return HEADER_VALUE_RE.test(value);
 }
 
+const CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST = new Set([
+  "accept",
+  "accept-language",
+  "upgrade-insecure-requests",
+  "user-agent",
+]);
+
+/**
+ * Same-origin hops retain every header. Cross-origin hops retain only generic
+ * browser capability headers, and stripped values stay stripped for the rest
+ * of the redirect chain.
+ */
+export function headersForRedirect(
+  headers: HeadersInit | undefined,
+  fromUrl: string,
+  toUrl: string,
+): Headers {
+  const result = new Headers(headers);
+  if (new URL(fromUrl).origin === new URL(toUrl).origin) return result;
+
+  for (const name of [...result.keys()]) {
+    if (!CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST.has(name.toLowerCase())) {
+      result.delete(name);
+    }
+  }
+  return result;
+}
+
 // A DocumentFetcher's `headers["set-cookie"]` is "\n"-joined, one real
-// Set-Cookie header per line (packages/fetchers/src/index.ts's headersToRecord,
-// squirrelscan/repo#973) — necessary because repeated Set-Cookie headers are
+// Set-Cookie header per line (packages/fetchers/src/index.ts's headersToRecord)
+// because repeated Set-Cookie headers are
 // the one case `Headers` never combines, so they have to be flattened into a
 // single record string somehow. Rehydrating that joined string back into a
 // Headers object via `headers.set("set-cookie", joined)` — or via the

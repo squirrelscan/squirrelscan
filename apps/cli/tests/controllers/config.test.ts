@@ -5,10 +5,13 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { ConfigSchema } from "../../src/config";
 import {
-  showConfig,
-  setConfigValue,
   getConfigPath,
+  redactConfigForDisplay,
+  redactConfigValueForDisplay,
+  setConfigValue,
+  showConfig,
 } from "../../src/controllers/config";
 
 describe("showConfig", () => {
@@ -81,6 +84,51 @@ max_pages = "not a number"
       expect(result.error.code).toBe("INVALID_CONFIG");
       expect(result.error.message).toContain("crawler.max_pages");
     }
+  });
+});
+
+describe("config display redaction", () => {
+  test("redacts every crawler header and provider API key", () => {
+    const config = ConfigSchema.parse({
+      crawler: {
+        headers: {
+          Authorization: "Bearer review-secret",
+          "CF-Access-Client-Secret": "custom-secret", // pragma: allowlist secret
+        },
+      },
+      intel: {
+        enabled: true,
+        providers: {
+          "safe-browsing": { api_key: "review-api-key" }, // pragma: allowlist secret
+        },
+      },
+    });
+
+    const redacted = redactConfigForDisplay(config);
+    expect(redacted.crawler.headers).toEqual({
+      Authorization: "[REDACTED]",
+      "CF-Access-Client-Secret": "[REDACTED]",
+    });
+    expect(redacted.intel.providers["safe-browsing"]?.api_key).toBe(
+      "[REDACTED]"
+    );
+    expect(config.crawler.headers.Authorization).toBe("Bearer review-secret");
+  });
+
+  test("redacts secret values echoed by config set", () => {
+    expect(
+      redactConfigValueForDisplay(
+        "crawler.headers.Authorization",
+        "Bearer secret"
+      )
+    ).toBe("[REDACTED]");
+    expect(
+      redactConfigValueForDisplay(
+        "intel.providers.urlhaus.api_key",
+        "api-secret"
+      )
+    ).toBe("[REDACTED]");
+    expect(redactConfigValueForDisplay("crawler.max_pages", 100)).toBe(100);
   });
 });
 

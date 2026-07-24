@@ -21,7 +21,7 @@ import {
   REPORT_PAGES_HARD_CAP,
 } from "../constants";
 import { groupIssuesByCategory, groupCategoriesByGroup, type GroupedCategory } from "../grouping";
-import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
+import { groupTechnologies, techChangeSummary } from "../technologies";
 import {
   SITE_PROFILE_NOTE,
   siteProfileFlags,
@@ -254,7 +254,6 @@ details[open] > summary { margin-bottom: 0.5rem; }
 .tech-group-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: ${THEME.colors.mutedForeground}; margin-bottom: 0.5rem; font-weight: 600; }
 .tech-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .tech-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: ${THEME.colors.card}; border: 1px solid ${THEME.colors.border}; padding: 0.35rem 0.6rem; font-size: 0.85rem; }
-.tech-badge img { width: 16px; height: 16px; object-fit: contain; }
 .tech-badge .tech-ver { color: ${THEME.colors.mutedForeground}; font-size: 0.72rem; }
 
 .profile-section { margin: 2rem 0; }
@@ -278,7 +277,7 @@ details[open] > summary { margin-bottom: 0.5rem; }
 
 .summary-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; margin-top: 1rem; }
 .site-identity { display: flex; align-items: flex-start; gap: 1rem; flex: 1 1 340px; min-width: 0; }
-.site-favicon { width: 44px; height: 44px; border: 1px solid ${THEME.colors.border}; background-color: ${THEME.colors.card}; background-size: 30px 30px; background-position: center; background-repeat: no-repeat; flex-shrink: 0; }
+.site-favicon { width: 44px; height: 44px; border: 1px solid ${THEME.colors.border}; background-color: ${THEME.colors.card}; color: ${THEME.colors.mutedForeground}; display: grid; place-items: center; font-size: 1.1rem; font-weight: 650; flex-shrink: 0; }
 .site-identity-text { min-width: 0; }
 .site-title { font-size: 1.75rem; font-weight: 700; line-height: 1.2; margin: 0 0 0.35rem; word-break: break-word; }
 .site-description { color: ${THEME.colors.mutedForeground}; font-size: 0.95rem; line-height: 1.5; margin: 0 0 0.5rem; }
@@ -349,24 +348,16 @@ function Logo() {
   );
 }
 
-// DuckDuckGo favicon service: privacy-friendly, returns a fallback icon when the
-// site has none (no broken image). One external request; reports carry no strict
-// CSP today (see SCREENSHOT_HIDE_SCRIPT note) so img-src is unrestricted.
 function SiteFavicon({ report }: { report: AuditReport }) {
   let host: string | null = null;
   try {
     host = new URL(report.baseUrl).hostname;
   } catch {}
   if (!host) return null;
-  // CSS background-image (not <img>): a missing favicon (DDG returns an empty
-  // body for faviconless sites) shows the empty placeholder tile rather than a
-  // broken-image icon — no JS/onerror needed, so the hide-script stays untouched.
   return (
-    <div
-      className="site-favicon"
-      style={{ backgroundImage: `url(https://icons.duckduckgo.com/ip3/${host}.ico)` }}
-      aria-hidden
-    />
+    <div className="site-favicon" aria-hidden>
+      {host.charAt(0).toUpperCase()}
+    </div>
   );
 }
 
@@ -1084,10 +1075,8 @@ function TechnologiesSection({ report }: { report: AuditReport }) {
           </div>
           <div className="tech-badges">
             {group.items.map((t) => {
-              const url = techIconUrl(t.icon);
               return (
                 <span className="tech-badge" key={t.id}>
-                  {url && <img src={sanitizeUrl(url)} alt={t.name} loading="lazy" />}
                   <span>{t.name}</span>
                   {t.version && <span className="tech-ver">{t.version}</span>}
                 </span>

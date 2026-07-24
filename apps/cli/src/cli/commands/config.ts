@@ -6,9 +6,11 @@ import { stringify as stringifyTOML } from "smol-toml";
 
 import { findConfigFile } from "@/config";
 import {
-  showConfig,
-  setConfigValue,
   getConfigPath,
+  redactConfigForDisplay,
+  redactConfigValueForDisplay,
+  setConfigValue,
+  showConfig,
 } from "@/controllers/config";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { safeExit } from "@/self/updater";
@@ -37,7 +39,7 @@ export const config = defineCommand({
 
         console.log(`Config file: ${result.data.configPath}`);
         console.log("");
-        console.log(stringifyTOML(result.data.config));
+        console.log(stringifyTOML(redactConfigForDisplay(result.data.config)));
         console.log("");
         console.log("Crawler keys:");
         console.log(
@@ -88,9 +90,13 @@ export const config = defineCommand({
         }
 
         if (args["dry-run"]) {
-          console.log(`Would set ${result.data.key} = ${result.data.value}`);
+          console.log(
+            `Would set ${result.data.key} = ${redactConfigValueForDisplay(result.data.key, result.data.value)}`
+          );
           console.log("");
-          console.log(stringifyTOML(result.data.config));
+          console.log(
+            stringifyTOML(redactConfigForDisplay(result.data.config))
+          );
           return;
         }
 
@@ -99,7 +105,9 @@ export const config = defineCommand({
           result.data.configPath,
           stringifyTOML(result.data.config)
         );
-        console.log(`Set ${result.data.key} = ${result.data.value}`);
+        console.log(
+          `Set ${result.data.key} = ${redactConfigValueForDisplay(result.data.key, result.data.value)}`
+        );
       },
     }),
     path: defineCommand({
