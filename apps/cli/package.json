@@ -1,6 +1,6 @@
 {
   "name": "@squirrelscan/cli",
-  "version": "0.0.79",
+  "version": "0.0.80",
   "description": "Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows.",
   "bin": {
     "squirrelscan": "./build/squirrelscan"

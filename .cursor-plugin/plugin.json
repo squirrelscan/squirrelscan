@@ -2,7 +2,7 @@
   "name": "squirrelscan",
   "displayName": "squirrelscan",
   "description": "Website QA tool built for coding agents (Claude Code, Cursor). 260+ rules across SEO, performance, security, accessibility & agent experience: audit from the CLI, fix findings in code, publish reports, and connect over MCP.",
-  "version": "0.0.79",
+  "version": "0.0.80",
   "author": {
     "name": "squirrelscan"
   },

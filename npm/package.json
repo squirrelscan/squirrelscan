@@ -1,6 +1,6 @@
 {
   "name": "squirrelscan",
-  "version": "0.0.79",
+  "version": "0.0.80",
   "description": "Website QA tool built for coding agents. 260+ rules across SEO, performance, security, accessibility & agent experience, from the CLI, cloud, or MCP.",
   "bin": {
     "squirrel": "bin/squirrel.js"
@@ -16,17 +16,7 @@
   "bugs": {
     "url": "https://github.com/squirrelscan/squirrelscan/issues"
   },
-  "keywords": [
-    "seo",
-    "audit",
-    "cli",
-    "website",
-    "llm",
-    "accessibility",
-    "performance",
-    "security",
-    "crawler"
-  ],
+  "keywords": ["seo", "audit", "cli", "website", "llm", "accessibility", "performance", "security", "crawler"],
   "author": "squirrelscan",
   "license": "MIT",
   "publishConfig": {
@@ -35,21 +25,7 @@
   "engines": {
     "node": ">=18"
   },
-  "os": [
-    "darwin",
-    "linux",
-    "win32"
-  ],
-  "cpu": [
-    "x64",
-    "arm64"
-  ],
-  "files": [
-    "bin/",
-    "lib/",
-    "scripts/postinstall.js",
-    "README.md",
-    "LICENSE",
-    "THIRD_PARTY_NOTICES.md"
-  ]
+  "os": ["darwin", "linux", "win32"],
+  "cpu": ["x64", "arm64"],
+  "files": ["bin/", "lib/", "scripts/postinstall.js", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]
 }
