@@ -1,0 +1,17 @@
+{
+  "name": "@squirrelscan/config",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/utils": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "private": true,
+  "license": "MIT"
+}

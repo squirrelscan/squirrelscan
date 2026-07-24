@@ -1,0 +1,19 @@
+{
+  "name": "@squirrelscan/threat-intel",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./signatures": "./src/signatures.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/core-contracts": "workspace:*",
+    "tldts": "^7"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test"
+  },
+  "private": true,
+  "license": "MIT"
+}

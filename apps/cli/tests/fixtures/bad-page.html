@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+  <head>
+    <title>bad page</title>
+    <!-- Missing meta description -->
+    <!-- Missing canonical -->
+    <!-- Missing viewport -->
+    <!-- Missing lang attribute on html -->
+
+    <!-- Bad OG tags -->
+    <meta
+      property="og:title"
+      content="This is an extremely long title that exceeds the recommended character limit for Open Graph titles and will likely be truncated on social media platforms when shared"
+    />
+
+    <!-- Invalid Twitter card -->
+    <meta name="twitter:card" content="invalid_card_type" />
+
+    <!-- Invalid hreflang -->
+    <link rel="alternate" hreflang="UK" href="https://example.com/uk" />
+    <link
+      rel="alternate"
+      hreflang="invalid-code"
+      href="https://example.com/invalid"
+    />
+    <!-- Missing x-default -->
+    <!-- Missing self-reference -->
+
+    <!-- Render blocking resources -->
+    <link rel="stylesheet" href="https://example.com/large-style.css" />
+    <link rel="stylesheet" href="https://example.com/another-style.css" />
+    <link rel="stylesheet" href="https://example.com/more-style.css" />
+    <link rel="stylesheet" href="https://example.com/even-more-style.css" />
+    <script src="https://example.com/blocking-script.js"></script>
+    <script src="https://example.com/another-blocking.js"></script>
+
+    <!-- Third-party scripts -->
+    <script src="https://www.google-analytics.com/analytics.js"></script>
+    <script src="https://connect.facebook.net/en_US/sdk.js"></script>
+    <script src="https://platform.twitter.com/widgets.js"></script>
+    <script src="https://static.hotjar.com/script.js"></script>
+    <script src="https://js.hs-scripts.com/123.js"></script>
+    <script src="https://cdn.segment.com/analytics.js"></script>
+
+    <!-- Invalid JSON-LD -->
+    <script type="application/ld+json">
+      {
+          "@context": "https://schema.org",
+          "@type": "Article"
+          "headline": "Missing comma before this"
+      }
+    </script>
+
+    <style>
+      @font-face {
+          font-family: 'NoSwapFont';
+          src: url('/fonts/noswap.woff2') format('woff2');
+          /* Missing font-display: swap */
+      }
+    </style>
+  </head>
+  <body>
+    <!-- No semantic structure -->
+    <div>
+      <div>Menu</div>
+      <a href="#">Click here</a>
+      <a href="#">Read more</a>
+      <a href="#">Learn more</a>
+      <a href="#">Here</a>
+      <a href="#">Link</a>
+      <a href="#">More</a>
+    </div>
+
+    <div>
+      <div>bad page</div>
+
+      <!-- Images without dimensions (CLS risk) -->
+      <img src="https://example.com/image1.jpg" alt="" />
+      <img src="https://example.com/image2.jpg" />
+      <img src="https://example.com/image3.jpg" alt="" />
+      <img src="https://example.com/image4.jpg" />
+      <img src="https://example.com/image5.jpg" alt="" />
+      <img src="https://example.com/image6.jpg" />
+
+      <!-- Lazy loading on above-fold image -->
+      <img src="https://example.com/hero.jpg" loading="lazy" alt="Hero image" />
+
+      <!-- Images with generic/random filenames -->
+      <img src="https://example.com/img123.jpg" alt="Product" />
+      <img src="https://example.com/DSC_0001.jpg" alt="Photo" />
+      <img
+        src="https://example.com/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.jpg"
+        alt="Hash filename"
+      />
+
+      <!-- Iframes without dimensions -->
+      <iframe src="https://www.youtube.com/embed/abc123"></iframe>
+      <iframe src="https://maps.google.com/embed"></iframe>
+
+      <!-- Empty link -->
+      <a href="https://example.com/page"></a>
+
+      <div>Some content here with very short paragraphs.</div>
+      <div>Another paragraph.</div>
+    </div>
+
+    <!-- Lots of external links with no internal linking -->
+    <a href="https://external-site1.com">External 1</a>
+    <a href="https://external-site2.com">External 2</a>
+    <a href="https://external-site3.com">External 3</a>
+    <a href="https://external-site4.com">External 4</a>
+    <a href="https://external-site5.com">External 5</a>
+  </body>
+</html>

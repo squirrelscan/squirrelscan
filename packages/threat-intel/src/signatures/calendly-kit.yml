@@ -1,0 +1,43 @@
+# Calendly phishing-kit signature — seeded from the sydneyavspecialists incident
+# (#115). A token-gated standalone page that impersonates Calendly's booking /
+# "Sign in with Google" surface, ships a large obfuscated inline payload carrying
+# an anti-tamper string, and overlays the page with a full-viewport `#google-auth`
+# iframe. Injected affiliate "doorway" posts (ClickFunnels / Kajabi / sales-funnel
+# titles) share the same campaign.
+#
+# YARA-style: declare named strings, then a boolean `condition` over them. Targets
+# scope each string to a corpus (title / html / text / url / scripts / any).
+# `contains` is a case-insensitive substring; `regex` honours `nocase` + `flags`.
+id: calendly-kit
+name: Calendly phishing kit
+severity: critical
+description: >-
+  Page matches the Calendly credential-phishing kit: a Calendly-branded booking
+  surface combined with the injected #google-auth credential overlay or the
+  obfuscator's anti-tamper marker. If you did not build this page your site is
+  likely compromised — remove the page, rotate credentials, and audit server
+  access logs.
+strings:
+  # Calendly branding in the page title or visible copy.
+  calendly_brand:
+    contains: calendly
+    target: any
+  # The injected full-viewport credential overlay iframe id from the incident.
+  google_auth_overlay:
+    regex: 'id=["'']?google-auth'
+    target: html
+    nocase: true
+  # Anti-tamper string emitted by the kit's JS obfuscator.
+  anti_tamper:
+    contains: the code has been tampered
+    target: html
+  # "Updated"/"Verify" Calendly doorway titles seen across the campaign.
+  doorway_title:
+    regex: '(clickfunnels|sales funnel|make money online|kajabi).{0,40}(tips|best|review|guide|funnel)'
+    target: title
+    nocase: true
+# Calendly branding AND a kit tell — the injected credential overlay, the
+# obfuscator's anti-tamper marker, or a campaign doorway title. Branding always
+# required, so a legit Calendly embed never fires, and a generic ClickFunnels /
+# sales-funnel blog title (no Calendly) never fires either.
+condition: calendly_brand and (google_auth_overlay or anti_tamper or doorway_title)

@@ -1,0 +1,216 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        required: true
+        type: choice
+        options: [beta, stable]
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        options: [patch, minor, major, promote]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  NO_TELEMETRY: "1"
+
+jobs:
+  version:
+    name: Version and tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bun
+      - name: Compute version
+        id: version
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          current=$(jq -r .version apps/cli/package.json)
+          if [ "$INPUT_BUMP" = promote ]; then
+            new=$(printf '%s' "$current" | sed -E 's/-(beta|alpha)\.[0-9]+$//')
+            prerelease=false
+          elif [ "$INPUT_CHANNEL" = beta ]; then
+            if [[ "$current" =~ -beta\.([0-9]+)$ ]]; then
+              base=${current%%-beta.*}
+              new="${base}-beta.$((BASH_REMATCH[1] + 1))"
+            else
+              new=$(npx --yes semver -i "pre${INPUT_BUMP}" --preid beta "$current")
+            fi
+            prerelease=true
+          else
+            new=$(npx --yes semver -i "$INPUT_BUMP" "$current")
+            prerelease=false
+          fi
+          {
+            echo "version=$new"
+            echo "tag=v$new"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+      - name: Update manifests
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bun -e '
+            const path = "apps/cli/package.json";
+            const pkg = await Bun.file(path).json();
+            pkg.version = process.env.VERSION;
+            await Bun.write(path, JSON.stringify(pkg, null, 2) + "\n");
+          '
+          bun run scripts/sync-plugin-manifests.ts --version "$VERSION"
+          bun install
+      - name: Commit and tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/package.json npm/package.json plugin.json .cursor-plugin/plugin.json .claude-plugin/plugin.json bun.lock
+          git commit -m "chore(release): v${VERSION}"
+          git tag "$TAG"
+          git push origin HEAD:main "$TAG"
+
+  quality:
+    name: Release quality gate
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: ./.github/actions/setup-bun
+      - run: bun run format:check
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run test:engine
+      - run: bun run test:release
+
+  build:
+    name: Build release binaries
+    needs: [version, quality]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: ./.github/actions/setup-bun
+      - name: Build all platforms
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: make build-all VERSION="$VERSION"
+      - name: Generate manifest
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: make manifest VERSION="$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: |
+            apps/cli/build/squirrel-*
+            apps/cli/build/manifest.json
+
+  github-release:
+    name: Publish GitHub release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-binaries
+          path: apps/cli/build
+      - name: Resolve release notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notes=$(awk -v "v=$VERSION" -f scripts/extract-changelog.awk CHANGELOG.md)
+          if [ -z "${notes//[[:space:]]/}" ]; then
+            notes="squirrelscan v${VERSION}"
+          fi
+          printf '%s\n' "$notes" > release-notes.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          flag=()
+          if [ "$PRERELEASE" = true ]; then flag+=(--prerelease); fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            "${flag[@]}" \
+            apps/cli/build/squirrel-* \
+            apps/cli/build/manifest.json
+
+  npm:
+    name: Publish npm package
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.5.1
+      - name: Publish with provenance
+        working-directory: npm
+        run: npm publish --access public --provenance
+
+  hosted-release-refresh:
+    name: Refresh hosted release cache
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Notify private website
+        env:
+          RELEASE_WEBHOOK_SECRET: ${{ secrets.RELEASE_WEBHOOK_SECRET }}
+        run: |
+          test -n "$RELEASE_WEBHOOK_SECRET"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${RELEASE_WEBHOOK_SECRET}" \
+            --header "Content-Type: application/json" \
+            https://squirrelscan.com/api/release-refresh
+
+  install-tests:
+    name: Verify installers
+    needs: [version, github-release]
+    uses: ./.github/workflows/test-install.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}

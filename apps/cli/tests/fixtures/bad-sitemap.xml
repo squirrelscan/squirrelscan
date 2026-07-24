@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <!-- Missing loc in first entry -->
+    <url>
+        <lastmod>2024-01-15</lastmod>
+    </url>
+
+    <!-- Relative URL (should be absolute) -->
+    <url>
+        <loc>/relative-path</loc>
+    </url>
+
+    <!-- Future date -->
+    <url>
+        <loc>https://example.com/page1</loc>
+        <lastmod>2030-01-01</lastmod>
+    </url>
+
+    <!-- Invalid date format -->
+    <url>
+        <loc>https://example.com/page2</loc>
+        <lastmod>January 15, 2024</lastmod>
+    </url>
+
+    <!-- Invalid changefreq -->
+    <url>
+        <loc>https://example.com/page3</loc>
+        <changefreq>sometimes</changefreq>
+    </url>
+
+    <!-- Invalid priority -->
+    <url>
+        <loc>https://example.com/page4</loc>
+        <priority>2.5</priority>
+    </url>
+
+    <!-- Cross-domain URL -->
+    <url>
+        <loc>https://different-domain.com/page</loc>
+        <lastmod>2024-01-15</lastmod>
+    </url>
+
+    <!-- Valid entry for comparison -->
+    <url>
+        <loc>https://example.com/valid-page</loc>
+        <lastmod>2024-01-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+</urlset>

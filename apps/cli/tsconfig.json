@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react",
+    "types": ["bun-types"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@squirrelscan/api-client": ["../../packages/api-client/src/index.ts"],
+      "@squirrelscan/audit-engine": [
+        "../../packages/audit-engine/src/index.ts"
+      ],
+      "@squirrelscan/audit-engine/*": ["../../packages/audit-engine/src/*"],
+      "@squirrelscan/core-contracts": [
+        "../../packages/core-contracts/src/index.ts"
+      ],
+      "@squirrelscan/core-contracts/*": ["../../packages/core-contracts/src/*"],
+      "@squirrelscan/crawler": ["../../packages/crawler/src/index.ts"],
+      "@squirrelscan/crawler/*": ["../../packages/crawler/src/*"],
+      "@squirrelscan/fetchers": ["../../packages/fetchers/src/index.ts"],
+      "@squirrelscan/fetchers/*": ["../../packages/fetchers/src/*"],
+      "@squirrelscan/parser": ["../../packages/parser/src/index.ts"],
+      "@squirrelscan/parser/*": ["../../packages/parser/src/*"],
+      "@squirrelscan/report": ["../../packages/report/src/index.ts"],
+      "@squirrelscan/report/*": ["../../packages/report/src/*"],
+      "@squirrelscan/rules": ["../../packages/rules/src/index.ts"],
+      "@squirrelscan/rules/*": ["../../packages/rules/src/*"],
+      "@squirrelscan/utils": ["../../packages/utils/src/index.ts"],
+      "@squirrelscan/utils/*": ["../../packages/utils/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "tests/**/*.ts"]
+}

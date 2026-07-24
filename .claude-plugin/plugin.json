@@ -11,5 +11,5 @@
   "repository": "https://github.com/squirrelscan/squirrelscan",
   "license": "MIT",
   "keywords": ["seo", "audit", "website", "performance", "security", "accessibility", "crawler"],
-  "version": "0.0.76"
+  "version": "0.0.79"
 }

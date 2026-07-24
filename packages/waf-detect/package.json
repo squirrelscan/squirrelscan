@@ -1,0 +1,13 @@
+{
+  "name": "@squirrelscan/waf-detect",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "private": true,
+  "license": "MIT"
+}

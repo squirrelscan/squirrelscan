@@ -1,0 +1,29 @@
+# Bad robots.txt example - multiple issues
+
+User-agent: *
+Disallow: /
+# Blocks entire site!
+
+# Missing sitemap declaration
+
+User-agent: Googlebot
+Disallow: /admin
+Disallow: /private
+Allow: /admin/public
+# Allow after Disallow doesn't work as expected in some crawlers
+
+# Duplicate user-agent
+User-agent: Googlebot
+Disallow: /duplicate
+
+# Invalid directive
+Nofollow: /should-not-exist
+
+# Blocking CSS/JS (bad for rendering)
+Disallow: /*.css$
+Disallow: /*.js$
+
+# Wrong format for crawl-delay (some parsers)
+Crawl-delay: abc
+
+# Missing newline at end of file

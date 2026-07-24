@@ -1,0 +1,28 @@
+{
+  "name": "@squirrelscan/rules",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./categories": "./src/categories.ts",
+    "./fold": "./src/fold.ts",
+    "./resolution": "./src/resolution.ts",
+    "./types": "./src/types.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/core-contracts": "workspace:*",
+    "@squirrelscan/parser": "workspace:*",
+    "@squirrelscan/utils": "workspace:*",
+    "linkedom": "^0.18.12",
+    "tldts": "^7",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.1"
+  },
+  "private": true,
+  "license": "MIT"
+}

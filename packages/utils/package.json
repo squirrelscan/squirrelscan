@@ -1,0 +1,40 @@
+{
+  "name": "@squirrelscan/utils",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts",
+    "./url": "./src/url.ts",
+    "./dom": "./src/dom.ts",
+    "./waf": "./src/waf.ts",
+    "./patterns": "./src/patterns.ts",
+    "./robots-txt": "./src/robots-txt.ts",
+    "./validation": "./src/validation.ts",
+    "./headers": "./src/headers.ts",
+    "./user-agent": "./src/user-agent.ts",
+    "./client-redirects": "./src/client-redirects.ts",
+    "./indexable": "./src/indexable.ts",
+    "./schema-rich-results": "./src/schema-rich-results.ts",
+    "./crypto-compare": "./src/crypto-compare.ts",
+    "./fingerprint": "./src/fingerprint.ts",
+    "./concurrency": "./src/concurrency.ts",
+    "./cache-control": "./src/cache-control.ts",
+    "./rule-pattern": "./src/rule-pattern.ts",
+    "./bytes": "./src/bytes.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/core-contracts": "workspace:*",
+    "@squirrelscan/waf-detect": "workspace:*",
+    "user-agents": "^1.1.675"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/node": "^24.13.1"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "private": true,
+  "license": "MIT"
+}

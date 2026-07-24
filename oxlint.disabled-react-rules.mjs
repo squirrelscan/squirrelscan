@@ -1,0 +1,72 @@
+// Rules disabled repo-wide during the oxlint 1.73 / ultracite 7.9 lint-toolchain
+// migration (#77), for the ultracite "react" config (jsx-a11y, react,
+// react-doctor, react-hooks) layered on top of core in React workspaces.
+// Same behavior-parity rationale as oxlint.disabled-core-rules.mjs. Tracked
+// for deliberate re-adoption in #763.
+export const disabledReactRules = {
+  // jsx-a11y (8 rules)
+  "jsx-a11y/alt-text": "off",
+  "jsx-a11y/click-events-have-key-events": "off",
+  "jsx-a11y/control-has-associated-label": "off",
+  "jsx-a11y/interactive-supports-focus": "off",
+  "jsx-a11y/label-has-associated-control": "off",
+  "jsx-a11y/media-has-caption": "off",
+  "jsx-a11y/no-static-element-interactions": "off",
+  "jsx-a11y/prefer-tag-over-role": "off",
+
+  // react (9 rules)
+  "react/button-has-type": "off",
+  "react/iframe-missing-sandbox": "off",
+  "react/jsx-no-constructed-context-values": "off",
+  "react/jsx-no-useless-fragment": "off",
+  "react/no-danger": "off",
+  "react/no-unescaped-entities": "off",
+  "react/no-unstable-nested-components": "off",
+  "react/react-compiler": "off",
+  "react/self-closing-comp": "off",
+
+  // react-doctor (40 rules)
+  "react-doctor/async-await-in-loop": "off",
+  "react-doctor/async-defer-await": "off",
+  "react-doctor/async-parallel": "off",
+  "react-doctor/js-combine-iterations": "off",
+  "react-doctor/js-flatmap-filter": "off",
+  "react-doctor/js-hoist-intl": "off",
+  "react-doctor/js-index-maps": "off",
+  "react-doctor/js-set-map-lookups": "off",
+  "react-doctor/js-tosorted-immutable": "off",
+  "react-doctor/no-adjust-state-on-prop-change": "off",
+  "react-doctor/no-array-index-as-key": "off",
+  "react-doctor/no-cascading-set-state": "off",
+  "react-doctor/no-chain-state-updates": "off",
+  "react-doctor/no-derived-state": "off",
+  "react-doctor/no-derived-state-effect": "off",
+  "react-doctor/no-derived-useState": "off",
+  "react-doctor/no-effect-chain": "off",
+  "react-doctor/no-event-handler": "off",
+  "react-doctor/no-fetch-in-effect": "off",
+  "react-doctor/no-giant-component": "off",
+  "react-doctor/no-initialize-state": "off",
+  "react-doctor/no-inline-exhaustive-style": "off",
+  "react-doctor/no-pass-live-state-to-parent": "off",
+  "react-doctor/no-prevent-default": "off",
+  "react-doctor/no-prop-callback-in-effect": "off",
+  "react-doctor/no-react19-deprecated-apis": "off",
+  "react-doctor/no-reset-all-state-on-prop-change": "off",
+  "react-doctor/only-export-components": "off",
+  "react-doctor/prefer-dynamic-import": "off",
+  "react-doctor/prefer-module-scope-pure-function": "off",
+  "react-doctor/prefer-module-scope-static-value": "off",
+  "react-doctor/prefer-useReducer": "off",
+  "react-doctor/react-compiler-no-manual-memoization": "off",
+  "react-doctor/rendering-hydration-mismatch-time": "off",
+  "react-doctor/rendering-hydration-no-flicker": "off",
+  "react-doctor/rerender-lazy-ref-init": "off",
+  "react-doctor/rerender-memo-before-early-return": "off",
+  "react-doctor/server-sequential-independent-await": "off",
+  "react-doctor/zod-v4-no-deprecated-schema-apis": "off",
+  "react-doctor/zod-v4-prefer-top-level-string-formats": "off",
+
+  // react-hooks (1 rules)
+  "react-hooks/exhaustive-deps": "off",
+};

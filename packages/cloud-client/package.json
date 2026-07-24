@@ -1,0 +1,16 @@
+{
+  "name": "@squirrelscan/cloud-client",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/core-contracts": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "private": true,
+  "license": "MIT"
+}

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Best Practices SEO Page - Complete Guide to Web Optimization</title>
+    <meta
+      name="description"
+      content="A comprehensive guide to SEO best practices with proper meta tags, structured data, and semantic HTML. Learn how to optimize your website for search engines."
+    />
+    <link rel="canonical" href="https://example.com/seo-guide" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Best Practices SEO Page" />
+    <meta
+      property="og:description"
+      content="A comprehensive guide to SEO best practices"
+    />
+    <meta property="og:url" content="https://example.com/seo-guide" />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:image"
+      content="https://example.com/images/seo-guide.jpg"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="SEO Guide illustration" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Example Site" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Best Practices SEO Page" />
+    <meta
+      name="twitter:description"
+      content="A comprehensive guide to SEO best practices"
+    />
+    <meta
+      name="twitter:image"
+      content="https://example.com/images/seo-guide.jpg"
+    />
+    <meta name="twitter:image:alt" content="SEO Guide illustration" />
+    <meta name="twitter:site" content="@examplesite" />
+
+    <!-- Preconnect for CDNs -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      href="https://example.com/images/hero.webp"
+      as="image"
+    />
+
+    <!-- hreflang -->
+    <link rel="alternate" hreflang="en" href="https://example.com/seo-guide" />
+    <link
+      rel="alternate"
+      hreflang="es"
+      href="https://example.com/es/seo-guide"
+    />
+    <link
+      rel="alternate"
+      hreflang="x-default"
+      href="https://example.com/seo-guide"
+    />
+
+    <script type="application/ld+json">
+      {
+          "@context": "https://schema.org",
+          "@graph": [
+              {
+                  "@type": "WebSite",
+                  "@id": "https://example.com/#website",
+                  "url": "https://example.com",
+                  "name": "Example Site",
+                  "potentialAction": {
+                      "@type": "SearchAction",
+                      "target": "https://example.com/search?q={search_term_string}",
+                      "query-input": "required name=search_term_string"
+                  }
+              },
+              {
+                  "@type": "Organization",
+                  "@id": "https://example.com/#organization",
+                  "name": "Example Company",
+                  "url": "https://example.com",
+                  "logo": "https://example.com/logo.png",
+                  "sameAs": [
+                      "https://twitter.com/example",
+                      "https://linkedin.com/company/example"
+                  ]
+              },
+              {
+                  "@type": "Article",
+                  "@id": "https://example.com/seo-guide#article",
+                  "headline": "Best Practices SEO Page - Complete Guide",
+                  "author": {
+                      "@type": "Person",
+                      "name": "John Doe"
+                  },
+                  "datePublished": "2024-01-15",
+                  "dateModified": "2024-06-01",
+                  "image": "https://example.com/images/seo-guide.jpg",
+                  "publisher": {
+                      "@type": "Organization",
+                      "name": "Example Company"
+                  },
+                  "description": "A comprehensive guide to SEO best practices"
+              },
+              {
+                  "@type": "BreadcrumbList",
+                  "itemListElement": [
+                      {
+                          "@type": "ListItem",
+                          "position": 1,
+                          "name": "Home",
+                          "item": "https://example.com"
+                      },
+                      {
+                          "@type": "ListItem",
+                          "position": 2,
+                          "name": "Guides",
+                          "item": "https://example.com/guides"
+                      },
+                      {
+                          "@type": "ListItem",
+                          "position": 3,
+                          "name": "SEO Guide"
+                      }
+                  ]
+              }
+          ]
+      }
+    </script>
+
+    <style>
+      @font-face {
+          font-family: 'CustomFont';
+          src: url('/fonts/custom.woff2') format('woff2');
+          font-display: swap;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="https://example.com">Home</a>
+      <a href="https://example.com/guides">Guides</a>
+      <a href="https://example.com/blog">Blog</a>
+      <a href="https://example.com/contact">Contact</a>
+    </nav>
+
+    <main>
+      <article>
+        <h1>Best Practices SEO Page - Complete Guide to Web Optimization</h1>
+
+        <figure>
+          <img
+            src="https://example.com/images/hero.webp"
+            alt="SEO optimization illustration showing search engine results"
+            width="1200"
+            height="630"
+            loading="eager"
+          />
+          <figcaption>
+            SEO optimization helps improve search visibility
+          </figcaption>
+        </figure>
+
+        <p>
+          This comprehensive guide covers all aspects of search engine
+          optimization. Learn how to implement proper meta tags, structured
+          data, and semantic HTML to improve your website's visibility in search
+          results.
+        </p>
+
+        <h2>Understanding Meta Tags</h2>
+        <p>
+          Meta tags provide crucial information to search engines about your
+          page content. The most important meta tags include the title tag, meta
+          description, and canonical URL.
+        </p>
+
+        <img
+          src="https://example.com/images/meta-tags.webp"
+          alt="Diagram showing different types of meta tags"
+          width="800"
+          height="400"
+          loading="lazy"
+          srcset="https://example.com/images/meta-tags-400.webp 400w,
+                         https://example.com/images/meta-tags-800.webp 800w"
+          sizes="(max-width: 600px) 400px, 800px"
+        />
+
+        <h2>Structured Data Implementation</h2>
+        <p>
+          JSON-LD structured data helps search engines understand your content
+          better, potentially enabling rich results in search.
+        </p>
+
+        <h2>Internal Linking Strategy</h2>
+        <p>
+          A solid
+          <a href="https://example.com/guides/internal-linking"
+            >internal linking strategy</a
+          >
+          helps distribute page authority and improves user navigation.
+        </p>
+
+        <p>
+          Related:
+          <a href="https://example.com/blog/seo-tips"
+            >10 Essential SEO Tips for 2024</a
+          >
+        </p>
+      </article>
+    </main>
+
+    <footer>
+      <a href="https://example.com/privacy">Privacy Policy</a>
+      <a href="https://example.com/terms">Terms of Service</a>
+    </footer>
+
+    <script src="https://example.com/js/app.js" defer></script>
+  </body>
+</html>

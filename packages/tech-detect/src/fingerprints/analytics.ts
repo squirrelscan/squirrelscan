@@ -1,0 +1,135 @@
+import type { TechFingerprint } from "../types";
+
+export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
+  {
+    id: "google-analytics-4",
+    name: "Google Analytics 4",
+    category: "analytics",
+    website: "https://analytics.google.com",
+    icon: "google-analytics",
+    detectors: [
+      { type: "script-url", pattern: /gtag\/js\?id=G-/i },
+      { type: "html", pattern: /gtag\(['"]config['"],\s*['"]G-/i },
+      { type: "script-content", pattern: /gtag\(['"]config['"],\s*['"]G-/i },
+    ],
+  },
+  {
+    id: "google-analytics-ua",
+    name: "Google Analytics (Universal)",
+    category: "analytics",
+    website: "https://analytics.google.com",
+    icon: "google-analytics",
+    detectors: [
+      { type: "script-url", pattern: /google-analytics\.com\/analytics\.js/i },
+      { type: "html", pattern: /UA-\d{4,}-\d+/ },
+      { type: "script-url", pattern: /gtag\/js\?id=UA-/i },
+    ],
+    confidence: "medium",
+  },
+  {
+    id: "posthog",
+    name: "PostHog",
+    category: "analytics",
+    website: "https://posthog.com",
+    icon: "posthog",
+    detectors: [
+      { type: "script-url", pattern: /us\.i\.posthog\.com/i },
+      { type: "script-url", pattern: /eu\.i\.posthog\.com/i },
+      { type: "script-url", pattern: /app\.posthog\.com/i },
+      { type: "html", pattern: /posthog\.init/i },
+      { type: "script-content", pattern: /posthog\.init/i },
+    ],
+  },
+  {
+    id: "mixpanel",
+    name: "Mixpanel",
+    category: "analytics",
+    website: "https://mixpanel.com",
+    icon: "mixpanel",
+    detectors: [
+      { type: "script-url", pattern: /cdn\.mxpnl\.com/i },
+      { type: "html", pattern: /mixpanel\.init/i },
+      { type: "script-content", pattern: /mixpanel\.init/i },
+    ],
+  },
+  {
+    id: "amplitude",
+    name: "Amplitude",
+    category: "analytics",
+    website: "https://amplitude.com",
+    icon: "amplitude",
+    detectors: [
+      { type: "script-url", pattern: /cdn\.amplitude\.com/i },
+      { type: "html", pattern: /amplitude\.init/i },
+      { type: "script-content", pattern: /amplitude\.init/i },
+    ],
+  },
+  {
+    id: "plausible",
+    name: "Plausible",
+    category: "analytics",
+    website: "https://plausible.io",
+    icon: "plausible",
+    detectors: [
+      { type: "script-url", pattern: /plausible\.io\/js\//i },
+      { type: "html", pattern: /data-domain=.*plausible/i },
+    ],
+  },
+  {
+    id: "hotjar",
+    name: "Hotjar",
+    category: "analytics",
+    website: "https://hotjar.com",
+    icon: "hotjar",
+    detectors: [
+      { type: "script-url", pattern: /static\.hotjar\.com/i },
+      { type: "html", pattern: /hj\(['"]init['"]/i },
+      { type: "script-content", pattern: /hotjar\.com/ },
+    ],
+  },
+  {
+    id: "heap",
+    name: "Heap",
+    category: "analytics",
+    website: "https://heap.io",
+    icon: "heap",
+    detectors: [
+      { type: "script-url", pattern: /cdn\.heapanalytics\.com/i },
+      { type: "html", pattern: /heap\.load/i },
+    ],
+  },
+  {
+    id: "clarity",
+    name: "Microsoft Clarity",
+    category: "analytics",
+    website: "https://clarity.microsoft.com",
+    icon: "clarity",
+    detectors: [
+      { type: "script-url", pattern: /clarity\.ms/i },
+      { type: "html", pattern: /clarity\(['"]set['"]/i },
+    ],
+  },
+  {
+    id: "fathom",
+    name: "Fathom Analytics",
+    category: "analytics",
+    website: "https://usefathom.com",
+    icon: "fathom",
+    detectors: [
+      { type: "script-url", pattern: /cdn\.usefathom\.com/i },
+      { type: "html", pattern: /data-site=.*usefathom/i },
+    ],
+  },
+  {
+    id: "matomo",
+    name: "Matomo",
+    category: "analytics",
+    website: "https://matomo.org",
+    icon: "matomo",
+    detectors: [
+      { type: "script-url", pattern: /matomo\.js/i },
+      { type: "html", pattern: /_paq\.push/i },
+      { type: "script-content", pattern: /_paq\.push/ },
+    ],
+  },
+];

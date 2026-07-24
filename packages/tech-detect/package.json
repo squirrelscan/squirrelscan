@@ -1,0 +1,17 @@
+{
+  "name": "@squirrelscan/tech-detect",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./versions": "./src/versions/index.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/core-contracts": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "private": true,
+  "license": "MIT"
+}

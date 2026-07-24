@@ -195,6 +195,47 @@ See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
 squirrelscan is in **active beta**. Expect rapid iteration and breaking changes. Feedback and issue reports welcome!
 
+## Source and development
+
+The complete local CLI, crawler, audit engine, rules, report generators, and CLI-facing cloud clients are open source in this repository. The hosted API, website, dashboard, and cloud worker implementations are separate private services.
+
+Prerequisites: [Bun 1.3.14](https://bun.sh/) and Git.
+
+```bash
+git clone https://github.com/squirrelscan/squirrelscan.git
+cd squirrelscan
+bun install --frozen-lockfile
+bun run dev -- audit https://example.com --max-pages 10
+```
+
+Run the same checks used in pull requests:
+
+```bash
+bun run format:check
+bun run lint
+bun run typecheck
+bun test
+bun run build
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Contributions require a Developer Certificate of Origin sign-off (`git commit -s`).
+
+## Telemetry
+
+Telemetry is enabled by default and is deliberately minimal: event name, CLI version, a random install ID, and bounded error categories. It does not send credentials, URLs, report contents, or raw error messages, and telemetry requests are never authenticated.
+
+Disable it permanently with:
+
+```bash
+squirrel self settings set telemetry false
+```
+
+Or disable all telemetry and install registration for any invocation by defining `NO_TELEMETRY`. Any defined value works, including an empty value, `0`, or `false`:
+
+```bash
+NO_TELEMETRY=1 squirrel audit https://example.com
+```
+
 ## Links
 
 - [Website](https://squirrelscan.com)
@@ -206,4 +247,4 @@ squirrelscan is in **active beta**. Expect rapid iteration and breaking changes.
 
 ## License
 
-The skills, plugin manifests, MCP configuration, and install scripts in this repository are MIT licensed (see [LICENSE](LICENSE)). The squirrelscan CLI binary itself is distributed as a standalone executable and is not open source.
+The CLI and the repository contents are licensed under the [MIT License](LICENSE). SquirrelScan names and logos are covered by [TRADEMARKS.md](TRADEMARKS.md).

@@ -1,0 +1,23 @@
+{
+  "name": "@squirrelscan/parser",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./extractors": "./src/extractors/index.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/core-contracts": "workspace:*",
+    "@squirrelscan/utils": "workspace:*",
+    "effect": "^3.21.3",
+    "linkedom": "^0.18.12"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.1"
+  },
+  "private": true,
+  "license": "MIT"
+}

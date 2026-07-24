@@ -1,0 +1,436 @@
+name: Test Install Script
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to test (e.g., v0.0.15). Leave empty for latest.'
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to test (e.g., v0.0.15). Leave empty for latest.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  NO_TELEMETRY: "1"
+
+jobs:
+  test-install-linux-glibc:
+    name: Linux (glibc)
+    runs-on: ubuntu-latest
+    env:
+      TEST_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Create test user
+        run: |
+          sudo useradd -m -s /bin/bash testuser
+          sudo mkdir -p /home/testuser/.local/bin
+          sudo chown -R testuser:testuser /home/testuser
+
+      - name: Install squirrel as test user
+        run: |
+          sudo -u testuser bash -c "
+            export HOME=/home/testuser
+            export PATH=/home/testuser/.local/bin:\$PATH
+            if [ -n '$TEST_VERSION' ]; then
+              export SQUIRREL_VERSION='$TEST_VERSION'
+            fi
+            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+          "
+
+      - name: Verify installation
+        run: |
+          # Verify binary exists
+          sudo -u testuser test -f /home/testuser/.local/bin/squirrel || \
+            sudo -u testuser test -L /home/testuser/.local/bin/squirrel
+
+          # Verify squirrel runs
+          sudo -u testuser bash -c "
+            export HOME=/home/testuser
+            export PATH=/home/testuser/.local/bin:\$PATH
+            squirrel --version
+          "
+
+      - name: Verify version output
+        run: |
+          VERSION_OUTPUT=$(sudo -u testuser bash -c "
+            export HOME=/home/testuser
+            export PATH=/home/testuser/.local/bin:\$PATH
+            squirrel self version --json
+          ")
+          echo "Version info: $VERSION_OUTPUT"
+
+          # Verify it's valid JSON with expected fields
+          echo "$VERSION_OUTPUT" | jq -e '.version' > /dev/null
+          echo "$VERSION_OUTPUT" | jq -e '.platform' > /dev/null
+
+      - name: Run self doctor
+        run: |
+          sudo -u testuser bash -c "
+            export HOME=/home/testuser
+            export PATH=/home/testuser/.local/bin:\$PATH
+            squirrel self doctor
+          "
+
+  test-install-linux-musl:
+    name: Linux (musl/Alpine)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Binary may not be published yet
+    container:
+      image: alpine:latest
+    env:
+      TEST_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Install dependencies
+        run: |
+          # libstdc++ is the runtime the musl binary links against (#163) —
+          # a real Alpine box needs it; install.sh auto-adds it as root, but the
+          # test installs as a non-root user, so provision it here.
+          apk add --no-cache curl bash sudo shadow jq libstdc++
+
+      - name: Create test user
+        run: |
+          adduser -D -s /bin/bash testuser
+          mkdir -p /home/testuser/.local/bin
+          chown -R testuser:testuser /home/testuser
+          echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+      - name: Install squirrel as test user
+        run: |
+          su - testuser -c "
+            export PATH=/home/testuser/.local/bin:\$PATH
+            if [ -n '$TEST_VERSION' ]; then
+              export SQUIRREL_VERSION='$TEST_VERSION'
+            fi
+            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+          "
+
+      - name: Verify installation
+        run: |
+          su - testuser -c "
+            export PATH=/home/testuser/.local/bin:\$PATH
+            squirrel --version
+          "
+
+      - name: Verify version output
+        run: |
+          VERSION_OUTPUT=$(su - testuser -c "
+            export PATH=/home/testuser/.local/bin:\$PATH
+            squirrel self version --json
+          ")
+          echo "Version info: $VERSION_OUTPUT"
+
+          # Verify platform shows musl
+          echo "$VERSION_OUTPUT" | jq -e '.platform | contains("musl")' > /dev/null || \
+            echo "Warning: Platform doesn't contain 'musl' - may be expected if musl binary not published"
+
+      - name: Run self doctor
+        run: |
+          su - testuser -c "
+            export PATH=/home/testuser/.local/bin:\$PATH
+            squirrel self doctor
+          "
+
+  test-install-macos-arm64:
+    name: macOS (arm64)
+    runs-on: macos-latest
+    env:
+      TEST_VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Create test user
+        run: |
+          # Create a test user on macOS.
+          # dscl can transiently fail with eNotYetImplemented on fresh runner
+          # images (Directory Services flake), so retry up to 3 times.
+          create_test_user() {
+            sudo dscl . -create /Users/testuser &&
+              sudo dscl . -create /Users/testuser UserShell /bin/bash &&
+              sudo dscl . -create /Users/testuser RealName "Test User" &&
+              sudo dscl . -create /Users/testuser UniqueID 1001 &&
+              sudo dscl . -create /Users/testuser PrimaryGroupID 20 &&
+              sudo dscl . -create /Users/testuser NFSHomeDirectory /Users/testuser
+          }
+
+          for attempt in 1 2 3; do
+            echo "Creating test user (attempt $attempt/3)..."
+            if create_test_user; then
+              echo "Test user created on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Failed to create test user after 3 attempts"
+              exit 1
+            fi
+            echo "dscl failed (transient Directory Services flake), cleaning up and retrying in 5s..."
+            sudo dscl . -delete /Users/testuser 2>/dev/null || true
+            sleep 5
+          done
+
+          sudo mkdir -p /Users/testuser
+          sudo chown -R testuser:staff /Users/testuser
+
+      - name: Install squirrel as test user
+        run: |
+          sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export GITHUB_TOKEN='$GH_TOKEN'
+            mkdir -p /Users/testuser/.local/bin
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            if [ -n '$TEST_VERSION' ]; then
+              export SQUIRREL_VERSION='$TEST_VERSION'
+            fi
+            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+          "
+
+      - name: Verify installation
+        run: |
+          # Verify binary exists
+          sudo -u testuser test -f /Users/testuser/.local/bin/squirrel || \
+            sudo -u testuser test -L /Users/testuser/.local/bin/squirrel
+
+          # Verify squirrel runs
+          sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            squirrel --version
+          "
+
+      - name: Verify version output
+        run: |
+          VERSION_OUTPUT=$(sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            squirrel self version --json
+          ")
+          echo "Version info: $VERSION_OUTPUT"
+
+          # Verify it's valid JSON with expected fields
+          echo "$VERSION_OUTPUT" | jq -e '.version' > /dev/null
+          echo "$VERSION_OUTPUT" | jq -e '.platform | contains("darwin")' > /dev/null
+
+      - name: Run self doctor
+        run: |
+          sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            squirrel self doctor
+          "
+
+  test-install-macos-x64:
+    name: macOS (x64)
+    runs-on: macos-15-intel  # x64 runner
+    env:
+      TEST_VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Create test user
+        run: |
+          # Create a test user on macOS.
+          # dscl can transiently fail with eNotYetImplemented on fresh runner
+          # images (Directory Services flake; broke v0.0.41), so retry up to 3 times.
+          create_test_user() {
+            sudo dscl . -create /Users/testuser &&
+              sudo dscl . -create /Users/testuser UserShell /bin/bash &&
+              sudo dscl . -create /Users/testuser RealName "Test User" &&
+              sudo dscl . -create /Users/testuser UniqueID 1001 &&
+              sudo dscl . -create /Users/testuser PrimaryGroupID 20 &&
+              sudo dscl . -create /Users/testuser NFSHomeDirectory /Users/testuser
+          }
+
+          for attempt in 1 2 3; do
+            echo "Creating test user (attempt $attempt/3)..."
+            if create_test_user; then
+              echo "Test user created on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Failed to create test user after 3 attempts"
+              exit 1
+            fi
+            echo "dscl failed (transient Directory Services flake), cleaning up and retrying in 5s..."
+            sudo dscl . -delete /Users/testuser 2>/dev/null || true
+            sleep 5
+          done
+
+          sudo mkdir -p /Users/testuser
+          sudo chown -R testuser:staff /Users/testuser
+
+      - name: Install squirrel as test user
+        run: |
+          sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export GITHUB_TOKEN='$GH_TOKEN'
+            mkdir -p /Users/testuser/.local/bin
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            if [ -n '$TEST_VERSION' ]; then
+              export SQUIRREL_VERSION='$TEST_VERSION'
+            fi
+            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+          "
+
+      - name: Verify installation
+        run: |
+          sudo -u testuser test -f /Users/testuser/.local/bin/squirrel || \
+            sudo -u testuser test -L /Users/testuser/.local/bin/squirrel
+
+          sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            squirrel --version
+          "
+
+      - name: Verify version output
+        run: |
+          VERSION_OUTPUT=$(sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            squirrel self version --json
+          ")
+          echo "Version info: $VERSION_OUTPUT"
+          echo "$VERSION_OUTPUT" | jq -e '.version' > /dev/null
+          echo "$VERSION_OUTPUT" | jq -e '.platform | contains("darwin-x64")' > /dev/null
+
+      - name: Run self doctor
+        run: |
+          sudo -u testuser bash -c "
+            export HOME=/Users/testuser
+            export PATH=/Users/testuser/.local/bin:\$PATH
+            squirrel self doctor
+          "
+
+  test-install-windows:
+    name: Windows (PowerShell)
+    runs-on: windows-latest
+    env:
+      TEST_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Create test user
+        shell: pwsh
+        run: |
+          # Create local test user
+          $Password = ConvertTo-SecureString "T3stP@ssw0rd!Secure2026" -AsPlainText -Force
+          New-LocalUser -Name "testuser" -Password $Password -FullName "Test User" -Description "Test user for install"
+          Add-LocalGroupMember -Group "Users" -Member "testuser"
+
+      - name: Install squirrel as test user
+        shell: pwsh
+        run: |
+          # Run install script as test user using runas
+          $cred = New-Object System.Management.Automation.PSCredential("testuser", (ConvertTo-SecureString "T3stP@ssw0rd!Secure2026" -AsPlainText -Force))
+
+          # Create user profile directory
+          $userProfile = "C:\Users\testuser"
+          if (-not (Test-Path $userProfile)) {
+            New-Item -ItemType Directory -Path $userProfile -Force | Out-Null
+          }
+
+          # Download and run install script
+          $installScript = @"
+          `$ErrorActionPreference = 'Stop'
+          `$env:USERPROFILE = 'C:\Users\testuser'
+          `$env:LOCALAPPDATA = 'C:\Users\testuser\AppData\Local'
+          if ('$env:TEST_VERSION') {
+            `$env:SQUIRREL_VERSION = '$env:TEST_VERSION'
+          }
+
+          # Create required directories
+          New-Item -ItemType Directory -Path `$env:LOCALAPPDATA -Force | Out-Null
+
+          # Download and execute install script
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.ps1' -OutFile 'C:\Users\testuser\install.ps1'
+          & 'C:\Users\testuser\install.ps1'
+          "@
+
+          $installScript | Out-File -FilePath "C:\Users\testuser\run-install.ps1" -Encoding UTF8
+
+          # Execute as the test user (simplified - run in current context with modified env)
+          $env:USERPROFILE = "C:\Users\testuser"
+          $env:LOCALAPPDATA = "C:\Users\testuser\AppData\Local"
+          if ($env:TEST_VERSION) {
+            $env:SQUIRREL_VERSION = $env:TEST_VERSION
+          }
+
+          New-Item -ItemType Directory -Path $env:LOCALAPPDATA -Force | Out-Null
+
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.ps1' -OutFile 'C:\Users\testuser\install.ps1'
+          & 'C:\Users\testuser\install.ps1'
+
+      - name: Verify installation
+        shell: pwsh
+        run: |
+          $binPath = "C:\Users\testuser\AppData\Local\squirrel\bin\squirrel.exe"
+
+          # Check binary exists
+          if (-not (Test-Path $binPath)) {
+            Write-Error "Binary not found at $binPath"
+            exit 1
+          }
+
+          # Verify squirrel runs
+          & $binPath --version
+
+      - name: Verify version output
+        shell: pwsh
+        run: |
+          $binPath = "C:\Users\testuser\AppData\Local\squirrel\bin\squirrel.exe"
+          $versionJson = & $binPath self version --json | ConvertFrom-Json
+
+          Write-Host "Version info: $($versionJson | ConvertTo-Json)"
+
+          # Verify fields exist
+          if (-not $versionJson.version) {
+            Write-Error "Missing version field"
+            exit 1
+          }
+          if ($versionJson.platform -notlike "*windows*") {
+            Write-Error "Platform doesn't contain 'windows': $($versionJson.platform)"
+            exit 1
+          }
+
+          Write-Host "Verification passed!"
+
+      - name: Run self doctor
+        shell: pwsh
+        run: |
+          # Set env to match install context
+          $env:USERPROFILE = "C:\Users\testuser"
+          $env:LOCALAPPDATA = "C:\Users\testuser\AppData\Local"
+          $binPath = "C:\Users\testuser\AppData\Local\squirrel\bin\squirrel.exe"
+          & $binPath self doctor
+
+  summary:
+    name: Test Summary
+    needs: [test-install-linux-glibc, test-install-linux-musl, test-install-macos-arm64, test-install-macos-x64, test-install-windows]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          {
+            echo "## Install Test Results"
+            echo ""
+            echo "| Platform | Status |"
+            echo "|----------|--------|"
+            echo "| Linux (glibc) | ${{ needs.test-install-linux-glibc.result }} |"
+            echo "| Linux (musl) | ${{ needs.test-install-linux-musl.result }} |"
+            echo "| macOS (arm64) | ${{ needs.test-install-macos-arm64.result }} |"
+            echo "| macOS (x64) | ${{ needs.test-install-macos-x64.result }} |"
+            echo "| Windows | ${{ needs.test-install-windows.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail if any required job failed (musl is optional since binary may not be published)
+          if [ "${{ needs.test-install-linux-glibc.result }}" = "failure" ] || \
+             [ "${{ needs.test-install-macos-arm64.result }}" = "failure" ] || \
+             [ "${{ needs.test-install-macos-x64.result }}" = "failure" ] || \
+             [ "${{ needs.test-install-windows.result }}" = "failure" ]; then
+            echo ""
+            echo "One or more required tests failed!"
+            exit 1
+          fi

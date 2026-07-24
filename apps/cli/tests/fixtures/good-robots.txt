@@ -1,0 +1,19 @@
+# Good robots.txt example
+
+User-agent: *
+Disallow: /admin/
+Disallow: /private/
+Disallow: /api/
+Allow: /api/public/
+
+User-agent: Googlebot
+Disallow: /admin/
+Allow: /
+
+User-agent: Bingbot
+Disallow: /admin/
+Allow: /
+
+# Sitemap declarations
+Sitemap: https://example.com/sitemap.xml
+Sitemap: https://example.com/sitemap-posts.xml

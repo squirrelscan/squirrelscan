@@ -1,0 +1,27 @@
+{
+  "name": "@squirrelscan/core-contracts",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./scoring": "./src/scoring.ts",
+    "./storage": "./src/storage.ts",
+    "./plans": "./src/plans.ts",
+    "./limits": "./src/limits.ts",
+    "./clamp": "./src/clamp.ts",
+    "./credits": "./src/credits.ts",
+    "./services": "./src/services.ts",
+    "./api-keys": "./src/api-keys.ts",
+    "./threat-intel": "./src/threat-intel.ts",
+    "./resolution": "./src/resolution.ts"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.49",
+    "effect": "^3.21.3"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "private": true,
+  "license": "MIT"
+}

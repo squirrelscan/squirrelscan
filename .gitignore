@@ -1,7 +1,20 @@
-# npm
+# Dependencies and build output
 node_modules/
+**/node_modules/
+apps/cli/build/
 *.tgz
+.env
+.env.*
+!.env.example
+.DS_Store
 
 # Downloaded binary (written by postinstall)
-bin/squirrel
-bin/squirrel.exe
+npm/bin/squirrel
+npm/bin/squirrel.exe
+
+# Local audit state and reports
+.squirrel/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

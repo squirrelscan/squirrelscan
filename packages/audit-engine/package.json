@@ -1,0 +1,35 @@
+{
+  "name": "@squirrelscan/audit-engine",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./smart-audits": "./src/smart-audits.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test:golden": "bun test tests/*golden*.test.ts tests/streaming*.test.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/cloud-client": "workspace:*",
+    "@squirrelscan/config": "workspace:*",
+    "@squirrelscan/core-contracts": "workspace:*",
+    "@squirrelscan/crawler": "workspace:*",
+    "@squirrelscan/fetchers": "workspace:*",
+    "@squirrelscan/parser": "workspace:*",
+    "@squirrelscan/report": "workspace:*",
+    "@squirrelscan/rules": "workspace:*",
+    "@squirrelscan/tech-detect": "workspace:*",
+    "@squirrelscan/threat-intel": "workspace:*",
+    "@squirrelscan/utils": "workspace:*",
+    "@squirrelscan/waf-detect": "workspace:*",
+    "effect": "^3.21.3"
+  },
+  "devDependencies": {
+    "@squirrelscan/synthetic-site": "workspace:*",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^24.13.1"
+  },
+  "private": true,
+  "license": "MIT"
+}

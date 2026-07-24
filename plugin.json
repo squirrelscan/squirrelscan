@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "squirrelscan",
-  "version": "0.0.76",
+  "version": "0.0.79",
   "description": "Website QA tool built for coding agents (Claude Code, Cursor). 260+ rules across SEO, performance, security, accessibility & agent experience: audit from the CLI, fix findings in code, publish reports, and connect over MCP.",
   "author": {
     "name": "squirrelscan",
