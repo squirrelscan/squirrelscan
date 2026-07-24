@@ -47,9 +47,7 @@ function isPrivateIPv4(hostname: string): boolean {
 function isPrivateIPv6(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
   return (
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("fe80:")
+    normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:")
   );
 }
 
@@ -379,14 +377,91 @@ export function resolveUrl(href: string, baseUrl: string): string | null {
 // with common file extensions (.zip, .md, .mov, .sh, .pl, .py) — a bare
 // "index.html"-style href must resolve relative to the page, like browsers do.
 const SCHEMELESS_COERCIBLE_TLDS = new Set([
-  "com", "org", "net", "io", "co", "dev", "app", "ai", "edu", "gov", "mil",
-  "info", "biz", "me", "tv", "cc", "xyz", "site", "online", "store", "shop",
-  "blog", "cloud", "design", "agency", "studio", "tech", "digital", "media",
-  "news", "live", "world", "today", "uk", "de", "fr", "es", "it", "nl", "be",
-  "at", "ch", "se", "no", "dk", "fi", "ie", "pt", "gr", "cz", "ro", "hu",
-  "ru", "ua", "tr", "il", "ae", "sa", "in", "cn", "jp", "kr", "tw", "hk",
-  "sg", "my", "th", "vn", "id", "ph", "au", "nz", "za", "ng", "ke", "eg",
-  "br", "mx", "ar", "cl", "pe", "ca", "us", "eu", "asia",
+  "com",
+  "org",
+  "net",
+  "io",
+  "co",
+  "dev",
+  "app",
+  "ai",
+  "edu",
+  "gov",
+  "mil",
+  "info",
+  "biz",
+  "me",
+  "tv",
+  "cc",
+  "xyz",
+  "site",
+  "online",
+  "store",
+  "shop",
+  "blog",
+  "cloud",
+  "design",
+  "agency",
+  "studio",
+  "tech",
+  "digital",
+  "media",
+  "news",
+  "live",
+  "world",
+  "today",
+  "uk",
+  "de",
+  "fr",
+  "es",
+  "it",
+  "nl",
+  "be",
+  "at",
+  "ch",
+  "se",
+  "no",
+  "dk",
+  "fi",
+  "ie",
+  "pt",
+  "gr",
+  "cz",
+  "ro",
+  "hu",
+  "ru",
+  "ua",
+  "tr",
+  "il",
+  "ae",
+  "sa",
+  "in",
+  "cn",
+  "jp",
+  "kr",
+  "tw",
+  "hk",
+  "sg",
+  "my",
+  "th",
+  "vn",
+  "id",
+  "ph",
+  "au",
+  "nz",
+  "za",
+  "ng",
+  "ke",
+  "eg",
+  "br",
+  "mx",
+  "ar",
+  "cl",
+  "pe",
+  "ca",
+  "us",
+  "eu",
+  "asia",
 ]);
 
 /**
@@ -397,7 +472,8 @@ const SCHEMELESS_COERCIBLE_TLDS = new Set([
  * are treated as authoring mistakes worth coercing.
  */
 export function coerceSchemelessUrl(href: string): string {
-  if (href.startsWith("http://") || href.startsWith("https://")) return href;
+  const lowerHref = href.toLowerCase();
+  if (lowerHref.startsWith("http://") || lowerHref.startsWith("https://")) return href;
   if (href.startsWith("/") || href.startsWith("./") || href.startsWith("../")) return href;
   if (href.includes(":")) return href;
 
@@ -413,16 +489,51 @@ export function coerceSchemelessUrl(href: string): string {
   return href;
 }
 
+function explicitUrlScheme(href: string): string | null {
+  const input = href.trimStart();
+  const colon = input.indexOf(":");
+  if (colon <= 0 || colon > 64) return null;
+
+  let scheme = "";
+  for (let i = 0; i < colon; i++) {
+    const char = input[i];
+    // WHATWG URL parsing ignores ASCII tabs/newlines in schemes. Compact them
+    // here so values such as "java\nscript:" cannot evade the filter.
+    if (char === "\t" || char === "\n" || char === "\r") continue;
+    const code = char.charCodeAt(0);
+    const isAlpha = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    const isDigit = code >= 48 && code <= 57;
+    if (
+      (scheme.length === 0 && !isAlpha) ||
+      (!isAlpha && !isDigit && char !== "+" && char !== "-" && char !== ".")
+    ) {
+      return null;
+    }
+    scheme += char.toLowerCase();
+  }
+  return scheme || null;
+}
+
+/** True for browser-executable or inline-data URL schemes. */
+export function hasUnsafeUrlScheme(href: string): boolean {
+  const scheme = explicitUrlScheme(href);
+  return scheme === "javascript" || scheme === "vbscript" || scheme === "data";
+}
+
+/** True when an href has an explicit scheme other than HTTP(S). */
+export function hasNonCrawlableUrlScheme(href: string): boolean {
+  const scheme = explicitUrlScheme(href);
+  return scheme !== null && scheme !== "http" && scheme !== "https";
+}
+
 /**
- * Check if URL should be skipped (javascript:, mailto:, etc.)
+ * Check if a crawl href should be skipped. Relative URLs and HTTP(S) are
+ * crawlable; fragments and every other explicit scheme are not.
  */
 export function shouldSkipUrl(href: string): boolean {
-  return (
-    href.startsWith("javascript:") ||
-    href.startsWith("mailto:") ||
-    href.startsWith("tel:") ||
-    href.startsWith("#")
-  );
+  const trimmed = href.trimStart();
+  if (trimmed.startsWith("#")) return true;
+  return hasNonCrawlableUrlScheme(trimmed);
 }
 
 /**
@@ -463,10 +574,7 @@ export interface ProjectNameContext {
  * Get project name context for a URL
  * Determines if a custom project name should be prompted for local addresses
  */
-export function getProjectNameContext(
-  url: string,
-  configName?: string
-): ProjectNameContext {
+export function getProjectNameContext(url: string, configName?: string): ProjectNameContext {
   try {
     const parsed = new URL(url);
     const local = isLocalhost(parsed.hostname);
@@ -474,8 +582,7 @@ export function getProjectNameContext(
     // Generate suggested name (matches domainToProjectName logic)
     const hostname = parsed.hostname;
     const base = hostname.replace(/\./g, "-");
-    const suggestedName =
-      local && parsed.port ? `${base}-${parsed.port}` : base;
+    const suggestedName = local && parsed.port ? `${base}-${parsed.port}` : base;
 
     return {
       isLocal: local,

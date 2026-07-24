@@ -1,6 +1,7 @@
 // Internal link analysis - crawl depth, orphan pages, link equity
 // Phase 4 enhancement for comprehensive link analysis
 
+import { shouldSkipUrl } from "@squirrelscan/utils";
 import { parseHTML } from "linkedom";
 
 import type {
@@ -46,12 +47,7 @@ export function extractEnhancedLinks(
     if (!href) continue;
 
     // Skip javascript:, mailto:, tel:, etc.
-    if (
-      href.startsWith("javascript:") ||
-      href.startsWith("mailto:") ||
-      href.startsWith("tel:") ||
-      href.startsWith("#")
-    ) {
+    if (shouldSkipUrl(href)) {
       continue;
     }
 

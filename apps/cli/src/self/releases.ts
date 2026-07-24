@@ -9,9 +9,63 @@ import type {
   PlatformArch,
 } from "./types";
 
+import { isValidReleaseVersion } from "./paths";
+
 const GITHUB_API = "https://api.github.com";
 const REPO_OWNER = "squirrelscan";
 const REPO_NAME = "squirrelscan";
+const PLATFORM_ARCHES: PlatformArch[] = [
+  "darwin-arm64",
+  "darwin-x64",
+  "linux-x64",
+  "linux-arm64",
+  "windows-x64",
+];
+const RELEASE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
+
+function parseReleaseManifest(value: unknown): Result<ReleaseManifest> {
+  if (!value || typeof value !== "object") {
+    return err(
+      commandError("NETWORK_ERROR", "Malformed release metadata response")
+    );
+  }
+
+  const manifest = value as Partial<ReleaseManifest>;
+  if (
+    typeof manifest.version !== "string" ||
+    !isValidReleaseVersion(manifest.version) ||
+    (manifest.channel !== "stable" && manifest.channel !== "beta") ||
+    typeof manifest.released_at !== "string" ||
+    !manifest.binaries ||
+    typeof manifest.binaries !== "object" ||
+    typeof manifest.release_notes_url !== "string"
+  ) {
+    return err(
+      commandError("NETWORK_ERROR", "Malformed release metadata response")
+    );
+  }
+
+  for (const platformArch of PLATFORM_ARCHES) {
+    const binary = manifest.binaries[platformArch];
+    if (!binary) continue;
+    if (
+      typeof binary.filename !== "string" ||
+      !RELEASE_FILENAME_PATTERN.test(binary.filename) ||
+      typeof binary.sha256 !== "string" ||
+      !SHA256_PATTERN.test(binary.sha256) ||
+      typeof binary.size !== "number" ||
+      !Number.isSafeInteger(binary.size) ||
+      binary.size <= 0
+    ) {
+      return err(
+        commandError("NETWORK_ERROR", "Malformed release metadata response")
+      );
+    }
+  }
+
+  return ok(manifest as ReleaseManifest);
+}
 
 // R2-backed release metadata (latest manifest per channel) served by the
 // installer worker. Primary update-check source: the GitHub API below is
@@ -39,13 +93,7 @@ export async function fetchChannelManifest(
         )
       );
     }
-    const manifest = (await response.json()) as ReleaseManifest;
-    if (typeof manifest?.version !== "string" || !manifest.binaries) {
-      return err(
-        commandError("NETWORK_ERROR", "Malformed release metadata response")
-      );
-    }
-    return ok(manifest);
+    return parseReleaseManifest(await response.json());
   } catch (error) {
     return err(commandError("NETWORK_ERROR", (error as Error).message));
   }
@@ -109,7 +157,7 @@ export async function fetchManifest(
         )
       );
     }
-    return ok((await response.json()) as ReleaseManifest);
+    return parseReleaseManifest(await response.json());
   } catch (error) {
     return err(commandError("NETWORK_ERROR", (error as Error).message));
   }
@@ -256,6 +304,9 @@ export async function downloadBinary(
   platformArch: PlatformArch,
   options?: { signal?: AbortSignal }
 ): Promise<Result<ArrayBuffer>> {
+  if (!isValidReleaseVersion(manifest.version)) {
+    return err(commandError("INVALID_RELEASE", "Release version is invalid"));
+  }
   const binary = manifest.binaries[platformArch];
   if (!binary) {
     return err(
@@ -263,6 +314,16 @@ export async function downloadBinary(
         "UNSUPPORTED_PLATFORM",
         `No binary available for ${platformArch}`
       )
+    );
+  }
+  if (
+    !RELEASE_FILENAME_PATTERN.test(binary.filename) ||
+    !SHA256_PATTERN.test(binary.sha256) ||
+    !Number.isSafeInteger(binary.size) ||
+    binary.size <= 0
+  ) {
+    return err(
+      commandError("INVALID_RELEASE", "Release binary metadata is invalid")
     );
   }
 

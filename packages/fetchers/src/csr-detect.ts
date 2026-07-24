@@ -6,6 +6,8 @@
 // and are never flagged, so static sites pay zero render credits. A missed CSR
 // page (false negative) just audits the shell, same as a plain --http run.
 
+import { stripHtmlForText } from "@squirrelscan/utils";
+
 // Thresholds tuned for LOW false positives so static/SSR sites pay zero render
 // credits.
 /** Visible-text length below which a page counts as "empty-ish" (a shell). */
@@ -24,11 +26,9 @@ const EMPTY_SPA_ROOT_PATTERNS: RegExp[] = [
 
 /** Approximate visible text: strip comments, non-rendered elements, head, tags. */
 export function extractVisibleText(html: string): string {
-  return html
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style|template|noscript|svg)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<head\b[\s\S]*?<\/head>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+  return stripHtmlForText(html, {
+    exclude: ["script", "style", "template", "noscript", "svg", "head"],
+  })
     .replace(/\s+/g, " ")
     .trim();
 }

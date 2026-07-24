@@ -21,7 +21,7 @@ import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type { Config } from "@squirrelscan/config";
 import { buildEditorSummaryRequest } from "@squirrelscan/report/editor-summary";
 import { filterRules, loadAllRules, type RuleCloudSpec } from "@squirrelscan/rules";
-import { getHostname, getOrigin, getPathname } from "@squirrelscan/utils/url";
+import { getHostname, getOrigin, getPathname, hasUnsafeUrlScheme } from "@squirrelscan/utils/url";
 
 import {
   prefetchCloudData,
@@ -128,8 +128,7 @@ function extractVisibleLinks(doc: Document): { href: string; text?: string }[] {
   const seen = new Set<string>();
   for (const anchor of doc.querySelectorAll("a[href]")) {
     const href = (anchor as Element).getAttribute("href")?.trim();
-    if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("data:"))
-      continue;
+    if (!href || href.trimStart().startsWith("#") || hasUnsafeUrlScheme(href)) continue;
     if (seen.has(href)) continue;
     seen.add(href);
     const text = (anchor as Element).textContent?.trim();
@@ -269,7 +268,7 @@ export function buildBlocklistPayload(
 // ── keyword/content gaps payloads (mirrors apps/cli/src/audit/cloud-payloads-gaps.ts) ──
 const MIN_SEED_LENGTH = 3;
 const MAX_SEED_LENGTH = 80;
-const TITLE_SEPARATORS = /\s*[|·—–]\s*|\s+-\s+/;
+const TITLE_SEPARATOR_CHARS = new Set(["|", "·", "—", "–"]);
 
 export type GapsPayloads = Pick<CloudSitePayloads, "keyword-gaps" | "content-gaps">;
 
@@ -304,7 +303,34 @@ function gapsOptions(config: Config, ruleId: string): GapsRuleOptions {
 }
 
 function cleanSeed(text: string): string | null {
-  const segment = (text.split(TITLE_SEPARATORS)[0] ?? "").replace(/\s+/g, " ").trim();
+  let separator = text.length;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (
+      TITLE_SEPARATOR_CHARS.has(char) ||
+      (char === "-" &&
+        i > 0 &&
+        i + 1 < text.length &&
+        text[i - 1].trim() === "" &&
+        text[i + 1].trim() === "")
+    ) {
+      separator = i;
+      break;
+    }
+  }
+  const raw = text.slice(0, separator).trim();
+  const parts: string[] = [];
+  let inWhitespace = false;
+  for (const char of raw) {
+    if (char.trim() === "") {
+      inWhitespace = true;
+    } else {
+      if (inWhitespace && parts.length > 0) parts.push(" ");
+      parts.push(char);
+      inWhitespace = false;
+    }
+  }
+  const segment = parts.join("");
   if (segment.length < MIN_SEED_LENGTH || segment.length > MAX_SEED_LENGTH) return null;
   return segment;
 }

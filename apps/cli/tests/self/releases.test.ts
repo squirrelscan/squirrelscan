@@ -76,6 +76,19 @@ describe("releases noRetry option", () => {
     expect(callCount).toBe(1);
   });
 
+  test("fetchManifest rejects path-traversing release versions", async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ ...mockManifest, version: "../../bin" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })) as unknown as typeof fetch;
+
+    const result = await fetchManifest(mockRelease, { noRetry: true });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error.message).toBe("Malformed release metadata response");
+  });
+
   test("checkForUpdates resolves via the metadata endpoint in one call", async () => {
     const urls: string[] = [];
 

@@ -34,6 +34,45 @@ export interface MarkdownRenderOptions {
   branding?: ReportBranding;
 }
 
+function escapeMarkdownTableCell(value: string, escapeBrackets = false): string {
+  const output: string[] = [];
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === "\\") output.push("\\\\");
+    else if (char === "|") output.push("\\|");
+    else if (escapeBrackets && (char === "[" || char === "]")) output.push(`\\${char}`);
+    else if (char === "\r" || char === "\n") {
+      if (char === "\r" && value[i + 1] === "\n") i++;
+      output.push("<br>");
+    } else output.push(char);
+  }
+  return output.join("");
+}
+
+function escapeMarkdownDestination(value: string): string {
+  const output: string[] = [];
+  for (const char of value) {
+    if (char === "\\") output.push("%5C");
+    else if (char === "(") output.push("%28");
+    else if (char === ")") output.push("%29");
+    else output.push(char);
+  }
+  return output.join("");
+}
+
+function siteProfileMarkdownValue(value: string, rawUrl?: string): string {
+  const label = escapeMarkdownTableCell(value, true);
+  if (!rawUrl) return label;
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return label;
+    const destination = escapeMarkdownDestination(url.toString());
+    return `[${label}](${destination})`;
+  } catch {
+    return label;
+  }
+}
+
 export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOptions): string {
   const lines: string[] = [];
   const version = options?.version ?? "";
@@ -141,13 +180,11 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("| Field | Value |");
     lines.push("|-------|-------|");
     for (const row of siteProfileRows(report.siteMetadata)) {
-      const value = row.url
-        ? `[${row.value.replace(/\|/g, "\\|")}](${row.url})`
-        : row.value.replace(/\|/g, "\\|");
+      const value = siteProfileMarkdownValue(row.value, row.url);
       lines.push(`| ${row.label} | ${value} |`);
     }
     const flags = siteProfileFlags(report.siteMetadata);
-    if (flags) lines.push(`| Flags | ${flags.replace(/\|/g, "\\|")} |`);
+    if (flags) lines.push(`| Flags | ${escapeMarkdownTableCell(flags)} |`);
     lines.push("");
   }
 
@@ -276,7 +313,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           lines.push("|-------|--------|---------|");
           for (const check of rule.checks) {
             const statusIcon = check.status === "fail" ? "X" : "!";
-            const escapedMessage = (check.message + carriedTag(check)).replace(/\|/g, "\\|");
+            const escapedMessage = escapeMarkdownTableCell(check.message + carriedTag(check));
             lines.push(`| ${check.name} | ${statusIcon} ${check.status} | ${escapedMessage} |`);
           }
           lines.push("");

@@ -1,6 +1,7 @@
 // content/quality - LLM-based content quality analysis
 
 import { z } from "zod";
+import { stripHtmlForText } from "@squirrelscan/utils";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -11,22 +12,44 @@ const QualitySchema = z.object({
   feedback: z.string(),
 });
 
-// Extract clean text from HTML for LLM analysis
-function extractTextFromHtml(html: string): string {
-  return html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
-    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
-    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\s+/g, " ")
-    .trim();
+const BASIC_ENTITIES = new Map([
+  ["&nbsp;", " "],
+  ["&amp;", "&"],
+  ["&lt;", "<"],
+  ["&gt;", ">"],
+]);
+
+// Extract clean text from HTML for LLM analysis. Decode each source entity at
+// most once so text such as &amp;lt; cannot turn into markup in a later pass.
+export function extractTextFromHtml(html: string): string {
+  const visible = stripHtmlForText(html, {
+    exclude: ["script", "style", "nav", "footer", "header"],
+  });
+  const output: string[] = [];
+  let pendingSpace = false;
+
+  for (let i = 0; i < visible.length; i++) {
+    let char = visible[i];
+    if (char === "&") {
+      for (const [entity, decoded] of BASIC_ENTITIES) {
+        if (visible.startsWith(entity, i)) {
+          char = decoded;
+          i += entity.length - 1;
+          break;
+        }
+      }
+    }
+
+    if (char.trim() === "") {
+      pendingSpace = output.length > 0;
+    } else {
+      if (pendingSpace) output.push(" ");
+      output.push(char);
+      pendingSpace = false;
+    }
+  }
+
+  return output.join("");
 }
 
 export const contentQualityRule: Rule = {
@@ -83,11 +106,7 @@ Respond with a JSON object containing score (0-100) and feedback (2-3 sentences)
 
 ${content}`;
 
-    const result = await llmCallWithSystem(
-      systemPrompt,
-      userPrompt,
-      QualitySchema
-    );
+    const result = await llmCallWithSystem(systemPrompt, userPrompt, QualitySchema);
 
     if (!result.success) {
       checks.push({

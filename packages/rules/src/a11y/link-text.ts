@@ -1,6 +1,8 @@
 // a11y/link-text - Check for descriptive link text
 // Based on WCAG 2.4.4 Link Purpose (In Context) (Level A)
 
+import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Generic link text that doesn't describe the destination
@@ -131,11 +133,7 @@ function hasAccessibleContent(link: Element): {
     const svgTitle = svg.querySelector("title");
     const svgAriaLabel = svg.getAttribute("aria-label");
     const svgAriaLabelledby = svg.getAttribute("aria-labelledby");
-    if (
-      svgTitle?.textContent?.trim() ||
-      svgAriaLabel?.trim() ||
-      svgAriaLabelledby
-    ) {
+    if (svgTitle?.textContent?.trim() || svgAriaLabel?.trim() || svgAriaLabelledby) {
       return { hasContent: true, contentType: "svg" };
     }
     // SVG without accessible name - this is a problem
@@ -144,7 +142,7 @@ function hasAccessibleContent(link: Element): {
 
   // Check for icon font (common patterns)
   const iconElement = link.querySelector(
-    'i[class*="icon"], span[class*="icon"], i[class*="fa-"], span[class*="fa-"]'
+    'i[class*="icon"], span[class*="icon"], i[class*="fa-"], span[class*="fa-"]',
   );
   if (iconElement) {
     return { hasContent: false, contentType: "icon-font" };
@@ -189,13 +187,10 @@ export const linkTextRule: Rule = {
       const href = link.getAttribute("href") || "";
 
       // Skip anchor links and javascript
-      if (href.startsWith("#") || href.startsWith("javascript:")) continue;
+      if (href.trimStart().startsWith("#") || hasUnsafeUrlScheme(href)) continue;
 
       // Get accessible name (aria-labelledby, aria-label, title)
-      const accessibleName = getAccessibleName(
-        link,
-        doc as unknown as Document
-      );
+      const accessibleName = getAccessibleName(link, doc as unknown as Document);
 
       // If has accessible name via ARIA, skip further checks
       if (accessibleName) {
@@ -254,11 +249,7 @@ export const linkTextRule: Rule = {
       });
     }
 
-    if (
-      emptyLinks.length === 0 &&
-      genericLinks.length === 0 &&
-      links.length > 0
-    ) {
+    if (emptyLinks.length === 0 && genericLinks.length === 0 && links.length > 0) {
       checks.push({
         name: "link-text",
         status: "pass",

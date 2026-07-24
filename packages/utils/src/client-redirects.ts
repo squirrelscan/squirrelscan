@@ -6,10 +6,7 @@
  * - Meta refresh: <meta http-equiv="refresh" content="0;url=...">
  * - JavaScript: window.location = "...", window.location.href = "..."
  */
-export function findClientRedirects(
-  html: string,
-  baseUrl: string
-): string | null {
+export function findClientRedirects(html: string, baseUrl: string): string | null {
   // 1. Check for meta refresh
   const metaRefresh = findMetaRefresh(html, baseUrl);
   if (metaRefresh) return metaRefresh;
@@ -29,30 +26,107 @@ export function findClientRedirects(
  * <meta name="viewport" content="0;url=..." http-equiv="refresh">
  */
 function findMetaRefresh(html: string, baseUrl: string): string | null {
-  // Match meta tag with http-equiv="refresh" (attributes in any order)
-  const metaTagRegex = /<meta\s+([^>]*http-equiv=["']refresh["'][^>]*)>/gi;
-  const metaTags = html.matchAll(metaTagRegex);
+  for (const tag of findStartTags(html, "meta")) {
+    if (getAttribute(tag, "http-equiv")?.toLowerCase() !== "refresh") continue;
+    const content = getAttribute(tag, "content");
+    if (!content) continue;
 
-  for (const metaMatch of metaTags) {
-    // Extract content attribute value from the matched tag
-    const contentRegex = /content=["']([^"']+)["']/i;
-    const contentMatch = contentRegex.exec(metaMatch[1]);
-    if (contentMatch) {
-      // Parse the content value: "0;url=..."
-      const urlRegex = /(\d+)\s*;\s*url=([^"';]+)/i;
-      const urlMatch = urlRegex.exec(contentMatch[1]);
-      if (urlMatch?.[2]) {
-        try {
-          // Resolve relative URLs
-          return new URL(urlMatch[2].trim(), baseUrl).toString();
-        } catch {
-          // Invalid URL, continue to next match
-          continue;
-        }
-      }
+    const separator = content.indexOf(";");
+    if (separator < 0 || !isAsciiDigits(content.slice(0, separator).trim())) continue;
+    const directive = content.slice(separator + 1);
+    const equals = directive.indexOf("=");
+    if (equals < 0 || directive.slice(0, equals).trim().toLowerCase() !== "url") continue;
+    const target = directive.slice(equals + 1).trim();
+    if (!target) continue;
+    try {
+      return new URL(target, baseUrl).toString();
+    } catch {
+      // Invalid URL, continue to the next tag.
     }
   }
 
+  return null;
+}
+
+function isAsciiDigits(value: string): boolean {
+  if (!value) return false;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 48 || code > 57) return false;
+  }
+  return true;
+}
+
+function findStartTags(html: string, tagName: string): string[] {
+  const lower = html.toLowerCase();
+  const prefix = `<${tagName}`;
+  const tags: string[] = [];
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const start = lower.indexOf(prefix, cursor);
+    if (start < 0) break;
+    const boundary = lower[start + prefix.length];
+    if (
+      boundary &&
+      boundary !== " " &&
+      boundary !== "\t" &&
+      boundary !== "\n" &&
+      boundary !== "\r" &&
+      boundary !== "/" &&
+      boundary !== ">"
+    ) {
+      cursor = start + prefix.length;
+      continue;
+    }
+
+    let quote: '"' | "'" | null = null;
+    let end = start + prefix.length;
+    for (; end < html.length; end++) {
+      const char = html[end];
+      if (quote) {
+        if (char === quote) quote = null;
+      } else if (char === '"' || char === "'") {
+        quote = char;
+      } else if (char === ">") {
+        break;
+      }
+    }
+    if (end >= html.length) break;
+    tags.push(html.slice(start, end + 1));
+    cursor = end + 1;
+  }
+
+  return tags;
+}
+
+function getAttribute(tag: string, attributeName: string): string | null {
+  let cursor = 1;
+  while (cursor < tag.length && !/\s/.test(tag[cursor]) && tag[cursor] !== ">") cursor++;
+  while (cursor < tag.length) {
+    while (/\s/.test(tag[cursor] ?? "")) cursor++;
+    if (tag[cursor] === ">" || tag[cursor] === "/" || cursor >= tag.length) break;
+    const nameStart = cursor;
+    while (cursor < tag.length && !/[\s=>/]/.test(tag[cursor])) cursor++;
+    const name = tag.slice(nameStart, cursor).toLowerCase();
+    while (/\s/.test(tag[cursor] ?? "")) cursor++;
+    if (tag[cursor] !== "=") {
+      while (cursor < tag.length && !/\s/.test(tag[cursor]) && tag[cursor] !== ">") cursor++;
+      continue;
+    }
+    cursor++;
+    while (/\s/.test(tag[cursor] ?? "")) cursor++;
+    const quote = tag[cursor] === '"' || tag[cursor] === "'" ? tag[cursor++] : null;
+    const valueStart = cursor;
+    if (quote) {
+      while (cursor < tag.length && tag[cursor] !== quote) cursor++;
+    } else {
+      while (cursor < tag.length && !/[\s>]/.test(tag[cursor])) cursor++;
+    }
+    const value = tag.slice(valueStart, cursor);
+    if (name === attributeName) return value;
+    if (quote && tag[cursor] === quote) cursor++;
+  }
   return null;
 }
 

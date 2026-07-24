@@ -14,6 +14,7 @@
 // capped to `maxPages` so it never multiplies crawl cost.
 
 import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
+import { stripHtmlForText } from "@squirrelscan/utils";
 
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
 
@@ -145,12 +146,7 @@ export function selectSuspiciousPaths(
 
 /** Strip markup + script/style and return the set of visible-text tokens. */
 export function visibleTokens(html: string): Set<string> {
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .toLowerCase();
+  const text = stripHtmlForText(html, { exclude: ["script", "style"] }).toLowerCase();
   const set = new Set<string>();
   for (const t of text.split(/[^a-z0-9]+/)) {
     if (t.length > 1) set.add(t);

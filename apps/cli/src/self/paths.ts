@@ -17,6 +17,14 @@ export interface SquirrelPaths {
   logs: string; // ~/.squirrel/logs
 }
 
+const RELEASE_VERSION_PATTERN =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+/** Release directory names must be canonical SemVer and a single path segment. */
+export function isValidReleaseVersion(version: string): boolean {
+  return RELEASE_VERSION_PATTERN.test(version);
+}
+
 export function getSquirrelPaths(): SquirrelPaths {
   const home = homedir();
   const os = platform() as Platform;
@@ -135,6 +143,9 @@ export function getLocalSettingsDir(): string {
 }
 
 export function getReleasePath(version: string): string {
+  if (!isValidReleaseVersion(version)) {
+    throw new Error(`Invalid release version: ${version}`);
+  }
   return join(getSquirrelPaths().releases, version);
 }
 

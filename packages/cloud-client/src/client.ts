@@ -253,7 +253,9 @@ function isRetryableStatus(status: number): boolean {
 }
 
 export function createCloudClient(config: CloudClientConfig): CloudServicesClient {
-  const base = config.apiUrl.replace(/\/+$/, "");
+  let baseEnd = config.apiUrl.length;
+  while (baseEnd > 0 && config.apiUrl[baseEnd - 1] === "/") baseEnd--;
+  const base = config.apiUrl.slice(0, baseEnd);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxAttempts = config.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 

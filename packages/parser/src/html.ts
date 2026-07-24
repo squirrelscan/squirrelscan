@@ -4,7 +4,7 @@
 
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { coerceSchemelessUrl } from "@squirrelscan/utils";
+import { coerceSchemelessUrl, shouldSkipUrl } from "@squirrelscan/utils";
 import { parseHTML, type Document, type Element } from "linkedom";
 
 import type {
@@ -51,13 +51,9 @@ import { extractVisibleMeta } from "./visible-meta";
 export function extractMeta(doc: Document): MetaData {
   return {
     title: doc.querySelector("title")?.textContent ?? null,
-    description:
-      doc.querySelector('meta[name="description"]')?.getAttribute("content") ??
-      null,
-    canonical:
-      doc.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? null,
-    robots:
-      doc.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null,
+    description: doc.querySelector('meta[name="description"]')?.getAttribute("content") ?? null,
+    canonical: doc.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? null,
+    robots: doc.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null,
   };
 }
 
@@ -80,9 +76,7 @@ export function extractH1(doc: Document): { count: number; texts: string[] } {
 // Extract Open Graph tags from parsed document
 export function extractOG(doc: Document): OpenGraphData {
   const getOG = (property: string): string | null =>
-    doc
-      .querySelector(`meta[property="og:${property}"]`)
-      ?.getAttribute("content") ?? null;
+    doc.querySelector(`meta[property="og:${property}"]`)?.getAttribute("content") ?? null;
 
   return {
     title: getOG("title"),
@@ -97,9 +91,7 @@ export function extractOG(doc: Document): OpenGraphData {
 // Extract Twitter Card tags from parsed document
 export function extractTwitter(doc: Document): TwitterData {
   const getTwitter = (name: string): string | null =>
-    doc
-      .querySelector(`meta[name="twitter:${name}"]`)
-      ?.getAttribute("content") ?? null;
+    doc.querySelector(`meta[name="twitter:${name}"]`)?.getAttribute("content") ?? null;
 
   return {
     card: getTwitter("card"),
@@ -116,14 +108,7 @@ export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
   const baseUrlObj = new URL(baseUrl);
 
   const shouldSkip = (href: string): boolean => {
-    const trimmed = href.trim();
-    return (
-      trimmed.startsWith("#") ||
-      trimmed.startsWith("javascript:") ||
-      trimmed.startsWith("mailto:") ||
-      trimmed.startsWith("tel:") ||
-      trimmed.startsWith("data:")
-    );
+    return shouldSkipUrl(href);
   };
 
   for (const anchor of anchors) {
@@ -239,7 +224,7 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
       // as extractors/headings.ts; oversize h1s must never leave the parser.
       const text = clampItemString(
         (el as Element).textContent?.trim() ?? "",
-        REPORT_LIMITS.maxMediumString
+        REPORT_LIMITS.maxMediumString,
       );
       const heading = { level, text, order: order++ };
       headings.push(heading);
@@ -259,14 +244,12 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
 
   // Find duplicates
   const duplicateHeadings = headingTexts.filter(
-    (text, index) => headingTexts.indexOf(text) !== index && text !== ""
+    (text, index) => headingTexts.indexOf(text) !== index && text !== "",
   );
 
   // Build outline
   const outline = headings
-    .map(
-      (h: HeadingData) => `${"  ".repeat(h.level - 1)}H${h.level}: ${h.text}`
-    )
+    .map((h: HeadingData) => `${"  ".repeat(h.level - 1)}H${h.level}: ${h.text}`)
     .join("\n");
 
   return {
