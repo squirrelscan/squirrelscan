@@ -1,0 +1,42 @@
+---
+title: "OG Image Size"
+description: "Checks og:image meets recommended size (1200x630)"
+---
+
+Checks og:image meets recommended size (1200x630)
+
+| | |
+|---|---|
+| **Rule ID** | `social/og-image-size` |
+| **Category** | [Social Media](/rules/social) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+og:image should be at least 1200x630 pixels for optimal display on Facebook and LinkedIn. Smaller images may appear cropped or low quality. Use 1.91:1 aspect ratio. Keep file size under 8MB. Test with Facebook Sharing Debugger. Consider creating dedicated social images for key pages.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["social/og-image-size"]
+```
+
+### Disable all Social Media rules
+
+```toml squirrel.toml
+[rules]
+disable = ["social/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["social/og-image-size"]
+disable = ["*"]
+```

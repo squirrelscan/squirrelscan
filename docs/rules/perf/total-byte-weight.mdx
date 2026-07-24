@@ -1,0 +1,59 @@
+---
+title: "Total Page Weight"
+description: "Checks the total byte weight of the page"
+---
+
+Checks the total byte weight of the page
+
+| | |
+|---|---|
+| **Rule ID** | `perf/total-byte-weight` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Reduce total page weight for faster loads on slow connections. Optimize images (use modern formats, compress, serve appropriate sizes). Minify and compress CSS/JS. Remove unused code via tree-shaking. Lazy-load non-critical resources. Target under 1.6MB for mobile users.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warn_threshold_kb` | unknown | `undefined` | Warning threshold for total page weight in KB |
+| `error_threshold_kb` | unknown | `undefined` | Error threshold for total page weight in KB |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."perf/total-byte-weight"]
+warn_threshold_kb = undefined
+error_threshold_kb = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/total-byte-weight"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/total-byte-weight"]
+disable = ["*"]
+```

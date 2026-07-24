@@ -1,0 +1,42 @@
+---
+title: "Sitemap Exists"
+description: "Checks if XML sitemap exists and is referenced in robots.txt"
+---
+
+Checks if XML sitemap exists and is referenced in robots.txt
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/sitemap-exists` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 10/10 |
+
+## Solution
+
+XML sitemaps help search engines discover and index your pages. Create a sitemap.xml at your domain root listing all important pages. Reference it in robots.txt with 'Sitemap: https://yoursite.com/sitemap.xml'. Submit it to Google Search Console and Bing Webmaster Tools. Keep it under 50MB and 50,000 URLs per file; use a sitemap index for larger sites.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/sitemap-exists"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/sitemap-exists"]
+disable = ["*"]
+```

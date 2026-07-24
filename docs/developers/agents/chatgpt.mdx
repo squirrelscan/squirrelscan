@@ -1,0 +1,60 @@
+---
+title: "squirrelscan for ChatGPT"
+sidebarTitle: "ChatGPT"
+description: "Add squirrelscan to ChatGPT as a developer-mode MCP connector to run audits and query findings in chat."
+icon: "message-square"
+---
+
+ChatGPT connects to squirrelscan through a custom MCP connector (developer mode). Once added, you can run audits and ask questions about the findings straight from a chat.
+
+<Note>ChatGPT is a chat client, not a coding agent, so it uses the hosted MCP server only, no CLI, skills, or local file edits. To have an agent fix issues in your codebase, use [Claude Code](/developers/agents/claude-code), [Cursor](/developers/agents/cursor), [Codex](/developers/agents/codex), or [opencode](/developers/agents/opencode).</Note>
+
+## Requirements
+
+- A ChatGPT **Plus, Pro, Business, Enterprise, or Education** account (developer mode is not on Free).
+- ChatGPT only supports **remote** MCP servers over HTTPS, which is exactly what squirrelscan hosts.
+
+## 1. Enable developer mode
+
+Open **Settings → Connectors → Advanced**, and turn on **Developer mode**. (Connectors were renamed **apps** in late 2025; the toggle is the same.) On a workspace, an admin may need to enable custom connectors under **Permissions & Roles** first.
+
+## 2. Add the connector
+
+1. Go to **Settings → Connectors** and click **Create** (or the **+**).
+2. Give it a name, `squirrelscan`.
+3. Set the MCP server URL:
+
+   ```
+   https://mcp.squirrelscan.com/mcp
+   ```
+
+4. Choose **OAuth** for authentication and save. ChatGPT discovers the authorization server and runs a browser sign-in, so nothing secret is stored.
+
+## 3. Run an audit
+
+Start a chat, enable the **squirrelscan** connector for the conversation, and ask:
+
+```
+Audit https://example.com and summarize the top 10 issues by severity.
+```
+
+ChatGPT calls the squirrelscan tools, waits for the audit to finish, and reads the report back. Cloud audits spend [credits](/cloud/credits); a base charge starts the run and pages are charged as they render.
+
+<Warning>Developer-mode connectors give a model write access to third-party tools. Only enable connectors you trust, and review actions ChatGPT proposes before approving them.</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and how credits work.
+  </Card>
+  <Card title="Cloud credits" icon="coins" href="/cloud/credits">
+    What an audit costs and how billing works.
+  </Card>
+  <Card title="Fix it in your editor" icon="wand-sparkles" href="/developers/agents">
+    Hand findings to a coding agent to fix in code.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule squirrelscan checks.
+  </Card>
+</CardGroup>

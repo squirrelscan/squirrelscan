@@ -1,0 +1,42 @@
+---
+title: "YMYL Detection"
+description: "Detects Your Money Your Life (YMYL) content"
+---
+
+Detects Your Money Your Life (YMYL) content
+
+| | |
+|---|---|
+| **Rule ID** | `eeat/ymyl-detection` |
+| **Category** | [E-E-A-T](/rules/eeat) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 5/10 |
+
+## Solution
+
+YMYL content (health, finance, legal, safety) is held to higher E-E-A-T standards by Google. If detected: ensure expert authors with credentials, add disclaimers ('not medical advice'), cite authoritative sources, show content review dates, and include professional credentials. YMYL errors can significantly impact rankings.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/ymyl-detection"]
+```
+
+### Disable all E-E-A-T rules
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["eeat/ymyl-detection"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Horizontal Scroll"
+description: "Checks for elements that may cause horizontal scrolling"
+---
+
+Checks for elements that may cause horizontal scrolling
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/horizontal-scroll` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Horizontal scrolling on mobile is a poor user experience and fails Google's mobile-friendly test. Common causes: fixed-width elements, images without max-width, wide tables. Use max-width: 100% on images, responsive tables, and avoid fixed pixel widths. Test on mobile devices.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/horizontal-scroll"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/horizontal-scroll"]
+disable = ["*"]
+```

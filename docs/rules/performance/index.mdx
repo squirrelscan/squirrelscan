@@ -1,0 +1,30 @@
+---
+title: "Performance"
+description: "The Performance score group: page speed and loading behavior"
+icon: "gauge"
+---
+
+Performance is one of the four score groups on every report. It measures page
+speed and loading behavior: Core Web Vitals hints (LCP, CLS, INP), render
+blocking, resource weight, caching, compression, and delivery.
+
+The group is a single category with 29 rules. Most run locally against the HTML
+and response headers; a few need [browser rendering](/guides/browser-rendering)
+for measurements only a real browser can take.
+
+## Category
+
+<CardGroup cols={2}>
+  <Card title="Performance" icon="folder" href="/rules/perf">
+    Page speed and loading performance (29 rules)
+  </Card>
+</CardGroup>
+
+## Disable all performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+See the [full rules reference](/rules) for the other score groups.

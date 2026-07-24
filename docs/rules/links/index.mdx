@@ -1,0 +1,60 @@
+---
+title: "Links"
+description: "Internal and external link health and structure"
+---
+
+Internal and external link health and structure
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Anchor Text" icon="triangle-exclamation" href="/rules/links/anchor-text">
+    Checks for empty or generic anchor text
+  </Card>
+  <Card title="Broken External Links" icon="triangle-exclamation" href="/rules/links/broken-external-links">
+    Detects external links returning 4xx/5xx errors or timeouts
+  </Card>
+  <Card title="Broken Links" icon="circle-exclamation" href="/rules/links/broken-links">
+    Detects links returning 404 or 5xx errors
+  </Card>
+  <Card title="Dead Links (Cloud)" icon="circle-info" href="/rules/links/dead-links">
+    Verifies external links through the cloud service with a shared global cache
+  </Card>
+  <Card title="Dead-End Pages" icon="triangle-exclamation" href="/rules/links/dead-end-pages">
+    Pages with no outgoing internal links, potentially trapping users
+  </Card>
+  <Card title="External Links" icon="circle-info" href="/rules/links/external-links">
+    Reports on external link count
+  </Card>
+  <Card title="HTTPS Downgrade" icon="triangle-exclamation" href="/rules/links/https-downgrade">
+    Detects links from HTTPS pages to HTTP destinations
+  </Card>
+  <Card title="Internal Links" icon="triangle-exclamation" href="/rules/links/internal-links">
+    Validates internal link count
+  </Card>
+  <Card title="Invalid Links" icon="triangle-exclamation" href="/rules/links/invalid-links">
+    Detects invalid link formats on the page
+  </Card>
+  <Card title="Nofollow Internal" icon="triangle-exclamation" href="/rules/links/nofollow-internal">
+    Flags internal links with rel=nofollow
+  </Card>
+  <Card title="Orphan Pages" icon="triangle-exclamation" href="/rules/links/orphan-pages">
+    Detects pages with no internal links pointing to them
+  </Card>
+  <Card title="Redirect Chains" icon="triangle-exclamation" href="/rules/links/redirect-chains">
+    Detects URLs that redirect and links pointing to redirects
+  </Card>
+  <Card title="Tel & Mailto Links" icon="circle-info" href="/rules/links/tel-mailto">
+    Validates tel: and mailto: link formats
+  </Card>
+  <Card title="Weak Internal Links" icon="triangle-exclamation" href="/rules/links/weak-internal-links">
+    Detects pages with only 1 dofollow internal link pointing to them
+  </Card>
+</CardGroup>
+
+## Disable All Links Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```

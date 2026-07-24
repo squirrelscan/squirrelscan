@@ -1,0 +1,30 @@
+---
+title: "Legal Compliance"
+description: "Privacy policy and legal compliance signals"
+---
+
+Privacy policy and legal compliance signals
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Cookie Consent" icon="circle-info" href="/rules/legal/cookie-consent">
+    Checks for cookie consent mechanism
+  </Card>
+  <Card title="Privacy Policy" icon="triangle-exclamation" href="/rules/legal/privacy-policy">
+    Checks for privacy policy link presence
+  </Card>
+  <Card title="Sub-processor Disclosure" icon="circle-info" href="/rules/legal/subprocessor-disclosure">
+    Checks for a sub-processor / data-processing (DPA) disclosure page or link
+  </Card>
+  <Card title="Terms of Service" icon="circle-info" href="/rules/legal/terms-of-service">
+    Checks for terms of service link presence
+  </Card>
+</CardGroup>
+
+## Disable All Legal Compliance Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/*"]
+```

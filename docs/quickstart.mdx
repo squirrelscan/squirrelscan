@@ -1,0 +1,215 @@
+---
+title: "Quickstart"
+icon: "play"
+description: "Install squirrelscan and run your first SEO audit"
+---
+
+## Installation
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
+
+<Tip>After installation, run `squirrel self doctor` to verify everything is set up correctly.</Tip>
+
+<Note>
+**Alpine / musl Linux:** the binary needs the `libstdc++` runtime library. The installer adds it automatically when run as root; otherwise install it first with `apk add libstdc++` (or `sudo apk add libstdc++`).
+</Note>
+
+## Four Ways to Run squirrelscan
+
+<Tabs>
+  <Tab title="CLI">
+    Run audits directly with human-readable terminal output:
+    ```bash
+    squirrel audit example.com
+    ```
+  </Tab>
+  <Tab title="In your agent">
+    Install the skills for autonomous workflows in Claude Code, Cursor, Codex, and any coding agent:
+    ```bash
+    npx skills add squirrelscan/squirrelscan
+    ```
+    Then run `/audit-website` or prompt your agent:
+    ```
+    Use the audit-website skill to audit this site and fix all issues
+    ```
+    <Info>For best results, use the skill in **plan mode** if your agent supports it. This lets the agent analyze issues and create an implementation plan before making changes.</Info>
+
+    Or pipe LLM-optimized output to any assistant:
+    ```bash
+    squirrel audit example.com --format llm | claude
+    ```
+  </Tab>
+  <Tab title="Cloud">
+    Log in to enrich audits with browser rendering, AI analysis, and shareable reports:
+    ```bash
+    squirrel auth login
+    squirrel audit example.com
+    ```
+    <Info>Cloud features are billed in [credits](/cloud/credits): every account gets 500 free per month. See the [cloud docs](/cloud).</Info>
+  </Tab>
+  <Tab title="MCP">
+    Run a local MCP server so agents call squirrelscan's tools directly:
+    ```bash
+    squirrel mcp
+    ```
+    <Info>Your agent launches it via its MCP config. See the [MCP server docs](/developers/mcp).</Info>
+  </Tab>
+</Tabs>
+
+<Info>See [AI Agent Integration](/developers/agents) for detailed guidance on using squirrelscan with Claude Code, Cursor, and other AI coding assistants.</Info>
+
+## Run Your First Audit
+
+Audit a website with a single command:
+
+```bash
+squirrel audit https://example.com
+```
+
+You'll see output like:
+
+```
+ ▄█▀ ▄▀█ █ █ █ █▀▄ █▀▄ █▀▀ █   ▄█▀ ▄▀▀ ▄▀█ █▄ █
+ ▀▄  █ █ █ █ █ ██▀ ██▀ █▀  █   ▀▄  █   █▀█ █ ▀█
+ █▄▀ ▀▀█ ▀▄▀ █ █ █ █ █ █▄▄ █▄▄ █▄▀ ▀▄▄ █ █ █  █
+
+  v0.0.16 (beta)  •  https://squirrelscan.com
+────────────────────────────────────────────
+Auditing  https://example.com
+Coverage  surface · max 100 pages
+Config    defaults
+Account   you@example.com · 500 credits
+Dashboard https://app.squirrelscan.com
+
+✓ Audited 12 pages in 2.1s
+
+──────────────────────────────────────────────────
+SQUIRRELSCAN REPORT
+https://example.com • 12 pages • 72/100 (C)
+──────────────────────────────────────────────────
+
+Category Breakdown:
+--------------------------------------------------
+Core SEO             ███████░░░ 75%
+Content              ████████░░ 82%
+Links                █████████░ 91%
+...
+
+ISSUES
+
+Core SEO (1 error, 3 warnings)
+  core/meta-description Meta Description (error)
+    ✗ meta-description: Missing meta description
+      → /about
+      → /contact
+
+  core/og-tags Open Graph Tags (warning)
+    ⚠ og-image: Missing og:image
+      → /
+
+Content (2 warnings)
+  content/word-count Word Count (warning)
+    ⚠ word-count: Thin content: 150 words (min 300)
+      → /landing
+
+──────────────────────────────────────────────────
+87 passed • 12 warnings • 3 failed
+──────────────────────────────────────────────────
+```
+
+<Info>When you're **signed in**, audits automatically sync to your [dashboard](/dashboard) as **unlisted** reports - a shareable link plus issue history, no extra flags. Publishing is included in the audit base charge, whatever the visibility. Opt out of a run with `--no-publish` (or `--offline`), or turn it off for good with `[cloud] publish = false`. Logged-out runs never publish.</Info>
+
+## Common Options
+
+<Steps>
+  <Step title="Limit pages crawled">
+    For large sites, limit pages to get faster results:
+    ```bash
+    squirrel audit https://example.com -m 10
+    ```
+  </Step>
+
+  <Step title="Export to JSON">
+    Output machine-readable JSON for CI/CD or AI processing:
+    ```bash
+    squirrel audit https://example.com -f json -o report.json
+    ```
+  </Step>
+
+  <Step title="Generate HTML report">
+    Create a visual HTML report:
+    ```bash
+    squirrel audit https://example.com -f html -o report.html
+    ```
+  </Step>
+
+  <Step title="Fresh crawl">
+    Ignore cache and fetch all pages fresh:
+    ```bash
+    squirrel audit https://example.com --refresh
+    ```
+  </Step>
+</Steps>
+
+## Output Formats
+
+| Format | Flag | Use Case |
+|--------|------|----------|
+| `console` | (default) | Human-readable terminal output |
+| `json` | `-f json` | CI/CD pipelines, programmatic processing |
+| `html` | `-f html` | Visual reports for sharing |
+| `markdown` | `-f markdown` | Documentation, GitHub |
+| `text` | `-f text` | Plain text output |
+| `llm` | `-f llm` | Compact AI-optimized (40% smaller than XML) |
+| `xml` | `-f xml` | Verbose structured XML for enterprise |
+
+<Note>
+All formats work with both `squirrel audit --format` and `squirrel report --format`. The `xml` format is only available via `squirrel report`.
+</Note>
+
+## Using with AI Agents
+
+squirrelscan is designed for AI workflows. Two primary methods:
+
+### 1. Install the Skills (Recommended)
+
+```bash
+npx skills add squirrelscan/squirrelscan
+```
+
+Then use with Claude Code, Cursor, or any skill-compatible agent:
+
+```
+Use the audit-website skill to audit example.com and fix all issues
+```
+
+### 2. Pipe Output to AI
+
+```bash
+# Audit and pipe directly to Claude
+squirrel audit example.com --format llm | claude "analyze and prioritize fixes"
+```
+
+The `--format llm` provides compact, token-optimized output designed specifically for AI agents.
+
+<Tip>See [AI Agent Integration](/developers/agents) for advanced workflows including plan mode, subagents, and continuous monitoring.</Tip>
+
+## Next Steps
+
+- Run `squirrel --help` for all available commands
+- See [Configuration](/configuration) to customize audit behavior
+- Check [CLI Reference](/cli/audit) for full audit options
+- View the [GitHub repo](https://github.com/squirrelscan/squirrelscan) for updates

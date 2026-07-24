@@ -1,0 +1,61 @@
+---
+title: "Template Discontinuity"
+description: "Detects pages whose markup diverges hard from the site's common template"
+---
+
+Detects pages whose markup diverges hard from the site's common template: a standalone page with none of the site's theme is a classic injected-page signal.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/template-discontinuity` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## How it works
+
+The rule fingerprints every crawled page on stable theme markers: shared stylesheets, asset hosts, body classes, CSS custom properties, and the presence of a nav and footer. It then builds a baseline from the markers shared by the majority of pages (your theme). Pages whose similarity to that baseline falls below the threshold are reported.
+
+A lone off-theme page is reported as **info** (it might be a legitimate off-theme landing page). It escalates to a **failure** only when the divergent page also carries page-level compromise signals (brand impersonation, an obfuscated script, an auth overlay, or doorway content): the correlation gating that keeps false positives down.
+
+## Solution
+
+A page that shares almost none of your site's theme (no shared stylesheets, asset hosts, nav/footer, or CSS variables) may be an injected standalone page rather than something your CMS produced. Confirm the page is one you created; if not, treat the site as compromised: remove the page, audit recently modified files, and check server access logs. Legitimate off-theme landing pages should still load your shared assets.
+
+## Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `minPages` | `4` | Minimum pages needed to establish a reliable baseline |
+| `similarityThreshold` | `0.2` | Pages below this similarity to the baseline are flagged |
+
+```toml squirrel.toml
+[rules."integrity/template-discontinuity"]
+minPages = 4
+similarityThreshold = 0.2
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/template-discontinuity"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/template-discontinuity"]
+disable = ["*"]
+```

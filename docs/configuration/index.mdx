@@ -1,0 +1,369 @@
+---
+title: "Configuration Overview"
+icon: "settings-2"
+description: "Understanding squirrelscan's configuration system"
+---
+
+squirrelscan uses a layered configuration system that combines TOML config files and JSON settings to customize behavior.
+
+## Configuration is Optional
+
+squirrelscan works out of the box with sensible defaults. You only need configuration when you want to customize behavior.
+
+**Zero-config defaults:**
+- Crawls up to 500 pages
+- 100ms delay between requests
+- Fetches robots.txt for sitemap discovery, but doesn't enforce it (audits are owner-initiated)
+- Checks external links (cached 7 days)
+- Runs all rules (gap-analysis rules are opt-in)
+- Cloud rules run when logged in, capped at 1000 credits per audit
+- Logged-in audits render pages in a cloud browser by default (one-time opt-in; `--http` to skip)
+- Console output format
+
+## Configuration System
+
+squirrelscan has two separate configuration systems:
+
+### 1. Project Configuration (`squirrel.toml`)
+
+**What it controls:**
+- How the crawler behaves (limits, delays, patterns)
+- Which audit rules run
+- Output format defaults
+- Per-rule options
+
+**File format:** TOML
+
+**Scope:** Project-specific (audits, crawling, rules)
+
+**Learn more:** [Project Configuration](#project-configuration)
+
+### 2. CLI Settings (`settings.json`)
+
+**What it controls:**
+- Update channel (stable/beta)
+- Auto-update preferences
+- Notification settings
+- Feedback email
+
+**File format:** JSON
+
+**Scope:** CLI behavior (updates, notifications)
+
+**Learn more:** [CLI Settings](#cli-settings)
+
+## Configuration Hierarchy
+
+Settings are merged from multiple sources in this priority order:
+
+### 1. Project Config (`squirrel.toml`)
+
+**Priority:** Highest (overrides everything)
+
+**Location:** squirrelscan walks up from current directory to home directory looking for `squirrel.toml`
+
+```
+Current: /Users/you/projects/mysite/blog
+Searches:
+  1. /Users/you/projects/mysite/blog/squirrel.toml  ← Most specific
+  2. /Users/you/projects/mysite/squirrel.toml
+  3. /Users/you/projects/squirrel.toml
+  4. /Users/you/squirrel.toml                       ← Least specific (home)
+```
+
+**Create:**
+```bash
+cd /path/to/project
+squirrel init
+```
+
+**Scope:**
+- Crawler settings
+- Rule enable/disable
+- Rule options
+- Output format
+- External link checking
+
+### 2. Local CLI Settings (`.squirrel/settings.json`)
+
+**Priority:** Medium
+
+**Location:** `.squirrel/settings.json` in project directory
+
+**Create:**
+```bash
+squirrel self settings set notifications false --local
+```
+
+**Scope:**
+- CLI notifications (project-scoped)
+- Update channel preferences (project-scoped)
+
+**Example:**
+```json
+{
+  "notifications": false,
+  "channel": "beta"
+}
+```
+
+### 3. User CLI Settings (`~/.squirrel/settings.json`)
+
+**Priority:** Low
+
+**Location:**
+- Unix/macOS: `~/.squirrel/settings.json`
+- Windows: `%LOCALAPPDATA%\squirrel\settings.json`
+
+**Manage:**
+```bash
+squirrel self settings show
+squirrel self settings set channel beta
+```
+
+**Scope:**
+- Update channel (stable/beta)
+- Auto-update preferences
+- Notification settings
+- Feedback email
+- Dismissed update versions
+
+### 4. Built-in Defaults
+
+**Priority:** Lowest
+
+**Scope:** All settings have defaults
+
+## Project Configuration
+
+Project configuration is stored in `squirrel.toml` using TOML format.
+
+### Sections
+
+| Section | Purpose | Learn More |
+|---------|---------|------------|
+| `[project]` | Project name, allowed domains | [Project Settings](/configuration/project) |
+| `[crawler]` | Crawl limits, delays, patterns | [Crawler Settings](/configuration/crawler) |
+| `[rules]` | Enable/disable audit rules | [Rules Configuration](/configuration/rules) |
+| `[external_links]` | External link checking | [External Links](/configuration/external-links) |
+| `[output]` | Default output format | [Output Settings](/configuration/output) |
+| `[cloud]` | Cloud features, spend limits, rendering | [Cloud Settings](/configuration/cloud) |
+| `[rule_options.*]` | Per-rule configuration | [Rule Options](/configuration/rule-options) |
+| `smart_audits` | Carry issues across partial re-audits (top-level boolean) | [Smart Audits](#smart-audits) |
+
+### Smart Audits
+
+`smart_audits` (top-level boolean) keeps issues from disappearing when you
+audit fewer pages than last time. Default: on when you are signed in (any plan),
+off for anonymous runs. Set it explicitly to override either way.
+
+With it **on**, squirrelscan persists per-page issue state across audits (a local
+SQLite store keyed by site). On a partial re-audit:
+
+- **re-crawled pages** get fresh results that supersede their prior state,
+- **un-crawled pages** carry their last-known issues forward (tagged `carried`,
+  with a "last seen" time) indefinitely, until you re-crawl them,
+- **removed pages** (404/410) have their issues closed.
+
+The health score is then computed over the **union of all known non-removed
+pages**, so re-auditing a subset never inflates the score by hiding the issues on
+the pages you skipped. Reports show a coverage line ("audited N of M known
+pages") and tag carried findings.
+
+```toml
+smart_audits = true
+```
+
+When off, behaviour is unchanged (each audit reports only the pages crawled
+that run).
+
+### Quick Start
+
+Create a config file:
+
+```bash
+squirrel init
+```
+
+This generates `squirrel.toml` with all available settings:
+
+```toml
+[project]
+name = ""
+domains = []
+
+[crawler]
+max_pages = 500
+delay_ms = 100
+timeout_ms = 30000
+concurrency = 5
+include = []
+exclude = []
+# ... more crawler options
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]
+
+[external_links]
+enabled = true
+cache_ttl_days = 7
+
+[output]
+format = "console"
+
+[rule_options]
+# Per-rule configuration
+```
+
+### Example Configurations
+
+See [Configuration Examples](/configuration/examples) for common use cases:
+- High-volume crawl
+- Multi-domain project
+- CI/CD pipeline
+- Accessibility audit
+- Performance audit
+
+## CLI Settings
+
+CLI settings control squirrel's own behavior (updates, notifications).
+
+### User Settings
+
+Global settings in `~/.squirrel/settings.json`:
+
+```json
+{
+  "channel": "stable",
+  "auto_update": true,
+  "notifications": true,
+  "user_feedback_email": "you@example.com",
+  "dismissed_update_version": null
+}
+```
+
+**Manage:**
+```bash
+# View all settings
+squirrel self settings show
+
+# Change update channel
+squirrel self settings set channel beta
+
+# Disable notifications
+squirrel self settings set notifications false
+```
+
+### Local Settings
+
+Project-scoped settings in `.squirrel/settings.json`:
+
+```json
+{
+  "notifications": false,
+  "channel": "beta"
+}
+```
+
+**Manage:**
+```bash
+# Set local (project-scoped) setting
+squirrel self settings set notifications false --local
+
+# View only local settings
+squirrel self settings show --local
+```
+
+**Use cases:**
+- Disable notifications for specific project
+- Use beta channel for one project only
+- Different settings for work vs personal projects
+
+## Managing Configuration
+
+### View Configuration
+
+Show effective config (merged from all sources):
+
+```bash
+squirrel config show
+```
+
+Show config file path:
+
+```bash
+squirrel config path
+```
+
+### Modify Configuration
+
+Edit file directly:
+
+```bash
+nano squirrel.toml
+```
+
+Or use CLI:
+
+```bash
+squirrel config set crawler.max_pages 200
+```
+
+Preview changes:
+
+```bash
+squirrel config set crawler.max_pages 200 --dry-run
+```
+
+### Validate Configuration
+
+Check for errors:
+
+```bash
+squirrel config validate
+```
+
+Output on success:
+```
+Config valid: /path/to/squirrel.toml
+```
+
+Output on error:
+```
+Invalid config: crawler.max_pages: Expected number, received string
+```
+
+## Configuration vs Settings
+
+| Aspect | Project Config (`squirrel.toml`) | CLI Settings (`settings.json`) |
+|--------|----------------------------------|--------------------------------|
+| **Format** | TOML | JSON |
+| **Purpose** | Audit behavior | CLI behavior |
+| **Scope** | Crawler, rules, output | Updates, notifications |
+| **Managed by** | `squirrel init`, `squirrel config` | `squirrel self settings` |
+| **Location** | Project directory (walks up) | `~/.squirrel/` or `.squirrel/` |
+| **Examples** | Max pages, rule patterns, delays | Update channel, notifications |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Project Settings" icon="folder" href="/configuration/project">
+    Project name and allowed domains
+  </Card>
+  <Card title="Crawler Settings" icon="waypoints" href="/configuration/crawler">
+    Crawl limits, delays, and patterns
+  </Card>
+  <Card title="Rules Configuration" icon="list-check" href="/configuration/rules">
+    Enable/disable audit rules
+  </Card>
+  <Card title="Examples" icon="code" href="/configuration/examples">
+    Common configuration examples
+  </Card>
+</CardGroup>
+
+## Related
+
+- [init](/cli/init) - Create config file
+- [config](/cli/config) - Manage config
+- [self settings](/cli/self#settings) - Manage CLI settings

@@ -1,0 +1,42 @@
+---
+title: "Link Text"
+description: "Checks for descriptive link text"
+---
+
+Checks for descriptive link text
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/link-text` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Link text should describe the destination, not generic phrases like 'click here'. Screen reader users often navigate by links, hearing them out of context. Good: 'View our pricing plans'. Bad: 'Click here'. For icon-only links, add aria-label: `<a href='/search' aria-label='Search'>``<svg>`...`</svg>``</a>`. Empty links are especially problematic - add text or aria-label.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/link-text"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/link-text"]
+disable = ["*"]
+```

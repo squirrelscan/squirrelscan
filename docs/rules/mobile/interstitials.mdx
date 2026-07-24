@@ -1,0 +1,42 @@
+---
+title: "Interstitials"
+description: "Detects potentially intrusive mobile interstitials"
+---
+
+Detects potentially intrusive mobile interstitials
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/interstitials` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Google penalizes intrusive interstitials that cover main content on mobile. Avoid: popups that cover the content immediately on page load, standalone interstitials before the main content, above-the-fold layouts that look like interstitials. Allowed: age verification, cookie consent (small), login walls for paywalled content.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/interstitials"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/interstitials"]
+disable = ["*"]
+```

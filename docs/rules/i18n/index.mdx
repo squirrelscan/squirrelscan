@@ -1,0 +1,24 @@
+---
+title: "Internationalization"
+description: "Language declarations and multi-region support"
+---
+
+Language declarations and multi-region support
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Hreflang Tags" icon="circle-info" href="/rules/i18n/hreflang">
+    Checks for hreflang link elements
+  </Card>
+  <Card title="Lang Attribute" icon="triangle-exclamation" href="/rules/i18n/lang-attribute">
+    Checks for lang attribute on html element
+  </Card>
+</CardGroup>
+
+## Disable All Internationalization Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/*"]
+```

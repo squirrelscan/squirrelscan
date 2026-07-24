@@ -1,0 +1,495 @@
+---
+title: "Crawling"
+icon: "waypoints"
+description: "How SquirrelScan crawls websites efficiently and intelligently"
+---
+
+SquirrelScan uses a smart crawling system that balances thoroughness with efficiency. This page explains how crawling works under the hood.
+
+## How It Works
+
+When you run `squirrel audit https://example.com`, the crawler:
+
+1. **Fetches robots.txt** to discover sitemaps (enforcing its rules is opt-in, see below)
+2. **Seeds the frontier** with your starting URL
+3. **Discovers links** by parsing each page's HTML
+4. **Crawls breadth-first** to prioritize important pages
+5. **Stores everything** in a local SQLite database
+
+```
+squirrel audit https://example.com
+```
+
+## Coverage Modes
+
+SquirrelScan supports three coverage modes to balance thoroughness with speed:
+
+| Mode | Default Pages | Behavior | Use Case |
+|------|---------------|----------|----------|
+| `quick` | 25 | Seed + sitemaps only, no link discovery, no cloud rules | CI checks, fast health check (anonymous default) |
+| `surface` | 100 | One sample per URL pattern, runs cloud rules + summary | General audits (signed-in default, free or Pro) |
+| `full` | 500 | Crawl everything up to limit, runs cloud rules + summary | Deep analysis |
+
+```bash
+# Signed-in default: surface (100 pages, cloud rules + summary).
+# Anonymous default: quick (25 pages, local, no cloud, no link discovery).
+squirrel audit https://example.com
+
+# Surface crawl (100 pages, pattern sampling, cloud services)
+squirrel audit https://example.com -C surface
+
+# Full comprehensive audit (500 pages)
+squirrel audit https://example.com -C full
+
+# Override page limit for any mode
+squirrel audit https://example.com -C surface -m 200
+```
+
+### Surface Mode Pattern Detection
+
+Surface mode is smart about detecting URL patterns. When it sees `/blog/my-first-post`, `/blog/another-post`, and `/blog/third-post`, it recognizes these as the same pattern (`/blog/{slug}`) and only crawls one sample.
+
+**Detected Patterns:**
+- Numeric IDs: `/products/12345` → `/products/{id}`
+- UUIDs: `/doc/a1b2c3d4-e5f6-...` → `/doc/{id}`
+- Dates: `/blog/2024/01/15` → `/blog/{date}/{date}/{date}`
+- Slugs: `/blog/my-awesome-post` → `/blog/{slug}`
+
+This means a blog with 10,000 posts gets sampled efficiently without wasting crawl budget on duplicate templates.
+
+<Tip>
+Surface mode is the default for any signed-in account, free or Pro (only anonymous runs default to `quick`), and is recommended for most audits. It gives you comprehensive coverage of unique page templates while avoiding over-crawling repetitive content like blog archives or product listings, and runs the cloud-backed rules + editor's summary.
+</Tip>
+
+## Hitting the Page Limit
+
+Every crawl stops once it reaches the **max pages** limit. That limit comes from one of three places, in priority order:
+
+1. **`--max-pages <N>` / `-m <N>`**: per-run CLI override (wins over everything).
+2. **`[crawler] max_pages = N`** in your config, when set to a non-default value.
+3. **Coverage-mode default**: `quick` = 25, `surface` = 100, `full` = 500.
+
+A **hard cap of 5,000 pages** applies on top: any higher value is clamped down to 5,000.
+
+When the limit is the reason a crawl stopped, the CLI says so and tells you how to scan more:
+
+```bash
+squirrel audit https://example.com
+# ✓ Audited 100 pages in 42.3s
+# ⚠ Reached max pages (100). Raise with --max-pages <N> or [crawler] max_pages (cap 5000); use -C full for full coverage.
+```
+
+To scan a larger site, raise the limit or switch to `full` coverage:
+
+```bash
+# Raise just this run
+squirrel audit https://example.com --max-pages 1000
+
+# Use full coverage (default 500 pages)
+squirrel audit https://example.com -C full
+
+# Or set it permanently in squirrel.toml
+```
+
+```toml
+[crawler]
+max_pages = 2000
+```
+
+<Note>
+If you've already set the limit to 5,000 (the hard cap) and still hit it, split the audit by section using `include` patterns (e.g. `include = ["/blog/**"]`) and audit each section separately.
+</Note>
+
+See [Crawler Settings → `max_pages`](/configuration/crawler#max-pages) for the full config reference.
+
+## Redirect Following
+
+SquirrelScan automatically follows **both HTTP and client-side redirects** when starting an audit. This ensures you audit the correct final destination, even through complex redirect chains.
+
+### Supported Redirects
+
+- **HTTP redirects** (301, 302, 303, 307, 308) - handled by native fetch
+- **Meta refresh** - `<meta http-equiv="refresh" content="0;url=...">`
+- **JavaScript redirects** - `window.location`, `window.location.href`, `location.href`
+
+### How It Works
+
+Before crawling begins, SquirrelScan:
+
+1. Follows HTTP redirect chains automatically
+2. Fetches the target page and checks for client-side redirects
+3. Continues following redirects up to 10 hops
+4. Detects and prevents redirect loops
+5. Uses the final URL as the crawl base URL
+
+### Example: Geo-Targeted Redirects
+
+Many sites redirect based on location. SquirrelScan handles this intelligently:
+
+```bash
+squirrel audit gymshark.com
+# Following redirect: https://gymshark.com/ → https://www.gymshark.com/
+# SQUIRRELSCAN REPORT
+# https://www.gymshark.com • 500 pages • 88/100 (B)
+```
+
+Behind the scenes:
+```
+HTTP redirect:        gymshark.com → us.checkout.gymshark.com
+Client-side redirect: us.checkout.gymshark.com → www.gymshark.com
+Final crawl target:   www.gymshark.com
+```
+
+<Tip>
+The original and final URLs are stored in the crawl session for reference. This is useful for sites with A/B testing, geo-targeting, or domain migrations.
+</Tip>
+
+## Connection Resilience
+
+If a fetch fails on a **TLS / SSL / client-certificate error** (for example a strict handshake that rejects browser-impersonated requests), SquirrelScan automatically retries the page with a standard fetch instead of silently dropping it. This keeps reachability and redirect detection working on hosts with picky TLS configurations.
+
+TLS failures and fallbacks are logged with context. Run with `--debug` (or `squirrel config set log_level debug`) to see them (the exact line format depends on your log level):
+
+```bash
+squirrel audit example.com --debug
+# tls fetch event { kind: 'fallback', url: '...', message: '... — falling back to standard fetch' }
+```
+
+## Crawl Sessions
+
+Each audit creates a **crawl session** with a unique ID. Sessions are stored per-domain in `~/.squirrel/projects/<domain>/project.db`.
+
+### Session Behavior
+
+| Scenario | What Happens |
+|----------|--------------|
+| First audit | Creates new crawl session |
+| Re-run audit | Creates new session (old preserved for history) |
+| Interrupted (Ctrl+C) | Session paused, can be resumed |
+| Resume interrupted | Continues from where it left off |
+
+<Note>
+Old crawl sessions are preserved for historical comparison. Future versions will support crawl diffs to track changes over time.
+</Note>
+
+## Browser-Like Caching
+
+SquirrelScan emulates a browser cache across audits, so re-running an audit on
+the same site reuses unchanged content instead of re-downloading it. The cache
+is **persistent and per-site** (stored in `~/.squirrel/projects/<domain>/project.db`),
+works **fully offline / logged-out** (no cloud needed), and is keyed by URL plus
+any request headers the response's `Vary` header depends on.
+
+When re-fetching a URL, the crawler walks three levels, cheapest first:
+
+1. **Freshness skip (no request at all).** If the origin's `Cache-Control: max-age`
+   (or `s-maxage`, or a future `Expires` date) says the cached copy is still
+   fresh, SquirrelScan reuses it **without making any HTTP request**. `immutable`
+   and `stale-while-revalidate` are honored too. A configurable **staleness cap**
+   (`max_staleness_seconds`, default 24h) bounds how long an absurd `max-age` can
+   keep a page out of revalidation within a single audit.
+2. **Conditional GET (304).** If the cached copy is stale, the crawler sends
+   `If-None-Match` (ETag) and/or `If-Modified-Since`. A **304 Not Modified**
+   reuses the cached body (one cheap round-trip, no body download).
+3. **Content-hash compare.** On a full `200`, the new body is hashed against the
+   cached hash: identical content is treated as unchanged.
+
+This makes re-crawling fast: fresh pages are instant (zero requests), and
+changed pages are still detected correctly. **Caching never changes audit
+results**: a fresh-cache run produces the same health score as a full re-fetch.
+
+```bash
+# First crawl: fetches all pages fresh
+squirrel audit https://example.com -m 50
+
+# Second crawl: fresh pages skipped entirely, stale pages 304'd — much faster
+squirrel audit https://example.com -m 100
+```
+
+<Note>
+`Vary: *` responses are never reused, and a stored entry is only reused when the
+request headers it varies on (e.g. `Vary: User-Agent`) still match, so caching
+can't serve the wrong variant.
+</Note>
+
+### Sub-resources (CSS & images)
+
+The same freshness logic applies to **sub-resources** (CSS, images), not just
+pages. On a re-audit, a sub-resource the origin still declares fresh
+(`Cache-Control: max-age`/`s-maxage`/`immutable`) is reused **without any
+request**, and one with only a validator is revalidated with a conditional GET
+(a **304** reuses the prior size). Any sub-resource whose response carried a
+content-negotiating `Vary` (e.g. `User-Agent`, `Accept`) is always re-fetched,
+never reused. Each sub-resource also records its `content-encoding`
+(gzip/Brotli) and transfer size, which feeds the bandwidth-savings metric and
+the `perf/bad-caching` rule.
+
+### Cache stats
+
+After a re-audit, the report includes a compact **cache** line: hit rate,
+bytes saved, and a hits-by-reason breakdown (`max-age` vs `304` vs
+content-hash, …) across **pages and sub-resources**:
+
+```
+Cache: 4/4 hits (100%), 87.2 KB saved
+  by reason: max-age 2, s-maxage 2
+```
+
+It appears in the text, Markdown, and HTML reports (and as a panel in the
+dashboard) only when there is cache reuse to report; a first/cold audit omits
+it. These stats are **informational and never affect the health score**.
+
+### Disabling cache-control skipping
+
+The freshness skip is on by default. To always revalidate (conditional GET) even
+for fresh pages, without ignoring the cache entirely, set:
+
+```toml
+[crawler]
+use_cache_control = false        # skip step 1; always revalidate
+```
+
+The staleness cap only applies when the freshness skip is enabled: it bounds
+how long an origin's declared `max-age` is trusted:
+
+```toml
+[crawler]
+use_cache_control = true         # default
+max_staleness_seconds = 86400    # cap on trusting origin max-age (default 24h)
+```
+
+Use `--refresh` to ignore the cache completely (see below).
+
+## URL Normalization
+
+URLs are normalized before crawling to avoid duplicates:
+
+- Lowercased scheme and host
+- Sorted query parameters
+- Removed default ports (80, 443)
+- Removed trailing slashes
+- Decoded percent-encoding where safe
+
+### Query Parameter Handling
+
+By default, query parameters are stripped except those in your allowlist:
+
+```toml
+[crawler]
+# Keep these query params (e.g., for pagination)
+allow_query_params = ["page", "sort"]
+
+# Drop tracking params (default)
+drop_query_prefixes = ["utm_", "gclid", "fbclid"]
+```
+
+## Scope Control
+
+Control which URLs get crawled with include/exclude patterns:
+
+```toml
+[crawler]
+# Only crawl blog pages
+include = ["/blog/*"]
+
+# Skip admin and api routes
+exclude = ["/admin/*", "/api/*", "*.pdf"]
+```
+
+<Warning>
+Changing `include`, `exclude`, `allow_query_params`, or `drop_query_prefixes` creates a new crawl session since these affect which URLs are in scope.
+</Warning>
+
+### Multi-Domain Crawling
+
+By default, only the seed domain is crawled. To allow additional domains:
+
+```toml
+[project]
+domains = ["example.com", "blog.example.com", "cdn.example.com"]
+```
+
+## User-Agent
+
+By default, SquirrelScan uses a **random browser user-agent**, drawn once per project. This helps avoid bot detection and ensures your audit sees the same content real users would see.
+
+### Default Behavior
+
+The first crawl of a project draws a random user-agent from real browser fingerprints (Chrome, Firefox, Safari, Edge) across desktop, mobile, and tablet devices, then pins it to the project. Every request in every later run reuses the same user-agent, so the server keeps serving the same markup and re-runs stay fast (a changed user-agent can flip a site between mobile and desktop HTML, invalidating caches). Pass `--fresh-ua` to re-roll; the new user-agent becomes the pin.
+
+### Custom User-Agent
+
+To override the random user-agent with a fixed value:
+
+```toml
+[crawler]
+# Use a specific user-agent
+user_agent = "MyBot/1.0 (+https://example.com/bot)"
+
+# Or use the SquirrelScan bot identifier
+user_agent = "SquirrelScan/2.0 (+https://squirrelscan.com/bot)"
+```
+
+<Tip>
+Set a custom `user_agent` if you need to:
+- Whitelist the crawler in your WAF or firewall
+- Test how your site responds to specific browsers
+- Identify squirrelscan requests in your server logs
+</Tip>
+
+## Rate Limiting
+
+SquirrelScan is polite by default:
+
+```toml
+[crawler]
+concurrency = 5              # Total concurrent requests
+per_host_concurrency = 5     # Max concurrent per host
+delay_ms = 100               # Base delay between requests
+per_host_delay_ms = 50       # Min delay between request starts per host
+```
+
+This prevents overloading servers while still crawling efficiently.
+
+## Robots.txt
+
+SquirrelScan always fetches and parses `/robots.txt`, regardless of the setting below: it's needed to discover sitemaps from `Sitemap:` directives and to power the `crawl/robots-txt` audit rule.
+
+By default, SquirrelScan does not enforce `robots.txt` directives:
+
+```toml
+[crawler]
+respect_robots = false  # default
+```
+
+Audits are something you run against your own site, not an uninvited crawl, so `Disallow` rules and `Crawl-delay` aimed at bots don't apply unless you opt in.
+
+Set `respect_robots = true` and the crawler will:
+- Honor `Disallow` rules for the `SquirrelScan` and `*` user agents
+- Honor `Crawl-delay`, capped at 2 seconds even if the directive asks for longer
+
+<Tip>
+Turn `respect_robots` on when auditing a site you don't own, or when you want a fully compliant crawl.
+</Tip>
+
+## Data Storage
+
+Crawl data is stored in SQLite databases organized by domain:
+
+```
+~/.squirrel/projects/
+├── example-com/
+│   └── project.db      # All crawl sessions for example.com
+├── blog-example-com/
+│   └── project.db      # Separate for subdomains
+```
+
+Each database contains:
+- **crawls** - Session metadata and config
+- **pages** - HTML content, headers, timing
+- **links** - Internal and external links
+- **images** - Image metadata
+- **frontier** - URL queue state
+
+## Resuming Interrupted Crawls
+
+If a crawl is interrupted (Ctrl+C, crash, etc.), it can be resumed:
+
+```bash
+# Interrupted at 30/100 pages
+squirrel audit https://example.com -m 100
+# ^C
+
+# Resume - continues from page 31
+squirrel audit https://example.com -m 100
+```
+
+The crawler detects the incomplete session and picks up where it left off.
+
+## Fresh Crawl (--refresh)
+
+To ignore the cache and fetch all pages fresh:
+
+```bash
+squirrel audit https://example.com --refresh
+```
+
+This skips all caching (freshness, conditional GET, and content-hash) and
+re-downloads everything. Useful when:
+- Debugging caching issues
+- Testing after major site changes
+- Verifying server responses
+
+## Crawler Stats
+
+After each crawl, stats are stored:
+
+| Stat | Description |
+|------|-------------|
+| `pagesTotal` | Total pages in crawl |
+| `pagesFetched` | Pages fetched fresh (200 responses) |
+| `pagesUnchanged` | Pages reused from cache (304, content-hash, or freshness skip) |
+| `pagesCacheFresh` | Pages reused with **no request at all** (origin freshness honored), a subset of `pagesUnchanged` |
+| `bytesCacheSaved` | Approximate bytes saved by skipping fresh requests |
+| `pagesFailed` | Failed fetches |
+| `pagesSkipped` | Skipped (out of scope, robots.txt) |
+| `avgLoadTimeMs` | Average page load time |
+| `bytesTotal` | Total bytes downloaded |
+
+## Timing Data
+
+Each page records timing information:
+
+- **loadTimeMs** - Total request time
+- **ttfb** - Time to first byte
+- **downloadTime** - Body download time
+
+This data feeds into performance rules like `perf/ttfb`.
+
+## Performance Optimizations
+
+SquirrelScan uses several techniques to crawl efficiently:
+
+### Parallel URL Fetching
+
+URLs are fetched in parallel batches respecting concurrency limits:
+
+```toml
+[crawler]
+concurrency = 5              # Total concurrent requests
+per_host_concurrency = 5     # Max concurrent per host
+```
+
+The crawler pops multiple URLs from the frontier and processes them concurrently, significantly speeding up crawls compared to sequential fetching.
+
+### Content Caching
+
+HTML and JavaScript content is stored in a global content cache (`~/.squirrel/content-store.db`) with:
+
+- **Gzip compression** - Typically 80-90% space savings
+- **Content deduplication** - Identical content stored once
+- **LRU eviction** - Old entries pruned when cache is full
+
+This means:
+- Repeated crawls of unchanged pages are instant
+- CDN scripts shared across sites are cached once
+- Large crawl sessions use less disk space
+
+### Smart Resource Limits
+
+Script scanning automatically scales with site size:
+
+| Site Size | Scripts Scanned |
+|-----------|-----------------|
+| < 100 pages | 10 scripts |
+| 100-500 pages | 10-50 scripts |
+| > 500 pages | 50 scripts (cap) |
+
+This ensures small sites get thorough scanning while large sites don't waste time on excessive script analysis.
+
+### Database Optimizations
+
+SQLite databases use WAL mode and optimized indexes for:
+- Fast frontier operations (URL queue)
+- Efficient link counting
+- Quick page lookups

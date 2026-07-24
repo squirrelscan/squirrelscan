@@ -1,0 +1,42 @@
+---
+title: "Cookie Flags"
+description: "Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes"
+---
+
+Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes
+
+| | |
+|---|---|
+| **Rule ID** | `security/cookie-flags` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Cookies set by your server should carry the flags appropriate to their purpose. Secure stops a cookie from ever being sent over plain HTTP, so it can't be intercepted on a downgraded connection. HttpOnly stops client-side JavaScript from reading it, closing off a common XSS cookie-theft path — omit it only for cookies your own frontend genuinely needs to read. SameSite=Lax or SameSite=Strict blocks the cookie from being sent on cross-site requests, mitigating CSRF; if you need SameSite=None for a legitimate cross-site use case (e.g. an embedded widget), it must be paired with Secure or browsers will reject the cookie outright.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/cookie-flags"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/cookie-flags"]
+disable = ["*"]
+```

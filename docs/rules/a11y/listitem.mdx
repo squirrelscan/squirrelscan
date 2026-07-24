@@ -1,0 +1,42 @@
+---
+title: "List Item Context"
+description: "Checks that li elements are inside ul, ol, or menu"
+---
+
+Checks that li elements are inside ul, ol, or menu
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/listitem` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+The `<li>` element must be contained within a `<ul>`, `<ol>`, or `<menu>` element. Orphaned list items lose their semantic meaning. Wrap them in an appropriate list container.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/listitem"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/listitem"]
+disable = ["*"]
+```

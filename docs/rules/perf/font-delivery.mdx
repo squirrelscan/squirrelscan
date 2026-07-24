@@ -1,0 +1,54 @@
+---
+title: "Font Delivery"
+description: "Flags render-blocking third-party font stylesheets in the critical request chain"
+---
+
+Flags render-blocking third-party font stylesheets that sit in the critical request chain.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/font-delivery` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## What it detects
+
+- **Render-blocking font CSS**: a `<link rel="stylesheet">` in `<head>` pointing at a hosted font service (Google Fonts, Adobe Typekit, Monotype fast.fonts, Typography.com, Bunny Fonts, Font Awesome) that is not deferred. A stylesheet loaded with `media="print"` (the async-load trick) is treated as non-blocking and is not flagged.
+- **`@import` of a font provider** inside an inline `<style>` block, which adds an extra render-blocking round-trip.
+
+A generic "critical request chains" warning tells you *that* you have a blocking resource; this rule names the font stylesheet specifically and gives font-focused fixes.
+
+## Solution
+
+A `<link rel="stylesheet">` to a hosted font service blocks rendering and adds a cross-origin round-trip before any text can paint. Make font delivery non-blocking:
+
+1. **Self-host** the font files and the `@font-face` CSS to remove the third-party request entirely.
+2. If you keep the hosted CSS, **preconnect** to the font host and load the stylesheet asynchronously with `media="print" onload="this.media='all'"`.
+3. Use `font-display: swap` so fallback text shows immediately.
+4. **Subset** the font to the characters you actually use to cut bytes.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/font-delivery"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/font-delivery"]
+disable = ["*"]
+```

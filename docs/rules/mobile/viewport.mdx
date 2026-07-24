@@ -1,0 +1,42 @@
+---
+title: "Viewport Meta"
+description: "Checks for proper viewport meta tag"
+---
+
+Checks for proper viewport meta tag
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/viewport` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+The viewport meta tag is essential for responsive design. Use: `<meta name='viewport' content='width=device-width, initial-scale=1'>`. This ensures proper scaling on mobile devices. Without it, mobile browsers render at desktop width and zoom out. Required for mobile-first indexing.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/viewport"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/viewport"]
+disable = ["*"]
+```

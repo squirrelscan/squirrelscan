@@ -1,0 +1,54 @@
+---
+title: "LLM Parsability"
+description: "Analyzes how well LLMs can parse and understand the content"
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge** (shared with [Page Type Match](/rules/ai/page-type-match) - both read the same analysis). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+
+Analyzes how well LLMs can parse and understand the content
+
+| | |
+|---|---|
+| **Rule ID** | `ai/llm-parsability` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+| **Default** | Enabled |
+
+## Solution
+
+This rule evaluates how well LLMs can understand and extract information from your content, which affects AI-powered search and assistants. Improve parsability by using clear structure, explicit topic sentences, and well-organized sections. Avoid ambiguous pronouns and ensure context is clear. Use semantic HTML and structured data. Clear, well-written content for humans typically scores well for LLM parsability too.
+
+## Scoring
+
+The rule scores content from 0-100 based on:
+
+- Clear semantic structure (headings, paragraphs, lists)
+- Logical content flow
+- Absence of layout text/navigation mixed with content
+- Clean text without excessive special characters
+- Well-defined sections and topics
+- Machine-readable formatting
+
+| Score | Status | Meaning |
+|-------|--------|---------|
+| 70-100 | Pass | Good LLM parsability |
+| 40-69 | Warning | Could be improved |
+| 0-39 | Fail | Poor parsability |
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/llm-parsability"]
+```
+
+### Disable all AI rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/*"]
+```

@@ -1,0 +1,48 @@
+---
+title: "SEO Doorway Page"
+description: "Detects injected off-topic, keyword-stuffed affiliate doorway posts"
+---
+
+Detects injected off-topic, keyword-stuffed affiliate doorway posts that diverge from the rest of the site's content.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/seo-doorway` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## How it works
+
+The rule fires when a page's title carries doorway lexicon (affiliate funnel terms like ClickFunnels, Kajabi, "sales funnel", "make money online") **and** the body is either thin or keyword-stuffed with multiple distinct doorway terms. A single legitimate "affiliate disclosure" mention never fires: the rule needs real keyword stuffing, not one word.
+
+A lone doorway signal is reported as **info** (it could be legitimate affiliate content). It escalates to a **failure** only when another compromise signal corroborates: for example the post is also an off-template, hidden orphan page, the parasite-SEO shape from the real incident.
+
+## Solution
+
+Off-topic, thin, keyword-stuffed affiliate posts injected into a site are a parasite-SEO compromise: they hijack the domain's authority to rank spam. If you did not publish this content, treat the site as compromised: remove the injected posts, audit your CMS for unauthorized authors/plugins, and check server logs. Google penalizes doorway pages, so leaving them up risks ranking damage.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/seo-doorway"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/seo-doorway"]
+disable = ["*"]
+```

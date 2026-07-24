@@ -1,0 +1,42 @@
+---
+title: "Permissions-Policy"
+description: "Checks for Permissions-Policy (Feature-Policy) header"
+---
+
+Checks for Permissions-Policy (Feature-Policy) header
+
+| | |
+|---|---|
+| **Rule ID** | `security/permissions-policy` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+Permissions-Policy controls which browser features your site can use (camera, microphone, geolocation, etc.). This limits what embedded iframes can access. Example: Permissions-Policy: camera=(), microphone=(), geolocation=(). Empty parentheses disable the feature entirely. This is especially important if you embed third-party content.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/permissions-policy"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/permissions-policy"]
+disable = ["*"]
+```

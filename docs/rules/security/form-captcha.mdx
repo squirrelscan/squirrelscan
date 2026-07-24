@@ -1,0 +1,46 @@
+---
+title: "Form CAPTCHA"
+description: "Checks for CAPTCHA protection on public forms"
+---
+
+Checks for CAPTCHA protection on public forms
+
+| | |
+|---|---|
+| **Rule ID** | `security/form-captcha` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## What it detects
+
+Public-facing forms (contact, comment, newsletter, registration, etc.) with no detected CAPTCHA or bot-protection. Recognized providers: reCAPTCHA, Cloudflare Turnstile, hCaptcha, FriendlyCaptcha, and [FormShield](https://formshield.dev). FormShield protects an entire page invisibly via a single site-wide beacon script (no per-form widget), so its presence (the beacon script tag or its `data-fs-project-key` attribute) is treated as covering every public form on the page.
+
+## Solution
+
+Add CAPTCHA protection (reCAPTCHA, Cloudflare Turnstile, hCaptcha, FormShield, etc.) to public-facing forms to prevent spam and bot submissions. Contact forms, comment forms, newsletter signups, and registration forms are common targets for automated abuse. Modern solutions like Turnstile and FormShield offer invisible protection with minimal user friction.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/form-captcha"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/form-captcha"]
+disable = ["*"]
+```

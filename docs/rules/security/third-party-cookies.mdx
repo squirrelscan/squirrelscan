@@ -1,0 +1,42 @@
+---
+title: "Third-Party Cookies"
+description: "Detects third-party resources that may set cookies"
+---
+
+Detects third-party resources that may set cookies
+
+| | |
+|---|---|
+| **Rule ID** | `security/third-party-cookies` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Third-party cookies are being phased out by browsers. Review resources from external domains that may set cookies for tracking. Consider using first-party analytics solutions, server-side tracking, or privacy-focused alternatives. Ensure compliance with GDPR/CCPA by providing cookie consent and disclosing third-party services in your privacy policy.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/third-party-cookies"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/third-party-cookies"]
+disable = ["*"]
+```

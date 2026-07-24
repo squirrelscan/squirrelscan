@@ -1,0 +1,53 @@
+---
+title: "Carousel Hidden Eager Images"
+description: "Flags eagerly-loaded images inside hidden carousel slides"
+---
+
+Flags eagerly-loaded images inside hidden carousel slides, which waste bandwidth by downloading off-screen slides up front.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/carousel-hidden-eager` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## What it detects
+
+An `<img>` is flagged when **all** of the following hold:
+
+- It is **eager**: no `loading="lazy"` attribute (lazy images are handled by the lazy-loading rules instead, so the two never flag the same image).
+- It has a real `src` (data URIs are skipped).
+- It sits inside a **carousel slide**: an ancestor whose class matches a known slider framework (Swiper, Splide, Glide, Slick, keen-slider, Embla, Flickity, Owl) or contains `carousel`/`slider`/`slide`.
+- That slide (or an ancestor) is **hidden** via `aria-hidden="true"`, the `hidden` attribute, or an inline `display:none` / `visibility:hidden`.
+
+Hiding a slide does not stop the browser from fetching its eager images, so all slides download at load time and compete with above-fold resources.
+
+## Solution
+
+Add `loading="lazy"` to images in off-screen carousel slides so the browser defers them until the slide is shown. Keep the first (visible) slide's image eager so it is not delayed. Many carousel libraries offer a built-in lazy-load option that swaps `src` in as slides become active.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/carousel-hidden-eager"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/carousel-hidden-eager"]
+disable = ["*"]
+```

@@ -1,0 +1,93 @@
+---
+title: "API & OAuth Discovery"
+description: "Detects api-catalog, OpenAPI, and OAuth discovery documents"
+---
+
+Detects the machine-readable documents that let an agent go from "I found this site" to "I can call its API": an [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) API catalog, an OpenAPI specification, and OAuth discovery documents ([RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) authorization server metadata, [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) protected-resource metadata). Together these turn an API from something a human has to read docs for into something an agent can introspect and use directly.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/api-discovery` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+<Note>This rule is a **recommendation**: it never penalizes your score. Not every site has (or needs) a public API; absence is expected for content-only sites.</Note>
+
+## What it checks
+
+The audit probes, once per crawl:
+
+- **`/.well-known/api-catalog`** (RFC 9727): a directory of the site's APIs, each entry pointing to its own description document.
+- **`/openapi.json`**, `/swagger.json`, and `/api/openapi.json`: common conventional paths for an OpenAPI specification.
+- **`/.well-known/oauth-authorization-server`** (RFC 8414): metadata describing an OAuth authorization server, if the API requires auth.
+- **`/.well-known/oauth-protected-resource`** (RFC 9728): metadata describing which authorization server protects a given resource, and what scopes it expects.
+- **Agent self-onboarding**: within the RFC 8414 metadata, whether the authorization server advertises `registration_endpoint` ([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) dynamic client registration) or sets `client_id_metadata_document_supported: true` (Client ID Metadata Documents, the CIMD pattern popularized by client.dev).
+
+For each, it reports presence and whether the body parses as valid JSON matching the expected shape.
+
+Discovering an OAuth server is only half the job: an agent still needs a client ID to start an authorization flow, and by default that means a human has to pre-register one by hand in a developer dashboard. Dynamic Client Registration and CIMD both remove that step — DCR lets a client register itself against `registration_endpoint` at connect time, and CIMD lets a client present a URL to a signed metadata document as its identity instead of a pre-issued ID, so no registration call happens at all. This is the mechanism MCP clients rely on to connect to a new MCP server without a human copying credentials around first; squirrelscan's own hosted MCP server implements CIMD for exactly this reason. A site with `/.well-known/oauth-authorization-server` but no `registration_endpoint` and no CIMD support is discoverable but not truly self-service: an agent can find the door, but a person still has to unlock it.
+
+## Solution
+
+If you expose a public API, publish an OpenAPI spec at a conventional path and, if practical, an `api-catalog` pointing to it:
+
+```json .well-known/api-catalog
+{
+  "linkset": [
+    {
+      "anchor": "https://example.com/",
+      "service-desc": [
+        { "href": "https://example.com/openapi.json", "type": "application/json" }
+      ]
+    }
+  ]
+}
+```
+
+If the API requires OAuth, publish the discovery documents so an agent can find the authorization server and required scopes without hardcoded configuration:
+
+```json .well-known/oauth-protected-resource
+{
+  "resource": "https://example.com/api",
+  "authorization_servers": ["https://auth.example.com"],
+  "scopes_supported": ["read", "write"]
+}
+```
+
+To let an agent onboard itself instead of waiting on a human to register a client, add `registration_endpoint` (DCR) and/or `client_id_metadata_document_supported` (CIMD) to your authorization server metadata:
+
+```json .well-known/oauth-authorization-server
+{
+  "issuer": "https://auth.example.com",
+  "authorization_endpoint": "https://auth.example.com/authorize",
+  "token_endpoint": "https://auth.example.com/token",
+  "registration_endpoint": "https://auth.example.com/register",
+  "client_id_metadata_document_supported": true
+}
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/api-discovery"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/api-discovery"]
+disable = ["*"]
+```

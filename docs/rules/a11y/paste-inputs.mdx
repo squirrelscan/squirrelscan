@@ -1,0 +1,42 @@
+---
+title: "Paste Inputs"
+description: "Detects form inputs that prevent pasting"
+---
+
+Detects form inputs that prevent pasting
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/paste-inputs` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Remove any JavaScript that prevents pasting in form inputs. Blocking paste forces users to manually type passwords, email addresses, or other data, which increases errors and frustrates users with password managers. Users with motor impairments may rely on paste functionality. Remove onpaste='return false', event.preventDefault() on paste events, and similar anti-paste code.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/paste-inputs"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/paste-inputs"]
+disable = ["*"]
+```

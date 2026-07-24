@@ -1,0 +1,66 @@
+---
+title: "Pay Per Crawl"
+description: "Detects HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)"
+---
+
+Detects monetized agent access: an HTTP `402 Payment Required` response carrying a `crawler-price` header (Cloudflare Pay Per Crawl) or an [x402](https://x402.org) JSON payment body, served to AI crawler user-agents. This is the most literal expression of the "Actionable" pillar — a site that has decided agent access to its content is a paid transaction, not a free crawl.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/pay-per-crawl` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | warning (only when a user-action fetcher is charged; otherwise informational) |
+| **Weight** | 1/10 |
+
+<Note>Monetizing crawler access is a legitimate business decision, and this rule reports it informationally by default. It only escalates to a warning when a `402` is served to a **user-action fetcher** (`ChatGPT-User`, `Claude-User`, `Perplexity-User`) rather than a training or bulk crawler — that charges a real person's live request rather than a background crawl.</Note>
+
+## What it checks
+
+The audit re-requests representative pages using AI crawler user-agents and inspects the response for:
+
+- **Cloudflare Pay Per Crawl**: a `402` status with a `crawler-price` response header stating the price to fetch the resource.
+- **x402**: a `402` status with a JSON body following the [x402 protocol](https://x402.org) shape (payment requirements, accepted schemes, resource identifier).
+
+When found, it reports the monetization scheme, the declared price where present, and which user-agent classes (training / AI-search / user-action, per [AI Crawler Access](/rules/ax/ai-crawlers)) the `402` applies to.
+
+## Solution
+
+If you're monetizing crawler access, scope the `402` to the crawler classes you intend to charge — typically training and bulk-ingestion crawlers — and keep it off user-action fetchers so a real user's in-the-moment request through an AI assistant isn't the thing that gets billed:
+
+```http
+GET / HTTP/1.1
+User-agent: GPTBot
+
+HTTP/1.1 402 Payment Required
+crawler-price: $0.01
+Content-Type: text/plain
+
+Payment required for automated access. See https://example.com/crawler-pricing
+```
+
+If you have no intention of charging for access, no action is needed — this rule is purely informational unless a `402` shows up somewhere it shouldn't.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/pay-per-crawl"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/pay-per-crawl"]
+disable = ["*"]
+```

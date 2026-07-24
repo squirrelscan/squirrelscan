@@ -1,0 +1,42 @@
+---
+title: "Multiple Labels"
+description: "Checks that form fields don't have multiple labels"
+---
+
+Checks that form fields don't have multiple labels
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/form-field-multiple-labels` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Form inputs should have only one associated label. Multiple labels can confuse assistive technology. If you need multiple text descriptions, use aria-describedby for supplementary text instead of multiple labels.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/form-field-multiple-labels"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/form-field-multiple-labels"]
+disable = ["*"]
+```

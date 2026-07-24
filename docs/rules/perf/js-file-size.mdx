@@ -1,0 +1,59 @@
+---
+title: "JavaScript File Size Too Large"
+description: "Checks for JavaScript files that exceed recommended size limits"
+---
+
+Checks for JavaScript files that exceed recommended size limits
+
+| | |
+|---|---|
+| **Rule ID** | `perf/js-file-size` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Large JavaScript files block the main thread and delay interactivity. Code-split bundles into smaller chunks, tree-shake unused exports, lazy-load non-critical scripts, and defer or async load third-party scripts. Use dynamic imports for route-based splitting.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warn_bytes` | number | `256000` (250KB) | Byte size to trigger warning |
+| `error_bytes` | number | `1048576` (1MB) | Byte size to trigger error |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."perf/js-file-size"]
+warn_bytes = 256000
+error_bytes = 1048576
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/js-file-size"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/js-file-size"]
+disable = ["*"]
+```

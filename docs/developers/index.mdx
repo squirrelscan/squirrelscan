@@ -1,0 +1,77 @@
+---
+title: "Developers"
+description: "The programmatic surface of squirrelscan: REST API, CI/CD, webhooks, auth, and agents"
+icon: "code"
+---
+
+Everything squirrelscan does from a terminal it can also do from your code,
+your pipeline, and your agent. This hub is the map of that programmatic surface:
+the stable REST API, CI/CD integration, outbound webhooks, headless
+authentication, and the agent/MCP workflow.
+
+<Info>
+New here? Most integrations start in one of two places: gate a build with
+[CI/CD](/guides/ci), or drive audits from the [REST API](/api/index). Both
+authenticate with an [API key](/developers/authentication).
+</Info>
+
+## Pick your surface
+
+<CardGroup cols={2}>
+  <Card title="REST API" icon="square-code" href="/api/index">
+    The stable `/v1` surface: create audits, read reports, check credits.
+    OpenAPI-described, agent- and MCP-friendly.
+  </Card>
+  <Card title="CI/CD" icon="git-branch" href="/guides/ci">
+    Gate builds on audits with `--fail-on` exit codes. GitHub Actions, GitLab,
+    and any shell runner.
+  </Card>
+  <Card title="Webhooks" icon="bell" href="/cloud/webhooks">
+    Push audit events to any HTTPS endpoint. Signed, versioned, retried: react
+    without polling.
+  </Card>
+  <Card title="Authentication" icon="key" href="/developers/authentication">
+    API keys, scopes, and `SQUIRRELSCAN_API_KEY` for headless and CI auth.
+  </Card>
+  <Card title="Agents & MCP" icon="sparkles" href="/developers/mcp">
+    Connect any agent to the hosted MCP server at `mcp.squirrelscan.com`, or wire
+    squirrelscan into Claude Code, Cursor, and autonomous workflows.
+  </Card>
+</CardGroup>
+
+## How it fits together
+
+The CLI (`squirrel`) and the REST API are two front doors to the same engine.
+Local, deterministic audits are **free and need no login**. Anything that talks
+to the cloud (publishing reports, browser rendering, AI summaries, the API)
+authenticates with a credential and is metered in [credits](/cloud/credits).
+
+| You want to… | Reach for |
+|--------------|-----------|
+| Run an audit locally or in a script | [`squirrel audit`](/cli/audit) |
+| Fail a build on a regression | [CI/CD](/guides/ci) + [`--fail-on`](/cli/audit) |
+| Drive audits/reports from your own backend | [REST API](/api/index) |
+| Get notified when an audit finishes | [Webhooks](/cloud/webhooks) |
+| Authenticate without a browser | [`SQUIRRELSCAN_API_KEY`](/developers/authentication) |
+| Connect an agent over MCP | [Hosted MCP server](/developers/mcp) |
+| Let an agent run audits autonomously | [Agents & MCP](/developers/agents) |
+
+## A 60-second tour
+
+```bash
+# 1. Local, free, no login — exits non-zero if the gate trips.
+squirrel audit https://example.com --fail-on 'score<90'
+
+# 2. Headless cloud auth — mint a key with `squirrel keys create`, or grab one
+#    from the dashboard.
+export SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx
+
+# 3. Or skip the CLI entirely and hit the API.
+curl https://api.squirrelscan.com/v1/credits \
+  -H "Authorization: Bearer $SQUIRRELSCAN_API_KEY"
+```
+
+<Note>
+The REST API contract is published as an [OpenAPI 3.1 spec](/openapi.json):
+point a client generator, Postman, or an MCP server straight at it.
+</Note>

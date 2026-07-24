@@ -1,0 +1,42 @@
+---
+title: "One Main Landmark"
+description: "Checks that the page has exactly one main landmark"
+---
+
+Checks that the page has exactly one main landmark
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/landmark-one-main` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Each page should have exactly one `<main>` element or element with role='main'. This helps screen reader users quickly navigate to the primary content. Multiple main landmarks confuse navigation. Use `<aside>`, `<nav>`, or other landmarks for secondary content.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/landmark-one-main"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/landmark-one-main"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Label Content Name Mismatch"
+description: "Checks that visible label text is part of accessible name"
+---
+
+Checks that visible label text is part of accessible name
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/label-content-name-mismatch` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+For controls with visible labels, the accessible name should contain the visible text. Voice control users say what they see - if the accessible name doesn't include the visible label, voice commands won't work. Example: A button showing 'Search' should not have aria-label='Find products'.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/label-content-name-mismatch"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/label-content-name-mismatch"]
+disable = ["*"]
+```

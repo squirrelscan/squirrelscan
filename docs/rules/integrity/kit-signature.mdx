@@ -1,0 +1,55 @@
+---
+title: "Kit Signature"
+description: "Matches a page's HTML and JavaScript against threat-intel signatures of known phishing and malware kits"
+---
+
+Matches a page's HTML and JavaScript against threat-intel signatures of known phishing and malware kits (for example the Calendly credential kit). A signature fires on the structural fingerprint of a kit, so it can catch an injected, token-gated standalone page that impersonates a brand's login or booking surface even when the softer heuristic integrity rules miss it.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/kit-signature` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Page |
+| **Severity** | error |
+| **Weight** | 9/10 |
+
+## How it works
+
+This rule is part of the opt-in **threat-intel** feature (`[intel]`). When the feature is on, squirrelscan loads a set of bundled kit signatures before the audit rules run, then matches each page against them using:
+
+- the page **URL** and **title**,
+- the page **HTML** and extracted **text**, and
+- the bodies of **inline and external scripts** attached to that page.
+
+Signatures are written to be high precision: each one requires several corroborating strings on the same page (a brand lexicon plus a kit tell), so a casual mention never trips it. Because the signature already demands multiple corroborating strings, a match reports a **failure** directly rather than going through the correlation gate the heuristic integrity rules use.
+
+The signatures ship with squirrelscan and need no API key or network access, so this rule works on every opted-in audit, both from the CLI and in the cloud. When the `[intel]` feature is off, `ctx.intel` is undefined and the rule does nothing: it never reports a page as clean for signatures it never ran.
+
+## Enable the feature
+
+Threat-intel is off by default. Turn it on to activate this rule:
+
+```toml squirrel.toml
+[intel]
+enabled = true            # off by default
+```
+
+## Solution
+
+A page matching a known kit signature is a strong indicator that your site is compromised: an injected, often token-gated standalone page that impersonates a brand's login or booking surface to harvest credentials. Remove the page and any unexpected files, rotate credentials, audit server access logs, and review for a web shell or an injected loader. Signatures are high precision (they require multiple corroborating strings), so a match is not a casual false positive.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/kit-signature"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```

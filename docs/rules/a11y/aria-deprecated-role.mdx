@@ -1,0 +1,42 @@
+---
+title: "Deprecated ARIA Roles"
+description: "Checks for deprecated or abstract ARIA roles"
+---
+
+Checks for deprecated or abstract ARIA roles
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-deprecated-role` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Solution
+
+Avoid deprecated or abstract ARIA roles. Use the recommended alternatives. Abstract roles are never meant to be used directly - they're base types that other roles extend. Replace with specific, concrete roles.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-deprecated-role"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-deprecated-role"]
+disable = ["*"]
+```

@@ -1,0 +1,390 @@
+---
+title: "audit"
+icon: "scan-search"
+description: "Run an audit on a website"
+---
+
+The `audit` command crawls a website and runs SEO rules to generate a report.
+
+## Usage
+
+```bash
+squirrel audit <url> [options]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `url` | The URL to audit (required) |
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--max-pages` | `-m` | Maximum pages to crawl | varies by coverage mode |
+| `--max-depth` | | Maximum crawl depth from the seed (start page = 0) | unlimited |
+| `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
+| `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
+| `--coverage` | `-C` | Coverage mode: `quick`, `surface`, `full` | auth-aware (see below) |
+| `--format` | `-f` | Output format: `console`, `text`, `json`, `html`, `markdown`, `xml`, `llm` | `console` |
+| `--output` | `-o` | Output file path | auto |
+| `--refresh` | `-r` | Ignore cache, fetch all pages fresh (full re-scan) | `false` |
+| `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |
+| `--incremental` | | Re-scan only changed pages via conditional GET (the default; overrides `[crawler] incremental = false`) | `true` |
+| `--no-incremental` | | Fetch every page in full, disabling conditional GET | `false` |
+| `--resume` | | Resume interrupted crawl for this domain | `false` |
+| `--verbose` | `-v` | Verbose output | `false` |
+| `--debug` | | Enable debug logging | `false` |
+| `--trace` | | Enable performance tracing | `false` |
+| `--project-name` | `-n` | Project name (overrides config and prompts) | auto |
+| `--publish` | `-p` | Force publish to reports.squirrelscan.com (now the default when signed in) | auto |
+| `--no-publish` | | Skip auto-publishing this run (stay online, just don't publish) | `false` |
+| `--visibility` | | Visibility: `public`, `unlisted`, `private` | `unlisted` |
+| `--yes` | `-y` | Skip confirmation prompts (e.g. cloud credit spend) | `false` |
+| `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
+| `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | auto |
+| `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render, never spend render credits) | auto |
+| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry | `false` |
+| `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
+| `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
+| `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
+| `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
+| `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
+
+### Coverage Modes
+
+| Mode | Default Pages | Description |
+|------|---------------|-------------|
+| `quick` | 25 | Fast scan - seed URL + sitemaps only, no link discovery, no cloud rules |
+| `surface` | 100 | Smart sampling - one page per URL pattern, runs cloud rules + summary |
+| `full` | 500 | Comprehensive - crawl everything up to limit, runs cloud rules + summary |
+
+**Default coverage is auth-aware.** Any signed-in account (free or Pro) defaults to
+`surface`, so the cloud-backed rules (AI/EEAT/blocking) and the editor's summary run
+and a free report demos the full product. Only anonymous (not signed-in) runs default
+to `quick` (fast, no cloud calls, no credit spend). Pass `--coverage` (or set
+`[crawler] coverage` in config) to override either way. `quick` deliberately skips
+**all** networked cloud enrichment. Use `surface`/`full` (or just sign in) to run the
+full rule set. Free and Pro run the same checks: Pro just grants more monthly credits
+and lets you top up.
+
+## Examples
+
+### Basic Audit
+
+```bash
+squirrel audit https://example.com
+```
+
+### Quick Health Check
+
+```bash
+squirrel audit https://example.com -C quick
+```
+
+### Full Comprehensive Audit
+
+```bash
+squirrel audit https://example.com -C full
+```
+
+### Crawl More Pages
+
+```bash
+squirrel audit https://example.com -m 200
+```
+
+### Export to JSON
+
+```bash
+squirrel audit https://example.com -f json -o report.json
+```
+
+### Generate HTML Report
+
+```bash
+squirrel audit https://example.com -f html -o report.html
+```
+
+### Fresh Crawl (Ignore Cache)
+
+```bash
+squirrel audit https://example.com --refresh
+```
+
+### Publishing to the Dashboard
+
+When you're **signed in and online, every audit auto-publishes to your dashboard as `unlisted`**, independent of cloud rendering or enrichment. You get a shareable link plus issue history with no extra flags. Not signed in (or `--offline`)? Nothing publishes.
+
+**Publishing is included in the audit base charge**, whatever the visibility. The auto-publish default is `unlisted`.
+
+```bash
+# signed in → auto-publishes (unlisted) and prints the URL
+squirrel audit https://example.com
+```
+
+Override the visibility for a run:
+
+```bash
+squirrel audit https://example.com --visibility public
+```
+
+Skip publishing for a single run (still runs online):
+
+```bash
+squirrel audit https://example.com --no-publish
+```
+
+Turn auto-publish off for the project in `squirrel.toml`:
+
+```toml
+[cloud]
+publish = false
+```
+
+`--publish` is still accepted (now redundant when signed in) and forces a publish even if `[cloud] publish = false`. `--publish` and `--no-publish` cannot be combined.
+
+<Note>
+Publishing requires authentication. Run `squirrel auth login` first; logged-out runs never publish.
+</Note>
+
+### Browser Rendering
+
+When you're **logged in, audits render every page in a cloud browser by default** (2 credits/page) - so JavaScript-heavy sites are audited against their fully rendered HTML. The first time this would spend credits the CLI asks once and remembers your answer.
+
+Force plain HTTP for a run (no rendering, no render credits):
+
+```bash
+squirrel audit https://example.com --http
+```
+
+Force rendering for a run even if your config disables it:
+
+```bash
+squirrel audit https://example.com --render
+```
+
+For finer control, `--render-mode auto` renders **only** pages that need it (client-side-rendered shells) and uses fast plain HTTP for the rest. To set the behavior permanently, use `render` in `[cloud]` - see the [browser rendering guide](/guides/browser-rendering).
+
+### Fully Offline Audit
+
+Run an audit with zero network calls beyond the site being audited: no cloud
+analysis, no publishing, no update checks, no telemetry. Results are stored in
+the local database as usual:
+
+```bash
+squirrel audit https://example.com --offline
+```
+
+`--offline` cannot be combined with `--publish` or `--render` (both require
+cloud access and login).
+
+### Gate CI on Audit Results
+
+Use `--fail-on` to fail a CI build when an audit regresses. The command exits
+with code `2` when **any** threshold trips (vs `1` for operational errors and
+`0` when everything passes), and prints a summary of what tripped:
+
+```bash
+# Fail if the overall score drops below 90, or any error-severity issue is found.
+# Quote each expression — shells treat bare < and > as redirection.
+squirrel audit https://example.com --fail-on 'score<90' --fail-on 'severity>=error'
+
+# Comma-separated form, plus a per-category threshold
+squirrel audit https://example.com --fail-on 'score<90,score:perf<80,warnings>0'
+```
+
+Supported metrics:
+
+| Expression | Trips when |
+|------------|-----------|
+| `score<N` | overall health score is below `N` |
+| `score:<category><N` | a category score (e.g. `score:perf<80`) is below `N` |
+| `severity>=error` | any error-severity finding exists (also `>=warning`) |
+| `errors>0` | there is at least one error-severity finding |
+| `warnings>0` | there is at least one warning-severity finding |
+
+Operators: `<`, `<=`, `>`, `>=`, `=`; all five work on the numeric metrics
+(`score`, `score:<category>`, `errors`, `warnings`). For `severity`, `=` means
+the **exact** rank (e.g. `severity=warning` trips on warnings but not errors);
+use `>=` for "at least" (e.g. `severity>=warning` trips on warnings *or* errors).
+
+The gate summary is written to stderr, so machine formats like `--format json`
+keep a clean stdout for piping. A malformed expression fails fast (exit `1`)
+before any crawl runs.
+
+### Filtering Rules
+
+Use `--rule-include` / `--rule-exclude` to run only some rule categories, for
+a faster pass or to focus on one area. Bare tokens expand to the whole
+category (`ax` → `ax/*`); exact rules also work (`core/meta-title`):
+
+```bash
+# Only run agent-experience and performance rules
+squirrel audit https://example.com --rule-include ax,perf
+
+# Run everything except images and social
+squirrel audit https://example.com --rule-exclude images,social
+
+# Repeatable or comma-separated, same as --fail-on
+squirrel audit https://example.com --rule-include ax --rule-include perf
+```
+
+`--rule-include` replaces the categories that run for this audit;
+`--rule-exclude` skips categories on top of whatever would normally run. When
+either flag is set, the report is **partial**: the health score is recomputed
+from only the included categories and the console output prints a
+`partial audit: ...` notice under the score. Only console output carries that
+notice: other formats (json, text, markdown, xml, llm) print a warning to
+stderr instead, so the report body itself is unchanged. An unknown category
+errors before crawling, listing the valid category codes. `--fail-on score:<category>`
+referencing an excluded category also errors up front, since it could never
+trip.
+
+### Summary Output
+
+Use `--summary` for a quick score check without the per-issue detail — useful
+in CI logs or a fast re-check:
+
+```bash
+squirrel audit https://example.com --summary
+```
+
+This prints the header, health score, category breakdown, editor's summary
+(when present), and per-category issue counts, but skips individual rule
+findings and affected-page lists. Console format only — combine with a
+non-console `--format` and the command errors up front.
+
+### Verbose Output
+
+```bash
+squirrel audit https://example.com -v
+```
+
+## Output Formats
+
+### Console (default)
+
+Human-readable output with colored issue severity:
+
+```
+squirrelscan v0.1.0
+========================================
+Auditing  https://example.com
+Coverage  surface · max 100 pages
+Config    defaults
+Account   you@example.com · 500 credits
+Dashboard https://app.squirrelscan.com
+
+Crawled 12 pages
+
+ISSUES
+
+[high] Missing meta description
+  → /about
+  → /contact
+
+[medium] Image missing alt text
+  → /images/hero.png on /
+
+[low] Non-HTTPS link
+  → http://oldsite.com on /links
+```
+
+### JSON
+
+Machine-readable JSON for CI/CD pipelines and AI processing:
+
+```bash
+squirrel audit https://example.com -f json -o report.json
+```
+
+```json
+{
+  "url": "https://example.com",
+  "crawledAt": "2025-01-08T00:00:00Z",
+  "pages": [...],
+  "issues": [...],
+  "stats": {
+    "totalPages": 12,
+    "issueCount": { "high": 2, "medium": 3, "low": 5 }
+  }
+}
+```
+
+### HTML
+
+Visual report you can open in a browser:
+
+```bash
+squirrel audit https://example.com -f html -o report.html
+open report.html
+```
+
+## Crawl Behavior
+
+The audit command manages crawl sessions intelligently:
+
+| Scenario | Behavior |
+|----------|----------|
+| First run | Creates new crawl |
+| Re-run (completed) | New crawl, uses cache for 304s |
+| Re-run (interrupted) | Resumes from where it left off |
+| Config changed | New crawl with fresh scope |
+
+<Info>
+Changing scope-affecting config (`include`, `exclude`, `allow_query_params`, `drop_query_prefixes`) triggers a fresh crawl.
+</Info>
+
+## Caching
+
+SquirrelScan caches page content locally. On subsequent audits:
+
+- **304 Not Modified**: Uses cached content (fast)
+- **200 OK**: Fetches fresh content (slower)
+
+Use `--refresh` to bypass the cache entirely.
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Error (invalid URL, crawl failed, down/blocked site, etc.) |
+| `2` | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped (CI gate) |
+
+## Configuration
+
+The audit command respects settings from `squirrel.toml`:
+
+```toml
+[crawler]
+max_pages = 100
+delay_ms = 200
+timeout_ms = 30000
+include = ["/blog/*"]
+exclude = ["/admin/*"]
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]
+```
+
+See [Configuration](/configuration) for all options.
+
+## Using with AI
+
+Pipe JSON output to your LLM:
+
+```bash
+squirrel audit https://example.com -f json | claude "analyze this SEO report"
+```
+
+Or use with Claude Code's MCP integration for interactive auditing.
+
+## Related
+
+- [Crawling](/crawl) - How the crawler works
+- [Configuration](/configuration) - Config file options
+- [squirrel report](/cli/report) - View stored audit reports

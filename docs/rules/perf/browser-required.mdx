@@ -1,0 +1,42 @@
+---
+title: "Browser-Required Audits"
+description: "Lists performance audits that require browser execution"
+---
+
+Lists performance audits that require browser execution
+
+| | |
+|---|---|
+| **Rule ID** | `perf/browser-required` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+## Solution
+
+For complete performance analysis, run browser-based tools like Lighthouse, WebPageTest, or Chrome DevTools. These tools measure actual runtime metrics that cannot be determined through static HTML analysis alone.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/browser-required"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/browser-required"]
+disable = ["*"]
+```

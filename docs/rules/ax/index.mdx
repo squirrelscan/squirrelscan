@@ -1,0 +1,127 @@
+---
+title: "Agent Experience"
+description: "How ready a site is for AI agents to read, discover, and operate on it"
+---
+
+**Agent Experience (AX)** measures how ready a site is for AI agents — chat assistants, answer engines, and autonomous browsers — to read it, find their way around it, and act on it. AX is to agents what UX is to people and DX is to developers: a first-class audit pillar alongside SEO, Performance, and Security, not an afterthought bolted onto them.
+
+Two things pushed AX from "nice to have" to something worth measuring in 2026: Cloudflare shipped an [Agent Readiness score](https://blog.cloudflare.com/agent-readiness/) across its network, and Vercel published an Agent Readability spec. Both formalize what this category already tracked informally — whether a page is legible and reachable by something other than a browser with a human behind it.
+
+<Note>Most AX signals are emerging standards, not settled ones. These rules are deliberately **informational / recommendation**: they surface what an agent sees without penalizing your health score, with the exception of genuine misconfigurations: [AI Crawler Access](/rules/ax/ai-crawlers), [Agent Blocking](/rules/ax/agent-blocking), and [Token Weight](/rules/ax/token-weight) always score, and [Content Signals](/rules/ax/content-signals), [RSL License](/rules/ax/rsl-license), [Pay Per Crawl](/rules/ax/pay-per-crawl), and a masquerading [llms.txt](/rules/ax/llms-txt) warn only when something you declared is contradictory, broken, or misfiring. Even those keep training-crawler blocks informational — it's blocking an AI-search indexer or a user-action fetcher that carries the warning.</Note>
+
+## The five pillars
+
+AX splits into five questions, each covered by one or more rules.
+
+### Readable
+
+Can an agent that fetches a URL actually get the content? Most agent fetchers — `ChatGPT-User`, `Claude-User`, and friends — are plain HTTP clients with no JavaScript engine, so anything that only exists after hydration is invisible to them. Readable also covers token weight: a page bloated with markup relative to its text costs an agent more tokens to parse for the same information.
+
+- [Content Without JavaScript](/rules/ax/content-without-js) — flags main content that only renders client-side
+- [Token Weight](/rules/ax/token-weight) — per-page token estimate and text-to-HTML ratio
+- [Markdown Response](/rules/ax/markdown-response) — serving clean Markdown via content negotiation or a `.md` variant
+
+### Reachable
+
+Are legitimate agents actually let in? `robots.txt` is the front door, and it has three different kinds of visitors to reason about: crawlers that train models (`GPTBot`, `ClaudeBot`, `CCBot`, `Google-Extended`), crawlers that back AI search results (`OAI-SearchBot`, `Claude-SearchBot`, `PerplexityBot`), and fetchers acting on a live user request (`ChatGPT-User`, `Claude-User`, `Perplexity-User`). These are separate user-agent tokens with separate policies — blocking `ClaudeBot` does **not** block `Claude-User`. Beyond declared policy, a WAF or bot-challenge page that 403s a verified agent breaks reachability regardless of what `robots.txt` says.
+
+- [AI Crawler Access](/rules/ax/ai-crawlers) — what `robots.txt` declares for each crawler class
+- [Agent Blocking](/rules/ax/agent-blocking) — behavioral probe for WAF/challenge responses served to agent user-agents
+
+### Discoverable
+
+Does the site expose a machine-readable entry point instead of making an agent guess? This is `llms.txt` and its neighbors: sitemaps, feeds, structured data, `AGENTS.md` for coding agents working in a repo or against docs, and the newer `.well-known` agent descriptors (MCP server cards, A2A agent cards, agent-skills manifests).
+
+- [llms.txt](/rules/ax/llms-txt) — curated Markdown map of the site's key content
+- [AGENTS.md](/rules/ax/agents-md) — repo/docs-oriented instructions file for coding agents
+- [Well-Known Agent Files](/rules/ax/well-known-agent) — MCP server cards, A2A agent cards, agent-skills manifests
+
+### Declared
+
+Has the site said anything explicit about AI access, or is it silent? A `Content-Signal` line in `robots.txt`, an RSL license, or a `noai` tag are all ways of declaring a position. Even "no" is good AX — an explicit block is a clear answer an agent can act on. Ambiguity, or worse, contradiction (declaring `ai-train=yes` while blocking `GPTBot`), is bad AX.
+
+- [Content Signals](/rules/ax/content-signals) — `Content-Signal` policy lines in `robots.txt`
+- [noai Signals](/rules/ax/noai-signals) — `noai`/`noimageai` and AI-search-quoting opt-outs
+- [RSL License](/rules/ax/rsl-license) — machine-readable licensing terms via the RSL standard
+
+### Actionable
+
+Can an agent go beyond reading and actually transact — call an API, use an MCP endpoint, authenticate, or pay for access? This is the frontier of the category: OpenAPI specs, OAuth discovery documents, and Cloudflare Pay Per Crawl / x402 monetized-access responses.
+
+- [API & OAuth Discovery](/rules/ax/api-discovery) — `api-catalog`, OpenAPI, OAuth discovery documents
+- [Pay Per Crawl](/rules/ax/pay-per-crawl) — HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)
+- [Archive Indexing](/rules/ax/archive-indexing) — presence in the Wayback Machine and Common Crawl, the archives AI training corpora are built from (cloud)
+
+<Note>`llms.txt` has no proven SEO value — Google has explicitly said it does not use it for search ranking or indexing. Treat it as a convenience for coding agents and docs consumption, not a ranking lever.</Note>
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Content Without JavaScript" icon="code" href="/rules/ax/content-without-js">
+    Flags main content that only appears after JavaScript runs, invisible to agents that read raw HTML
+  </Card>
+  <Card title="Token Weight" icon="gauge" href="/rules/ax/token-weight">
+    Per-page raw-HTML token estimate and text-to-HTML ratio
+  </Card>
+  <Card title="Markdown Response" icon="markdown" href="/rules/ax/markdown-response">
+    Checks whether the site serves text/markdown via content negotiation or a .md variant
+  </Card>
+  <Card title="AI Crawler Access" icon="robot" href="/rules/ax/ai-crawlers">
+    Classifies and reports which training, AI-search, and user-action crawlers robots.txt allows or blocks
+  </Card>
+  <Card title="Agent Blocking" icon="ban" href="/rules/ax/agent-blocking">
+    Probes whether agent user-agents get 403s or challenge pages that browsers don't
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="/rules/ax/llms-txt">
+    Detects /llms.txt (+ /llms-full.txt) at the domain root and checks its basic Markdown format
+  </Card>
+  <Card title="AGENTS.md" icon="clipboard-list" href="/rules/ax/agents-md">
+    Detects /AGENTS.md and variants: instructions for coding agents working against the site
+  </Card>
+  <Card title="Well-Known Agent Files" icon="id-badge" href="/rules/ax/well-known-agent">
+    Detects MCP server cards, A2A agent cards, and agent-skills manifests
+  </Card>
+  <Card title="Content Signals" icon="flag" href="/rules/ax/content-signals">
+    Parses Content-Signal lines in robots.txt and flags contradictory AI policy
+  </Card>
+  <Card title="noai Signals" icon="eye-slash" href="/rules/ax/noai-signals">
+    Reports noai/noimageai tags and AI-search-quoting opt-outs
+  </Card>
+  <Card title="RSL License" icon="file-contract" href="/rules/ax/rsl-license">
+    Checks for a robots.txt License directive pointing to a valid RSL document
+  </Card>
+  <Card title="API & OAuth Discovery" icon="diagram-project" href="/rules/ax/api-discovery">
+    Detects api-catalog, OpenAPI, and OAuth discovery documents
+  </Card>
+  <Card title="Pay Per Crawl" icon="credit-card" href="/rules/ax/pay-per-crawl">
+    Detects HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)
+  </Card>
+  <Card title="Archive Indexing" icon="box-archive" href="/rules/ax/archive-indexing">
+    Checks presence in the Wayback Machine and Common Crawl, the archives AI training corpora are built from
+  </Card>
+  <Card title="Site Profile" icon="circle-info" href="/rules/ai/site-metadata">
+    Resolves the per-domain site profile that gates cloud features and which rules apply
+  </Card>
+  <Card title="LLM Parsability" icon="circle-info" href="/rules/ai/llm-parsability">
+    Analyzes how well LLMs can parse and understand the content
+  </Card>
+  <Card title="Page Type Match" icon="triangle-exclamation" href="/rules/ai/page-type-match">
+    Checks the AI-classified page type agrees with declared structured data
+  </Card>
+  <Card title="AI Content Detection" icon="circle-info" href="/rules/ai/ai-content">
+    Detects if content appears to be AI-generated (currently disabled)
+  </Card>
+</CardGroup>
+
+<Note>The LLM-backed rules above keep their `ai/` rule IDs, so their cards still link to `/rules/ai/…` paths (like Blocking rules kept `adblock/`); only the category changed. Reports stored under the old `ai` category code normalize to `ax` automatically.</Note>
+
+## Roadmap
+
+More AX checks are planned: WebMCP / agent-accessibility parity with [Lighthouse agentic browsing](https://developer.chrome.com/docs/lighthouse/agentic-browsing/scoring).
+
+## Disable All Agent Experience Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*", "ai/*"]
+```

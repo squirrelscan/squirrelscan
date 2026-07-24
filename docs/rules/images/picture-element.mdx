@@ -1,0 +1,55 @@
+---
+title: "Picture Element Validation"
+description: "Validates <picture> elements have required <img> fallback"
+---
+
+Validates `<picture>` elements have required `<img>` fallback
+
+| | |
+|---|---|
+| **Rule ID** | `images/picture-element` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Solution
+
+Every `<picture>` element MUST contain an `<img>` child element as fallback.
+
+Correct structure:
+`<picture>`
+  `<source srcset="image.webp" type="image/webp">`
+  `<source srcset="image.jpg" type="image/jpeg">`
+  `<img src="image.jpg" alt="Description">`
+`</picture>`
+
+The `<img>` provides fallback for:
+- Browsers without `<picture>` support
+- Screen readers
+- Search engine crawlers
+- Failed srcset loading
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/picture-element"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/picture-element"]
+disable = ["*"]
+```

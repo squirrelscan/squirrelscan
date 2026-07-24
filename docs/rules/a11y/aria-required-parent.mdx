@@ -1,0 +1,42 @@
+---
+title: "ARIA Required Parent"
+description: "Checks that elements with certain roles have required parent roles"
+---
+
+Checks that elements with certain roles have required parent roles
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-required-parent` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Some ARIA roles must be contained within specific parent roles. For example, role='listitem' must be within role='list', role='option' must be within role='listbox'. Restructure your markup to ensure proper parent-child relationships.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-required-parent"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-required-parent"]
+disable = ["*"]
+```

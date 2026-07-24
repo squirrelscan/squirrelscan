@@ -1,0 +1,42 @@
+---
+title: "Terms of Service"
+description: "Checks for terms of service link presence"
+---
+
+Checks for terms of service link presence
+
+| | |
+|---|---|
+| **Rule ID** | `legal/terms-of-service` |
+| **Category** | [Legal Compliance](/rules/legal) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Terms of Service (ToS) protect your business by defining user rights and limitations. Link to ToS from your footer on every page. Essential for: e-commerce sites, SaaS products, user-generated content platforms, and membership sites. Include sections on: usage rules, liability limits, dispute resolution, and termination.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/terms-of-service"]
+```
+
+### Disable all Legal Compliance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["legal/terms-of-service"]
+disable = ["*"]
+```

@@ -1,0 +1,144 @@
+---
+title: "keys"
+icon: "key"
+description: "Mint, list, and revoke org API keys without leaving the terminal"
+---
+
+The `keys` command manages [org API keys](/developers/authentication), the credential used for CI, headless agents, and the [hosted MCP server](/developers/mcp). It talks to the same endpoints as the dashboard's **Settings → API Keys** page.
+
+<Note>
+Every subcommand requires a **login session** (`squirrel auth login`), not an
+API key. This is intentional: an API key can never mint another API key, so
+there's no privilege-escalation loop.
+</Note>
+
+## Subcommands
+
+- [create](#create) - Mint a new key
+- [list](#list) - List keys for your org
+- [revoke](#revoke) - Revoke a key by prefix or id
+
+---
+
+## create
+
+Mint a new org API key. The plaintext token is shown **once**, copy it before you close the terminal.
+
+### Usage
+
+```bash
+squirrel keys create [options]
+```
+
+### Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--name` | Key name | `cli-<hostname>-<yyyymmdd>` |
+| `--scopes` | Comma-separated [scopes](/developers/authentication#scopes) | full access |
+| `--expires-days` | Days until expiry | never |
+| `--shell` | Offer to append the export line to your shell rc file | off |
+| `--json` | Output as JSON | off |
+
+### Example
+
+```bash
+squirrel keys create --name "CI" --scopes audits:write,audits:read,credits:read
+```
+
+```
+✓ Created API key CI (sq_ab12cd…) for Acme Inc
+  Scopes: audits:write, audits:read, credits:read
+  Expires: never
+
+Save this token now (it will not be shown again):
+  sq_ab12cd34ef56gh78ij90kl12mn34op56
+
+Ready to copy:
+  export SQUIRRELSCAN_API_KEY=sq_ab12cd34ef56gh78ij90kl12mn34op56
+```
+
+### `--shell`
+
+`--shell` shows the exact line and target file, asks for confirmation, then **appends** (never overwrites), with a trailing `# added by squirrel keys create` comment so it's easy to find later:
+
+```bash
+squirrel keys create --shell
+```
+
+```
+About to append to /Users/you/.zshenv:
+  export SQUIRRELSCAN_API_KEY=sq_ab12cd…  # added by squirrel keys create
+Append this line? [y/N]
+```
+
+zsh prefers `~/.zshenv` (sourced for every invocation, not just interactive shells) when it exists, falling back to `~/.zshrc`. Requires an interactive terminal: in CI or a non-TTY shell, copy the printed export line manually instead.
+
+---
+
+## list
+
+List API keys for your org.
+
+### Usage
+
+```bash
+squirrel keys list [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON |
+
+### Example
+
+```bash
+squirrel keys list
+```
+
+```
+sq_ab12cd…  CI  active
+  Scopes: audits:write, audits:read, credits:read
+  Created: Jun 1, 2026  Last used: Jul 3, 2026
+```
+
+---
+
+## revoke
+
+Revoke a key immediately by its prefix (as shown by `list`) or full id.
+
+### Usage
+
+```bash
+squirrel keys revoke <prefix-or-id> [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--force` | Skip the confirmation prompt |
+| `--json` | Output as JSON |
+
+### Example
+
+```bash
+squirrel keys revoke sq_ab12cd
+```
+
+```
+About to revoke CI (sq_ab12cd…).
+Continue? [y/N] y
+✓ Revoked CI (sq_ab12cd…)
+```
+
+A prefix that matches more than one active key errors instead of guessing. Use a longer prefix or the full id.
+
+## Related
+
+- [Authentication](/developers/authentication) - token types, scopes, and precedence
+- [auth](/cli/auth) - log in first; `keys` requires a login session
+- [Hosted MCP](/developers/mcp) - the main consumer of a minted key for agents

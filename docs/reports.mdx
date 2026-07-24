@@ -1,0 +1,701 @@
+---
+title: "Reports & Scoring"
+icon: "file-text"
+description: "Understanding audit reports and health score calculation"
+---
+
+squirrelscan generates comprehensive audit reports with a health score and detailed issue breakdown.
+
+## Health Score
+
+The health score is calculated from 0-100 based on:
+
+- **Rule weights** - Each rule has a weight (1-10) reflecting its importance
+- **Check results** - Pass/fail/warning status of each check (warnings count as 0.5)
+- **Scoring curve** - Compresses high scores to reward perfection
+- **Penalties** - Applied for critical crawlability issues and high issue density
+
+### Scoring Formula
+
+```
+Base Score = (Earned Weight / Total Weight) × 100
+Curved Score = Base Score ^ 1.2
+Issue Density Penalty = up to -45% when many errors/warnings (kicks in after 10+ issue units)
+Final Score = Curved Score × Penalty Multipliers × Issue Density Multiplier
+```
+
+Issue units are volume-aware for errors: a failed check counts every element it
+flags (a page with 40 unnamed buttons weighs ~40 units, not 1), capped per check
+and page so a single bad page can't zero a score. Warnings count once per check.
+
+The issue density penalty applies to the overall score and to every group and
+category score individually, each from its own local counts. A group showing
+100 errors can't score green while the overall grade is a D.
+
+### Penalties
+
+Critical crawlability issues reduce the final score:
+
+| Issue | Penalty | Check |
+|-------|---------|-------|
+| Missing robots.txt | -15% | `crawl/robots-txt` |
+| Robots blocks all | -50% | `crawl/robots-txt` |
+| Missing sitemap | -20% | `crawl/sitemap-exists` |
+| High issue density | up to -45% | Any rules (10+ issue units; errors count per flagged element) |
+
+Penalties are multiplicative. For example, an 80% score with missing robots.txt (-15%) and no sitemap (-20%):
+
+```
+80 × (1 - 0.15) × (1 - 0.20) = 80 × 0.85 × 0.80 = 54.4
+```
+
+### Grade Scale
+
+| Score | Grade |
+|-------|-------|
+| 90-100 | A |
+| 80-89 | B |
+| 70-79 | C |
+| 60-69 | D |
+| 0-59 | F |
+
+### Group Scores
+
+Every category rolls up into one of four top-level groups, and each group gets its own 0-100 score. These are the four scores shown on reports and in the dashboard alongside the overall health score:
+
+| Group | What it covers |
+|-------|----------------|
+| **SEO** | Crawlability, core SEO, content, links, structured data, images, social, accessibility, mobile, URLs, internationalization, E-E-A-T, local, video, analytics |
+| **Performance** | Page speed and loading performance |
+| **Security** | HTTPS and headers, site integrity, legal compliance, blocked content |
+| **Agents** | Agent experience: how ready the site is for AI agents to read, discover, and operate on it |
+
+Group scores use the same weighted formula and scoring curve as the health score. The crawlability penalties apply only to the overall health score.
+
+### Category Scores
+
+Each category (core, content, links, etc.) receives its own score:
+
+- Weighted by rule importance within category
+- Includes pass/warning/fail counts
+- Sorted by error count (most errors first)
+- Perfect categories (100%, no issues) shown last
+
+## Output Formats
+
+squirrelscan supports multiple report formats optimized for different use cases.
+
+### console (Default)
+
+Human-readable terminal output with colors and formatting.
+
+```bash
+squirrel report
+```
+
+**Output:**
+```
+================================================================================
+SQUIRRELSCAN REPORT
+https://example.com • 42 pages • 87/100 (B)
+================================================================================
+
+Health Score: 87/100 (B)
+
+Category Breakdown:
+--------------------------------------------------
+Core SEO             ██████████ 100%
+  Passed: 45 | Warnings: 0 | Failed: 0
+Links                ████████░░ 85%
+  Passed: 23 | Warnings: 5 | Failed: 3
+Images               ███████░░░ 72%
+  Passed: 15 | Warnings: 8 | Failed: 6
+
+Total: 83 passed, 13 warnings, 9 errors
+
+ISSUES
+
+Content (2 errors, 3 warnings)
+  content/word-count Word Count (warning)
+    ✗ Low word count: 150 words (min: 300) (3 pages)
+      → /blog/post-1
+      → /blog/post-2
+      → /about
+```
+
+**Features:**
+- Color-coded severity (red errors, yellow warnings)
+- Visual progress bars for category scores
+- Grouped by category
+- Shows affected pages
+
+### json
+
+Machine-readable format for CI/CD pipelines, programmatic processing, and LLM consumption.
+
+```bash
+squirrel report -f json -o report.json
+```
+
+**Structure:**
+```json
+{
+  "baseUrl": "https://example.com",
+  "crawledAt": "2026-01-17T00:00:00Z",
+  "totalPages": 42,
+  "healthScore": {
+    "overall": 87,
+    "groups": [
+      {
+        "group": "seo",
+        "name": "SEO",
+        "score": 94,
+        "passed": 120,
+        "warnings": 8,
+        "failed": 2,
+        "total": 130
+      }
+    ],
+    "categories": [
+      {
+        "category": "core",
+        "name": "Core SEO",
+        "score": 100,
+        "passed": 45,
+        "warnings": 0,
+        "failed": 0,
+        "total": 45
+      }
+    ],
+    "errorCount": 9,
+    "warningCount": 13,
+    "passedCount": 83
+  },
+  "ruleResults": [
+    {
+      "id": "content/word-count",
+      "name": "Word Count",
+      "category": "content",
+      "severity": "warning",
+      "checks": [
+        {
+          "name": "min-words",
+          "status": "fail",
+          "message": "Low word count: 150 words (min: 300)",
+          "pages": ["/blog/post-1", "/blog/post-2"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Use Cases:**
+- CI/CD pipeline integration
+- Fail builds on score thresholds
+- Track score trends over time
+- Feed into monitoring systems
+- LLM analysis
+
+### html
+
+Interactive HTML report that opens in a browser.
+
+```bash
+squirrel report -f html -o report.html
+open report.html
+```
+
+**Features:**
+- Health score plus the four group scores (SEO, Performance, Security, Agents)
+- Issues grouped by category with affected pages and fixes
+- Site summary and tech stack (cloud audits)
+- Shareable when published
+- Responsive design
+
+### markdown
+
+Markdown format for documentation and README files.
+
+```bash
+squirrel report -f markdown -o report.md
+```
+
+**Output:**
+```markdown
+# Audit Report
+
+**Site:** https://example.com
+**Pages:** 42
+**Health Score:** 87/100 (B)
+
+## Health Score
+
+Overall: **87/100** (B)
+
+### Category Breakdown
+
+| Category | Score | Passed | Warnings | Errors |
+|----------|-------|--------|----------|--------|
+| Core SEO | 100% | 45 | 0 | 0 |
+| Links | 85% | 23 | 5 | 3 |
+| Images | 72% | 15 | 8 | 6 |
+
+## Issues
+
+### Content (2 errors, 3 warnings)
+
+#### ⚠️ Word Count
+Low word count detected on 3 pages.
+```
+
+**Use Cases:**
+- Add to repository README
+- Document audit results
+- Share in pull requests
+- Include in technical specs
+
+### text
+
+Plain text format without colors or formatting (for piping and scripting).
+
+```bash
+squirrel report -f text > report.txt
+```
+
+**Use Cases:**
+- Email reports
+- Log files
+- Plain text editors
+- Grep/search processing
+
+### llm
+
+**Compact token-optimized format for AI agents** - hybrid XML/text structure designed for LLM consumption.
+
+```bash
+squirrel report -f llm -o report.xml
+```
+
+or pipe directly:
+
+```bash
+squirrel report -f llm | claude "analyze this audit and prioritize fixes"
+```
+
+**Format Structure:**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<audit version="0.0.13">
+<site url="https://example.com" crawled="42" date="2025-01-18T10:30:00Z"/>
+<score overall="87" grade="B">
+ <cat name="Core SEO" score="100"/>
+ <cat name="Links" score="85"/>
+ <cat name="Images" score="72"/>
+</score>
+<summary passed="83" warnings="13" failed="9"/>
+<issues>
+ <category name="Content" errors="2" warnings="3">
+  <rule id="content/word-count" severity="warning" status="warn">
+   Low word count: 150 words (min: 300)
+   Desc: Pages should have sufficient content for good SEO
+   Fix: Add more relevant content to improve page depth
+   Pages (3): /blog/post-1, /blog/post-2, /about
+  </rule>
+ </category>
+ <category name="Images" errors="6" warnings="0">
+  <rule id="images/alt-text" severity="error" status="fail">
+   Desc: All images must have descriptive alt text
+   Fix: Add alt attributes to img tags
+   Items (6):
+    - /products/widget.png (from: /products)
+    - /hero.jpg (from: /)
+  </rule>
+ </category>
+</issues>
+<locked-rules count="7" audience="anonymous-upsell">
+ Cloud-powered checks (page rendering, AI content analysis, link-rot, brand protection, and more) run with a free squirrelscan account.
+ <cta label="Get started to unlock them" url="https://squirrelscan.com"/>
+ <rule id="ai/llm-parsability" name="LLM Parsability"/>
+ <rule id="ai/site-metadata" name="Site Metadata"/>
+</locked-rules>
+</audit>
+```
+
+**Key Features:**
+- **40-70% smaller** than verbose XML (125KB vs 209KB for 51-page audit)
+- **1-space indentation** for token efficiency
+- **Inline attributes** - metadata as XML attributes, not nested elements
+- **Text prefixes** - `Desc:`, `Fix:`, `Pages (n):`, `Items (n):`
+- **Comma-separated lists** - pages and URLs formatted inline
+- **Hybrid structure** - XML tags for parsing, text for readability
+- **`<locked-rules>`** - cloud-gated checks that didn't run this audit (logged out, quick coverage, out of credits), with an audience-aware action and, for anonymous/free runs, a signup or credits link. Absent when every eligible check ran.
+
+**Token Efficiency:**
+The LLM format achieves significant size reduction through:
+- Minimal indentation (1 space vs 2-4)
+- Flattened hierarchy (fewer nesting levels)
+- Inline attributes instead of nested elements
+- Comma-separated lists instead of multiple elements
+- Text prefixes instead of wrapping tags
+
+**Use Cases:**
+- Piping to Claude Code, Cursor, or other AI assistants
+- Token-limited API contexts (Claude API, GPT)
+- Cost optimization for LLM processing
+- Agent-based workflows requiring structured output
+
+See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/squirrelscan/blob/main/skills/audit-website/references/OUTPUT-FORMAT.md) for complete format specification.
+
+### xml
+
+**Verbose structured XML format** for enterprise integration and detailed archival.
+
+```bash
+squirrel report -f xml -o report.xml
+```
+
+**Format Structure:**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<audit version="0.0.13">
+  <site>
+    <url>https://example.com</url>
+    <crawled>42</crawled>
+    <date>2025-01-18T10:30:00Z</date>
+  </site>
+  <score>
+    <overall>87</overall>
+    <grade>B</grade>
+    <categories>
+      <category>
+        <name>Core SEO</name>
+        <score>100</score>
+      </category>
+    </categories>
+  </score>
+  <issues>
+    <category>
+      <name>Content</name>
+      <rules>
+        <rule>
+          <id>content/word-count</id>
+          <description>Pages should have sufficient content</description>
+          <solution>Add more relevant content to improve page depth</solution>
+          <pages>
+            <page>/blog/post-1</page>
+            <page>/blog/post-2</page>
+          </pages>
+        </rule>
+      </rules>
+    </category>
+  </issues>
+</audit>
+```
+
+**Key Features:**
+- **2-space indentation** for readability
+- **Fully nested elements** - all metadata in dedicated tags
+- **Explicit structure** - strict schema compliance
+- **Detailed metadata** - all information preserved
+- **Enterprise-ready** - suitable for XML parsers and validators
+
+**Comparison: LLM vs XML**
+
+| Aspect | LLM Format | XML Format |
+|--------|-----------|------------|
+| Size (51 pages) | 125KB | 209KB |
+| Indentation | 1 space | 2 spaces |
+| Structure | Hybrid XML/text | Pure XML |
+| Metadata | Inline attributes | Nested elements |
+| Lists | Comma-separated | Multiple elements |
+| Best For | AI agents, tokens | Enterprise, archival |
+
+**Use Cases:**
+- Enterprise data integration
+- Detailed audit archival
+- Schema validation requirements
+- XML processing pipelines
+- Long-term storage with full metadata
+
+## Filtering Reports
+
+### By Severity
+
+Show only errors:
+```bash
+squirrel report --severity error
+```
+
+Show only warnings:
+```bash
+squirrel report --severity warning
+```
+
+### By Category
+
+Filter by single category:
+```bash
+squirrel report --category core
+```
+
+Filter by multiple categories:
+```bash
+squirrel report --category core,links,images
+```
+
+**Available categories:**
+- `core` - Core SEO elements (title, meta, canonical)
+- `content` - Content quality (word count, headings, duplicates)
+- `links` - Link analysis (broken, internal, external)
+- `images` - Image optimization (alt text, formats, dimensions)
+- `schema` - Structured data (JSON-LD validation)
+- `security` - Security headers (HTTPS, CSP, HSTS)
+- `a11y` - Accessibility (ARIA, contrast, focus)
+- `i18n` - Internationalization (lang, hreflang)
+- `perf` - Performance (LCP, CLS, lazy loading)
+- `social` - Social media (Open Graph, Twitter Cards)
+- `crawl` - Crawlability (robots, sitemaps, indexability)
+- `url` - URL structure (length, keywords, parameters)
+- `mobile` - Mobile optimization (viewport, tap targets)
+- `legal` - Legal compliance (privacy, cookies, terms)
+- `local` - Local SEO (NAP, geo tags)
+- `video` - Video optimization (schema, thumbnails)
+- `analytics` - Analytics tracking (GTM, consent)
+- `eeat` - E-E-A-T signals (author, expertise, trust)
+- `blocking` - Ad-blocker & privacy-filter impact (`adblock` still accepted)
+
+### Combined Filters
+
+Combine severity and category filters:
+```bash
+squirrel report --severity error --category links,images
+```
+
+## Diff Reports
+
+Compare a baseline audit to the current report:
+
+```bash
+squirrel report --diff a7b3c2d1 --format json
+```
+
+Compare the latest report for a domain against a baseline audit:
+
+```bash
+squirrel report --regression-since example.com --format llm
+```
+
+<Note>
+Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and `xml` are not supported in diff mode. Diff reports cannot be published with `--publish`.
+</Note>
+
+## CI/CD Integration
+
+### Fail Build on Low Score
+
+```bash
+#!/bin/bash
+SCORE=$(squirrel audit https://example.com -f json | jq '.healthScore.overall')
+if [ "$SCORE" -lt 80 ]; then
+  echo "Health score too low: $SCORE/100 (minimum: 80)"
+  exit 1
+fi
+```
+
+### Fail on Errors
+
+```bash
+#!/bin/bash
+ERRORS=$(squirrel audit https://example.com -f json | jq '.healthScore.errorCount')
+if [ "$ERRORS" -gt 0 ]; then
+  echo "Audit failed with $ERRORS errors"
+  exit 1
+fi
+```
+
+### GitHub Actions Example
+
+Use the official action and gate the build with [`--fail-on`](/cli/audit): it
+exits `2` when a threshold trips, so the job fails automatically:
+
+```yaml
+name: Audit
+on: [pull_request]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: squirrelscan/audit-action@v1
+        id: audit
+        with:
+          url: https://preview.example.com
+          fail-on: "score<80,severity>=error"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report
+          path: ${{ steps.audit.outputs.report }}
+```
+
+This gates pull requests; swap the trigger to `on: [push]` (or add `branches`)
+to gate pushes to a branch instead. See the [CI integration guide](/guides/ci)
+for GitLab, generic runners, and token setup.
+
+## Report Storage
+
+Audit reports are stored in a local SQLite database at:
+
+```
+~/.local/share/squirrel/audits.db
+```
+
+### List Stored Audits
+
+```bash
+squirrel report --list
+```
+
+**Output:**
+```
+Recent Audits:
+================================================================================
+ID       Date                   Pages    Status
+--------------------------------------------------------------------------------
+a7b3c2d1 1/17/2026, 10:30 AM    42       complete
+  https://example.com
+5e9f1a3b 1/16/2026, 3:45 PM     38       complete
+  https://test.com
+
+Total: 2 audits
+```
+
+### View Specific Audit
+
+By ID:
+```bash
+squirrel report a7b3c2d1
+```
+
+By domain:
+```bash
+squirrel report example.com
+```
+
+### Delete Old Audits
+
+Reports are kept indefinitely. To clean up:
+
+```bash
+# Remove specific audit
+rm -rf ~/.local/share/squirrel/audits.db
+
+# This will be regenerated on next audit
+```
+
+## Publishing Reports
+
+Share audit reports online by publishing to `reports.squirrelscan.com`. Published reports can be shared with clients, included in documentation, or consumed programmatically by LLMs and CI pipelines.
+
+<Note>
+Publishing requires authentication. Run `squirrel auth login` first.
+</Note>
+
+### Auto-publish (default when signed in)
+
+When you're **signed in and online, every `squirrel audit` auto-publishes to your dashboard as `unlisted`** - you get a shareable link and issue history with no extra flags. **Publishing is included in the audit base charge**, whatever the visibility. Logged-out and `--offline` runs never publish.
+
+```bash
+# signed in → auto-publishes (unlisted) and prints the URL
+squirrel audit example.com
+```
+
+Skip publishing for a single run:
+
+```bash
+squirrel audit example.com --no-publish
+```
+
+Turn auto-publish off for the project (`squirrel.toml`):
+
+```toml
+[cloud]
+publish = false
+```
+
+See [Cloud Settings](/configuration/cloud) for the `publish` and `visibility` config options.
+
+### Publish from CLI
+
+`--publish` forces a publish even when `[cloud] publish = false`, and works from a stored audit too:
+
+```bash
+squirrel report --publish
+squirrel report a7b3c2d1 --publish --visibility unlisted
+```
+
+The CLI prints the published URL:
+
+```
+https://reports.squirrelscan.com/SJEItpldwW
+```
+
+### Visibility
+
+| Level | Description |
+|-------|-------------|
+| `public` | Listed and searchable |
+| `unlisted` | Accessible via direct link only (default) |
+| `private` | Only visible to you when logged in |
+
+```bash
+squirrel report --publish --visibility private
+```
+
+<Note>
+Publishing is included in the audit base charge, whatever the visibility. Flipping an existing report's visibility later (in the [dashboard](/dashboard) or via the API) is free.
+</Note>
+
+### Output Formats via URL
+
+Published reports support multiple output formats. Append a file extension to the report URL to get a specific format:
+
+| Format | URL | Use Case |
+|--------|-----|----------|
+| HTML | [/SJEItpldwW](https://reports.squirrelscan.com/SJEItpldwW) | Browser viewing (default) |
+| JSON | [/SJEItpldwW.json](https://reports.squirrelscan.com/SJEItpldwW.json) | CI/CD, programmatic access |
+| Markdown | [/SJEItpldwW.md](https://reports.squirrelscan.com/SJEItpldwW.md) | Documentation, READMEs |
+| Plain Text | [/SJEItpldwW.txt](https://reports.squirrelscan.com/SJEItpldwW.txt) | Email, logs |
+| XML | [/SJEItpldwW.xml](https://reports.squirrelscan.com/SJEItpldwW.xml) | Enterprise integration |
+| LLM | [/SJEItpldwW.llm](https://reports.squirrelscan.com/SJEItpldwW.llm) | AI agents, token-efficient |
+
+Without an extension, the format is determined by the `Accept` header. Browsers receive HTML, while tools like `curl` can request specific formats:
+
+```bash
+# Get JSON via Accept header
+curl -H "Accept: application/json" https://reports.squirrelscan.com/SJEItpldwW
+
+# Get JSON via extension (simpler)
+curl https://reports.squirrelscan.com/SJEItpldwW.json
+
+# Pipe LLM format to Claude
+curl -s https://reports.squirrelscan.com/SJEItpldwW.llm | claude "prioritize fixes"
+```
+
+### Managing Published Reports
+
+Visit the [dashboard](https://app.squirrelscan.com) to manage published reports:
+
+- Change visibility (public/unlisted/private)
+- Delete published reports
+- View report analytics (view count, last viewed)
+
+See [Dashboard](/dashboard) for full documentation.
+
+## Related
+
+- [audit](/cli/audit) - Run new audit
+- [report](/cli/report) - Report command reference
+- [Dashboard](/dashboard) - Manage published reports
+- [Rules Reference](/rules) - All audit rules
+- [Configuration](/configuration) - Config file options

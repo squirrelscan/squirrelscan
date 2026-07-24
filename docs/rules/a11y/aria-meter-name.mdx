@@ -1,0 +1,42 @@
+---
+title: "ARIA Meter Name"
+description: "Checks that meter elements have accessible names"
+---
+
+Checks that meter elements have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-meter-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Meter elements must have accessible names to describe what they're measuring. Add aria-label, aria-labelledby, or an associated `<label>`. Example: `<meter aria-label='Battery level' value='0.8'>`80%`</meter>`
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-meter-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-meter-name"]
+disable = ["*"]
+```

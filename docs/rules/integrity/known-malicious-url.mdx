@@ -1,0 +1,68 @@
+---
+title: "Known Malicious URL"
+description: "Cross-references the site's own URLs and outbound links against threat-intel feeds"
+---
+
+Cross-references the site's own URLs (its domain and each page's final URL) and its outbound external links against threat-intel feeds and on-demand lookups. This catches token-gated or cloaked kits that never render for the crawler but are already listed by a reputation provider, and it flags outbound links that point visitors at a known-malicious host.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/known-malicious-url` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 9/10 |
+
+## How it works
+
+This rule is part of the opt-in **threat-intel** feature (`[intel]`). When the feature is on, squirrelscan gathers every candidate URL (the base domain, each crawled page's URL and final URL, and every outbound external link), then checks each one against the configured providers:
+
+- **Daily-pull feeds:** URLhaus, ThreatFox, OpenPhish, and PhishTank. These are pulled once per day into a cached blocklist.
+- **On-demand lookups:** Google Safe Browsing, urlscan, and VirusTotal. These are queried per URL and their results are memoized for the run.
+
+A flagged **site** URL means one of your own pages is serving (or hosting an injected) phishing or malware payload, a likely compromise. A flagged **outbound** link means the page links out to a known-malicious host.
+
+The rule reports honestly when data is incomplete: if no provider was consulted for a URL (the feature is off, or nothing was prefetched), it stays silent for that URL rather than implying it is clean. When at least one provider was consulted and nothing matched, it records a single reassuring pass for the report.
+
+## Enable the feature
+
+Threat-intel is off by default. Turn it on and configure at least one provider so this rule has feeds to check against:
+
+```toml squirrel.toml
+[intel]
+enabled = true            # off by default
+
+# Keyless daily-pull feeds: just switch them on.
+[intel.providers.urlhaus]
+enabled = true
+
+[intel.providers.openphish]
+enabled = true
+
+# API-keyed on-demand lookups.
+[intel.providers.safe-browsing]
+api_key = "your-safe-browsing-key" # pragma: allowlist secret
+
+[intel.providers.virustotal]
+api_key = "your-virustotal-key" # pragma: allowlist secret
+```
+
+## Solution
+
+A site URL flagged by a threat feed means the page is serving (or is hosting an injected) phishing or malware payload, almost always a compromise. Remove the offending content, rotate credentials, and request a review from the listing provider once the page is clean. A flagged **outbound** link points your visitors at a malicious host: remove or replace the link, and check whether it was injected, which is a compromise signal in its own right.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/known-malicious-url"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```

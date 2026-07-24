@@ -1,0 +1,42 @@
+---
+title: "Review Schema"
+description: "Validates Review and AggregateRating schema"
+---
+
+Validates Review and AggregateRating schema
+
+| | |
+|---|---|
+| **Rule ID** | `schema/review` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Review schema enables star ratings in search results. AggregateRating needs ratingValue, bestRating (default 5), ratingCount or reviewCount. Individual Review needs author, reviewRating, datePublished. Reviews must be for specific items (Product, LocalBusiness, etc.), not the overall site. Self-reviews violate guidelines.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/review"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/review"]
+disable = ["*"]
+```

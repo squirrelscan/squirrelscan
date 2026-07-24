@@ -1,0 +1,42 @@
+---
+title: "Font Loading"
+description: "Checks for font loading best practices"
+---
+
+Checks for font loading best practices
+
+| | |
+|---|---|
+| **Rule ID** | `perf/font-loading` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Optimize font loading to prevent FOIT (Flash of Invisible Text) and FOUT (Flash of Unstyled Text): 1) Use font-display: swap in @font-face to show fallback text immediately. 2) Preconnect to font CDNs with `<link rel='preconnect'>`. 3) Use WOFF2 format for best compression. 4) Self-host fonts when possible for faster loading. 5) Limit font families and weights to reduce downloads.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/font-loading"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/font-loading"]
+disable = ["*"]
+```

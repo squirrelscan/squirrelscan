@@ -1,0 +1,42 @@
+---
+title: "Critical Request Chains"
+description: "Identifies chains of dependent resources that delay rendering"
+---
+
+Identifies chains of dependent resources that delay rendering
+
+| | |
+|---|---|
+| **Rule ID** | `perf/critical-request-chains` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Critical request chains are sequences of dependent network requests that must complete before the page can render. Reduce chain depth by: 1) Inlining critical CSS instead of linking external files. 2) Adding async or defer to non-critical scripts. 3) Avoiding CSS @import; use `<link>` tags instead. 4) Using `<link rel='preload'>` for critical resources. 5) Reducing the number of render-blocking resources in `<head>`.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/critical-request-chains"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/critical-request-chains"]
+disable = ["*"]
+```

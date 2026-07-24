@@ -1,0 +1,42 @@
+---
+title: "ARIA Hidden Body"
+description: "Ensures document body is not set to aria-hidden"
+---
+
+Ensures document body is not set to aria-hidden
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-hidden-body` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 10/10 |
+
+## Solution
+
+Never set aria-hidden='true' on the `<body>` element. This makes the entire page invisible to assistive technology. If you need to hide content when a modal is open, add aria-hidden to sibling elements of the modal, not to body.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-hidden-body"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-hidden-body"]
+disable = ["*"]
+```

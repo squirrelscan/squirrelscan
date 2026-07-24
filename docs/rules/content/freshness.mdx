@@ -1,0 +1,42 @@
+---
+title: "Content Freshness"
+description: "Checks for last-modified and published date signals"
+---
+
+Checks for last-modified and published date signals
+
+| | |
+|---|---|
+| **Rule ID** | `content/freshness` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Date signals help search engines understand content freshness. Use Article schema with datePublished and dateModified. Show visible publication dates on content. Update dates when making significant changes. For evergreen content, periodic updates with new dateModified signal relevance. The Last-Modified HTTP header also helps crawlers.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/freshness"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/freshness"]
+disable = ["*"]
+```

@@ -1,0 +1,63 @@
+---
+title: "Soft 404"
+description: "Detects pages that serve 404/error content with an HTTP 200 status"
+---
+
+Detects pages that serve 404/error content with an HTTP 200 status
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/soft-404` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+A soft 404 is a URL that shows "not found" or error content but returns a success (2xx) status instead of a real 404 or 410. squirrelscan flags a page only when it shows at least two independent signals, with at least one strong content signal: a framework error-shell marker (for example `<html id="__next_error__">`), a "page not found" title or heading, plus supporting signals such as a robots `noindex` directive or near-empty content. A regular article that merely mentions "404" is never flagged.
+
+Soft 404s waste crawl budget and can be indexed as thin or duplicate content. They also cause downstream content, legal, and agent-experience rules to skip the page (with a visible `soft-404` skip reason), so one broken template can't spray per-page warnings.
+
+## Confirmation before warning
+
+Some sites intermittently serve an error shell (HTTP 200 with `noindex`) for real, existing pages because of transient CDN or incremental-static-regeneration behaviour. To avoid a confusing false positive, squirrelscan does not warn from a single observation: when a page trips the soft-404 signals during the crawl, it re-fetches that page once at the end of the crawl and re-runs detection.
+
+- The error shell reproduces: the standard soft 404 warning is reported.
+- The re-fetch returns real content: a distinct finding, "page intermittently serves 404 error content with HTTP 200", is reported instead. This is still a problem because crawlers can hit the poisoned variant and the `noindex` on it can deindex a real page, even though your browser may show the page normally.
+- The re-fetch is not possible (offline, a network error, or the confirmation budget is exhausted): the finding is reported but annotated as based on a single crawl observation.
+
+Every variant notes that the check reads the server's raw HTML response, which can differ from what a browser renders.
+
+The confirmation pass is on by default, is bounded to the flagged pages only, and stays polite: same-host re-fetches are sequential and honor the crawl's per-host delay, with an overall time budget. On rate-limited or staging hosts you can turn it off, in which case flagged pages are reported as unconfirmed rather than re-fetched:
+
+```toml squirrel.toml
+[integrity.soft404_confirm]
+enabled = false
+```
+
+## Solution
+
+Return a proper 404 (or 410 for permanently removed URLs) for missing pages, or restore the real content if the URL should resolve. If the URL is valid, remove the error-shell markup and the "page not found" title/heading so the page reads as a real page.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/soft-404"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/soft-404"]
+disable = ["*"]
+```

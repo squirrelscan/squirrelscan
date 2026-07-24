@@ -1,0 +1,42 @@
+---
+title: "URL Hyphens"
+description: "Checks that URLs use hyphens, not underscores"
+---
+
+Checks that URLs use hyphens, not underscores
+
+| | |
+|---|---|
+| **Rule ID** | `url/hyphens` |
+| **Category** | [URL Structure](/rules/url) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Use hyphens (-) to separate words in URLs, not underscores (_). Google treats hyphens as word separators but treats underscores as word joiners. 'blue-shoes' = 'blue' + 'shoes', but 'blue_shoes' = 'blueshoes'. This affects keyword matching and SEO. Replace underscores with hyphens and set up redirects from old URLs.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["url/hyphens"]
+```
+
+### Disable all URL Structure rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["url/hyphens"]
+disable = ["*"]
+```

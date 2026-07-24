@@ -1,0 +1,42 @@
+---
+title: "Video Captions"
+description: "Checks that videos have captions or transcripts"
+---
+
+Checks that videos have captions or transcripts
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/video-captions` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+All video content needs captions for deaf/hard-of-hearing users (WCAG 1.2.2). Add `<track kind='captions' src='captions.vtt' srclang='en'>` to video elements. For embedded videos (YouTube, Vimeo), enable captions in the embed settings. Also provide a text transcript for complex content. Auto-generated captions should be reviewed for accuracy.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/video-captions"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/video-captions"]
+disable = ["*"]
+```

@@ -1,0 +1,145 @@
+---
+title: "config"
+icon: "settings-2"
+description: "View and modify squirrelscan configuration"
+---
+
+The `config` command lets you inspect and modify your `squirrel.toml` configuration file without editing it manually.
+
+## Subcommands
+
+### show
+
+Display the current configuration with the resolved file path:
+
+```bash
+squirrel config show
+```
+
+Output:
+```
+Config file: /path/to/squirrel.toml
+
+[project]
+domains = []
+
+[crawler]
+max_pages = 500
+...
+```
+
+### set
+
+Update a configuration value using dot notation:
+
+```bash
+squirrel config set crawler.max_pages 100
+```
+
+```bash
+squirrel config set rules.disable '["ai/*"]'
+```
+
+<Warning>
+Comments and formatting in your TOML file are not preserved when using `config set`. If you need to maintain comments, edit the file manually.
+</Warning>
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Preview the change without writing to disk |
+
+Preview what would change:
+
+```bash
+squirrel config set crawler.max_pages 100 --dry-run
+```
+
+Output:
+```
+Would set crawler.max_pages = 100
+
+[project]
+domains = []
+
+[crawler]
+max_pages = 100
+...
+```
+
+### path
+
+Print the path to the active config file:
+
+```bash
+squirrel config path
+```
+
+Output:
+```
+/Users/you/project/squirrel.toml
+```
+
+Useful for scripting or verifying which config file is in use.
+
+### validate
+
+Check that your config file is valid TOML and passes schema validation:
+
+```bash
+squirrel config validate
+```
+
+Output on success:
+```
+Config valid: /path/to/squirrel.toml
+```
+
+Output on error:
+```
+Invalid config: crawler.max_pages: Expected number, received string
+```
+
+## Examples
+
+### Check current settings
+
+```bash
+squirrel config show
+```
+
+### Increase crawl limit
+
+```bash
+squirrel config set crawler.max_pages 200
+```
+
+### Preview a change
+
+```bash
+squirrel config set crawler.concurrency 10 --dry-run
+```
+
+### Disable AI rules
+
+```bash
+squirrel config set rules.disable '["ai/*", "content/quality"]'
+```
+
+### Verify config before deploy
+
+```bash
+squirrel config validate && echo "Config OK"
+```
+
+## Config File Resolution
+
+squirrelscan searches for `squirrel.toml` starting from the current directory and walking up to your home directory. The first config file found is used.
+
+If no config file exists, commands that require one will prompt you to run `squirrel init`.
+
+## See Also
+
+- [Configuration Reference](/configuration) - Full config file documentation
+- [init](/cli/init) - Create a new config file

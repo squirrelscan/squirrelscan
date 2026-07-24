@@ -1,0 +1,1095 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "squirrelscan Public API",
+    "version": "1.0.0",
+    "summary": "Programmatic website-audit API for external clients, agents, and MCP integrations.",
+    "description": "The public `/v1` REST surface of squirrelscan.\n\nThis document covers the **external-client-facing** routes only — internal\nserver-to-server callbacks (`/v1/*/internal/*`), webhook receivers\n(`/v1/webhooks`, `/v1/github`), and admin-only routes (`/v1/admin/*`,\n`/v1/stats`, `/v1/users`) are intentionally out of scope and NOT part of the\npublic contract.\n\nAll error responses use a stable typed envelope:\n`{ \"error\": { \"code\": string, \"message\": string, \"requestId\"?: string } }`.\n\nAuthentication is via a bearer token in the `Authorization` header.\nOrganization API keys with an `sq_` prefix (`sq_dev_` in development) are the\nprimary mechanism for automated clients and agents; set one as the\n`SQUIRRELSCAN_API_KEY` environment variable and the CLI and this REST API both\npick it up. CLI login tokens (`sqcli_`) and Clerk dashboard JWTs are also\naccepted. MCP clients can reach these same audit tools over the hosted MCP\nserver at https://mcp.squirrelscan.com/mcp.",
+    "contact": {
+      "name": "squirrelscan support",
+      "url": "https://squirrelscan.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.squirrelscan.com",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Audits",
+      "description": "Create and track cloud audit runs (`agent_runs`)."
+    },
+    {
+      "name": "Reports",
+      "description": "Publish, list, and manage audit reports."
+    },
+    {
+      "name": "Credits",
+      "description": "Read the active organization's credit balance and pricing."
+    },
+    {
+      "name": "Organizations",
+      "description": "Read organization details and membership."
+    }
+  ],
+  "paths": {
+    "/v1/agent-runs": {
+      "post": {
+        "tags": ["Audits"],
+        "summary": "Create an audit run",
+        "description": "Start a new cloud audit run. With `trigger: \"api\"` the run is dispatched to the cloud crawler immediately and progresses asynchronously; poll `GET /v1/agent-runs/{id}` for status. Cloud features are credit-gated. If the requested page count exceeds the org's plan ceiling, the run still starts at the plan's max (clamp, never a hard error) and the response carries a `notice` field (`type: \"page_limit_clamped\"`) saying so.",
+        "operationId": "createAuditRun",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateAuditRunRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Run created (status `pending`).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateAuditRunResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "502": {
+            "description": "Failed to dispatch the cloud audit (upstream crawler/sandbox unavailable). Typed envelope with code `UPSTREAM_ERROR`; the upstream cause is carried under `error.reason`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Error" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "reason": { "type": "string", "description": "Upstream cause (sandbox/crawler)." }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_ERROR",
+                    "message": "Failed to start cloud audit",
+                    "reason": "Sandbox worker is not configured"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Audits"],
+        "summary": "List audit runs",
+        "description": "List the authenticated user's audit runs, newest first.",
+        "operationId": "listAuditRuns",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Offset" },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/AuditRunStatus" }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/AuditRunMode" }
+          },
+          {
+            "name": "websiteId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of audit runs.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuditRunList" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/agent-runs/{id}": {
+      "get": {
+        "tags": ["Audits"],
+        "summary": "Get an audit run",
+        "description": "Fetch full detail for a single audit run owned by the authenticated user. While `status` is `pending`/`running`, `progress` carries the latest phase/page-count event streamed by the run, when one has been recorded. `notice` carries a `page_limit_clamped` signal when the run's requested page count was clamped down to the org's plan ceiling at dispatch time (never a hard error — the run itself still completed normally).",
+        "operationId": "getAuditRun",
+        "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+        "responses": {
+          "200": {
+            "description": "The audit run.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuditRun" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/agent-runs/{id}/report": {
+      "get": {
+        "tags": ["Audits"],
+        "summary": "Get an audit run's report",
+        "description": "Fetch the summarized report data for a completed run.\n\n**Polling pattern:** this endpoint returns `404` both when the run/report does not exist AND while a valid run's report is not generated yet. To distinguish the two, poll `GET /v1/agent-runs/{id}` and wait for `status: \"completed\"` before fetching the report — that is the canonical way to track progress. As a convenience, the \"not ready yet\" 404 additionally carries the run's current status under `error.runStatus` (e.g. `{ \"error\": { \"code\": \"NOT_FOUND\", \"message\": \"Report not available yet\", \"runStatus\": \"running\" } }`), so a client can keep polling this endpoint alone if it prefers. **Footgun:** only keep polling while `error.runStatus` is a non-terminal state (`pending`/`running`); a `404` with `error.runStatus: \"completed\"` (or `\"failed\"`/`\"cancelled\"`, or a `404` with NO `error.runStatus` at all) means the report is genuinely missing/unavailable — stop polling.",
+        "operationId": "getAuditRunReport",
+        "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+        "responses": {
+          "200": {
+            "description": "Report summary + scored issues for the run.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuditRunReport" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "Run or report not found, OR the run's report is not generated yet. When not-ready, `error.runStatus` holds the run's current status (`pending`/`running`/...); keep polling.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "notReady": {
+                    "summary": "Report not generated yet (keep polling)",
+                    "value": { "error": { "code": "NOT_FOUND", "message": "Report not available yet", "runStatus": "running" } }
+                  },
+                  "notFound": {
+                    "summary": "Run or report does not exist",
+                    "value": { "error": { "code": "NOT_FOUND", "message": "Run not found" } }
+                  }
+                }
+              }
+            }
+          },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/reports": {
+      "post": {
+        "tags": ["Reports"],
+        "summary": "Publish a report",
+        "description": "Publish an audit report. The report payload is the full `AuditReport` produced by the CLI/engine. Visibility defaults to `private`. **Publishing is included in the audit's base charge**; no visibility carries a separate credit charge. `unlisted` and `private` publishes always create a new report (no idempotency). Org-scoped `public` publishes are keyed on the publisher + a content hash: republishing the identical payload is an idempotent replay, returning the original report with `200` if the prior response was cached, or `409` otherwise (still in flight / not cached).",
+        "operationId": "publishReport",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PublishReportRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay of an identical org-scoped `public` publish whose original response was cached — returns the originally published report.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PublishedReport" }
+              }
+            }
+          },
+          "201": {
+            "description": "Report published.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PublishedReport" }
+              }
+            }
+          },
+          "400": {
+            "description": "The body failed validation (`VALIDATION_ERROR`, with `error.issues`), was not valid JSON (`INVALID_JSON`), or tripped the content security scanner (`SECURITY_VIOLATION`, with `error.threats`).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "validation": {
+                    "summary": "Schema validation failed",
+                    "value": { "error": { "code": "VALIDATION_ERROR", "message": "Report failed validation", "issues": [{ "path": "report.baseUrl", "message": "Invalid url" }] } }
+                  },
+                  "security": {
+                    "summary": "Payload tripped the security scanner",
+                    "value": { "error": { "code": "SECURITY_VIOLATION", "message": "Report contains potentially malicious content", "threats": ["<script>"] } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "402": { "$ref": "#/components/responses/InsufficientCredits" },
+          "409": { "$ref": "#/components/responses/DuplicateRequest" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "get": {
+        "tags": ["Reports"],
+        "summary": "List reports",
+        "description": "List the authenticated user's published reports, newest first.",
+        "operationId": "listReports",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of reports.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportList" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/reports/{id}": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get a report",
+        "description": "Fetch report metadata. Public and unlisted reports are readable without auth; private reports require a bearer token belonging to the owner (a non-owner gets 404, never revealing existence).",
+        "operationId": "getReport",
+        "security": [{ "bearerAuth": [] }, {}],
+        "parameters": [{ "$ref": "#/components/parameters/ReportId" }],
+        "responses": {
+          "200": {
+            "description": "Report metadata.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Report" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "patch": {
+        "tags": ["Reports"],
+        "summary": "Update report visibility",
+        "description": "Change a report's visibility. Owner only: a non-owner (or unauthenticated request) gets 404, never revealing the report's existence. Visibility changes carry no separate credit charge; publishing is included in the audit's base charge.",
+        "operationId": "updateReportVisibility",
+        "parameters": [{ "$ref": "#/components/parameters/ReportId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["visibility"],
+                "properties": {
+                  "visibility": { "$ref": "#/components/schemas/Visibility" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated visibility.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["id", "visibility", "url"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "visibility": { "$ref": "#/components/schemas/Visibility" },
+                    "url": { "type": "string", "format": "uri" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "402": { "$ref": "#/components/responses/InsufficientCredits" },
+          "404": {
+            "description": "Report not found / not owned by the caller, OR — only when flipping to `public` — the report's stored content is missing from R2. Both use the typed envelope with code `NOT_FOUND`; branch on the 404 status.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "notFound": {
+                    "summary": "Report not found or not owned",
+                    "value": { "error": { "code": "NOT_FOUND", "message": "Report not found" } }
+                  },
+                  "contentMissing": {
+                    "summary": "R2 content missing",
+                    "value": { "error": { "code": "NOT_FOUND", "message": "Report content not found" } }
+                  }
+                }
+              }
+            }
+          },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "delete": {
+        "tags": ["Reports"],
+        "summary": "Delete a report",
+        "description": "Soft-delete a report. Owner only.",
+        "operationId": "deleteReport",
+        "parameters": [{ "$ref": "#/components/parameters/ReportId" }],
+        "responses": {
+          "200": {
+            "description": "Report deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success"],
+                  "properties": { "success": { "type": "boolean", "const": true } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/credits": {
+      "get": {
+        "tags": ["Credits"],
+        "summary": "Get credit balance",
+        "description": "Current credit balance for the active organization, plus the plan and the credit pricing table. Pass `?orgId=` to target a specific organization the caller is a member of.",
+        "operationId": "getCredits",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": false,
+            "description": "Target a specific organization the caller belongs to. Defaults to the active org.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance, plan, and pricing.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreditsResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/organizations/{id}": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Get an organization",
+        "description": "Read an organization the caller is a member of, including its members and plan limits.",
+        "operationId": "getOrganization",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization detail.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrganizationDetail" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/organizations/{id}/logo": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Get an organization logo",
+        "description": "Public and unauthenticated — streams the organization's logo image (PNG/JPEG/WebP) with its stored content type, or 404 when no logo is set. This is the stable URL that `organizations.avatarUrl` points to.",
+        "operationId": "getOrganizationLogo",
+        "security": [],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The logo image.",
+            "content": {
+              "image/png": { "schema": { "type": "string", "format": "binary" } },
+              "image/jpeg": { "schema": { "type": "string", "format": "binary" } },
+              "image/webp": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Upload an organization logo",
+        "description": "Owner/admin only. Multipart upload with a `file` field. Accepts PNG/JPEG/WebP validated by magic bytes (SVG and non-images are rejected regardless of declared content type), max 1MB. Stores the image and persists its public URL on `organizations.avatarUrl`.",
+        "operationId": "uploadOrganizationLogo",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PNG, JPEG, or WebP image, max 1MB."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logo stored; returns the served URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["avatarUrl"],
+                  "properties": { "avatarUrl": { "type": "string", "format": "uri" } }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": {
+            "description": "The bytes are not a PNG/JPEG/WebP image (e.g. SVG). Typed envelope with code `UNSUPPORTED_MEDIA_TYPE`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "error": {
+                    "code": "UNSUPPORTED_MEDIA_TYPE",
+                    "message": "Logo must be a PNG, JPEG, or WebP image"
+                  }
+                }
+              }
+            }
+          },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "delete": {
+        "tags": ["Organizations"],
+        "summary": "Remove an organization logo",
+        "description": "Owner/admin only. Deletes the stored logo and clears `organizations.avatarUrl`.",
+        "operationId": "deleteOrganizationLogo",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logo removed; `avatarUrl` is now null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["avatarUrl"],
+                  "properties": { "avatarUrl": { "type": "null" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Bearer token in the `Authorization` header: `Authorization: Bearer <token>`.\n\nProgrammatic API keys are prefixed `sq_` (issue #154; bearer auth lands in #156). The same scheme today also accepts CLI tokens (`sqcli_` prefix) and Clerk dashboard JWTs."
+      }
+    },
+    "parameters": {
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Page size (1–100).",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+      },
+      "Offset": {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "description": "Number of items to skip.",
+        "schema": { "type": "integer", "minimum": 0, "default": 0 }
+      },
+      "RunId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Audit run id.",
+        "schema": { "type": "string" }
+      },
+      "ReportId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Report id.",
+        "schema": { "type": "string" }
+      }
+    },
+    "headers": {
+      "RateLimitLimit": {
+        "description": "Request quota for the current window.",
+        "schema": { "type": "integer" }
+      },
+      "RateLimitRemaining": {
+        "description": "Requests remaining in the current window.",
+        "schema": { "type": "integer" }
+      },
+      "RateLimitReset": {
+        "description": "Seconds until the current rate-limit window resets.",
+        "schema": { "type": "integer" }
+      },
+      "RetryAfter": {
+        "description": "Seconds to wait before retrying (sent on 429).",
+        "schema": { "type": "integer" }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid credentials (including the shared auth middleware: no/invalid bearer token). Typed envelope with code `UNAUTHORIZED`. Branch on the `401` status, not the message.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "UNAUTHORIZED", "message": "Authentication required" } }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Authenticated but not permitted (e.g. not a member of the requested organization). Typed envelope; code `FORBIDDEN`, or `NO_ORG` when no active organization is resolved on credit/org-scoped routes. Branch on the `403` status.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "noOrg": {
+                "summary": "No active organization resolved",
+                "value": { "error": { "code": "NO_ORG", "message": "No active organization" } }
+              },
+              "forbidden": {
+                "summary": "Not permitted (e.g. API key scoped to a different org)",
+                "value": { "error": { "code": "FORBIDDEN", "message": "API key is not scoped to this organization" } }
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found (or hidden from the caller).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "NOT_FOUND", "message": "Report not found" } }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Request body or query failed validation. `error.issues` lists up to 10 failed fields (`{ path, message }`); when more failed, `error.truncated: true` and `error.totalIssues` indicate the full count.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request failed validation",
+                "issues": [{ "path": "url", "message": "Invalid url" }]
+              }
+            }
+          }
+        }
+      },
+      "InsufficientCredits": {
+        "description": "The organization does not have enough credits for this operation. Typed envelope with code `INSUFFICIENT_CREDITS`; `error.required` and `error.balance` carry the credit detail. Branch on the `402` status.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                { "$ref": "#/components/schemas/Error" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "required": { "type": "integer", "description": "Credits needed for this operation." },
+                        "balance": {
+                          "type": "object",
+                          "description": "The org's credit balance at the time of the failure.",
+                          "properties": {
+                            "monthly": { "type": "integer" },
+                            "pack": { "type": "integer" },
+                            "total": { "type": "integer" },
+                            "periodEnd": { "type": ["string", "null"] }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "example": {
+              "error": {
+                "code": "INSUFFICIENT_CREDITS",
+                "message": "Insufficient credits",
+                "required": 50,
+                "balance": { "monthly": 0, "pack": 12, "total": 12, "periodEnd": "2026-07-01T00:00:00Z" }
+              }
+            }
+          }
+        }
+      },
+      "DuplicateRequest": {
+        "description": "An identical request was already processed under the same idempotency key and is still in flight or its cached response is unavailable. Typed envelope with code `DUPLICATE_REQUEST`.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "DUPLICATE_REQUEST", "message": "Duplicate request" } }
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "The request body exceeds the maximum allowed size.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "PAYLOAD_TOO_LARGE", "message": "Report exceeds maximum size" } }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Too many requests. Retry after the window resets. (Rate limiting is planned — issue #69 — these headers document the intended contract.)",
+        "headers": {
+          "RateLimit-Limit": { "$ref": "#/components/headers/RateLimitLimit" },
+          "RateLimit-Remaining": { "$ref": "#/components/headers/RateLimitRemaining" },
+          "RateLimit-Reset": { "$ref": "#/components/headers/RateLimitReset" },
+          "Retry-After": { "$ref": "#/components/headers/RetryAfter" }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "RATE_LIMITED", "message": "Too many requests" } }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "description": "Stable error envelope returned by all public routes.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Stable machine-readable error code (SCREAMING_SNAKE_CASE). Treat unknown codes as opaque."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description. May change; do not match on it."
+              },
+              "requestId": {
+                "type": "string",
+                "description": "Correlation id for support / log lookups, when available."
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "Visibility": {
+        "type": "string",
+        "enum": ["public", "unlisted", "private"]
+      },
+      "AuditRunStatus": {
+        "type": "string",
+        "enum": ["pending", "running", "completed", "failed", "cancelled"]
+      },
+      "AuditRunMode": {
+        "type": "string",
+        "enum": ["audit", "audit-fix", "fix", "recommend"]
+      },
+      "CreateAuditRunRequest": {
+        "type": "object",
+        "required": ["url", "trigger"],
+        "properties": {
+          "url": { "type": "string", "format": "uri", "description": "Site URL to audit." },
+          "trigger": {
+            "type": "string",
+            "enum": ["api"],
+            "description": "Run origin. Public API callers must send `api`, which dispatches the cloud crawler. (`cli`/`github`/`scheduled` are internal-origin values that skip cloud dispatch and are not accepted here.)"
+          },
+          "mode": { "allOf": [{ "$ref": "#/components/schemas/AuditRunMode" }], "default": "audit" },
+          "model": { "type": "string" },
+          "config": {
+            "type": "string",
+            "description": "Optional run config as a JSON-**encoded string** (not a nested object — the field is parsed server-side). Keys: coverageMode, maxPages, disabledRulePatterns, externalLinksEnabled. NOTE the round-trip asymmetry: you send a string here, but `AuditRun.config` is returned as a parsed object.",
+            "example": "{\"coverageMode\":\"quick\",\"maxPages\":50,\"externalLinksEnabled\":true}"
+          },
+          "websiteId": { "type": "string" },
+          "auditId": { "type": "string" }
+        }
+      },
+      "CreateAuditRunResponse": {
+        "type": "object",
+        "required": ["id", "status", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "type": "string", "const": "pending" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "notice": { "$ref": "#/components/schemas/PageLimitClampNotice" }
+        }
+      },
+      "PageLimitClampNotice": {
+        "type": "object",
+        "description": "Present only when the run's requested page count exceeded the org's plan ceiling. The run is never rejected for this (clamp-and-notify, not a hard error) — it dispatches at `applied` pages instead of `requested`, and this field says so.",
+        "required": ["type", "requested", "applied", "planId", "planCap", "upgradeHint"],
+        "properties": {
+          "type": { "type": "string", "const": "page_limit_clamped" },
+          "requested": { "type": "integer", "description": "Pages that were actually asked for (stored crawl config or an explicit request override)." },
+          "applied": { "type": "integer", "description": "Pages the run actually dispatched with — equal to `planCap`." },
+          "planId": { "type": "string", "enum": ["free", "starter", "team"] },
+          "planCap": { "type": "integer", "description": "The org's plan's effective max-pages-per-audit ceiling at dispatch time." },
+          "upgradeHint": { "type": "string", "description": "Human-readable upgrade suggestion, always including a pricing URL." }
+        }
+      },
+      "AuditRun": {
+        "description": "Full audit run record (the single-run GET). A caller can only fetch their own runs, so the owner identifiers below are always the caller's own. Composed as `AuditRunListItem` plus the owner identifiers `userId`/`orgId` via `allOf`, so the shared fields are defined once and cannot drift between the two.",
+        "allOf": [
+          { "$ref": "#/components/schemas/AuditRunListItem" },
+          {
+            "type": "object",
+            "required": ["userId"],
+            "properties": {
+              "userId": {
+                "type": "string",
+                "description": "Internal owner user id (the caller's own — runs are scoped to the authenticated user). Treat as an opaque identifier; do not log/forward outside an authenticated context."
+              },
+              "orgId": { "type": ["string", "null"] },
+              "progress": {
+                "type": ["object", "null"],
+                "description": "Live progress while `status` is `pending`/`running` (#692): the latest phase/page-count event streamed by the run. Null once the run is terminal, or if no progress event has been recorded yet.",
+                "properties": {
+                  "phase": { "type": ["string", "null"] },
+                  "message": { "type": ["string", "null"] },
+                  "current": { "type": ["integer", "null"] },
+                  "total": { "type": ["integer", "null"] },
+                  "failed": { "type": ["integer", "null"] },
+                  "updatedAt": { "type": "string", "format": "date-time" }
+                }
+              },
+              "notice": { "$ref": "#/components/schemas/PageLimitClampNotice" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      },
+      "AuditRunListItem": {
+        "type": "object",
+        "description": "Audit run as returned by the list endpoint. Also the shared base for the single-run `AuditRun` schema, which composes this plus `userId`/`orgId` via `allOf` — so the common fields live in exactly one place. Nullable fields are unset until the run progresses.",
+        "required": ["id", "url", "status", "trigger", "mode", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "status": { "$ref": "#/components/schemas/AuditRunStatus" },
+          "trigger": { "type": "string", "enum": ["cli", "api", "github", "scheduled"] },
+          "mode": { "$ref": "#/components/schemas/AuditRunMode" },
+          "model": { "type": ["string", "null"] },
+          "healthScore": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Rounded score from the persisted `health_score` DB column (an integer). The unrounded float is available as `report.healthScore` on `GET /v1/agent-runs/{id}/report`."
+          },
+          "issuesFound": { "type": ["integer", "null"] },
+          "issuesFixed": { "type": ["integer", "null"] },
+          "reportId": { "type": ["string", "null"] },
+          "websiteId": { "type": ["string", "null"] },
+          "auditId": { "type": ["string", "null"] },
+          "config": { "type": ["object", "null"], "additionalProperties": true },
+          "error": { "type": ["string", "null"] },
+          "completionReason": { "type": ["string", "null"] },
+          "completionMessage": { "type": ["string", "null"] },
+          "costUsd": { "type": ["number", "null"] },
+          "startedAt": { "type": ["string", "null"], "format": "date-time" },
+          "completedAt": { "type": ["string", "null"], "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": true
+      },
+      "AuditRunList": {
+        "type": "object",
+        "required": ["runs", "total", "hasMore"],
+        "properties": {
+          "runs": { "type": "array", "items": { "$ref": "#/components/schemas/AuditRunListItem" } },
+          "total": { "type": "integer" },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "AuditRunReport": {
+        "type": "object",
+        "description": "Summarized report data + top scored issues for a completed run, wrapped under `report`.",
+        "required": ["report"],
+        "properties": {
+          "report": {
+            "type": "object",
+            "required": ["id", "url", "visibility", "baseUrl"],
+            "properties": {
+              "id": { "type": "string" },
+              "url": { "type": "string", "format": "uri" },
+              "visibility": { "$ref": "#/components/schemas/Visibility" },
+              "siteKey": { "type": "string" },
+              "baseUrl": { "type": "string", "format": "uri" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "totalPages": { "type": "integer" },
+              "failed": { "type": "integer" },
+              "warnings": { "type": "integer" },
+              "passed": { "type": "integer" },
+              "healthScore": {
+                "type": ["number", "null"],
+                "description": "The precise overall score from the report (a float, e.g. 82.5), read straight from the report JSON. Intentionally a `number` here — the rounded `integer` `healthScore` on `AuditRun`/`Report` mirrors the persisted DB column, while this is the unrounded source value."
+              },
+              "categories": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+              "topIssues": {
+                "type": "array",
+                "description": "Up to 25 failing/warning checks, fails first.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ruleId": { "type": "string" },
+                    "ruleName": { "type": "string" },
+                    "category": { "type": "string" },
+                    "subcategory": { "type": "string" },
+                    "severity": { "type": "string", "enum": ["error", "warning"] },
+                    "status": { "type": "string", "enum": ["fail", "warn"] },
+                    "message": { "type": "string" },
+                    "pageUrl": { "type": ["string", "null"] }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "history": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "PublishReportRequest": {
+        "type": "object",
+        "required": ["report"],
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/AuditReport"
+          },
+          "visibility": {
+            "allOf": [{ "$ref": "#/components/schemas/Visibility" }],
+            "default": "private"
+          }
+        }
+      },
+      "AuditReport": {
+        "type": "object",
+        "description": "The full audit report payload produced by the squirrelscan engine. Only the high-signal top-level fields are documented here; the complete schema is validated server-side (see `apps/api/src/schemas/audit-report.ts`). Extra top-level fields are accepted but ignored (the server-side schema strips unknown keys rather than rejecting them) — hence `additionalProperties: true`. The documented fields below are still validated and must conform.",
+        "required": ["baseUrl", "timestamp", "totalPages", "passed", "warnings", "failed", "siteChecks", "summary", "ruleResults"],
+        "properties": {
+          "baseUrl": { "type": "string", "format": "uri" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "totalPages": { "type": "integer", "minimum": 0 },
+          "passed": { "type": "integer", "minimum": 0 },
+          "warnings": { "type": "integer", "minimum": 0 },
+          "failed": { "type": "integer", "minimum": 0 },
+          "siteChecks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "pages": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "summary": { "type": "object", "additionalProperties": true },
+          "ruleResults": { "type": "object", "additionalProperties": true },
+          "healthScore": { "type": "object", "additionalProperties": true }
+        },
+        "additionalProperties": true
+      },
+      "PublishedReport": {
+        "type": "object",
+        "required": ["id", "url", "visibility", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "visibility": { "$ref": "#/components/schemas/Visibility" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Report": {
+        "type": "object",
+        "required": ["id", "baseUrl", "visibility", "url", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "baseUrl": { "type": "string", "format": "uri" },
+          "healthScore": { "type": ["integer", "null"] },
+          "pageCount": { "type": ["integer", "null"] },
+          "errorCount": { "type": ["integer", "null"] },
+          "warningCount": { "type": ["integer", "null"] },
+          "passedCount": { "type": ["integer", "null"] },
+          "visibility": { "$ref": "#/components/schemas/Visibility" },
+          "viewCount": { "type": ["integer", "null"] },
+          "auditedAt": { "type": ["string", "null"], "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "url": { "type": "string", "format": "uri" }
+        }
+      },
+      "ReportList": {
+        "type": "object",
+        "required": ["reports", "total", "hasMore"],
+        "properties": {
+          "reports": { "type": "array", "items": { "$ref": "#/components/schemas/Report" } },
+          "total": { "type": "integer" },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "CreditsResponse": {
+        "type": "object",
+        "required": ["balance", "plan", "pricing", "pricingVersion"],
+        "properties": {
+          "balance": {
+            "type": "integer",
+            "description": "Available credits for the organization."
+          },
+          "plan": {
+            "type": "object",
+            "description": "The organization's plan definition.",
+            "additionalProperties": true
+          },
+          "pricing": {
+            "type": "object",
+            "description": "Credit cost table keyed by feature.",
+            "additionalProperties": true
+          },
+          "pricingVersion": {
+            "type": "integer",
+            "description": "Monotonic version of the pricing table."
+          }
+        }
+      },
+      "OrganizationDetail": {
+        "type": "object",
+        "required": ["organization", "members", "plan", "role"],
+        "properties": {
+          "organization": {
+            "type": "object",
+            "required": ["id", "name", "slug", "planId"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "slug": { "type": "string" },
+              "planId": { "type": "string" },
+              "createdAt": { "type": ["string", "null"], "format": "date-time" },
+              "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+            },
+            "additionalProperties": true
+          },
+          "members": {
+            "type": "array",
+            "description": "Members of the organization. Only returned to callers who are themselves members (the handler enforces membership and returns 404 otherwise — non-members never see this list).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "userId": { "type": "string" },
+                "role": { "type": "string", "enum": ["owner", "admin", "editor", "viewer", "billing"] },
+                "createdAt": { "type": "string", "format": "date-time" },
+                "userName": { "type": ["string", "null"] },
+                "userEmail": {
+                  "type": ["string", "null"],
+                  "format": "email",
+                  "description": "PII — a fellow member's email address. Intentionally exposed so org members can see their teammates (the dashboard team view renders it); access is gated by the membership check above. Treat as sensitive: do not log, cache publicly, or surface outside an authenticated org-member context."
+                },
+                "userAvatarUrl": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "plan": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "maxMembers": { "type": "integer" },
+              "monthlyCredits": { "type": "integer" },
+              "signupGrantCredits": { "type": "integer" }
+            }
+          },
+          "role": { "type": "string", "enum": ["owner", "admin", "editor", "viewer", "billing"] }
+        }
+      }
+    }
+  }
+}

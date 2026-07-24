@@ -1,0 +1,42 @@
+---
+title: "Trailing Slash"
+description: "Checks for consistent trailing slash usage"
+---
+
+Checks for consistent trailing slash usage
+
+| | |
+|---|---|
+| **Rule ID** | `url/trailing-slash` |
+| **Category** | [URL Structure](/rules/url) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Be consistent with trailing slashes across your site. /page and /page/ are technically different URLs. Pick one convention and stick to it. Configure your server to redirect one to the other. Most sites use trailing slashes for directories and no trailing slash for files. Use canonical tags to specify the preferred version.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["url/trailing-slash"]
+```
+
+### Disable all URL Structure rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["url/trailing-slash"]
+disable = ["*"]
+```

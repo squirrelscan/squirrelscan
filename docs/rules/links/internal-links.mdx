@@ -1,0 +1,59 @@
+---
+title: "Internal Links"
+description: "Validates internal link count"
+---
+
+Validates internal link count
+
+| | |
+|---|---|
+| **Rule ID** | `links/internal-links` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Internal links help users navigate your site and distribute page authority. Each page should have at least one internal link pointing to it (not counting navigation). Add contextual internal links from related content. Use descriptive anchor text that indicates what the linked page is about. Avoid orphan pages (no internal links) and ensure important pages receive more internal links. Review your site structure to create logical content clusters.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_internal_links` | unknown | `undefined` | Minimum internal links |
+| `max_internal_links` | unknown | `undefined` | Maximum internal links |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."links/internal-links"]
+min_internal_links = undefined
+max_internal_links = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/internal-links"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/internal-links"]
+disable = ["*"]
+```

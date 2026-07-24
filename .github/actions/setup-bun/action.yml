@@ -29,6 +29,7 @@ runs:
           ~/.bun/install/cache
           node_modules
           apps/*/node_modules
+          docs/node_modules
           packages/*/node_modules
         key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
         restore-keys: |

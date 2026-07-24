@@ -1,0 +1,2 @@
+/agents /developers/agents 301
+/agents/* /developers/agents/:splat 301

@@ -1,0 +1,63 @@
+---
+title: "Editor's Summary"
+description: "An auto-generated, exec-email-style summary of your audit - prose narrative plus point-form big-ticket items"
+icon: "newspaper"
+---
+
+Signed-in audits get an **editor's summary** at the top of the report: a couple of plain-English paragraphs on the state of the site, a short point-form list of the highest-impact things to fix, and a one-line verdict. Think of it as the quick note you'd email a manager - the bottom line, not a wall of checks.
+
+It's generated automatically for every signed-in cloud audit (like the [site profile](/cloud/site-metadata) and [technology detection](/cloud/technologies)) and is **informational - it never affects your health score**.
+
+## What it looks like
+
+```
+EDITOR'S SUMMARY
+Auto-generated editor's summary - informational, not scored.
+
+The site is in solid shape overall - an 82/100 health score, clean
+security headers, and fast core pages. The drag is mostly in links and
+images: a handful of broken internal links and missing alt text.
+
+Nothing here is structural. These are quick wins that, cleared, would
+push the score into the 90s.
+
+Big-ticket items:
+  - Fix 3 broken internal links (links category, -6 pts)
+  - Add alt text to 14 images (accessibility)
+  - Set a canonical tag on the blog index
+
+Verdict: Healthy site; clear the links and images and you're golden.
+```
+
+The summary appears at the **top** of every output format - console, HTML, Markdown, JSON, XML, and LLM - and in the [dashboard](/dashboard) audit detail.
+
+## What goes into it
+
+A single [Claude Sonnet 4.6](/cloud) pass over the audit aggregate - never your raw pages:
+
+- Overall and per-category health scores
+- The highest-impact issues, ranked
+- Counts of passing / warning / failing checks
+- **Deltas vs. the previous audit** when one is available ("score up 7 since last run") - it degrades gracefully to a first-run framing when there's no prior audit
+- The resolved [site profile](/cloud/site-metadata) for context (site type, audience, identity)
+
+## Requirements
+
+<Note>The editor's summary runs on any signed-in plan, free or Pro, and is included in the audit base charge. Pro just grants more monthly credits and lets you top up.</Note>
+
+- **Plan:** any signed-in account (free or Pro). Only anonymous runs skip it.
+- **Cost:** **included in the audit base charge** - no separate charge. See [Credits & Pricing](/cloud/credits).
+- **Config:** on by default for logged-in users. Turn it off per project:
+
+```toml squirrel.toml
+[cloud]
+editor_summary = false   # skip the editor's summary for this project
+```
+
+Like all cloud features, it never fails your audit: if you're logged out or out of credits, the summary is simply omitted and the rest of the report is unaffected.
+
+## Related
+
+- [Cloud overview](/cloud) - what cloud features add
+- [Credits & Pricing](/cloud/credits) - pricing and spend controls
+- [Site metadata](/cloud/site-metadata) - the site profile the summary draws on

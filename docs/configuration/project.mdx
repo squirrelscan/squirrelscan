@@ -1,0 +1,304 @@
+---
+title: "Project Settings"
+icon: "folder"
+description: "Configure project name and allowed domains"
+---
+
+The `[project]` section configures project-level metadata and multi-domain crawling.
+
+## Configuration
+
+```toml
+[project]
+name = "mysite"
+domains = ["example.com"]
+```
+
+## Options
+
+### `name`
+
+**Type:** `string`
+**Default:** Current directory name
+**Required:** No
+
+Project name used for identifying crawls of local URLs (localhost, 127.0.0.1, local IPs).
+
+When crawling local addresses, squirrelscan needs a project name to organize stored data. If not specified, it uses the current working directory name.
+
+**Examples:**
+
+Explicit project name:
+```toml
+[project]
+name = "my-nextjs-app"
+```
+
+Using default (directory name):
+```toml
+[project]
+# name omitted - uses directory name
+```
+
+**When crawling localhost:**
+```bash
+cd /Users/you/projects/my-app
+squirrel audit http://localhost:3000
+# Uses "my-app" as project name (from directory)
+```
+
+With explicit name:
+```bash
+# In squirrel.toml:
+[project]
+name = "staging-api"
+
+# Then run:
+squirrel audit http://localhost:8080
+# Uses "staging-api" as project name
+```
+
+**Interactive prompt:**
+
+If crawling localhost without a configured name and in a TTY, squirrelscan prompts for a name:
+
+```
+Crawling local address: http://localhost:3000
+Project name [mysite]: staging-frontend
+```
+
+---
+
+### `domains`
+
+**Type:** `string[]`
+**Default:** `[]` (empty array = seed domain only)
+**Required:** No
+
+Allowed domains for crawling. When empty, only the seed URL's domain is crawled.
+
+**Subdomain Wildcards:**
+
+Setting `domains = ["example.com"]` automatically allows all subdomains:
+- `example.com` ✓
+- `www.example.com` ✓
+- `blog.example.com` ✓
+- `api.example.com` ✓
+- `docs.example.com` ✓
+
+**Does NOT allow:**
+- `example.org` ✗ (different TLD)
+- `test-example.com` ✗ (not a subdomain)
+
+## Examples
+
+### Single Domain (Default)
+
+Crawl only the seed domain and its subdomains:
+
+```toml
+[project]
+domains = []
+```
+
+Running `squirrel audit https://example.com` crawls:
+- `https://example.com` ✓
+- `https://www.example.com` ✓ (subdomain)
+- Internal links to `https://blog.example.com` ✗ (not followed without config)
+
+### Multi-Domain Site
+
+Allow main site plus specific subdomains:
+
+```toml
+[project]
+domains = ["example.com"]
+```
+
+Running `squirrel audit https://example.com` crawls:
+- `https://example.com` ✓
+- `https://www.example.com` ✓
+- `https://blog.example.com` ✓
+- `https://docs.example.com` ✓
+- `https://api.example.com` ✓
+
+All subdomains are automatically allowed.
+
+### Multiple Root Domains
+
+Crawl multiple distinct domains (rare):
+
+```toml
+[project]
+domains = ["example.com", "example.org"]
+```
+
+Crawls both domains and all their subdomains.
+
+**Note:** This is uncommon. Most sites should use `include` patterns in the crawler section instead.
+
+### Local Development
+
+For local projects:
+
+```toml
+[project]
+name = "myapp-local"
+```
+
+Then run:
+```bash
+squirrel audit http://localhost:3000
+```
+
+## Domain Matching Rules
+
+### Subdomain Matching
+
+Domain `"example.com"` matches:
+
+| URL | Match | Reason |
+|-----|-------|--------|
+| `https://example.com` | ✓ | Exact match |
+| `https://www.example.com` | ✓ | Subdomain |
+| `https://api.example.com` | ✓ | Subdomain |
+| `https://blog.example.com` | ✓ | Subdomain |
+| `https://docs.example.com` | ✓ | Subdomain |
+| `https://test.blog.example.com` | ✓ | Nested subdomain |
+| `https://example.org` | ✗ | Different TLD |
+| `https://exampleXcom` | ✗ | Not a domain |
+
+### Port Handling
+
+Ports are ignored for matching:
+
+```toml
+[project]
+domains = ["localhost"]
+```
+
+Matches:
+- `http://localhost:3000` ✓
+- `http://localhost:8080` ✓
+- `http://localhost` ✓
+
+### Protocol Handling
+
+Protocols (http/https) are ignored for matching:
+
+```toml
+[project]
+domains = ["example.com"]
+```
+
+Matches:
+- `http://example.com` ✓
+- `https://example.com` ✓
+
+## When to Use `domains` vs `include`
+
+### Use `domains` when:
+
+You want to crawl an entire domain and all its subdomains:
+
+```toml
+[project]
+domains = ["example.com"]
+```
+
+Crawls everything under `*.example.com`.
+
+### Use `include` when:
+
+You want fine-grained URL pattern control:
+
+```toml
+[crawler]
+include = [
+  "/blog/**",
+  "/docs/**"
+]
+```
+
+See [Crawler Settings](/configuration/crawler#include) for URL patterns.
+
+## Interaction with Crawler Settings
+
+### Priority
+
+If both `domains` and `include` are set, `include` takes precedence:
+
+```toml
+[project]
+domains = ["example.com"]  # Ignored
+
+[crawler]
+include = ["/blog/**"]     # Used instead
+```
+
+This crawls only `/blog/**` URLs, even if `domains` is set.
+
+### Recommendation
+
+For most sites, leave `domains` empty and use `include`/`exclude` for fine control:
+
+```toml
+[project]
+domains = []  # Default: seed domain only
+
+[crawler]
+include = []  # Empty = all URLs from seed domain
+exclude = ["/admin/*", "*.pdf"]
+```
+
+## Data Storage
+
+Project data is stored at:
+
+```
+~/.squirrel/projects/<project-name>/
+```
+
+**For production domains:**
+```
+~/.squirrel/projects/example.com/
+  └── crawls/
+      └── 2026-01-17T10-30-00/
+```
+
+**For local domains:**
+```
+~/.squirrel/projects/my-app-local/
+  └── crawls/
+      └── 2026-01-17T10-30-00/
+```
+
+## Complete Example
+
+```toml
+[project]
+# Project name for local development
+name = "ecommerce-staging"
+
+# Allow main domain and all subdomains
+domains = ["example.com"]
+
+[crawler]
+# Exclude admin and API endpoints
+exclude = ["/admin/*", "/api/*"]
+
+# Crawl up to 200 pages
+max_pages = 200
+```
+
+Running `squirrel audit https://example.com`:
+- Crawls `example.com` and all subdomains
+- Skips `/admin/*` and `/api/*` paths
+- Stops at 200 pages
+- Stores data in `~/.squirrel/projects/example.com/`
+
+## Related
+
+- [Crawler Settings](/configuration/crawler) - URL patterns, include/exclude
+- [Configuration Overview](/configuration) - Full config system
+- [init](/cli/init) - Create config file

@@ -1,0 +1,94 @@
+---
+title: "Dashboard"
+icon: "layout-dashboard"
+description: "Manage published reports and account settings"
+---
+
+The squirrelscan dashboard at [app.squirrelscan.com](https://app.squirrelscan.com) lets you manage your published reports, change visibility settings, and delete reports.
+
+## Getting Started
+
+### 1. Authenticate
+
+First, log in via the CLI:
+
+```bash
+squirrel auth login
+```
+
+This opens your browser to complete authentication.
+
+### 2. Publish a Report
+
+After running an audit, publish it:
+
+```bash
+squirrel audit example.com
+squirrel report --publish
+```
+
+### 3. View in Dashboard
+
+Visit [app.squirrelscan.com](https://app.squirrelscan.com) to see your published reports.
+
+## Dashboard Overview
+
+<Frame>
+  <img src="/images/dashboard-home.jpg" alt="Dashboard home showing published reports count and recent reports" />
+</Frame>
+
+The dashboard home shows:
+- Total published reports count
+- Recent reports with health scores
+- Quick links to view reports
+
+## Managing Reports
+
+<Frame>
+  <img src="/images/dashboard-reports.jpg" alt="Reports list with visibility controls" />
+</Frame>
+
+The Reports page lets you:
+- **View all published reports** with health scores and issue counts
+- **Change visibility** using the dropdown (public/unlisted/private)
+- **Delete reports** using the trash icon
+- **Open reports** by clicking the site name
+
+### Visibility Levels
+
+| Level | Icon | Description |
+|-------|------|-------------|
+| Public | 🌐 | Anyone can view, listed in search |
+| Unlisted | 🔗 | Only accessible via direct link |
+| Private | 🔒 | Only visible when logged in |
+
+## Published Report View
+
+<Frame>
+  <img src="/images/published-report.jpg" alt="Published report showing health score and category breakdown" />
+</Frame>
+
+Published reports show:
+- Overall health score with letter grade
+- Category-by-category breakdown
+- Page count and issue summary
+- Detailed findings by category
+
+Share the URL with clients, team members, or include in documentation.
+
+## Deleting a website
+
+You can delete a website from its settings page (Settings, then the Danger zone). Deleting is also how you free up capacity if your organization hits its website limit.
+
+Deleting a website is a soft delete:
+
+- The website disappears from your websites list and stops counting toward your plan's website limit.
+- Its past audits, reports, and issues are preserved, and published report links keep working.
+- Re-adding the same domain later creates a fresh website with a new ID. The old website's history is never merged into the new one.
+
+Agents can do the same thing through the MCP `delete_website` tool or the `DELETE /v1/websites/:id` API route. See [MCP server](/developers/mcp#tools).
+
+## Related
+
+- [auth](/cli/auth) - CLI authentication commands
+- [report --publish](/cli/report#publishing) - Publishing from CLI

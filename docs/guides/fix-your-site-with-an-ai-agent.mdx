@@ -1,0 +1,164 @@
+---
+title: "Fix your website with an AI agent"
+description: "Connect your coding agent to squirrelscan over MCP, audit your live site, and loop through the fixes until the issues close"
+icon: "wand-sparkles"
+---
+
+This is the workflow squirrelscan was built for: your coding agent audits your live site, reads the report, fixes what it can in the repo, you deploy, and it re-audits until the score climbs and the issues close on their own.
+
+We ran exactly this loop against one of our own sites. Across four audits and three rounds of fixes the site went from a health score of **79 to 84**, grade **C to B**, and from **96 findings down to 71**. Six tracker issues closed themselves once the fix landed and the rule stopped firing. This guide walks you through the same loop.
+
+<Info>
+The agent does the tool calls; you mostly type prompts in plain English. The tool names below (`run_audit`, `get_report`, `list_issues`, and friends) are what the agent invokes under the hood, so you can follow along and know what it is doing.
+</Info>
+
+## What you need
+
+- A coding agent that speaks [MCP](https://modelcontextprotocol.io): Claude Code, Codex CLI, Cursor, opencode, or any other MCP client.
+- A squirrelscan account. Cloud audits are pay-as-you-go and free accounts get 500 credits a month, so you can run this loop today without a card. See [Credits](/cloud/credits).
+- The repository for the site you want to fix, checked out locally.
+
+## Step 1: Connect the hosted MCP and install the skills
+
+Point your agent at the hosted MCP server. There is nothing to install and no local process to keep running:
+
+```
+https://mcp.squirrelscan.com/mcp
+```
+
+The server gives your agent 14 tools for running cloud audits, reading reports, working the per-website issue tracker, and browsing the rule catalog. The [Hosted MCP server](/developers/mcp) guide covers the full tool list, OAuth versus API-key auth, and how credits work. For the exact config for each client, see [MCP client setup](/developers/mcp-clients).
+
+Then install the squirrelscan skills so your agent knows the audit workflow without you spelling it out each time:
+
+```bash
+squirrel skills install
+```
+
+This adds all the squirrelscan skills, currently `squirrelscan` (operate the CLI: login, publish reports, MCP, credits) and `audit-website` (the audit-and-fix loop). It runs `npx skills add` under the hood. See [`squirrel skills`](/cli/skills) and the [AI agent integration](/developers/agents) guide for what the skills do.
+
+<Tip>
+The MCP server and the skills complement each other. The MCP server is how the agent runs cloud audits and reaches the shared issue tracker. The skill is the procedure it follows. Install both.
+</Tip>
+
+## Step 2: Start your agent from the project folder
+
+Change into the repository for the site you are fixing and start your agent there. This matters: when the agent is inside the repo, it can read your source, make the edits, and open the files that produce the pages the audit flags.
+
+```bash
+cd ~/code/my-website
+```
+
+Each client connects to the same hosted endpoint. Here is the one-step connect for the common ones. Full per-client detail, including API-key auth for CI, lives in [MCP client setup](/developers/mcp-clients).
+
+<Tabs>
+  <Tab title="Claude Code">
+    ```bash
+    claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
+    ```
+
+    Start `claude` in the project, run `/mcp`, select **squirrelscan**, and choose **Authenticate**. Your browser opens for sign-in and organization selection.
+  </Tab>
+  <Tab title="Codex CLI">
+    ```bash
+    codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp
+    codex mcp login squirrelscan
+    ```
+
+    `codex mcp login` runs the browser sign-in and stores the token encrypted.
+  </Tab>
+  <Tab title="Cursor">
+    Add a remote server entry to `.cursor/mcp.json` in the project:
+
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "url": "https://mcp.squirrelscan.com/mcp"
+        }
+      }
+    }
+    ```
+
+    Open **Settings**, find **squirrelscan**, and click **Needs login** to run the browser flow.
+  </Tab>
+  <Tab title="opencode">
+    Add a remote MCP server to `opencode.json` in the project:
+
+    ```json
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "mcp": {
+        "squirrelscan": {
+          "type": "remote",
+          "url": "https://mcp.squirrelscan.com/mcp",
+          "enabled": true
+        }
+      }
+    }
+    ```
+
+    opencode runs the OAuth flow on first connect. See [MCP client setup](/developers/mcp-clients) for the other clients.
+  </Tab>
+</Tabs>
+
+Before the first audit, have the agent confirm who it is acting for. A quick prompt like "run whoami" makes it call the `whoami` tool, which reports your organization and current credit balance. If the balance and org look right, you are ready.
+
+## Step 3: Run the loop
+
+The loop is: audit, read, fix, deploy, re-audit. Here is what the agent does on the first pass, tool by tool:
+
+<Steps>
+  <Step title="Kick off the audit">
+    You prompt the agent to audit your site. It calls `run_audit` with the URL. The first call comes back with `status: "confirmation_required"`, a credit estimate (an upper bound), and your balance. The agent shows you the estimate.
+  </Step>
+  <Step title="Confirm the spend">
+    You approve, and the agent calls `run_audit` again with `confirm: true`. The audit starts and returns a `run_id`. A cloud fast audit takes about two minutes and covers roughly ten pages.
+  </Step>
+  <Step title="Wait for results">
+    The agent polls `get_audit_status` with the `run_id` until the run completes, then pulls the report with `get_report`. Start with the `summary` format for scores and top issues; `llm` or `markdown` gives the full detail.
+  </Step>
+  <Step title="Work the issue tracker">
+    The agent calls `list_issues` for the website to see every open finding, then `get_issue` for the detail and fix guidance on the ones worth tackling. It implements the fixes in your repo.
+  </Step>
+  <Step title="Deploy, then re-audit">
+    You deploy the changes. The agent runs `run_audit` again. Because cloud audits hit your live site, the re-audit only reflects fixes that are actually deployed. Issues resolve when their rule stops firing.
+  </Step>
+</Steps>
+
+<Warning>
+Deploy before you re-audit. A cloud audit fetches your live URL, not your working tree, so a fix sitting in an undeployed branch will still show up as an open issue. This trips people up on the first loop.
+</Warning>
+
+### How issues close
+
+Issues live in a per-website tracker, and they close by themselves. When you re-audit and a rule no longer fires on any page, the issues it raised move to resolved: you do not tick anything off by hand. In our run, **six issues auto-closed** across the fix rounds.
+
+Partial fixes are visible too. Each issue carries an occurrence count, the number of pages or items still tripping the rule, and that count decays as you fix pages. One issue in our run went from **8 occurrences to 7 to 1, then resolved** once the last page was fixed. A dropping count with the issue still open means you are on the right track and not yet done.
+
+### Some findings need a human call
+
+Not every finding should be fixed. A structured-data rule might ask a local business for a physical street address, but a service-area business that visits customers should not invent a storefront address just to satisfy a rule. The right move is to decide, then record the decision so your team and the next audit have the context. Ask the agent to call `comment_on_issue` with the reasoning, for example: "this is a service-area business with no public storefront, so we are intentionally not adding a `PostalAddress`." The comment shows up in the dashboard thread against that issue.
+
+<Tip>
+Actual credit spend usually lands under the estimate. The number the agent shows you at the confirm step is an upper bound; an audit is billed as it runs (50 credits base plus 2 per rendered page), so a crawl that finds fewer pages costs less. See [Credits](/cloud/credits) for the pricing behind the estimate.
+</Tip>
+
+## Sample prompts that worked
+
+Plain-English prompts are enough. Adapt these freely:
+
+- "Audit this site with squirrelscan and summarize the top issues worth fixing."
+- "Work through the open squirrelscan issues one by one. Fix what you can in this repo and comment on each issue with what you changed."
+- "We just deployed. Re-run the squirrelscan audit and tell me which issues closed and what the new score is."
+- "Audit staging.example.com, but stop if it would cost more than 200 credits."
+- "For each issue you can't fix in code, comment on it explaining why and what a human needs to decide."
+
+A full loop reads like a short conversation: audit, review the summary together, let the agent fix a batch, deploy, and re-audit to watch the score move and the issues close.
+
+## Related
+
+- [Hosted MCP server](/developers/mcp) - the full tool list, auth, and credits
+- [MCP client setup](/developers/mcp-clients) - exact config for every client
+- [AI agent integration](/developers/agents) - skills, plan mode, and subagent patterns
+- [Cloud audits](/guides/cloud-audits) - login, credits, and the issue tracker in depth
+- [Local audits with the CLI](/guides/local-audits-cli) - the free, no-login version of the same audit

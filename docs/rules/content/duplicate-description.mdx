@@ -1,0 +1,42 @@
+---
+title: "Duplicate Description"
+description: "Checks for duplicate meta descriptions across the site"
+---
+
+Checks for duplicate meta descriptions across the site
+
+| | |
+|---|---|
+| **Rule ID** | `content/duplicate-description` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Each page should have a unique meta description that summarizes its specific content. Duplicate descriptions reduce click-through rates and provide poor user experience in search results. Write unique, compelling descriptions for each page. For pages without unique content (like paginated results), consider using no description rather than a duplicate.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/duplicate-description"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/duplicate-description"]
+disable = ["*"]
+```

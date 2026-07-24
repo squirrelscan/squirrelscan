@@ -1,0 +1,42 @@
+---
+title: "ARIA Treeitem Name"
+description: "Checks that treeitem elements have accessible names"
+---
+
+Checks that treeitem elements have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-treeitem-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Treeitem elements must have accessible names. Add text content, aria-label, or aria-labelledby. The text content within the treeitem typically serves as its name.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-treeitem-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-treeitem-name"]
+disable = ["*"]
+```

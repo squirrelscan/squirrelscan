@@ -1,0 +1,42 @@
+---
+title: "Editorial Policy"
+description: "Checks for editorial and content policy pages"
+---
+
+Checks for editorial and content policy pages
+
+| | |
+|---|---|
+| **Rule ID** | `eeat/editorial-policy` |
+| **Category** | [E-E-A-T](/rules/eeat) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Editorial policies demonstrate content quality standards and professionalism. Include: how content is created/reviewed, fact-checking process, correction policy, and editorial independence. For news sites, this is essential. For content sites, it builds trust and supports E-E-A-T. Link from footer or about page.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/editorial-policy"]
+```
+
+### Disable all E-E-A-T rules
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["eeat/editorial-policy"]
+disable = ["*"]
+```

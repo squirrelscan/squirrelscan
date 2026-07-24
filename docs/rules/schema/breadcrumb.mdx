@@ -1,0 +1,42 @@
+---
+title: "Breadcrumb Schema"
+description: "Checks for BreadcrumbList schema on non-homepage"
+---
+
+Checks for BreadcrumbList schema on non-homepage
+
+| | |
+|---|---|
+| **Rule ID** | `schema/breadcrumb` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+BreadcrumbList schema shows navigation path in search results. Structure: BreadcrumbList with itemListElement array of ListItem. Each ListItem needs position (1, 2, 3...), name, and item (URL). The last item (current page) doesn't need a URL. Breadcrumbs help users understand site structure and improve click-through rates.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/breadcrumb"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/breadcrumb"]
+disable = ["*"]
+```

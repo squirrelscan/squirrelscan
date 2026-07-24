@@ -1,0 +1,42 @@
+---
+title: "HTTPS Downgrade"
+description: "Detects links from HTTPS pages to HTTP destinations"
+---
+
+Detects links from HTTPS pages to HTTP destinations
+
+| | |
+|---|---|
+| **Rule ID** | `links/https-downgrade` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Links from HTTPS to HTTP pages create security warnings and break the trust chain. Users may see 'not secure' warnings. Update all links to use HTTPS. If the target site doesn't support HTTPS, consider if you really need to link there. For internal links, ensure your entire site uses HTTPS.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/https-downgrade"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/https-downgrade"]
+disable = ["*"]
+```

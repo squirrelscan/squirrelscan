@@ -1,0 +1,48 @@
+---
+title: "Brand Impersonation"
+description: "Detects pages impersonating a third-party brand's login or booking surface"
+---
+
+Detects pages impersonating a third-party brand's login or booking surface (Calendly, Google/Microsoft login, ClickFunnels, Kajabi, DocuSign) where credentials are sent off-brand.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/brand-impersonation` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Page |
+| **Severity** | warning |
+| **Weight** | 8/10 |
+
+## How it works
+
+The rule fires only when a page combines a brand's lexicon **and** an action cue (sign in, book a call) **and** a credential affordance (a password field or login control) whose target is **not** that brand's legitimate host and **not** your own origin. A bare mention (e.g. "we integrate with Calendly") never fires, and a real "Sign in with Google" button pointing at `accounts.google.com` is spared.
+
+A lone brand-impersonation signal is reported as **info**. It escalates to a **failure** only when at least one other compromise signal corroborates on the same page (for example an obfuscated script or a full-viewport auth overlay): the classic phishing-kit shape.
+
+## Solution
+
+A page presenting a third-party brand's sign-in or booking surface whose credential target is NOT that brand's legitimate host is a classic phishing-kit pattern. If you did not create this page, your site is likely compromised: look for recently added files, unexpected pages not in your CMS, and injected PHP/JS. Remove the page, rotate credentials, and review server access logs. A legitimate integration must link to the brand's real domain (e.g. accounts.google.com, calendly.com).
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/brand-impersonation"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/brand-impersonation"]
+disable = ["*"]
+```

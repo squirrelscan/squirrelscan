@@ -1,0 +1,322 @@
+---
+title: "report"
+icon: "file-text"
+description: "View and query stored audit reports"
+---
+
+The `report` command lets you view and query audit reports from the local database.
+
+## Usage
+
+```bash
+squirrel report [id] [options]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `id` | Audit ID (UUID) or domain name (optional, defaults to latest) |
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--list` | `-l` | List recent audits | `false` |
+| `--format` | `-f` | Output format: `console`, `text`, `json`, `html`, `markdown`, `xml`, `llm` | `console` |
+| `--output` | `-o` | Output file path | auto |
+| `--input` | `-i` | Load from JSON file (fallback mode) | - |
+| `--severity` | | Filter by severity: `error`, `warning`, `all` | `all` |
+| `--category` | | Filter by categories (comma-separated) | all |
+| `--diff` | | Compare current report against baseline (audit ID or domain) | - |
+| `--regression-since` | | Compare against baseline and show regressions | - |
+| `--allow-cross-site` | | Allow diff across different base URLs | `false` |
+| `--publish` | `-p` | Publish report to reports.squirrelscan.com | `false` |
+| `--visibility` | | Visibility: `public`, `unlisted`, `private` | `public` |
+| `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
+
+## Publishing
+
+Share reports online by publishing to `reports.squirrelscan.com`.
+
+<Note>
+Publishing requires authentication. Run `squirrel auth login` first.
+</Note>
+
+### Visibility Levels
+
+| Level | Description |
+|-------|-------------|
+| `public` | Listed and searchable (default) |
+| `unlisted` | Accessible via link only, not listed |
+| `private` | Only visible to you when logged in |
+
+### Publish Report
+
+```bash
+squirrel report --publish
+```
+
+On success the command prints the published report URL (and nothing else, so it pipes cleanly):
+
+```
+https://reports.squirrelscan.com/XVv4NO7aPr
+```
+
+Manage published reports in the [dashboard](https://app.squirrelscan.com).
+
+### Publish with Visibility
+
+```bash
+squirrel report --publish --visibility unlisted
+```
+
+### Publish Specific Audit
+
+```bash
+squirrel report a7b3c2d1 --publish --visibility private
+```
+
+## Examples
+
+### View Latest Audit
+
+```bash
+squirrel report
+```
+
+### List All Audits
+
+```bash
+squirrel report --list
+```
+
+Output:
+```
+Recent Audits:
+================================================================================
+ID                                     Date                   Pages    Status
+--------------------------------------------------------------------------------
+a7b3c2d1                              1/17/2026, 10:30 AM    42       complete
+  https://example.com
+5e9f1a3b                              1/16/2026, 3:45 PM     38       complete
+  https://test.com
+
+Total: 2 audits
+```
+
+### View Specific Audit by ID
+
+```bash
+squirrel report a7b3c2d1
+```
+
+### View Latest Audit for Domain
+
+```bash
+squirrel report example.com
+```
+
+or with full URL:
+
+```bash
+squirrel report https://example.com
+```
+
+### Export as JSON
+
+```bash
+squirrel report -f json -o report.json
+```
+
+### Export as HTML
+
+```bash
+squirrel report -f html -o report.html
+open report.html
+```
+
+### Export as Markdown
+
+```bash
+squirrel report -f markdown -o report.md
+```
+
+### Filter by Severity
+
+Show only errors:
+
+```bash
+squirrel report --severity error
+```
+
+Show only warnings:
+
+```bash
+squirrel report --severity warning
+```
+
+### Filter by Category
+
+Show only core SEO issues:
+
+```bash
+squirrel report --category core
+```
+
+Show multiple categories:
+
+```bash
+squirrel report --category core,links,images
+```
+
+### Diff Reports
+
+Compare the latest report against a baseline audit:
+
+```bash
+squirrel report --diff a7b3c2d1 --format json
+```
+
+Compare the latest report for a domain against a baseline audit:
+
+```bash
+squirrel report --regression-since example.com --format llm
+```
+
+<Note>
+Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and `xml` are not supported in diff mode.
+</Note>
+<Note>
+Diff mode cannot be published with `--publish`.
+</Note>
+
+### LLM-Optimized Format
+
+Export in format optimized for LLM consumption:
+
+```bash
+squirrel report -f llm -o report.txt
+```
+
+Or pipe directly to Claude:
+
+```bash
+squirrel report -f llm | claude "analyze this SEO report"
+```
+
+## Output Formats
+
+### console (default)
+
+Human-readable colored output for terminal:
+
+```
+SquirrelScan Report
+========================================
+Site: https://example.com
+Audited: 42 pages
+
+ISSUES
+
+[high] Missing meta description
+  → /about
+  → /contact
+
+[medium] Image missing alt text
+  → /images/hero.png on /
+```
+
+### text
+
+Plain text without colors (for piping):
+
+```bash
+squirrel report -f text > report.txt
+```
+
+### json
+
+Machine-readable JSON for CI/CD and programmatic use:
+
+```bash
+squirrel report -f json -o report.json
+```
+
+```json
+{
+  "baseUrl": "https://example.com",
+  "crawledAt": "2025-01-17T00:00:00Z",
+  "pages": [...],
+  "checks": [...],
+  "stats": {
+    "pagesTotal": 42,
+    "issuesCount": { "high": 12, "medium": 18, "low": 23 }
+  }
+}
+```
+
+### markdown
+
+Markdown format for documentation:
+
+```bash
+squirrel report -f markdown -o report.md
+```
+
+### llm
+
+Optimized format for LLM analysis:
+
+```bash
+squirrel report -f llm | claude "what are the top 3 issues?"
+```
+
+### html
+
+Visual HTML report:
+
+```bash
+squirrel report -f html -o report.html
+```
+
+Opens in browser with interactive filtering and sorting.
+
+## Valid Categories
+
+Filter reports by these categories:
+
+- `core` - Core SEO elements
+- `content` - Content quality
+- `links` - Link analysis
+- `images` - Image optimization
+- `schema` - Structured data
+- `security` - Security headers
+- `a11y` - Accessibility
+- `i18n` - Internationalization
+- `perf` - Performance
+- `social` - Social media
+- `crawl` - Crawlability
+- `url` - URL structure
+- `mobile` - Mobile optimization
+- `legal` - Legal compliance
+- `local` - Local SEO
+- `video` - Video optimization
+- `analytics` - Analytics
+- `eeat` - E-E-A-T signals
+- `blocking` - Ad-blocker & privacy-filter impact (`adblock` still accepted)
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Error (no audit found, invalid format, etc.) |
+
+## Related
+
+- [auth](/cli/auth) - Authentication for publishing
+- [audit](/cli/audit) - Run new audit
+- [analyze](/cli/analyze) - Re-analyze crawl
+- [Dashboard](/dashboard) - Manage published reports
+- [Configuration](/configuration) - Config file options

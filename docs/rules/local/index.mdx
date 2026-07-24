@@ -1,0 +1,27 @@
+---
+title: "Local SEO"
+description: "Local business schema and NAP consistency"
+---
+
+Local business schema and NAP consistency
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Geo Meta Tags" icon="circle-info" href="/rules/local/geo-meta">
+    Checks for geographic meta tags for local targeting
+  </Card>
+  <Card title="NAP Consistency" icon="triangle-exclamation" href="/rules/local/nap-consistency">
+    Checks for consistent Name, Address, Phone across site
+  </Card>
+  <Card title="Service Area Pages" icon="circle-info" href="/rules/local/service-area">
+    Checks for service area/location pages
+  </Card>
+</CardGroup>
+
+## Disable All Local SEO Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["local/*"]
+```

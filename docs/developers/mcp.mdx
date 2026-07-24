@@ -1,0 +1,137 @@
+---
+title: "Hosted MCP server"
+description: "Connect any MCP client to the hosted squirrelscan MCP server: cloud audits, reports, issues, and rules as native agent tools"
+icon: "plug"
+---
+
+squirrelscan runs a hosted [Model Context Protocol](https://modelcontextprotocol.io) server in the cloud. Point any MCP client at it and your agent gets tools for running cloud audits, reading reports, working the per-website issue tracker, sending product feedback, and browsing the 260+ rule catalog. Nothing to install, nothing to keep running:
+
+```
+https://mcp.squirrelscan.com/mcp
+```
+
+The transport is streamable HTTP. Authentication is OAuth 2.1 (browser sign-in) or a squirrelscan API key as a bearer header, whichever suits the environment.
+
+## Quick connect
+
+The fastest path is Claude Code:
+
+```bash
+claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
+```
+
+Then, inside a session, run `/mcp`, select **squirrelscan**, and choose **Authenticate**. Your browser opens, you sign in to squirrelscan, pick the organization the agent should act for, and approve. That's it: the tools are live.
+
+Every other client is a couple of lines of config. See [MCP client setup](/developers/mcp-clients) for exact snippets for Cursor, Codex CLI, VS Code, Windsurf, and Gemini CLI.
+
+## Authentication
+
+There are two ways in. Pick one per config entry.
+
+### OAuth (browser sign-in)
+
+Add the server with **no auth headers** and the client handles everything: it discovers the authorization server at `/.well-known/oauth-authorization-server`, registers itself dynamically (DCR and CIMD are both supported), and runs the PKCE browser flow. You sign in, choose an organization, and approve on the consent screen.
+
+Behind the scenes the flow mints a 30-day squirrelscan API key scoped to the organization you approved. When it expires, the client prompts you to sign in again.
+
+Best for: a human at an editor. No key to copy, no secret in any config file.
+
+### API key (bearer header)
+
+Set a standard bearer header on the server entry:
+
+```
+Authorization: Bearer sq_xxxxxxxxxxxx
+```
+
+Get a key from the dashboard at [app.squirrelscan.com/settings/api-keys](https://app.squirrelscan.com/settings/api-keys), or without leaving the terminal:
+
+```bash
+squirrel keys create --shell
+```
+
+`--shell` offers to append `export SQUIRRELSCAN_API_KEY=sq_...` to your shell rc, and `SQUIRRELSCAN_API_KEY` is the conventional env var: most clients can interpolate it into the header so the key never lands in a config file. See [`squirrel keys`](/cli/keys) and [Authentication](/developers/authentication).
+
+Key scopes apply to tools exactly like they do to the REST API: `run_audit`, `add_website`, `delete_website`, and `comment_on_issue` need `audits:write`; audit, report, and issue reads need `audits:read`; `get_credit_balance` and `list_credit_transactions` need `credits:read`. A key missing a scope gets a structured `FORBIDDEN` error naming the missing scope. `whoami` works with any key but only includes the balance when the key has `credits:read`.
+
+Best for: CI, headless machines, containers, and configs you commit and share.
+
+<Warning>
+Setting an `Authorization` header disables the OAuth fallback in most clients: if the key is missing or invalid the connection just fails, and no browser flow is attempted. Use either OAuth or a header per entry, never both.
+</Warning>
+
+Anonymous connections can initialize and list the tool catalog, but every tool call requires credentials. Unauthenticated calls get a 401 with a `WWW-Authenticate` challenge that points OAuth-capable clients at the sign-in flow.
+
+## Tools
+
+All tools require authentication. Write tools are marked; everything else only reads.
+
+| Tool | What it does | Access |
+|------|--------------|--------|
+| `whoami` | Identify the active credentials: org, plan, auth kind, credit balance. Call it first. | Read |
+| `run_audit` | Run a cloud audit of a URL (crawl + 260+ rule analysis + report). Estimate and confirm rail, see [Credits](#credits). Registers the website automatically on first audit. If the requested page count exceeds the org's plan ceiling, the audit still runs at the plan's max (never a hard error) and the response carries a `notice` field saying so. | Write, spends credits |
+| `get_audit_status` | Poll a running audit by `run_id` until it completes. While running, the response includes a `progress` field (phase, message, page/link counts) when available. `notice` is present when the run's page count was clamped to the plan's ceiling at dispatch time. | Read |
+| `get_report` | Fetch a finished report: `summary` (JSON scores, top issues grouped by rule with fix text deduped into a `rules` dict, and score/issue-count history across prior audits), `llm` (compact text for agent context), or `markdown` (full report). | Read |
+| `list_audits` | Active and recent audit runs for the org. An active run carries `notice` when its page count was clamped to the plan's ceiling at dispatch time. | Read |
+| `list_websites` | Websites the org has audited, with latest status and health score. Paginated (`total`/`has_more`). | Read |
+| `add_website` | Register a website without auditing it. Idempotent per domain. | Write |
+| `delete_website` | Soft-delete a website (confirm rail). Past audits, reports, and issues are preserved and published report links keep working; the site leaves listings and frees a slot under the plan's website limit. Re-adding the domain later creates a fresh website with a new id. | Write |
+| `list_issues` | Open audit issues for a website, sorted by severity, filterable by status, severity, and category. | Read |
+| `get_issue` | One issue with full detail, per-occurrence detail from the latest report (which pages/images, capped and countable via `occurrence_limit`), and its comment thread. | Read |
+| `comment_on_issue` | Post a markdown comment on an issue, visible in the dashboard thread. | Write |
+| `list_rules` | Browse the audit rule catalog by category or keyword. | Read |
+| `get_rule` | One rule's full definition by id, e.g. `crawl/canonical-chain`, including its fix recommendation and docs link. | Read |
+| `get_credit_balance` | Monthly and pack credit buckets for the org. | Read |
+| `list_credit_transactions` | Org credit accounting log — grants, per-audit debits (each carries a `run_id`), refunds, adjustments — newest first, paginated, with the current balance. Needs `credits:read`. | Read |
+| `create_api_key` | Mint a new org API key. Requires the `keys:write` scope, which only OAuth sign-in grants. The key is returned exactly once. | Write, gated |
+| `send_feedback` | Send product feedback to the team: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other`. Works with any authenticated key, no scope required. | Write |
+
+Three tools deserve a closer look:
+
+- **`run_audit` has a confirm rail.** The first call returns a credit estimate instead of starting anything expensive; the agent is expected to show it to you and call again with `confirm: true`. Every audit costs at least the 50-credit base, so expect the confirm step on each run. A `max_credits` argument acts as a hard spend guard: the audit refuses to start if the estimate exceeds it.
+- **`delete_website` has the same confirm rail.** The first call previews what happens (the domain, how many audits and open issues stay attached to the old id) without deleting anything; the agent confirms with you and calls again with `confirm: true`. Deletion is soft: nothing is destroyed, and re-adding the domain later registers a fresh website with a new id.
+- **`create_api_key` is scope-gated.** It needs credentials carrying the reserved `keys:write` scope. OAuth sign-in grants it (you consented on the approval screen); plain API keys never carry it, and keys minted by this tool can't mint further keys. No escalation loops.
+
+## Credits
+
+Cloud audits are pay-as-you-go: credits are spent while the audit runs, and nothing is charged up front. From the agent's side a paid audit looks like this:
+
+1. Agent calls `run_audit` with the URL. The response comes back with `status: "confirmation_required"`, an upper-bound estimate (`estimate.cap`), and your current balance.
+2. The agent shows you the estimate and asks. Actual spend is usually below the cap.
+3. You approve; the agent calls `run_audit` again with `confirm: true`. The audit starts and returns a `run_id`.
+4. The agent polls `get_audit_status` every 15-30 seconds, then pulls the results with `get_report`.
+
+An audit costs 50 credits base plus 2 per rendered page. Check your balance with `get_credit_balance`, audit where the credits went with `list_credit_transactions` (or a single audit's per-feature breakdown via `get_report`'s `cost` field), or top up at [app.squirrelscan.com/billing](https://app.squirrelscan.com/billing).
+
+## Sample prompts
+
+Copy-paste starters. Prompts marked **spends credits** run a cloud audit; prompts marked **write** change state in your org.
+
+- "Audit https://example.com and fix the top 3 issues in this repo." (spends credits, write)
+- "Check my site's open audit issues and comment on the ones this PR fixes." (write)
+- "Compare the last two audits of example.com and tell me what regressed."
+- "Create an API key for CI and add it to my GitHub Actions secrets." (write, needs OAuth sign-in for `keys:write`)
+- "What would a deep audit of example.com cost, and how many credits do we have left?"
+- "Run a full-coverage audit of staging.example.com, but stop if it would cost more than 200 credits." (spends credits, write)
+- "List our websites and summarize the health of each one."
+- "What does the rule crawl/canonical-chain check, and how do I fix it on a Next.js site?"
+
+## Local MCP server
+
+The CLI ships a local stdio MCP server too:
+
+```bash
+squirrel mcp
+```
+
+It runs squirrelscan's deterministic audit engine on your machine: local audits are **free**, work offline, and need no account. Reach for it when you want unmetered local runs, are auditing localhost or a private network, or have no network at all. The hosted server is the better default for everything cloud-side: shared org state, the issue tracker, browser rendering, and zero local install.
+
+Full setup and tool reference: [`squirrel mcp`](/cli/mcp).
+
+## Related
+
+- [MCP client setup](/developers/mcp-clients) - exact config for Claude Code, Cursor, Codex CLI, VS Code, Windsurf, and Gemini CLI
+- [Authentication](/developers/authentication) - API keys, scopes, and `SQUIRRELSCAN_API_KEY`
+- [`squirrel keys`](/cli/keys) - mint and manage keys from the terminal
+- [`squirrel mcp`](/cli/mcp) - the local stdio server
+- [Cloud credits](/cloud/credits) - how audits are metered

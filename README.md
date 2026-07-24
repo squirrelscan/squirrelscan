@@ -197,7 +197,7 @@ squirrelscan is in **active beta**. Expect rapid iteration and breaking changes.
 
 ## Source and development
 
-The complete local CLI, crawler, audit engine, rules, report generators, and CLI-facing cloud clients are open source in this repository. The hosted API, website, dashboard, and cloud worker implementations are separate private services.
+The complete local CLI, crawler, audit engine, rules, report generators, CLI-facing cloud clients, and documentation site are open source in this repository. The hosted API, website, dashboard, and cloud worker implementations are separate private services.
 
 Prerequisites: [Bun 1.3.14](https://bun.sh/) and Git.
 
@@ -216,6 +216,8 @@ bun run lint
 bun run typecheck
 bun test
 bun run build
+bun run docs:check
+bun run docs:build
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Contributions require a Developer Certificate of Origin sign-off (`git commit -s`).

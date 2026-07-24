@@ -1,0 +1,46 @@
+---
+title: "Sub-processor Disclosure"
+description: "Checks for a sub-processor / data-processing (DPA) disclosure page or link"
+---
+
+Checks for a sub-processor / data-processing (DPA) disclosure page or link
+
+| | |
+|---|---|
+| **Rule ID** | `legal/subprocessor-disclosure` |
+| **Category** | [Legal Compliance](/rules/legal) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+<Note>This rule only runs for SaaS, web-app, and corporate sites (and software, fintech, banking, and IT-services businesses): the site types where the GDPR Art. 28 sub-processor duty applies. It is skipped for everyone else and when no site profile is available.</Note>
+
+## Solution
+
+Under GDPR Art. 28, processors must disclose the sub-processors they engage and offer a Data Processing Agreement (DPA). Publish a `/subprocessors` page listing each third party that handles customer personal data (purpose, location), keep it current, and link a DPA from your legal/trust pages. B2B SaaS and fintech buyers expect this during security review.
+
+The rule passes when it finds a dedicated sub-processor / data-processing / DPA page (by URL path) or a link to one (by href or anchor text) on any crawled page.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/subprocessor-disclosure"]
+```
+
+### Disable all Legal Compliance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["legal/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["legal/subprocessor-disclosure"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "ARIA Tooltip Name"
+description: "Checks that tooltip elements have accessible names"
+---
+
+Checks that tooltip elements have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-tooltip-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Tooltip elements with role='tooltip' must have accessible content. The tooltip content serves as its accessible name. Ensure tooltips have text content or use aria-label for icon-based tooltips.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-tooltip-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-tooltip-name"]
+disable = ["*"]
+```

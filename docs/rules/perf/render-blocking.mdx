@@ -1,0 +1,42 @@
+---
+title: "Render-Blocking Resources"
+description: "Checks for render-blocking CSS and JavaScript"
+---
+
+Checks for render-blocking CSS and JavaScript
+
+| | |
+|---|---|
+| **Rule ID** | `perf/render-blocking` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Render-blocking resources delay First Contentful Paint (FCP) and LCP. Fix by: 1) Inline critical CSS for above-fold content. 2) Load non-critical CSS with media='print' onload='this.media=all'. 3) Add async or defer to non-critical scripts. 4) Move scripts to end of body when possible. 5) Use `<link rel='preload'>` for critical resources. Consider tools like Critical to extract critical CSS.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/render-blocking"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/render-blocking"]
+disable = ["*"]
+```

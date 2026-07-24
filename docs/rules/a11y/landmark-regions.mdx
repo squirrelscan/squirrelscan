@@ -1,0 +1,42 @@
+---
+title: "Landmark Regions"
+description: "Checks for proper landmark regions (main, nav, footer)"
+---
+
+Checks for proper landmark regions (main, nav, footer)
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/landmark-regions` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Landmark regions help screen reader users navigate page structure. Use semantic HTML5 elements: `<main>` for primary content, `<nav>` for navigation, `<header>` for page header, `<footer>` for footer, `<aside>` for sidebars, and `<section>`/`<article>` for content sections. Alternatively, use ARIA roles: role='main', role='navigation', etc. Each page should have exactly one `<main>` element.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/landmark-regions"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/landmark-regions"]
+disable = ["*"]
+```

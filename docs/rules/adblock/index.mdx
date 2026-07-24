@@ -1,0 +1,36 @@
+---
+title: "Blocking"
+description: "Content, links, and trackers that ad blockers and privacy filters block"
+---
+
+<Note>**Cloud rules** - requires login (`squirrel auth login`). All three rules share a single blocklist check per audit, **included in the audit base charge**, matched server-side against the full EasyList and EasyPrivacy filter lists. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+
+The **Blocking** category covers content, links, and trackers that ad blockers and privacy filters would block. It reports in its own report section with two sub-groups - **Ad blocking** and **Privacy blocking** - and every check is a **warning** (it's signal worth knowing, not a hard failure). Enabled by default for logged-in users.
+
+<Note>Rule IDs and config filters keep the `adblock/` prefix (e.g. `adblock/*`) - only the report category was renamed to Blocking.</Note>
+
+## Ad blocking
+
+<CardGroup cols={2}>
+  <Card title="Adblock Element Hiding" icon="triangle-exclamation" href="/rules/adblock/element-hiding">
+    Checks for elements that would be hidden by common adblockers
+  </Card>
+  <Card title="Blocked Tracking Links" icon="circle-info" href="/rules/adblock/blocked-links">
+    Checks for links and resources pointing to blocked tracking domains
+  </Card>
+</CardGroup>
+
+## Privacy blocking
+
+<CardGroup cols={2}>
+  <Card title="Privacy Filter Matches" icon="circle-info" href="/rules/adblock/privacy-blocked">
+    Checks for trackers and analytics that EasyPrivacy would block
+  </Card>
+</CardGroup>
+
+## Disable all Blocking rules
+
+```toml squirrel.toml
+[rules]
+disable = ["adblock/*"]
+```

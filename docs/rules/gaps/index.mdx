@@ -1,0 +1,39 @@
+---
+title: "Gap Analysis"
+description: "Keyword and content gap analysis backed by live search data"
+---
+
+<Note>**Cloud rules, opt-in** - these rules require login (`squirrel auth login`), cost **25 credits each per audit**, and are **disabled by default** so a routine audit never spends them by surprise. See [Cloud rules](/cloud/rules).</Note>
+
+Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover.
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Keyword Gaps" icon="circle-info" href="/rules/gaps/keywords">
+    Keywords competitors rank for (or seed-keyword opportunities) that this site doesn't rank for
+  </Card>
+  <Card title="Content Gaps" icon="circle-info" href="/rules/gaps/content">
+    Topic clusters with search demand around your existing content that lack dedicated coverage
+  </Card>
+</CardGroup>
+
+## Enable Gap Analysis
+
+Both rules are opt-in:
+
+```toml squirrel.toml
+[rules]
+enable = ["gaps/keywords", "gaps/content"]
+```
+
+## Options
+
+Both rules accept the same options:
+
+```toml squirrel.toml
+[rule_options."gaps/keywords"]
+country = "US"                       # ISO country for search data
+language = "en"                      # language code for search data
+competitors = ["competitor.com"]     # up to 5 competitor domains
+```

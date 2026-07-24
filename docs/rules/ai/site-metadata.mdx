@@ -1,0 +1,41 @@
+---
+title: "Site Profile"
+description: "Resolves the durable per-domain site profile that anchors the audit decision graph"
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`); **included in the audit base charge** (resolved once per domain, cached ~30 days). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+
+Resolves the durable per-domain site profile (type, business category, country, audience, identity, contacts, socials, domain age): the root of the audit decision graph.
+
+| | |
+|---|---|
+| **Rule ID** | `ai/site-metadata` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 0/10 (report-only, non-scoring) |
+| **Default** | Enabled |
+
+## What it does
+
+The site profile is Stage 0 of the cloud decision graph. The resolved profile (site type, business category, primary country, audience scope, identity, contacts, socials, and domain age) gates every downstream cloud feature and informs which audit rules apply to the site. It is report-only and never fails the audit.
+
+## Solution
+
+Informational: the resolved profile anchors which cloud features and audit rules apply to this site. If the classification looks wrong, the site's purpose and identity may not be coming through: sharpen the homepage value proposition, Organization/LocalBusiness JSON-LD, `og`/`twitter` meta, and contact details.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/site-metadata"]
+```
+
+### Disable all AI rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/*"]
+```

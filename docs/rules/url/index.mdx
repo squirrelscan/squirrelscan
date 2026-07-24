@@ -1,0 +1,42 @@
+---
+title: "URL Structure"
+description: "URL structure, length, and formatting"
+---
+
+URL structure, length, and formatting
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Slug Keywords" icon="circle-info" href="/rules/url/slug-keywords">
+    Checks if URL slug contains relevant keywords
+  </Card>
+  <Card title="Trailing Slash" icon="circle-info" href="/rules/url/trailing-slash">
+    Checks for consistent trailing slash usage
+  </Card>
+  <Card title="URL Hyphens" icon="triangle-exclamation" href="/rules/url/hyphens">
+    Checks that URLs use hyphens, not underscores
+  </Card>
+  <Card title="URL Length" icon="circle-info" href="/rules/url/length">
+    Checks URL length for optimal SEO
+  </Card>
+  <Card title="URL Lowercase" icon="triangle-exclamation" href="/rules/url/lowercase">
+    Checks that URLs are lowercase
+  </Card>
+  <Card title="URL Parameters" icon="circle-info" href="/rules/url/parameters">
+    Checks for excessive URL parameters
+  </Card>
+  <Card title="URL Special Characters" icon="triangle-exclamation" href="/rules/url/special-chars">
+    Checks for problematic special characters in URL path
+  </Card>
+  <Card title="URL Stop Words" icon="circle-info" href="/rules/url/stop-words">
+    Flags common stop words in URL slugs
+  </Card>
+</CardGroup>
+
+## Disable All URL Structure Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```

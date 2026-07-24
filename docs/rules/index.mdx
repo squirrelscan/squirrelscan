@@ -1,0 +1,137 @@
+---
+title: "Rules Reference"
+description: "All 262 audit rules organized by score group and category"
+---
+
+squirrelscan includes **262 rules** across **21 categories**, plus opt-in cloud gap analysis. Every category rolls up into one of four score groups: **SEO**, **Performance**, **Security**, and **Agents**. These are the four scores you see on reports and in the dashboard, alongside the overall health score.
+
+Most rules run locally for free. A handful of [cloud rules](/cloud/rules) use AI analysis, full filter lists, or live search data - they require login and are skipped when you're not logged in. Cloud rules carry a notice banner on their doc pages.
+
+## SEO
+
+Search visibility: crawling, indexing, content, markup, and accessibility.
+[SEO group overview →](/rules/seo)
+
+<CardGroup cols={2}>
+  <Card title="Crawlability" icon="folder" href="/rules/crawl">
+    Robots.txt, sitemaps, and crawl directives (18 rules)
+  </Card>
+  <Card title="Core SEO" icon="folder" href="/rules/core">
+    Essential meta tags and page structure for search engines (13 rules)
+  </Card>
+  <Card title="Links" icon="folder" href="/rules/links">
+    Internal and external link health and structure (14 rules)
+  </Card>
+  <Card title="Content" icon="folder" href="/rules/content">
+    Text quality, readability, and content structure (12 rules)
+  </Card>
+  <Card title="Structured Data" icon="folder" href="/rules/schema">
+    Structured data and rich snippet eligibility (10 rules)
+  </Card>
+  <Card title="Images" icon="folder" href="/rules/images">
+    Image optimization and accessibility (15 rules)
+  </Card>
+  <Card title="Social Media" icon="folder" href="/rules/social">
+    Open Graph and social sharing metadata (4 rules)
+  </Card>
+  <Card title="Accessibility" icon="folder" href="/rules/a11y">
+    Accessibility for users with disabilities (59 rules)
+  </Card>
+  <Card title="Mobile" icon="folder" href="/rules/mobile">
+    Mobile-friendliness and responsive design (6 rules)
+  </Card>
+  <Card title="URL Structure" icon="folder" href="/rules/url">
+    URL structure, length, and formatting (8 rules)
+  </Card>
+  <Card title="Internationalization" icon="folder" href="/rules/i18n">
+    Language declarations and multi-region support (2 rules)
+  </Card>
+  <Card title="E-E-A-T" icon="folder" href="/rules/eeat">
+    Experience, expertise, authority, trust signals (15 rules)
+  </Card>
+  <Card title="Local SEO" icon="folder" href="/rules/local">
+    Local business schema and NAP consistency (3 rules)
+  </Card>
+  <Card title="Video" icon="folder" href="/rules/video">
+    Video content markup and accessibility (3 rules)
+  </Card>
+  <Card title="Analytics" icon="folder" href="/rules/analytics">
+    Tracking and measurement implementation (2 rules)
+  </Card>
+  <Card title="Gap Analysis" icon="folder" href="/rules/gaps">
+    Keyword and content gaps backed by live search data (2 rules, opt-in)
+  </Card>
+</CardGroup>
+
+## Performance
+
+Page speed and loading behavior.
+[Performance group overview →](/rules/performance)
+
+<CardGroup cols={2}>
+  <Card title="Performance" icon="folder" href="/rules/perf">
+    Page speed and loading performance (29 rules)
+  </Card>
+</CardGroup>
+
+## Security
+
+Transport security, compromise signals, compliance, and blocked content.
+
+<CardGroup cols={2}>
+  <Card title="Site Integrity" icon="folder" href="/rules/integrity">
+    Signs of compromise: injected pages, phishing kits, malware, SEO spam (9 rules)
+  </Card>
+  <Card title="Security" icon="folder" href="/rules/security">
+    HTTPS, headers, and safe link practices (16 rules)
+  </Card>
+  <Card title="Legal Compliance" icon="folder" href="/rules/legal">
+    Privacy policy and legal compliance signals (4 rules)
+  </Card>
+  <Card title="Blocking" icon="folder" href="/rules/adblock">
+    Content, links, and trackers blocked by ad blockers and privacy filters (3 rules)
+  </Card>
+</CardGroup>
+
+## Agents
+
+Agent Experience (AX): whether AI agents can read, reach, discover, and act on your site: a first-class score alongside SEO, Performance, and Security, not an afterthought. Covers five pillars: readable (no-JS content, token weight, Markdown), reachable (crawler access, behavioral blocking), discoverable (llms.txt, AGENTS.md, agent manifests), declared (Content-Signal, noai, RSL licensing), and actionable (API/OAuth discovery, pay-per-crawl).
+
+<CardGroup cols={2}>
+  <Card title="Agent Experience" icon="folder" href="/rules/ax">
+    Agent experience across five pillars: readable, reachable, discoverable, declared, actionable (17 rules)
+  </Card>
+</CardGroup>
+
+## Configuration
+
+### Enable/Disable Rules
+
+Use glob patterns in `squirrel.toml`:
+
+```toml squirrel.toml
+[rules]
+# Enable specific rules or categories
+enable = ["*"]  # all rules (default)
+
+# Disable specific rules
+disable = [
+  "ax/*", "ai/*",   # disable all Agent Experience rules
+  "content/word-count",  # disable specific rule
+]
+```
+
+### Rule Options
+
+Some rules have configurable options:
+
+```toml squirrel.toml
+[rules."core/meta-title"]
+min_length = 30
+max_length = 75
+
+[rules."content/word-count"]
+min_words = 300
+```
+
+See individual rule pages for available options.

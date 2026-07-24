@@ -1,0 +1,72 @@
+---
+title: "init"
+icon: "sparkles"
+description: "Create a squirrel.toml config file"
+---
+
+Create a config file for project-specific settings:
+
+```bash
+squirrel init
+```
+
+This creates `squirrel.toml` in your current directory.
+
+## Options
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--force` | `-f` | Overwrite existing config file |
+| `--project-name` | `-n` | Project name |
+
+## Default Config
+
+The generated config contains all available settings with sensible defaults:
+
+```toml
+[project]
+domains = []
+
+[crawler]
+max_pages = 500
+delay_ms = 100
+timeout_ms = 30000
+user_agent = ""
+follow_redirects = true
+concurrency = 5
+per_host_concurrency = 5
+per_host_delay_ms = 50
+include = []
+exclude = []
+allow_query_params = []
+drop_query_prefixes = ["utm_", "gclid", "fbclid"]
+respect_robots = false
+
+[rules]
+enable = ["*"]
+disable = ["ai/ai-content", "ai/llm-parsability", "content/quality"]
+
+[output]
+format = "console"
+
+[rule_options]
+```
+
+## Examples
+
+Create a new config:
+
+```bash
+squirrel init
+```
+
+Overwrite an existing config:
+
+```bash
+squirrel init --force
+```
+
+## See Also
+
+- [Configuration Reference](/configuration) - Full documentation of all config options
+- [config](/cli/config) - View and modify config values

@@ -1,0 +1,42 @@
+---
+title: "Slug Keywords"
+description: "Checks if URL slug contains relevant keywords"
+---
+
+Checks if URL slug contains relevant keywords
+
+| | |
+|---|---|
+| **Rule ID** | `url/slug-keywords` |
+| **Category** | [URL Structure](/rules/url) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+URLs should contain keywords that describe the page content. Good: /blue-running-shoes. Bad: /product-12345 or /p?id=abc. Include primary keywords in the URL path, but avoid keyword stuffing. URLs should be readable by humans and give users an idea of page content before clicking. Dynamic parameters don't provide SEO value.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["url/slug-keywords"]
+```
+
+### Disable all URL Structure rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["url/slug-keywords"]
+disable = ["*"]
+```

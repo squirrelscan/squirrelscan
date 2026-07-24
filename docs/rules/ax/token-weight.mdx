@@ -1,0 +1,59 @@
+---
+title: "Token Weight"
+description: "Per-page raw-HTML token estimate and text-to-HTML ratio"
+---
+
+Estimates how many LLM tokens a page's raw HTML costs to fetch and parse, and reports the **text-to-HTML ratio**: how much of that token budget is actual content versus markup, scripts, and styles. An agent that fetches a page pays for every token in the response, whether or not it's useful; a bloated page costs more per unit of content than a lean one.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/token-weight` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per page |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+<Note>This rule flags pages that exceed the token budget below. Unlike most AX rules, it can produce a **warning**: bloated markup is an actionable defect, not just a missing-but-optional signal.</Note>
+
+## What it checks
+
+For each crawled page, the rule:
+
+- Estimates the token count of the raw HTML response using the same tokenization approach a typical LLM fetcher would incur.
+- Computes the **text-to-HTML ratio**: visible text length divided by total HTML length.
+- Flags the page when the ratio falls under **15%**, the budget line used by Vercel's Agent Readability spec. Below that, an agent is paying for mostly markup, inline scripts, and styling to extract a small amount of usable content.
+
+## Why it matters
+
+Agents that fetch pages directly — coding assistants pulling in docs, answer engines summarizing a page, research agents crawling a site — pay token costs proportional to response size, not proportional to what's useful in it. A heavy component library, inlined SVGs, verbose class names, and unstripped scripts all inflate the raw HTML an agent has to wade through before it reaches your actual content. High-ratio pages are cheaper to fetch, cheaper to summarize correctly, and more likely to stay within an agent's context budget.
+
+## Solution
+
+- Strip or externalize inline `<script>` and `<style>` blocks where practical: they count as HTML tokens but carry no readable content.
+- Avoid deeply nested wrapper `<div>`s and long utility-class strings on content-bearing elements.
+- Serve a lean server-rendered markup shape rather than a client framework's verbose hydration output, especially for content pages (articles, docs, product pages).
+- Where the audience is explicitly agents, consider [content negotiation to Markdown](/rules/ax/markdown-response), which sidesteps the ratio problem entirely by removing HTML markup from the response.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/token-weight"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/token-weight"]
+disable = ["*"]
+```

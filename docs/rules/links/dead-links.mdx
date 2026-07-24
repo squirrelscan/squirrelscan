@@ -1,0 +1,43 @@
+---
+title: "Dead Links (Cloud)"
+description: "Verifies external links through the cloud dead-links service with a shared global cache"
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`); **included in the audit base charge**. WAF-blocked links retried via a rendered fetch bill as rendered requests (2 credits per link). Skipped when not logged in (external links are then checked locally as usual). See [Cloud rules](/cloud/rules).</Note>
+
+Verifies external links through the cloud dead-links service, which shares a global link-check cache across all audits.
+
+| | |
+|---|---|
+| **Rule ID** | `links/dead-links` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+| **Default** | Enabled |
+
+## What it does
+
+This rule is the **enable gate** for cloud external-link checking. When it's enabled and you're logged in, the audit's external-link phase routes through the cloud service instead of fetching every link from your machine:
+
+- **Shared global cache** - links checked by any recent audit (yours or anyone's) return instantly from cache, so repeat audits are much faster and third-party sites aren't hammered.
+- **Fresh results** - working links are cached for 7 days, failures for 24 hours.
+- **Same report shape** - broken links found this way are detailed by [`links/broken-external-links`](/rules/links/broken-external-links), exactly as with local checking.
+
+If an audit's estimated dead-link spend exceeds your `confirm_threshold`, you're prompted before the phase runs. Declining (or being logged out) falls back to local per-link checking.
+
+## Enable / Disable
+
+### Disable cloud link checking (keep local checking)
+
+```toml squirrel.toml
+[rules]
+disable = ["links/dead-links"]
+```
+
+### Disable external link checking entirely
+
+```toml squirrel.toml
+[external_links]
+enabled = false
+```

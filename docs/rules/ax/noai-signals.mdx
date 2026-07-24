@@ -1,0 +1,65 @@
+---
+title: "noai Signals"
+description: "Reports noai/noimageai tags and AI-search-quoting opt-outs"
+---
+
+Reports declared `noai` / `noimageai` opt-outs, and the related `nosnippet` / `max-snippet:0` directives that gate whether AI-search answer engines can quote a page directly in a generated answer. All of these are the same shape of signal: a site saying "don't use this for X" without blocking access to the page itself.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/noai-signals` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per page |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+<Note>This rule is purely informational: it reports what's declared and never penalizes a page for declaring or omitting an opt-out. These signals are also **advisory-only** — honoring them depends entirely on the crawler, with no enforcement mechanism behind the tag itself.</Note>
+
+## What it checks
+
+For each page, the rule reads:
+
+- **`X-Robots-Tag` header** and **`<meta name="robots">`** for the `noai` and `noimageai` tokens (an early, informally-adopted convention some AI companies said they'd respect for text and image use respectively).
+- **`nosnippet`** and **`max-snippet:0`**, which are the older, better-established snippet-control directives — they were built for classic search-result snippets, but AI-search answer engines that quote pages verbatim treat them as the same signal: don't display extracted text from this page.
+
+It reports which opt-outs are declared, at page or site scope, and notes the gap between `noai`/`noimageai` (aspirational, no enforcement guarantee) and `nosnippet`/`max-snippet:0` (long-standing directives most crawlers already implement).
+
+## Solution
+
+If you want a page kept out of AI-generated answers and snippets, declare it explicitly:
+
+```html
+<meta name="robots" content="noai, noimageai, nosnippet">
+```
+
+or as a header:
+
+```http
+X-Robots-Tag: noai, noimageai, nosnippet
+```
+
+Remember `noai`/`noimageai` are advisory: treat `robots.txt` crawler blocks (see [AI Crawler Access](/rules/ax/ai-crawlers)) as the enforcement layer, and these tags as the declared-intent layer on top of it.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/noai-signals"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/noai-signals"]
+disable = ["*"]
+```

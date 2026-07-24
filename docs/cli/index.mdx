@@ -1,0 +1,96 @@
+---
+title: "CLI Reference"
+icon: "terminal"
+description: "Complete reference for squirrel CLI commands"
+---
+
+The `squirrel` CLI provides commands for website auditing, crawling, and self-management.
+
+## Top-Level Commands
+
+### Project Commands
+
+Commands that operate on websites and projects:
+
+| Command | Description |
+|---------|-------------|
+| [`audit`](/cli/audit) | Run full website audit (crawl + analyze) |
+| [`crawl`](/cli/crawl) | Crawl website without analysis |
+| [`analyze`](/cli/analyze) | Run audit rules on stored crawl |
+| [`report`](/cli/report) | View and query stored audit reports |
+| [`init`](/cli/init) | Create squirrel.toml config file |
+| [`config`](/cli/config) | View and modify configuration |
+| [`feedback`](/cli/feedback) | Send feedback to squirrelscan team |
+| [`auth`](/cli/auth) | Authentication for cloud features and publishing |
+| [`credits`](/cli/credits) | Show cloud credit balance and pricing |
+| [`mcp`](/cli/mcp) | Run the local MCP server for agents |
+
+### Self-Management Commands
+
+Commands for managing the CLI itself:
+
+| Command | Description |
+|---------|-------------|
+| [`self install`](/cli/self#install) | Bootstrap local installation |
+| [`self update`](/cli/self#update) | Check and apply updates |
+| [`self completion`](/cli/self#completion) | Generate shell completions |
+| [`self doctor`](/cli/self#doctor) | Run health checks |
+| [`self version`](/cli/self#version) | Show version information |
+| [`self settings`](/cli/self#settings) | Manage CLI settings |
+| [`self uninstall`](/cli/self#uninstall) | Remove squirrel from system |
+
+## Quick Examples
+
+### Run audit on website
+
+```bash
+squirrel audit https://example.com
+```
+
+### Crawl 200 pages and export as JSON
+
+```bash
+squirrel audit https://example.com -m 200 -f json -o report.json
+```
+
+### View latest audit report
+
+```bash
+squirrel report
+```
+
+### List all stored audits
+
+```bash
+squirrel report --list
+```
+
+### Update to latest version
+
+```bash
+squirrel self update
+```
+
+## Global Options
+
+All commands support:
+
+| Option | Description |
+|--------|-------------|
+| `-c, --config-file` | Path to config file (default: auto-discover) |
+
+## Getting Help
+
+View help for any command:
+
+```bash
+squirrel --help
+squirrel audit --help
+squirrel self update --help
+```
+
+## Next Steps
+
+- [audit](/cli/audit) - Full audit command reference
+- [Configuration](/configuration) - Config file documentation
+- [Rules Reference](/rules) - Available audit rules

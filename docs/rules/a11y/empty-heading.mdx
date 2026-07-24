@@ -1,0 +1,42 @@
+---
+title: "Empty Headings"
+description: "Checks that heading elements have visible content"
+---
+
+Checks that heading elements have visible content
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/empty-heading` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Headings (h1-h6) must have text content for screen readers to announce. Empty headings create confusing navigation. Either add text content, use aria-label, or remove the empty heading element.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/empty-heading"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/empty-heading"]
+disable = ["*"]
+```

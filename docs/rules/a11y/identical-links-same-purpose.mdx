@@ -1,0 +1,42 @@
+---
+title: "Identical Links Same Purpose"
+description: "Checks that links with identical text go to the same destination"
+---
+
+Checks that links with identical text go to the same destination
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/identical-links-same-purpose` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Links with the same visible text should go to the same URL. When identical link text leads to different destinations, it confuses screen reader users who navigate by listing links. Make link text unique or more descriptive to differentiate destinations.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/identical-links-same-purpose"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/identical-links-same-purpose"]
+disable = ["*"]
+```

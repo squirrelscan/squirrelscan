@@ -1,0 +1,105 @@
+---
+title: "Performance"
+description: "Page speed and loading performance"
+---
+
+Page speed and loading performance
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Animated Content" icon="triangle-exclamation" href="/rules/perf/animated-content">
+    Checks for large GIFs that could be converted to video
+  </Card>
+  <Card title="Browser-Required Audits" icon="circle-info" href="/rules/perf/browser-required">
+    Lists performance audits that require browser execution
+  </Card>
+  <Card title="Cache Headers" icon="triangle-exclamation" href="/rules/perf/cache-headers">
+    Checks Cache-Control header configuration
+  </Card>
+  <Card title="Weak Caching" icon="triangle-exclamation" href="/rules/perf/bad-caching">
+    Flags sites where most pages lack caching freshness, validators, or compression
+  </Card>
+  <Card title="CLS Optimization Hints" icon="triangle-exclamation" href="/rules/perf/cls-hints">
+    Checks for Cumulative Layout Shift prevention
+  </Card>
+  <Card title="Compression" icon="triangle-exclamation" href="/rules/perf/compression">
+    Checks for Gzip or Brotli compression
+  </Card>
+  <Card title="Critical Request Chains" icon="triangle-exclamation" href="/rules/perf/critical-request-chains">
+    Identifies chains of dependent resources that delay rendering
+  </Card>
+  <Card title="CSS File Size Too Large" icon="hexagon-exclamation" href="/rules/perf/css-file-size">
+    Checks for CSS files that exceed recommended size limits
+  </Card>
+  <Card title="JavaScript File Size Too Large" icon="hexagon-exclamation" href="/rules/perf/js-file-size">
+    Checks for JavaScript files that exceed recommended size limits
+  </Card>
+  <Card title="DOM Size" icon="triangle-exclamation" href="/rules/perf/dom-size">
+    Detects excessive DOM complexity that impacts performance
+  </Card>
+  <Card title="Duplicate JavaScript" icon="triangle-exclamation" href="/rules/perf/duplicate-js">
+    Detects duplicate JavaScript libraries loaded multiple times
+  </Card>
+  <Card title="Font Loading" icon="triangle-exclamation" href="/rules/perf/font-loading">
+    Checks for font loading best practices
+  </Card>
+  <Card title="Font Delivery" icon="triangle-exclamation" href="/rules/perf/font-delivery">
+    Flags render-blocking third-party font stylesheets in the critical request chain
+  </Card>
+  <Card title="Carousel Hidden Eager Images" icon="triangle-exclamation" href="/rules/perf/carousel-hidden-eager">
+    Flags eagerly-loaded images inside hidden carousel slides
+  </Card>
+  <Card title="HTTP/2" icon="circle-info" href="/rules/perf/http2">
+    Checks for HTTP/2 protocol support
+  </Card>
+  <Card title="INP Optimization Hints" icon="circle-info" href="/rules/perf/inp-hints">
+    Checks for Interaction to Next Paint optimization
+  </Card>
+  <Card title="JavaScript Redirects" icon="triangle-exclamation" href="/rules/perf/js-redirects">
+    Detects JavaScript resources that return 3XX redirects
+  </Card>
+  <Card title="JS Libraries" icon="triangle-exclamation" href="/rules/perf/js-libraries">
+    Detects JavaScript libraries and checks for known vulnerabilities
+  </Card>
+  <Card title="Lazy Loading Above Fold" icon="triangle-exclamation" href="/rules/perf/lazy-above-fold">
+    Detects lazy loading on likely above-fold images
+  </Card>
+  <Card title="LCP Optimization Hints" icon="triangle-exclamation" href="/rules/perf/lcp-hints">
+    Checks for Largest Contentful Paint optimization opportunities
+  </Card>
+  <Card title="LCP Image Fetch Priority" icon="triangle-exclamation" href="/rules/perf/lcp-fetchpriority">
+    Flags the hero/LCP image when it lacks fetchpriority='high' and a preload
+  </Card>
+  <Card title="Legacy JavaScript" icon="circle-info" href="/rules/perf/legacy-js">
+    Detects ES5 polyfills and legacy JavaScript code
+  </Card>
+  <Card title="Preconnect Hints" icon="circle-info" href="/rules/perf/preconnect">
+    Checks for preconnect hints to critical third-party origins
+  </Card>
+  <Card title="Render-Blocking Resources" icon="triangle-exclamation" href="/rules/perf/render-blocking">
+    Checks for render-blocking CSS and JavaScript
+  </Card>
+  <Card title="Source Maps" icon="circle-info" href="/rules/perf/source-maps">
+    Checks for source map availability and configuration
+  </Card>
+  <Card title="Time to First Byte" icon="triangle-exclamation" href="/rules/perf/ttfb">
+    Measures server response time (TTFB)
+  </Card>
+  <Card title="Total Page Weight" icon="triangle-exclamation" href="/rules/perf/total-byte-weight">
+    Checks the total byte weight of the page
+  </Card>
+  <Card title="Unminified CSS" icon="triangle-exclamation" href="/rules/perf/unminified-css">
+    Detects unminified CSS that could be optimized
+  </Card>
+  <Card title="Unminified JavaScript" icon="triangle-exclamation" href="/rules/perf/unminified-js">
+    Detects unminified JavaScript that could be optimized
+  </Card>
+</CardGroup>
+
+## Disable All Performance Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```

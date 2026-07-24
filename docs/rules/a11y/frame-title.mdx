@@ -1,0 +1,42 @@
+---
+title: "Frame Title"
+description: "Checks that iframes and frames have title attributes"
+---
+
+Checks that iframes and frames have title attributes
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/frame-title` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+All iframes must have a title attribute describing their content. This helps screen reader users understand what the iframe contains. Example: `<iframe src='video.html' title='Product demo video'>`
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/frame-title"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/frame-title"]
+disable = ["*"]
+```

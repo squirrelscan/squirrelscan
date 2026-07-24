@@ -1,0 +1,42 @@
+---
+title: "OG URL Match"
+description: "Checks that og:url matches canonical URL"
+---
+
+Checks that og:url matches canonical URL
+
+| | |
+|---|---|
+| **Rule ID** | `social/og-url-match` |
+| **Category** | [Social Media](/rules/social) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Solution
+
+og:url should match your canonical URL. Mismatches can cause social share stats to be fragmented across different URLs. Use the same URL normalization (https, www, trailing slash) as your canonical tag. Facebook uses og:url for share counting and deduplication.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["social/og-url-match"]
+```
+
+### Disable all Social Media rules
+
+```toml squirrel.toml
+[rules]
+disable = ["social/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["social/og-url-match"]
+disable = ["*"]
+```

@@ -1,0 +1,831 @@
+---
+title: "Output Configuration"
+icon: "file-output"
+description: "Configure audit report format and output destinations"
+---
+
+The `[output]` section controls how squirrelscan formats and saves audit reports.
+
+## Configuration
+
+```toml
+[output]
+format = "console"
+path = ""
+```
+
+## Options
+
+### `format`
+
+**Type:** `"console"` | `"text"` | `"json"` | `"html"` | `"markdown"` | `"llm"` | `"xml"`
+**Default:** `"console"`
+
+Output format for audit reports.
+
+**Available Formats:**
+
+- `"console"` - Rich terminal output with colors and formatting
+- `"text"` - Plain text output without colors
+- `"json"` - Machine-readable JSON for automation
+- `"html"` - Interactive HTML report in browser
+- `"markdown"` - Markdown format for documentation
+- `"llm"` - Compact token-optimized XML/text for AI agents (40% smaller than xml)
+- `"xml"` - Verbose structured XML for enterprise integration
+
+**Note:** The `sarif` format is only available via the `report` command, not during `audit`. See [Reports documentation](/reports) for details.
+
+---
+
+### `"console"` (Default)
+
+Rich terminal output optimized for human readability.
+
+**Features:**
+
+- Colored output (red/yellow/green for fail/warn/pass)
+- Progress indicators during crawl
+- Summary statistics
+- Issue grouping by rule
+- Interactive formatting
+
+**Example output:**
+
+```
+🔍 Crawling https://example.com...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Fetched 100 pages in 12.3s
+
+📊 Running audit rules...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ISSUES FOUND (23)
+
+❌ core/meta-title (8 pages)
+  /about - Missing page title
+  /contact - Title too short (12 chars, min 30)
+
+⚠️  links/broken-links (15 links)
+  /blog/post-1 → /missing-page (404)
+
+✓ All other checks passed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Health Score: 78/100 (Good)
+```
+
+**Configuration:**
+
+```toml
+[output]
+format = "console"
+```
+
+**Use cases:**
+
+- Local development
+- Manual audits
+- Terminal-based workflows
+- Quick visual feedback
+
+---
+
+### `"json"`
+
+Machine-readable JSON output for automation and integrations.
+
+**Features:**
+
+- Complete crawl data
+- All rule results
+- Structured error information
+- Health score calculation
+- Timestamps and metadata
+
+**Example structure:**
+
+```json
+{
+  "project": {
+    "name": "example.com",
+    "seedUrl": "https://example.com",
+    "timestamp": "2026-01-17T10:30:00.000Z"
+  },
+  "stats": {
+    "totalPages": 100,
+    "totalLinks": 456,
+    "totalImages": 234,
+    "crawlDurationMs": 12345
+  },
+  "health": {
+    "score": 78,
+    "grade": "Good",
+    "issues": {
+      "error": 8,
+      "warning": 15,
+      "info": 12
+    }
+  },
+  "pages": [
+    {
+      "url": "https://example.com/about",
+      "status": 200,
+      "title": "About Us",
+      "checks": [...]
+    }
+  ],
+  "rules": [...],
+  "links": [...],
+  "images": [...]
+}
+```
+
+**Configuration:**
+
+```toml
+[output]
+format = "json"
+path = "reports/audit.json"  # Optional: save to file
+```
+
+**Use cases:**
+
+- CI/CD pipelines
+- Automated testing
+- Data analysis
+- Integration with other tools
+- API responses
+
+**CLI usage:**
+
+```bash
+# Output to stdout
+squirrel audit https://example.com --format json
+
+# Save to file
+squirrel audit https://example.com --format json --output report.json
+
+# Pipe to jq for filtering
+squirrel audit https://example.com --format json | jq '.health.score'
+```
+
+---
+
+### `"html"`
+
+Interactive HTML report that opens in your browser.
+
+**Features:**
+
+- Visual charts and graphs
+- Filterable issue list
+- Page-by-page breakdown
+- Click-to-navigate
+- Responsive design
+- Shareable standalone file
+
+**Includes:**
+
+- Health score gauge
+- Issue distribution charts
+- Rule category breakdown
+- Page list with status
+- Link analysis graphs
+- Image optimization metrics
+
+**Configuration:**
+
+```toml
+[output]
+format = "html"
+path = "reports/audit.html"  # Optional: custom path
+```
+
+**Default behavior:**
+
+If `path` is not specified, HTML report is saved to:
+
+```
+reports/audit-{timestamp}.html
+```
+
+**Use cases:**
+
+- Client presentations
+- Team sharing
+- Visual analysis
+- Stakeholder reports
+- Archive audits
+
+**CLI usage:**
+
+```bash
+# Generate and open in browser
+squirrel audit https://example.com --format html
+
+# Save to custom location
+squirrel audit https://example.com --format html --output reports/my-audit.html
+```
+
+---
+
+### `"llm"`
+
+**Compact token-optimized format for AI agents** - hybrid XML/text structure designed to minimize tokens while maintaining structured data.
+
+**Features:**
+
+- 40-70% smaller than verbose XML format
+- 1-space indentation for token efficiency
+- Inline attributes instead of nested elements
+- Text prefixes (`Desc:`, `Fix:`, `Pages:`, `Items:`)
+- Comma-separated lists for pages and URLs
+- Hybrid XML/text structure for easy parsing
+
+**Size Comparison:**
+
+For a 51-page audit:
+- XML format: 209KB
+- LLM format: 125KB (40% reduction)
+
+**Format Structure:**
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<audit version="0.0.13">
+<site url="https://example.com" crawled="42" date="2025-01-18T10:30:00Z"/>
+<score overall="87" grade="B">
+ <cat name="Core SEO" score="100"/>
+ <cat name="Links" score="85"/>
+</score>
+<summary passed="83" warnings="13" failed="9"/>
+<issues>
+ <category name="Content" errors="2" warnings="3">
+  <rule id="content/word-count" severity="warning" status="warn">
+   Low word count detected
+   Desc: Pages should have sufficient content for good SEO
+   Fix: Add more relevant content to improve page depth
+   Pages (3): /blog/post-1, /blog/post-2, /about
+  </rule>
+ </category>
+</issues>
+</audit>
+```
+
+**Use Cases:**
+
+- Piping to Claude Code, Cursor, GPT, or other AI assistants
+- Token-limited API contexts (cost optimization)
+- Agent-based workflows requiring structured output
+- AI code review and analysis
+
+**CLI usage:**
+
+```bash
+# Direct output during audit
+squirrel audit https://example.com --format llm
+
+# Or export from stored audit
+squirrel report <audit-id> --format llm
+
+# Pipe directly to AI agent
+squirrel audit https://example.com --format llm | claude "analyze and prioritize fixes"
+```
+
+See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/squirrelscan/blob/main/skills/audit-website/references/OUTPUT-FORMAT.md) for complete format specification.
+
+---
+
+### `"xml"`
+
+**Verbose structured XML format** for enterprise integration, archival, and strict schema validation.
+
+**Features:**
+
+- 2-space indentation for readability
+- Fully nested elements (all metadata in dedicated tags)
+- Explicit structure with strict schema compliance
+- All information preserved without abbreviation
+- Enterprise-ready for XML parsers and validators
+
+**Format Structure:**
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<audit version="0.0.13">
+  <site>
+    <url>https://example.com</url>
+    <crawled>42</crawled>
+    <date>2025-01-18T10:30:00Z</date>
+  </site>
+  <score>
+    <overall>87</overall>
+    <grade>B</grade>
+    <categories>
+      <category>
+        <name>Core SEO</name>
+        <score>100</score>
+      </category>
+    </categories>
+  </score>
+  <issues>
+    <category>
+      <name>Content</name>
+      <rules>
+        <rule>
+          <id>content/word-count</id>
+          <description>Pages should have sufficient content</description>
+          <solution>Add more relevant content</solution>
+          <pages>
+            <page>/blog/post-1</page>
+            <page>/blog/post-2</page>
+          </pages>
+        </rule>
+      </rules>
+    </category>
+  </issues>
+</audit>
+```
+
+**Comparison: LLM vs XML**
+
+| Aspect | LLM Format | XML Format |
+|--------|-----------|------------|
+| Size (51 pages) | 125KB | 209KB |
+| Indentation | 1 space | 2 spaces |
+| Structure | Hybrid XML/text | Pure XML |
+| Metadata | Inline attributes | Nested elements |
+| Best For | AI agents, tokens | Enterprise, archival |
+
+**Use Cases:**
+
+- Enterprise data integration and ETL pipelines
+- Long-term audit archival with full metadata
+- Schema validation and compliance requirements
+- XML processing tools and libraries
+- Integration with enterprise systems (SAP, Oracle, etc.)
+
+**CLI usage:**
+
+```bash
+# Direct output during audit
+squirrel audit https://example.com --format xml --output audit.xml
+
+# Or export from stored audit
+squirrel report <audit-id> --format xml --output audit.xml
+
+# Validate with xmllint
+squirrel audit https://example.com --format xml | xmllint --format -
+```
+
+---
+
+## `path`
+
+**Type:** `string`
+**Default:** `""` (empty = stdout for console/json, auto-generate for html)
+**Required:** No
+
+Output file path for saving reports.
+
+**Behavior:**
+
+**Empty (default):**
+- `console` format → stdout (terminal)
+- `json` format → stdout
+- `html` format → `reports/audit-{timestamp}.html`
+
+**Specified:**
+- Saves to exact path provided
+- Creates directories if needed
+- Overwrites existing files
+
+**Examples:**
+
+Save JSON to file:
+```toml
+[output]
+format = "json"
+path = "reports/latest.json"
+```
+
+Save HTML with custom name:
+```toml
+[output]
+format = "html"
+path = "audit-reports/example-com-2026-01-17.html"
+```
+
+Console to file (unusual):
+```toml
+[output]
+format = "console"
+path = "logs/audit.log"
+```
+
+**Path expansion:**
+
+Relative paths are relative to current working directory:
+
+```toml
+[output]
+path = "reports/audit.json"
+# Resolves to: /path/to/project/reports/audit.json
+```
+
+Absolute paths work too:
+
+```toml
+[output]
+path = "/Users/you/audits/report.json"
+```
+
+**Directory creation:**
+
+squirrelscan automatically creates parent directories:
+
+```toml
+[output]
+path = "reports/2026/january/audit.json"
+# Creates reports/2026/january/ if needed
+```
+
+---
+
+## Configuration Examples
+
+### Console Output (Default)
+
+Terminal output with colors:
+
+```toml
+[output]
+format = "console"
+```
+
+Run:
+```bash
+squirrel audit https://example.com
+```
+
+---
+
+### JSON for CI/CD
+
+Save JSON report for automated testing:
+
+```toml
+[output]
+format = "json"
+path = "reports/audit.json"
+```
+
+Then in CI:
+```bash
+squirrel audit https://staging.example.com
+cat reports/audit.json | jq '.health.score'
+```
+
+---
+
+### HTML for Sharing
+
+Generate shareable HTML report:
+
+```toml
+[output]
+format = "html"
+path = "reports/client-audit.html"
+```
+
+Share the file:
+```bash
+squirrel audit https://client.com
+# Send reports/client-audit.html to client
+```
+
+---
+
+### Multiple Outputs
+
+Use CLI to generate multiple formats:
+
+```bash
+# Console output
+squirrel audit https://example.com
+
+# JSON for automation
+squirrel audit https://example.com --format json --output reports/data.json
+
+# HTML for sharing
+squirrel audit https://example.com --format html --output reports/visual.html
+```
+
+---
+
+## CLI Override
+
+CLI flags override config file:
+
+**Config file:**
+```toml
+[output]
+format = "console"
+path = "reports/default.json"
+```
+
+**CLI override:**
+```bash
+squirrel audit https://example.com --format json --output custom.json
+# Uses: format=json, path=custom.json
+```
+
+**Precedence:**
+
+1. CLI flags (`--format`, `--output`) - Highest
+2. Config file (`[output]` section)
+3. Built-in defaults - Lowest
+
+---
+
+## Format Comparison
+
+| Feature | Console | JSON | HTML |
+|---------|---------|------|------|
+| **Human readable** | ✓ | ✗ | ✓ |
+| **Machine readable** | ✗ | ✓ | ✗ |
+| **Colors** | ✓ | ✗ | ✓ |
+| **Interactive** | ✗ | ✗ | ✓ |
+| **Shareable** | ✗ | ✓ | ✓ |
+| **CI/CD friendly** | ✗ | ✓ | ✗ |
+| **Charts/graphs** | ✗ | ✗ | ✓ |
+| **File size** | Small | Medium | Large |
+| **Parse complexity** | N/A | Easy | Medium |
+
+---
+
+## Output Schema
+
+### JSON Output Schema
+
+Full JSON output structure:
+
+```json
+{
+  "project": {
+    "name": "string",
+    "seedUrl": "string",
+    "timestamp": "ISO 8601 date",
+    "config": {
+      "maxPages": 500,
+      "rules": {...}
+    }
+  },
+  "stats": {
+    "totalPages": 0,
+    "totalLinks": 0,
+    "totalImages": 0,
+    "crawlDurationMs": 0,
+    "externalLinksChecked": 0
+  },
+  "health": {
+    "score": 0,
+    "grade": "Excellent|Good|Fair|Poor|Critical",
+    "issues": {
+      "error": 0,
+      "warning": 0,
+      "info": 0
+    }
+  },
+  "pages": [
+    {
+      "url": "string",
+      "status": 200,
+      "title": "string",
+      "description": "string",
+      "wordCount": 0,
+      "checks": [
+        {
+          "ruleId": "core/meta-title",
+          "name": "meta-title",
+          "status": "pass|warn|fail|info|skipped",
+          "message": "string",
+          "value": "any",
+          "expected": "any"
+        }
+      ]
+    }
+  ],
+  "ruleResults": [...],
+  "links": [...],
+  "images": [...]
+}
+```
+
+**Use for:**
+- Automated analysis
+- Data warehousing
+- Custom reporting
+- Integration testing
+
+---
+
+### HTML Report Structure
+
+HTML reports include:
+
+**1. Overview Section**
+- Health score gauge
+- Total pages/links/images
+- Crawl duration
+- Issue count by severity
+
+**2. Issues Section**
+- Grouped by rule
+- Sorted by severity
+- Expandable details
+- Quick filters
+
+**3. Pages Section**
+- Full page list
+- Status codes
+- Title/description
+- Check results per page
+
+**4. Rules Section**
+- All rules run
+- Pass/fail counts
+- Category breakdown
+
+**5. Links Section**
+- Internal link graph
+- Broken links list
+- Redirect chains
+- External links
+
+**6. Images Section**
+- Image list with previews
+- Missing alt text
+- File size analysis
+- Format recommendations
+
+---
+
+## Automation Examples
+
+### CI/CD Pipeline
+
+Extract health score in CI:
+
+```yaml
+# .github/workflows/audit.yml
+- name: Run Audit
+  run: squirrel audit https://staging.example.com --format json --output audit.json
+
+- name: Check Score
+  run: |
+    SCORE=$(cat audit.json | jq '.health.score')
+    if [ "$SCORE" -lt 70 ]; then
+      echo "Health score too low: $SCORE"
+      exit 1
+    fi
+```
+
+---
+
+### Compare Audits
+
+Compare two audits using JSON:
+
+```bash
+# Before changes
+squirrel audit https://example.com --format json --output before.json
+
+# Make changes...
+
+# After changes
+squirrel audit https://example.com --format json --output after.json
+
+# Compare scores
+echo "Before: $(cat before.json | jq '.health.score')"
+echo "After:  $(cat after.json | jq '.health.score')"
+```
+
+---
+
+### Generate Multiple Reports
+
+Run once, output multiple formats:
+
+```bash
+#!/bin/bash
+URL="https://example.com"
+DATE=$(date +%Y-%m-%d)
+
+# JSON for data
+squirrel audit $URL --format json --output "reports/$DATE/data.json"
+
+# HTML for sharing
+squirrel audit $URL --format html --output "reports/$DATE/report.html"
+
+# Console for logs
+squirrel audit $URL > "logs/$DATE.log"
+```
+
+---
+
+## Troubleshooting
+
+### HTML not opening in browser
+
+**Solution:** Open manually:
+
+```bash
+squirrel audit https://example.com --format html --output report.html
+open report.html  # macOS
+xdg-open report.html  # Linux
+```
+
+---
+
+### JSON output too large
+
+**Cause:** Large sites generate large JSON files
+
+**Solution:** Use console format or filter JSON:
+
+```bash
+# Get only health score
+squirrel audit https://example.com --format json | jq '.health'
+
+# Get only errors
+squirrel audit https://example.com --format json | jq '.pages[].checks[] | select(.status == "fail")'
+```
+
+---
+
+### Path permission denied
+
+**Cause:** No write permission to output directory
+
+**Solution:** Use writable directory or fix permissions:
+
+```toml
+[output]
+path = "~/reports/audit.json"  # Home directory
+```
+
+Or:
+```bash
+mkdir -p reports
+chmod 755 reports
+```
+
+---
+
+## Complete Example
+
+```toml
+[project]
+name = "mysite"
+
+[crawler]
+max_pages = 500
+
+[rules]
+enable = ["*"]
+disable = ["ai/*"]
+
+[output]
+# Default to console for development
+format = "console"
+
+# Override with CLI for CI/CD:
+# --format json --output reports/audit.json
+```
+
+**Local development:**
+```bash
+squirrel audit https://localhost:3000
+# Console output to terminal
+```
+
+**CI/CD:**
+```bash
+squirrel audit https://staging.example.com --format json --output audit.json
+# JSON saved to file for analysis
+```
+
+**Client report:**
+```bash
+squirrel audit https://client.com --format html --output reports/client-audit.html
+# HTML report for sharing
+```
+
+---
+
+## Related
+
+- [Crawler Settings](/configuration/crawler) - Control what gets crawled
+- [Rules Configuration](/configuration/rules) - Control what gets checked
+- [Examples](/configuration/examples) - Common use cases

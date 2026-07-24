@@ -1,0 +1,48 @@
+---
+title: "Structured Data"
+description: "Structured data and rich snippet eligibility"
+---
+
+Structured data and rich snippet eligibility
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Article Schema" icon="triangle-exclamation" href="/rules/schema/article">
+    Validates Article schema required properties
+  </Card>
+  <Card title="Breadcrumb Schema" icon="circle-info" href="/rules/schema/breadcrumb">
+    Checks for BreadcrumbList schema on non-homepage
+  </Card>
+  <Card title="FAQ Schema" icon="triangle-exclamation" href="/rules/schema/faq">
+    Validates FAQPage schema structure
+  </Card>
+  <Card title="JSON-LD Valid" icon="triangle-exclamation" href="/rules/schema/json-ld-valid">
+    Validates JSON-LD structured data
+  </Card>
+  <Card title="LocalBusiness Schema" icon="triangle-exclamation" href="/rules/schema/local-business">
+    Validates LocalBusiness schema for local SEO
+  </Card>
+  <Card title="Organization Schema" icon="circle-info" href="/rules/schema/organization">
+    Validates Organization schema for brand presence
+  </Card>
+  <Card title="Product Schema" icon="triangle-exclamation" href="/rules/schema/product">
+    Validates Product schema for e-commerce
+  </Card>
+  <Card title="Review Schema" icon="triangle-exclamation" href="/rules/schema/review">
+    Validates Review and AggregateRating schema
+  </Card>
+  <Card title="Video Schema" icon="triangle-exclamation" href="/rules/schema/video">
+    Validates VideoObject schema for video content
+  </Card>
+  <Card title="WebSite Search Schema" icon="circle-info" href="/rules/schema/website-search">
+    Checks for WebSite schema with sitelinks searchbox
+  </Card>
+</CardGroup>
+
+## Disable All Structured Data Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```

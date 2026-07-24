@@ -1,0 +1,72 @@
+---
+title: "Crawlability"
+description: "Robots.txt, sitemaps, and crawl directives"
+---
+
+Robots.txt, sitemaps, and crawl directives
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="4XX Pages in Sitemap" icon="triangle-exclamation" href="/rules/crawl/sitemap-4xx">
+    Checks for sitemap URLs returning 4XX status codes
+  </Card>
+  <Card title="All Non-Indexed Pages" icon="circle-info" href="/rules/crawl/all-noindex-pages">
+    Lists all pages blocked from indexing for user audit
+  </Card>
+  <Card title="Canonical Chain" icon="triangle-exclamation" href="/rules/crawl/canonical-chain">
+    Checks for redirect chains on canonical URLs
+  </Card>
+  <Card title="HTML Size" icon="triangle-exclamation" href="/rules/crawl/html-size">
+    Checks HTML document size against Googlebot crawl limits
+  </Card>
+  <Card title="Indexability Check" icon="circle-info" href="/rules/crawl/indexability">
+    Identifies pages blocked from search engine indexing
+  </Card>
+  <Card title="Indexability Conflicts" icon="triangle-exclamation" href="/rules/crawl/indexability-conflicts">
+    Detects conflicting signals between robots.txt and meta/headers
+  </Card>
+  <Card title="Noindex in Sitemap" icon="triangle-exclamation" href="/rules/crawl/noindex-in-sitemap">
+    Checks for noindexed pages listed in sitemap
+  </Card>
+  <Card title="Pagination" icon="circle-info" href="/rules/crawl/pagination">
+    Checks that paginated pages have proper canonicals
+  </Card>
+  <Card title="PDF Size" icon="triangle-exclamation" href="/rules/crawl/pdf-size">
+    Checks linked PDF sizes against Googlebot 64MB truncation limit
+  </Card>
+  <Card title="Redirect Chains" icon="triangle-exclamation" href="/rules/crawl/redirect-chain">
+    Detects multi-hop redirect chains that waste crawl budget
+  </Card>
+  <Card title="Robots Meta Conflict" icon="triangle-exclamation" href="/rules/crawl/robots-meta-conflict">
+    Detects conflicts between robots meta tags and robots.txt
+  </Card>
+  <Card title="Robots.txt" icon="circle-exclamation" href="/rules/crawl/robots-txt">
+    Checks if robots.txt exists and is properly configured
+  </Card>
+  <Card title="Schema + Noindex Conflict" icon="circle-exclamation" href="/rules/crawl/schema-noindex-conflict">
+    Detects pages with rich result schema that are blocked from indexing
+  </Card>
+  <Card title="Sitemap Coverage" icon="triangle-exclamation" href="/rules/crawl/sitemap-coverage">
+    Checks for indexable pages that are not in the sitemap
+  </Card>
+  <Card title="Sitemap Domain" icon="circle-exclamation" href="/rules/crawl/sitemap-domain">
+    Checks that all sitemap URLs belong to the expected domain
+  </Card>
+  <Card title="Sitemap Exists" icon="circle-exclamation" href="/rules/crawl/sitemap-exists">
+    Checks if XML sitemap exists and is referenced in robots.txt
+  </Card>
+  <Card title="Sitemap Valid" icon="circle-exclamation" href="/rules/crawl/sitemap-valid">
+    Validates sitemap structure and URL limits
+  </Card>
+  <Card title="Soft 404" icon="triangle-exclamation" href="/rules/crawl/soft-404">
+    Detects pages that serve 404/error content with an HTTP 200 status
+  </Card>
+</CardGroup>
+
+## Disable All Crawlability Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```

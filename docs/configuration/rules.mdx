@@ -1,0 +1,664 @@
+---
+title: "Rules Configuration"
+icon: "list-checks"
+description: "Enable and disable audit rules with pattern matching"
+---
+
+The `[rules]` section controls which audit rules run during analysis.
+
+## Configuration
+
+```toml
+[rules]
+enable = ["*"]
+disable = ["ai/*", "content/quality"]
+```
+
+## Options
+
+### `enable`
+
+**Type:** `string[]`
+**Default:** `["*"]` (all rules)
+
+Patterns of rules to enable. Supports wildcards and specific rule IDs.
+
+**Pattern Syntax:**
+
+- `*` - All rules
+- `category/*` - All rules in a category
+- `category/rule-name` - Specific rule
+
+**Examples:**
+
+Enable all rules (default):
+```toml
+[rules]
+enable = ["*"]
+```
+
+Enable specific categories:
+```toml
+[rules]
+enable = ["core/*", "links/*", "images/*"]
+```
+
+Enable specific rules:
+```toml
+[rules]
+enable = ["core/meta-title", "core/meta-description", "links/broken-links"]
+```
+
+---
+
+### `disable`
+
+**Type:** `string[]`
+**Default:** `["ai/ai-content", "ai/llm-parsability", "content/quality"]`
+
+Patterns of rules to disable. **Takes precedence over `enable`**.
+
+If a rule matches both `enable` and `disable`, it's disabled.
+
+**Examples:**
+
+Disable AI rules (default):
+```toml
+[rules]
+disable = ["ai/*"]
+```
+
+Disable slow rules:
+```toml
+[rules]
+disable = ["ai/*", "content/quality", "perf/*"]
+```
+
+Disable specific rules:
+```toml
+[rules]
+disable = ["content/word-count", "images/modern-format"]
+```
+
+---
+
+## Rule Categories
+
+All 18 audit rule categories:
+
+### Core SEO
+
+**ID:** `core/*`
+**Rules:** 11
+**Description:** Essential SEO elements
+
+Meta tags, titles, canonical URLs, Open Graph, Twitter Cards, favicons, robots meta tags.
+
+**Enable:**
+```toml
+[rules]
+enable = ["core/*"]
+disable = []
+```
+
+**Common rules:**
+- `core/meta-title` - Title tag presence and length
+- `core/meta-description` - Meta description presence and length
+- `core/canonical` - Canonical URL configuration
+- `core/h1` - H1 tag presence and uniqueness
+- `core/og-tags` - Open Graph tags
+- `core/twitter-cards` - Twitter Card tags
+
+---
+
+### Content Quality
+
+**ID:** `content/*`
+**Rules:** 11
+**Description:** Content analysis and quality checks
+
+Word count, heading hierarchy, duplicates, freshness, broken HTML.
+
+**Enable:**
+```toml
+[rules]
+enable = ["content/*"]
+```
+
+**Common rules:**
+- `content/word-count` - Minimum word count
+- `content/heading-hierarchy` - Proper heading structure (H1 → H2 → H3)
+- `content/duplicate-title` - Duplicate title tags across pages
+- `content/duplicate-description` - Duplicate meta descriptions
+- `content/keyword-stuffing` - Excessive keyword repetition
+- `content/broken-html` - HTML parsing errors
+
+---
+
+### Links
+
+**ID:** `links/*`
+**Rules:** 12
+**Description:** Internal and external link analysis
+
+Broken links, redirects, orphan pages, anchor text.
+
+**Enable:**
+```toml
+[rules]
+enable = ["links/*"]
+```
+
+**Common rules:**
+- `links/broken-links` - 404 internal links
+- `links/broken-external-links` - 404 external links
+- `links/redirect-chains` - Multiple redirects
+- `links/orphan-pages` - Pages with no incoming links
+- `links/nofollow-internal` - Internal links with nofollow
+- `links/https-downgrade` - HTTPS to HTTP downgrades
+
+---
+
+### Images
+
+**ID:** `images/*`
+**Rules:** 10
+**Description:** Image optimization and accessibility
+
+Alt text, dimensions, formats, lazy loading, file sizes.
+
+**Enable:**
+```toml
+[rules]
+enable = ["images/*"]
+```
+
+**Common rules:**
+- `images/alt-text` - Missing alt attributes
+- `images/dimensions` - Missing width/height attributes
+- `images/modern-format` - WebP/AVIF format suggestions
+- `images/lazy-loading` - Lazy loading implementation
+- `images/image-file-size` - Large image file sizes
+
+---
+
+### Schema (Structured Data)
+
+**ID:** `schema/*`
+**Rules:** 10
+**Description:** JSON-LD and structured data validation
+
+Article, Product, LocalBusiness, FAQ, Breadcrumb, Organization schemas.
+
+**Enable:**
+```toml
+[rules]
+enable = ["schema/*"]
+```
+
+**Common rules:**
+- `schema/json-ld-valid` - Valid JSON-LD syntax
+- `schema/article` - Article schema validation
+- `schema/product` - Product schema validation
+- `schema/breadcrumb` - Breadcrumb schema
+- `schema/organization` - Organization schema
+
+---
+
+### Security
+
+**ID:** `security/*`
+**Rules:** 9
+**Description:** Security headers and HTTPS
+
+HTTPS, HSTS, CSP, X-Frame-Options, mixed content.
+
+**Enable:**
+```toml
+[rules]
+enable = ["security/*"]
+```
+
+**Common rules:**
+- `security/https` - HTTPS usage
+- `security/hsts` - HSTS header presence
+- `security/csp` - Content Security Policy
+- `security/mixed-content` - Mixed HTTP/HTTPS content
+- `security/x-frame-options` - Clickjacking protection
+
+---
+
+### Accessibility
+
+**ID:** `a11y/*`
+**Rules:** 12
+**Description:** Web accessibility (WCAG)
+
+ARIA labels, color contrast, keyboard navigation, screen readers.
+
+**Enable:**
+```toml
+[rules]
+enable = ["a11y/*"]
+```
+
+**Common rules:**
+- `a11y/skip-link` - Skip navigation link
+- `a11y/aria-labels` - Proper ARIA attributes
+- `a11y/form-labels` - Form label associations
+- `a11y/color-contrast` - Sufficient color contrast
+- `a11y/link-text` - Descriptive link text
+
+---
+
+### Internationalization
+
+**ID:** `i18n/*`
+**Rules:** 2
+**Description:** Multi-language support
+
+Lang attributes, hreflang tags.
+
+**Enable:**
+```toml
+[rules]
+enable = ["i18n/*"]
+```
+
+**Rules:**
+- `i18n/lang-attribute` - HTML lang attribute
+- `i18n/hreflang` - Hreflang alternate links
+
+---
+
+### Performance
+
+**ID:** `perf/*`
+**Rules:** 9
+**Description:** Core Web Vitals and performance hints
+
+LCP, CLS, INP hints, font loading, preconnect.
+
+**Enable:**
+```toml
+[rules]
+enable = ["perf/*"]
+```
+
+**Common rules:**
+- `perf/lcp-hints` - Largest Contentful Paint optimization
+- `perf/cls-hints` - Cumulative Layout Shift hints
+- `perf/font-loading` - Font loading strategies
+- `perf/render-blocking` - Render-blocking resources
+
+---
+
+### Social Media
+
+**ID:** `social/*`
+**Rules:** 4
+**Description:** Social media optimization
+
+Open Graph images, URL matching, social profiles.
+
+**Enable:**
+```toml
+[rules]
+enable = ["social/*"]
+```
+
+**Rules:**
+- `social/og-image-size` - Open Graph image dimensions
+- `social/og-url-match` - OG URL matches canonical
+- `social/social-profiles` - Social profile links
+- `social/share-buttons` - Social sharing buttons
+
+---
+
+### Crawlability
+
+**ID:** `crawl/*`
+**Rules:** 15
+**Description:** Search engine crawlability
+
+Robots.txt, sitemaps, indexability, canonical chains.
+
+**Enable:**
+```toml
+[rules]
+enable = ["crawl/*"]
+```
+
+**Common rules:**
+- `crawl/robots-txt` - Robots.txt existence and validity
+- `crawl/sitemap-exists` - XML sitemap presence
+- `crawl/sitemap-valid` - Sitemap XML validity
+- `crawl/indexability` - Indexable pages
+- `crawl/canonical-chain` - Canonical chain detection
+
+---
+
+### URL Structure
+
+**ID:** `url/*`
+**Rules:** 8
+**Description:** URL formatting and best practices
+
+Length, keywords, hyphens, parameters.
+
+**Enable:**
+```toml
+[rules]
+enable = ["url/*"]
+```
+
+**Common rules:**
+- `url/length` - URL length limits
+- `url/slug-keywords` - Descriptive URL slugs
+- `url/hyphens` - Hyphen usage (not underscores)
+- `url/parameters` - Query parameter best practices
+
+---
+
+### Mobile Optimization
+
+**ID:** `mobile/*`
+**Rules:** 6
+**Description:** Mobile-friendly design
+
+Viewport meta tag, tap targets, font sizes.
+
+**Enable:**
+```toml
+[rules]
+enable = ["mobile/*"]
+```
+
+**Common rules:**
+- `mobile/viewport` - Viewport meta tag
+- `mobile/tap-targets` - Touch target sizing
+- `mobile/font-size` - Readable font sizes
+
+---
+
+### Legal Compliance
+
+**ID:** `legal/*`
+**Rules:** 3
+**Description:** Legal requirements
+
+Privacy policy, cookie consent, terms of service.
+
+**Enable:**
+```toml
+[rules]
+enable = ["legal/*"]
+```
+
+**Rules:**
+- `legal/privacy-policy` - Privacy policy page
+- `legal/cookie-consent` - Cookie consent mechanism
+- `legal/terms-of-service` - Terms of service page
+
+---
+
+### Local SEO
+
+**ID:** `local/*`
+**Rules:** 3
+**Description:** Local business optimization
+
+NAP consistency, geo meta tags, service areas.
+
+**Enable:**
+```toml
+[rules]
+enable = ["local/*"]
+```
+
+**Rules:**
+- `local/nap-consistency` - Name, address, phone consistency
+- `local/geo-meta` - Geographic meta tags
+- `local/service-area` - Service area markup
+
+---
+
+### Video Optimization
+
+**ID:** `video/*`
+**Rules:** 3
+**Description:** Video content optimization
+
+Video schema, thumbnails, accessibility.
+
+**Enable:**
+```toml
+[rules]
+enable = ["video/*"]
+```
+
+**Rules:**
+- `video/video-schema` - VideoObject schema
+- `video/video-thumbnail` - Video thumbnail presence
+- `video/video-accessible` - Video accessibility features
+
+---
+
+### Analytics
+
+**ID:** `analytics/*`
+**Rules:** 2
+**Description:** Analytics and tracking
+
+Google Tag Manager, consent mode.
+
+**Enable:**
+```toml
+[rules]
+enable = ["analytics/*"]
+```
+
+**Rules:**
+- `analytics/gtm-present` - Google Tag Manager
+- `analytics/consent-mode` - Google Consent Mode v2
+
+---
+
+### E-E-A-T (Expertise, Authoritativeness, Trustworthiness)
+
+**ID:** `eeat/*`
+**Rules:** 14
+**Description:** Trust and authority signals
+
+Author info, citations, about page, editorial policy.
+
+**Enable:**
+```toml
+[rules]
+enable = ["eeat/*"]
+```
+
+**Common rules:**
+- `eeat/author-byline` - Author attribution
+- `eeat/content-dates` - Content dates
+- `eeat/citations` - External citations
+- `eeat/about-page` - About page presence
+- `eeat/contact-page` - Contact information
+
+---
+
+### AI & LLM
+
+**ID:** `ai/*`
+**Rules:** 2
+**Description:** AI-powered analysis (requires LLM)
+
+**DISABLED BY DEFAULT** - Requires OpenRouter API key.
+
+AI content detection, LLM parsability.
+
+**Enable:**
+```toml
+[rules]
+enable = ["*"]
+disable = []  # Remove ai/* from disable list
+```
+
+**Rules:**
+- `ai/ai-content` - AI-generated content detection
+- `ai/llm-parsability` - LLM-friendly structure
+
+**Note:** Requires `OPENROUTER_API_KEY` environment variable.
+
+---
+
+### Blocking
+
+**ID:** `adblock/*`
+**Rules:** 3
+**Description:** Ad-blocker & privacy-filter impact (ad blocking + privacy blocking)
+
+Element hiding, blocked tracking links, and privacy-filter matches. Reported as warnings in their own report section.
+
+**Enable:**
+```toml
+[rules]
+enable = ["adblock/*"]
+```
+
+**Rules:**
+- `adblock/element-hiding` - Elements hidden by adblockers (ad blocking)
+- `adblock/blocked-links` - Links to blocked domains (ad blocking)
+- `adblock/privacy-blocked` - Trackers EasyPrivacy would block (privacy blocking)
+
+---
+
+## Configuration Examples
+
+### SEO-Focused Audit
+
+Focus on SEO rules only:
+
+```toml
+[rules]
+enable = ["core/*", "content/*", "crawl/*", "url/*", "schema/*"]
+disable = []
+```
+
+### Accessibility Audit
+
+Focus on accessibility and mobile:
+
+```toml
+[rules]
+enable = ["a11y/*", "mobile/*"]
+disable = []
+```
+
+### Performance Audit
+
+Focus on performance and images:
+
+```toml
+[rules]
+enable = ["perf/*", "images/*"]
+disable = []
+```
+
+### Security Audit
+
+Focus on security headers and HTTPS:
+
+```toml
+[rules]
+enable = ["security/*"]
+disable = []
+```
+
+### All Rules Except AI
+
+Enable everything except AI-powered rules:
+
+```toml
+[rules]
+enable = ["*"]
+disable = ["ai/*"]
+```
+
+### Fast Audit (Core Only)
+
+Quick audit with just essential checks:
+
+```toml
+[rules]
+enable = ["core/*"]
+disable = []
+```
+
+### Disable Slow Rules
+
+Exclude computationally expensive rules:
+
+```toml
+[rules]
+enable = ["*"]
+disable = ["ai/*", "content/quality", "perf/cls-hints"]
+```
+
+### CI/CD Pipeline
+
+Strict subset for automated checks:
+
+```toml
+[rules]
+enable = ["core/*", "security/*", "links/broken-links"]
+disable = []
+```
+
+## Pattern Matching
+
+### Wildcards
+
+```toml
+[rules]
+enable = ["core/*"]      # All core rules
+disable = ["core/og-*"]  # Disable all OG rules
+```
+
+### Multiple Patterns
+
+```toml
+[rules]
+enable = ["core/*", "links/*", "images/*"]
+disable = ["images/modern-format", "links/orphan-pages"]
+```
+
+### Disable Takes Precedence
+
+```toml
+[rules]
+enable = ["*"]           # Enable all
+disable = ["ai/*"]       # But disable AI (wins)
+```
+
+Result: All rules except AI category.
+
+## Rule Weights
+
+Each rule has a weight (1-10) reflecting its importance:
+
+| Weight | Importance | Example Rules |
+|--------|------------|---------------|
+| 10 | Critical | `core/meta-title`, `crawl/robots-txt` |
+| 8 | High | `core/canonical`, `links/broken-links` |
+| 6 | Medium | `images/alt-text`, `content/word-count` |
+| 4 | Low | `url/hyphens`, `social/share-buttons` |
+| 2 | Info | `analytics/gtm-present` |
+
+Weights affect the health score calculation.
+
+## Related
+
+- [Rule Options](/configuration/rule-options) - Per-rule configuration
+- [Rules Reference](/rules) - All audit rules
+- [Configuration Examples](/configuration/examples) - Common patterns

@@ -1,0 +1,42 @@
+---
+title: "Select Name"
+description: "Checks that select elements have accessible names"
+---
+
+Checks that select elements have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/select-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Select elements need accessible labels. Use `<label for='selectId'>`Label`</label>`, wrap in `<label>`, or use aria-label/aria-labelledby.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/select-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/select-name"]
+disable = ["*"]
+```

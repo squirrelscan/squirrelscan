@@ -1,0 +1,42 @@
+---
+title: "Duplicate ID Active"
+description: "Checks that active, focusable elements have unique IDs"
+---
+
+Checks that active, focusable elements have unique IDs
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/duplicate-id-active` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Duplicate IDs on focusable elements (links, buttons, inputs) break keyboard navigation and label associations. Browsers only recognize the first element with a given ID, so labels, focus management, and ARIA references will target the wrong element. Ensure every focusable element with an id attribute has a unique value.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/duplicate-id-active"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/duplicate-id-active"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "HSTS Header"
+description: "Checks for HTTP Strict Transport Security header"
+---
+
+Checks for HTTP Strict Transport Security header
+
+| | |
+|---|---|
+| **Rule ID** | `security/hsts` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+HSTS forces browsers to only connect via HTTPS, preventing downgrade attacks. Add the header: Strict-Transport-Security: max-age=31536000; includeSubDomains. Start with a short max-age (1 day) to test, then increase to 1 year. The includeSubDomains directive protects all subdomains. Consider preloading via hstspreload.org for maximum protection.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/hsts"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/hsts"]
+disable = ["*"]
+```

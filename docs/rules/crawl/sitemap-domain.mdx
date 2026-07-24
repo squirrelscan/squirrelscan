@@ -1,0 +1,42 @@
+---
+title: "Sitemap Domain"
+description: "Checks that all sitemap URLs belong to the expected domain"
+---
+
+Checks that all sitemap URLs belong to the expected domain
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/sitemap-domain` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+All URLs in your sitemap should point to pages on your own domain. Cross-domain URLs in sitemaps are a configuration error - search engines will ignore URLs that don't match the sitemap's domain. Remove external URLs from your sitemap or fix the domain in URLs if they're incorrectly formatted.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/sitemap-domain"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/sitemap-domain"]
+disable = ["*"]
+```

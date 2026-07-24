@@ -1,0 +1,42 @@
+---
+title: "Social Profiles"
+description: "Checks for links to social media profiles"
+---
+
+Checks for links to social media profiles
+
+| | |
+|---|---|
+| **Rule ID** | `social/social-profiles` |
+| **Category** | [Social Media](/rules/social) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+Link to your social media profiles from your website. Include in footer or about page. Use Organization schema with sameAs property to list all official social profiles. This helps Google's Knowledge Panel and verifies your brand across platforms. Ensure links open in new tabs.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["social/social-profiles"]
+```
+
+### Disable all Social Media rules
+
+```toml squirrel.toml
+[rules]
+disable = ["social/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["social/social-profiles"]
+disable = ["*"]
+```

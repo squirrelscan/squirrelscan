@@ -1,0 +1,42 @@
+---
+title: "ARIA Hidden Focus"
+description: "Ensures aria-hidden elements do not contain focusable content"
+---
+
+Ensures aria-hidden elements do not contain focusable content
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/aria-hidden-focus` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden or make children non-focusable with tabindex='-1'.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/aria-hidden-focus"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/aria-hidden-focus"]
+disable = ["*"]
+```

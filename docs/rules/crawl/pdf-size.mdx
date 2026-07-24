@@ -1,0 +1,61 @@
+---
+title: "PDF Size"
+description: "Checks linked PDF sizes against Googlebot 60MB truncation limit"
+---
+
+Checks linked PDF sizes against Googlebot 60MB truncation limit
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/pdf-size` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 4/10 |
+
+## Solution
+
+Googlebot truncates PDFs at 60MB: content beyond that limit is ignored during indexing. Split large documents into smaller parts, compress images within PDFs, or add a noindex X-Robots-Tag header if the PDF doesn't need to appear in search results.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warn_bytes` | number | `31457280` (30MB) | Byte size to trigger warning |
+| `error_bytes` | number | `62914560` (60MB) | Byte size to trigger error (Googlebot truncation limit) |
+| `max_pdfs_to_check` | number | `50` | Maximum number of PDF links to check |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."crawl/pdf-size"]
+warn_bytes = 31457280
+error_bytes = 62914560
+max_pdfs_to_check = 50
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/pdf-size"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/pdf-size"]
+disable = ["*"]
+```

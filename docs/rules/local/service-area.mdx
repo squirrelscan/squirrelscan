@@ -1,0 +1,42 @@
+---
+title: "Service Area Pages"
+description: "Checks for service area/location pages"
+---
+
+Checks for service area/location pages
+
+| | |
+|---|---|
+| **Rule ID** | `local/service-area` |
+| **Category** | [Local SEO](/rules/local) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Solution
+
+Service area pages help rank for '[service] in [location]' searches. Create pages for each major city/area you serve. Include location-specific content, testimonials, and case studies. Use unique content - don't just swap city names. Add LocalBusiness schema with areaServed property.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["local/service-area"]
+```
+
+### Disable all Local SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["local/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["local/service-area"]
+disable = ["*"]
+```

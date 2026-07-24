@@ -1,0 +1,60 @@
+---
+title: "Cloaking / UA-Gated Content"
+description: "Detects pages that serve different content to Googlebot than to a normal visitor"
+---
+
+Detects pages that serve materially different content to a **Googlebot** user-agent than to a normal visitor (UA cloaking), or that change their response when a URL query token is added (token-gating). Both are classic ways an injected SEO-spam or phishing payload hides from the site owner while still ranking: you see a clean page, the search engine (or a tokened link) sees the payload.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/cloaking` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## How it works
+
+This rule reads the results of an **opt-in differential probe**. After the crawl, squirrelscan picks a small, capped set of **suspicious** paths, pages that are *orphaned* (no inbound internal links and absent from the sitemap) or *recently modified* (sitemap `lastmod` within a recent window), and re-fetches each one:
+
+1. with the **default** (normal-visitor) user-agent: the baseline,
+2. with a **Googlebot** user-agent, and
+3. optionally once more with an appended query token.
+
+It then compares the responses by HTTP status and visible-text similarity:
+
+- **UA cloaking** (→ failure): the Googlebot response materially diverges from the baseline: for example, the normal visitor gets a `403`/`404` while Googlebot gets a `200`, or the visible text barely overlaps.
+- **Token-gating** (→ warning): the response changes materially when a query token is appended, suggesting content gated behind a URL parameter.
+
+The probe is **off by default** and **bounded** (capped page count) so it never multiplies crawl cost. When it is off, this rule does nothing: it never reports "clean" for paths it never probed.
+
+## Enable the probe
+
+```toml squirrel.toml
+[integrity.cloaking_probe]
+enabled = true            # off by default
+max_pages = 10            # hard cap on probed paths (1–50)
+recent_days = 14          # sitemap lastmod within N days counts as "recent"
+query_variation = true    # also probe an appended query token (token-gating)
+# googlebot_user_agent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+```
+
+## Solution
+
+A page that shows search engines (or tokened links) different content than it shows you is cloaking: almost always an injected payload or a deceptive doorway, and a likely compromise. Fetch the URL yourself with a Googlebot user-agent (e.g. `curl -A 'Googlebot' <url>`) to see the hidden content, then audit recently modified files/plugins and any server-side rules that branch on user-agent or query string. Legitimate UA/geo personalization should never change the core indexable content.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/cloaking"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```

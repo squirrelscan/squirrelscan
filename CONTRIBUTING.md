@@ -13,9 +13,15 @@ bun run format:check
 bun run lint
 bun run typecheck
 bun test
+bun run docs:check
+bun run docs:build
 ```
 
 Add focused tests for behavioral changes. Keep changes scoped and avoid generated or unrelated formatting churn.
+
+Documentation source lives in `docs/`. Run `bun run docs:check` after editing links,
+navigation, or MDX content, and `bun run docs:build` before submitting structural or
+configuration changes.
 
 ## Pull requests
 

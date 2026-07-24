@@ -1,0 +1,42 @@
+---
+title: "List Structure"
+description: "Checks that ul and ol elements contain only li elements"
+---
+
+Checks that ul and ol elements contain only li elements
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/list-structure` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Lists (`<ul>` and `<ol>`) should only contain `<li>` elements as direct children. For custom components, you can also use elements with role='listitem'. Move other content inside `<li>` elements.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/list-structure"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/list-structure"]
+disable = ["*"]
+```

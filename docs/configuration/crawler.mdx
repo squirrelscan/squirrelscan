@@ -1,0 +1,872 @@
+---
+title: "Crawler Settings"
+icon: "waypoints"
+description: "Configure crawl behavior, limits, delays, and URL patterns"
+---
+
+The `[crawler]` section controls how squirrelscan discovers and fetches pages.
+
+## Configuration
+
+```toml
+[crawler]
+max_pages = 100
+delay_ms = 100
+timeout_ms = 30000
+concurrency = 5
+per_host_concurrency = 5
+per_host_delay_ms = 50
+include = []
+exclude = []
+allow_query_params = []
+drop_query_prefixes = ["utm_", "gclid", "fbclid"]
+respect_robots = false
+incremental = true
+breadth_first = true
+max_prefix_budget = 0.25
+user_agent = ""
+follow_redirects = true
+```
+
+## Crawl Limits
+
+### `max_pages`
+
+**Type:** `number`
+**Default:** `100`
+**Range:** `1` to `5000` (capped by CLI)
+
+Maximum number of pages to crawl per audit. The literal config default is `100`, but when `max_pages` isn't explicitly set the effective budget follows the [coverage mode](/crawl): `quick` = 25, `surface` = 100, `full` = 500. The default coverage mode is auth-aware: any signed-in account (free or Pro) defaults to `surface`, only anonymous runs default to `quick` (see [Coverage Modes](/cli/audit#coverage-modes)).
+
+**Examples:**
+
+Small site:
+```toml
+[crawler]
+max_pages = 50
+```
+
+Large site:
+```toml
+[crawler]
+max_pages = 2000
+```
+
+**CLI override:**
+```bash
+squirrel audit https://example.com -m 100
+```
+
+The resolution order is **`--max-pages` / `-m` > non-default `[crawler] max_pages` > coverage-mode default** (`quick` 25, `surface` 100, `full` 500).
+
+**Note:** The CLI enforces a hard cap (currently 5,000 pages) regardless of config or plan - local audits are free and unlimited, and this cap never changes based on your account. When a crawl stops because it hit the limit, the CLI prints a hint naming `--max-pages` and the cap; see [Hitting the page limit](/crawl#hitting-the-page-limit).
+
+**Cloud audits are different:** an audit dispatched from the dashboard (on-demand or [scheduled](/cloud/scheduled-audits)) is capped per plan instead - see [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit).
+
+### `coverage`
+
+**Type:** `string`
+**Default:** unset (auth-aware for `audit`; always `quick` for `crawl`)
+**Values:** `quick`, `surface`, `full`
+
+Default [coverage mode](/crawl) for crawls and audits. When unset, `audit` picks the mode by auth state (`surface` signed in, `quick` anonymous) while `crawl` always uses `quick`. Each mode sets the default page budget (`quick` 25, `surface` 100, `full` 500) and controls link discovery and cloud enrichment.
+
+```toml
+[crawler]
+coverage = "full"
+```
+
+**CLI override:**
+```bash
+squirrel audit https://example.com -C surface
+```
+
+### `max_depth`
+
+**Type:** `number`
+**Default:** unset (unlimited)
+
+Maximum crawl depth measured in link hops from the start page (seed and sitemap URLs are depth `0`; a link found on a depth-`N` page is depth `N+1`). When set, the crawler never follows links past this depth: `max_depth = 1` audits the start page plus the pages it links to directly. Unset leaves crawling depth-unbounded (the page budget still applies).
+
+```toml
+[crawler]
+max_depth = 2
+```
+
+**CLI override:**
+```bash
+squirrel audit https://example.com --max-depth 2
+```
+
+The resolution order is **`--max-depth` > `[crawler] max_depth` > unlimited**.
+
+---
+
+### `timeout_ms`
+
+**Type:** `number`
+**Default:** `30000` (30 seconds)
+**Range:** `1000` to `60000` recommended
+
+Timeout for each page request in milliseconds.
+
+**Examples:**
+
+Fast timeout for quick sites:
+```toml
+[crawler]
+timeout_ms = 10000  # 10 seconds
+```
+
+Slow sites or APIs:
+```toml
+[crawler]
+timeout_ms = 45000  # 45 seconds
+```
+
+**When request exceeds timeout:**
+- Page marked as failed
+- Crawl continues with next URL
+- Logged in error output
+
+---
+
+## Rate Limiting
+
+### `delay_ms`
+
+**Type:** `number`
+**Default:** `100` (100ms)
+
+Base delay between requests in milliseconds.
+
+**Examples:**
+
+Fast crawl (be careful):
+```toml
+[crawler]
+delay_ms = 50
+```
+
+Polite crawl:
+```toml
+[crawler]
+delay_ms = 500
+```
+
+No delay (local development only):
+```toml
+[crawler]
+delay_ms = 0
+```
+
+**Note:** Actual delays depend on `per_host_delay_ms` and concurrency settings.
+
+---
+
+### `per_host_delay_ms`
+
+**Type:** `number`
+**Default:** `50` (50ms)
+
+Minimum delay between consecutive request **starts** to the same host. Request
+starts stagger independently, so up to `per_host_concurrency` requests can be in
+flight at once while still spacing new requests apart for politeness.
+
+A `Crawl-delay` directive in the target's `robots.txt` overrides this value
+only when [`respect_robots`](#respect_robots) is `true`, and is capped at 2
+seconds even then.
+
+**Examples:**
+
+Very polite:
+```toml
+[crawler]
+per_host_delay_ms = 1000  # 1 second
+```
+
+**How it works:**
+
+With `per_host_concurrency = 5` and `per_host_delay_ms = 50`:
+- At most 5 concurrent requests to same host
+- New requests to the host start at least 50ms apart
+- Other hosts can be fetched simultaneously
+
+---
+
+### `concurrency`
+
+**Type:** `number`
+**Default:** `5`
+**Range:** `1` to `20` recommended
+
+Maximum number of concurrent requests globally.
+
+**Examples:**
+
+Sequential (single request at a time):
+```toml
+[crawler]
+concurrency = 1
+```
+
+Moderate parallelism:
+```toml
+[crawler]
+concurrency = 10
+```
+
+High parallelism (use cautiously):
+```toml
+[crawler]
+concurrency = 20
+```
+
+**Impact:**
+- Higher = faster crawls
+- Higher = more server load
+- Bounded by `per_host_concurrency`
+
+---
+
+### `per_host_concurrency`
+
+**Type:** `number`
+**Default:** `5`
+**Range:** `1` to `8` recommended
+
+Maximum number of concurrent requests per host.
+
+Prevents overwhelming a single server even with high global concurrency.
+
+**Examples:**
+
+One request per host at a time:
+```toml
+[crawler]
+per_host_concurrency = 1
+```
+
+Allow more parallel requests:
+```toml
+[crawler]
+per_host_concurrency = 4
+```
+
+**How it interacts with `concurrency`:**
+
+```toml
+[crawler]
+concurrency = 10
+per_host_concurrency = 2
+```
+
+- Up to 10 total concurrent requests
+- At most 2 concurrent requests to any single host
+- Can fetch from up to 5 different hosts simultaneously
+
+**Command-line overrides:**
+
+Both `squirrel audit` and `squirrel crawl` accept `--concurrency <n>` and
+`--per-host <n>` (positive integers) to set these per run without a config file.
+They take precedence over `[crawler] concurrency` / `per_host_concurrency`.
+
+```bash
+squirrel audit https://example.com --concurrency 10 --per-host 4
+squirrel crawl https://example.com --concurrency 10 --per-host 4
+```
+
+**Localhost fast path:**
+
+When the target is a loopback host (`localhost`, `*.localhost`, `127.0.0.1`,
+`::1`), which is your own dev server, the crawler skips politeness throttling and
+runs at raised concurrency with no per-host delay.
+
+`squirrel crawl` never renders, so the fast path applies to every loopback crawl.
+For `squirrel audit` it applies to **plain-HTTP crawls only**: anonymous runs,
+`--offline`, or `--http` / `--render-mode off`. When cloud browser rendering is
+active (the default for signed-in users on `surface` / `full` coverage), each
+page is a credit-priced render governed by your plan's render concurrency, so the
+loopback boost does not apply there. On either command, it's also suppressed
+when you set `concurrency`, `per_host_concurrency`, or `per_host_delay_ms`
+explicitly (via flags or config). Use `--debug` to see whether the fast path
+engaged.
+
+---
+
+## URL Filtering
+
+### `include`
+
+**Type:** `string[]`
+**Default:** `[]` (empty = include all URLs from seed domain)
+
+URL patterns to include. If set, **only** matching URLs are crawled.
+
+**Pattern Syntax:**
+
+Uses glob syntax:
+- `*` - Match anything except `/`
+- `**` - Match anything including `/`
+- `?` - Match single character
+- `[abc]` - Match character set
+
+**Examples:**
+
+Only crawl blog:
+```toml
+[crawler]
+include = ["/blog/**"]
+```
+
+Multiple sections:
+```toml
+[crawler]
+include = ["/blog/**", "/docs/**", "/products/**"]
+```
+
+Specific file types:
+```toml
+[crawler]
+include = ["*.html", "*.htm"]
+```
+
+**Important:** When `include` is set, it **overrides** the `domains` setting in `[project]`.
+
+---
+
+### `exclude`
+
+**Type:** `string[]`
+**Default:** `[]` (empty = exclude nothing)
+
+URL patterns to exclude from crawling.
+
+Takes precedence over `include` - if a URL matches both, it's excluded.
+
+**Examples:**
+
+Exclude admin areas:
+```toml
+[crawler]
+exclude = ["/admin/**", "/wp-admin/**"]
+```
+
+Exclude file types:
+```toml
+[crawler]
+exclude = ["*.pdf", "*.zip", "*.tar.gz"]
+```
+
+Exclude API endpoints:
+```toml
+[crawler]
+exclude = ["/api/**", "/v1/**"]
+```
+
+Exclude query parameters:
+```toml
+[crawler]
+exclude = ["*?preview=*", "*?draft=*"]
+```
+
+**Common exclusions:**
+
+```toml
+[crawler]
+exclude = [
+  "/admin/**",
+  "/wp-admin/**",
+  "/wp-content/**",
+  "/api/**",
+  "*.pdf",
+  "*.zip",
+  "*.jpg",
+  "*.png",
+  "*?preview=*",
+  "*?print=*"
+]
+```
+
+---
+
+### Pattern Matching Examples
+
+| Pattern | Matches | Doesn't Match |
+|---------|---------|---------------|
+| `/blog/*` | `/blog/post` | `/blog/post/comment` |
+| `/blog/**` | `/blog/post`, `/blog/post/comment` | `/about` |
+| `*.pdf` | `/file.pdf`, `/docs/guide.pdf` | `/file.html` |
+| `*?preview=*` | `/page?preview=true` | `/page` |
+| `/api/*/users` | `/api/v1/users` | `/api/v1/v2/users` |
+
+---
+
+## Query Parameters
+
+### `allow_query_params`
+
+**Type:** `string[]`
+**Default:** `[]` (empty = drop all query params for deduplication)
+
+Query parameters to preserve during URL deduplication.
+
+**Why this matters:**
+
+URLs are deduplicated before crawling:
+- `/page?id=1&utm_source=google` → `/page?id=1` (utm dropped)
+
+Without configuration, all query params are dropped except those in `allow_query_params`.
+
+**Examples:**
+
+Preserve pagination:
+```toml
+[crawler]
+allow_query_params = ["page"]
+```
+
+Preserve filters:
+```toml
+[crawler]
+allow_query_params = ["category", "sort", "filter", "q"]
+```
+
+Preserve all query params:
+```toml
+[crawler]
+allow_query_params = ["*"]
+```
+
+**Use case:**
+
+E-commerce site with filters:
+```toml
+[crawler]
+allow_query_params = ["category", "price", "brand", "page"]
+```
+
+This preserves:
+- `/products?category=shoes` ✓
+- `/products?category=shoes&page=2` ✓
+
+This drops:
+- `/products?utm_source=google` ✗ (becomes `/products`)
+- `/products?gclid=abc123` ✗ (becomes `/products`)
+
+---
+
+### `drop_query_prefixes`
+
+**Type:** `string[]`
+**Default:** `["utm_", "gclid", "fbclid"]`
+
+Query parameter prefixes to always drop, even if in `allow_query_params`.
+
+**Default tracking params dropped:**
+- `utm_*` - Google Analytics (utm_source, utm_medium, etc.)
+- `gclid` - Google Ads
+- `fbclid` - Facebook Ads
+
+**Examples:**
+
+Drop more tracking params:
+```toml
+[crawler]
+drop_query_prefixes = [
+  "utm_",
+  "gclid",
+  "fbclid",
+  "mc_",       # Mailchimp
+  "_ga",       # Google Analytics
+  "ref",       # Referrer
+  "source"     # Generic source tracking
+]
+```
+
+Drop nothing:
+```toml
+[crawler]
+drop_query_prefixes = []
+```
+
+---
+
+## Crawl Strategy
+
+### `breadth_first`
+
+**Type:** `boolean`
+**Default:** `true`
+
+Use breadth-first crawling for better site coverage.
+
+**Breadth-first (default):**
+- Crawls level-by-level
+- Discovers homepage, then all links from homepage, then all links from those pages
+- Better site coverage
+- Avoids getting stuck in deep paths
+
+**Depth-first (`false`):**
+- Crawls as deep as possible before backtracking
+- Can get stuck in deep sections
+- Less even coverage
+
+**Example:**
+
+Disable breadth-first:
+```toml
+[crawler]
+breadth_first = false
+```
+
+**Recommendation:** Keep `true` (default) for most sites.
+
+---
+
+### `max_prefix_budget`
+
+**Type:** `number`
+**Default:** `0.25` (25%)
+**Range:** `0.1` to `1.0`
+
+Maximum percentage of crawl budget for any single path prefix.
+
+Prevents the crawler from spending all pages on one section (e.g., `/blog/` with 1000+ posts).
+
+**How it works:**
+
+With `max_pages = 500` and `max_prefix_budget = 0.25`:
+- At most 125 pages (25%) from any single path prefix
+- Ensures diverse coverage across site sections
+
+**Examples:**
+
+More strict (better coverage):
+```toml
+[crawler]
+max_prefix_budget = 0.15  # Max 15% per prefix
+```
+
+More lenient (deeper coverage):
+```toml
+[crawler]
+max_prefix_budget = 0.5   # Max 50% per prefix
+```
+
+**Disable budget (not recommended):**
+```toml
+[crawler]
+max_prefix_budget = 1.0   # No limit
+```
+
+**Use case:**
+
+Site with large blog:
+```
+/blog/post-1
+/blog/post-2
+...
+/blog/post-5000
+/about
+/contact
+```
+
+With `max_prefix_budget = 0.25` and `max_pages = 500`:
+- At most 125 blog posts crawled
+- Remaining budget for other sections
+
+---
+
+## Request Configuration
+
+### `user_agent`
+
+**Type:** `string`
+**Default:** `""` (empty = random browser user agent, pinned per project)
+
+Custom user agent string.
+
+**Default behavior (empty string):**
+
+A random modern browser user agent is drawn on the first crawl and pinned to the project, so every later run reuses the same one:
+```
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+```
+
+Pinning keeps the served markup stable between runs (sites often vary HTML by user agent, e.g. mobile themes), which keeps incremental crawls and render caches effective. Pass `--fresh-ua` to `squirrel audit` or `squirrel crawl` to draw a new one; the new user agent replaces the pin for later runs. Setting an explicit `user_agent` always overrides the pin.
+
+**Examples:**
+
+Custom user agent:
+```toml
+[crawler]
+user_agent = "SquirrelScan Bot (https://squirrelscan.com)"
+```
+
+Mobile user agent:
+```toml
+[crawler]
+user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
+```
+
+**Recommendation:** Leave empty (default) for best results with bot protection.
+
+---
+
+### `headers`
+
+**Type:** `table` (map of header name → value)
+**Default:** `{}` (no custom headers)
+
+Custom HTTP request headers attached to **every** crawl request: pages, assets,
+`robots.txt`, sitemaps, `llms.txt`, and markdown probes. Use this to authorize
+the crawler with schemes that require signed headers, such as
+[Web Bot Auth](/guides/web-bot-auth) (used by Shopify and Cloudflare).
+
+```toml
+[crawler]
+headers = { "Signature-Agent" = "\"https://shopify.com\"", "Signature-Input" = "...", "Signature" = "..." }
+```
+
+**CLI override:**
+
+```bash
+squirrel audit https://example.com \
+  -H 'Signature-Agent: "https://shopify.com"' \
+  -H 'Signature-Input: sig1=("@authority");keyid="..."' \
+  -H 'Signature: sig1=:...:'
+```
+
+The repeatable `--header` / `-H` flag takes a `Name: Value` string (split on the
+first colon, so values may contain colons). CLI headers **merge over** the TOML
+`[crawler] headers` map; a flag with the same name wins. Quoting is preserved
+verbatim, so `Signature-Agent: "https://shopify.com"` keeps its quotes
+end-to-end.
+
+<Warning>
+  Header values are treated as **secrets**. squirrelscan never echoes them in CLI
+  output or logs; the audit preamble shows header **names** only
+  (`Headers: Signature-Agent: <redacted>`). Avoid committing real signature
+  values to a shared `squirrel.toml`; prefer the `-H` flag in CI with the values
+  sourced from secrets.
+</Warning>
+
+**Cloud audits:** applying custom headers to dashboard **cloud** audits is a
+**Pro** feature. Set them per-website under **Settings → Crawl → Custom request
+headers**; free plans receive `403 upgrade_required`. The render worker applies
+them to the headless browser via `setExtraHTTPHeaders`, so they ride every
+request the rendered page makes.
+
+---
+
+### `follow_redirects`
+
+**Type:** `boolean`
+**Default:** `true`
+
+Follow HTTP 3xx redirects.
+
+**When `true` (default):**
+- Follows redirects automatically
+- Crawls final destination URL
+- Redirect chains tracked for analysis
+
+**When `false`:**
+- Stops at redirect
+- Does not fetch redirect destination
+- Useful for debugging redirect issues
+
+**Example:**
+
+Disable redirect following:
+```toml
+[crawler]
+follow_redirects = false
+```
+
+**Recommendation:** Keep `true` (default) for normal audits.
+
+---
+
+## Robots.txt
+
+squirrelscan always fetches and parses `/robots.txt`, regardless of
+`respect_robots` below: it's used for sitemap discovery (`Sitemap:`
+directives) and the `crawl/robots-txt` audit rule.
+
+### `respect_robots`
+
+**Type:** `boolean`
+**Default:** `false`
+
+Enforce robots.txt `Disallow:` rules and honor its `Crawl-delay:` directive.
+
+**When `false` (default):**
+- robots.txt is still fetched and parsed (for sitemaps + the audit rule)
+- `Disallow:` rules are **not** enforced — all in-scope URLs are crawled
+- `Crawl-delay:` is ignored — `per_host_delay_ms` applies instead
+- squirrelscan audits are something you run against your own site, not an
+  uninvited crawl, so directives aimed at bots don't apply unless you opt in
+
+**When `true`:**
+- Respects `Disallow:` rules for the `SquirrelScan` and `*` user agents
+- Honors `Crawl-delay:`, capped at 2 seconds even if the directive asks for
+  longer
+
+**Example:**
+
+Enforce robots.txt (auditing a site you don't own):
+```toml
+[crawler]
+respect_robots = true
+```
+
+**Recommendation:** Turn this on when auditing a third-party site, or when you
+want a fully compliant crawl. Leave it off (default) for your own sites.
+
+**Cloud audits:** the per-website toggle under **Settings → Crawl → Respect
+robots.txt** applies the same enforcement to dashboard **cloud** audits. It
+defaults to off, matching the CLI default above.
+
+---
+
+## Crawling politely & re-scanning efficiently
+
+squirrelscan is designed to be a good guest on the sites it audits. Two
+mechanisms keep load low: **politeness controls** (how fast it fetches) and
+**incremental re-scanning** (avoiding re-downloading pages that haven't changed).
+
+### `incremental`
+
+**Type:** `boolean`
+**Default:** `true`
+
+Re-scan only pages that changed since the last crawl. When enabled, the crawler
+records each page's `ETag` and `Last-Modified` response headers (plus a content
+hash) and, on the next audit of the same site, sends conditional requests
+(`If-None-Match` / `If-Modified-Since`). Unchanged pages return a lightweight
+`304 Not Modified`: no body is transferred and the cached content is reused.
+
+This is the answer to "incremental vs full scans so I don't overwhelm the host":
+incremental crawling is **on by default**, so repeat audits re-download only what
+actually changed.
+
+- **First audit of a site:** there's nothing cached yet, so every page is fetched
+  in full; incremental has no effect on a cold run.
+- **Repeat audits:** unchanged pages come back as `304`s, cutting bandwidth and
+  load on the target server.
+
+```toml
+[crawler]
+incremental = true
+```
+
+**CLI overrides:**
+
+```bash
+# Force incremental on for this run — overrides a project config with incremental = false
+squirrel audit https://example.com --incremental
+
+# Disable conditional requests — fetch every page in full
+squirrel audit https://example.com --no-incremental
+
+# Full re-scan, ignoring all cached content (alias for a cold crawl)
+squirrel audit https://example.com --refresh
+```
+
+The resolution order is **`--refresh` (always full) > `--incremental` /
+`--no-incremental` > `[crawler] incremental` (default `true`)**. `--refresh` also
+ignores the cross-audit freshness cache (see `use_cache_control`), so use it when
+you want a guaranteed clean re-fetch.
+
+### Politeness checklist
+
+For a gentle crawl of a third-party site, combine incremental re-scanning with
+the rate-limit and robots controls documented above:
+
+- `respect_robots`: obey `robots.txt` and its `Crawl-delay` (set `true`; default `false`).
+- `per_host_delay_ms`: space out requests to a single host.
+- `per_host_concurrency`: cap simultaneous requests per host.
+- `delay_ms` / `concurrency`: global pacing.
+- `incremental`: skip re-downloading unchanged pages on repeat audits.
+
+A `Crawl-delay` directive in the target's `robots.txt` overrides
+`per_host_delay_ms` only when `respect_robots = true`, and is capped at 2
+seconds even then.
+
+### What squirrelscan does *not* access
+
+squirrelscan crawls **public HTTP only**: the same pages a browser or search
+engine bot would see. It does not read server logs, databases, or any
+authenticated/internal source, and it requires no access beyond what the public
+site serves. Scanning protected or internal sources is **not currently
+supported**; if you need it, please open an issue describing your use case so it
+can be scoped separately.
+
+---
+
+## Complete Examples
+
+### Fast Local Development
+
+```toml
+[crawler]
+max_pages = 50
+delay_ms = 0
+per_host_delay_ms = 0
+concurrency = 10
+respect_robots = false
+```
+
+### Polite Production Crawl
+
+```toml
+[crawler]
+max_pages = 500
+delay_ms = 200
+per_host_delay_ms = 500
+concurrency = 5
+per_host_concurrency = 2
+respect_robots = true
+```
+
+### High-Volume Crawl
+
+```toml
+[crawler]
+max_pages = 2000
+delay_ms = 100
+per_host_delay_ms = 200
+concurrency = 10
+per_host_concurrency = 3
+breadth_first = true
+max_prefix_budget = 0.2
+```
+
+### Focused Blog Crawl
+
+```toml
+[crawler]
+max_pages = 200
+include = ["/blog/**"]
+exclude = ["*.pdf", "/blog/drafts/**"]
+allow_query_params = ["page"]
+```
+
+### E-commerce Site
+
+```toml
+[crawler]
+max_pages = 1000
+include = ["/products/**", "/categories/**"]
+exclude = ["/cart/**", "/checkout/**", "/account/**"]
+allow_query_params = ["category", "sort", "page", "filter"]
+drop_query_prefixes = ["utm_", "gclid", "fbclid", "ref"]
+```
+
+## Related
+
+- [Project Settings](/configuration/project) - Domains configuration
+- [Rules Configuration](/configuration/rules) - Which rules to run
+- [Examples](/configuration/examples) - More configuration examples

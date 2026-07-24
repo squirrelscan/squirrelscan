@@ -1,0 +1,100 @@
+---
+title: "Cloud audits"
+description: "Log in, spend credits pay-as-you-go, and run cloud audits from the CLI, dashboard, or MCP with a shared issue tracker and published reports"
+icon: "cloud"
+---
+
+Cloud audits add what your machine can't do on its own: AI page analysis, technology detection, browser rendering for JavaScript-heavy sites, a per-website issue tracker, and shareable published reports. This guide gets you logged in, explains how credits work, and shows the three ways to run a cloud audit.
+
+Everything here builds on the free [local audit](/guides/local-audits-cli). The cloud runs the same rules and adds the cloud-only ones on top.
+
+## Log in
+
+Sign in once so your audits can reach the cloud:
+
+```bash
+squirrel auth login
+```
+
+This opens your browser to sign in. What runs next depends on the audit's coverage mode. Once you are signed in (free or Pro), audits default to `surface` coverage, which runs the cloud rules and merges their results into the same report as the local rules, spending credits as they run. Only anonymous, logged-out runs default to `quick`. Want a fast, free scan while signed in? Pass `-C quick`. Free accounts get 500 credits a month to spend; Pro includes 3,000. See [`squirrel auth`](/cli/auth) for API-key auth and credential precedence, and [`squirrel audit`](/cli/audit#coverage-modes) for the coverage modes.
+
+## Credits are pay-as-you-go
+
+Cloud features are priced in credits, small integers rather than dollars. Nothing is charged up front: credits are spent while an audit runs. Local audits never cost credits.
+
+Free accounts get **500 credits every month**, no card required; Pro includes 3,000. Check your balance and pricing anytime:
+
+```bash
+squirrel credits
+```
+
+An audit costs 50 credits base plus 2 per rendered page, everything included, so a typical 25-page audit costs 100 credits. Full pricing, plans, and top-ups are in [Credits and pricing](/cloud/credits).
+
+<Tip>
+You stay in control of spend. A per-audit cap (`max_credits_per_audit`) truncates work deterministically at the ceiling, and estimates above `confirm_threshold` prompt before spending. See [Spend controls](/cloud/credits#spend-controls).
+</Tip>
+
+## Run a cloud audit, three ways
+
+The audit is the same underneath. Pick whichever surface fits how you work.
+
+<Tabs>
+  <Tab title="CLI">
+    Run an audit with the cloud rules included. Signed in, the default `surface` coverage already runs them (and, when relevant, pages render in a cloud browser); the flag below just makes it explicit:
+
+    ```bash
+    squirrel audit https://example.com -C surface
+    ```
+
+    The start banner shows the estimated spend against your balance. See [`squirrel audit`](/cli/audit).
+  </Tab>
+  <Tab title="Dashboard">
+    Trigger a run from [app.squirrelscan.com](https://app.squirrelscan.com): open a website and use its Run dialog. Cloud audits use the website's own [audit settings](/dashboard/audit-settings) (which rules run, external link checking, the spend cap), not your local `squirrel.toml`.
+  </Tab>
+  <Tab title="MCP">
+    Your agent runs the audit as a tool call. Point any MCP client at the [hosted MCP server](/developers/mcp) and it calls `run_audit` with the URL, confirms the credit estimate, then polls `get_audit_status` and reads the report. The full agent workflow is in [Fix your website with an AI agent](/guides/fix-your-site-with-an-ai-agent).
+  </Tab>
+</Tabs>
+
+## The per-website issue tracker
+
+Cloud audits register the website and keep a tracker of its open issues, so findings persist across runs instead of scrolling past in your terminal. This is the backbone of the fix loop: an issue stays open until a later audit finds its rule no longer firing, then it closes on its own.
+
+You work the tracker in the [dashboard](/dashboard), or your agent works it over MCP with `list_issues`, `get_issue`, and `comment_on_issue`. Recording a decision on an issue (why you are not fixing something, or what a fix changed) keeps the context with the finding for your team and the next audit.
+
+## Published reports
+
+When you are signed in and online, every audit auto-publishes to your dashboard as an **unlisted** report, giving you a shareable link plus issue history with no extra flags. Publishing is included in the audit base charge, whatever the visibility.
+
+```bash
+# signed in: auto-publishes (unlisted) and prints the URL
+squirrel audit https://example.com
+
+# make it public and listed
+squirrel audit https://example.com --visibility public
+```
+
+Opt out of a single run with `--no-publish`, or turn it off for the project with `[cloud] publish = false`. Published reports are available in HTML, JSON, Markdown, plain text, XML, and the LLM format by appending an extension to the report URL. See [Reports and scoring](/reports#publishing-reports) for the details.
+
+## The dashboard
+
+[app.squirrelscan.com](https://app.squirrelscan.com) is where your cloud work lives:
+
+- Published reports with health scores, and visibility controls (public, unlisted, private).
+- The issue tracker for each website.
+- Per-website [audit settings](/dashboard/audit-settings): rule selection, external link checking, and the spend cap.
+- Billing and credits.
+
+See the [Dashboard](/dashboard) guide for a tour.
+
+## Keep audits running on a schedule
+
+Instead of remembering to re-audit, have the cloud do it. Scheduled audits re-run a site daily, weekly, or monthly and update its tracker automatically, so regressions surface without you lifting a finger. A scheduled run that would exceed the website's spend cap is skipped with a notification, never a surprise bill. See [Scheduled audits](/cloud/scheduled-audits).
+
+## Related
+
+- [Cloud overview](/cloud) - what the cloud adds on top of local audits
+- [Credits and pricing](/cloud/credits) - costs, plans, and spend controls
+- [Hosted MCP server](/developers/mcp) - run cloud audits from your agent
+- [Browser rendering](/guides/browser-rendering) - audit JavaScript-heavy sites
+- [Fix your website with an AI agent](/guides/fix-your-site-with-an-ai-agent) - the full agent fix loop

@@ -1,0 +1,60 @@
+---
+title: "mcp"
+icon: "plug"
+description: "Run the local MCP server so agents can drive squirrelscan"
+---
+
+The `mcp` command starts a local [Model Context Protocol](https://modelcontextprotocol.io) server over stdio. Agents like Claude Code and Cursor launch it to call squirrelscan's audit engine and cloud features as tools.
+
+<Info>
+Prefer the **hosted MCP server** for most work: point any client at `https://mcp.squirrelscan.com/mcp` with nothing to install and no local process to run. See the [Hosted MCP server](/developers/mcp) guide. The local stdio server below is the offline, unmetered alternative: free local audits, no account, no network needed.
+</Info>
+
+## Usage
+
+```bash
+squirrel mcp
+```
+
+The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarely run it directly. Your agent spawns it from its MCP config. See the [MCP Server guide](/developers/mcp) for connect instructions.
+
+## Tools
+
+| Tool | Auth | Description |
+|------|------|-------------|
+| `audit_website` | None | Full deterministic audit of a URL; cloud enrichment added when logged in. |
+| `quick_check` | None | Fast, local-only single-pass health check of one URL. |
+| `list_rules` | None | List all built-in audit rules. |
+| `get_rule` | None | Full definition of one rule by id. |
+| `list_audits` | Login | Your org's running/pending audits. Prints a one-line `⚠ Page limit: ...` warning for any run whose page count was clamped to the plan's ceiling. |
+| `get_report` | Login | Fetch a published report by audit id. |
+| `list_issues` | Login | Supplant-aware issue state for a website. |
+| `get_issue` | Login | A single issue by website + number. |
+| `comment_on_issue` | Login | Comment on an audit issue. |
+
+## Authentication for agent/CI use
+
+Tools marked "Login" above need a credential to reach the squirrelscan API. The local server reuses the same [token resolution](/developers/authentication) as the rest of the CLI: it checks `SQUIRRELSCAN_API_KEY` (or the older `SQUIRREL_API_TOKEN` alias) first, then falls back to a `squirrel auth login` session.
+
+For a headless agent or CI runner that spawns `squirrel mcp` without ever calling `squirrel auth login`, set the env var on the process:
+
+```bash
+SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx squirrel mcp
+```
+
+If neither the env var nor a login session is present, an authed tool call returns a clear error naming both fixes instead of a generic failure. A call that's denied for lacking a scope (e.g. an `audits:read`-only key calling a write tool) names the missing scope in the error text as well.
+
+<Info>
+That error is a structured tool result, part of the normal JSON-RPC response on stdout. All other server output, logs and diagnostics, goes to stderr; stdout carries only the JSON-RPC stream.
+</Info>
+
+## Quick start with Claude Code
+
+```bash
+claude mcp add squirrelscan -- squirrel mcp
+```
+
+## Related
+
+- [MCP Server](/developers/mcp): full connect guide for Claude Code, Cursor, and other clients
+- [Using with Agents](/developers/agents): skills-based integration

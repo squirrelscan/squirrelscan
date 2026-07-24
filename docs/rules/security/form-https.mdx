@@ -1,0 +1,42 @@
+---
+title: "Form HTTPS"
+description: "Checks that form actions use HTTPS"
+---
+
+Checks that form actions use HTTPS
+
+| | |
+|---|---|
+| **Rule ID** | `security/form-https` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Forms should always submit to HTTPS URLs to protect user data in transit. Update form action attributes from http:// to https://. For relative URLs, ensure the page itself is on HTTPS. Be especially careful with login forms, payment forms, and any forms collecting personal data. Browsers may warn users about insecure form submissions.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/form-https"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/form-https"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Broken External Links"
+description: "Detects external links returning 4xx/5xx errors or timeouts"
+---
+
+Detects external links returning 4xx/5xx errors or timeouts
+
+| | |
+|---|---|
+| **Rule ID** | `links/broken-external-links` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Broken external links hurt user experience and credibility. Regularly audit external links using automated tools. Remove or replace broken links with working alternatives. Consider using archived versions (archive.org) if the original content is gone. For important resources, consider hosting your own copies of critical documentation or linking to more stable sources.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/broken-external-links"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/broken-external-links"]
+disable = ["*"]
+```

@@ -1,0 +1,42 @@
+---
+title: "Share Buttons"
+description: "Checks for social sharing buttons on content pages"
+---
+
+Checks for social sharing buttons on content pages
+
+| | |
+|---|---|
+| **Rule ID** | `social/share-buttons` |
+| **Category** | [Social Media](/rules/social) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Solution
+
+Social share buttons encourage content sharing and can drive traffic. Place them prominently on blog posts, articles, and shareable content. Include major platforms: Facebook, Twitter/X, LinkedIn. Consider sticky share bars for long content. Avoid too many buttons - 3-4 is optimal.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["social/share-buttons"]
+```
+
+### Disable all Social Media rules
+
+```toml squirrel.toml
+[rules]
+disable = ["social/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["social/share-buttons"]
+disable = ["*"]
+```

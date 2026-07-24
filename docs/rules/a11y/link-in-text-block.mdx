@@ -1,0 +1,42 @@
+---
+title: "Link in Text Block"
+description: "Checks that links in text blocks are visually distinguishable"
+---
+
+Checks that links in text blocks are visually distinguishable
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/link-in-text-block` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Links within text blocks must be distinguishable by more than just color (for color-blind users). Use underlines, bold, borders, or other visual indicators. Exception: Links can rely on color alone if the contrast ratio between link and surrounding text is at least 3:1 and you provide additional cues on hover/focus.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/link-in-text-block"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/link-in-text-block"]
+disable = ["*"]
+```

@@ -1,0 +1,44 @@
+---
+title: "Archive Indexing"
+description: "Checks whether the site is present in the Wayback Machine and the Common Crawl index, the archives that feed AI training corpora"
+---
+
+Checks whether your domain is present in the two web archives that matter for AI visibility: the **Wayback Machine** (Internet Archive) and the **Common Crawl index**. Common Crawl is a primary training and discovery corpus for the major AI labs, so a site absent from it is invisible to every model trained on it.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/archive-indexing` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 1/10 |
+
+<Note>This is a **cloud check**: it runs the archive lookups through the squirrelscan API (credit-gated, `archive_indexing`). Results are cached per domain — a repeat audit inside the cache window is a free hit. Negative results re-check after 7 days (a site can get archived any week); positive results after 30. Logged-out CLI audits skip it gracefully.</Note>
+
+## What it checks
+
+Two independent lookups per domain:
+
+- **Wayback Machine**: does at least one snapshot of the site exist, and how recent is the latest capture?
+- **Common Crawl**: does the domain appear in the most recent Common Crawl collection?
+
+These are separate corpora. Common Crawl runs its own crawler (**CCBot**), and the Internet Archive *ingests* Common Crawl's data — so a Wayback snapshot does **not** prove Common Crawl inclusion, and each is checked directly against its own index.
+
+The rule warns when:
+
+- the domain is **not in the Common Crawl index** — the check with real teeth, since CC feeds AI training sets,
+- the domain has **no Wayback snapshot at all** — a strong signal archive crawlers can't reach or discover the site,
+- either archive's latest capture is **more than a year old** — the archives only have a stale copy of you.
+
+## Why it matters
+
+Being in Common Crawl is the closest thing to a checkbox for "will AI models know this site exists". The major labs build training sets on top of CC-derived corpora, and some agent discovery pipelines consult the same indexes. A site that blocks or evades the archive crawlers opts out of all of that at once — usually by accident, via a WAF rule or an over-broad robots.txt.
+
+The Wayback Machine matters for the same reason plus one more: it is the public record of your site. No snapshot at all almost always means a crawlability problem, not a policy choice.
+
+## Solution
+
+1. **Allow the archive crawlers in robots.txt.** Make sure `CCBot` (Common Crawl) and `ia_archiver` / `archive.org_bot` (Internet Archive) are not disallowed — the [`ax/ai-crawlers`](/rules/ax/ai-crawlers) rule checks this. Blocking CCBot opts you out of every model trained on Common Crawl, not just one vendor.
+2. **Check your WAF/CDN bot rules.** Challenge pages block archive crawlers just as effectively as robots.txt.
+3. **Seed a Wayback snapshot** at [web.archive.org/save](https://web.archive.org/save) — this is instant and free.
+4. **Wait for the next crawl** for Common Crawl: there is no manual submission. CC crawls roughly monthly and discovers sites through links, so being crawlable and linked from indexed pages is what gets you in.

@@ -1,0 +1,42 @@
+---
+title: "Meta Tags in Body"
+description: "Detects meta tags incorrectly placed in document body"
+---
+
+Detects meta tags incorrectly placed in document body
+
+| | |
+|---|---|
+| **Rule ID** | `content/meta-in-body` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Move all meta tags from `<body>` to `<head>`. Meta tags in the body are ignored by browsers and search engines. Common offenders: meta description, viewport, robots, and Open Graph tags. This is often caused by incorrect HTML structure or dynamic rendering issues.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/meta-in-body"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/meta-in-body"]
+disable = ["*"]
+```

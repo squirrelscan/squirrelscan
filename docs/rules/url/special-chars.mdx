@@ -1,0 +1,42 @@
+---
+title: "URL Special Characters"
+description: "Checks for problematic special characters in URL path"
+---
+
+Checks for problematic special characters in URL path
+
+| | |
+|---|---|
+| **Rule ID** | `url/special-chars` |
+| **Category** | [URL Structure](/rules/url) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Avoid special characters in URL paths. Characters like %, &, #, ?, = have special meanings and can cause issues. Spaces should be avoided (they become %20). Use only lowercase letters, numbers, and hyphens. Special characters can break links when copied, cause encoding issues, and look unprofessional. URL-encode if unavoidable.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["url/special-chars"]
+```
+
+### Disable all URL Structure rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["url/special-chars"]
+disable = ["*"]
+```

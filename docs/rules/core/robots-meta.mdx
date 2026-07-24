@@ -1,0 +1,42 @@
+---
+title: "Robots Meta"
+description: "Checks robots meta tag for indexing directives"
+---
+
+Checks robots meta tag for indexing directives
+
+| | |
+|---|---|
+| **Rule ID** | `core/robots-meta` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+The robots meta tag controls how search engines index and follow links on a page. Common directives include noindex, nofollow, noarchive, and nosnippet. If your page has noindex, it won't appear in search results. Review whether this is intentional. For pages that should be indexed, remove the noindex directive or change to "index, follow". Be careful with nofollow as it prevents link equity from flowing to linked pages.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/robots-meta"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/robots-meta"]
+disable = ["*"]
+```

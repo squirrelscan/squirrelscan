@@ -1,0 +1,299 @@
+---
+title: "auth"
+icon: "log-in"
+description: "Authenticate with squirrelscan for cloud features and publishing"
+---
+
+The `auth` command manages authentication for [cloud features](/cloud) - cloud rules, browser rendering, and publishing reports. Every account gets 500 free credits each month, no card required.
+
+There are two ways to authenticate:
+
+- **`squirrel auth login`**: interactive browser sign-in, tied to your user. Best for local development.
+- **`SQUIRRELSCAN_API_KEY` env var**: a long-lived, org-scoped API key. Best for CI, headless agents, and automation. See [API token](#api-token-ci--headless).
+
+## Subcommands
+
+- [login](#login) - Sign in to squirrelscan
+- [logout](#logout) - Sign out and revoke token
+- [status](#status) / [whoami](#whoami) - Show the active credential (source, scopes, org)
+- [`squirrel keys`](/cli/keys) - Mint, list, and revoke org API keys without leaving the terminal
+
+---
+
+## API token (CI / headless)
+
+For CI and headless use, set the `SQUIRRELSCAN_API_KEY` environment variable to an
+**org API key**. Mint one from the terminal with
+[`squirrel keys create`](/cli/keys#create), or from the
+[dashboard](https://app.squirrelscan.com/settings/api-keys). No `squirrel auth
+login` is required at run time: the token is read straight from the environment.
+
+```bash
+SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx squirrel audit https://example.com
+```
+
+<Note>
+The older `SQUIRREL_API_TOKEN` name still works as a back-compat alias, no
+deprecation warning, it just works. `SQUIRRELSCAN_API_KEY` is the documented
+name going forward.
+</Note>
+
+API keys are org-scoped (audits debit the org's credit pool) and carry
+[scopes](#scopes). They are sent as `Authorization: Bearer <token>`, the same
+transport as a login session, and the API tells them apart by prefix.
+
+### Minting a key from the CLI
+
+```bash
+squirrel auth login          # once, interactively
+squirrel keys create --shell # mints a key and offers to append the export line
+```
+
+See [`squirrel keys`](/cli/keys) for `list` and `revoke` too.
+
+### Credential precedence
+
+When the CLI needs to authenticate a cloud call it resolves **one** credential,
+highest priority first:
+
+1. **`SQUIRRELSCAN_API_KEY`** (or its back-compat alias `SQUIRREL_API_TOKEN`,
+   checked only when the preferred var is unset) is **authoritative**. It
+   **overrides a logged-in session**, and is **fail-closed**: if the token is
+   invalid (revoked, expired, or minted for a different environment) the CLI
+   **errors**, and does **not** silently fall back to your login session. This
+   keeps CI predictable and avoids the "I exported a token but it used my
+   personal session" surprise (the same convention as `gh`, the Stripe CLI, and
+   AWS).
+2. **Logged-in session** (`squirrel auth login`), used only when neither env
+   var is set (or non-empty).
+3. **Unauthenticated**: local / deterministic-only audits.
+
+The env token is **never** written to `~/.squirrel/settings.json`. An empty or
+whitespace-only value is treated as unset (it falls through to the alias, then
+the login session).
+
+<Note>
+When an env token is set, `squirrel auth login` and `squirrel auth
+logout` still operate on your *login session*, but the env var wins at runtime
+until you unset it. Both commands print a note when the env var is shadowing the
+session (naming whichever var, preferred or alias, you actually set).
+</Note>
+
+### Environment-aware prefixes
+
+Keys carry an environment segment so a dev key can't accidentally hit production
+(and vice-versa): the API rejects cross-environment keys with a clear error.
+
+| Prefix | Environment |
+|--------|-------------|
+| `sq_…` | production |
+| `sq_dev_…` | development |
+| `sqcli_…` | legacy user login token (browser flow) |
+
+### Scopes
+
+API keys carry per-resource scopes (`resource:action`). A key is only allowed to
+call endpoints covered by its scopes; a request outside its scopes returns a
+clear error naming the missing scope.
+
+| Scope | Grants |
+|-------|--------|
+| `audits:write` | Run audits, submit cloud renders |
+| `audits:read` | Read published reports |
+| `credits:read` | Read credit balance + ledger |
+| `org:read` | Read org details |
+| `org:write` | Manage org (invites, settings) |
+
+Login sessions are unscoped (full access). Scopes only apply to API keys.
+
+### GitHub Actions
+
+```yaml
+- name: Audit
+  env:
+    SQUIRRELSCAN_API_KEY: ${{ secrets.SQUIRRELSCAN_API_KEY }}
+  run: squirrel audit https://example.com --yes
+```
+
+Store the key as a repository or organization secret, never commit it. A `CI`
+preset key (audits + credits read) is enough for most pipelines.
+
+---
+
+## login
+
+Authenticate with squirrelscan using device authorization flow.
+
+### Usage
+
+```bash
+squirrel auth login [options]
+```
+
+### Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--device-name` | `-d` | Name for this device | hostname |
+
+### Example
+
+```bash
+squirrel auth login
+```
+
+Opens browser for authentication. After completing login:
+```
+✓ Authenticated as you@example.com
+  Device: macbook-pro
+  Expires: Feb 2, 2027
+```
+
+### Troubleshooting
+
+**`Couldn't reach the auth server …`**: the API was unreachable (it's down, or
+you're pointed at a local/dev server that isn't running). The error names the
+server it tried. To target production, unset or set the override:
+
+```bash
+SQUIRREL_API_SERVER=https://api.squirrelscan.com squirrel auth login
+```
+
+**Session expired / cloud unavailable during an audit**: if your *login token*
+has expired (or the API can't be reached), `squirrel audit` keeps working with
+**local checks only** and prints the reason on the `Account` line. Cloud
+features (renders, AI summary, tech detection) are skipped cleanly, and nothing
+fails. In an interactive terminal you'll be asked whether to continue
+local-only; agents, CI, piped output and `--yes` proceed automatically. Run
+`squirrel auth login` to restore cloud features.
+
+**`SQUIRRELSCAN_API_KEY was rejected …`**: an [API token](#api-token-ci--headless)
+is fail-closed: when set, an invalid token (revoked, expired, or wrong
+environment) **errors the command** rather than degrading to local-only. The
+message names whichever env var you actually set (`SQUIRRELSCAN_API_KEY` or the
+`SQUIRREL_API_TOKEN` alias). Fix or rotate the key with
+[`squirrel keys create`](/cli/keys) or the
+[dashboard](https://app.squirrelscan.com/settings/api-keys), or unset it to use
+your login session instead.
+
+---
+
+## logout
+
+Sign out and revoke the current authentication token.
+
+### Usage
+
+```bash
+squirrel auth logout
+```
+
+### Example
+
+```bash
+squirrel auth logout
+```
+
+```
+✓ Signed out successfully
+```
+
+---
+
+## status
+
+Show the active credential: its **source** (login session vs env var,
+`SQUIRRELSCAN_API_KEY` or the `SQUIRREL_API_TOKEN` alias), and, for API keys,
+the org and granted **scopes**.
+
+### Usage
+
+```bash
+squirrel auth status [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON |
+
+### Example
+
+Logged-in session:
+
+```bash
+squirrel auth status
+```
+
+```
+Authenticated as you@example.com
+  Source: logged-in session
+  Device: macbook-pro
+  Expires: Feb 2, 2027
+  Credits: 950
+```
+
+With an API key via `SQUIRRELSCAN_API_KEY` (note the `Source` line and the scopes):
+
+```
+Authenticated as ci@acme.com
+  Source: SQUIRRELSCAN_API_KEY env var
+  Org: Acme Inc
+  Key: CI – production
+  Scopes: audits:write, credits:read
+  Key env: production
+  Credits: 12,400
+```
+
+When an env token shadows a logged-in session, `status` notes which session is
+being overridden.
+
+JSON output:
+
+```bash
+squirrel auth status --json
+```
+
+```json
+{
+  "authenticated": true,
+  "source": "env",
+  "user": { "id": "u_123", "email": "ci@acme.com", "name": "CI Bot" },
+  "token": { "deviceName": null, "expiresAt": null },
+  "apiKey": {
+    "name": "CI – production",
+    "scopes": ["audits:write", "credits:read"],
+    "keyEnv": "production"
+  },
+  "org": { "id": "org_123", "name": "Acme Inc" }
+}
+```
+
+<Note>
+**`--json` schema additions.** The `user` and `token` objects are unchanged. New
+fields are **additive**: `source` (`"env"` | `"login"`), and, when authenticated
+with an API key, `apiKey` (name, scopes, keyEnv) and `org` (id, name); plus
+`shadowedLoginEmail` when an env token is overriding a login session. One value
+change: `token.expiresAt` is `null` for env tokens (it was always a string for
+login sessions). Parse defensively (`expiresAt` may be `null`).
+</Note>
+
+---
+
+## whoami
+
+Alias for [`status`](#status): the conventional name for "who am I
+authenticated as". Same output and `--json` flag.
+
+```bash
+squirrel auth whoami
+```
+
+---
+
+## Related
+
+- [`squirrel keys`](/cli/keys) - Mint, list, and revoke org API keys
+- [Dashboard](/dashboard) - Manage reports online
+- [report --publish](/cli/report#publishing) - Publish reports

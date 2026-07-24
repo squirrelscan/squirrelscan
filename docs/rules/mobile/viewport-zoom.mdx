@@ -1,0 +1,42 @@
+---
+title: "Viewport Zoom"
+description: "Checks that viewport doesn't disable user zoom"
+---
+
+Checks that viewport doesn't disable user zoom
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/viewport-zoom` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Never disable user zoom with maximum-scale=1, user-scalable=no, or user-scalable=0. Users with visual impairments need to zoom. This is an accessibility violation (WCAG 1.4.4). It also harms usability for all users. Remove these properties from your viewport meta tag.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/viewport-zoom"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/viewport-zoom"]
+disable = ["*"]
+```

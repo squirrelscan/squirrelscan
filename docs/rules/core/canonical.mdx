@@ -1,0 +1,42 @@
+---
+title: "Canonical URL"
+description: "Validates canonical URL presence and format"
+---
+
+Validates canonical URL presence and format
+
+| | |
+|---|---|
+| **Rule ID** | `core/canonical` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Solution
+
+Canonical URLs tell search engines which version of a page is the "master" copy, preventing duplicate content issues. Every page should specify a canonical URL, typically pointing to itself. Add a `<link rel="canonical" href="...">` tag in the head section. Use absolute URLs and ensure consistency (with or without trailing slash, www vs non-www). For paginated content, point to the main page or use rel="prev/next".
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/canonical"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/canonical"]
+disable = ["*"]
+```

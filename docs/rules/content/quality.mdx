@@ -1,0 +1,67 @@
+---
+title: "Content Quality"
+description: "LLM-based content quality analysis for SEO"
+---
+
+LLM-based content quality analysis for SEO
+
+| | |
+|---|---|
+| **Rule ID** | `content/quality` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 3/10 |
+| **Default** | Disabled |
+
+<Note>
+This rule requires `OPENROUTER_API_KEY` environment variable to be set.
+</Note>
+
+## How it works
+
+This rule uses an LLM to analyze page content and provide a quality score (0-100) based on:
+
+- Clarity and readability
+- Depth of information
+- Structure and organization
+- Engagement and value to readers
+- Grammar and spelling
+- Originality and uniqueness
+
+## Scoring
+
+| Score | Status | Meaning |
+|-------|--------|---------|
+| 70-100 | Pass | Good content quality |
+| 40-69 | Warning | Content needs improvement |
+| 0-39 | Fail | Poor content quality |
+
+## Solution
+
+Content quality affects both user engagement and search rankings. High-quality content is clear, well-structured, informative, and free of errors. Review flagged pages for clarity and depth. Ensure content provides genuine value to readers. Check for grammar and spelling errors. Break up long paragraphs, use subheadings, and include relevant examples. Consider whether the content fully answers user questions.
+
+## Enable / Disable
+
+### Enable this rule
+
+This rule is disabled by default. To enable:
+
+```toml squirrel.toml
+[rules]
+enable = ["content/quality"]
+```
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/quality"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```

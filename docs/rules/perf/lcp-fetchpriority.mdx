@@ -1,0 +1,53 @@
+---
+title: "LCP Image Fetch Priority"
+description: "Flags the hero/LCP image when it is eagerly loaded but has no fetchpriority='high' or preload"
+---
+
+Flags the hero/LCP image when it is eagerly loaded but has neither `fetchpriority="high"` nor a matching preload.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/lcp-fetchpriority` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## What it detects
+
+The rule picks the likely Largest Contentful Paint element: the first eagerly-loaded content `<img>` on the page (it skips `loading="lazy"` images, data URIs, SVG/ICO icons, tracking pixels, small declared thumbnails, and logos inside `<header>`/`<nav>`). It then warns when that image is left at default priority:
+
+- **No `fetchpriority="high"`** on the image, **and**
+- **No `<link rel="preload" as="image">`** whose `href` or responsive `imagesrcset` matches the image `src`.
+
+Either signal is enough to pass. A default-priority hero is discovered and fetched late, delaying LCP.
+
+This rule overlaps with [LCP Hints](/rules/perf/lcp-hints) on the no-preload case, which is why its weight is deliberately low: it adds the `fetchpriority` recommendation without double-charging the same root cause.
+
+## Solution
+
+Give the LCP image an early, high-priority fetch. Add `fetchpriority="high"` to the `<img>`, or preload it with `<link rel="preload" as="image" href="..." fetchpriority="high">`. You do not need both. Frameworks such as React 19 emit an image preload for eager images automatically. Only apply this to the single above-fold LCP image, never to below-fold images, which should stay lazy.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/lcp-fetchpriority"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/lcp-fetchpriority"]
+disable = ["*"]
+```

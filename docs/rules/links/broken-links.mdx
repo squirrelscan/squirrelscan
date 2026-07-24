@@ -1,0 +1,42 @@
+---
+title: "Broken Links"
+description: "Detects links returning 404 or 5xx errors"
+---
+
+Detects links returning 404 or 5xx errors
+
+| | |
+|---|---|
+| **Rule ID** | `links/broken-links` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Solution
+
+Broken links hurt user experience and waste crawl budget. Regularly audit links using tools or crawlers. Fix or remove broken links. Set up 301 redirects for moved content. For external links, consider using nofollow and regularly verifying they still work. Implement custom 404 pages that help users find content.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/broken-links"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/broken-links"]
+disable = ["*"]
+```

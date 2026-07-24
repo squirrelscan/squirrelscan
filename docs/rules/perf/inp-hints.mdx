@@ -1,0 +1,42 @@
+---
+title: "INP Optimization Hints"
+description: "Checks for Interaction to Next Paint optimization"
+---
+
+Checks for Interaction to Next Paint optimization
+
+| | |
+|---|---|
+| **Rule ID** | `perf/inp-hints` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 5/10 |
+
+## Solution
+
+INP measures responsiveness to user interactions. Improve by: 1) Minimize third-party scripts that block the main thread. 2) Use async/defer for non-critical scripts. 3) Break up long JavaScript tasks into smaller chunks. 4) Use web workers for heavy computations. 5) Implement code splitting to reduce initial bundle size. Consider using requestIdleCallback for non-urgent work.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/inp-hints"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/inp-hints"]
+disable = ["*"]
+```

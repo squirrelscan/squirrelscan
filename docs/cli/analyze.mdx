@@ -1,0 +1,107 @@
+---
+title: "analyze"
+icon: "microchip"
+description: "Run audit rules on stored crawl data"
+---
+
+The `analyze` command runs audit rules on a previously crawled website without re-crawling.
+
+## Usage
+
+```bash
+squirrel analyze [options]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--id` | Crawl ID to analyze | Latest crawl |
+
+## Examples
+
+### Analyze Latest Crawl
+
+```bash
+squirrel analyze
+```
+
+### Analyze Specific Crawl
+
+```bash
+squirrel analyze --id a7b3c2d1
+```
+
+## Output
+
+```
+Analyzing latest crawl...
+
+✓ Ran 87 rules in 2.3s
+
+Analysis complete: a7b3c2d1
+  Site: https://example.com
+  Passed: 52 | Warnings: 18 | Failed: 17
+
+Run 'squirrel report' to view results.
+```
+
+## Use Cases
+
+### Iterate on Rule Configuration
+
+```bash
+# Crawl once
+squirrel crawl https://example.com
+
+# Test different rule configs
+squirrel analyze
+# Edit squirrel.toml
+squirrel analyze
+```
+
+### Re-analyze After Code Changes
+
+```bash
+# While developing custom rules
+squirrel analyze
+```
+
+### Separate Crawl and Analysis
+
+```bash
+# Crawl during off-hours
+squirrel crawl https://example.com
+
+# Analyze later
+squirrel analyze
+```
+
+## Configuration
+
+The analyze command respects rule settings from `squirrel.toml`:
+
+```toml
+[rules]
+enable = ["*"]
+disable = ["ai/*", "content/quality"]
+
+[rule_options]
+# Rule-specific options
+```
+
+See [Configuration](/configuration) for all options.
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Error (no crawl found, analysis failed, etc.) |
+
+## Related
+
+- [crawl](/cli/crawl) - Crawl website without analysis
+- [audit](/cli/audit) - Crawl + analyze in one command
+- [report](/cli/report) - View analysis results
+- [Configuration](/configuration) - Config file options

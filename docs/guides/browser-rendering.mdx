@@ -1,0 +1,95 @@
+---
+title: "Browser Rendering"
+icon: "monitor"
+description: "Audit JavaScript-heavy sites with cloud browser rendering"
+---
+
+Some sites build their content with JavaScript - single-page apps, client-rendered frameworks, content loaded after the initial response. A plain HTTP fetch sees the empty shell, so content rules report missing headings, thin word counts, and absent meta tags that are actually there.
+
+Browser rendering solves this: pages are loaded in a real headless browser in the cloud, and the audit runs against the fully rendered HTML.
+
+<Note>Browser rendering is a [cloud feature](/cloud) - it requires login and costs **2 credits per page**. See [how it works under the hood](/cloud/rendering).</Note>
+
+## It's automatic when you're logged in
+
+```bash
+squirrel auth login          # once
+squirrel audit https://example.com
+```
+
+Once you're logged in, audits render every page in the cloud by default. The first time this would spend credits, the CLI asks once and remembers your answer - so you opt in knowingly and never get prompted again. The crawl progress shows the rendering spend so far (the 50-credit base appears in the final total, not this counter):
+
+```
+Crawling (cloud-rendered) 34/100 · ~68 credits
+```
+
+Logged-out runs (and `--offline`) always use plain HTTP and cost nothing.
+
+## Turn it off for one run
+
+If a site is server-rendered and you don't want to spend render credits:
+
+```bash
+squirrel audit https://example.com --http
+```
+
+`--http` forces plain HTTP for that run. The opposite, `--render`, renders every page even when your config disables it.
+
+## Pick a strategy: `off` / `auto` / `all`
+
+Rendering isn't all-or-nothing. The `render` setting takes a scale:
+
+| Strategy | What it does | Render credits |
+| --- | --- | --- |
+| `off` | Plain HTTP only, never render | none |
+| `auto` | **HTTP-first**: render *only* pages that are client-side-rendered (empty SPA shells); fast HTTP for static / server-rendered pages | only the pages that need it |
+| `all` | Render every HTML page | 2 / page |
+
+`auto` is usually what you want: a static or server-rendered site costs **zero** render credits and runs at HTTP speed, while a JS app still gets a real rendered DOM where it matters. `robots.txt`, sitemaps, and assets are always plain HTTP. Even with `all`, only crawled HTML pages are ever rendered.
+
+Run a single audit with a strategy:
+
+```bash
+squirrel audit https://example.com --render-mode auto
+```
+
+## Make the choice permanent for a project
+
+Pin the behavior in `squirrel.toml` so it never depends on login state or the prompt:
+
+```toml squirrel.toml
+[cloud]
+render = "auto"   # off | auto | all
+```
+
+Setting `render` explicitly overrides the auto default - no prompt, every audit of this project behaves the same. (The older `rendering = "http" | "browser"` still works: `http` = `off`, `browser` = `all`, but `render` is preferred.)
+
+## Watch your page count
+
+At 2 credits per rendered page (on top of the audit's 50-credit base), rendering is the only part of an audit that scales with page count. Two settings to keep in mind:
+
+- `--max-pages` / `[crawler] max_pages` - fewer pages, fewer credits.
+- `[cloud] max_credits_per_audit` (default **1000**) - the hard cap. It covers rendering for about 475 pages; raise it or cap your pages for larger rendered crawls.
+
+```toml squirrel.toml
+[cloud]
+rendering = "browser"
+max_credits_per_audit = 400
+```
+
+## Do I need it?
+
+Run a normal audit first. If pages you know are full of content come back with implausibly low word counts or missing headings, the site is client-rendered - switch to browser rendering. Server-rendered sites (most CMSs, SSR frameworks, static sites) gain nothing from it.
+
+## If rendering fails
+
+You never lose an audit to rendering problems:
+
+- A single page that fails to render falls back to plain HTTP; the rest keep rendering.
+- If you run out of credits or the service is down, the whole crawl falls back to plain HTTP with a one-line warning, and the report notes the fallback.
+
+## Related
+
+- [Cloud rendering explained](/cloud/rendering) - service behavior, costs, fallback details
+- [Credits & Pricing](/cloud/credits) - balance, pricing, spend controls
+- [Crawler settings](/configuration/crawler) - page limits and crawl behavior

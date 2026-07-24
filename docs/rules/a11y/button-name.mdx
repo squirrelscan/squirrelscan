@@ -1,0 +1,42 @@
+---
+title: "Button Name"
+description: "Checks that all buttons have accessible names"
+---
+
+Checks that all buttons have accessible names
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/button-name` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Solution
+
+Buttons must have accessible names. Options: 1) Add text content inside the button. 2) Use aria-label for icon buttons. 3) Use aria-labelledby to reference visible text. 4) Use title attribute (less preferred). For `<input type='button'>`, use the value attribute.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/button-name"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/button-name"]
+disable = ["*"]
+```

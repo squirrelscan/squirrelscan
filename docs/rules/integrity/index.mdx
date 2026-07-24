@@ -1,0 +1,53 @@
+---
+title: "Site Integrity"
+description: "Signs of compromise: injected pages, phishing kits, malware, SEO spam"
+---
+
+Site Integrity rules answer a question SEO tools usually ignore: **is this site hacked?**
+
+A compromised page is, by construction, an anomaly: off-theme, hidden from your own navigation, impersonating a third-party brand, or carrying an obfuscated payload. squirrelscan already crawls every page's DOM, scripts, links, and sitemap, so it can spot these patterns for free, with no external calls.
+
+## Correlation gating (low false positives)
+
+A single suspicious signal is rarely proof of compromise: a big inline script, one off-theme page, or a brand mention can all be innocent. So high-severity integrity findings require **at least two corroborating signals** on the same page (for example brand-impersonation **and** an obfuscated script). A lone signal is reported as **info** for review, not flagged as a failure. This is what keeps a legitimate "we integrate with Calendly" page from ever tripping the brand-impersonation rule.
+
+These rules run **locally and free**, no login required.
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Template Discontinuity" icon="triangle-exclamation" href="/rules/integrity/template-discontinuity">
+    Detects pages whose markup diverges hard from the site's common template
+  </Card>
+  <Card title="Hidden Orphan Page" icon="triangle-exclamation" href="/rules/integrity/orphan-page">
+    Detects crawled pages absent from every sitemap AND linked from nowhere
+  </Card>
+  <Card title="Brand Impersonation" icon="triangle-exclamation" href="/rules/integrity/brand-impersonation">
+    Detects pages impersonating a third-party brand's login or booking surface
+  </Card>
+  <Card title="Obfuscated Inline Script" icon="triangle-exclamation" href="/rules/integrity/obfuscated-script">
+    Detects large inline scripts with high entropy and obfuscation markers
+  </Card>
+  <Card title="Fake Authentication Overlay" icon="triangle-exclamation" href="/rules/integrity/fake-auth-overlay">
+    Detects full-viewport credential overlays and off-brand sign-in controls
+  </Card>
+  <Card title="SEO Doorway Page" icon="triangle-exclamation" href="/rules/integrity/seo-doorway">
+    Detects injected off-topic, keyword-stuffed affiliate doorway posts
+  </Card>
+  <Card title="Cloaking / UA-Gated Content" icon="triangle-exclamation" href="/rules/integrity/cloaking">
+    Detects pages serving different content to Googlebot than to a normal visitor
+  </Card>
+  <Card title="Kit Signature" icon="triangle-exclamation" href="/rules/integrity/kit-signature">
+    Matches a page against threat-intel signatures of known phishing and malware kits
+  </Card>
+  <Card title="Known Malicious URL" icon="triangle-exclamation" href="/rules/integrity/known-malicious-url">
+    Cross-references site URLs and outbound links against threat-intel feeds
+  </Card>
+</CardGroup>
+
+## Disable All Site Integrity Rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```

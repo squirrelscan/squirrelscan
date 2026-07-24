@@ -1,0 +1,71 @@
+---
+title: "Article Link Density"
+description: "Articles should have appropriate internal and external links based on length"
+---
+
+Articles should have appropriate internal and external links based on length
+
+| | |
+|---|---|
+| **Rule ID** | `content/article-links` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+Add relevant internal links to other pages on your site and cite authoritative external sources. Short articles (under 800 words) need at least 1 of each, medium (800-1500) need 2 of each, long (over 1500) need 3 internal and 2 external.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `short_max_words` | unknown | `undefined` |  |
+| `long_min_words` | unknown | `undefined` |  |
+| `short_min_internal` | unknown | `undefined` |  |
+| `medium_min_internal` | unknown | `undefined` |  |
+| `long_min_internal` | unknown | `undefined` |  |
+| `short_min_external` | unknown | `undefined` |  |
+| `medium_min_external` | unknown | `undefined` |  |
+| `long_min_external` | unknown | `undefined` |  |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."content/article-links"]
+short_max_words = undefined
+long_min_words = undefined
+short_min_internal = undefined
+medium_min_internal = undefined
+long_min_internal = undefined
+short_min_external = undefined
+medium_min_external = undefined
+long_min_external = undefined
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/article-links"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/article-links"]
+disable = ["*"]
+```

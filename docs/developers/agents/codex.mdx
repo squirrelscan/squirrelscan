@@ -1,0 +1,91 @@
+---
+title: "squirrelscan for OpenAI Codex"
+sidebarTitle: "OpenAI Codex"
+description: "Set up squirrelscan in OpenAI Codex CLI: add the hosted MCP server, install the skills, and run audits."
+icon: "square-terminal"
+---
+
+Codex connects to squirrelscan over the hosted MCP server and reads Agent Skills from `~/.agents/skills`, so it can run audits, read findings as tools, and fix them in your repo.
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+<Tabs>
+  <Tab title="OAuth (recommended)">
+    ```bash
+    codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp
+    codex mcp login squirrelscan
+    ```
+
+    `codex mcp login` opens the browser, runs PKCE with a local loopback callback, and stores the token encrypted (Codex CLI 0.140.0+), not in `config.toml`.
+  </Tab>
+  <Tab title="API key">
+    ```bash
+    codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp \
+      --bearer-token-env-var SQUIRRELSCAN_API_KEY
+    ```
+
+    Codex sends `SQUIRRELSCAN_API_KEY` as `Authorization: Bearer <value>`. Export it in your shell or CI first.
+  </Tab>
+  <Tab title="config.toml">
+    Hand-write the block into `~/.codex/config.toml` (global) or `<project>/.codex/config.toml` (honored once the project is trusted):
+
+    ```toml
+    [mcp_servers.squirrelscan]
+    url = "https://mcp.squirrelscan.com/mcp"
+    # bearer_token_env_var = "SQUIRRELSCAN_API_KEY"   # omit if using OAuth
+    ```
+  </Tab>
+</Tabs>
+
+<Note>Don't set `experimental_environment` for this server, it's for stdio-over-remote-executor and doesn't support streamable HTTP. More detail on the [MCP client setup](/developers/mcp-clients#codex-cli) page.</Note>
+
+## 3. Install the skills
+
+Codex reads Agent Skills from `~/.agents/skills`, so the same install works:
+
+```bash
+npx skills add squirrelscan/squirrelscan
+```
+
+## 4. Run an audit
+
+Ask Codex in natural language, it will call the squirrelscan tools or the CLI:
+
+```
+Use squirrelscan to audit example.com, then fix the high-severity issues.
+```
+
+Scope large sites to keep runs fast:
+
+```
+Audit only /blog/* on example.com, cap it at 20 pages, and list the SEO regressions.
+```
+
+<Tip>The ChatGPT desktop app, Codex CLI, and IDE extension share MCP config for the same Codex host, so set it up once and switch clients freely.</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+    A full worked example of the audit-and-fix loop.
+  </Card>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#codex-cli">
+    Scopes, API-key auth, and TOML config.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule and how it's fixed.
+  </Card>
+</CardGroup>
