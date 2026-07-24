@@ -30,7 +30,7 @@
     "@squirrelscan/utils": "workspace:*",
     "citty": "^0.1.6",
     "effect": "^3.21.3",
-    "fast-xml-parser": "^4.5.6",
+    "fast-xml-parser": "^5.10.1",
     "gradient-string": "^3.0.0",
     "linkedom": "^0.18.12",
     "picocolors": "^1.1.1",
