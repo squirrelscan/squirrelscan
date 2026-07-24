@@ -12,6 +12,11 @@ squirrelscan audits your website for SEO, performance, security, accessibility a
 [![Add to opencode](https://img.shields.io/badge/Add_to-opencode-383838?style=for-the-badge)](https://squirrelscan.com/add/opencode)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-1f6feb?style=for-the-badge)](https://registry.modelcontextprotocol.io)
 
+[![CI](https://img.shields.io/github/actions/workflow/status/squirrelscan/squirrelscan/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/squirrelscan/squirrelscan/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/squirrelscan/squirrelscan/codeql.yml?branch=main&style=for-the-badge&label=CodeQL)](https://github.com/squirrelscan/squirrelscan/actions/workflows/codeql.yml)
+[![npm](https://img.shields.io/npm/v/squirrelscan?style=for-the-badge&label=npm)](https://www.npmjs.com/package/squirrelscan)
+[![License: MIT](https://img.shields.io/badge/License-MIT-52a852?style=for-the-badge)](LICENSE)
+
 ## Add to your coding agent
 
 squirrelscan ships as an **MCP server** (hosted at `mcp.squirrelscan.com`), **skills** (autonomous audit + fix workflows), and a **plugin** for Claude Code and Cursor. Cursor installs in one click from the badge above; the rest are a single copy-paste.
