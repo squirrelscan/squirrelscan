@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { computeNextVersion } from "./release";
+import { computeNextVersion, latestTaggedVersion } from "./release";
 
 const cases: Array<{
   current: string;
@@ -36,4 +36,16 @@ describe("computeNextVersion mirrors release.yml", () => {
       expect(computeNextVersion(current, channel, bump)).toBe(expected);
     });
   }
+});
+
+describe("latestTaggedVersion", () => {
+  test("uses the highest semantic version rather than the main manifest", () => {
+    expect(latestTaggedVersion(["v0.0.79", "v0.1.0-beta.1", "not-a-version"], "0.0.1")).toBe(
+      "0.1.0-beta.1",
+    );
+  });
+
+  test("falls back when no release tags exist", () => {
+    expect(latestTaggedVersion([], "0.0.1")).toBe("0.0.1");
+  });
 });

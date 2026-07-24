@@ -23,17 +23,18 @@ env:
 
 jobs:
   version:
-    name: Version and tag
+    name: Compute version
     runs-on: ubuntu-latest
-    environment: release
     permissions:
-      contents: write
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-bun
       - name: Compute version
         id: version
@@ -42,34 +43,59 @@ jobs:
           INPUT_BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
-          git fetch --tags --force
-          current=$(git tag --list 'v*' | sed 's/^v//' | npx --yes semver | tail -1)
-          if [ -z "$current" ]; then
-            current=$(jq -r .version apps/cli/package.json)
-          fi
-          if [ "$INPUT_BUMP" = promote ]; then
-            new=$(printf '%s' "$current" | sed -E 's/-(beta|alpha)\.[0-9]+$//')
-            prerelease=false
-          elif [ "$INPUT_CHANNEL" = beta ]; then
-            if [[ "$current" =~ -beta\.([0-9]+)$ ]]; then
-              base=${current%%-beta.*}
-              new="${base}-beta.$((BASH_REMATCH[1] + 1))"
-            else
-              new=$(npx --yes semver -i "pre${INPUT_BUMP}" --preid beta "$current")
-            fi
-            prerelease=true
-          else
-            new=$(npx --yes semver -i "$INPUT_BUMP" "$current")
-            prerelease=false
-          fi
-          {
-            echo "version=$new"
-            echo "tag=v$new"
-            echo "prerelease=$prerelease"
-          } >> "$GITHUB_OUTPUT"
+          bun -e '
+            import { computeNextVersion, resolveCurrentVersion } from "./scripts/release.ts";
+            const pkg = await Bun.file("apps/cli/package.json").json();
+            const current = await resolveCurrentVersion(pkg.version);
+            const version = computeNextVersion(current, process.env.INPUT_CHANNEL, process.env.INPUT_BUMP);
+            console.log("version=" + version);
+            console.log("tag=v" + version);
+            console.log("prerelease=" + (process.env.INPUT_CHANNEL === "beta"));
+          ' >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: Release quality gate
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-bun
       - name: Update manifests
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          bun -e '
+            const path = "apps/cli/package.json";
+            const pkg = await Bun.file(path).json();
+            pkg.version = process.env.VERSION;
+            await Bun.write(path, JSON.stringify(pkg, null, 2) + "\n");
+          '
+          bun run scripts/sync-plugin-manifests.ts --version "$VERSION"
+          bun install
+      - run: bun run format:check
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run notices:check
+      - run: bun run audit:dependencies
+      - run: bun test
+      - run: bun run test:engine
+      - run: bun run test:release
+
+  tag:
+    name: Create release tag
+    needs: [version, quality]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-bun
+      - name: Update manifests
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           bun -e '
             const path = "apps/cli/package.json";
@@ -81,8 +107,8 @@ jobs:
           bun install
       - name: Commit and tag
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,32 +117,14 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
 
-  quality:
-    name: Release quality gate
-    needs: version
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.version.outputs.tag }}
-      - uses: ./.github/actions/setup-bun
-      - run: bun run format:check
-      - run: bun run lint
-      - run: bun run typecheck
-      - run: bun test
-      - run: bun run test:engine
-      - run: bun run test:release
-
   build:
     name: Build release binaries
-    needs: [version, quality]
+    needs: [version, tag]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.version.outputs.tag }}
       - uses: ./.github/actions/setup-bun
@@ -128,27 +136,35 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: make manifest VERSION="$VERSION"
-      - uses: actions/upload-artifact@v4
+      - name: Stage release assets
+        run: |
+          mkdir release-assets
+          cp apps/cli/build/squirrel-* apps/cli/build/manifest.json LICENSE THIRD_PARTY_NOTICES.md release-assets/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-binaries
-          path: |
-            apps/cli/build/squirrel-*
-            apps/cli/build/manifest.json
+          path: release-assets/
 
   github-release:
     name: Publish GitHub release
     needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
+      attestations: write
       contents: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.version.outputs.tag }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-binaries
-          path: apps/cli/build
+          path: release-assets
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: release-assets/*
       - name: Resolve release notes
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -170,8 +186,10 @@ jobs:
             --title "$TAG" \
             --notes-file release-notes.md \
             "${flag[@]}" \
-            apps/cli/build/squirrel-* \
-            apps/cli/build/manifest.json
+            release-assets/squirrel-* \
+            release-assets/manifest.json \
+            release-assets/LICENSE \
+            release-assets/THIRD_PARTY_NOTICES.md
 
   npm:
     name: Publish npm package
@@ -182,10 +200,10 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.version.outputs.tag }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.14.0"
           registry-url: https://registry.npmjs.org

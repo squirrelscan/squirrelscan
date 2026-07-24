@@ -47,7 +47,9 @@
   "files": [
     "bin/",
     "lib/",
-    "scripts/",
-    "README.md"
+    "scripts/postinstall.js",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ]
 }

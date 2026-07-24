@@ -6,7 +6,7 @@
  *
  * Environment variables:
  *   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
- *   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
+ *   SQUIRREL_CHANNEL   - Explicitly follow the latest stable or beta release
  */
 
 const https = require("https");
@@ -121,6 +121,34 @@ async function getLatestVersion(channel) {
   return release.tag_name;
 }
 
+function normalizeVersion(version) {
+  return version.startsWith("v") ? version : `v${version}`;
+}
+
+async function resolveVersion(env = process.env, latestVersion = getLatestVersion) {
+  if (env.SQUIRREL_VERSION) {
+    return {
+      version: normalizeVersion(env.SQUIRREL_VERSION),
+      message: `Installing pinned version: ${normalizeVersion(env.SQUIRREL_VERSION)}`,
+    };
+  }
+
+  if (env.SQUIRREL_CHANNEL) {
+    const version = await latestVersion(env.SQUIRREL_CHANNEL);
+    return {
+      version,
+      message: `Latest version: ${version} (channel: ${env.SQUIRREL_CHANNEL})`,
+    };
+  }
+
+  const packageVersion = require("../package.json").version;
+  const version = normalizeVersion(packageVersion);
+  return {
+    version,
+    message: `Installing npm package version: ${version}`,
+  };
+}
+
 async function main() {
   const platform = getPlatform();
   const ext = getBinaryExtension();
@@ -129,16 +157,9 @@ async function main() {
   const binDir = path.join(__dirname, "..", "bin");
   const binaryPath = path.join(binDir, `squirrel${ext}`);
 
-  // Determine version: pinned, channel-based, or package default
-  let version;
-  if (process.env.SQUIRREL_VERSION) {
-    version = process.env.SQUIRREL_VERSION;
-    log(`Installing pinned version: ${version}`);
-  } else {
-    const channel = process.env.SQUIRREL_CHANNEL || "stable";
-    version = await getLatestVersion(channel);
-    log(`Latest version: ${version} (channel: ${channel})`);
-  }
+  const resolved = await resolveVersion();
+  const version = resolved.version;
+  log(resolved.message);
 
   log(`Installing squirrelscan ${version} for ${platform}...`);
 
@@ -209,26 +230,15 @@ async function main() {
   }
 
   log("Installation complete!");
-
-  // Install skill if npx available
-  log("Installing audit-website skill...");
-  const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
-  const skillResult = spawnSync(npxCmd, ["skills", "add", "squirrelscan/skills", "--skill", "audit-website", "-y", "-g"], {
-    stdio: "pipe",
-    windowsHide: true,
-  });
-
-  if (skillResult.status === 0) {
-    info("Skill installed globally");
-  } else {
-    warn("Skill installation skipped (npx not available or failed)");
-    info("Install manually: npx skills add squirrelscan/skills --skill audit-website -y -g");
-  }
-
   info("Run 'squirrel --help' to get started");
+  info("Install agent integrations explicitly with 'squirrel skills install'");
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+module.exports = { normalizeVersion, resolveVersion };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

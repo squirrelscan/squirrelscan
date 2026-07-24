@@ -1,0 +1,7 @@
+# Security-sensitive distribution and automation surfaces.
+/.github/ @nc9
+/install.sh @nc9
+/install.ps1 @nc9
+/npm/ @nc9
+/scripts/release.ts @nc9
+/Makefile @nc9
