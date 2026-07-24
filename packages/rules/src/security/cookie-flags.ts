@@ -16,7 +16,7 @@ interface ParsedCookie {
  * comma that's followed by what looks like the start of the next cookie
  * (name=), the same heuristic used by set-cookie-parser and similar tools.
  * Also splits on newlines first, for a future fix to the fetcher's header
- * capture (squirrelscan/repo#973) that joins multiple real Set-Cookie
+ * capture that joins multiple real Set-Cookie
  * headers with \n instead of silently keeping only the last one.
  */
 function splitSetCookieHeader(value: string): string[] {

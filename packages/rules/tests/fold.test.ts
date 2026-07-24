@@ -736,9 +736,8 @@ describe("clampCheckDetails (#1288)", () => {
 
   test("scoring/issue-sync bookkeeping numbers (additional/occurrences/pagesTruncated) survive the clamp untouched", () => {
     // packages/audit-engine/src/scoring.ts's checkAdditional() reads
-    // details.additional for the item-overflow-aware fail-unit count;
-    // apps/api/src/services/issue-sync.ts reads details verbatim into
-    // issues.metadata. Neither must ever see these bookkeeping numbers
+    // details.additional for the item-overflow-aware fail-unit count; hosted
+    // issue synchronization also persists the details. Neither must see these numbers
     // altered by this clamp, even when the record ALSO needs bounding.
     const bigNoise = Object.fromEntries(
       Array.from({ length: 30 }, (_, i) => [`k${i}`, "x".repeat(50)]),

@@ -1,8 +1,8 @@
 // withWafTech rehydrates a stored header record into a real Headers object to
 // run WAF detection. `headers["set-cookie"]` may be "\n"-joined (one real
-// Set-Cookie header per line, squirrelscan/repo#973) — a naive
+// Set-Cookie header per line) — a naive
 // `new Headers()` + `.set()` loop THROWS on that value, dropping WAF
-// detection for the whole page (squirrelscan/repo#1035 review fix).
+// detection for the whole page.
 
 import { describe, expect, test } from "bun:test";
 

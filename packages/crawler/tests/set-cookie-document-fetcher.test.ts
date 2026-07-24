@@ -5,9 +5,8 @@
 // headersFromRecord() before re-extracting them. setHeaderSafely() strips
 // \r\n from every header value to guard against header injection, which — if
 // set-cookie weren't special-cased — would collapse the "\n"-joined
-// multi-cookie shape from packages/fetchers / apps/crawler-worker into one
-// corrupted, space-joined cookie. This proves the round-trip preserves every
-// cookie.
+// multi-cookie shape from packages/fetchers and hosted rendering into one
+// corrupted, space-joined cookie. This proves the round-trip preserves every cookie.
 
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";

@@ -1233,7 +1233,7 @@ export function triggerToAuditSource(trigger: string | null | undefined): AuditS
 
 // ── Agent-run lifecycle & org-sync `runs` delta ────────────────────
 
-/** `agent_runs.status` lifecycle (mirrors the DB CHECK in apps/api schema). */
+/** Hosted agent-run status lifecycle. */
 export type AgentRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
@@ -1296,8 +1296,7 @@ export interface PlanDefinition {
   /**
    * Raw per-plan cloud-audit page ceiling (#1020 ladder: Free 500 / Pro
    * 2,000 / Team 5,000). This is the plan's OWN allowance, not the effective
-   * runtime ceiling — every cloud dispatch site clamps it further via
-   * `planMaxPages()` (apps/api/src/lib/website-run-config.ts) to
+   * runtime ceiling — hosted dispatch sites clamp it further to
    * `REPORT_LIMITS.maxPages`, the report/publish ingest cap. Team's raw value
    * exceeds that cap today on purpose: raising the cap later (separate
    * engine/report-pipeline work) auto-unlocks Team with no plan-data change.

@@ -2,10 +2,8 @@
 // through every affected-page-count consumer, asserting the count surfaces are
 // AUTHORITATIVE (the true pre-sample total, not the clipped sample length) and
 // that clipped lists are labeled as examples. This file covers the 6
-// packages/report renderers; the API's 7th renderer (report-markdown.ts) and
-// BOTH summary builders read the same shared `affectedPages` accessor and are
-// pinned by sibling tests in apps/api (report-markdown.test.ts +
-// run-report.test.ts) — they can't import across the app/package boundary.
+// packages/report renderers. Hosted renderers and summary builders consume the
+// same shared `affectedPages` accessor through this public package.
 
 import { describe, expect, test } from "bun:test";
 

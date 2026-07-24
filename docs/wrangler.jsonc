@@ -2,7 +2,6 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "squirrelscan-docs",
   "compatibility_date": "2026-06-01",
-  "account_id": "fe8c09050e3a4f5758a97d28a93c2a63",
   "preview_urls": true,
   "workers_dev": true,
   "assets": {

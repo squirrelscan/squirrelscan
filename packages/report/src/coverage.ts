@@ -140,12 +140,8 @@ export interface MixedProvenanceCheck {
  * shows red only because of pages the crawl didn't revisit. Must read every
  * status (pass included), not just fail/warn.
  *
- * SINGLE shared implementation (#1135 codex review) — both
- * `packages/report`'s grouping.ts (feeds the cloud HTML/markdown/LLM
- * renderers) and `apps/api`'s run-report.ts (feeds the MCP/agent-runs AND
- * dashboard report summaries) call this instead of maintaining their own
- * copy, so the two can't silently drift the way #1135's own provenance data
- * once did between those two report-summary builders.
+ * Single shared implementation used by the public renderers and hosted report
+ * summaries so the two surfaces cannot silently drift.
  *
  * A page can be BOTH a fresh pass (one check under the rule) and a carried
  * issue (a different check under the same rule) — e.g. one check-name passes

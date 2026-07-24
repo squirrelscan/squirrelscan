@@ -217,8 +217,7 @@ export const REPORT_LIMITS = {
   maxFindingPayload: 16 * 1024,
   // meta description gets extra headroom over maxMediumString (search engines
   // truncate around 155-320 chars for display, but some CMSes stuff far more
-  // into the tag) — mirrors pageAuditSchema.meta.description in
-  // apps/api/src/schemas/audit-report.ts; keep the two in sync (#1259).
+  // into the tag) and stays aligned with hosted report validation.
   maxMetaDescriptionString: 2000,
   // Must stay ABOVE the shipped rules-catalog count with headroom — the API
   // publish schema rejects whole reports past this, so hitting it strands

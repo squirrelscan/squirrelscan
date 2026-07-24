@@ -425,8 +425,8 @@ export const REPORT_SOURCE_PAGES_PREVIEW = 3;
 // squirrelscan.com, linked from the marketing site's report section, so it must
 // never 404. The API refuses to delete this report and a daily scheduler task
 // (demo-report:check) verifies it still serves. When refreshing the demo:
-// update this ID, then re-capture apps/web/public/images/html-report-screenshot.webp
-// from the same report so the screenshot and link stay in sync.
+// update this ID, then refresh the website's report screenshot from the same
+// report so the screenshot and link stay in sync.
 export const DEMO_REPORT_ID = "01KWKSVT79R6SZDQE7K6WWZCFY";
 export const DEMO_REPORT_URL = `https://reports.squirrelscan.com/${DEMO_REPORT_ID}`;
 
@@ -439,11 +439,10 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 // Public rule/category counts for marketing and doc copy that can't read the
 // live catalog (MDX, plugin manifests, skill files, MCP tool descriptions).
 // PUBLIC_RULE_COUNT_FLOOR is deliberately rounded DOWN from the live total
-// (apps/api/src/generated/rule-catalog.ts totalRules, currently 262) so copy
-// doesn't need a bump on every rule add/remove; PUBLIC_CATEGORY_COUNT tracks
-// exactly since categories change far less often. The widened #483 drift
-// guard (apps/api/tests/routes/rule-count-consistency.test.ts) fails the
-// build if the floor ever exceeds the live count. Bump both by hand when the
+// (currently 262) so copy doesn't need a bump on every rule add/remove;
+// PUBLIC_CATEGORY_COUNT tracks exactly since categories change far less often.
+// The hosted catalog drift guard fails if the floor exceeds the live count.
+// Bump both by hand when the
 // live count moves meaningfully past the floor. #1019 #986 #981
 export const PUBLIC_RULE_COUNT_FLOOR = 260;
 export const PUBLIC_CATEGORY_COUNT = 21;

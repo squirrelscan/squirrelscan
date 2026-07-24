@@ -238,7 +238,7 @@ export interface ResponseHeaders {
   /**
    * Raw Set-Cookie header value(s), "\n"-joined when a page sets more than
    * one (via `Headers.getSetCookie()` — comma-joining is ambiguous with
-   * commas embedded in a cookie's own Expires attribute, squirrelscan/repo#973).
+   * commas embedded in a cookie's own Expires attribute).
    * See packages/rules/src/security/cookie-flags.ts's splitter. Optional for
    * backward compatibility with records that predate the security/cookie-flags
    * rule (#748).
