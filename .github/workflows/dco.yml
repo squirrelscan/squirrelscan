@@ -17,6 +17,7 @@ jobs:
           fetch-depth: 0
       - name: Check DCO sign-offs
         env:
+          ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -27,6 +28,10 @@ jobs:
             author=$(git show -s --format='%aN <%aE>' "$commit")
             committer=$(git show -s --format='%cN <%cE>' "$commit")
             message=$(git show -s --format=%B "$commit")
+            if [ "$ACTOR" = "dependabot[bot]" ] && \
+               [ "$author" = "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>" ]; then
+              continue
+            fi
             if ! grep -Fqx "Signed-off-by: $author" <<< "$message" && \
                ! grep -Fqx "Signed-off-by: $committer" <<< "$message"; then
               echo "::error::Commit $commit must be signed off by its author or committer. Use git commit -s."
