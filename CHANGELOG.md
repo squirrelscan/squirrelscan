@@ -20,6 +20,37 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.81
+
+A security release. Audits now treat everything a site tells them to fetch as
+untrusted, and `squirrel self settings` no longer prints your credentials.
+
+Everyone should update. If you audit sites you do not control, or you use
+`-H/--header` to pass authenticated headers, update before your next run.
+
+### Fixed
+
+- **Redirects can no longer change protocol.** Every fetch derived from page
+  content, including redirect targets, sitemap and RSL references, `Link`
+  headers, and client-side meta refresh, is now restricted to `http` and
+  `https`. Previously a site could redirect an audit to a non-http URL and have
+  the result stored in the report.
+- **Custom headers stay on their origin.** Values passed with `-H/--header` are
+  now scoped to the origin you sent them to and are dropped when a redirect
+  crosses to another origin, on auxiliary probe requests as well as page
+  fetches. These values are documented as secrets, so this closes a path where
+  a redirect could forward them to a host you did not choose.
+- **`squirrel self settings` redacts credentials.** The command printed the
+  stored auth token, and any provider keys held in the plaintext fallback used
+  when the OS keychain is unavailable. Output is now redacted. If you have
+  pasted this output anywhere, rotate the token with `squirrel auth login`.
+- **Project names cannot escape their directory.** A `[project] name` in
+  `squirrel.toml` is now contained before it is used to build the local
+  database path.
+- **Repo-local settings are limited to safe keys.** A `settings.json` inside a
+  checkout can now only influence the documented writable settings, so cloning
+  an untrusted repository cannot redirect where the CLI installs updates.
+
 ## v0.0.80
 
 The CLI is now open source under MIT, with the public repo set up as the canonical
