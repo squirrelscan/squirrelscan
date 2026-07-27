@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { redactSettingsForDisplay } from "@/cli/commands/self";
 import type { UserSettings } from "@/self/types";
+
+import { redactSettingsForDisplay } from "@/cli/commands/self";
 
 // Distinctive values that redactString() does NOT catch on its own — so if the
 // explicit masking regressed, these would surface in the output and fail the
 // assertions below (proving the baseline redactValue() pass is not enough).
-const TOKEN = "sk_live_SESSION_TOKEN_abc123xyz";
-const KEY_MATERIAL = "BYOK_SECRET_KEY_material_987";
+const TOKEN = "session-token-probe-value-1399";
+const KEY_MATERIAL = "byok-key-probe-value-1399";
 
 // Minimal valid UserSettings (only the schema-required fields).
 function baseSettings(): UserSettings {

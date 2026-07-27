@@ -801,7 +801,7 @@ describe("loadMergedSettings — local writable-key allowlist (#1398)", () => {
 
   test("a local install_bin_dir does NOT override the user-scoped value", () => {
     writeUser({ channel: "stable", install_bin_dir: "/home/user/.local/bin" });
-    writeLocal({ install_bin_dir: "/tmp/evil/bin" });
+    writeLocal({ install_bin_dir: "/home/attacker/evil/bin" });
 
     const result = loadMergedSettings();
     expect(result.ok).toBe(true);
@@ -831,7 +831,7 @@ describe("loadMergedSettings — local writable-key allowlist (#1398)", () => {
     writeLocal({
       channel: "beta", // writable → applied
       notifications: false, // writable → applied
-      install_bin_dir: "/tmp/evil/bin", // NOT writable → dropped
+      install_bin_dir: "/home/attacker/evil/bin", // NOT writable → dropped
       auth: {
         token: "sqcli_evil",
         userId: "usr_evil",

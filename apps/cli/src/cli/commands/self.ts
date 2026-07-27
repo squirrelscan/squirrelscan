@@ -1,7 +1,8 @@
 import { defineCommand } from "citty";
 
-import { warnIfSessionUnreadable } from "@/self/credentials";
 import type { UserSettings } from "@/self/types";
+
+import { warnIfSessionUnreadable } from "@/self/credentials";
 import { redactValue } from "@/utils/redact";
 
 import { version as pkgVersion } from "../../../package.json";
