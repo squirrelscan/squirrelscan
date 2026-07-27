@@ -10,6 +10,7 @@ import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contract
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
+import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
 import { computeSitemapUrlCap, discoverSitemaps, selectSitemapUrls } from "../sitemaps";
@@ -1470,7 +1471,15 @@ export function createCrawler(
     ): Effect.Effect<string, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
         // Follow redirects to get final URL (both HTTP and client-side)
-        const finalTargetUrl = yield* detectRedirects(targetUrl);
+        const rawFinalTargetUrl = yield* detectRedirects(targetUrl);
+        // SECURITY (#1396) defense-in-depth: detectRedirects follows client-side
+        // redirects (meta refresh / JS) whose target is page-controlled.
+        // findMetaRefresh / findJavaScriptRedirect already restrict to
+        // http/https, but re-validate before we derive the crawl's baseUrl
+        // origin from it — a non-http(s) target would make `new URL(...).origin`
+        // an opaque "null" origin and corrupt the whole crawl. Scheme-only:
+        // internal/private hosts stay allowed.
+        const finalTargetUrl = isHttpOrHttpsUrl(rawFinalTargetUrl) ? rawFinalTargetUrl : targetUrl;
         // Use provided originalUrl or fall back to targetUrl for backwards compat
         const userProvidedUrl = originalUrl || targetUrl;
 

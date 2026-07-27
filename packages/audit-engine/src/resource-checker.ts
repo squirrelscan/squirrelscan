@@ -14,6 +14,7 @@ import type {
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
 import { calculateFreshness } from "@squirrelscan/crawler";
 import { RESOURCE_SIZE_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 
 export interface ResourceCheckResult {
@@ -236,7 +237,10 @@ async function checkSingleResourceAsync(
 
   try {
     try {
-      const headResponse = await fetch(url, {
+      // #1395: follow redirects manually so per hop the http/https scheme
+      // allowlist applies and secret customHeaders are stripped on a cross-origin
+      // redirect (native redirect:"follow" replays them to the redirect target).
+      const { response: headResponse, finalUrl: headFinalUrl } = await safeRedirectFetch(url, {
         method: "HEAD",
         headers: {
           "User-Agent": options.userAgent,
@@ -245,7 +249,6 @@ async function checkSingleResourceAsync(
           ...conditional,
         },
         signal: controller.signal,
-        redirect: "follow",
       });
 
       // 304 Not Modified → reuse prior body size (validator hit).
@@ -307,14 +310,16 @@ async function checkSingleResourceAsync(
           etag: meta.etag,
           lastModified: meta.lastModified,
           vary: meta.vary,
-          redirectTarget: headResponse.url !== url ? headResponse.url : null,
+          redirectTarget: headFinalUrl !== url ? headFinalUrl : null,
         };
       }
     } catch {
       // HEAD failed; fall through to GET
     }
 
-    let getResponse = await fetch(url, {
+    // #1395: manual redirects — scheme allowlist + strip secret customHeaders on
+    // cross-origin redirects (see the HEAD path above).
+    let { response: getResponse, finalUrl: getFinalUrl } = await safeRedirectFetch(url, {
       method: "GET",
       headers: {
         "User-Agent": options.userAgent,
@@ -324,7 +329,6 @@ async function checkSingleResourceAsync(
         ...conditional,
       },
       signal: controller.signal,
-      redirect: "follow",
     });
 
     // Servers that reject Range answer 416 (Range Not Satisfiable). That is a
@@ -335,7 +339,7 @@ async function checkSingleResourceAsync(
       // Discard the rejected response body so the connection can be reused
       // instead of stalling the pool while the 416 body lingers unread.
       getResponse.body?.cancel();
-      getResponse = await fetch(url, {
+      ({ response: getResponse, finalUrl: getFinalUrl } = await safeRedirectFetch(url, {
         method: "GET",
         headers: {
           "User-Agent": options.userAgent,
@@ -344,8 +348,7 @@ async function checkSingleResourceAsync(
           ...conditional,
         },
         signal: controller.signal,
-        redirect: "follow",
-      });
+      }));
     }
 
     // 304 Not Modified on the GET fallback → validator hit.
@@ -417,7 +420,7 @@ async function checkSingleResourceAsync(
       etag: meta.etag,
       lastModified: meta.lastModified,
       vary: meta.vary,
-      redirectTarget: getResponse.url !== url ? getResponse.url : null,
+      redirectTarget: getFinalUrl !== url ? getFinalUrl : null,
     };
   } catch (error) {
     clearTimeout(timeoutId);

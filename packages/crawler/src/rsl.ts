@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
+import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
 import type { RslData, RslLicenseDoc } from "@squirrelscan/core-contracts";
 
@@ -49,7 +50,11 @@ export function looksLikeXml(body: string): boolean {
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+  // #1395: manual redirects — per-hop scheme allowlist + strip secret
+  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
+  return safeRedirectFetch(url, { ...options, signal: controller.signal })
+    .then((result) => result.response)
+    .finally(() => clearTimeout(timeout));
 }
 
 async function fetchLicenseDoc(
@@ -128,14 +133,26 @@ export function fetchRslLicensing(
     const licenseUrls = [...new Set([...directiveUrls, ...headerUrls])].flatMap((u) => {
       // A malformed advisory URL must not abort the crawl — drop it.
       try {
-        return [new URL(u, baseUrl).toString()];
+        const resolved = new URL(u, baseUrl).toString();
+        // #1394: `License:` directives and `Link: rel=license` headers are
+        // untrusted page content. Only fetch http(s) license docs — a
+        // `file://`/`data:` target would otherwise be fetched and its body
+        // captured into `excerpt`.
+        if (!isHttpOrHttpsUrl(resolved)) return [];
+        return [resolved];
       } catch {
         return [];
       }
     });
 
+    // #1394: the caller's secret customHeaders are scoped to the audited origin —
+    // a license doc hosted off-origin must not receive them.
+    const baseHost = new URL(baseUrl).host;
     const documents = await Promise.all(
-      licenseUrls.map((url) => fetchLicenseDoc(url, userAgent, customHeaders)),
+      licenseUrls.map((url) => {
+        const sameOrigin = new URL(url).host === baseHost;
+        return fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined);
+      }),
     );
 
     return {

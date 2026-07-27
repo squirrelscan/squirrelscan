@@ -7,6 +7,7 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
+import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
@@ -125,17 +126,28 @@ function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number):
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  return fetch(url, {
+  // #1395: manual redirects — per-hop scheme allowlist + strip secret
+  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
+  return safeRedirectFetch(url, {
     ...options,
     signal: controller.signal,
-  }).finally(() => clearTimeout(timeout));
+  })
+    .then((result) => result.response)
+    .finally(() => clearTimeout(timeout));
 }
 
 export function fetchSitemap(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  baseHost?: string,
 ): Effect.Effect<SitemapFetchResult, never, never> {
+  // #1393: the caller's secret customHeaders are scoped to the audited origin. A
+  // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
+  // off-origin host, so only forward them when the target host matches baseHost.
+  // When baseHost is unset (direct callers/tests), preserve prior behavior.
+  const originScopedHeaders =
+    baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
   return pipe(
     Effect.tryPromise({
       try: () =>
@@ -146,7 +158,7 @@ export function fetchSitemap(
               "User-Agent": userAgent,
               Accept: "application/xml, text/xml, */*",
               "Accept-Language": "en-US,en;q=0.9",
-              ...customHeaders,
+              ...originScopedHeaders,
             },
             redirect: "follow",
           },
@@ -233,6 +245,9 @@ export function fetchSitemapsRecursive(
   seen: Set<string> = new Set(),
   urlBudget?: SitemapUrlBudget,
   customHeaders?: Record<string, string>,
+  // #1393: host of the audited origin; customHeaders are only forwarded to
+  // matching-host sitemap fetches. Threaded through the recursion.
+  baseHost?: string,
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (currentDepth >= maxDepth || urls.length === 0) {
     return Effect.succeed([]);
@@ -268,7 +283,7 @@ export function fetchSitemapsRecursive(
 
       const chunk = unseenUrls.slice(i, i + SITEMAP_FETCH_CONCURRENCY);
       const chunkResults = yield* Effect.all(
-        chunk.map((url) => fetchSitemap(url, userAgent, customHeaders)),
+        chunk.map((url) => fetchSitemap(url, userAgent, customHeaders, baseHost)),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
       fetchResults.push(...chunkResults);
@@ -310,6 +325,7 @@ export function fetchSitemapsRecursive(
       seen,
       urlBudget,
       customHeaders,
+      baseHost,
     );
 
     return [...fetchResults, ...childResults];
@@ -350,10 +366,20 @@ export function discoverSitemaps(
     const sitemapUrls = new Set<string>();
     const robotsSitemaps = new Set<string>();
 
+    // #1393: robots.txt is untrusted page content. A `Sitemap:` directive can
+    // carry any scheme/host — reject non-http(s) targets (a `file://` sitemap
+    // would otherwise be fetched and its body parsed/stored). Off-origin http(s)
+    // sitemaps are still fetched (legit CDN case) but without customHeaders,
+    // enforced by the baseHost gate passed to fetchSitemapsRecursive below.
+    const baseHost = new URL(baseUrl).host;
     if (robotsTxt?.sitemaps) {
       for (const sitemap of robotsTxt.sitemaps) {
         try {
           const resolvedUrl = new URL(sitemap, baseUrl).toString();
+          if (!isHttpOrHttpsUrl(resolvedUrl)) {
+            logger.debug(`Non-http(s) sitemap URL in robots.txt skipped: ${sitemap}`);
+            continue;
+          }
           sitemapUrls.add(resolvedUrl);
           robotsSitemaps.add(resolvedUrl);
         } catch {
@@ -377,6 +403,7 @@ export function discoverSitemaps(
       undefined,
       urlBudget,
       options.customHeaders,
+      baseHost,
     );
 
     const allSitemaps = allResults.filter((result) => result.success).map((result) => result.data);
