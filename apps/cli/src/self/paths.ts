@@ -1,6 +1,6 @@
 import { realpathSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
-import { dirname, join, parse, sep } from "node:path";
+import { dirname, isAbsolute, join, parse, sep } from "node:path";
 
 import { type Result, ok, err, commandError } from "@/controllers/types";
 
@@ -155,9 +155,40 @@ export function getBinaryPath(version: string): string {
   return join(getReleasePath(version), `squirrel${ext}`);
 }
 
+/**
+ * Validate a caller-supplied custom bin directory before it is used to build a
+ * symlink/rename/unlink target. `customBinDir` can originate from an untrusted
+ * source (a repo-local .squirrel/settings.json's `install_bin_dir`, threaded
+ * through the auto-updater as customBinDir), so a hostile value must not be
+ * able to plant the `squirrel` symlink at an attacker-chosen path (#1398).
+ * Rejects empty strings, embedded NUL (truncates past the C-string boundary),
+ * any relative path (must be absolute), and any `..` traversal segment. The
+ * trusted default from getSquirrelPaths().bin never routes through here.
+ */
+function assertSafeBinDir(dir: string): void {
+  if (dir === "") {
+    throw new Error("Invalid bin directory: must not be empty");
+  }
+  if (dir.includes("\0")) {
+    throw new Error("Invalid bin directory: must not contain a NUL byte");
+  }
+  if (!isAbsolute(dir)) {
+    throw new Error(`Invalid bin directory: must be an absolute path: ${dir}`);
+  }
+  // Split on BOTH separators so a `..` segment is caught regardless of the
+  // slash style the value was written with (Windows accepts either).
+  if (dir.split(/[/\\]/).includes("..")) {
+    throw new Error(`Invalid bin directory: must not contain '..': ${dir}`);
+  }
+}
+
 export function getSymlinkPath(customBinDir?: string): string {
   const os = platform() as Platform;
   const ext = os === "win32" ? ".exe" : "";
+  // Only a caller-supplied dir is untrusted; the default is trusted as-is.
+  if (customBinDir !== undefined) {
+    assertSafeBinDir(customBinDir);
+  }
   const binDir = customBinDir ?? getSquirrelPaths().bin;
   return join(binDir, `squirrel${ext}`);
 }

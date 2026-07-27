@@ -6,7 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { platform, tmpdir } from "node:os";
+import { homedir, platform, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -179,6 +179,45 @@ describe("getSymlinkPath", () => {
       expect(path).toEndWith("squirrel");
     });
   }
+
+  // #1398: a caller-supplied bin dir can originate from an untrusted
+  // repo-local settings.json (install_bin_dir → the auto-updater's
+  // customBinDir), so getSymlinkPath must validate it before the value is
+  // used to build a symlink/rename/unlink target. The trusted default
+  // (no argument) is never validated and must keep working.
+  describe("custom bin dir validation", () => {
+    const ext = platform() === "win32" ? ".exe" : "";
+
+    test("honors a legit absolute custom bin dir", () => {
+      // `~/.local/bin` reaches this function already tilde-expanded.
+      for (const dir of [
+        join(homedir(), ".local", "bin"),
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+      ]) {
+        expect(getSymlinkPath(dir)).toBe(join(dir, `squirrel${ext}`));
+      }
+    });
+
+    test("rejects a relative custom bin dir", () => {
+      expect(() => getSymlinkPath("relative/bin")).toThrow();
+      expect(() => getSymlinkPath("./bin")).toThrow();
+      expect(() => getSymlinkPath(".local/bin")).toThrow();
+    });
+
+    test("rejects a custom bin dir containing a '..' traversal segment", () => {
+      expect(() => getSymlinkPath("/usr/../etc/bin")).toThrow();
+      expect(() => getSymlinkPath("/opt/homebrew/../../tmp/evil")).toThrow();
+    });
+
+    test("rejects an empty custom bin dir", () => {
+      expect(() => getSymlinkPath("")).toThrow();
+    });
+
+    test("rejects a custom bin dir with an embedded NUL byte", () => {
+      expect(() => getSymlinkPath("/usr/local/bin\0/evil")).toThrow();
+    });
+  });
 });
 
 describe("isBinInPath", () => {
