@@ -39,7 +39,15 @@ function findMetaRefresh(html: string, baseUrl: string): string | null {
     const target = directive.slice(equals + 1).trim();
     if (!target) continue;
     try {
-      return new URL(target, baseUrl).toString();
+      const resolved = new URL(target, baseUrl);
+      // SECURITY (#1396): only follow http/https meta-refresh targets. A
+      // `content="0;url=file:///etc/passwd"` (or data:/javascript:) must not
+      // become a redirect the crawler then fetches/derives its base URL from.
+      // findJavaScriptRedirect already restricts to http/https/relative; mirror
+      // that here. Relative targets resolve against the http(s) baseUrl, so they
+      // stay allowed.
+      if (resolved.protocol !== "http:" && resolved.protocol !== "https:") continue;
+      return resolved.toString();
     } catch {
       // Invalid URL, continue to the next tag.
     }

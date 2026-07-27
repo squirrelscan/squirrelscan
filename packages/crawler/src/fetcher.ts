@@ -10,6 +10,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { CHROME_SEC_CH_UA } from "@squirrelscan/utils/constants";
 import { headersForRedirect } from "@squirrelscan/utils/headers";
+import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   readBodyCapped,
@@ -634,6 +635,19 @@ function fetchPageStandard(
           break;
         }
         const nextUrl = new URL(location, currentUrl).toString();
+        // SECURITY (#1392): this hand-rolled manual-redirect loop bypasses the
+        // runtime's native cross-protocol-redirect rejection, so a
+        // `Location: file:///…` (or data:/blob:/ftp:/…) would otherwise be
+        // blindly re-fetched and its body stored (crawler.ts stores result.body
+        // unconditionally). Refuse any non-http(s) redirect target — treat it as
+        // a terminal error hop, never fetch it. Scheme-only: private/loopback
+        // HOSTS stay allowed so internal-site audits keep working.
+        if (!isHttpOrHttpsUrl(nextUrl)) {
+          endsInError = true;
+          finalResponse = response;
+          finalTiming = timing;
+          break;
+        }
         headers = headersForRedirect(headers, currentUrl, nextUrl);
         currentUrl = nextUrl;
         continue;

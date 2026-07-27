@@ -4,6 +4,7 @@
 import { Effect } from "effect";
 
 import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 
 export interface ScriptFetchResult {
@@ -82,7 +83,15 @@ async function fetchSingleScriptAsync(
   };
 
   try {
-    const response = await fetch(url, {
+    // #1395: follow redirects manually so per hop the http/https scheme
+    // allowlist applies and secret customHeaders are stripped on a cross-origin
+    // redirect (native redirect:"follow" replays them; a Location: file:// would
+    // otherwise be fetched and its content scanned/captured).
+    const {
+      response,
+      finalUrl: resolvedFinalUrl,
+      redirected,
+    } = await safeRedirectFetch(url, {
       method: "GET",
       headers: {
         "User-Agent": options.userAgent,
@@ -90,7 +99,6 @@ async function fetchSingleScriptAsync(
         ...options.customHeaders,
       },
       signal: controller.signal,
-      redirect: "follow",
     });
 
     clearTimeout(timeoutId);
@@ -106,8 +114,8 @@ async function fetchSingleScriptAsync(
       response.headers.get("x-sourcemap") ||
       undefined;
 
-    const wasRedirected = response.redirected;
-    const finalUrl = wasRedirected ? response.url : undefined;
+    const wasRedirected = redirected;
+    const finalUrl = wasRedirected ? resolvedFinalUrl : undefined;
 
     if (
       declaredSize &&

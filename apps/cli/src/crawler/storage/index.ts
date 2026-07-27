@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { Effect } from "effect";
 import { mkdirSync, existsSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
+import { join, resolve, sep } from "path";
 
 import { getProjectsPath } from "@/self/paths";
 import { logger } from "@/utils/logger";
@@ -40,12 +40,46 @@ export function domainToProjectName(url: string): string {
 }
 
 /**
+ * Guard against path traversal from an untrusted `[project] name` (squirrel.toml
+ * ships inside a cloned repo, so the name is attacker-controlled). Rejects empty
+ * names, embedded separators, and "."/".." segments, then authoritatively
+ * confirms projectDir stays under projectsDir before any fs work.
+ */
+function assertContainedProjectName(
+  projectName: string,
+  projectsDir: string,
+  projectDir: string
+): void {
+  const parts = projectName.split(/[/\\]/);
+  if (
+    projectName.length === 0 ||
+    parts.length > 1 ||
+    parts.some((part) => part === "." || part === "..")
+  ) {
+    throw new Error(
+      `Invalid [project] name in squirrel.toml: "${projectName}" must be a single path segment without separators or "."/".." parts.`
+    );
+  }
+
+  // Authoritative containment: mirrors the exe.startsWith(releases + sep) idiom
+  // in self/paths.ts so a resolved projectDir can never escape projectsDir.
+  if (!resolve(projectDir).startsWith(resolve(projectsDir) + sep)) {
+    throw new Error(
+      `Invalid [project] name in squirrel.toml: "${projectName}" escapes the projects directory.`
+    );
+  }
+}
+
+/**
  * Get the database path for a project
  * Creates the project directory if it doesn't exist
  */
 export function getProjectDbPath(projectName: string): string {
   const projectsDir = getProjectsPath();
   const projectDir = join(projectsDir, projectName);
+
+  // Validate before touching the filesystem so traversal never creates dirs.
+  assertContainedProjectName(projectName, projectsDir, projectDir);
 
   if (!existsSync(projectDir)) {
     mkdirSync(projectDir, { recursive: true });

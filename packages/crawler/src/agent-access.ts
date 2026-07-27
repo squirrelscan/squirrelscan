@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
+import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
 import type {
   AgentAccessData,
@@ -47,7 +48,12 @@ export function detectPayment(status: number, headers: Headers, body: string): s
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+  // #1395: manual redirects — per-hop scheme allowlist + strip secret
+  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
+  // The probe identity's User-Agent is on the allowlist, so it survives the hop.
+  return safeRedirectFetch(url, { ...options, signal: controller.signal })
+    .then((result) => result.response)
+    .finally(() => clearTimeout(timeout));
 }
 
 async function probeOne(

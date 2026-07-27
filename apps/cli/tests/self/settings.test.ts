@@ -23,7 +23,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { commandError } from "../../src/controllers/types";
+import { commandError, ok } from "../../src/controllers/types";
 import * as pathsModule from "../../src/self/paths";
 import {
   setSettingValue,
@@ -31,6 +31,7 @@ import {
   shouldCheckForUpdates,
   formatSessionLoadWarning,
   loadUserSettings,
+  loadMergedSettings,
   readAndParseSettingsFile,
   writeFileAtomic,
   DEFAULT_SETTINGS,
@@ -313,6 +314,13 @@ describe("isWritableSetting", () => {
     expect(isWritableSetting("update_prompt_snoozed_until")).toBe(false);
     expect(isWritableSetting("id")).toBe(false);
     expect(isWritableSetting("registered")).toBe(false);
+    // #1398: these must stay non-writable — the local-scope merge allowlist
+    // relies on this predicate to keep a repo-local settings.json from
+    // injecting them (install_bin_dir steers the updater's symlink target,
+    // auth forges a session, tool_credentials smuggles BYOK secrets).
+    expect(isWritableSetting("install_bin_dir")).toBe(false);
+    expect(isWritableSetting("auth")).toBe(false);
+    expect(isWritableSetting("tool_credentials")).toBe(false);
   });
 
   test("rejects unknown settings", () => {
@@ -749,5 +757,103 @@ describe("loadUserSettings — corrupt vs. missing vs. valid (#805)", () => {
     const result = loadUserSettings(testPath);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.data.auth?.email).toBe("nik@example.com");
+  });
+});
+
+// #1398: loadMergedSettings must apply a repo-local .squirrel/settings.json
+// ONLY for the writable-key allowlist, exactly like the write path
+// (setSettingValue). A cloned repo could otherwise inject non-writable keys —
+// install_bin_dir (steers the auto-updater's symlink target to an
+// attacker-chosen path) or auth (forges a session). getSettingsPath is already
+// redirected file-wide to sandboxSettingsPath (the user file); this block
+// additionally spies findLocalSettingsPath so the local file is a controlled
+// temp path rather than anything discovered by walking the real cwd. Every key
+// written to the local file below is schema-VALID, so the ONLY thing that can
+// filter it is the writable-key gate — not a parse rejection.
+describe("loadMergedSettings — local writable-key allowlist (#1398)", () => {
+  let localDir: string;
+  let localPath: string;
+  let restoreFindLocal: () => void = () => {};
+
+  const futureIso = new Date(Date.now() + 86_400_000).toISOString();
+
+  const writeUser = (obj: unknown): void =>
+    writeFileSync(sandboxSettingsPath, JSON.stringify(obj));
+  const writeLocal = (obj: unknown): void =>
+    writeFileSync(localPath, JSON.stringify(obj));
+
+  beforeEach(() => {
+    localDir = mkdtempSync(join(tmpdir(), "squirrel-local-merge-test-"));
+    localPath = join(localDir, "settings.json");
+    const spy = spyOn(pathsModule, "findLocalSettingsPath").mockImplementation(
+      () => ok(localPath)
+    );
+    restoreFindLocal = () => spy.mockRestore();
+  });
+
+  afterEach(() => {
+    restoreFindLocal();
+    rmSync(localDir, { recursive: true, force: true });
+    // Reset the shared user file back to logged-out so nothing leaks into the
+    // setSettingValue suites (which tolerate a missing file → defaults).
+    rmSync(sandboxSettingsPath, { force: true });
+  });
+
+  test("a local install_bin_dir does NOT override the user-scoped value", () => {
+    writeUser({ channel: "stable", install_bin_dir: "/home/user/.local/bin" });
+    writeLocal({ install_bin_dir: "/home/attacker/evil/bin" });
+
+    const result = loadMergedSettings();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // The poisoned local value is dropped; the user value survives.
+      expect(result.data.effective.install_bin_dir).toBe(
+        "/home/user/.local/bin"
+      );
+      expect(result.data.sources.install_bin_dir).toBe("user");
+    }
+  });
+
+  test("a local channel (a writable key) DOES still override, source local", () => {
+    writeUser({ channel: "stable" });
+    writeLocal({ channel: "beta" });
+
+    const result = loadMergedSettings();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.effective.channel).toBe("beta");
+      expect(result.data.sources.channel).toBe("local");
+    }
+  });
+
+  test("a mixed poisoned local file is filtered key-by-key", () => {
+    writeUser({ channel: "stable", install_bin_dir: "/home/user/.local/bin" });
+    writeLocal({
+      channel: "beta", // writable → applied
+      notifications: false, // writable → applied
+      install_bin_dir: "/home/attacker/evil/bin", // NOT writable → dropped
+      auth: {
+        token: "sqcli_evil",
+        userId: "usr_evil",
+        email: "evil@example.com",
+        expiresAt: futureIso,
+      }, // NOT writable → dropped
+    });
+
+    const result = loadMergedSettings();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const { effective, sources } = result.data;
+      // Writable keys from local win.
+      expect(effective.channel).toBe("beta");
+      expect(sources.channel).toBe("local");
+      expect(effective.notifications).toBe(false);
+      expect(sources.notifications).toBe("local");
+      // Non-writable keys stay user-sourced — the poison is filtered out.
+      expect(effective.install_bin_dir).toBe("/home/user/.local/bin");
+      expect(sources.install_bin_dir).toBe("user");
+      expect(effective.auth).toBeNull();
+      expect(sources.auth).toBe("user");
+    }
   });
 });

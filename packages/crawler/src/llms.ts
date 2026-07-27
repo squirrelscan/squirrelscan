@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
+import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
 import type { LlmsTxtData, LlmsTxtFile } from "@squirrelscan/core-contracts";
 
@@ -14,7 +15,11 @@ function emptyFile(url: string): LlmsTxtFile {
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+  // #1395: manual redirects — per-hop scheme allowlist + strip secret
+  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
+  return safeRedirectFetch(url, { ...options, signal: controller.signal })
+    .then((result) => result.response)
+    .finally(() => clearTimeout(timeout));
 }
 
 // Fetch one well-known file; a 404/error/oversize file is "absent", never a throw.

@@ -1,8 +1,51 @@
 import { defineCommand } from "citty";
 
+import type { UserSettings } from "@/self/types";
+
 import { warnIfSessionUnreadable } from "@/self/credentials";
+import { redactValue } from "@/utils/redact";
 
 import { version as pkgVersion } from "../../../package.json";
+
+const REDACTED = "[REDACTED]";
+
+/**
+ * Deep-clone `settings` and mask every secret before display. Reuses
+ * redactValue() for the clone + baseline pass (mirrors redactConfigForDisplay
+ * in controllers/config.ts), then explicitly masks the two settings-specific
+ * secrets the baseline pass can't recognize:
+ *   - `auth` — the whole object, because `auth.token` is a live session bearer.
+ *   - each `tool_credentials` value — a plaintext BYOK secret on
+ *     keychain-unavailable installs — EXCEPT the `{ _keychainRef: true }`
+ *     sentinel, which only points at the OS keychain and holds no secret.
+ * Never mutates the caller's object — redactValue returns a fresh clone.
+ */
+export function redactSettingsForDisplay(
+  settings: UserSettings
+): Record<string, unknown> {
+  const redacted = redactValue(settings) as Record<string, unknown>;
+
+  // A live session bearer token lives under auth.token — mask the whole object.
+  if (redacted.auth != null) {
+    redacted.auth = REDACTED;
+  }
+
+  const creds = redacted.tool_credentials;
+  if (creds != null && typeof creds === "object") {
+    const credsRecord = creds as Record<string, unknown>;
+    for (const [tool, cred] of Object.entries(credsRecord)) {
+      // The keychain-ref sentinel holds no secret (the real key is in the OS
+      // keychain); every other value is a plaintext BYOK credential.
+      const isKeychainRef =
+        cred != null &&
+        typeof cred === "object" &&
+        (cred as Record<string, unknown>)._keychainRef === true;
+      if (!isKeychainRef) credsRecord[tool] = REDACTED;
+    }
+  }
+
+  return redacted;
+}
 
 function getShellConfig(): { shell: string; rcFile: string } {
   const { platform } = process;
@@ -379,7 +422,9 @@ const selfSettingsShow = defineCommand({
       }
 
       console.log(`User Settings (${getSettingsPath()}):\n`);
-      for (const [key, value] of Object.entries(result.data)) {
+      for (const [key, value] of Object.entries(
+        redactSettingsForDisplay(result.data)
+      )) {
         if (value === undefined) continue;
         const displayValue =
           typeof value === "object" ? JSON.stringify(value) : String(value);
@@ -402,7 +447,9 @@ const selfSettingsShow = defineCommand({
     const { effective, sources, userPath, localPath } = result.data;
 
     console.log("Effective Settings:\n");
-    for (const [key, value] of Object.entries(effective)) {
+    for (const [key, value] of Object.entries(
+      redactSettingsForDisplay(effective)
+    )) {
       if (value === undefined) continue;
       const displayValue =
         typeof value === "object" ? JSON.stringify(value) : String(value);

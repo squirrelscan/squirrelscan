@@ -323,9 +323,13 @@ export function loadMergedSettings(): Result<MergedSettings> {
     } else {
       const localSettings = parseResult.data;
 
-      // Merge local settings on top, track sources
+      // Merge local settings on top, track sources. Gate on the SAME
+      // writable-key predicate the write path enforces (setSettingValue) so a
+      // repo-local .squirrel/settings.json can't inject non-writable keys like
+      // install_bin_dir/auth — a cloned repo could otherwise steer the
+      // auto-updater's symlink target or forge a session (#1398).
       for (const [key, value] of Object.entries(localSettings)) {
-        if (value !== undefined) {
+        if (value !== undefined && isWritableSetting(key)) {
           (userSettings as Record<string, unknown>)[key] = value;
           sources[key] = "local";
         }

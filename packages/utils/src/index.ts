@@ -35,6 +35,8 @@ export {
   recordToHeaders,
 } from "./headers";
 
+export { isHttpOrHttpsUrl, safeRedirectFetch, type SafeRedirectResult } from "./safe-fetch";
+
 export {
   DEFAULT_MAX_BODY_BYTES,
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,

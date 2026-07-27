@@ -3,6 +3,7 @@ import robotsParser from "robots-parser";
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
 export interface RobotsEvaluator {
   data: RobotsTxtData;
@@ -61,10 +62,15 @@ function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number):
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  return fetch(url, {
+  // #1395: follow redirects manually so per-hop the scheme allowlist applies and
+  // the caller's secret customHeaders are stripped when a redirect changes origin
+  // (native redirect:"follow" would replay them cross-origin).
+  return safeRedirectFetch(url, {
     ...options,
     signal: controller.signal,
-  }).finally(() => clearTimeout(timeout));
+  })
+    .then((result) => result.response)
+    .finally(() => clearTimeout(timeout));
 }
 
 export function fetchRobotsEvaluator(

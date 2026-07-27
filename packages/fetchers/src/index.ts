@@ -2,6 +2,7 @@ import type { RedirectChain } from "@squirrelscan/core-contracts";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   headersForRedirect,
+  isHttpOrHttpsUrl,
   readBodyCapped,
 } from "@squirrelscan/utils";
 
@@ -227,6 +228,16 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
               break;
             }
             const nextUrl = new URL(location, currentUrl).toString();
+            // SECURITY (#1392): a hand-rolled manual-redirect loop bypasses the
+            // runtime's native cross-protocol-redirect rejection, so a
+            // `Location: file:///…` (or data:/blob:/ftp:/…) would otherwise be
+            // re-fetched and its body returned as the page. Refuse any
+            // non-http(s) redirect target — terminal error hop, never fetched.
+            // Scheme-only: private/loopback HOSTS stay allowed (internal audits).
+            if (!isHttpOrHttpsUrl(nextUrl)) {
+              endsInError = true;
+              break;
+            }
             requestHeaders = headersForRedirect(requestHeaders, currentUrl, nextUrl);
             currentUrl = nextUrl;
             continue;
