@@ -1,0 +1,68 @@
+---
+title: "Encoding Corruption"
+description: "Detects mojibake and replacement characters in visible text"
+---
+
+Detects mojibake and replacement characters in visible text
+
+| | |
+|---|---|
+| **Rule ID** | `content/mojibake` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Solution
+
+Mojibake means the bytes and the declared encoding disagree. Fix the declaration first: serve `<meta charset="utf-8">` as the first thing in the head, and send `Content-Type: text/html; charset=utf-8`. If the declaration is already utf-8, the source itself was double-encoded, usually by a CMS migration that read utf-8 bytes as latin1 and re-encoded them. Re-import the affected content from the original source rather than search-and-replacing the visible symptoms, because the same corruption is usually present in fields you cannot see, such as meta descriptions and alt text.
+
+## What it checks
+
+Three families of corruption, in visible text only:
+
+| Kind | Example | Meaning |
+|---|---|---|
+| `utf8-as-latin1` | `Itâ€™s`, `cafÃ©` | utf-8 bytes decoded as latin1 or cp1252 |
+| `replacement-char` | `caf�` | the decoder gave up on those bytes |
+| `double-encoded-entity` | visible `&amp;nbsp;` | the source said `&amp;amp;nbsp;` |
+
+The check reads text with `<script>`, `<style>` and `<noscript>` excluded, never raw HTML, so an encoded sequence inside a script body is not reported. A page with no body is skipped rather than passed.
+
+**Severity depends on certainty.** The replacement character is unambiguous corruption and fails. The other families warn.
+
+## Cause attribution
+
+The finding cross-checks `<meta charset>` so the message names the actual fix rather than just reporting odd characters:
+
+- **No charset declared**: the browser guessed. Add `<meta charset="utf-8">`.
+- **Charset is utf-8**: the declaration is right, so the source is double-encoded. Re-import the content.
+- **Charset is something else**: correct the declaration, then re-check whether the source is also double-encoded.
+
+## False positives
+
+Correctly-decoded accented text is not corruption. Copy such as `Un café à Paris`, `Grüße aus Köln`, `jalapeño`, `25°` or curly quotes stays clean, because the rule matches multi-character *sequences* that only arise from a bad decode, not individual accented letters.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/mojibake"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/mojibake"]
+disable = ["*"]
+```

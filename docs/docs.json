@@ -238,7 +238,8 @@
                   "rules/content/mime-type",
                   "rules/content/article-links",
                   "rules/content/quality",
-                  "rules/content/stale-copyright"
+                  "rules/content/stale-copyright",
+                  "rules/content/mojibake"
                 ]
               },
               {
