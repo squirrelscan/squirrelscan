@@ -14,6 +14,7 @@ import { metaInBodyRule } from "./meta-in-body";
 import { mimeTypeRule } from "./mime-type";
 import { contentQualityRule } from "./quality";
 import { readingLevelRule } from "./reading-level";
+import { staleCopyrightRule } from "./stale-copyright";
 import { wordCountRule } from "./word-count";
 
 export const rules: Rule[] = [
@@ -30,6 +31,7 @@ export const rules: Rule[] = [
   authorInfoRule,
   metaInBodyRule,
   mimeTypeRule,
+  staleCopyrightRule,
 ];
 
 export {
@@ -45,5 +47,6 @@ export {
   metaInBodyRule,
   mimeTypeRule,
   readingLevelRule,
+  staleCopyrightRule,
   wordCountRule,
 };

@@ -1,0 +1,64 @@
+---
+title: "Stale Copyright Year"
+description: "Checks the footer copyright year against the current year"
+---
+
+Checks the footer copyright year against the current year
+
+| | |
+|---|---|
+| **Rule ID** | `content/stale-copyright` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## Solution
+
+A footer copyright year behind the current year is the most common "this site is abandoned" signal a visitor sees, and it costs nothing to fix. Render the year dynamically from the server or build step rather than hardcoding it, or use a range whose end year updates ("2019-2026"). If the date is a deliberate legal assertion tied to a fixed publication, move it out of site chrome and into the page body so it reads as a statement about that content rather than about the site.
+
+## What it checks
+
+Reads `©`, `(c)`, `&copy;` or the word "Copyright" followed by a year or a year range, and compares the **latest** year found against the current year.
+
+- **Ranges are judged on the end year.** In 2026, `© 2019-2026` is clean and `© 2019-2025` warns.
+- **A year ahead of now is not a finding.** Sites legitimately roll the year over early.
+- **Only site chrome is inspected**: `<footer>`, `[role=contentinfo]`, `.footer`, `#footer`, `.site-footer`, `.page-footer` and `#colophon`. A historical year in body copy is correct as written, and an archived post is supposed to say 2019, so neither is reported.
+- Pages with no footer, or a footer with no copyright notice, are **skipped** rather than passed.
+
+## Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `current_year` | number | current UTC year | Year to compare the footer against |
+
+```toml squirrel.toml
+[rules.options."content/stale-copyright"]
+current_year = 2026
+```
+
+Setting `current_year` pins the comparison, which is useful when auditing an archived snapshot of a site as of a particular year.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/stale-copyright"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/stale-copyright"]
+disable = ["*"]
+```

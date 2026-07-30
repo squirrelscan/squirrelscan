@@ -65,8 +65,8 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // rule-surface drift tripwire (see golden-baseline.test.ts for the same fixture).
       expect(v1.meta.pageCount).toBeGreaterThanOrEqual(GOLDEN_BASELINE_PAGE_COUNT);
       expect(v1.healthScore.overall).toBe(48);
-      expect(v1.findings.length).toBe(94709);
-      expect(v1.perRuleTally.length).toBe(262);
+      expect(v1.findings.length).toBe(95209);
+      expect(v1.perRuleTally.length).toBe(263);
     },
     180_000,
   );

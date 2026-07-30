@@ -439,7 +439,7 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 // Public rule/category counts for marketing and doc copy that can't read the
 // live catalog (MDX, plugin manifests, skill files, MCP tool descriptions).
 // PUBLIC_RULE_COUNT_FLOOR is deliberately rounded DOWN from the live total
-// (currently 262) so copy doesn't need a bump on every rule add/remove;
+// (currently 263) so copy doesn't need a bump on every rule add/remove;
 // PUBLIC_CATEGORY_COUNT tracks exactly since categories change far less often.
 // The hosted catalog drift guard fails if the floor exceeds the live count.
 // Bump both by hand when the
