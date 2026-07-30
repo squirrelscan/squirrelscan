@@ -237,7 +237,8 @@
                   "rules/content/meta-in-body",
                   "rules/content/mime-type",
                   "rules/content/article-links",
-                  "rules/content/quality"
+                  "rules/content/quality",
+                  "rules/content/stale-copyright"
                 ]
               },
               {
