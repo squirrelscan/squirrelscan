@@ -11,6 +11,7 @@ import { freshnessRule } from "./freshness";
 import { headingHierarchyRule } from "./heading-hierarchy";
 import { keywordStuffingRule } from "./keyword-stuffing";
 import { metaInBodyRule } from "./meta-in-body";
+import { mojibakeRule } from "./mojibake";
 import { mimeTypeRule } from "./mime-type";
 import { contentQualityRule } from "./quality";
 import { readingLevelRule } from "./reading-level";
@@ -31,6 +32,7 @@ export const rules: Rule[] = [
   authorInfoRule,
   metaInBodyRule,
   mimeTypeRule,
+  mojibakeRule,
   staleCopyrightRule,
 ];
 
@@ -46,6 +48,7 @@ export {
   keywordStuffingRule,
   metaInBodyRule,
   mimeTypeRule,
+  mojibakeRule,
   readingLevelRule,
   staleCopyrightRule,
   wordCountRule,
