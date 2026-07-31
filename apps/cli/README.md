@@ -1,4 +1,4 @@
-# SquirrelScan
+# squirrelscan
 
 CLI SEO audit tool for developers. Analyzes websites for technical SEO issues.
 

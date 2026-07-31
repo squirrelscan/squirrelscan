@@ -52,7 +52,7 @@ export class StorageError extends Error {
       lower.includes("sqlite_busy");
 
     const message = isDbLocked
-      ? `Storage error during ${operation}: SQLite database is busy (locked). Another SquirrelScan crawl/report/analyze command may be running in parallel. Wait for it to finish and retry.`
+      ? `Storage error during ${operation}: SQLite database is busy (locked). Another squirrelscan crawl/report/analyze command may be running in parallel. Wait for it to finish and retry.`
       : `Storage error during ${operation}: ${cause}`;
 
     super(message);

@@ -9,6 +9,7 @@ export * from "./plans";
 export * from "./credits";
 export * from "./limits";
 export * from "./clamp";
+export * from "./control-chars";
 
 // Org-scoped API keys — token format, env→prefix map, scopes (shared by
 // API mint/parse, dashboard display, CLI precedence).
