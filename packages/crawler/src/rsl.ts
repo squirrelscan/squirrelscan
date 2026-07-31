@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
 import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
 import type { RslData, RslLicenseDoc } from "@squirrelscan/core-contracts";
 
@@ -75,7 +76,7 @@ async function fetchLicenseDoc(
       PROBE_TIMEOUT_MS,
     );
     const contentType = response.headers.get("content-type");
-    const raw = await response.text();
+    const raw = await readBodyCapped(response, RSL_MAX_BYTES);
     const body = truncateToBytes(raw, RSL_MAX_BYTES);
     return {
       url,
@@ -118,7 +119,7 @@ export function fetchRslLicensing(
         PROBE_TIMEOUT_MS,
       );
       if (response.ok) {
-        const raw = await response.text();
+        const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
         robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
         linkHeader = response.headers.get("link");
       } else {

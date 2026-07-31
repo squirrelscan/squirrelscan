@@ -10,6 +10,10 @@ import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contract
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
+import {
+  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
@@ -1443,7 +1447,9 @@ export function createCrawler(
             // Check for client-side redirects (meta refresh, JS)
             const contentType = response.headers.get("content-type") || "";
             if (contentType.includes("text/html")) {
-              const html = await response.text();
+              // Runs during seed redirect resolution, before the crawl has any
+              // size limits of its own, so this read needs its own bound.
+              const html = await readBodyCapped(response, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
               const clientRedirect = findClientRedirects(html, currentUrl);
 
               if (clientRedirect && clientRedirect !== currentUrl) {
