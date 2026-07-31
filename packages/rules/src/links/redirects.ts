@@ -4,6 +4,7 @@
 import type { CheckResult, RedirectChain, RedirectHop } from "@squirrelscan/core-contracts";
 
 import { HTTP_PROBE_LIMITS } from "@squirrelscan/utils/constants";
+import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { requestAsync } from "../tools";
 
 export async function followRedirects(url: string): Promise<RedirectChain> {
@@ -68,6 +69,16 @@ export async function followRedirects(url: string): Promise<RedirectChain> {
           statusCode,
           type: "http",
         });
+
+        // Following redirects by hand bypasses the runtime's own cross-protocol
+        // rejection, so the scheme allowlist has to be applied here. This loop
+        // cannot delegate to safeRedirectFetch: that helper returns only the final
+        // response, and this probe exists to report the per-hop status codes.
+        // Record the hop we observed, then refuse to fetch the target.
+        if (!isHttpOrHttpsUrl(nextUrl)) {
+          endsInError = true;
+          break;
+        }
 
         currentUrl = nextUrl;
         continue;
