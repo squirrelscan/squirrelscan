@@ -1,5 +1,6 @@
 // Console report output
 
+import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/control-chars";
 import {
   carriedTag,
   coverageLine,
@@ -39,7 +40,6 @@ import {
 } from "@/cli/format";
 import { groupIssuesByCategory } from "@/reports/grouping";
 import { RULE_CATEGORY_VALUES } from "@/rules/categories";
-import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/control-chars";
 
 /**
  * Every console line in this renderer goes through here.
@@ -53,7 +53,9 @@ import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/con
  */
 function log(...args: unknown[]): void {
   console.log(
-    ...args.map((a) => (typeof a === "string" ? stripControlCharsPreservingSgr(a) : a)),
+    ...args.map((a) =>
+      typeof a === "string" ? stripControlCharsPreservingSgr(a) : a
+    )
   );
 }
 
@@ -190,9 +192,7 @@ export function generateConsoleReport(
         if (hasSub && rule.subcategory !== lastSub) {
           lastSub = rule.subcategory;
           if (rule.subcategory) {
-            log(
-              box.line(` ${fmt.bold(getSubcategoryName(rule.subcategory))}`)
-            );
+            log(box.line(` ${fmt.bold(getSubcategoryName(rule.subcategory))}`));
           }
         }
         const severityLabel =
@@ -244,9 +244,7 @@ export function generateConsoleReport(
               // Show source pages if present (for site-scope items)
               if (item.sourcePages && item.sourcePages.length > 0) {
                 for (const src of item.sourcePages.slice(0, 2)) {
-                  log(
-                    box.line(`       ${fmt.dim(`from ${pathOnly(src)}`)}`)
-                  );
+                  log(box.line(`       ${fmt.dim(`from ${pathOnly(src)}`)}`));
                 }
                 if (item.sourcePages.length > 2) {
                   log(
@@ -428,9 +426,7 @@ function printGroupBreakdown(groups: GroupScore[]): void {
 
 function printCategoryBreakdown(score: HealthScore): void {
   if (score.overall === null) {
-    log(
-      `Health Score: ${fmt.dim("N/A")} ${fmt.dim("(no auditable pages)")}`
-    );
+    log(`Health Score: ${fmt.dim("N/A")} ${fmt.dim("(no auditable pages)")}`);
     log("");
     return;
   }
