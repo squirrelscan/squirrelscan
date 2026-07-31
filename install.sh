@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# SquirrelScan installer
+# squirrelscan installer
 # Usage: curl -fsSL https://install.squirrelscan.com/install.sh | bash
 # Or: curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
 #

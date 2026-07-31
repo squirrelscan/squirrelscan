@@ -1,6 +1,6 @@
 # Code of Conduct
 
-SquirrelScan contributors must keep project spaces professional, specific, and welcoming.
+squirrelscan contributors must keep project spaces professional, specific, and welcoming.
 
 Harassment, threats, discrimination, doxxing, sexualized conduct, and sustained personal attacks are not acceptable. Technical disagreement is expected; address the work and its tradeoffs rather than the person.
 

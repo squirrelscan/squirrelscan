@@ -84,9 +84,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     lines.push(line);
   };
 
-  // White-label drops the "SquirrelScan" title in favour of the org name (or a
+  // White-label drops the "squirrelscan" title in favour of the org name (or a
   // neutral "Audit Report") so the text export carries no squirrelscan branding.
-  const titleBase = whiteLabel ? (options?.branding?.orgName ?? "Audit Report") : "SquirrelScan";
+  const titleBase = whiteLabel ? (options?.branding?.orgName ?? "Audit Report") : "squirrelscan";
   write(`${titleBase}${version ? ` v${version}` : ""}`);
   write("=".repeat(60));
   write(`Auditing: ${report.baseUrl}`);
