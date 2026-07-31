@@ -44,7 +44,7 @@ export function showTelemetryNotice(settings: UserSettings): void {
 
   console.error(
     [
-      "SquirrelScan collects minimal pseudonymous telemetry: event name, CLI version,",
+      "squirrelscan collects minimal pseudonymous telemetry: event name, CLI version,",
       "a random install ID, and bounded error categories. It never sends URLs,",
       "credentials, report contents, or raw error messages.",
       "Disable it with `squirrel self settings set telemetry false` or `NO_TELEMETRY=1`.",

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to SquirrelScan. Bug fixes, rules, tests, documentation, and focused performance improvements are welcome.
+Thanks for contributing to squirrelscan. Bug fixes, rules, tests, documentation, and focused performance improvements are welcome.
 
 ## Development
 

@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
 import type {
   AgentAccessData,
@@ -78,7 +79,7 @@ async function probeOne(
       },
       PROBE_TIMEOUT_MS,
     );
-    const raw = await response.text();
+    const raw = await readBodyCapped(response, AGENT_ACCESS_MAX_BYTES);
     const body = truncateToBytes(raw, AGENT_ACCESS_MAX_BYTES);
     const challengeSignal = detectChallenge(response.headers, body);
     const paymentSignal = detectPayment(response.status, response.headers, body);

@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
 import type { WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
 
@@ -143,7 +144,7 @@ async function probeOne(
         error: "body exceeds cap",
       };
     }
-    const raw = await response.text();
+    const raw = await readBodyCapped(response, WELL_KNOWN_MAX_BYTES);
     const body = truncateToBytes(raw, WELL_KNOWN_MAX_BYTES);
     const looksHtml = looksLikeHtml(body);
     // A SPA-fallback HTML page must never count as valid JSON/markdown.
