@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
@@ -14,6 +15,34 @@ function requestUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.toString();
   return input.url;
+}
+
+// A server whose every response is a 302 pointing at `location`.
+function serveRedirectTo(location: string) {
+  return Bun.serve({
+    port: 0,
+    fetch() {
+      return new Response(null, { status: 302, headers: { location } });
+    },
+  });
+}
+
+// Record every URL passed to global fetch while still performing it, so a test
+// can assert a scheme was never even attempted (not merely that its body was
+// discarded). Returns the recorded list plus a restore function.
+function recordFetches(): { requested: string[]; restore: () => void } {
+  const originalFetch = globalThis.fetch;
+  const requested: string[] = [];
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    requested.push(requestUrl(input));
+    return originalFetch(input as RequestInfo, init);
+  }) as typeof fetch;
+  return {
+    requested,
+    restore: () => {
+      globalThis.fetch = originalFetch;
+    },
+  };
 }
 
 describe("standard fetch redirect headers", () => {
@@ -117,6 +146,123 @@ describe("cross-protocol redirect refusal (#1392)", () => {
       );
     } finally {
       source.stop(true);
+    }
+  });
+
+  // One case per non-http(s) scheme, on both hand-rolled redirect loops. The
+  // `data:text/html` hop matters twice over: its body would be stored AND
+  // parsed, so it must never reach `result.body` in the first place.
+  const REFUSED_LOCATIONS = [
+    { label: "file:// (/etc/passwd)", location: "file:///etc/passwd", marker: "root:" },
+    { label: "file:// (/etc/hosts)", location: "file:///etc/hosts", marker: "localhost" },
+    {
+      label: "file:// (/proc/self/environ)",
+      location: "file:///proc/self/environ",
+      marker: "PATH=",
+    },
+    {
+      label: "data:text/html",
+      location: "data:text/html,<html><title>pwned-marker</title></html>",
+      marker: "pwned-marker",
+    },
+    { label: "blob:", location: "blob:http://127.0.0.1/abc", marker: "pwned-marker" },
+    { label: "ftp:", location: "ftp://127.0.0.1/etc/passwd", marker: "root:" },
+    { label: "javascript:", location: "javascript:alert(1)", marker: "alert(1)" },
+  ] as const;
+
+  for (const { label, location, marker } of REFUSED_LOCATIONS) {
+    test(`crawler fetchPage refuses a ${label} redirect target`, async () => {
+      const source = serveRedirectTo(location);
+      const spy = recordFetches();
+
+      try {
+        const result = await Effect.runPromise(
+          fetchPage(`http://127.0.0.1:${source.port}/x`, {
+            userAgent: "squirrel-test",
+            timeoutMs: 5_000,
+            followRedirects: true,
+          }),
+        );
+
+        // Terminal error hop: the redirect is not followed, so the final URL
+        // stays on the http origin and the 302 is the final response.
+        expect(result.status).toBe(302);
+        expect(result.finalUrl).toContain(`127.0.0.1:${source.port}`);
+        expect(result.redirectChain.endsInError).toBe(true);
+        // Nothing from the refused target reaches the body that crawler.ts
+        // stores as PageRecord.html (and would otherwise parse).
+        expect(result.body).not.toContain(marker);
+        expect(spy.requested.some((u) => !u.startsWith("http:") && !u.startsWith("https:"))).toBe(
+          false,
+        );
+      } finally {
+        spy.restore();
+        source.stop(true);
+      }
+    });
+
+    test(`fetchers document fetcher refuses a ${label} redirect target`, async () => {
+      const source = serveRedirectTo(location);
+      const spy = recordFetches();
+
+      try {
+        const result = await createFetchDocumentFetcher().fetch({
+          url: `http://127.0.0.1:${source.port}/x`,
+          timeoutMs: 5_000,
+          followRedirects: true,
+        });
+
+        expect(result.status).toBe(302);
+        expect(result.finalUrl).toContain(`127.0.0.1:${source.port}`);
+        expect(result.redirectChain.endsInError).toBe(true);
+        expect(result.body).not.toContain(marker);
+        expect(spy.requested.some((u) => !u.startsWith("http:") && !u.startsWith("https:"))).toBe(
+          false,
+        );
+      } finally {
+        spy.restore();
+        source.stop(true);
+      }
+    });
+  }
+
+  // The guard is SCHEME-only (#1417 tracks host policy at the hosted egress
+  // boundary): auditing localhost / private-IP sites must keep working, including
+  // when the redirect target itself is such a host.
+  test("still follows an http(s) redirect to a loopback host on both paths", async () => {
+    const target = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response("<html>internal ok</html>", {
+          headers: { "content-type": "text/html" },
+        });
+      },
+    });
+    const source = serveRedirectTo(`http://127.0.0.1:${target.port}/final`);
+
+    try {
+      const crawled = await Effect.runPromise(
+        fetchPage(`http://localhost:${source.port}/x`, {
+          userAgent: "squirrel-test",
+          timeoutMs: 5_000,
+          followRedirects: true,
+        }),
+      );
+      expect(crawled.status).toBe(200);
+      expect(crawled.body).toContain("internal ok");
+      expect(crawled.redirectChain.endsInError).toBe(false);
+
+      const fetched = await createFetchDocumentFetcher().fetch({
+        url: `http://localhost:${source.port}/x`,
+        timeoutMs: 5_000,
+        followRedirects: true,
+      });
+      expect(fetched.status).toBe(200);
+      expect(fetched.body).toContain("internal ok");
+      expect(fetched.redirectChain.endsInError).toBe(false);
+    } finally {
+      source.stop(true);
+      target.stop(true);
     }
   });
 });
