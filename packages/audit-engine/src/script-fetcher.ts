@@ -4,6 +4,7 @@
 import { Effect } from "effect";
 
 import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 
@@ -158,13 +159,17 @@ async function fetchSingleScriptAsync(
       };
     }
 
-    const text = await response.text();
+    const maxSizeBytes = options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES;
+    // Read one byte past the limit rather than the limit itself: the check below
+    // rejects anything OVER the cap, so reading exactly `maxSizeBytes` would
+    // truncate an oversized script to precisely the limit and the rejection
+    // would never fire. At cap+1 an oversized body still trips it, while the
+    // read stays bounded — previously this was an unbounded `.text()` whose
+    // size was only measured once the whole body was already in memory.
+    const text = await readBodyCapped(response, maxSizeBytes + 1);
     const sizeBytes = new TextEncoder().encode(text).length;
 
-    if (
-      sizeBytes >
-      (options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES)
-    ) {
+    if (sizeBytes > maxSizeBytes) {
       return {
         ...defaultResult,
         status: response.status,

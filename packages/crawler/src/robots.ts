@@ -3,7 +3,12 @@ import robotsParser from "robots-parser";
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+
+// Matches the limit Google documents for robots.txt; anything past it is
+// ignored by real crawlers, so there is nothing to gain by reading further.
+const ROBOTS_MAX_BYTES = 512 * 1024;
 
 export interface RobotsEvaluator {
   data: RobotsTxtData;
@@ -114,7 +119,10 @@ export function fetchRobotsEvaluator(
         };
       }
 
-      const content = await response.text();
+      // Bounded: robots.txt is fetched before anything else is known about the
+      // host, so an unbounded read here is reachable on the very first request
+      // of an audit.
+      const content = await readBodyCapped(response, ROBOTS_MAX_BYTES);
       return createRobotsEvaluator(robotsUrl, content, userAgent);
     },
     catch: (error) => {
