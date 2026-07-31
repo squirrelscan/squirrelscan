@@ -161,6 +161,23 @@ for (const [hash, notice] of [...noticeTexts].sort(([a], [b]) => a.localeCompare
 }
 
 const output = `${lines.join("\n").replace(/\n+$/, "")}\n`;
-await Bun.write(join(root, "THIRD_PARTY_NOTICES.md"), output);
-await Bun.write(join(root, "npm", "THIRD_PARTY_NOTICES.md"), output);
-console.log(`Wrote notices for ${packages.size} packages (${noticeTexts.size} unique texts).`);
+const targets = [join(root, "THIRD_PARTY_NOTICES.md"), join(root, "npm", "THIRD_PARTY_NOTICES.md")];
+
+if (process.argv.includes("--check")) {
+  const stale = targets.filter((target) => {
+    try {
+      return readFileSync(target, "utf8") !== output;
+    } catch {
+      return true;
+    }
+  });
+  if (stale.length > 0) {
+    console.error(`Third-party notices are out of date: ${stale.join(", ")}`);
+    console.error("Run `bun run notices:generate` and commit the result.");
+    process.exit(1);
+  }
+  console.log(`Third-party notices are up to date (${packages.size} packages).`);
+} else {
+  for (const target of targets) await Bun.write(target, output);
+  console.log(`Wrote notices for ${packages.size} packages (${noticeTexts.size} unique texts).`);
+}
