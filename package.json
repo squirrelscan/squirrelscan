@@ -17,7 +17,7 @@
     "docs:build": "cd docs && bun run build",
     "audit:dependencies": "bun audit --ignore=GHSA-9wv6-86v2-598j --ignore=GHSA-mh99-v99m-4gvg",
     "notices:generate": "bun run scripts/generate-third-party-notices.ts",
-    "notices:check": "bun run notices:generate && git diff --exit-code -- THIRD_PARTY_NOTICES.md npm/THIRD_PARTY_NOTICES.md",
+    "notices:check": "bun run scripts/generate-third-party-notices.ts --check",
     "check:psl-freshness": "bun run scripts/check-tldts-freshness.ts",
     "release": "bun run scripts/release.ts"
   },
