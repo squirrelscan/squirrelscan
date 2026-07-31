@@ -9,7 +9,7 @@ export function isDatabaseLockMessage(message: string): boolean {
 }
 
 export function getDatabaseLockWarning(): string {
-  return "Warning: Another SquirrelScan process appears to be using SQLite. Avoid running multiple crawl/report/analyze commands in parallel for the same workspace.";
+  return "Warning: Another squirrelscan process appears to be using SQLite. Avoid running multiple crawl/report/analyze commands in parallel for the same workspace.";
 }
 
 export function printDatabaseLockWarningIfNeeded(

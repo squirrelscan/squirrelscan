@@ -254,4 +254,4 @@ NO_TELEMETRY=1 squirrel audit https://example.com
 
 ## License
 
-The CLI and the repository contents are licensed under the [MIT License](LICENSE). SquirrelScan names and logos are covered by [TRADEMARKS.md](TRADEMARKS.md).
+The CLI and the repository contents are licensed under the [MIT License](LICENSE). squirrelscan names and logos are covered by [TRADEMARKS.md](TRADEMARKS.md).

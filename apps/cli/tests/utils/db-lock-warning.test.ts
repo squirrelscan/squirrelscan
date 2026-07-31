@@ -25,7 +25,7 @@ describe("isDatabaseLockMessage", () => {
 describe("getDatabaseLockWarning", () => {
   test("returns user guidance for parallel commands", () => {
     const warning = getDatabaseLockWarning();
-    expect(warning).toContain("Another SquirrelScan process");
+    expect(warning).toContain("Another squirrelscan process");
     expect(warning).toContain("parallel");
   });
 });

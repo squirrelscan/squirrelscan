@@ -9,7 +9,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SquirrelScan version
+      label: squirrelscan version
       placeholder: Output of squirrel --version
     validations:
       required: true
