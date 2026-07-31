@@ -9,6 +9,7 @@ import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
+import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
 export interface LlmRenderOptions {
   version?: string;
@@ -368,5 +369,8 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   }
 
   lines.push("</audit>");
-  return lines.join("\n");
+  // Sanitise once, at the boundary — see the note in text.ts. This output is
+  // documented as pipeable straight into an agent (`--format llm | claude`), so
+  // it is also the path where control bytes would land in a model's context.
+  return stripControlChars(lines.join("\n"));
 }
