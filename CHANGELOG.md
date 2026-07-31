@@ -22,11 +22,25 @@ Earlier releases (v0.0.56 and prior) are on the
 
 ## v0.0.81
 
-A security release. Audits now treat everything a site tells them to fetch as
+A security release, plus two new content rules. Audits now treat everything a
+site tells them to fetch, and everything a site tells them to print, as
 untrusted, and `squirrel self settings` no longer prints your credentials.
 
 Everyone should update. If you audit sites you do not control, or you use
 `-H/--header` to pass authenticated headers, update before your next run.
+
+### Added
+
+- **`content/stale-copyright` flags a footer year that has fallen behind.** A
+  copyright year stuck in the past is the most common "this site is abandoned"
+  signal a visitor sees, and it costs nothing to fix. It is a warning at low
+  weight, so one templated footer repeated across every page cannot dominate
+  your content score.
+- **`content/mojibake` flags encoding corruption in visible text.** Catches
+  garbled sequences like `â€™` and `Ã©`, and replacement characters, in the text
+  your visitors actually read. These almost always mean a template, export, or
+  CMS migration lost the original encoding, and the same corruption is usually
+  sitting in fields you cannot see, such as meta descriptions and alt text.
 
 ### Fixed
 
@@ -40,6 +54,21 @@ Everyone should update. If you audit sites you do not control, or you use
   crosses to another origin, on auxiliary probe requests as well as page
   fetches. These values are documented as secrets, so this closes a path where
   a redirect could forward them to a host you did not choose.
+- **A hostile response can no longer exhaust an audit's memory.** Every read of
+  an untrusted response body is now bounded as it streams and cancelled at the
+  limit: robots.txt, sitemaps, `llms.txt`, `.well-known` documents, RSL,
+  fetched scripts, and page bodies. The previous guards could not do this. A
+  `content-length` header is absent on a chunked response and reports the
+  compressed size on an encoded one, and the size limit was otherwise applied
+  only once the whole body was already in memory. A small compressed file that
+  expands to gigabytes now stops at the limit instead.
+- **A site can no longer repaint your terminal.** Page text reaches the console
+  report and the `text` and `llm` outputs through many fields, and it could
+  carry terminal control sequences: a site could embed an escape that clears
+  your screen and prints its own "0 issues found" over the real result. Control
+  characters are now stripped where the report is written. The console keeps
+  colour codes, which can only change how text looks and never move the cursor
+  or clear the screen, so the report itself is unchanged.
 - **`squirrel self settings` redacts credentials.** The command printed the
   stored auth token, and any provider keys held in the plaintext fallback used
   when the OS keychain is unavailable. Output is now redacted. If you have
@@ -50,6 +79,8 @@ Everyone should update. If you audit sites you do not control, or you use
 - **Repo-local settings are limited to safe keys.** A `settings.json` inside a
   checkout can now only influence the documented writable settings, so cloning
   an untrusted repository cannot redirect where the CLI installs updates.
+- **Consistent lowercase branding.** The product is "squirrelscan" everywhere,
+  including the text report title and the database lock warning.
 
 ## v0.0.80
 

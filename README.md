@@ -161,14 +161,14 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 |----------|-------|-------|
 | Accessibility | 59 | ARIA, button/input names, landmarks, lists, tables, focus |
 | Performance | 29 | Core Web Vitals, compression, caching, JS optimization |
-| Crawlability | 17 | Robots.txt, sitemaps, indexability |
+| Crawlability | 18 | Robots.txt, sitemaps, indexability |
 | Agent Experience | 17 | How ready a site is for AI agents to read, discover, operate |
 | Security | 16 | HTTPS, CSP, cookies, leaked secrets |
 | Images | 15 | Alt text, formats, lazy loading, optimization |
 | E-E-A-T | 15 | Authority, trust, expertise signals |
 | Links | 14 | Broken links, redirects, anchor text |
 | Core SEO | 13 | Meta tags, canonical, doctype, charset |
-| Content | 12 | Readability, freshness, word count |
+| Content | 14 | Readability, freshness, word count, encoding, copyright year |
 | Structured Data | 10 | JSON-LD, schema validation |
 | Site Integrity | 9 | Injected pages, phishing kits, malware, SEO spam |
 | URL Structure | 8 | Length, format, parameters |
@@ -181,7 +181,7 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 | Internationalization | 2 | Hreflang, lang attribute |
 | Analytics | 2 | GTM, consent mode |
 
-**Total: 261 rules across 21 categories**
+**Total: 264 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
