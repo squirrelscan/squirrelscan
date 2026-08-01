@@ -44,7 +44,7 @@
 // capabilities so downstream concurrency planning (which keys on the
 // "cloud-render" id) is unaffected.
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 import { normalizeHtmlForFingerprint } from "@squirrelscan/utils/fingerprint";
 
