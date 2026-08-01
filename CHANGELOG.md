@@ -20,6 +20,39 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.82
+
+Follow-ups to the v0.0.81 security release, plus two crawl-correctness fixes.
+Pages listed in a sitemap with query strings are now crawled at the right URL,
+and a single network blip no longer takes down a whole audit.
+
+### Fixed
+
+- **Sitemap URLs with query strings are crawled correctly.** XML requires `&` to
+  be written `&amp;` inside a `<loc>`, and that escape was surviving into the
+  URL the crawler enqueued. A sitemap entry for `?a=1&amp;b=2` was fetched
+  literally, so those pages 404'd or were audited as the wrong URL, and on a
+  site that paginates or filters through query strings that can be most of the
+  sitemap. All five predefined XML escapes are now decoded, in a urlset and in
+  the child entries of a sitemap index.
+- **A single network blip no longer aborts the audit.** The pre-flight
+  reachability probe had no retry, so one transient DNS failure, connection
+  reset, or timeout ended the run before the crawl started. It now makes up to
+  three attempts with a short backoff, inside a 20 second overall budget so a
+  genuinely unreachable site still fails quickly. Only transient failures are
+  retried: a refused connection or an HTTP error is still reported on the first
+  attempt.
+- **The bounded-read guard now covers every path.** v0.0.81 bounded untrusted
+  response bodies as they stream. On the fallback path taken when a runtime
+  hands back no readable stream, the limit was still applied only once the body
+  was in memory. That path now refuses an over-declared `content-length` before
+  reading anything, and truncates by bytes rather than characters, so a
+  multi-byte character cannot split at the boundary.
+- **Builtin crypto imports are explicit.** The crawler and the fetchers imported
+  `crypto` unqualified. That is an undeclared dependency which can resolve to a
+  deprecated npm stub instead of the runtime builtin, depending on what else is
+  installed. Both now import `node:crypto`.
+
 ## v0.0.81
 
 A security release, plus two new content rules. Audits now treat everything a
