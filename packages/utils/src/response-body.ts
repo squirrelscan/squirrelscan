@@ -1,3 +1,5 @@
+import { truncateToBytes } from "./bytes";
+
 /** Default cap for small probe responses. */
 export const DEFAULT_MAX_BODY_BYTES = 1_000_000;
 
@@ -12,7 +14,13 @@ export const DEFAULT_MAX_DOCUMENT_BODY_BYTES = 10 * 1024 * 1024;
 export async function readBodyCapped(res: Response, maxBytes: number): Promise<string> {
   const stream = res.body;
   if (!stream || typeof stream.getReader !== "function") {
-    return (await res.text()).slice(0, maxBytes);
+    // No stream to meter (some runtimes and mocks): a partial read is not
+    // possible, so refuse bodies that declare themselves over the cap before
+    // buffering anything, and slice the rest by BYTES — String#slice counts
+    // UTF-16 code units, which can retain up to 2x maxBytes of multibyte text.
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > maxBytes) return "";
+    return truncateToBytes(await res.text(), maxBytes);
   }
 
   const reader = stream.getReader();
