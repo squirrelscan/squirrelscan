@@ -65,6 +65,49 @@ function hashText(value: string): string {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex");
 }
 
+/**
+ * Versions recorded in bun.lock, keyed by package name.
+ *
+ * The walk below reads versions off whatever happens to be installed in
+ * node_modules, which is local state: a partial or stale install silently
+ * yields a different version than the lockfile pins, so the generated notices
+ * disagree with a correct repo and `--check` fails for a reason the contributor
+ * cannot see (#1410). The lockfile is the authority, so any disagreement is
+ * reported as "your install is stale", not as "the notices are wrong".
+ */
+function lockfileVersions(): Map<string, Set<string>> {
+  const versions = new Map<string, Set<string>>();
+  const path = join(root, "bun.lock");
+  if (!existsSync(path)) return versions;
+  // bun.lock is JSONC: strip trailing commas before parsing.
+  const raw = readFileSync(path, "utf8").replace(/,(\s*[}\]])/g, "$1");
+  let parsed: { packages?: Record<string, unknown> };
+  try {
+    parsed = JSON.parse(raw) as { packages?: Record<string, unknown> };
+  } catch {
+    return versions;
+  }
+  // A name can legitimately appear at several versions — the lockfile records
+  // nested resolutions under path keys ("@squirrelscan/config/zod"), so collect
+  // every version per name rather than letting the last key win.
+  for (const entry of Object.values(parsed.packages ?? {})) {
+    const descriptor = Array.isArray(entry) ? entry[0] : entry;
+    if (typeof descriptor !== "string") continue;
+    // "name@version" / "@scope/name@version" — split on the LAST @.
+    const at = descriptor.lastIndexOf("@");
+    if (at <= 0) continue;
+    const name = descriptor.slice(0, at);
+    const version = descriptor.slice(at + 1);
+    const existing = versions.get(name);
+    if (existing) existing.add(version);
+    else versions.set(name, new Set([version]));
+  }
+  return versions;
+}
+
+const lockedVersions = lockfileVersions();
+const versionMismatches: string[] = [];
+
 const packages = new Map<string, PackageNotice>();
 const noticeTexts = new Map<string, { filename: string; text: string; packages: Set<string> }>();
 const visitedDirectories = new Set<string>();
@@ -82,6 +125,12 @@ function visit(directory: string): void {
   ]);
 
   if (pkg.name && !pkg.name.startsWith("@squirrelscan/")) {
+    const locked = lockedVersions.get(pkg.name);
+    if (locked && pkg.version && !locked.has(pkg.version)) {
+      versionMismatches.push(
+        `${pkg.name}: installed ${pkg.version}, bun.lock has ${[...locked].sort().join(", ")}`,
+      );
+    }
     const id = `${pkg.name}@${pkg.version ?? "unknown"}`;
     const noticeHashes: string[] = [];
     for (const filename of readdirSync(realDirectory).sort()) {
@@ -162,6 +211,16 @@ for (const [hash, notice] of [...noticeTexts].sort(([a], [b]) => a.localeCompare
 
 const output = `${lines.join("\n").replace(/\n+$/, "")}\n`;
 const targets = [join(root, "THIRD_PARTY_NOTICES.md"), join(root, "npm", "THIRD_PARTY_NOTICES.md")];
+
+// A stale/partial node_modules yields versions the lockfile does not pin, so
+// the notices generated from it are wrong no matter what the committed file
+// says. Fail on that directly instead of reporting it as out-of-date notices.
+if (versionMismatches.length > 0) {
+  console.error("Installed dependencies do not match bun.lock:");
+  for (const mismatch of versionMismatches.sort()) console.error(`  ${mismatch}`);
+  console.error("Run `bun install` and try again.");
+  process.exit(1);
+}
 
 if (process.argv.includes("--check")) {
   const stale = targets.filter((target) => {
