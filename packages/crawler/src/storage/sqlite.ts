@@ -5,7 +5,7 @@
 // Uses bun:sqlite for native SQLite bindings
 
 import { Database } from "bun:sqlite";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";

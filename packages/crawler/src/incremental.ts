@@ -1,7 +1,7 @@
 // Change detection for incremental crawling
 // Uses ETag, Last-Modified, and content hash to detect changes
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 import {
   type CacheControl,
