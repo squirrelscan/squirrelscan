@@ -81,13 +81,11 @@ describe("sitemap entity expansion", () => {
     ]);
   });
 
-  // Pins CURRENT behaviour, which is wrong but is the cost of the guard above:
-  // `processEntities: false` disables the five XML predefined escapes too, so a
-  // legitimate `&amp;` in a query string survives into the enqueued URL. Turning
-  // entities back on to fix it would reopen the first test, so the fix is to
-  // decode the predefined five after parsing. Tracked separately; when that
-  // lands this expectation flips to `?q=1&page=2`.
-  test("KNOWN BUG: predefined XML escapes are not decoded", () => {
+  // The other half of the guard above: `processEntities: false` also suppresses
+  // the five XML predefined escapes, so they are decoded after parsing. Declared
+  // entities stay unexpanded (first test) while a legitimate `&amp;` in a query
+  // string reaches the crawler as `&`. Escape coverage: sitemap-xml-escapes.test.ts.
+  test("predefined XML escapes are decoded", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset>
   <url><loc>https://example.com/search?q=1&amp;page=2</loc></url>
@@ -95,6 +93,6 @@ describe("sitemap entity expansion", () => {
 
     const result = parseSitemap(xml, SITEMAP_URL);
 
-    expect(result.urls[0]?.loc).toBe("https://example.com/search?q=1&amp;page=2");
+    expect(result.urls[0]?.loc).toBe("https://example.com/search?q=1&page=2");
   });
 });
