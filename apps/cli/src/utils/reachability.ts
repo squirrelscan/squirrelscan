@@ -12,6 +12,47 @@ const REACHABILITY_TIMEOUT_MS = 10000;
 const REACHABILITY_BODY_SAMPLE_BYTES = 10240;
 const REACHABILITY_BODY_SAMPLE_TIMEOUT_MS = 1500;
 
+// The probe runs before any crawling, and a single transient blip used to abort
+// the whole audit (the crawler itself has retried since forever). Retry only
+// errors that can plausibly succeed on a second try, and bound the total spend
+// so a genuinely dead host still fails fast.
+export const REACHABILITY_MAX_ATTEMPTS = 3;
+const REACHABILITY_RETRY_BASE_DELAY_MS = 300;
+const REACHABILITY_TOTAL_BUDGET_MS = 20000;
+
+/**
+ * Errors worth a second attempt. Definitive answers (DNS says the name does not
+ * exist, the port actively refused, the certificate is bad) are not retried:
+ * they resolve in milliseconds and repeating them only delays the failure.
+ */
+export function isTransientReachabilityError(
+  error: string | undefined
+): boolean {
+  if (!error) return false;
+  const message = error.toLowerCase();
+  if (
+    message.includes("dns") ||
+    message.includes("host not found") ||
+    message.includes("refused") ||
+    message.includes("certificate") ||
+    message.includes("ssl") ||
+    message.includes("tls")
+  ) {
+    return false;
+  }
+  return (
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("socket") ||
+    message.includes("network") ||
+    message.includes("econnreset") ||
+    message.includes("fetch failed")
+  );
+}
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 export interface ReachabilityResult {
   reachable: boolean;
   error?: string;
@@ -111,10 +152,34 @@ async function readBodySample(
  * Check if a URL is reachable
  * Uses browser-like headers for WAF compatibility
  * Detects WAF/bot protection on target site
+ *
+ * Transient failures are retried with a short backoff (see
+ * isTransientReachabilityError); definitive ones fail on the first attempt.
  */
 export async function checkReachability(
   url: string
 ): Promise<ReachabilityResult> {
+  const deadline = Date.now() + REACHABILITY_TOTAL_BUDGET_MS;
+  let result = await attemptReachability(url);
+
+  for (let attempt = 2; attempt <= REACHABILITY_MAX_ATTEMPTS; attempt++) {
+    if (result.reachable || !isTransientReachabilityError(result.error)) break;
+    const delay = REACHABILITY_RETRY_BASE_DELAY_MS * 2 ** (attempt - 2);
+    if (Date.now() + delay >= deadline) break;
+    logger.debug(
+      "reachability retry",
+      url,
+      `attempt ${attempt}`,
+      result.error ?? ""
+    );
+    await sleep(delay);
+    result = await attemptReachability(url);
+  }
+
+  return result;
+}
+
+async function attemptReachability(url: string): Promise<ReachabilityResult> {
   // Fast path for localhost/loopback using native fetch (no WAF detection needed)
   let isLocalhost = false;
   try {
