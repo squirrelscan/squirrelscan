@@ -13,6 +13,28 @@ const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
 };
 
+/**
+ * Decode the five XML predefined escapes.
+ *
+ * The parser runs with `processEntities: false` to block declared-entity
+ * substitution (billion-laughs / XXE, pinned by sitemap-entity-expansion.test.ts).
+ * That flag also suppresses the predefined five, which are not declarations and
+ * are the spec-mandated way to encode `&` in a sitemap URL — without this a
+ * `?q=1&amp;page=2` loc is fetched literally, hitting a different URL than the
+ * sitemap advertised.
+ *
+ * `&amp;` is decoded LAST so `&amp;lt;` yields the literal `&lt;` rather than
+ * double-decoding to `<`.
+ */
+function decodeXmlEscapes(value: string): string {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
 export function parseSitemap(content: string, url: string): SitemapData {
   const errors: string[] = [];
   const parser = new XMLParser({
@@ -37,7 +59,8 @@ export function parseSitemap(content: string, url: string): SitemapData {
       const sitemapEntries = ensureArray(sitemapIndex.sitemap);
       const childSitemaps = sitemapEntries
         .map((entry) => entry.loc?.trim())
-        .filter((loc): loc is string => Boolean(loc));
+        .filter((loc): loc is string => Boolean(loc))
+        .map(decodeXmlEscapes);
 
       return {
         url,
@@ -69,8 +92,9 @@ export function parseSitemap(content: string, url: string): SitemapData {
       const urls: SitemapUrl[] = [];
 
       for (const entry of urlEntries) {
-        const loc = entry.loc?.trim();
-        if (!loc) continue;
+        const rawLoc = entry.loc?.trim();
+        if (!rawLoc) continue;
+        const loc = decodeXmlEscapes(rawLoc);
 
         const priorityRaw = entry.priority;
         const priority =
