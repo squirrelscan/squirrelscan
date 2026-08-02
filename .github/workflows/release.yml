@@ -212,6 +212,108 @@ jobs:
         working-directory: npm
         run: npm publish --access public --provenance
 
+  installers-publish:
+    name: Publish installers and channel metadata
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      # wrangler >= 4.99 requires Node 22+; runners default to Node 20.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.x"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-binaries
+          path: release-assets
+
+      # install.squirrelscan.com serves the install scripts and the per-channel
+      # "latest release" metadata from R2, because resolving a version through
+      # api.github.com is capped at 60 req/hr per IP and users behind shared
+      # egress (corporate NAT, VPN, CI) get 403s. R2 is only correct while
+      # something keeps writing to it, and that is this job.
+      - name: Build per-channel manifests
+        env:
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          # The build job generates one manifest.json and it always carries
+          # channel="stable". The beta channel serves every release, so its copy
+          # has to be restamped: a channels/beta.json that says "stable" is how
+          # the two keys ended up byte-identical last time.
+          jq '.channel = "beta"' release-assets/manifest.json > channel-beta.json
+          if [ "$PRERELEASE" != "true" ]; then
+            jq '.channel = "stable"' release-assets/manifest.json > channel-stable.json
+          fi
+
+      - name: Publish installers and channel metadata to R2
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+
+          put() {
+            npx --yes wrangler@4.99.0 r2 object put "squirrelscan-installers/$1" \
+              --file "$2" --content-type "$3" --remote
+          }
+
+          put install.sh install.sh "text/x-shellscript; charset=utf-8"
+          put install.ps1 install.ps1 "text/plain; charset=utf-8"
+
+          # Beta tracks every release; stable only non-prereleases. This mirrors
+          # the worker's GitHub fallback (beta accepts prereleases, stable does
+          # not) so the primary and fallback paths can never disagree about what
+          # a channel means.
+          put channels/beta.json channel-beta.json "application/json; charset=utf-8"
+          if [ "$PRERELEASE" != "true" ]; then
+            put channels/stable.json channel-stable.json "application/json; charset=utf-8"
+          fi
+
+      # Writing to a bucket proves nothing about the bucket the deployed worker
+      # reads: they are separate configs and can point at different accounts.
+      # Assert the pairing against the live endpoint instead of assuming it.
+      - name: Verify the live endpoint serves this release
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          verify() {
+            channel="$1"
+            got_version="" got_channel=""
+            # Responses are edge-cached for 300s, so a colo that answered before
+            # the upload can keep serving the previous object for a few minutes.
+            # Poll past that window rather than racing it.
+            for _ in $(seq 1 24); do
+              body=$(curl -fsS "https://install.squirrelscan.com/releases/${channel}" || true)
+              got_version=$(printf '%s' "$body" | jq -r '.version // ""' 2>/dev/null || true)
+              got_channel=$(printf '%s' "$body" | jq -r '.channel // ""' 2>/dev/null || true)
+              if [ "$got_version" = "$VERSION" ] && [ "$got_channel" = "$channel" ]; then
+                echo "/releases/${channel} -> ${got_version} (${got_channel})"
+                return 0
+              fi
+              sleep 20
+            done
+            echo "::error::/releases/${channel} reports version='${got_version}' channel='${got_channel}', expected version='${VERSION}' channel='${channel}'"
+            return 1
+          }
+
+          verify beta
+          if [ "$PRERELEASE" != "true" ]; then
+            verify stable
+          fi
+
   hosted-release-refresh:
     name: Refresh hosted release cache
     needs: [version, github-release]
