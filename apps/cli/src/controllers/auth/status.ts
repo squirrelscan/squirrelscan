@@ -4,7 +4,10 @@
 // authoritative / fail-closed: an invalid env token errors here rather than
 // silently reporting a cached login session.
 
-import type { ApiKeyScope } from "@squirrelscan/core-contracts/api-keys";
+import {
+  type ApiKeyScope,
+  isApiKey,
+} from "@squirrelscan/core-contracts/api-keys";
 
 import { STATUS_REQUEST_TIMEOUT_MS } from "@/constants";
 import { type Result, ok, err, commandError } from "@/controllers/types";
@@ -12,6 +15,7 @@ import { cliApi } from "@/lib/api-client";
 import {
   API_TOKEN_ENV_VAR,
   activeEnvTokenVar,
+  apiKeyNotVerifiableMessage,
   type CredentialSource,
   describeEnvToken,
   envTokenRejectedMessage,
@@ -105,6 +109,21 @@ export async function runAuthStatus(): Promise<Result<StatusResult>> {
 
     if (!res.ok) {
       if (res.status === 401) {
+        // An org API key is ALWAYS 401 here: /v1/auth/whoami is the CLI-session
+        // endpoint and only accepts a `sqcli_…` login token. Saying "invalid,
+        // revoked, expired, or wrong environment" about a key that works for
+        // every other cloud call sends the user hunting for a problem that
+        // isn't there, so name the real reason first.
+        if (isApiKey(credential.token)) {
+          return err(
+            commandError(
+              "API_KEY_NOT_VERIFIABLE",
+              apiKeyNotVerifiableMessage(
+                credential.source === "env" ? activeEnvTokenVar() : null
+              )
+            )
+          );
+        }
         // FAIL-CLOSED: an env token rejected by the server is a hard error; we
         // never fall back to (or silently report) the local login session.
         if (credential.source === "env") {
