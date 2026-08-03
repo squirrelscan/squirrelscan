@@ -364,6 +364,12 @@ export interface ReportRuleResult {
 export interface AuditReport {
   crawlId?: string; // UUID of the crawl this report was generated from
   baseUrl: string;
+  /**
+   * Where the seed's redirects resolved to, when that is a DIFFERENT site from
+   * `baseUrl` — the redirect left the seed's site and was refused, not adopted.
+   * Absent when the seed did not redirect off-site.
+   */
+  finalUrl?: string;
   timestamp: string;
   totalPages: number;
   passed: number;

@@ -234,6 +234,14 @@ export function auditStatusToLifecycle(
 export interface AuditReport {
   crawlId?: string;
   baseUrl: string;
+  /**
+   * Where the seed URL's redirects resolved to, when that is a DIFFERENT site
+   * from `baseUrl` — i.e. the redirect left the seed's registrable domain and
+   * was refused rather than adopted. `baseUrl` always stays the site the user
+   * asked for; this records the redirect so it is still visible in the output.
+   * Absent when the seed did not redirect off-site.
+   */
+  finalUrl?: string;
   timestamp: string;
   totalPages: number;
   passed: number;

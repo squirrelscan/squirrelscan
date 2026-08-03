@@ -65,6 +65,7 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
+import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { reconstructReport } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
@@ -73,7 +74,12 @@ import { initRequestTool } from "@/tools/request";
 import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
 import { summarizeRenderTimings } from "@/utils/render-timing-summary";
-import { getHostname, isLoopbackHost, parseUserUrl } from "@/utils/url";
+import {
+  getHostname,
+  getOrigin,
+  isLoopbackHost,
+  parseUserUrl,
+} from "@/utils/url";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
 
 /**
@@ -935,8 +941,10 @@ export async function runAudit(
         )
       );
 
-      // Check for existing crawl to determine resume vs new crawl
-      const baseUrl = new URL(finalUrl).origin;
+      // Check for existing crawl to determine resume vs new crawl. Keyed on the
+      // origin the crawl will actually be based on, which is the seed's unless
+      // its redirect stayed same-site — the crawler makes the same call (#1418).
+      const baseUrl = resolveSeedRedirect(url, finalUrl).baseUrl;
       const existingCrawl = await Effect.runPromise(
         storage.getCrawlByUrl(baseUrl)
       );
@@ -1036,15 +1044,21 @@ export async function runAudit(
         if (crawlPhaseTimer) clearTimeout(crawlPhaseTimer);
       }
 
-      // Show redirect if it occurred (user chose to show all redirects)
+      // Show redirect if it occurred (user chose to show all redirects). A seed
+      // redirect whose target is a different origin than the crawl's base was
+      // REFUSED as off-site, so say so rather than claiming we followed it
+      // (#1418).
       const crawlMeta = await Effect.runPromise(storage.getCrawl(crawlId));
       if (
         crawlMeta?.originalUrl &&
         crawlMeta?.seedUrl &&
         crawlMeta.originalUrl !== crawlMeta.seedUrl
       ) {
+        const followed = getOrigin(crawlMeta.seedUrl) === crawlMeta.baseUrl;
         logger.info(
-          `Following redirect: ${crawlMeta.originalUrl} → ${crawlMeta.seedUrl}`
+          followed
+            ? `Following redirect: ${crawlMeta.originalUrl} → ${crawlMeta.seedUrl}`
+            : `Refusing off-site redirect: ${crawlMeta.originalUrl} → ${crawlMeta.seedUrl}; auditing ${crawlMeta.baseUrl}`
         );
       }
 
