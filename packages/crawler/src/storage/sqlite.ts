@@ -57,7 +57,7 @@ export interface ContentStoreAdapter {
 }
 
 // Schema version - increment when schema changes
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 20;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -265,6 +265,26 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE page_features ADD COLUMN meta_noindex INTEGER`,
     `ALTER TABLE page_features ADD COLUMN indexable_reasons TEXT`,
     `ALTER TABLE page_features ADD COLUMN rich_result_types TEXT`,
+  ],
+  // Version 20: page_features NAP scalars — the per-page Name/Address/Phone the
+  // local/nap-consistency rule compares across pages to find contact-detail drift
+  // (#1373), so its streaming path reads these instead of re-holding every parsed
+  // page. ADDITIVE columns; ALTER is idempotent (the runner swallows "duplicate
+  // column name"). Local sqlite only — NOT a prod migration.
+  //
+  // No backfill, for the v19 reason: `extractPageFeatures` always writes a FULL
+  // row via INSERT OR REPLACE keyed by (crawl_id, normalized_url), each crawl
+  // writes only its own crawl_id, and the streaming loop re-extracts every scored
+  // page in the current run — so no pre-v20 row is ever read. NULL reads back as
+  // null / [] / false, which is the same as "this page declared no NAP".
+  20: [
+    `ALTER TABLE page_features ADD COLUMN nap_name TEXT`,
+    `ALTER TABLE page_features ADD COLUMN nap_phones TEXT`,
+    `ALTER TABLE page_features ADD COLUMN nap_phone_formats TEXT`,
+    `ALTER TABLE page_features ADD COLUMN nap_address TEXT`,
+    `ALTER TABLE page_features ADD COLUMN nap_address_format TEXT`,
+    `ALTER TABLE page_features ADD COLUMN nap_tel_link INTEGER`,
+    `ALTER TABLE page_features ADD COLUMN nap_mailto_link INTEGER`,
   ],
 };
 
@@ -658,6 +678,13 @@ CREATE TABLE IF NOT EXISTS page_features (
   meta_noindex INTEGER,
   indexable_reasons TEXT,
   rich_result_types TEXT,
+  nap_name TEXT,
+  nap_phones TEXT,
+  nap_phone_formats TEXT,
+  nap_address TEXT,
+  nap_address_format TEXT,
+  nap_tel_link INTEGER,
+  nap_mailto_link INTEGER,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -3401,8 +3428,10 @@ export class SQLiteStorage implements CrawlStorage {
       title, title_hash, description, desc_hash, content_hash,
       word_count, page_type, schema_types, robots_noindex, canonical,
       visible_author, visible_date, transfer_bytes, template_fp, secret_hits,
-      meta_noindex, indexable_reasons, rich_result_types
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      meta_noindex, indexable_reasons, rich_result_types,
+      nap_name, nap_phones, nap_phone_formats, nap_address, nap_address_format,
+      nap_tel_link, nap_mailto_link
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   private pageFeatureParams(
@@ -3432,6 +3461,13 @@ export class SQLiteStorage implements CrawlStorage {
       row.metaNoindex ? 1 : 0,
       row.indexableReasons.length > 0 ? JSON.stringify(row.indexableReasons) : null,
       row.richResultTypes.length > 0 ? JSON.stringify(row.richResultTypes) : null,
+      row.napName,
+      row.napPhones.length > 0 ? JSON.stringify(row.napPhones) : null,
+      row.napPhoneFormats.length > 0 ? JSON.stringify(row.napPhoneFormats) : null,
+      row.napAddress,
+      row.napAddressFormat,
+      row.napTelLink ? 1 : 0,
+      row.napMailtoLink ? 1 : 0,
     ];
   }
 
@@ -3779,6 +3815,17 @@ export class SQLiteStorage implements CrawlStorage {
       richResultTypes: row.rich_result_types
         ? this.safeJsonParse(row.rich_result_types as string, [] as string[])
         : [],
+      napName: (row.nap_name as string | null) ?? null,
+      napPhones: row.nap_phones
+        ? this.safeJsonParse(row.nap_phones as string, [] as string[])
+        : [],
+      napPhoneFormats: row.nap_phone_formats
+        ? this.safeJsonParse(row.nap_phone_formats as string, [] as string[])
+        : [],
+      napAddress: (row.nap_address as string | null) ?? null,
+      napAddressFormat: (row.nap_address_format as string | null) ?? null,
+      napTelLink: row.nap_tel_link === 1,
+      napMailtoLink: row.nap_mailto_link === 1,
     };
   }
 }

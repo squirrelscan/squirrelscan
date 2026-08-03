@@ -1047,6 +1047,19 @@ export interface LinkData {
   isNofollow?: boolean;
 }
 
+/**
+ * A `tel:` / `mailto:` anchor. These are absent from {@link LinkData} on purpose
+ * (they are not crawlable and would pollute the link graph), but they are a
+ * page's DECLARED contact details, so they are carried separately.
+ */
+export interface ContactLinkData {
+  scheme: "tel" | "mailto";
+  /** The href payload with any `?subject=`/`;phone-context=` params stripped. */
+  value: string;
+  /** The anchor's visible text — how the page actually renders the contact. */
+  text: string;
+}
+
 export interface ImageData {
   src: string;
   alt: string | null;
@@ -1193,6 +1206,11 @@ export interface ParsedPage {
   og: OpenGraphData;
   twitter: TwitterData;
   links: LinkData[];
+  /**
+   * `tel:`/`mailto:` anchors. Optional so parsed records serialized before this
+   * field existed stay valid; readers must treat absent as "none declared".
+   */
+  contactLinks?: ContactLinkData[];
   images: ImageData[];
   headings: HeadingHierarchy;
   content: ContentAnalysis;

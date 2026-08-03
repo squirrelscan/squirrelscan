@@ -25,6 +25,17 @@ async function freshStore(): Promise<SQLiteStorage> {
 
 const CRAWL = "crawl-1";
 
+/** The v20 NAP columns (#1373) — asserted on both the fresh and migrated paths. */
+const NAP_COLUMNS = [
+  "nap_name",
+  "nap_phones",
+  "nap_phone_formats",
+  "nap_address",
+  "nap_address_format",
+  "nap_tel_link",
+  "nap_mailto_link",
+];
+
 function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
   return {
     normalizedUrl: "https://example.com/a",
@@ -48,6 +59,13 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     metaNoindex: false,
     indexableReasons: [],
     richResultTypes: [],
+    napName: null,
+    napPhones: [],
+    napPhoneFormats: [],
+    napAddress: null,
+    napAddressFormat: null,
+    napTelLink: false,
+    napMailtoLink: false,
     ...over,
   };
 }
@@ -79,6 +97,43 @@ describe("page_features store — round-trip", () => {
     expect(got?.visibleDate).toBe(true);
     expect(got?.wordCount).toBeNull();
     expect(got?.title).toBeNull();
+    await run(store.close());
+  });
+
+  test("NAP columns round-trip (parallel phone arrays, address pair, link flags)", async () => {
+    const store = await freshStore();
+    const row = feat({
+      normalizedUrl: "https://example.com/contact",
+      napName: "Acme Bakery",
+      napPhones: ["1234567", "7654321"],
+      napPhoneFormats: ["(555) 123-4567", "+1 555 765 4321"],
+      napAddress: "12 main street springfield",
+      napAddressFormat: "12 Main St, Springfield",
+      napTelLink: true,
+      napMailtoLink: false,
+    });
+    await run(store.upsertPageFeatures(CRAWL, row));
+
+    const got = await run(store.getPageFeatures(CRAWL, "https://example.com/contact"));
+    expect(got).toEqual(row);
+    // The two phone arrays are index-parallel; a serialization that reordered
+    // either would silently mis-attribute a display format to a number.
+    expect(got?.napPhones).toEqual(["1234567", "7654321"]);
+    expect(got?.napPhoneFormats).toEqual(["(555) 123-4567", "+1 555 765 4321"]);
+    expect(got?.napTelLink).toBe(true);
+    expect(got?.napMailtoLink).toBe(false);
+    await run(store.close());
+  });
+
+  test("empty NAP arrays round-trip as [] and nullables as null", async () => {
+    const store = await freshStore();
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/bare" })));
+    const got = await run(store.getPageFeatures(CRAWL, "https://example.com/bare"));
+    expect(got?.napPhones).toEqual([]);
+    expect(got?.napPhoneFormats).toEqual([]);
+    expect(got?.napName).toBeNull();
+    expect(got?.napAddress).toBeNull();
+    expect(got?.napAddressFormat).toBeNull();
     await run(store.close());
   });
 
@@ -410,7 +465,7 @@ describe("page_features migration (v17 → current)", () => {
     const version = check.prepare("SELECT version FROM schema_version LIMIT 1").get() as {
       version: number;
     };
-    expect(version.version).toBe(19);
+    expect(version.version).toBe(20);
     const cols = (
       check.prepare("PRAGMA table_info(page_features)").all() as Array<{ name: string }>
     ).map((c) => c.name);
@@ -420,6 +475,78 @@ describe("page_features migration (v17 → current)", () => {
     expect(cols).toContain("meta_noindex");
     expect(cols).toContain("indexable_reasons");
     expect(cols).toContain("rich_result_types");
+    // v20 NAP columns present after migration.
+    for (const col of NAP_COLUMNS) expect(cols).toContain(col);
+    check.close();
+  });
+
+  // The v20 columns must land on BOTH paths: `init()` execs SCHEMA (fresh install)
+  // BEFORE runMigrations(), so a column added only to MIGRATIONS[20] would never
+  // exist on a brand-new DB, and one added only to SCHEMA would never reach a DB
+  // already recorded at 19. Assert each path separately.
+  test("v20 NAP columns exist on a FRESH database (SCHEMA path, not the migration)", async () => {
+    const path = tmpDbPath();
+    const store = new SQLiteStorage(path);
+    await run(store.init());
+    await run(store.close());
+
+    const check = new Database(path);
+    const cols = (
+      check.prepare("PRAGMA table_info(page_features)").all() as Array<{ name: string }>
+    ).map((c) => c.name);
+    for (const col of NAP_COLUMNS) expect(cols).toContain(col);
+    check.close();
+  });
+
+  test("a DB already at v19 gains the NAP columns and keeps its existing rows", async () => {
+    const path = tmpDbPath();
+    // Build a real v19 store, seed a row, then wind the version marker back so the
+    // append-only migration is the only thing that can add the columns.
+    const seed = new SQLiteStorage(path);
+    await run(seed.init());
+    await run(
+      seed.upsertPageFeatures("c1", feat({ normalizedUrl: "https://example.com/legacy" }))
+    );
+    await run(seed.close());
+
+    const downgrade = new Database(path);
+    for (const col of NAP_COLUMNS) downgrade.exec(`ALTER TABLE page_features DROP COLUMN ${col}`);
+    downgrade.exec("UPDATE schema_version SET version = 19");
+    downgrade.close();
+
+    const store = new SQLiteStorage(path);
+    await run(store.init());
+    const migrated = await run(store.getPageFeatures("c1", "https://example.com/legacy"));
+    // Pre-v20 rows read back as "declared no NAP" rather than throwing.
+    expect(migrated?.title).toBe("Title A");
+    expect(migrated?.napName).toBeNull();
+    expect(migrated?.napPhones).toEqual([]);
+    expect(migrated?.napTelLink).toBe(false);
+    // ...and the migrated table accepts a full v20 write.
+    await run(
+      store.upsertPageFeatures(
+        "c1",
+        feat({
+          normalizedUrl: "https://example.com/new",
+          napName: "Acme Bakery",
+          napPhones: ["1234567"],
+          napPhoneFormats: ["(555) 123-4567"],
+          napAddress: "12 main street",
+          napAddressFormat: "12 Main St",
+          napTelLink: true,
+          napMailtoLink: true,
+        })
+      )
+    );
+    const fresh = await run(store.getPageFeatures("c1", "https://example.com/new"));
+    expect(fresh?.napPhoneFormats).toEqual(["(555) 123-4567"]);
+    await run(store.close());
+
+    const check = new Database(path);
+    const version = check.prepare("SELECT version FROM schema_version LIMIT 1").get() as {
+      version: number;
+    };
+    expect(version.version).toBe(20);
     check.close();
   });
 });

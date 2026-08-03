@@ -17,7 +17,7 @@
 //     empty headers, are E-E's universe-assembly concern, not this function's.)
 
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
-import { getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
+import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
 
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
 import type { ParsedPage } from "@squirrelscan/rules";
@@ -92,6 +92,9 @@ export function extractPageFeatures(page: PageRecord, parsed: ParsedPage): PageF
 
   const title = parsed.meta.title;
   const description = parsed.meta.description;
+  // Same extractor local/nap-consistency's legacy path calls on the live parsed
+  // page, so the stored signal and the re-derived one are identical by construction.
+  const nap = extractNapSignal(parsed);
 
   return {
     normalizedUrl: page.normalizedUrl,
@@ -118,5 +121,12 @@ export function extractPageFeatures(page: PageRecord, parsed: ParsedPage): PageF
     metaNoindex: metaRobotsNoindex(parsed.meta.robots),
     indexableReasons: indexability.reasons,
     richResultTypes: getRichResultTypes(parsed.schemas),
+    napName: nap.name,
+    napPhones: nap.phones,
+    napPhoneFormats: nap.phoneFormats,
+    napAddress: nap.address,
+    napAddressFormat: nap.addressFormat,
+    napTelLink: nap.telLink,
+    napMailtoLink: nap.mailtoLink,
   };
 }
