@@ -23,6 +23,7 @@ import { ariaTooltipNameRule } from "./aria-tooltip-name";
 import { ariaTreeitemNameRule } from "./aria-treeitem-name";
 import { ariaValidAttrRule } from "./aria-valid-attr";
 import { ariaValidAttrValueRule } from "./aria-valid-attr-value";
+import { autocompleteTokensRule } from "./autocomplete-tokens";
 import { buttonNameRule } from "./button-name";
 import { colorContrastRule } from "./color-contrast";
 import { definitionListRule } from "./definition-list";
@@ -40,6 +41,7 @@ import { htmlXmlLangMismatchRule } from "./html-xml-lang-mismatch";
 import { identicalLinksSamePurposeRule } from "./identical-links-same-purpose";
 import { imageRedundantAltRule } from "./image-redundant-alt";
 import { inputImageAltRule } from "./input-image-alt";
+import { inputTypesRule } from "./input-types";
 import { labelContentNameMismatchRule } from "./label-content-name-mismatch";
 import { landmarkOneMainRule } from "./landmark-one-main";
 import { landmarkRegionsRule } from "./landmark-regions";
@@ -141,6 +143,8 @@ export const rules: Rule[] = [
 
   // Forms
   formFieldMultipleLabelsRule,
+  autocompleteTokensRule,
+  inputTypesRule,
 
   // Tables
   tableDuplicateNameRule,
@@ -171,6 +175,7 @@ export {
   ariaTreeitemNameRule,
   ariaValidAttrRule,
   ariaValidAttrValueRule,
+  autocompleteTokensRule,
   buttonNameRule,
   colorContrastRule,
   definitionListRule,
@@ -188,6 +193,7 @@ export {
   identicalLinksSamePurposeRule,
   imageRedundantAltRule,
   inputImageAltRule,
+  inputTypesRule,
   labelContentNameMismatchRule,
   landmarkOneMainRule,
   landmarkRegionsRule,

@@ -10,12 +10,23 @@ Checks that form actions use HTTPS
 | **Rule ID** | `security/form-https` |
 | **Category** | [Security](/rules/security) |
 | **Scope** | Per-page |
-| **Severity** | warning |
+| **Severity** | error |
 | **Weight** | 6/10 |
+
+## What it checks
+
+`form` `action` and submit-button `formaction` values are resolved against the page URL, so a relative or protocol-relative action inherits the page's scheme rather than being guessed at.
+
+| Outcome | When |
+|---|---|
+| `pass` | Every submission target resolves to HTTPS |
+| `warn` | A page already served over HTTP submits to `http://` |
+| `fail` | An HTTPS page submits to `http://`, downgrading the submission |
+| `info` | Nothing on the page submits anywhere |
 
 ## Solution
 
-Forms should always submit to HTTPS URLs to protect user data in transit. Update form action attributes from http:// to https://. For relative URLs, ensure the page itself is on HTTPS. Be especially careful with login forms, payment forms, and any forms collecting personal data. Browsers may warn users about insecure form submissions.
+Forms should always submit to HTTPS URLs to protect user data in transit. Update form action attributes from http:// to https://, and check `formaction` on any submit button that overrides the form. A form on an HTTPS page that posts to http:// is the worst case: the padlock tells the user they are safe while the submission itself travels in the clear, and browsers block or interstitial it. Be especially careful with login forms, payment forms, and any forms collecting personal data. For relative URLs, ensure the page itself is on HTTPS.
 
 ## Enable / Disable
 
