@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { runAuthStatus } from "@/controllers/auth/status";
 
-const API_KEY_ENV = "SQUIRRELSCAN_API_KEY";
+const API_KEY_ENV = "SQUIRRELSCAN_API_KEY"; // pragma: allowlist secret
 const API_SERVER_ENV = "SQUIRREL_API_SERVER";
 
 // Module-level env snapshot is safe: `bun test` runs the tests in a file
@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe("auth status with an org API key the identity endpoint refuses", () => {
   test("explains that the endpoint wants a login token, and does not call the key invalid", async () => {
-    process.env[API_KEY_ENV] = "sq_notarealkeynotarealkeynotareal";
+    process.env[API_KEY_ENV] = "sq_notarealkeynotarealkeynotareal"; // pragma: allowlist secret
     serveWhoami(401);
 
     const result = await runAuthStatus();
@@ -68,7 +68,7 @@ describe("auth status with an org API key the identity endpoint refuses", () => 
   });
 
   test("a dev-environment key gets the same explanation", async () => {
-    process.env[API_KEY_ENV] = "sq_dev_notarealkeynotarealkeynot";
+    process.env[API_KEY_ENV] = "sq_dev_notarealkeynotarealkeynot"; // pragma: allowlist secret
     serveWhoami(401);
 
     const result = await runAuthStatus();
@@ -81,7 +81,7 @@ describe("auth status with an org API key the identity endpoint refuses", () => 
   test("a login token that is genuinely rejected still reports as rejected", async () => {
     // Regression guard: the new branch keys on the sq_ prefix, so the existing
     // fail-closed wording for a real dead credential must be untouched.
-    process.env[API_KEY_ENV] = "sqcli_notarealtokennotarealtoken";
+    process.env[API_KEY_ENV] = "sqcli_notarealtokennotarealtoken"; // pragma: allowlist secret
     serveWhoami(401);
 
     const result = await runAuthStatus();
@@ -93,7 +93,7 @@ describe("auth status with an org API key the identity endpoint refuses", () => 
   });
 
   test("a non-401 failure is still a plain API error", async () => {
-    process.env[API_KEY_ENV] = "sq_notarealkeynotarealkeynotareal";
+    process.env[API_KEY_ENV] = "sq_notarealkeynotarealkeynotareal"; // pragma: allowlist secret
     serveWhoami(500);
 
     const result = await runAuthStatus();
@@ -106,7 +106,7 @@ describe("auth status with an org API key the identity endpoint refuses", () => 
   test("an org API key the endpoint DOES accept reports normally", async () => {
     // Forward compatibility: if the identity endpoint ever accepts org keys,
     // nothing here suppresses the successful answer.
-    process.env[API_KEY_ENV] = "sq_notarealkeynotarealkeynotareal";
+    process.env[API_KEY_ENV] = "sq_notarealkeynotarealkeynotareal"; // pragma: allowlist secret
     serveWhoami(200, {
       user: { id: "u_1", email: "dev@example.com", name: "Dev" },
       authSource: "api-key",
