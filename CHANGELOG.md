@@ -24,9 +24,9 @@ Earlier releases (v0.0.56 and prior) are on the
 
 A crawl-correctness release. squirrelscan was requesting URLs your site never
 links and then reporting the redirects it had caused. On any site whose URLs end
-in a slash, which is the default on WordPress, Hugo and Jekyll, this invented
-findings and quietly spent most of the page budget on redirect stubs instead of
-your content.
+in a slash, which is the default on WordPress, Hugo and Jekyll, that invented
+findings, and on some hosts it also spent part of the page budget on redirect
+pages instead of your content.
 
 ### Fixed
 
@@ -44,15 +44,17 @@ your content.
   empty. Genuine redirects are unaffected: a page you really do link at a URL
   that really does redirect is still reported.
 
-  Second, and harder to see: some hosts answer the no-slash URL with a small
-  JavaScript redirect page instead of an HTTP redirect. Those stubs were stored
-  and graded as though they were your pages, so title, charset, word count and
-  the rest were judged against a few hundred bytes of redirect script. In one
-  15 page crawl of a static-hosted blog, 14 of the 15 audited pages were stubs
-  of this kind. Your page budget now goes to real content. Expect finding counts
-  and scores to move in both directions on affected sites: some checks stop
-  failing because they had been grading a stub, and others start reporting
-  because a real page is finally being read.
+  Second, and only on some hosts: a few sites answer the no-slash URL with a
+  `200` and a small JavaScript redirect page rather than an HTTP redirect. There
+  is no redirect for the crawler to follow, so that page was stored and graded as
+  though it were your article, and title, charset and word count were judged
+  against a few hundred bytes of redirect script. In one 15 page crawl of a blog
+  hosted this way, 12 of the 15 stored pages were redirect pages rather than
+  posts. Sites that answer with an ordinary HTTP redirect were never affected
+  this way, because the crawler followed it and stored the real page. If your
+  site is in the first group, expect finding counts and scores to move in both
+  directions: some checks stop failing because they had been grading a redirect
+  page, and others start reporting because your content is finally being read.
 
 - **A redirect chain no longer shows a status the hop never returned.** When a
   page is rendered in the cloud, the render service reports the page it landed
