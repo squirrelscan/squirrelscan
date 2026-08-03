@@ -102,7 +102,10 @@ function extractJsonLdBlocks(doc: Document): string[] {
 }
 
 function extractMetaNameContent(doc: Document): Record<string, string> {
-  const out: Record<string, string> = {};
+  // Object.create(null): `key` is page-controlled, so on a plain object the
+  // `key in out` guard below is true for `constructor`/`__proto__` inherited
+  // from the prototype chain and those tags never reach the cloud payload.
+  const out: Record<string, string> = Object.create(null);
   for (const meta of doc.querySelectorAll("meta")) {
     const el = meta as Element;
     const key = (el.getAttribute("property") ?? el.getAttribute("name") ?? "").trim().toLowerCase();

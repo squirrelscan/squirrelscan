@@ -130,7 +130,11 @@ interface RenderJobStatusResponse {
 // (packages/rules/src/security/cookie-flags.ts) splits back into individual
 // cookies on this exact separator; hosted rendering produces the same shape.
 function headersToRecord(headers: Headers): Record<string, string> {
-  const result: Record<string, string> = {};
+  // Object.create(null), NOT {}: header names are chosen by the audited site and
+  // `__proto__` is a valid HTTP token, so `result["__proto__"] = value` on a
+  // plain object hits the inherited setter and silently discards the header
+  // instead of recording it — a header an audit is specifically meant to see.
+  const result: Record<string, string> = Object.create(null);
   headers.forEach((value, key) => {
     if (key.toLowerCase() === "set-cookie") return;
     result[key.toLowerCase()] = value;

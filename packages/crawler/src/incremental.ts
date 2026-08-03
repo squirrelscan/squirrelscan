@@ -444,7 +444,10 @@ export function varyMatches(
   if (fields.length === 0) return true;
 
   const lower = (h: Record<string, string> | null): Record<string, string> => {
-    const out: Record<string, string> = {};
+    // Object.create(null): `fields` comes from the site's Vary header, so the
+    // lookups below would otherwise resolve `constructor`/`toString` off
+    // Object.prototype and compare inherited functions instead of headers.
+    const out: Record<string, string> = Object.create(null);
     if (h) for (const [k, v] of Object.entries(h)) out[k.toLowerCase()] = v;
     return out;
   };

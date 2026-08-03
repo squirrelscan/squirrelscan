@@ -10,6 +10,11 @@ import type { SchemaCollection } from "@squirrelscan/core-contracts";
  * wrappers (nested recursively). Returns [] for unparseable input.
  * Rules that JSON.parse `schema.raw` and only inspect top-level keys
  * silently miss everything on @graph sites — always go through this.
+ *
+ * The returned nodes are raw JSON.parse output from an audited page, so a node
+ * can carry an OWN property literally named `__proto__` or `constructor`. That
+ * is harmless to hold and to read, but a consumer must never bracket-copy those
+ * keys onto a plain `{}` — see @squirrelscan/core-contracts/untrusted-keys.
  */
 export function flattenJsonLdNodes(raw: string): Record<string, unknown>[] {
   // raw may be several JSON-LD blocks joined with blank lines (one per
