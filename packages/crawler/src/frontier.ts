@@ -46,13 +46,6 @@ const TRACKING_PARAM_PREFIXES = new Set([
   "sfmc_id",
 ]);
 
-function normalizeTrailingSlash(pathname: string): string {
-  if (pathname.length > 1 && pathname.endsWith("/")) {
-    return pathname.slice(0, -1);
-  }
-  return pathname;
-}
-
 function shouldDropQueryParam(key: string, allowQueryParams: string[]): boolean {
   const lowerKey = key.toLowerCase();
 
@@ -85,7 +78,13 @@ export function normalizeUrl(rawUrl: string, options: UrlNormalizationOptions): 
       resolved.port = "";
     }
 
-    resolved.pathname = normalizeTrailingSlash(resolved.pathname);
+    // The trailing slash is NOT noise: `/about` and `/about/` are distinct
+    // request targets, and the normalized URL is the URL we actually FETCH
+    // (`fetchPage(entry.normalizedUrl, …)`). Stripping it asked slash-canonical
+    // sites — the WordPress/Hugo/Jekyll default — for a URL they never linked,
+    // and reported the 301 they answered with as the site's own redirect
+    // (#1510). The two forms stay separate frontier entries on purpose: which
+    // one redirects is what the audit is trying to find out.
 
     if (resolved.search) {
       const params = new URLSearchParams(resolved.search);

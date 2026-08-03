@@ -9,6 +9,12 @@ import type { Effect } from "effect";
 
 export interface RedirectHop {
   url: string;
+  /**
+   * The status THIS url returned. `0` means no status was observed for this hop
+   * — the fetcher that produced the chain saw the landing page but not the
+   * redirect responses that led to it. Never substitute the final response's
+   * status: a hop that returns 200 did not redirect (#1510).
+   */
   statusCode: number;
   type: "http" | "javascript" | "meta-refresh";
 }
