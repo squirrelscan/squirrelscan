@@ -152,14 +152,25 @@ export function mapRenderItemToResponse(
   const lastHop = item.redirectChain?.[item.redirectChain.length - 1];
   const finalUrl = lastHop?.url ?? item.url ?? requestUrl;
   const status = item.status ?? 0;
-  const hops = [
-    { url: requestUrl, statusCode: status, type: "http" as const },
-    ...(item.redirectChain ?? []).map((hop) => ({
-      url: hop.url,
-      statusCode: hop.status,
-      type: "http" as const,
-    })),
-  ];
+  const renderHops = (item.redirectChain ?? []).map((hop) => ({
+    url: hop.url,
+    statusCode: hop.status,
+    type: "http" as const,
+  }));
+  // The render service reports the LANDING page only, not each hop, so the
+  // status codes of the redirects themselves were never observed. Stamping the
+  // landing page's status onto the request URL produced chains that claimed
+  // `200 → 200` — a first hop that returned 200 did not redirect at all
+  // (#1510). Record the unobserved source hop with status 0 ("no status seen",
+  // the same convention the fetchers use for a response that never arrived)
+  // rather than inventing one. Skip it entirely when the service already
+  // reported the source itself.
+  const needsSourceHop = renderHops.length > 0 && renderHops[0]?.url !== requestUrl;
+  const hops = needsSourceHop
+    ? [{ url: requestUrl, statusCode: 0, type: "http" as const }, ...renderHops]
+    : renderHops.length > 0
+      ? renderHops
+      : [{ url: requestUrl, statusCode: status, type: "http" as const }];
   // Prefer the real render headers (already lowercase from the API); fall back
   // to a synthesized content-type only when the item carries no headers.
   const headers =
