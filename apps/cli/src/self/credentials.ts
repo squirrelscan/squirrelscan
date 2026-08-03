@@ -161,6 +161,39 @@ export function envTokenRejectedMessage(): string {
 }
 
 /**
+ * Why `squirrel auth status` / `squirrel auth whoami` cannot report an identity
+ * for an org API key.
+ *
+ * The identity endpoint the command calls (`/v1/auth/whoami`) is the CLI-session
+ * endpoint: it accepts only the `sqcli_…` token that `squirrel auth login`
+ * issues, and refuses an `sq_…` org key at the prefix. So a key that works
+ * everywhere else — audits, publishing, credits, MCP — still 401s HERE, and the
+ * generic rejected-token wording blamed the user's key for being revoked,
+ * expired or from the wrong environment when usually none of that is true.
+ *
+ * We cannot tell that case apart from a genuinely dead key (both are a bare
+ * 401), so this leads with the structural reason, which is the one a user has no
+ * way to guess, and still points at the dashboard for the other one.
+ *
+ * `envVarName` names the env var that supplied the key, when one did; omit it
+ * for a key that came from the session file.
+ */
+export function apiKeyNotVerifiableMessage(envVarName?: string | null): string {
+  const source = envVarName
+    ? `the org API key in ${envVarName}`
+    : "an org API key";
+  return (
+    `This command cannot verify ${source}.\n` +
+    `  ${getApiUrl()} answers identity lookups only for the login token that\n` +
+    `  "squirrel auth login" issues, so it refuses an org API key (sq_…) here even\n` +
+    `  when that same key works for audits, publishing and credits.\n` +
+    `  To see your account, run: squirrel auth login\n` +
+    `  If cloud calls are failing too, the key may be revoked, expired, or from\n` +
+    `  another environment: ${API_KEYS_DASHBOARD_URL}`
+  );
+}
+
+/**
  * Loud warning for a USER session file that exists but couldn't be loaded
  * (EACCES, corrupt JSON, fails schema, ...) — as opposed to genuinely logged
  * out (no file), which stays silent. This is the single implementation of
