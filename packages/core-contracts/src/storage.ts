@@ -566,6 +566,27 @@ export interface PageFeatureRow {
   indexableReasons: string[];
   /** `getRichResultTypes(parsed.schemas)` — canonical-cased rich-result @types (≤16). */
   richResultTypes: string[];
+  /**
+   * The page's declared NAP (Name / Address / Phone), from `extractNapSignal`
+   * (@squirrelscan/utils). `local/nap-consistency` compares these across pages to
+   * find contact-detail drift, so the SAME extractor feeds this row and the rule's
+   * legacy `ctx.site.pages` path — the two must never diverge.
+   *
+   * Business name from LocalBusiness/Organization JSON-LD, or null.
+   */
+  napName: string | null;
+  /** Canonical phone keys (trailing subscriber digits), deduped, ≤4 per page. */
+  napPhones: string[];
+  /** Display form of `napPhones[i]` as the page rendered it (parallel array). */
+  napPhoneFormats: string[];
+  /** Canonical postal-address key (abbreviations expanded), or null. */
+  napAddress: string | null;
+  /** The postal address as the page rendered it (≤200 chars). */
+  napAddressFormat: string | null;
+  /** The page carries at least one `tel:` link. */
+  napTelLink: boolean;
+  /** The page carries at least one `mailto:` link. */
+  napMailtoLink: boolean;
 }
 
 /** Which hashed field a {@link SiteQuery.duplicateGroups} scan is keyed on. */

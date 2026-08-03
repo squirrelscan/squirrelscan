@@ -56,6 +56,19 @@ export {
   flattenJsonLdNodes,
 } from "./schema-rich-results";
 
+export {
+  extractNapSignal,
+  emptyNapSignal,
+  napAddressKey,
+  napPhoneKey,
+  NAP_BUSINESS_SCHEMA_TYPES,
+  NAP_MAX_ADDRESS_CHARS,
+  NAP_MAX_PHONES_PER_PAGE,
+  NAP_NAME_SCHEMA_TYPES,
+  NAP_PHONE_MIN_DIGITS,
+  type NapSignal,
+} from "./nap";
+
 export { findClientRedirects } from "./client-redirects";
 
 export { getRandomUserAgent } from "./user-agent";

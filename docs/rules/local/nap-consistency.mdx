@@ -5,6 +5,37 @@ description: "Checks for consistent Name, Address, Phone across site"
 
 Checks for consistent Name, Address, Phone across site
 
+## What it checks
+
+The rule reads each page's **declared** contact details: `tel:` and `mailto:` links, and the `telephone` / `address` fields of your `LocalBusiness` or `Organization` JSON-LD. It never guesses phone numbers or addresses out of body text, so order numbers and dates are never mistaken for a NAP.
+
+| Check | What it means |
+|---|---|
+| `local-business-schema` | Whether the site declares `LocalBusiness` or `Organization` schema. |
+| `contact-info` | Your contact page carries a `tel:` or `mailto:` link. |
+| `phone-consistency` | The primary phone number, compared across every page that declares one. |
+| `address-consistency` | The primary postal address, compared across every page that declares one. |
+
+### How drift is graded
+
+`phone-consistency` and `address-consistency` compare the **first** phone or address each page declares, which is the number a directory or an agent treats as your primary contact. A footer listing extra branch numbers does not count against you.
+
+- **Pass**: one value, rendered the same way everywhere.
+- **Warn**: one value, rendered several ways. `+1 (555) 123-4567` and `555.123.4567` are the same number, and `123 Main St` and `123 Main Street` are the same address, but directories and agents cite them as written, which splits your citations.
+- **Fail**: some pages present a genuinely different primary number or address. That is a real NAP conflict, not a formatting nit.
+
+### When it stays quiet
+
+Cross-page comparison only runs when it can say something meaningful:
+
+- **Fewer than 10 pages declare the signal**: skipped. Three pages carrying a phone number cannot support a site-wide consistency claim.
+- **No dominant value (under 70% agreement)**: skipped. A multi-location business or a franchise directory is legitimately varied, and no page is a deviant.
+- **The site is not a local business**: the whole rule is skipped, because `appliesWhen` gates it on the detected site profile.
+
+### Fixing it
+
+Pick one rendering of your name, address, and phone, and use that exact string everywhere: the footer, the contact page, and your `LocalBusiness` JSON-LD. Then use the same string on Google Business Profile and every directory listing.
+
 | | |
 |---|---|
 | **Rule ID** | `local/nap-consistency` |

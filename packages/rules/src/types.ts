@@ -14,6 +14,7 @@ import type {
   BusinessCategory,
   CheckResult,
   CloakingProbeData,
+  ContactLinkData,
   ContentAnalysis,
   HeadingHierarchy,
   ImageData,
@@ -136,6 +137,9 @@ export interface ParsedPage {
   og: OpenGraphData;
   twitter: TwitterData;
   links: LinkData[];
+  // tel:/mailto: anchors — dropped from `links` (not crawlable), carried here so
+  // site rules can compare declared contact details across pages.
+  contactLinks?: ContactLinkData[];
   images: ImageData[];
   headings: HeadingHierarchy;
   content: ContentAnalysis;

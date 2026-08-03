@@ -68,6 +68,13 @@ function feat(row: Row): PageFeatureRow {
     metaNoindex: false,
     indexableReasons: [],
     richResultTypes: [],
+    napName: null,
+    napPhones: [],
+    napPhoneFormats: [],
+    napAddress: null,
+    napAddressFormat: null,
+    napTelLink: false,
+    napMailtoLink: false,
   };
 }
 

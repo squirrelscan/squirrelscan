@@ -8,6 +8,7 @@ import { coerceSchemelessUrl, shouldSkipUrl } from "@squirrelscan/utils";
 import { parseHTML, type Document, type Element } from "linkedom";
 
 import type {
+  ContactLinkData,
   ContentAnalysis,
   HeadingData,
   HeadingHierarchy,
@@ -135,6 +136,41 @@ export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
   }
 
   return links;
+}
+
+// Cap on carried contact anchors — a footer repeating one number does not need
+// an unbounded array on every parsed page.
+const MAX_CONTACT_LINKS = 32;
+
+/**
+ * `tel:` / `mailto:` anchors, which `extractLinks` deliberately drops: they are
+ * not crawlable, so they never belonged in the link graph. They ARE the page's
+ * declared contact details though, so site rules that compare contact data across
+ * pages (local/nap-consistency) need them somewhere, and re-walking the DOM is
+ * not an option for a site rule — by then only the ParsedPage survives.
+ */
+export function extractContactLinks(doc: Document): ContactLinkData[] {
+  const contacts: ContactLinkData[] = [];
+
+  for (const anchor of doc.querySelectorAll('a[href^="tel:" i], a[href^="mailto:" i]')) {
+    if (contacts.length >= MAX_CONTACT_LINKS) break;
+    const href = (anchor as Element).getAttribute("href");
+    if (!href) continue;
+
+    const trimmed = href.trim();
+    const colon = trimmed.indexOf(":");
+    const scheme = trimmed.slice(0, colon).toLowerCase();
+    if (scheme !== "tel" && scheme !== "mailto") continue;
+
+    contacts.push({
+      scheme,
+      // `?subject=…` / `;phone-context=…` are routing params, not the address.
+      value: trimmed.slice(colon + 1).split(/[?;]/)[0] ?? "",
+      text: (anchor as Element).textContent?.trim() ?? "",
+    });
+  }
+
+  return contacts;
 }
 
 // Extract images from parsed document
@@ -350,6 +386,7 @@ export function parsePage(html: string, url: string): ParsedPage {
     og: extractOG(doc),
     twitter: extractTwitter(doc),
     links: extractLinks(doc, url),
+    contactLinks: extractContactLinks(doc),
     images: extractImages(doc, url),
     headings: extractHeadings(doc),
     content: extractContent(doc, html),
