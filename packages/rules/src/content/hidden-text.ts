@@ -1030,6 +1030,27 @@ function isScriptReferenced(el: Element, scriptText: string): boolean {
   return false;
 }
 
+/**
+ * The landmarks that ARE the page. Concealment presupposes a visible page to
+ * conceal something on, so `<main style="opacity:0">` is not a hiding place: it
+ * is the resting state of a load transition or a hydration shell, revealed by
+ * script we cannot see. `isScriptReferenced` is the same guard for a reveal
+ * written inline; this one covers the far more common external bundle, which
+ * `collectScriptText` never reads.
+ *
+ * Deliberately keyed on the semantic landmark rather than on how much of the
+ * page's text the element holds: a share threshold suppresses a genuinely
+ * mostly-hidden doorway page, and picking the number is guesswork. Wrapper
+ * `div`s doing the same fade are still reported, which is the safer error.
+ *
+ * Only weak techniques are dropped on the strength of this. An element carrying
+ * `text-indent:-9999px` is making a claim no page transition ever makes.
+ */
+function isPageWrapper(el: Element): boolean {
+  const tag = tagOf(el);
+  return tag === "main" || tag === "body";
+}
+
 /** A short, human-readable handle for the offending node. */
 function describeElement(el: Element): string {
   let label = tagOf(el) || "element";
@@ -1184,7 +1205,7 @@ export const hiddenTextRule: Rule = {
       // toggle library has ever shipped `text-indent:-9999px`.
       if (techniques.length > 0 && techniques.some((t) => WEAK_TECHNIQUES.has(t.kind))) {
         scriptText ??= collectScriptText(doc);
-        if (isScriptReferenced(el, scriptText)) {
+        if (isScriptReferenced(el, scriptText) || isPageWrapper(el)) {
           for (let i = techniques.length - 1; i >= 0; i--) {
             if (WEAK_TECHNIQUES.has(techniques[i].kind)) techniques.splice(i, 1);
           }

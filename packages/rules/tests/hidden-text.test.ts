@@ -491,6 +491,38 @@ describe("content/hidden-text — script-controlled elements", () => {
   });
 });
 
+describe("content/hidden-text — page-level fade-in wrappers", () => {
+  // Regression: sweetgreen.com ships `<main class="main page-catering"
+  // style="opacity: 0">` around the whole page and reveals it from an external
+  // bundle. The script guard cannot see that bundle, so the rule failed the page
+  // over its own visible marketing copy, links and all.
+  test("a main landmark at opacity:0 is a load transition, not concealment", () => {
+    const html = `<html><body>
+      <header><a href="/">home</a></header>
+      <main id="main" class="main page-catering" style="opacity: 0">
+        <h1>Cater your next event</h1><p>${PAYLOAD}</p>${SPAM_LINKS}
+      </main>
+      </body></html>`;
+    expect(run(html).status).toBe("pass");
+  });
+
+  test("the landmark guard does not rescue an off-screen main", () => {
+    const html = `<html><body>
+      <main style="text-indent:-9999px"><p>${PAYLOAD}</p></main>
+      </body></html>`;
+    expect(run(html).status).toBe("warn");
+  });
+
+  test("a hidden wrapper div is still reported", () => {
+    // Only the semantic landmark is exempt. A div doing the same fade stays
+    // flagged rather than inviting a guessed size threshold.
+    const html = `<html><body>
+      <div class="page-wrapper" style="opacity: 0"><p>${PAYLOAD}</p></div>
+      </body></html>`;
+    expect(run(html).status).toBe("warn");
+  });
+});
+
 describe("content/hidden-text — payload thresholds and reporting", () => {
   test("a tiny hidden string with no link payload is not worth reporting", () => {
     expect(run(`<html><body><div style="display:none">Loading</div></body></html>`).status).toBe(
