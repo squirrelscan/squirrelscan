@@ -30,6 +30,23 @@ export interface RedirectChain {
   httpToHttps: boolean;
 }
 
+/**
+ * One hop as it appears in a user-facing chain label: `url (301)`, or a bare
+ * `url` when no status was observed for it.
+ *
+ * Lives beside `RedirectHop` because it is part of that type's contract: `0` is
+ * the "not observed" sentinel, and it must never reach a report as `(0)`, which
+ * reads like a real status code and is meaningless to a user. Every rule that
+ * renders a hop uses this rather than interpolating `statusCode` itself.
+ *
+ * `displayUrl` overrides the text for the URL part, for rules that show a
+ * pathname instead of the whole URL.
+ */
+export function formatRedirectHop(hop: RedirectHop, displayUrl?: string): string {
+  const url = displayUrl ?? hop.url;
+  return hop.statusCode > 0 ? `${url} (${hop.statusCode})` : url;
+}
+
 export interface SecurityHeaders {
   hsts: string | null;
   csp: string | null;
