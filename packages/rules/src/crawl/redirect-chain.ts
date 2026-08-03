@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { formatRedirectHop } from "@squirrelscan/core-contracts";
+
 import { getPathname } from "@squirrelscan/utils";
 
 export const redirectChainRule: Rule = {
@@ -56,8 +58,8 @@ export const redirectChainRule: Rule = {
       if (!chain || chain.hops.length <= maxHops) continue;
 
       // Build readable chain representation: url1 (301) → url2 (301) → url3 (200)
-      const chainParts = chain.hops.map(
-        (hop) => `${getPathname(hop.url)} (${hop.statusCode})`
+      const chainParts = chain.hops.map((hop) =>
+        formatRedirectHop(hop, getPathname(hop.url))
       );
       // Add final URL if different from last hop
       if (chain.finalUrl && chain.hops.length > 0) {
@@ -87,8 +89,8 @@ export const redirectChainRule: Rule = {
           // This is more of an informational check - entry URL should ideally not redirect
           const chain = entryPage.redirectChain;
           if (chain && chain.hops.length > 0) {
-            const chainParts = chain.hops.map(
-              (hop) => `${getPathname(hop.url)} (${hop.statusCode})`
+            const chainParts = chain.hops.map((hop) =>
+              formatRedirectHop(hop, getPathname(hop.url))
             );
             if (chain.finalUrl) {
               chainParts.push(getPathname(chain.finalUrl) + " (200)");
