@@ -90,9 +90,17 @@ describe("manifestsCarry", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  test("absent vendor manifests are skipped, not treated as drift", async () => {
+  // Skipping an absent manifest would let the release gate pass on a tree that
+  // cannot carry a version at all.
+  test("throws when a release manifest is missing rather than passing", async () => {
     const root = await fixture({ "apps/cli/package.json": "0.0.83" });
-    expect(await manifestsCarry("0.0.83", root)).toBe(true);
+    await expect(manifestsCarry("0.0.83", root)).rejects.toThrow("npm/package.json");
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("a missing manifest is reported even when another already disagrees", async () => {
+    const root = await fixture({ "apps/cli/package.json": "0.0.82" });
+    await expect(manifestsCarry("0.0.83", root)).rejects.toThrow(/missing/);
     await rm(root, { recursive: true, force: true });
   });
 

@@ -69,19 +69,32 @@ jobs:
           # Resolve main from the remote rather than trusting whatever refs
           # actions/checkout happened to create.
           git fetch --no-tags origin main
-          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
-            echo "::error::${GITHUB_SHA} is not on main. Dispatch the release from main so the tag lands on a reviewed commit."
+          tip=$(git rev-parse FETCH_HEAD)
+          # Equality, not ancestry: ancestry alone would also accept the bump
+          # commit itself once main has moved past it, and the release would
+          # then ship an older tree than main under a fresh tag. The tag job
+          # relaxes this to ancestry so a merge during the quality gate cannot
+          # abort a release that was already validated here.
+          if [ "$(git rev-parse HEAD)" != "$tip" ]; then
+            echo "::error::${GITHUB_SHA} is not the current tip of main (${tip}). Dispatch the release from main."
             exit 1
           fi
 
-          actual=$(jq -r .version apps/cli/package.json)
-          if [ "$actual" != "$VERSION" ]; then
-            echo "::error::main is at ${actual} but this run would release v${VERSION}. Land the bump on main first (\`make release\` opens that PR), then re-dispatch."
-            exit 1
-          fi
+          # Reuses the same SYNCED_MANIFESTS list the local `make release`
+          # preflight uses, so the two can never disagree about what "carries
+          # this version" means. Throws if a manifest is missing entirely.
+          # shellcheck disable=SC2016  # ${v} is a JS template literal, not shell
+          bun -e '
+            import { manifestsCarry } from "./scripts/release.ts";
+            const v = process.env.VERSION;
+            if (!(await manifestsCarry(v))) {
+              console.log(`::error::main does not carry v${v}. Land the bump on main first (\`make release\` opens that PR), then re-dispatch.`);
+              process.exit(1);
+            }
+          '
 
-          # The vendor manifests fan out from apps/cli/package.json; a partial
-          # bump would ship marketplace listings pointing at the wrong version.
+          # Catches drift the version fields alone miss (descriptions fanned out
+          # from plugin.json into the vendor copies).
           bun run scripts/sync-plugin-manifests.ts --check
 
   quality:
@@ -120,6 +133,9 @@ jobs:
 
       # Re-checked here, not just in `version`: this job checks out again, and
       # tagging the wrong commit is the one failure the later jobs cannot undo.
+      # Ancestry rather than tip-equality: `version` already proved this commit
+      # was the tip when the release started, and main may legitimately have
+      # advanced while the quality gate ran.
       - name: Re-verify the commit being tagged
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -130,11 +146,15 @@ jobs:
             echo "::error::${GITHUB_SHA} is not on main; refusing to tag it."
             exit 1
           fi
-          actual=$(jq -r .version apps/cli/package.json)
-          if [ "$actual" != "$VERSION" ]; then
-            echo "::error::main is at ${actual}, expected ${VERSION}."
-            exit 1
-          fi
+          # shellcheck disable=SC2016  # ${v} is a JS template literal, not shell
+          bun -e '
+            import { manifestsCarry } from "./scripts/release.ts";
+            const v = process.env.VERSION;
+            if (!(await manifestsCarry(v))) {
+              console.log(`::error::the commit being tagged does not carry v${v}.`);
+              process.exit(1);
+            }
+          '
           bun run scripts/sync-plugin-manifests.ts --check
 
       - name: Tag the release commit

@@ -150,16 +150,18 @@ export const SYNCED_MANIFESTS = [
   ".claude-plugin/plugin.json",
 ];
 
-// A manifest absent from the checkout is skipped, not treated as drift: the
-// vendor copies are optional. A manifest that exists and disagrees is drift,
-// so a half-applied bump can never read as "already landed".
+// Throws when one of these is missing rather than skipping it. They are all
+// tracked files, so absence means a broken checkout -- and "skip what isn't
+// there" would let the release gate pass on a tree that cannot carry a version
+// at all. Returns false only for the real case: present, but disagreeing.
 export async function manifestsCarry(version: string, root = "."): Promise<boolean> {
+  let carried = true;
   for (const rel of SYNCED_MANIFESTS) {
     const file = Bun.file(`${root}/${rel}`);
-    if (!(await file.exists())) continue;
-    if ((JSON.parse(await file.text()) as PackageJson).version !== version) return false;
+    if (!(await file.exists())) throw new Error(`Release manifest is missing: ${rel}`);
+    if ((JSON.parse(await file.text()) as PackageJson).version !== version) carried = false;
   }
-  return true;
+  return carried;
 }
 
 // The release workflow used to stamp the version itself, commit it on a
