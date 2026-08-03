@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { formatRedirectHop } from "@squirrelscan/core-contracts";
+
 import { normalizeUrl } from "@squirrelscan/utils";
 
 export const canonicalChainRule: Rule = {
@@ -33,9 +35,7 @@ export const canonicalChainRule: Rule = {
     ) {
       const chainLabel =
         redirectChain.hops.length > 1
-          ? redirectChain.hops
-              .map((hop) => `${hop.url} (${hop.statusCode})`)
-              .join(" → ")
+          ? redirectChain.hops.map((hop) => formatRedirectHop(hop)).join(" → ")
           : `${pageUrl} → ${finalUrl}`;
 
       checks.push({
@@ -157,9 +157,7 @@ export const canonicalChainRule: Rule = {
           items: [
             {
               id: absoluteCanonical,
-              label: redirectChain.hops
-                .map((hop) => `${hop.url} (${hop.statusCode})`)
-                .join(" → "),
+              label: redirectChain.hops.map((hop) => formatRedirectHop(hop)).join(" → "),
               meta: { chain: redirectChain, finalUrl },
             },
           ],

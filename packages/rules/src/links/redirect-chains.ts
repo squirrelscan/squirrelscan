@@ -1,7 +1,7 @@
 // links/redirect-chains - Redirect detection
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { RedirectChain } from "@squirrelscan/core-contracts";
+import { formatRedirectHop, type RedirectChain } from "@squirrelscan/core-contracts";
 
 /**
  * Identity of the resource a URL names, for deciding whether a request LANDED
@@ -57,11 +57,6 @@ function contradictsItself(chain: RedirectChain | undefined): boolean {
     .some((hop) => hop.type === "http" && hop.statusCode >= 200 && hop.statusCode < 300);
 }
 
-/** `url (301)`, or bare `url` when no status was observed for that hop. */
-function formatHop(hop: { url: string; statusCode: number }): string {
-  return hop.statusCode > 0 ? `${hop.url} (${hop.statusCode})` : hop.url;
-}
-
 export const redirectChainsRule: Rule = {
   meta: {
     id: "links/redirect-chains",
@@ -114,7 +109,7 @@ export const redirectChainsRule: Rule = {
       if (redirected && !contradictsItself(chain)) {
         const chainLabel =
           chain && chain.hops.length > 1
-            ? chain.hops.map(formatHop).join(" → ")
+            ? chain.hops.map((hop) => formatRedirectHop(hop)).join(" → ")
             : `${page.url} → ${page.finalUrl}`;
         redirectTargets.set(original, {
           originalUrl: page.url,
