@@ -32,6 +32,11 @@ jobs:
         run: bun run typecheck
       - name: Check third-party notices
         run: bun run notices:check
+      # Marketplace listings read plugin.json / .claude-plugin from the default
+      # branch, so drift here is publicly visible. Checked on every PR because
+      # nothing else notices until someone reads the repo.
+      - name: Check plugin manifests are in sync
+        run: bun run scripts/sync-plugin-manifests.ts --check
 
   cli-tests:
     name: CLI tests

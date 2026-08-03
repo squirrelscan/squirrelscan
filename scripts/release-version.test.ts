@@ -3,8 +3,16 @@
 // Expectations mirror the workflow's promote(sed)/beta-bump/semver-inc logic.
 
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { computeNextVersion, latestTaggedVersion } from "./release";
+import {
+  computeNextVersion,
+  latestTaggedVersion,
+  manifestsCarry,
+  SYNCED_MANIFESTS,
+} from "./release";
 
 const cases: Array<{
   current: string;
@@ -47,5 +55,56 @@ describe("latestTaggedVersion", () => {
 
   test("falls back when no release tags exist", () => {
     expect(latestTaggedVersion([], "0.0.1")).toBe("0.0.1");
+  });
+});
+
+// This gate is what stops a release tagging a commit whose manifests still say
+// the previous version — the drift that left main on 0.0.82 while v0.0.83 was
+// the published release.
+describe("manifestsCarry", () => {
+  async function fixture(versions: Record<string, string>): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), "release-manifests-"));
+    for (const [rel, version] of Object.entries(versions)) {
+      await Bun.write(join(root, rel), JSON.stringify({ version }) + "\n");
+    }
+    return root;
+  }
+
+  const all = (version: string) => Object.fromEntries(SYNCED_MANIFESTS.map((m) => [m, version]));
+
+  test("true when every manifest is on the version", async () => {
+    const root = await fixture(all("0.0.83"));
+    expect(await manifestsCarry("0.0.83", root)).toBe(true);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("false when the release version is not yet stamped", async () => {
+    const root = await fixture(all("0.0.82"));
+    expect(await manifestsCarry("0.0.83", root)).toBe(false);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("false when only some manifests were bumped", async () => {
+    const root = await fixture({ ...all("0.0.83"), "npm/package.json": "0.0.82" });
+    expect(await manifestsCarry("0.0.83", root)).toBe(false);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  // Skipping an absent manifest would let the release gate pass on a tree that
+  // cannot carry a version at all.
+  test("throws when a release manifest is missing rather than passing", async () => {
+    const root = await fixture({ "apps/cli/package.json": "0.0.83" });
+    await expect(manifestsCarry("0.0.83", root)).rejects.toThrow("npm/package.json");
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("a missing manifest is reported even when another already disagrees", async () => {
+    const root = await fixture({ "apps/cli/package.json": "0.0.82" });
+    await expect(manifestsCarry("0.0.83", root)).rejects.toThrow(/missing/);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("server.json is not one of the synced manifests", () => {
+    expect(SYNCED_MANIFESTS).not.toContain("server.json");
   });
 });
