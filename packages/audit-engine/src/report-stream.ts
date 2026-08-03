@@ -51,6 +51,22 @@ import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
 // SITE-RECORD BUILDERS
 // ============================================
 
+/**
+ * The seed's resolved URL, but only when it names a DIFFERENT origin than the
+ * crawl's base — i.e. the crawler refused an off-site seed redirect and pinned
+ * the base to the seed instead (see the crawler's `resolveSeedRedirect`).
+ * Undefined otherwise, so reports for the overwhelmingly common no-redirect and
+ * same-site-redirect cases are unchanged.
+ */
+function offSiteSeedRedirect(baseUrl: string, seedUrl: string | undefined): string | undefined {
+  if (!seedUrl || !baseUrl) return undefined;
+  try {
+    return new URL(seedUrl).origin === new URL(baseUrl).origin ? undefined : seedUrl;
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildRobotsData(robots: RobotsTxtRecord | null): RobotsTxtData | null {
   if (!robots) return null;
 
@@ -404,8 +420,12 @@ export function buildV1Report(
       (p) => p.fallbackReason === "render-block",
     ).length;
 
+    const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
+
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",
+      // Present only when the crawler refused an off-site seed redirect (#1418).
+      ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
       totalPages: pages.length,
       passed,
@@ -666,8 +686,12 @@ export function buildV2Report(
       .pipe(Effect.catchAll(() => Effect.succeed([])));
     const robotsData = buildRobotsData(robots);
 
+    const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
+
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",
+      // Present only when the crawler refused an off-site seed redirect (#1418).
+      ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
       totalPages: pagesCrawled,
       passed,
