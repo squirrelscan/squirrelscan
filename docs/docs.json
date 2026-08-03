@@ -226,6 +226,7 @@
                 "pages": [
                   "rules/content/index",
                   "rules/content/heading-hierarchy",
+                  "rules/content/hidden-text",
                   "rules/content/word-count",
                   "rules/content/duplicate-title",
                   "rules/content/duplicate-description",

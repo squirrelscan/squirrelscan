@@ -9,6 +9,7 @@ import { duplicateDescriptionRule } from "./duplicate-description";
 import { duplicateTitleRule } from "./duplicate-title";
 import { freshnessRule } from "./freshness";
 import { headingHierarchyRule } from "./heading-hierarchy";
+import { hiddenTextRule } from "./hidden-text";
 import { keywordStuffingRule } from "./keyword-stuffing";
 import { metaInBodyRule } from "./meta-in-body";
 import { mojibakeRule } from "./mojibake";
@@ -26,6 +27,7 @@ export const rules: Rule[] = [
   duplicateTitleRule,
   duplicateDescriptionRule,
   keywordStuffingRule,
+  hiddenTextRule,
   brokenHtmlRule,
   readingLevelRule,
   freshnessRule,
@@ -45,6 +47,7 @@ export {
   duplicateTitleRule,
   freshnessRule,
   headingHierarchyRule,
+  hiddenTextRule,
   keywordStuffingRule,
   metaInBodyRule,
   mimeTypeRule,
