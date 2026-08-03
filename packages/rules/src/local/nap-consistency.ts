@@ -323,7 +323,14 @@ function napFromRow(row: PageFeatureRow): NapSignal {
 /**
  * Streaming path (#1373): fold the per-page NAP scalars straight off the
  * page_features cursor, in normalized_url order (== the legacy `site.pages`
- * order). Only the bounded rollup stays resident; no parsed page is held.
+ * order). Only the rollup stays resident; no parsed page is held.
+ *
+ * Zero rows is read as an empty crawl. A crawl whose pages are ALL non-auditable
+ * (4xx/5xx) also yields zero rows while the legacy universe still appends those
+ * pages with an empty parse, so the two paths word the skip differently there.
+ * That is a property of the streaming universe shared with every other site rule
+ * on this seam (see content/duplicate-title), not something specific to NAP, and
+ * such a crawl cannot resolve the local-business metadata this rule is gated on.
  */
 async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
   const rollup = emptyRollup();

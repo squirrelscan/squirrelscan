@@ -9,6 +9,7 @@ export {
   extractOG,
   extractTwitter,
   extractLinks as extractLinksBasic,
+  extractContactLinks,
   extractImages,
   extractSchema,
   extractHeadings,
