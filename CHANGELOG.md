@@ -20,6 +20,83 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.83
+
+Three new rules, a rebuilt local-SEO check, and a crawl-correctness fix for seeds
+that redirect off your site. The rule set is now 267.
+
+### Added
+
+- **`content/hidden-text` flags text and links hidden from visitors but left
+  visible to crawlers.** Google's spam policies treat this as deceptive, and
+  pages doing it can lose rankings or drop out of search entirely. The rule
+  looks for the techniques that have no innocent explanation: an off-screen
+  `text-indent`, a zero font size, same-on-same colour, a zero-size clip. It
+  deliberately does not accuse you over `display:none` or `opacity:0` on their
+  own, because that is what every accordion, modal, and scroll-reveal library
+  writes. Content revealed inside a `@media` block, by a transition on a
+  compound selector, or alongside a transform is read as UI rather than
+  concealment. It is a warning at weight 6, and escalates to a failure only when
+  hidden *links* are involved, which is the stronger spam signal.
+- **`a11y/autocomplete-tokens` checks that fields collecting a person's own data
+  carry the right autofill token.** Name, email, phone, address, and payment
+  fields with the correct WHATWG token fill in one tap, which is the difference
+  between a completed checkout and an abandoned one, and WCAG 2.1 success
+  criterion 1.3.5 requires it. Section and shipping/billing prefixes are
+  understood. A token the browser does not recognise is ignored outright, so a
+  typo like `firstname` is worse than nothing, and `autocomplete="off"` on
+  personal data does not stop autofill in modern browsers, it only stops the
+  accurate kind.
+- **`a11y/input-types` checks that fields use the right input type and keyboard
+  hint.** `type="email"`, `type="tel"`, `type="url"`, and `type="number"` each
+  summon the right mobile keyboard and bring free browser validation with them.
+  The rule also flags `type="number"` on digit strings such as postal codes,
+  phone numbers, and card numbers, where it strips leading zeros and silently
+  discards anything that is not a valid float, and `novalidate` on a form that
+  still declares `required` or `pattern` and ships no replacement validation.
+
+### Changed
+
+- **`local/nap-consistency` now compares your business details across the whole
+  site.** It used to judge one page at a time. It now collects the name, address,
+  and phone from every crawled page and reports when the same value is rendered
+  several different ways, which is the drift that actually costs you local
+  citations. Phone numbers declared in `tel:` links count alongside JSON-LD, so a
+  footer that formats the number differently from your markup is visible. The
+  cross-page half only fires once enough pages declare a signal, and the rule
+  still skips sites with no local-business signal at all.
+- **`security/form-https` now separates a real downgrade from an already-insecure
+  page.** Actions are resolved against the page URL, so a relative or
+  protocol-relative `action` inherits the page's scheme instead of being guessed
+  at, and `formaction` on submit buttons is read too. An HTTPS page posting to
+  `http://` now fails: the padlock tells the user they are safe while the
+  submission travels in the clear. An HTTP page posting to `http://` stays a
+  warning, and a page with nothing to submit reports as info rather than passing
+  silently.
+
+### Fixed
+
+- **A seed that redirects off-site no longer re-bases the whole audit.** If the
+  URL you passed redirected to another site, that target became the audit's base:
+  every root probe (robots.txt, llms.txt, sitemap discovery, the `.well-known`
+  and agent-manifest sweep) went to a host you never named, and the target's
+  content was stored and reported under your seed's name. A site redirecting to a
+  CDN or a parked domain produced a report describing the target while claiming
+  to describe the seed. The base is now pinned to the seed. A redirect is adopted
+  only when it stays on the same registrable domain and port, so `http` to
+  `https` upgrades and apex to `www` bounces still work; one that leaves is
+  refused, and the refused target is recorded as the report's `finalUrl` so you
+  can still see it. The same rule applies per page: a page whose redirects landed
+  off-site is dropped rather than filed under your audit, unless your own scope
+  config admits it.
+- **Building objects from untrusted keys is hardened.** Keys taken from crawled
+  content can no longer reach an object's prototype.
+- **The install endpoint always serves the current release.** Release channel
+  metadata and the install scripts are now published as part of the release
+  itself and verified against the live endpoint before the run is allowed to
+  finish, so a new version cannot be announced while the installer still hands
+  out the previous one.
+
 ## v0.0.82
 
 Follow-ups to the v0.0.81 security release, plus two crawl-correctness fixes.
