@@ -176,18 +176,26 @@ export function envTokenRejectedMessage(): string {
  * way to guess, and still points at the dashboard for the other one.
  *
  * `envVarName` names the env var that supplied the key, when one did; omit it
- * for a key that came from the session file.
+ * for a key that came from the session file. It changes the ADVICE, not just the
+ * wording: an env token is authoritative and keeps shadowing the session (see
+ * the precedence doc at the top of this file), so telling an env-key user to
+ * just log in would hand them the identical error again afterwards — they have
+ * to unset the variable for the session to be consulted at all.
  */
 export function apiKeyNotVerifiableMessage(envVarName?: string | null): string {
   const source = envVarName
     ? `the org API key in ${envVarName}`
     : "an org API key";
+  const howToSeeAccount = envVarName
+    ? `  To see your account, run "squirrel auth login", then unset ${envVarName} —\n` +
+      `  while it is set it takes precedence over the session for every cloud call.\n`
+    : `  To see your account, run: squirrel auth login\n`;
   return (
     `This command cannot verify ${source}.\n` +
     `  ${getApiUrl()} answers identity lookups only for the login token that\n` +
     `  "squirrel auth login" issues, so it refuses an org API key (sq_…) here even\n` +
     `  when that same key works for audits, publishing and credits.\n` +
-    `  To see your account, run: squirrel auth login\n` +
+    howToSeeAccount +
     `  If cloud calls are failing too, the key may be revoked, expired, or from\n` +
     `  another environment: ${API_KEYS_DASHBOARD_URL}`
   );
