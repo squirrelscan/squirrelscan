@@ -36,6 +36,11 @@ export const NAP_PHONE_MIN_DIGITS = 7;
  * ("+1 (555) 123-4567", "555.123.4567", "01555 1234567" all key on "1234567"), so
  * one number written many ways stays ONE number and only the display form differs
  * — which is precisely the format-drift signal this rule reports as a warning.
+ *
+ * The tradeoff is deliberate and one-directional: two genuinely different numbers
+ * sharing a subscriber tail (same 7 digits, different area code) collapse into one
+ * key, so a real conflict is under-reported as format drift. It never invents a
+ * conflict that isn't there, which is the error that would matter.
  */
 const NAP_PHONE_KEY_DIGITS = 7;
 

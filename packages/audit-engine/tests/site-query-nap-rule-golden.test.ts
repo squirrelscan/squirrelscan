@@ -15,10 +15,12 @@ import { Effect } from "effect";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
+import { extractNapSignal } from "@squirrelscan/utils";
 import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 import type { PageRecord } from "@squirrelscan/core-contracts";
 
 import { createSiteQuery, extractPageFeatures } from "../src/index";
+import { parseHtmlForRules } from "../src/adapter";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -181,5 +183,35 @@ describe("dual-path golden — local/nap-consistency (extractor → v20 columns 
       samplePages: 12,
     });
     expect(address.items?.[0]?.sourcePages).toEqual(["https://example.com/p12"]);
+  });
+});
+
+describe("parseHtmlForRules carries contactLinks", () => {
+  // There are TWO parsers producing a ParsedPage: `parsePage` (crawler) and
+  // `parseHtmlForRules` (this package — what `parsePageRecord` and the #263
+  // page-rule workers actually run). A field added to only one of them is
+  // invisible in production while every direct-parser test still passes, so pin
+  // that both agree.
+  const HTML =
+    `<html><body><a href="tel:+1 (555) 123-4567">+1 (555) 123-4567</a>` +
+    `<a href="mailto:hi@example.com">Email</a><a href="/about">about</a></body></html>`;
+
+  test("both parse paths produce the same contact links", () => {
+    const viaAdapter = parseHtmlForRules(HTML, BASE);
+    const viaParser = parsePage(HTML, BASE);
+
+    expect(viaAdapter.contactLinks).toEqual([
+      { scheme: "tel", value: "+1 (555) 123-4567", text: "+1 (555) 123-4567" },
+      { scheme: "mailto", value: "hi@example.com", text: "Email" },
+    ]);
+    expect(viaAdapter.contactLinks).toEqual(viaParser.contactLinks);
+  });
+
+  test("a NAP signal survives the adapter parse path", () => {
+    const nap = extractNapSignal(parseHtmlForRules(HTML, BASE));
+    expect(nap.phones).toEqual(["1234567"]);
+    expect(nap.phoneFormats).toEqual(["+1 (555) 123-4567"]);
+    expect(nap.telLink).toBe(true);
+    expect(nap.mailtoLink).toBe(true);
   });
 });
