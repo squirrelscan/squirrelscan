@@ -119,7 +119,10 @@ function extractVersion(fingerprint: TechFingerprint, input: TechDetectInput): s
  * attribute orders are handled — some CMSes emit `content=… name=generator`.
  */
 function extractMetaFromHtml(html: string): Record<string, string> {
-  const out: Record<string, string> = {};
+  // Object.create(null): `name` is page-controlled, so on a plain object the
+  // `key in out` guard below would be true for `constructor`/`__proto__` from
+  // the prototype chain and drop those tags before they reach a detector.
+  const out: Record<string, string> = Object.create(null);
   // Quoted attributes only — unquoted generator tags are vanishingly rare.
   const sample = html.slice(0, 51200);
   const tagRe = /<meta\b[^>]*>/gi;

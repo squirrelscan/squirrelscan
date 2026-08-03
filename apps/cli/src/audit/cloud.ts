@@ -209,7 +209,10 @@ function extractJsonLdBlocks(doc: Document): string[] {
 
 /** og:* / twitter:* / name meta tags → a flat name→content map (identity signals). */
 function extractMetaNameContent(doc: Document): Record<string, string> {
-  const out: Record<string, string> = {};
+  // Object.create(null): `key` is page-controlled, so on a plain object the
+  // `key in out` guard below is true for `constructor`/`__proto__` inherited
+  // from the prototype chain and those tags never reach the cloud payload.
+  const out: Record<string, string> = Object.create(null);
   const metas = doc.querySelectorAll("meta");
   for (const meta of metas) {
     const el = meta as Element;
@@ -554,7 +557,8 @@ function extractScriptSrcs(html: string): string[] {
  * detectors are the backstop for any tag this misses (e.g. content-first order).
  */
 function extractMetaTags(html: string): Record<string, string> {
-  const out: Record<string, string> = {};
+  // Object.create(null) — same reason as extractMetaNameContent above.
+  const out: Record<string, string> = Object.create(null);
   // Parse each <meta> tag and read its name/content attrs INDEPENDENTLY so
   // either attribute order works — some CMSes (Joomla, Drupal) emit
   // `<meta content="…" name="generator">`, and `generator` is the key CMS signal.

@@ -9,6 +9,7 @@
     "./frontier": "./src/frontier.ts",
     "./robots": "./src/robots.ts",
     "./sitemaps": "./src/sitemaps.ts",
+    "./well-known": "./src/well-known.ts",
     "./storage": "./src/storage/index.ts"
   },
   "dependencies": {

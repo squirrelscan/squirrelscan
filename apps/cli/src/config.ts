@@ -2,6 +2,7 @@
 // Schema + types + defaults come from @squirrelscan/config.
 // This file adds CLI-specific TOML loading, file discovery, and process.exit.
 
+import { isUnsafeObjectKey } from "@squirrelscan/core-contracts/untrusted-keys";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -75,12 +76,22 @@ export function getGlobalConfigPath(): string | undefined {
 }
 
 // Deep merge utility — arrays replace, objects deep merge
+//
+// `source` is TOML from a `squirrel.toml` we did not write (audits run inside
+// checkouts), and smol-toml turns a `[__proto__]` table into a real own key.
+// Merging that key would read `target["__proto__"]` (Object.prototype) as the
+// recursion target and then assign the result back through the inherited
+// setter, repointing the merged config's prototype. Skip those keys: no
+// SquirrelScanConfig field is named any of them.
 function deepMerge<T extends Record<string, unknown>>(
   target: T,
   source: Partial<T>
 ): T {
   const result = { ...target };
   for (const key of Object.keys(source) as (keyof T)[]) {
+    // String(key), not a `typeof key === "string"` guard: narrowing `key` here
+    // would also narrow it for the `result[key] = …` writes below.
+    if (isUnsafeObjectKey(String(key))) continue;
     const sourceVal = source[key];
     const targetVal = target[key];
     if (

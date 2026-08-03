@@ -1,5 +1,6 @@
 // Generic config command - interface-agnostic
 
+import { isUnsafeObjectKey } from "@squirrelscan/core-contracts/untrusted-keys";
 import { existsSync, readFileSync } from "node:fs";
 import { parse as parseTOML } from "smol-toml";
 
@@ -174,6 +175,22 @@ export function setConfigValue(
   // Set the value (supports dot notation for nested keys)
   // Note: writing back with stringifyTOML will lose any comments/formatting
   const keys = key.split(".");
+  // `config` comes from parseTOML and inherits Object.prototype, so descending
+  // into a `__proto__`/`constructor`/`prototype` segment hands back the shared
+  // prototype and the final write lands on every object in the process. No
+  // config key is named any of these, so reject rather than silently skip.
+  const unsafeSegment = keys.find((segment) => isUnsafeObjectKey(segment));
+  if (unsafeSegment) {
+    return err(
+      commandError(
+        ErrorCodes.INVALID_VALUE,
+        `Invalid config key segment: ${unsafeSegment}`,
+        {
+          key,
+        }
+      )
+    );
+  }
   let obj: Record<string, unknown> = config;
   for (let i = 0; i < keys.length - 1; i++) {
     if (!(keys[i] in obj)) {
