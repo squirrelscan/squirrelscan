@@ -168,7 +168,7 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 | E-E-A-T | 15 | Authority, trust, expertise signals |
 | Links | 14 | Broken links, redirects, anchor text |
 | Core SEO | 13 | Meta tags, canonical, doctype, charset |
-| Content | 14 | Readability, freshness, word count, encoding, copyright year |
+| Content | 15 | Readability, freshness, word count, encoding, hidden text, copyright year |
 | Structured Data | 10 | JSON-LD, schema validation |
 | Site Integrity | 9 | Injected pages, phishing kits, malware, SEO spam |
 | URL Structure | 8 | Length, format, parameters |
@@ -181,7 +181,7 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 | Internationalization | 2 | Hreflang, lang attribute |
 | Analytics | 2 | GTM, consent mode |
 
-**Total: 266 rules across 21 categories**
+**Total: 267 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 

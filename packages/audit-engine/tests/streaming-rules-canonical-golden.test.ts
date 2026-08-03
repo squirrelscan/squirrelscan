@@ -65,15 +65,15 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // rule-surface drift tripwire (see golden-baseline.test.ts for the same fixture).
       expect(v1.meta.pageCount).toBeGreaterThanOrEqual(GOLDEN_BASELINE_PAGE_COUNT);
       expect(v1.healthScore.overall).toBe(48);
-      // 95711 -> 97711: a11y/autocomplete-tokens and a11y/input-types emit four
-      // page checks between them (1 + 3) across the 500 fixture pages that have a
-      // document, 518 minus the 18 without one. The overall score is unmoved.
-      expect(v1.findings.length).toBe(97711);
+      // 97711 -> 98211: content/hidden-text emits one page check across the 500
+      // fixture pages that have a document, and passes on every one of them. The
+      // overall score is unmoved.
+      expect(v1.findings.length).toBe(98211);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
-      // is only correct alongside a deliberate new rule id. 264 -> 266 is the two
-      // rules above; anything else means a rule id leaked in, so fix that rather
-      // than this number.
-      expect(v1.perRuleTally.length).toBe(266);
+      // is only correct alongside a deliberate new rule id. 266 -> 267 is
+      // content/hidden-text; anything else means a rule id leaked in, so fix
+      // that rather than this number.
+      expect(v1.perRuleTally.length).toBe(267);
     },
     180_000,
   );
