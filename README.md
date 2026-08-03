@@ -159,7 +159,7 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 
 | Category | Rules | Focus |
 |----------|-------|-------|
-| Accessibility | 59 | ARIA, button/input names, landmarks, lists, tables, focus |
+| Accessibility | 61 | ARIA, button/input names, landmarks, lists, tables, focus |
 | Performance | 29 | Core Web Vitals, compression, caching, JS optimization |
 | Crawlability | 18 | Robots.txt, sitemaps, indexability |
 | Agent Experience | 17 | How ready a site is for AI agents to read, discover, operate |
@@ -181,7 +181,7 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 | Internationalization | 2 | Hreflang, lang attribute |
 | Analytics | 2 | GTM, consent mode |
 
-**Total: 264 rules across 21 categories**
+**Total: 266 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 

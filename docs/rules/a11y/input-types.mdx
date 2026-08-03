@@ -1,0 +1,70 @@
+---
+title: "Input Types"
+description: "Checks that fields use the right input type and keyboard hint, and that forms keep native validation"
+---
+
+Checks that fields use the right input type and keyboard hint, and that forms keep native validation
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/input-types` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## What it checks
+
+Three ways markup opts out of help the browser gives for free. Each check reports the exact node with a selector and its opening tag.
+
+### `input-types`
+
+`fail` when a digit string uses `type="number"` (a postal code, phone number, card number or security code). `warn` when `type="text"` is used where `email`, `tel`, `url` or `number` is correct. A field that already sets a matching `inputmode` is a deliberate choice and is left alone.
+
+### `enterkeyhint`
+
+`warn` when a form with three or more fields sets `enterkeyhint` on none of them. Shorter forms are skipped.
+
+### `form-novalidate`
+
+`warn` only on a genuine intent mismatch: the form sets `novalidate`, still declares constraints (`required`, `pattern`, `min`/`max`, `minlength`/`maxlength`, `step`, or a validating input type), and ships no validation of its own. A form with an error region, an `onsubmit` handler, `aria-invalid`, or a page that calls `checkValidity()` is left alone, as is a `novalidate` form with no constraints to disable.
+
+## Solution
+
+Use the input type that matches the data. `type="email"`, `type="tel"`, `type="url"` and `type="number"` each summon the right mobile keyboard and bring free browser validation with them, while `type="text"` gives users the full QWERTY keyboard and no help at all.
+
+Never use `type="number"` for a digit string such as a postal code, phone number or card number: it strips leading zeros, adds a spinner, and silently discards anything that is not a valid float. If you need a numeric keypad without those side effects, keep `type="text"` and add `inputmode="numeric"`:
+
+```html
+<label for="zip">ZIP code</label>
+<input id="zip" name="postalCode" type="text" inputmode="numeric"
+       autocomplete="postal-code" enterkeyhint="next">
+```
+
+On forms with several fields, set `enterkeyhint="next"` on each field and `enterkeyhint="send"` or `"done"` on the last one so the mobile return key says what it does.
+
+Only add `novalidate` when your own JavaScript takes over validation. On a form that still declares `required` or `pattern` and ships no replacement, it removes the browser's error messages and hands users nothing back.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/input-types"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/input-types"]
+disable = ["*"]
+```

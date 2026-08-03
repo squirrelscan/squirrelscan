@@ -345,6 +345,8 @@
                   "rules/a11y/meta-refresh",
                   "rules/a11y/link-in-text-block",
                   "rules/a11y/form-field-multiple-labels",
+                  "rules/a11y/autocomplete-tokens",
+                  "rules/a11y/input-types",
                   "rules/a11y/landmark-one-main",
                   "rules/a11y/html-xml-lang-mismatch",
                   "rules/a11y/aria-deprecated-role",

@@ -1,0 +1,65 @@
+---
+title: "Autocomplete Tokens"
+description: "Checks that name, email, phone, address and payment fields carry the correct autocomplete token"
+---
+
+Checks that name, email, phone, address and payment fields carry the correct autocomplete token
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/autocomplete-tokens` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## What it checks
+
+The rule works out what each field is for from its `name`, `id`, label and placeholder, then checks the `autocomplete` token against that purpose. Only fields whose purpose is unambiguous are considered, so a field called `capacity` is never read as a city and `hotel` is never read as a phone number.
+
+| Outcome | When |
+|---|---|
+| `pass` | Every identified field carries a correct token |
+| `warn` | An identified field has no token, or turns autofill off |
+| `fail` | A token is not in the spec, or belongs to a different purpose |
+| `skipped` | No field on the page has an identifiable purpose |
+
+Each finding names the exact node with a selector and the field's opening tag.
+
+## Solution
+
+Give every field that collects a person's own data the matching WHATWG autofill token, e.g. `autocomplete="given-name"`, `"email"`, `"tel"`, `"address-line1"`, `"postal-code"`, `"cc-number"`. Browsers and password managers fill those fields in one tap, which is the difference between a completed checkout and an abandoned one, and WCAG 2.1 success criterion 1.3.5 (Identify Input Purpose) requires it.
+
+Tokens may be prefixed with `section-*`, `shipping`/`billing` and `home`/`work`/`mobile`:
+
+```html
+<label for="ship-street">Address line 1</label>
+<input id="ship-street" name="shippingAddressLine1" type="text"
+       autocomplete="shipping address-line1" enterkeyhint="next">
+```
+
+A token the browser does not recognise is ignored outright, so a typo like `autocomplete="firstname"` is worse than nothing: use `given-name`. Avoid `autocomplete="off"` on personal data. It does not stop autofill in modern browsers, it only stops the accurate kind.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/autocomplete-tokens"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/autocomplete-tokens"]
+disable = ["*"]
+```
