@@ -9,6 +9,7 @@ import {
 } from "@squirrelscan/audit-engine";
 import {
   detectPageType,
+  extractContactLinks,
   extractContent,
   extractHeadings,
   extractImages,
@@ -245,6 +246,11 @@ export function parsePageRecord(page: PageRecord): ParsedPage | null {
           rel: l.rel,
           isNofollow: l.isNofollow,
         })),
+        // tel:/mailto: anchors, which `extractLinks` drops as non-crawlable.
+        // This is the THIRD ParsedPage producer (see @squirrelscan/parser's
+        // `parsePage` and audit-engine's `parseHtmlForRules`); a field set on
+        // only some of them is undefined at runtime with every test still green.
+        contactLinks: extractContactLinks(doc),
         images: images.map((i) => ({
           src: i.src,
           alt: i.alt,
