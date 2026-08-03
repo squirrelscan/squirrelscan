@@ -42,7 +42,7 @@ import type {
 } from "./types";
 
 import { fetchPageWithRetry, type CrawlFetcher } from "../fetcher";
-import { normalizeUrl, isInScope } from "../frontier";
+import { normalizeUrl, isInScope, isOffSiteFinalUrl, resolveSeedRedirect } from "../frontier";
 import {
   buildConditionalHeaders,
   extractChangeDetection,
@@ -765,6 +765,36 @@ export function createCrawler(
           }
 
           const result = fetchResult.right;
+
+          // SECURITY (#1418): the fetcher follows redirects, so an in-scope URL
+          // can still hand back a document served by another site. Record the
+          // hop and drop the response — storing it would file another site's
+          // title and body under this audit's report, and every stored page is
+          // also a link/discovery source that would pull the crawl across.
+          //
+          // Two escapes, both deliberate: a same-site landing (an http→https
+          // upgrade, an apex→www bounce) is not off-site at all, and a landing
+          // the crawl's OWN scope config admits — `allowedDomains`, or an
+          // absolute `include` pattern — was explicitly asked for by the user.
+          if (
+            isOffSiteFinalUrl(baseUrl, result.finalUrl) &&
+            !normalizeAndCheckScope(result.finalUrl).decision.allowed
+          ) {
+            const message = `Off-site redirect to ${result.finalUrl}`;
+            logger.warn("off-site redirect refused", entry.normalizedUrl, "→", result.finalUrl);
+            yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "failed", message);
+            yield* emit({
+              type: "page:failed",
+              url: entry.normalizedUrl,
+              error: message,
+              retryable: false,
+              depth: entry.depth,
+              timestamp: Date.now(),
+            });
+            yield* updateStats(crawlId, { pagesFailed: 1 });
+            markPrefixFailed(entry.normalizedUrl, entry.depth);
+            return;
+          }
 
           // Handle 304 Not Modified — reuse cached page (conditional-GET hit).
           if (isNotModifiedResponse(result.status)) {
@@ -1491,16 +1521,31 @@ export function createCrawler(
 
         if (finalTargetUrl !== targetUrl) {
           logger.debug("final URL after redirects", targetUrl, "→", finalTargetUrl);
-
-          // Warn if cross-domain redirect
-          const originalOrigin = new URL(targetUrl).origin;
-          const finalOrigin = new URL(finalTargetUrl).origin;
-          if (originalOrigin !== finalOrigin) {
-            logger.warn("cross-domain redirect detected", originalOrigin, "→", finalOrigin);
-          }
         }
 
-        baseUrl = new URL(finalTargetUrl).origin;
+        // SECURITY (#1418): the crawl's base is pinned to the SEED the user
+        // asked for. A seed redirect is adopted only when it stays on the seed's
+        // own site (same registrable domain + port); one that leaves it is
+        // refused and the seed is crawled instead.
+        //
+        // Every root probe below (robots.txt, llms.txt, sitemap discovery, the
+        // .well-known / agent-manifest / markdown sweep) is built from `baseUrl`,
+        // and `baseUrl` is also the report's `baseUrl` and the crawl's scope
+        // anchor. Re-basing onto a redirect target therefore turns one followed
+        // redirect into a full discovery sweep of a site the user never named,
+        // and files that site's content under the seed's name.
+        //
+        // `userProvidedUrl`, not `targetUrl`, is the seed: callers (the CLI)
+        // resolve redirects themselves and pass the already-resolved URL as
+        // `targetUrl` with the user's own URL as `originalUrl`.
+        const seedResolution = resolveSeedRedirect(userProvidedUrl, finalTargetUrl);
+        baseUrl = seedResolution.baseUrl;
+        if (seedResolution.offSite) {
+          logger.warn(
+            "off-site redirect refused",
+            `${userProvidedUrl} → ${finalTargetUrl} leaves the seed's site; auditing ${baseUrl} instead`,
+          );
+        }
 
         // Reset breadth-first state for new crawl
         prefixStats.clear();
@@ -1509,7 +1554,11 @@ export function createCrawler(
         // Reset pattern stats for new crawl
         clearPatternStats(patternStats);
 
-        // Create crawl session
+        // Create crawl session. `seedUrl` records where the seed's redirects
+        // RESOLVED to, which is not necessarily what we crawl — when its origin
+        // differs from `baseUrl` the redirect was refused as off-site and the
+        // seed itself was crawled. That comparison is how consumers surface the
+        // redirect without the base ever moving.
         const crawlId = yield* storage.createCrawl({
           baseUrl,
           seedUrl: finalTargetUrl,
@@ -1737,8 +1786,9 @@ export function createCrawler(
           `${sitemapResult.discovered.length} discovered, ${sitemapResult.all.length} total, ${config.sitemapPendingCount}/${config.sitemapUrlCount} enqueued (rest filtered)`,
         );
 
-        // Seed the crawl queue
-        yield* enqueueUrl(crawlId, finalTargetUrl, 0, undefined, "seed");
+        // Seed the crawl queue — the resolved URL when its redirect was adopted,
+        // the user's own URL when it was refused as off-site.
+        yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
 
         // If nothing is pending after sitemaps + seed, every candidate URL was
         // filtered (robots.txt / scope). The crawl loop terminates cleanly

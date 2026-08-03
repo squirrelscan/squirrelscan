@@ -135,6 +135,7 @@
         "effect": "^3.21.3",
         "fast-xml-parser": "^5.10.1",
         "robots-parser": "^3.0.1",
+        "tldts": "^7",
         "zod": "^3.25.76",
       },
       "devDependencies": {
