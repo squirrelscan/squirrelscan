@@ -395,6 +395,16 @@ export function createCrawler(
           return;
         }
 
+        // NOTE (#1510): `/about` and `/about/` are deliberately NOT collapsed
+        // into one frontier entry. They are different request targets, and which
+        // of them redirects is exactly what the audit is trying to find out — a
+        // first-seen dedupe would answer it by discovery order, reporting the
+        // redirect on a site that happens to link the redirecting form first and
+        // staying silent on the same site if the links appear the other way
+        // round. Under-reporting a redirect is worse than crawling one extra
+        // page, and this only ever costs a page on a site that already links
+        // both forms of the same path.
+
         // Check max pages (in-memory; the dispatch loop is the authoritative cap)
         if (pagesCommitted >= config.maxPages) {
           return;

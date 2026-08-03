@@ -6,6 +6,33 @@ import {
   readBodyCapped,
 } from "@squirrelscan/utils";
 
+/**
+ * Enforce the one invariant every redirect chain must satisfy: an HTTP hop that
+ * is FOLLOWED by another hop redirected at the HTTP level, so a 2xx recorded
+ * against it is not a status that hop can have returned — it belongs to some
+ * other response, and in practice to the landing page. Downgrade it to `0`
+ * ("no status observed for this hop") instead of passing it on.
+ *
+ * `javascript` and `meta-refresh` hops are left alone: a client-side redirect is
+ * a document that loaded with 200 and THEN redirected, so 2xx is the correct
+ * status there and carries real information.
+ *
+ * Applied at every producer that does not derive hops from responses it watched
+ * itself, so no consumer can read a fabricated `200 → 200` as a redirect
+ * (#1510). Producers that follow redirects by hand only ever append a hop after
+ * seeing a 3xx, so they satisfy this by construction and do not need it.
+ */
+export function withObservedHopStatuses(hops: RedirectChain["hops"]): RedirectChain["hops"] {
+  return hops.map((hop, i) =>
+    i < hops.length - 1 &&
+    hop.type === "http" &&
+    hop.statusCode >= 200 &&
+    hop.statusCode < 300
+      ? { ...hop, statusCode: 0 }
+      : hop,
+  );
+}
+
 export interface FetcherCapabilities {
   jsRendering: boolean;
   cookies: boolean;
@@ -511,28 +538,39 @@ export function createBrowserQueueDocumentFetcher(
           throw new Error(statusData.error ?? "Browser render job failed");
         }
         if (statusData.status === "completed" && statusData.result) {
+          const { sourceUrl, finalUrl, status } = statusData.result;
+          // The render service reports the landing page; the statuses of the
+          // redirects that led to it were never observed. Only the LAST hop can
+          // carry `status`, and a supplied chain is sanitised rather than
+          // trusted, so neither path can claim a 2xx hop redirected (#1510).
+          const redirected = Boolean(finalUrl) && finalUrl !== sourceUrl;
+          const fallbackHops: RedirectChain["hops"] = redirected
+            ? [
+                { url: sourceUrl, statusCode: 0, type: "http" },
+                { url: finalUrl, statusCode: status, type: "http" },
+              ]
+            : [{ url: sourceUrl, statusCode: status, type: "http" }];
           return {
             url: statusData.result.sourceUrl,
             finalUrl: statusData.result.finalUrl,
             status: statusData.result.status,
             headers: statusData.result.headers,
             body: statusData.result.body,
-            redirectChain: statusData.result.redirectChain ?? {
-              sourceUrl: statusData.result.sourceUrl,
-              finalUrl: statusData.result.finalUrl,
-              hops: [
-                {
-                  url: statusData.result.sourceUrl,
-                  statusCode: statusData.result.status,
-                  type: "http",
+            redirectChain: statusData.result.redirectChain
+              ? {
+                  ...statusData.result.redirectChain,
+                  hops: withObservedHopStatuses(statusData.result.redirectChain.hops),
+                }
+              : {
+                  sourceUrl,
+                  finalUrl,
+                  hops: fallbackHops,
+                  chainLength: Math.max(0, fallbackHops.length - 1),
+                  isLoop: false,
+                  endsInError: status >= 400,
+                  httpsToHttp: sourceUrl.startsWith("https://") && finalUrl.startsWith("http://"),
+                  httpToHttps: sourceUrl.startsWith("http://") && finalUrl.startsWith("https://"),
                 },
-              ],
-              chainLength: 0,
-              isLoop: false,
-              endsInError: statusData.result.status >= 400,
-              httpsToHttp: false,
-              httpToHttps: false,
-            },
             timing: {
               startedAt: statusData.result.startedAt,
               responseAt: statusData.result.responseAt,

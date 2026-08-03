@@ -3,7 +3,11 @@ import { describe, it, expect } from "bun:test";
 import { normalizeUrl, isInScope } from "../../../src/crawler/frontier";
 
 describe("normalizeUrl", () => {
-  it("normalizes fragments, trailing slashes, and query parameters", () => {
+  it("strips fragments and tracking params but KEEPS the trailing slash", () => {
+    // The normalized URL is the URL the crawler fetches. `/about` and `/about/`
+    // are different request targets, so dropping the slash asked slash-canonical
+    // sites for a URL they never linked and turned their 301 into a reported
+    // redirect (#1510).
     const normalized = normalizeUrl(
       "https://example.com/about/?utm_source=test#section",
       {
@@ -13,7 +17,7 @@ describe("normalizeUrl", () => {
       }
     );
 
-    expect(normalized).toBe("https://example.com/about");
+    expect(normalized).toBe("https://example.com/about/");
   });
 
   it("filters query params with allow list", () => {
