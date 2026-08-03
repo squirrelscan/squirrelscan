@@ -6,6 +6,10 @@
  * Description ← plugin.json (the portable Open Plugin manifest is
  *            the canonical plugin metadata; vendor copies fan out from it).
  *
+ * server.json is deliberately NOT synced. It tracks its own 1.0.x cadence
+ * because the MCP registry can reject a backwards version jump, so stamping the
+ * CLI version into it would break publishing. Do not add it to `edits` below.
+ *
  *   bun run scripts/sync-plugin-manifests.ts            # stamp + write
  *   bun run scripts/sync-plugin-manifests.ts --check    # no writes, exit 1 on drift
  *   bun run scripts/sync-plugin-manifests.ts --version 0.0.79

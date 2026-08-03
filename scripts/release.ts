@@ -139,6 +139,96 @@ async function checkChangelogSection(version: string): Promise<void> {
   }
 }
 
+// Every manifest that carries the release version. server.json is deliberately
+// absent: it tracks its own 1.0.x cadence because the MCP registry rejects a
+// backwards version jump.
+export const SYNCED_MANIFESTS = [
+  PACKAGE_JSON,
+  "npm/package.json",
+  "plugin.json",
+  ".cursor-plugin/plugin.json",
+  ".claude-plugin/plugin.json",
+];
+
+// A manifest absent from the checkout is skipped, not treated as drift: the
+// vendor copies are optional. A manifest that exists and disagrees is drift,
+// so a half-applied bump can never read as "already landed".
+export async function manifestsCarry(version: string, root = "."): Promise<boolean> {
+  for (const rel of SYNCED_MANIFESTS) {
+    const file = Bun.file(`${root}/${rel}`);
+    if (!(await file.exists())) continue;
+    if ((JSON.parse(await file.text()) as PackageJson).version !== version) return false;
+  }
+  return true;
+}
+
+// The release workflow used to stamp the version itself, commit it on a
+// detached checkout and push only the tag — so the bump was reachable from the
+// tag and nowhere else, and main sat a full release behind forever (0.0.82
+// while v0.0.83 was live). It cannot simply push the branch instead: main is
+// covered by a ruleset with an empty bypass list, so CI can neither push to it
+// nor open the PR (Actions PR creation is off for this repo). The bump has to
+// land the way every other change does, before the tag is cut.
+async function ensureVersionLanded(version: string): Promise<void> {
+  if (await manifestsCarry(version)) {
+    info(`main already carries v${version}.`);
+    return;
+  }
+
+  console.log();
+  warn(`main does not carry v${version} yet — that bump has to merge before the tag is cut.`);
+
+  // A bump PR built on a stale main just gets rejected by the "branch must be
+  // up to date" rule, so require the real tip up front.
+  await $`git fetch --no-tags origin main`.quiet();
+  const head = (await $`git rev-parse HEAD`.text()).trim();
+  const tip = (await $`git rev-parse FETCH_HEAD`.text()).trim();
+  if (head !== tip) {
+    error("HEAD is not at origin/main. Pull main, then re-run.");
+  }
+
+  const branch = `release/v${version}`;
+  // A leftover branch from an abandoned attempt would make `git switch -c` fail
+  // with a message that says nothing about releasing.
+  if (
+    await $`git rev-parse --verify --quiet ${branch}`
+      .quiet()
+      .nothrow()
+      .then((r) => r.exitCode === 0)
+  ) {
+    error(`Branch ${branch} already exists locally. Delete it or finish that PR, then re-run.`);
+  }
+
+  log("Opening the version bump PR:");
+  info(`Branch: ${branch}`);
+  info(`Files:  ${SYNCED_MANIFESTS.join(", ")}`);
+  const answer = await prompt("Create and push it? [y/N] ");
+  if (answer.toLowerCase() !== "y") {
+    error("Aborted — nothing was pushed.");
+  }
+
+  await $`git switch -c ${branch}`;
+  const pkg = await readPackageJson();
+  // Spread keeps `version` in its original position, so the diff stays 1 line.
+  await Bun.write(PACKAGE_JSON, JSON.stringify({ ...pkg, version }, null, 2) + "\n");
+  await $`bun run scripts/sync-plugin-manifests.ts --version ${version}`;
+
+  const title = `chore(release): v${version}`;
+  await $`git add ${SYNCED_MANIFESTS}`;
+  await $`git commit -s -m ${title}`;
+  await $`git push --set-upstream origin ${branch}`;
+  await $`gh pr create --base main --head ${branch} --title ${title} --body ${
+    `Stamps the release version into the synced manifests so main matches the tag.\n\n` +
+    `server.json is excluded: it tracks its own 1.0.x cadence.\n\n` +
+    `Merge this, then re-run \`make release\` to cut v${version}.`
+  }`;
+
+  console.log();
+  log(`Bump PR opened for v${version}.`);
+  info(`Merge it, then: git switch main && git pull && make release`);
+  process.exit(0);
+}
+
 async function promptChannel(): Promise<Channel> {
   console.log("\nChannel:");
   console.log("  1) beta    - Pre-release for early adopters");
@@ -207,6 +297,9 @@ async function main(): Promise<void> {
   const nextVersion = computeNextVersion(currentVersion, channel, bump);
   info(`Next version: v${nextVersion}`);
   await checkChangelogSection(nextVersion);
+  // Exits after opening the bump PR when main is behind; the release is
+  // dispatched on the re-run, once that PR has merged.
+  await ensureVersionLanded(nextVersion);
   console.log();
 
   const confirm = await prompt("Run release workflow? [y/N] ");

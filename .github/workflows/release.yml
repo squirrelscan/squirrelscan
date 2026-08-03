@@ -53,6 +53,37 @@ jobs:
             console.log("prerelease=" + (process.env.INPUT_CHANNEL === "beta"));
           ' >> "$GITHUB_OUTPUT"
 
+      # This workflow cannot land the bump itself. `main` is covered by a
+      # ruleset with an empty bypass list, so the job can neither push to it nor
+      # open the PR for it. Releasing therefore reads the version off main
+      # rather than stamping it, and refuses to tag a commit that disagrees --
+      # otherwise the tag would carry a bump reachable from nowhere else and
+      # main would silently stay a release behind (which is how it reached
+      # 0.0.82 while v0.0.83 was the published release).
+      - name: Verify main already carries this version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Resolve main from the remote rather than trusting whatever refs
+          # actions/checkout happened to create.
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::${GITHUB_SHA} is not on main. Dispatch the release from main so the tag lands on a reviewed commit."
+            exit 1
+          fi
+
+          actual=$(jq -r .version apps/cli/package.json)
+          if [ "$actual" != "$VERSION" ]; then
+            echo "::error::main is at ${actual} but this run would release v${VERSION}. Land the bump on main first (\`make release\` opens that PR), then re-dispatch."
+            exit 1
+          fi
+
+          # The vendor manifests fan out from apps/cli/package.json; a partial
+          # bump would ship marketplace listings pointing at the wrong version.
+          bun run scripts/sync-plugin-manifests.ts --check
+
   quality:
     name: Release quality gate
     needs: version
@@ -62,18 +93,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
-      - name: Update manifests
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          bun -e '
-            const path = "apps/cli/package.json";
-            const pkg = await Bun.file(path).json();
-            pkg.version = process.env.VERSION;
-            await Bun.write(path, JSON.stringify(pkg, null, 2) + "\n");
-          '
-          bun run scripts/sync-plugin-manifests.ts --version "$VERSION"
-          bun install
+      # No manifest stamping: the `version` job has already established that the
+      # checked-out tree carries $VERSION, so the gate runs against exactly the
+      # bytes that will be tagged.
       - run: bun run format:check
       - run: bun run lint
       - run: bun run typecheck
@@ -92,30 +114,46 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-bun
-      - name: Update manifests
+
+      # Re-checked here, not just in `version`: this job checks out again, and
+      # tagging the wrong commit is the one failure the later jobs cannot undo.
+      - name: Re-verify the commit being tagged
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          bun -e '
-            const path = "apps/cli/package.json";
-            const pkg = await Bun.file(path).json();
-            pkg.version = process.env.VERSION;
-            await Bun.write(path, JSON.stringify(pkg, null, 2) + "\n");
-          '
-          bun run scripts/sync-plugin-manifests.ts --version "$VERSION"
-          bun install
-      - name: Commit and tag
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::${GITHUB_SHA} is not on main; refusing to tag it."
+            exit 1
+          fi
+          actual=$(jq -r .version apps/cli/package.json)
+          if [ "$actual" != "$VERSION" ]; then
+            echo "::error::main is at ${actual}, expected ${VERSION}."
+            exit 1
+          fi
+          bun run scripts/sync-plugin-manifests.ts --check
+
+      - name: Tag the release commit
         env:
-          VERSION: ${{ needs.version.outputs.version }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/cli/package.json npm/package.json plugin.json .cursor-plugin/plugin.json .claude-plugin/plugin.json bun.lock
-          git commit --signoff -m "chore(release): v${VERSION}"
+          set -euo pipefail
+
+          # A tag that already exists means this version was released before.
+          # The tag ruleset blocks deletion and non-fast-forward, so the push
+          # would fail anyway -- fail here with a message that says why.
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::${TAG} already exists on origin. Nothing was pushed."
+            exit 1
+          fi
+
           git tag "$TAG"
-          git push origin "$TAG"
+          # Explicit refspec so a same-named branch can never be pushed instead.
+          git push origin "refs/tags/${TAG}:refs/tags/${TAG}"
 
   build:
     name: Build release binaries
