@@ -26,7 +26,12 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { CREDIT_COSTS } from "@squirrelscan/core-contracts/credits";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
-import type { DocumentFetcher, FetchRequest, FetchResponse } from "@squirrelscan/fetchers";
+import {
+  type DocumentFetcher,
+  type FetchRequest,
+  type FetchResponse,
+  withObservedHopStatuses,
+} from "@squirrelscan/fetchers";
 
 import { CloudClientError, type CloudServicesClient } from "@squirrelscan/cloud-client";
 import { detectWafChallengePage, WAF_CHALLENGE_STATUS_CODES } from "@squirrelscan/waf-detect";
@@ -166,11 +171,15 @@ export function mapRenderItemToResponse(
   // rather than inventing one. Skip it entirely when the service already
   // reported the source itself.
   const needsSourceHop = renderHops.length > 0 && renderHops[0]?.url !== requestUrl;
-  const hops = needsSourceHop
+  const rawHops = needsSourceHop
     ? [{ url: requestUrl, statusCode: 0, type: "http" as const }, ...renderHops]
     : renderHops.length > 0
       ? renderHops
       : [{ url: requestUrl, statusCode: status, type: "http" as const }];
+  // Enforced, not assumed: whatever the service sends, this mapper cannot emit
+  // a 2xx status on a hop it also says redirected. Shared with the other render
+  // passthrough so the invariant has one implementation.
+  const hops = withObservedHopStatuses(rawHops);
   // Prefer the real render headers (already lowercase from the API); fall back
   // to a synthesized content-type only when the item carries no headers.
   const headers =

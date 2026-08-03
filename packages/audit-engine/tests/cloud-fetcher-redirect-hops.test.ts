@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { RenderResultItem } from "@squirrelscan/core-contracts";
+import { withObservedHopStatuses } from "@squirrelscan/fetchers";
 
 import { mapRenderItemToResponse } from "../src/cloud-fetcher";
 
@@ -98,6 +99,56 @@ describe("mapRenderItemToResponse — redirect hops", () => {
       { url: "https://example.com/new/", statusCode: 200, type: "http" },
     ]);
     expect(response.redirectChain!.chainLength).toBe(1);
+  });
+
+  test("a service-reported 2xx on a non-final hop is downgraded, not passed through", () => {
+    // The invariant is enforced, not assumed: whatever the service sends, a hop
+    // that is followed by another hop cannot have returned 2xx, so this mapper
+    // must never be able to emit the reported `200 → 200` shape.
+    const response = map(
+      {
+        url: "https://example.com/o-mnie",
+        status: 200,
+        redirectChain: [
+          { url: "https://example.com/o-mnie", status: 200 },
+          { url: "https://example.com/o-mnie/", status: 200 },
+        ],
+      },
+      "https://example.com/o-mnie",
+    );
+
+    expect(response.redirectChain!.hops).toEqual([
+      { url: "https://example.com/o-mnie", statusCode: 0, type: "http" },
+      { url: "https://example.com/o-mnie/", statusCode: 200, type: "http" },
+    ]);
+  });
+
+  test("a client-side hop keeps its 200 — that document really did return 200", () => {
+    expect(
+      withObservedHopStatuses([
+        { url: "https://example.com/old/", statusCode: 200, type: "javascript" },
+        { url: "https://example.com/new/", statusCode: 200, type: "http" },
+      ]),
+    ).toEqual([
+      { url: "https://example.com/old/", statusCode: 200, type: "javascript" },
+      { url: "https://example.com/new/", statusCode: 200, type: "http" },
+    ]);
+  });
+
+  test("a real 3xx reported for a non-final hop is preserved", () => {
+    const response = map(
+      {
+        url: "https://example.com/a",
+        status: 200,
+        redirectChain: [
+          { url: "https://example.com/a", status: 308 },
+          { url: "https://example.com/b/", status: 200 },
+        ],
+      },
+      "https://example.com/a",
+    );
+
+    expect(response.redirectChain!.hops[0]!.statusCode).toBe(308);
   });
 
   test("scheme downgrade/upgrade flags still derive from source vs landing", () => {

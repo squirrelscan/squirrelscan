@@ -42,13 +42,7 @@ import type {
 } from "./types";
 
 import { fetchPageWithRetry, type CrawlFetcher } from "../fetcher";
-import {
-  normalizeUrl,
-  isInScope,
-  isOffSiteFinalUrl,
-  resolveSeedRedirect,
-  trailingSlashVariant,
-} from "../frontier";
+import { normalizeUrl, isInScope, isOffSiteFinalUrl, resolveSeedRedirect } from "../frontier";
 import {
   buildConditionalHeaders,
   extractChangeDetection,
@@ -401,24 +395,15 @@ export function createCrawler(
           return;
         }
 
-        // Trailing-slash dedupe (#1510): the frontier keeps URLs exactly as the
-        // site linked them, so `/about` and `/about/` are separate entries. Only
-        // ONE of them should be crawled — whichever form was seen first — or a
-        // site that links both forms burns double the budget and the second form
-        // reports a redirect that only exists because we asked for it.
-        //
-        // Deliberately LAST of the eligibility checks, and deliberately blind to
-        // `skipped`/`failed` variants: an entry that robots, scope or the length
-        // cap refused is not a crawl of that path, so it must not suppress the
-        // other form — the two forms can match different robots/include patterns.
-        // A lost race here enqueues both forms, which is only a wasted page, not
-        // a wrong one, so it stays a plain read rather than an atomic claim.
-        const variant = trailingSlashVariant(normalized);
-        if (variant) {
-          const variantEntry = yield* storage.getFrontierEntry(crawlId, variant);
-          if (variantEntry && variantEntry.status !== "skipped" && variantEntry.status !== "failed")
-            return;
-        }
+        // NOTE (#1510): `/about` and `/about/` are deliberately NOT collapsed
+        // into one frontier entry. They are different request targets, and which
+        // of them redirects is exactly what the audit is trying to find out — a
+        // first-seen dedupe would answer it by discovery order, reporting the
+        // redirect on a site that happens to link the redirecting form first and
+        // staying silent on the same site if the links appear the other way
+        // round. Under-reporting a redirect is worse than crawling one extra
+        // page, and this only ever costs a page on a site that already links
+        // both forms of the same path.
 
         // Check max pages (in-memory; the dispatch loop is the authoritative cap)
         if (pagesCommitted >= config.maxPages) {

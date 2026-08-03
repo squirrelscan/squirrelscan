@@ -128,56 +128,99 @@ describe("a trailing-slash-canonical site", () => {
   });
 
   test("no stored chain claims a 2xx status on a hop it says redirected", async () => {
-    const site = track(serveSlashCanonical());
+    // Crawled with the moved page linked, so there ARE multi-hop chains to
+    // inspect — on a purely canonical site every chain is one hop and
+    // `hops.slice(0, -1)` is empty, which would make this assertion vacuous.
+    const site = track(serveSlashCanonical({ linkMovedPage: true, alsoLinkNoSlash: true }));
 
     const pages = await crawl(`${site.origin}/`);
 
-    for (const page of pages) {
-      for (const hop of page.redirectChain?.hops.slice(0, -1) ?? []) {
-        const is2xx = hop.statusCode >= 200 && hop.statusCode < 300;
-        expect(is2xx).toBe(false);
-      }
+    const nonFinalHops = pages.flatMap((p) => p.redirectChain?.hops.slice(0, -1) ?? []);
+    expect(nonFinalHops.length).toBeGreaterThan(0);
+    for (const hop of nonFinalHops) {
+      const is2xx = hop.statusCode >= 200 && hop.statusCode < 300;
+      expect(is2xx).toBe(false);
     }
   });
 });
 
 describe("a site that links BOTH forms of the same path", () => {
-  test("crawls only one of them — the budget is not spent twice", async () => {
+  test("crawls both, so the one that redirects is actually found", async () => {
+    // The two forms are different request targets and only a fetch can say which
+    // of them redirects. Collapsing them would answer that by discovery order.
     const site = track(serveSlashCanonical({ alsoLinkNoSlash: true }));
 
     const pages = await crawl(`${site.origin}/`);
 
-    const oMnie = pages.filter((p) => p.url.replace(/\/$/, "").endsWith("/o-mnie"));
-    expect(oMnie).toHaveLength(1);
-    // Whichever form was seen first is the one crawled; here the slash form is
-    // linked first, so the no-slash request is never made.
-    expect(oMnie[0]!.url).toBe(`${site.origin}/o-mnie/`);
+    const slash = pages.find((p) => p.url === `${site.origin}/o-mnie/`);
+    const noSlash = pages.find((p) => p.url === `${site.origin}/o-mnie`);
+    expect(slash).toBeDefined();
+    expect(noSlash).toBeDefined();
+
+    // The linked no-slash form is the one that genuinely redirects here.
+    expect(noSlash!.redirectChain?.hops[0]?.statusCode).toBe(301);
+    expect(noSlash!.finalUrl).toBe(`${site.origin}/o-mnie/`);
+    expect(slash!.redirectChain?.chainLength ?? 0).toBe(0);
   });
 });
 
-describe("a variant the crawl refused", () => {
-  test("does not suppress the form the crawl is allowed to fetch", async () => {
-    // `/o-mnie/` is excluded by scope, so it is recorded as a SKIPPED frontier
-    // entry. That is not a crawl of that path, so the no-slash form — which the
-    // exclude pattern does not match — must still be crawled.
-    const site = track(serveSlashCanonical({ alsoLinkNoSlash: true }));
+describe("a NO-SLASH-canonical site (canonicalized the other way)", () => {
+  // Mirror image of the reported case: `/o-mnie` is the real page and the SLASH
+  // form is the one that 301s. Discovery order must not decide whether that
+  // redirect is reported.
+  function serveNoSlashCanonical(linkFirst: "slash" | "no-slash"): Site {
+    const requested: string[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const path = new URL(req.url).pathname;
+        requested.push(path);
 
-    const storage = new SQLiteStorage(":memory:");
-    const pages = await Effect.runPromise(
-      Effect.gen(function* () {
-        yield* storage.init();
-        const crawler = yield* createCrawler({
-          config: { ...CONFIG, exclude: ["/o-mnie/"] },
-          storage,
-        });
-        const crawlId = yield* crawler.start(`${site.origin}/`, `${site.origin}/`);
-        return yield* storage.getPages(crawlId);
-      }),
-    );
+        if (path !== "/" && path.endsWith("/")) {
+          return new Response(null, {
+            status: 301,
+            headers: { location: path.slice(0, -1) },
+          });
+        }
+        if (path !== "/" && path !== "/o-mnie") {
+          return new Response("not found", { status: 404 });
+        }
 
-    expect(pages.some((p) => p.url === `${site.origin}/o-mnie/`)).toBe(false);
-    expect(pages.some((p) => p.url === `${site.origin}/o-mnie`)).toBe(true);
-  });
+        const hrefs =
+          linkFirst === "slash"
+            ? [`<a href="/o-mnie/">a</a>`, `<a href="/o-mnie">b</a>`]
+            : [`<a href="/o-mnie">b</a>`, `<a href="/o-mnie/">a</a>`];
+        return new Response(
+          `<!doctype html><html><head><title>${path}</title></head><body>${hrefs.join("")}</body></html>`,
+          { headers: { "content-type": "text/html" } },
+        );
+      },
+    });
+    return {
+      origin: `http://127.0.0.1:${server.port}`,
+      requested,
+      stop: () => server.stop(true),
+    };
+  }
+
+  test.each(["slash", "no-slash"] as const)(
+    "reports the slash form's genuine 301 when %s is linked first",
+    async (linkFirst) => {
+      const site = track(serveNoSlashCanonical(linkFirst));
+
+      const pages = await crawl(`${site.origin}/`);
+
+      const slash = pages.find((p) => p.url === `${site.origin}/o-mnie/`);
+      expect(slash).toBeDefined();
+      expect(slash!.redirectChain?.hops[0]?.statusCode).toBe(301);
+      expect(slash!.finalUrl).toBe(`${site.origin}/o-mnie`);
+
+      // The canonical form is crawled too and is not itself a redirect.
+      const canonical = pages.find((p) => p.url === `${site.origin}/o-mnie`);
+      expect(canonical).toBeDefined();
+      expect(canonical!.redirectChain?.chainLength ?? 0).toBe(0);
+    },
+  );
 });
 
 describe("a genuine redirect", () => {

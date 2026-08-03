@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { normalizeUrl, trailingSlashVariant } from "../src/frontier";
+import { normalizeUrl } from "../src/frontier";
 
 const opts = { baseUrl: "https://example.com/", allowQueryParams: [] as string[] };
 
@@ -39,23 +39,5 @@ describe("frontier normalizeUrl — trailing slash", () => {
     expect(normalizeUrl("HTTPS://EXAMPLE.COM:443/A/?utm_source=x#frag", opts)).toBe(
       "https://example.com/A/",
     );
-  });
-});
-
-describe("trailingSlashVariant", () => {
-  test.each([
-    ["https://example.com/a/", "https://example.com/a"],
-    ["https://example.com/a", "https://example.com/a/"],
-    ["https://example.com/a/?q=1", "https://example.com/a?q=1"],
-  ])("%s ↔ %s", (input, expected) => {
-    expect(trailingSlashVariant(input)).toBe(expected);
-  });
-
-  test("the root has no variant — its slash is not optional", () => {
-    expect(trailingSlashVariant("https://example.com/")).toBeNull();
-  });
-
-  test("an unparseable URL has no variant", () => {
-    expect(trailingSlashVariant("not a url")).toBeNull();
   });
 });

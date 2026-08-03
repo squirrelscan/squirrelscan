@@ -19,8 +19,8 @@ interface PageInput {
   links?: string[];
 }
 
-function hop(url: string, statusCode: number): RedirectHop {
-  return { url, statusCode, type: "http" };
+function hop(url: string, statusCode: number, type: RedirectHop["type"] = "http"): RedirectHop {
+  return { url, statusCode, type };
 }
 
 function chain(sourceUrl: string, finalUrl: string, hops: RedirectHop[]): RedirectChain {
@@ -184,6 +184,29 @@ describe("links/redirect-chains — genuine redirects still report", () => {
     );
   });
 
+  test("a SLASH-ONLY move with unobserved hop statuses is still reported", () => {
+    // The render path reports the landing page but never the statuses that led
+    // to it, so a genuine `/o-mnie → /o-mnie/` move arrives as `0 → 200`. Now
+    // that the crawler only ever requests URLs the site actually linked, this
+    // shape is a real redirect and must not be folded away with the slash.
+    const pages: PageInput[] = [
+      {
+        url: "https://example.com/o-mnie",
+        finalUrl: "https://example.com/o-mnie/",
+        redirectChain: chain("https://example.com/o-mnie", "https://example.com/o-mnie/", [
+          hop("https://example.com/o-mnie", 0),
+          hop("https://example.com/o-mnie/", 200),
+        ]),
+      },
+    ];
+
+    const redirectPages = check(pages, "redirect-pages");
+    expect(redirectPages?.status).toBe("warn");
+    expect(redirectPages?.items?.[0]?.label).toBe(
+      "https://example.com/o-mnie → https://example.com/o-mnie/ (200)",
+    );
+  });
+
   test("a genuine destination change with unobserved hop statuses still reports", () => {
     // Browser-rendered pages come back with the landing page only, so the source
     // hop carries status 0. The URL genuinely changed, so it is still a redirect.
@@ -204,6 +227,72 @@ describe("links/redirect-chains — genuine redirects still report", () => {
     expect(redirectPages?.items?.[0]?.label).toBe(
       "https://example.com/old-post/ → https://example.com/new-post/ (200)",
     );
+  });
+
+  test("only the pages linking the REDIRECTING form are blamed", () => {
+    // The fan-out complaint in the report: a slash-insensitive join blamed every
+    // page linking the canonical `/o-mnie/` for `/o-mnie`'s redirect. They are
+    // different hrefs and only one of them is the mistake.
+    const pages: PageInput[] = [
+      {
+        url: "https://example.com/o-mnie",
+        finalUrl: "https://example.com/o-mnie/",
+        redirectChain: chain("https://example.com/o-mnie", "https://example.com/o-mnie/", [
+          hop("https://example.com/o-mnie", 301),
+          hop("https://example.com/o-mnie/", 200),
+        ]),
+      },
+      {
+        url: "https://example.com/guilty/",
+        finalUrl: "https://example.com/guilty/",
+        links: ["https://example.com/o-mnie"],
+      },
+      ...Array.from({ length: 10 }, (_, i) => ({
+        url: `https://example.com/innocent-${i}/`,
+        finalUrl: `https://example.com/innocent-${i}/`,
+        links: ["https://example.com/o-mnie/"],
+      })),
+    ];
+
+    const linksToRedirect = check(pages, "links-to-redirect");
+    expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual(["https://example.com/guilty/"]);
+  });
+
+  test.each([["javascript"], ["meta-refresh"]] as const)(
+    "a %s redirect is reported even though its source hop returned 200",
+    (type) => {
+      // A client-side redirect IS a document that loaded with 200 and then sent
+      // the visitor elsewhere, so 2xx on the non-final hop is the truth here and
+      // must not be mistaken for a fabricated chain.
+      const pages: PageInput[] = [
+        {
+          url: "https://example.com/old/",
+          finalUrl: "https://example.com/new/",
+          redirectChain: chain("https://example.com/old/", "https://example.com/new/", [
+            hop("https://example.com/old/", 200, type),
+            hop("https://example.com/new/", 200),
+          ]),
+        },
+      ];
+
+      expect(check(pages, "redirect-pages")?.status).toBe("warn");
+    },
+  );
+
+  test("a client-side redirect back to the SAME url is still reported", () => {
+    // Nothing changed about the target, so only the hop type is evidence.
+    const pages: PageInput[] = [
+      {
+        url: "https://example.com/loop/",
+        finalUrl: "https://example.com/loop/",
+        redirectChain: chain("https://example.com/loop/", "https://example.com/loop/", [
+          hop("https://example.com/loop/", 200, "meta-refresh"),
+          hop("https://example.com/loop/", 200),
+        ]),
+      },
+    ];
+
+    expect(check(pages, "redirect-pages")?.status).toBe("warn");
   });
 
   test("links pointing at a genuinely redirecting URL are still blamed", () => {

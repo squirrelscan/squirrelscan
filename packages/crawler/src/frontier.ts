@@ -46,30 +46,6 @@ const TRACKING_PARAM_PREFIXES = new Set([
   "sfmc_id",
 ]);
 
-/**
- * The same path with its trailing slash toggled, or null when there is no
- * meaningful variant (the root path, whose slash is not optional).
- *
- * Used purely for DEDUPE: `/about` and `/about/` are different resources on the
- * wire, so the frontier keeps whichever form the site actually linked, but it
- * refuses to enqueue the other form once one of them is already queued. Fetching
- * a form nobody linked invents a redirect that only exists because we asked for
- * it (#1510) — trailing-slash canonicalization is the default on WordPress,
- * Hugo and most static hosts, so that mistake fires site-wide.
- */
-export function trailingSlashVariant(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.pathname === "/") return null;
-    parsed.pathname = parsed.pathname.endsWith("/")
-      ? parsed.pathname.slice(0, -1)
-      : `${parsed.pathname}/`;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
 function shouldDropQueryParam(key: string, allowQueryParams: string[]): boolean {
   const lowerKey = key.toLowerCase();
 
@@ -103,9 +79,12 @@ export function normalizeUrl(rawUrl: string, options: UrlNormalizationOptions): 
     }
 
     // The trailing slash is NOT noise: `/about` and `/about/` are distinct
-    // request targets, and the normalized URL is the URL we actually fetch.
-    // Stripping it made every slash-canonical site look like it redirected
-    // (#1510). Dedupe across the two forms happens at enqueue time instead.
+    // request targets, and the normalized URL is the URL we actually FETCH
+    // (`fetchPage(entry.normalizedUrl, …)`). Stripping it asked slash-canonical
+    // sites — the WordPress/Hugo/Jekyll default — for a URL they never linked,
+    // and reported the 301 they answered with as the site's own redirect
+    // (#1510). The two forms stay separate frontier entries on purpose: which
+    // one redirects is what the audit is trying to find out.
 
     if (resolved.search) {
       const params = new URLSearchParams(resolved.search);
