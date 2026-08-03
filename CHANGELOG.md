@@ -20,6 +20,68 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.84
+
+A crawl-correctness release. squirrelscan was requesting URLs your site never
+links and then reporting the redirects it had caused. On any site whose URLs end
+in a slash, which is the default on WordPress, Hugo and Jekyll, that invented
+findings, and on some hosts it also spent part of the page budget on redirect
+pages instead of your content.
+
+### Fixed
+
+- **The crawler no longer asks for a URL your site never linked.** URL
+  normalization dropped the trailing slash before the request went out, so a site
+  whose every internal link ends in `/` was asked for `/about` when it only
+  publishes `/about/`. Two things followed from that, and both are fixed.
+
+  First, the origin answered with a redirect, and `links/redirect-chains` and
+  `crawl/canonical-chain` reported it: a redirect that existed only because we
+  asked for it. Those findings were wrong rather than merely noisy, and they
+  fanned out, because the check for links pointing at redirecting URLs then
+  blamed nearly every page that linked the correct form. If your report listed
+  pages redirecting to themselves with a slash added, that section should now be
+  empty. Genuine redirects are unaffected: a page you really do link at a URL
+  that really does redirect is still reported.
+
+  Second, and only on some hosts: a few sites answer the no-slash URL with a
+  `200` and a small JavaScript redirect page rather than an HTTP redirect. There
+  is no redirect for the crawler to follow, so that page was stored and graded as
+  though it were your article, and title, charset and word count were judged
+  against a few hundred bytes of redirect script. In one 15 page crawl of a blog
+  hosted this way, 12 of the 15 stored pages were redirect pages rather than
+  posts. Sites that answer with an ordinary HTTP redirect were never affected
+  this way, because the crawler followed it and stored the real page. If your
+  site is in the first group, expect finding counts and scores to move in both
+  directions: some checks stop failing because they had been grading a redirect
+  page, and others start reporting because your content is finally being read.
+
+- **A redirect chain no longer shows a status the hop never returned.** When a
+  page is rendered in the cloud, the render service reports the page it landed
+  on, never the statuses of the redirects that got it there. Those unseen
+  statuses were filled in with the landing page's own status, producing chains
+  that read `(200) → (200)`. A first hop that returned 200 did not redirect at
+  all. Hops squirrelscan did not observe are now recorded as unknown and shown
+  without a status, and no chain can claim a hop redirected while also reporting
+  that it returned 200.
+
+- **`squirrel auth status` explains an organization API key instead of blaming
+  it.** An `sq_` organization API key works for audits, publishing and credits,
+  but the identity lookup behind `squirrel auth status` and `squirrel auth
+  whoami` accepts only the login token that `squirrel auth login` issues. That
+  rejection was reported as the key being invalid, revoked, expired or from the
+  wrong environment, none of which was usually true. It now says what actually
+  happened, and tells you to unset `SQUIRRELSCAN_API_KEY` after logging in, since
+  an environment key takes precedence over a session for every cloud call.
+
+### Changed
+
+- **A site that links both `/about` and `/about/` now has both crawled.** They
+  are different URLs, and only a request can tell you which one redirects, so
+  collapsing them into one meant the answer depended on which form the crawler
+  happened to see first. Sites that link a single consistent form, which is
+  nearly all of them, crawl exactly as before.
+
 ## v0.0.83
 
 Three new rules, a rebuilt local-SEO check, and a crawl-correctness fix for seeds
