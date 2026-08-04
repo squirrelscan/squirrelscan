@@ -31,6 +31,38 @@ Combine your coding agent with a deterministic and extensible audit tool.
 - **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
 - **MCP Connection** - Connect your agent to local or cloud MCP to run audits, fixes, etc.
 
+## Rule Categories
+
+Ordered by how much a failure usually costs you, not by how many rules each one has.
+
+| Category | Rules | What it covers |
+|----------|-------|----------------|
+| Crawlability | 18 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
+| Core SEO | 13 | The per-page fundamentals: title, meta description, H1, canonical, charset, doctype, robots meta, Open Graph and Twitter cards |
+| Agent Experience | 17 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, pay-per-crawl, response token weight |
+| Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
+| Security | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
+| Links | 14 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, HTTPS downgrades |
+| Content | 15 | Text quality and honesty: duplicate titles and descriptions, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
+| Performance | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
+| Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
+| Structured Data | 10 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search |
+| Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
+| Mobile | 6 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials |
+| Social Media | 4 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links |
+| URL Structure | 8 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency |
+| E-E-A-T | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
+| Legal Compliance | 4 | Privacy policy, terms of service, real cookie-consent machinery, subprocessor disclosure |
+| Internationalization | 2 | hreflang correctness and the document language declaration |
+| Local SEO | 3 | NAP (name, address, phone) consistency across every crawled page, geo metadata, service-area businesses |
+| Video | 3 | VideoObject markup, captions and accessibility, thumbnails |
+| Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
+| Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
+
+**Total: 267 rules across 21 categories**
+
+See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
+
 ## CLI
 
 ### Installation
@@ -173,38 +205,6 @@ Then, in your agent:
 ```
 Use the audit-website skill to audit this site and fix all issues but only crawl 10 pages
 ```
-
-## Rule Categories
-
-Ordered by how much a failure usually costs you, not by how many rules each one has.
-
-| Category | Rules | What it covers |
-|----------|-------|----------------|
-| Crawlability | 18 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
-| Core SEO | 13 | The per-page fundamentals: title, meta description, H1, canonical, charset, doctype, robots meta, Open Graph and Twitter cards |
-| Agent Experience | 17 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, pay-per-crawl, response token weight |
-| Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
-| Security | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
-| Links | 14 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, HTTPS downgrades |
-| Content | 15 | Text quality and honesty: duplicate titles and descriptions, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
-| Performance | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
-| Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
-| Structured Data | 10 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search |
-| Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
-| Mobile | 6 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials |
-| Social Media | 4 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links |
-| URL Structure | 8 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency |
-| E-E-A-T | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
-| Legal Compliance | 4 | Privacy policy, terms of service, real cookie-consent machinery, subprocessor disclosure |
-| Internationalization | 2 | hreflang correctness and the document language declaration |
-| Local SEO | 3 | NAP (name, address, phone) consistency across every crawled page, geo metadata, service-area businesses |
-| Video | 3 | VideoObject markup, captions and accessibility, thumbnails |
-| Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
-| Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
-
-**Total: 267 rules across 21 categories**
-
-See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
 ## Output Formats
 
