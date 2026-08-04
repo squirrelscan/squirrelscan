@@ -28,11 +28,14 @@ export const robotsTxtRule: Rule = {
       return { checks };
     }
 
-    // Check existence
+    // Check existence. `fail`, not `warn`: the rule's meta severity only
+    // surfaces as an error when a check fails, and a missing robots.txt is an
+    // error - no crawl directives, no sitemap pointer, and every crawler
+    // (including AI agents) is left to guess.
     if (!robotsTxt.exists) {
       checks.push({
         name: "robots-txt-exists",
-        status: "warn",
+        status: "fail",
         message: "No robots.txt found",
         value: "Search engines will crawl all accessible pages",
       });
