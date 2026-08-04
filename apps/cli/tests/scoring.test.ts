@@ -254,6 +254,72 @@ describe("calculateHealthScore", () => {
     expect(score.overall).toBe(37);
   });
 
+  // The rule emits "fail" for a missing robots.txt (#1535); "warn" above is the
+  // legacy status stored in pre-#1535 reports. Both must keep the penalty —
+  // matching only one silently drops -15% from every score.
+  test("applies penalty for missing robots.txt when the check failed", () => {
+    const mockRobotsMeta = {
+      id: "crawl/robots-txt",
+      name: "Robots.txt",
+      description: "Robots.txt check",
+      solution: "Add robots.txt",
+      category: "crawl" as const,
+      scope: "site" as const,
+      severity: "error" as const,
+      weight: 8,
+    };
+
+    const results = new Map<string, RuleRunResult>([
+      [
+        "core/test-rule",
+        {
+          meta: mockCoreMeta,
+          checks: [{ name: "ok", status: "pass", message: "Passed" }],
+        },
+      ],
+      [
+        "crawl/robots-txt",
+        {
+          meta: mockRobotsMeta,
+          checks: [
+            {
+              name: "robots-txt-exists",
+              status: "fail",
+              message: "No robots.txt found",
+            },
+          ],
+        },
+      ],
+    ]);
+
+    const withPenalty = calculateHealthScore({ results });
+
+    // Same shape, but the robots rule is absent so no penalty multiplier applies.
+    const baselineResults = new Map<string, RuleRunResult>([
+      [
+        "core/test-rule",
+        {
+          meta: mockCoreMeta,
+          checks: [{ name: "ok", status: "pass", message: "Passed" }],
+        },
+      ],
+      [
+        "crawl/other-rule",
+        {
+          meta: { ...mockRobotsMeta, id: "crawl/other-rule" },
+          checks: [{ name: "other", status: "fail", message: "Failed" }],
+        },
+      ],
+    ]);
+    const baseline = calculateHealthScore({ results: baselineResults });
+
+    // ±1 because both scores are rounded independently.
+    expect(
+      Math.abs((withPenalty.overall ?? 0) - (baseline.overall ?? 0) * 0.85)
+    ).toBeLessThanOrEqual(1);
+    expect(baseline.overall).toBeGreaterThan(0);
+  });
+
   test("applies penalty for robots blocking all", () => {
     const mockRobotsMeta = {
       id: "crawl/robots-txt",

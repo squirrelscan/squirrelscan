@@ -510,7 +510,9 @@ function calculatePenaltyMultiplier(
     if (disallowCheck?.status === "fail") {
       multiplier *= 1 - PENALTY_ROBOTS_BLOCKS_ALL; // Blocks all
     }
-    if (existsCheck?.status === "warn") {
+    // "fail" is what the rule emits now; "warn" is what pre-#1535 reports
+    // stored, and rescoring a stored report must still apply the penalty.
+    if (existsCheck?.status === "fail" || existsCheck?.status === "warn") {
       multiplier *= 1 - PENALTY_NO_ROBOTS_TXT; // Missing
     }
   }
