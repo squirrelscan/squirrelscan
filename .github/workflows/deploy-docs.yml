@@ -14,8 +14,11 @@ on:
 permissions:
   contents: read
 
+# Serialise deploys per ref. The group name is deliberately not the old
+# `deploy-docs-production`: runs queued against that group stopped starting
+# altogether (pending, zero jobs, indefinitely), so it is abandoned.
 concurrency:
-  group: deploy-docs-production
+  group: deploy-docs-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
