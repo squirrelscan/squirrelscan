@@ -4,7 +4,9 @@
 
 **The website QA tool for your coding agent**
 
-squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP. Local audits are always free.
+squirrelscan is an Open Source cli tool that audits websites for SEO, performance, security, accessibility, agent experience and other issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP. 
+
+Combine your coding agent with a deterministic and extensible audit tool.
 
 [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://squirrelscan.com/add/cursor)
 [![Add to Claude Code](https://img.shields.io/badge/Add_to-Claude_Code-d97757?style=for-the-badge)](https://squirrelscan.com/add/claude)
@@ -16,6 +18,104 @@ squirrelscan audits your website for SEO, performance, security, accessibility a
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/squirrelscan/squirrelscan/codeql.yml?branch=main&style=for-the-badge&label=CodeQL)](https://github.com/squirrelscan/squirrelscan/actions/workflows/codeql.yml)
 [![npm](https://img.shields.io/npm/v/squirrelscan?style=for-the-badge&label=npm)](https://www.npmjs.com/package/squirrelscan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-52a852?style=for-the-badge)](LICENSE)
+
+## Features
+
+- **267 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **Fast crawler** - Highly optimized memory efficient crawler 
+- **Agent Experience** - Audit agent experience to assist agents in using your site
+- **Security Audit** - Detect phishing kits, leaked credentials, and more 
+- **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
+- **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
+- **Crawl History & Changes** - Track site evolution, compare crawls, spot regressions
+- **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
+- **MCP Connection** - Connect your agent to local or cloud MCP to run audits, fixes, etc.
+
+## Rule Categories
+
+Ordered by how much a failure usually costs you, not by how many rules each one has.
+
+| Category | Rules | What it covers |
+|----------|-------|----------------|
+| Crawlability | 18 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
+| Core SEO | 13 | The per-page fundamentals: title, meta description, H1, canonical, charset, doctype, robots meta, Open Graph and Twitter cards |
+| Agent Experience | 17 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, pay-per-crawl, response token weight |
+| Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
+| Security | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
+| Links | 14 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, HTTPS downgrades |
+| Content | 15 | Text quality and honesty: duplicate titles and descriptions, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
+| Performance | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
+| Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
+| Structured Data | 10 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search |
+| Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
+| Mobile | 6 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials |
+| Social Media | 4 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links |
+| URL Structure | 8 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency |
+| E-E-A-T | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
+| Legal Compliance | 4 | Privacy policy, terms of service, real cookie-consent machinery, subprocessor disclosure |
+| Internationalization | 2 | hreflang correctness and the document language declaration |
+| Local SEO | 3 | NAP (name, address, phone) consistency across every crawled page, geo metadata, service-area businesses |
+| Video | 3 | VideoObject markup, captions and accessibility, thumbnails |
+| Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
+| Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
+
+**Total: 267 rules across 21 categories**
+
+See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
+
+## CLI
+
+### Installation
+
+**macOS / Linux:**
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+**Windows:**
+```powershell
+iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+```
+
+**npm (all platforms):**
+```bash
+npm install -g squirrelscan
+```
+
+**npx (run without installing):**
+```bash
+npx squirrelscan audit example.com
+```
+
+### Quick Start
+
+```bash
+# Audit a website
+squirrel audit example.com
+
+# Generate HTML report
+squirrel audit example.com -f html -o report.html
+
+# Pipe to Claude for AI analysis
+squirrel audit example.com --format llm | claude
+
+# Quick audit for fast initial probe (other options surface, full)
+squirrel audit example.com -C quick
+
+# run only agent experience and performance rules
+squirrel audit example.com --rule-include ax,performance
+
+# login for cloud audits and cloud rendering 
+squirrel auth login
+```
+
+## Reports
+
+Category scores for SEO, performance, security and Agent Experience (AX). Publish reports to the web to share with team members or coding agents (fix instructions are embedded)
+
+![squirrelscan report](https://squirrelscan.com/images/html-report-screenshot.webp)
+
+[see an example report](https://reports.squirrelscan.com/01KWKSVT79R6SZDQE7K6WWZCFY)
 
 ## Add to your coding agent
 
@@ -88,55 +188,6 @@ https://mcp.squirrelscan.com/mcp
 
 Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token). Skills follow the [Agent Skills standard](https://agentskills.io): `npx skills add squirrelscan/squirrelscan` lands them in `.agents/skills/`.
 
-## Features
-
-- **260+ Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
-- **AI-Native Design** - LLM-optimised output for Claude Code, Cursor, and any AI assistant
-- **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
-- **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
-- **E-E-A-T Auditing** - Dedicated rules for Experience, Expertise, Authority, Trust
-- **Crawl History & Changes** - Track site evolution, compare crawls, spot regressions
-- **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
-
-## CLI
-
-### Installation
-
-**macOS / Linux:**
-```bash
-curl -fsSL https://install.squirrelscan.com | bash
-```
-
-**Windows:**
-```powershell
-iwr -useb https://install.squirrelscan.com/install.ps1 | iex
-```
-
-**npm (all platforms):**
-```bash
-npm install -g squirrelscan
-```
-
-**npx (run without installing):**
-```bash
-npx squirrelscan audit example.com
-```
-
-### Quick Start
-
-```bash
-# Audit a website
-squirrel audit https://example.com
-
-# Generate HTML report
-squirrel audit https://example.com -f html -o report.html
-
-# Pipe to Claude for AI analysis
-squirrel audit https://example.com --format llm | claude
-
-# Limit pages for faster results
-squirrel audit https://example.com -m 10
-```
 
 ## Skills
 
@@ -155,36 +206,6 @@ Then, in your agent:
 Use the audit-website skill to audit this site and fix all issues but only crawl 10 pages
 ```
 
-## Rule Categories
-
-| Category | Rules | Focus |
-|----------|-------|-------|
-| Accessibility | 61 | ARIA, button/input names, landmarks, lists, tables, focus |
-| Performance | 29 | Core Web Vitals, compression, caching, JS optimization |
-| Crawlability | 18 | Robots.txt, sitemaps, indexability |
-| Agent Experience | 17 | How ready a site is for AI agents to read, discover, operate |
-| Security | 16 | HTTPS, CSP, cookies, leaked secrets |
-| Images | 15 | Alt text, formats, lazy loading, optimization |
-| E-E-A-T | 15 | Authority, trust, expertise signals |
-| Links | 14 | Broken links, redirects, anchor text |
-| Core SEO | 13 | Meta tags, canonical, doctype, charset |
-| Content | 15 | Readability, freshness, word count, encoding, hidden text, copyright year |
-| Structured Data | 10 | JSON-LD, schema validation |
-| Site Integrity | 9 | Injected pages, phishing kits, malware, SEO spam |
-| URL Structure | 8 | Length, format, parameters |
-| Mobile | 6 | Viewport, tap targets, responsive |
-| Social Media | 4 | Open Graph, Twitter Cards |
-| Legal Compliance | 4 | Privacy policy, cookie consent |
-| Video | 3 | Schema, captions, thumbnails |
-| Local SEO | 3 | NAP, geo tags, service areas |
-| Blocking | 3 | Content, links, trackers that ad/privacy blockers block |
-| Internationalization | 2 | Hreflang, lang attribute |
-| Analytics | 2 | GTM, consent mode |
-
-**Total: 267 rules across 21 categories**
-
-See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
-
 ## Output Formats
 
 | Format | Flag | Use Case |
@@ -195,10 +216,7 @@ See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 | Markdown | `-f markdown` | Documentation, GitHub |
 | Text | `-f text` | Clean output for piping to LLMs |
 | LLM | `-f llm` | LLM optimized output |
-
-## Development Status
-
-squirrelscan is in **active beta**. Expect rapid iteration and breaking changes. Feedback and issue reports welcome!
+| XML | `-f xml` | XML output |
 
 ## Source and development
 

@@ -86,7 +86,7 @@ You'll see output like:
  ▀▄  █ █ █ █ █ ██▀ ██▀ █▀  █   ▀▄  █   █▀█ █ ▀█
  █▄▀ ▀▀█ ▀▄▀ █ █ █ █ █ █▄▄ █▄▄ █▄▀ ▀▄▄ █ █ █  █
 
-  v0.0.16 (beta)  •  https://squirrelscan.com
+  v0.0.84  •  https://squirrelscan.com
 ────────────────────────────────────────────
 Auditing  https://example.com
 Coverage  surface · max 100 pages
@@ -162,6 +162,22 @@ Content (2 warnings)
     squirrel audit https://example.com --refresh
     ```
   </Step>
+
+  <Step title="Choose a coverage mode">
+    Trade depth for speed. `quick` is fast, local and free, `surface` audits one page per template, `full` is comprehensive:
+    ```bash
+    squirrel audit https://example.com -C quick
+    ```
+    The default is `quick` when you're signed out and `surface` when you're signed in.
+  </Step>
+
+  <Step title="Run only some categories">
+    Narrow the audit to the categories you care about right now:
+    ```bash
+    squirrel audit https://example.com --rule-include ax,performance
+    ```
+    <Warning>A filtered run produces a partial report. Scores reflect only the rules that ran, so don't compare them against a full audit.</Warning>
+  </Step>
 </Steps>
 
 ## Output Formats
@@ -169,15 +185,15 @@ Content (2 warnings)
 | Format | Flag | Use Case |
 |--------|------|----------|
 | `console` | (default) | Human-readable terminal output |
-| `json` | `-f json` | CI/CD pipelines, programmatic processing |
+| `json` | `-f json` | CI/CD, programmatic processing |
 | `html` | `-f html` | Visual reports for sharing |
 | `markdown` | `-f markdown` | Documentation, GitHub |
-| `text` | `-f text` | Plain text output |
-| `llm` | `-f llm` | Compact AI-optimized (40% smaller than XML) |
-| `xml` | `-f xml` | Verbose structured XML for enterprise |
+| `text` | `-f text` | Clean output for piping to LLMs |
+| `llm` | `-f llm` | LLM optimized output |
+| `xml` | `-f xml` | XML output |
 
 <Note>
-All formats work with both `squirrel audit --format` and `squirrel report --format`. The `xml` format is only available via `squirrel report`.
+All seven formats work with both `squirrel audit --format` and `squirrel report --format`.
 </Note>
 
 ## Using with AI Agents
