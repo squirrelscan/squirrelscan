@@ -18,3 +18,29 @@ data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Coding-agent instructions and memory. These carry internal context from the
+# private monorepo, so they must never land here. The .claude-plugin/ and
+# .cursor-plugin/ manifests are shipped on purpose and are not matched below.
+CLAUDE.md
+**/CLAUDE.md
+AGENTS.md
+**/AGENTS.md
+MEMORY.md
+**/MEMORY.md
+GEMINI.md
+**/GEMINI.md
+.claude/
+**/.claude/
+.cursor/
+**/.cursor/
+.codex/
+**/.codex/
+.opencode/
+**/.opencode/
+.windsurf/
+**/.windsurf/
+.aider*
+.github/copilot-instructions.md
+.github/instructions/
+plans/
