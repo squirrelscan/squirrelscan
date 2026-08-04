@@ -4,7 +4,9 @@ icon: "house"
 description: "The website QA tool for your coding agent"
 ---
 
-squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Single binary, zero dependencies.
+squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP.
+
+Combine your coding agent with a deterministic and extensible audit tool.
 
 <CardGroup cols={2}>
   <Card
@@ -55,7 +57,7 @@ Same audit engine, same report, four front doors: your terminal, your coding age
 
     Or pipe LLM-optimized output to any assistant:
     ```bash
-    squirrel audit example.com --format text | claude
+    squirrel audit example.com --format llm | claude
     ```
 
     Perfect for:
@@ -81,13 +83,19 @@ Same audit engine, same report, four front doors: your terminal, your coding age
   </Tab>
 
   <Tab title="MCP">
-    Run a local [MCP server](/developers/mcp) so agents call squirrelscan's audit engine and cloud features as tools, no shell glue required:
+    Point any client at the hosted [MCP server](/developers/mcp) so agents call squirrelscan's audit engine and cloud features as tools, no shell glue required:
+
+    ```
+    https://mcp.squirrelscan.com/mcp
+    ```
+
+    Authentication is per-user OAuth, or pass a squirrelscan API key as a Bearer token. Prefer to keep it local? Your agent can launch the CLI's own server via its MCP config instead:
 
     ```bash
     squirrel mcp
     ```
 
-    Your agent launches it via its MCP config. Perfect for:
+    Perfect for:
     - Agents and clients that speak MCP
     - Tool-calling instead of parsing CLI output
     - Claude Code and Cursor MCP setups
@@ -98,40 +106,58 @@ Same audit engine, same report, four front doors: your terminal, your coding age
 
 <Columns cols={2}>
   <Card
-    title="AI-Native Design"
+    title="267 Rules, 21 Categories"
+    icon="list-check"
+  >
+    Comprehensive coverage across SEO, accessibility, performance, and security.
+  </Card>
+  <Card
+    title="Fast crawler"
+    icon="bolt"
+  >
+    Highly optimised, memory efficient crawler.
+  </Card>
+  <Card
+    title="Agent Experience"
     icon="microchip"
   >
-    Built for coding agents. LLM-optimised output works seamlessly with Claude Code, Cursor, and any AI assistant.
+    Audit agent experience to assist agents in using your site.
+  </Card>
+  <Card
+    title="Security Audit"
+    icon="shield-check"
+  >
+    Detect phishing kits, leaked credentials, and more.
+  </Card>
+  <Card
+    title="Smart Incremental Crawling"
+    icon="rotate"
+  >
+    ETag, Last-Modified, content hashing. Resume from checkpoints.
   </Card>
   <Card
     title="Developer-First CLI"
     icon="terminal"
   >
-    Single binary, zero dependencies. Shell completions, self-update, and CI/CD compatible exit codes.
+    Single binary, zero dependencies, shell completions, self-update.
   </Card>
   <Card
-    title="267 Rules, 21 Categories"
-    icon="list-check"
+    title="Crawl History & Changes"
+    icon="clock-rotate-left"
   >
-    Comprehensive coverage across SEO, accessibility, performance, and security audits.
-  </Card>
-  <Card
-    title="Smart Incremental Crawling"
-    icon="bolt"
-  >
-    ETag, Last-Modified, and content hashing. Skip unchanged pages. Resume interrupted crawls.
-  </Card>
-  <Card
-    title="E-E-A-T Auditing"
-    icon="shield-check"
-  >
-    Dedicated rules for Experience, Expertise, Authority, and Trust: Google's top ranking signals.
+    Track site evolution, compare crawls, spot regressions.
   </Card>
   <Card
     title="Multiple Output Formats"
     icon="files"
   >
-    Console, JSON, HTML reports, LLM-friendly output. Export exactly what you need.
+    Console, JSON, HTML, Markdown, Text, LLM, XML.
+  </Card>
+  <Card
+    title="MCP Connection"
+    icon="plug"
+  >
+    Connect your agent to local or cloud MCP to run audits, fixes, etc.
   </Card>
 </Columns>
 
@@ -190,32 +216,35 @@ Same audit engine, same report, four front doors: your terminal, your coding age
 
 ## Rule Categories
 
-squirrelscan runs **267 rules** across **21 categories**, plus opt-in cloud gap analysis:
+squirrelscan runs **267 rules** across **21 categories**, plus opt-in cloud gap analysis. Ordered by how much a failure usually costs you, not by how many rules each one has.
 
-| Category | Description |
-|----------|-------------|
-| **Accessibility** | ARIA, focus, landmarks |
-| **Agent Experience** | AI crawler access, LLM parsability, page-type, site profile |
-| **Analytics** | GTM, consent mode |
-| **Blocking** | Ad-blocker & privacy-filter blocked content |
-| **Content** | Quality, readability, freshness |
-| **Core SEO** | Meta tags, canonical URLs, h1, favicon |
-| **Crawl** | Robots.txt, sitemap, indexing |
-| **E-E-A-T** | Experience, expertise, trust signals |
-| **Gap Analysis** | Keyword & content gaps (cloud, opt-in) |
-| **i18n** | Hreflang, lang attribute |
-| **Images** | Alt text, dimensions, formats |
-| **Legal** | Privacy, cookies, TOS |
-| **Links** | Internal, external, broken links |
-| **Local SEO** | NAP consistency, geo meta |
-| **Mobile** | Viewport, tap targets |
-| **Performance** | Core Web Vitals, LCP/CLS/INP |
-| **Schema** | JSON-LD structured data |
-| **Security** | HTTPS, CSP, headers |
-| **Site Integrity** | Injected pages, phishing, malware, SEO spam |
-| **Social** | Open Graph, Twitter cards |
-| **URL Structure** | Length, hyphens, keywords |
-| **Video** | VideoObject schema, accessibility |
+| Category | Rules | What it covers |
+|----------|-------|----------------|
+| **Crawlability** | 18 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
+| **Core SEO** | 13 | The per-page fundamentals: title, meta description, H1, canonical, charset, doctype, robots meta, Open Graph and Twitter cards |
+| **Agent Experience** | 17 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, pay-per-crawl, response token weight |
+| **Site Integrity** | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
+| **Security** | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
+| **Links** | 14 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, HTTPS downgrades |
+| **Content** | 15 | Text quality and honesty: duplicate titles and descriptions, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
+| **Performance** | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
+| **Images** | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
+| **Structured Data** | 10 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search |
+| **Accessibility** | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
+| **Mobile** | 6 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials |
+| **Social Media** | 4 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links |
+| **URL Structure** | 8 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency |
+| **E-E-A-T** | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
+| **Legal Compliance** | 4 | Privacy policy, terms of service, real cookie-consent machinery, subprocessor disclosure |
+| **Internationalization** | 2 | hreflang correctness and the document language declaration |
+| **Local SEO** | 3 | NAP (name, address, phone) consistency across every crawled page, geo metadata, service-area businesses |
+| **Video** | 3 | VideoObject markup, captions and accessibility, thumbnails |
+| **Analytics** | 2 | Google Tag Manager presence and consent-mode wiring |
+| **Blocking** | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
+
+**Total: 267 rules across 21 categories.** Gap analysis (keyword and content gaps) is a cloud opt-in and is not counted above.
+
+See the [rules reference](/rules) for full details.
 
 ## Resources
 
