@@ -9,6 +9,7 @@ on:
       - "package.json"
       - ".github/actions/setup-bun/action.yml"
       - ".github/workflows/deploy-docs.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,7 +23,10 @@ jobs:
     name: Deploy docs to Cloudflare
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: production
+    # Not `production`: that environment gates on a manual reviewer, which is
+    # right for releases and wrong for docs. Ten consecutive docs deploys sat
+    # unapproved and were cancelled by the next push, so the site went stale.
+    environment: docs-production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
