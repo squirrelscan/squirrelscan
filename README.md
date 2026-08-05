@@ -2,6 +2,8 @@
 
 # squirrelscan
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fsquirrelscan.svg)](https://mcptoplist.com/server/glama%2Fsquirrelscan)
+
 **The website QA tool for your coding agent**
 
 squirrelscan is an Open Source cli tool that audits websites for SEO, performance, security, accessibility, agent experience and other issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP. 
