@@ -27,7 +27,7 @@ This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
 **Alpine / musl Linux:** the binary needs the `libstdc++` runtime library. The installer adds it automatically when run as root; otherwise install it first with `apk add libstdc++` (or `sudo apk add libstdc++`).
 </Note>
 
-## Four Ways to Run squirrelscan
+## Four ways to run squirrelscan
 
 <Tabs>
   <Tab title="CLI">
@@ -69,9 +69,9 @@ This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
   </Tab>
 </Tabs>
 
-<Info>See [AI Agent Integration](/developers/agents) for detailed guidance on using squirrelscan with Claude Code, Cursor, and other AI coding assistants.</Info>
+<Info>See [Coding agent integration](/developers/agents) for detailed guidance on using squirrelscan with Claude Code, Cursor, and other coding agents.</Info>
 
-## Run Your First Audit
+## Run your first audit
 
 Audit a website with a single command:
 
@@ -130,9 +130,9 @@ Content (2 warnings)
 ──────────────────────────────────────────────────
 ```
 
-<Info>When you're **signed in**, audits automatically sync to your [dashboard](/dashboard) as **unlisted** reports - a shareable link plus issue history, no extra flags. Publishing is included in the audit base charge, whatever the visibility. Opt out of a run with `--no-publish` (or `--offline`), or turn it off for good with `[cloud] publish = false`. Logged-out runs never publish.</Info>
+<Info>When you're **logged in**, audits automatically sync to your [dashboard](/dashboard) as **unlisted** reports - a shareable link plus issue history, no extra flags. Publishing is included in the audit base charge, whatever the visibility. Opt out of a run with `--no-publish` (or `--offline`), or turn it off for good with `[cloud] publish = false`. Logged-out runs never publish.</Info>
 
-## Common Options
+## Common options
 
 <Steps>
   <Step title="Limit pages crawled">
@@ -164,23 +164,25 @@ Content (2 warnings)
   </Step>
 
   <Step title="Choose a coverage mode">
-    Trade depth for speed. `quick` is fast, local and free, `surface` audits one page per template, `full` is comprehensive:
+    Pick depth or speed. `quick` is fast, local and free. `surface` audits one page per template. `full` is comprehensive:
     ```bash
     squirrel audit https://example.com -C quick
     ```
-    The default is `quick` when you're signed out and `surface` when you're signed in.
+    The default is `quick` when you're logged out and `surface` when you're logged in.
   </Step>
 
   <Step title="Run only some categories">
-    Narrow the audit to the categories you care about right now:
+    Narrow the audit to the categories you care about right now.
+
+    <Warning>A filtered audit produces a partial report. Scores reflect only the rules that ran, so don't compare them against a full audit.</Warning>
+
     ```bash
     squirrel audit https://example.com --rule-include ax,performance
     ```
-    <Warning>A filtered run produces a partial report. Scores reflect only the rules that ran, so don't compare them against a full audit.</Warning>
   </Step>
 </Steps>
 
-## Output Formats
+## Output formats
 
 | Format | Flag | Use Case |
 |--------|------|----------|
@@ -196,11 +198,11 @@ Content (2 warnings)
 All seven formats work with both `squirrel audit --format` and `squirrel report --format`.
 </Note>
 
-## Using with AI Agents
+## Use with coding agents
 
-squirrelscan is designed for AI workflows. Two primary methods:
+squirrelscan is designed for coding agents. Two primary methods:
 
-### 1. Install the Skills (Recommended)
+### 1. Install the skills (recommended)
 
 ```bash
 npx skills add squirrelscan/squirrelscan
@@ -212,18 +214,18 @@ Then use with Claude Code, Cursor, or any skill-compatible agent:
 Use the audit-website skill to audit example.com and fix all issues
 ```
 
-### 2. Pipe Output to AI
+### 2. Pipe output to a coding agent
 
 ```bash
 # Audit and pipe directly to Claude
 squirrel audit example.com --format llm | claude "analyze and prioritize fixes"
 ```
 
-The `--format llm` provides compact, token-optimized output designed specifically for AI agents.
+The `--format llm` provides compact, token-optimized output designed specifically for coding agents.
 
-<Tip>See [AI Agent Integration](/developers/agents) for advanced workflows including plan mode, subagents, and continuous monitoring.</Tip>
+<Tip>See [Coding agent integration](/developers/agents) for advanced workflows including plan mode, subagents, and continuous monitoring.</Tip>
 
-## Next Steps
+## Next steps
 
 - Run `squirrel --help` for all available commands
 - See [Configuration](/configuration) to customize audit behavior

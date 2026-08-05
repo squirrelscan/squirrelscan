@@ -4,7 +4,7 @@
 
 **The website QA tool for your coding agent**
 
-squirrelscan is an Open Source cli tool that audits websites for SEO, performance, security, accessibility, agent experience and other issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP. 
+squirrelscan is an Open Source cli tool that audits websites for SEO, performance, security, accessibility, agent experience and other issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP.
 
 Combine your coding agent with a deterministic and extensible audit tool.
 
@@ -22,16 +22,16 @@ Combine your coding agent with a deterministic and extensible audit tool.
 ## Features
 
 - **278 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
-- **Fast crawler** - Highly optimized memory efficient crawler 
+- **Fast crawler** - Highly optimized memory efficient crawler
 - **Agent Experience** - Audit agent experience to assist agents in using your site
-- **Security Audit** - Detect phishing kits, leaked credentials, and more 
+- **Security Audit** - Detect phishing kits, leaked credentials, and more
 - **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
 - **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
 - **Crawl History & Changes** - Track site evolution, compare crawls, spot regressions
 - **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
 - **MCP Connection** - Connect your agent to local or cloud MCP to run audits, fixes, etc.
 
-## Rule Categories
+## Rule categories
 
 Ordered by how much a failure usually costs you, not by how many rules each one has.
 
@@ -87,7 +87,7 @@ npm install -g squirrelscan
 npx squirrelscan audit example.com
 ```
 
-### Quick Start
+### Quick start
 
 ```bash
 # Audit a website
@@ -105,7 +105,7 @@ squirrel audit example.com -C quick
 # run only agent experience and performance rules
 squirrel audit example.com --rule-include ax,performance
 
-# login for cloud audits and cloud rendering 
+# login for cloud audits and cloud rendering
 squirrel auth login
 ```
 
@@ -206,7 +206,7 @@ Then, in your agent:
 Use the audit-website skill to audit this site and fix all issues but only crawl 10 pages
 ```
 
-## Output Formats
+## Output formats
 
 | Format | Flag | Use Case |
 |--------|------|----------|
@@ -265,9 +265,9 @@ NO_TELEMETRY=1 squirrel audit https://example.com
 
 - [Website](https://squirrelscan.com)
 - [Documentation](https://docs.squirrelscan.com)
-- [AI Agent Integration](https://docs.squirrelscan.com/agents)
-- [Share Feedback](https://squirrelscan.com/feedback)
-- [Bugs, Issues & Feature Requests](https://github.com/squirrelscan/squirrelscan/issues)
+- [Coding agent integration](https://docs.squirrelscan.com/agents)
+- [Share feedback](https://squirrelscan.com/feedback)
+- [Bugs, issues and feature requests](https://github.com/squirrelscan/squirrelscan/issues)
 - [Twitter/X](https://x.com/squirrelscan_)
 
 ## License
