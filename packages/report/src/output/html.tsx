@@ -20,7 +20,7 @@ import {
   REPORT_PAGES_INLINE_CAP,
   REPORT_PAGES_HARD_CAP,
 } from "../constants";
-import { groupIssuesByCategory, groupCategoriesByGroup, type GroupedCategory } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity, type GroupedCategory } from "../grouping";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import {
   SITE_PROFILE_NOTE,
@@ -789,23 +789,27 @@ function PagesList({
   );
 }
 
-// Flat issues list: one section per group (anchor target for the score
-// circles), rules in group → category-priority → weight order. No group or
-// category headings — each rule carries its parent group as a small label.
+// Flat issues list in ONE global severity order (#1536): error →
+// recommendation → warning, then category priority, then rule weight. Groups
+// are no longer contiguous, so the `group-*` anchors the score circles link to
+// are stamped on each group's FIRST rule in this order — the jump lands on the
+// highest-severity issue in that group, which is what a reader wants anyway.
+// No group or category headings — each rule carries its parent group as a label.
 function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
   if (categories.length === 0) return null;
-  const groups = groupCategoriesByGroup(categories);
+  const issues = flattenIssuesBySeverity(categories);
+  const anchoredGroups = new Set<string>();
   return (
     <>
       <h2>Issues</h2>
-      {groups.map((group) => (
-        <div key={group.code} id={`group-${group.code}`} className="group-section">
-          {group.categories.map((category) => (
-            <React.Fragment key={category.code}>
-              {category.rules.map((rule) => {
-                // Sample-union count — the denominator the carried rollup /
-                // fully-carried check share with carriedPageCount (both known
-                // only for sampled pages; #1135).
+      <div className="group-section">
+        {issues.map((rule) => {
+          const groupCode = rule.group;
+          const isGroupAnchor = !anchoredGroups.has(groupCode);
+          if (isGroupAnchor) anchoredGroups.add(groupCode);
+          // Sample-union count — the denominator the carried rollup /
+          // fully-carried check share with carriedPageCount (both known
+          // only for sampled pages; #1135).
                 const totalPages = ruleAffectedPageCount(rule.checks);
                 // #1023 R-F / #1306: authoritative affected-page total for the
                 // header. `count` is a max-based FLOOR (never a sum — that would
@@ -820,6 +824,7 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                 return (
                   <React.Fragment key={rule.id}>
                     <details
+                      {...(isGroupAnchor ? { id: `group-${groupCode}` } : {})}
                       className="rule-block"
                       style={{
                         borderLeftColor:
@@ -833,14 +838,14 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                       <summary className="rule-summary">
                         <span
                           className="group-label"
-                          title={getGroupTitle(group.code)}
+                          title={getGroupTitle(groupCode)}
                           style={{
-                            color: getGroupColor(group.code).text,
-                            background: getGroupColor(group.code).bg,
-                            borderColor: getGroupColor(group.code).border,
+                            color: getGroupColor(groupCode).text,
+                            background: getGroupColor(groupCode).bg,
+                            borderColor: getGroupColor(groupCode).border,
                           }}
                         >
-                          {group.name}
+                          {getGroupName(groupCode)}
                         </span>
                         <span className="rule-name">{rule.name}</span>
                         {/* className keeps the raw severity (drives the .rule-severity.info
@@ -1024,11 +1029,8 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                     </details>
                   </React.Fragment>
                 );
-              })}
-            </React.Fragment>
-          ))}
-        </div>
-      ))}
+        })}
+      </div>
     </>
   );
 }

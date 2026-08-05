@@ -30,6 +30,7 @@ export {
   isValidGroup,
   getSubcategoryName,
   getSubcategoryPriority,
+  severityLabel,
   normalizeCategoryCode,
   deriveBlockingSubcategory,
 } from "./categories";
@@ -39,8 +40,8 @@ export type { CategoryInfo, GroupInfo, RuleGroup } from "./categories";
 export { checkOccurrences } from "./occurrences";
 
 // Grouping
-export { groupIssuesByCategory, groupCategoriesByGroup } from "./grouping";
-export type { GroupedCheck, GroupedRule, GroupedCategory, GroupedGroup } from "./grouping";
+export { groupIssuesByCategory, groupCategoriesByGroup, flattenIssuesBySeverity } from "./grouping";
+export type { GroupedCheck, GroupedRule, GroupedCategory, GroupedGroup, FlatIssue } from "./grouping";
 
 // Scoring
 export { getScoreGrade, getScoreColor, getGroupColor, GROUP_COLORS } from "./scoring";
