@@ -157,10 +157,14 @@ describe("renderers surface groups (#626)", () => {
     expect(parsed.score.groups).toEqual([]);
   });
 
-  test("text: emits group headings above the category sections", () => {
+  test("text: emits severity headings above the category sections (#1536)", () => {
     const out = renderText(reportWithGroups());
-    expect(out).toContain("=== SEO ===");
-    expect(out).toContain("=== PERFORMANCE ===");
+    // #1536 replaced the group headings in the ISSUES body with severity ones;
+    // the group breakdown up in the score section is unaffected.
+    expect(out).toContain("=== ERRORS ===");
+    expect(out).toContain("=== WARNINGS ===");
+    expect(out).toContain("[CORE SEO]");
+    expect(out).toContain("[PERFORMANCE]");
     expect(out).toContain("Group Breakdown:");
     // Breakdown name derives from the group code, not the stored name.
     expect(out).toContain("Agents");
@@ -204,20 +208,24 @@ describe("renderers surface groups (#626)", () => {
 
 // Fixture: seo has 2 categories (core, links); performance/security/ai have 1
 // each — and perf/security display names literally equal their group name.
-describe("single-category groups collapse the redundant heading (#626)", () => {
-  test("text: keeps the group heading but drops the duplicate category line", () => {
+describe("severity headings replace the group headings (#1536)", () => {
+  test("text: severity sections, with every category labeled under them", () => {
     const out = renderText(reportWithGroups());
-    // Group headings present for both single- and multi-category groups.
-    expect(out).toContain("=== PERFORMANCE ===");
-    expect(out).toContain("=== SEO ===");
-    // Single-category groups: no redundant [PERFORMANCE]/[SECURITY] category line.
-    expect(out).not.toContain("[PERFORMANCE]");
-    expect(out).not.toContain("[SECURITY]");
-    // Multi-category seo keeps its category sub-headers.
+    // #1536: the ISSUES body is keyed on severity, so the group headings the
+    // category lines used to be redundant with are gone — every category now
+    // carries its own label, including the single-category ones.
+    expect(out).not.toContain("=== SEO ===");
+    expect(out).toContain("=== ERRORS ===");
+    expect(out).toContain("=== WARNINGS ===");
+    expect(out).toContain("[PERFORMANCE]");
+    expect(out).toContain("[SECURITY]");
     expect(out).toContain("[CORE SEO]");
     expect(out).toContain("[LINKS]");
-    // Only the 2 multi-category categories emit a header line.
-    expect((out.match(/^\[[A-Z]/gm) || []).length).toBe(2);
+    // One label per category (5 categories in this fixture, one rule each).
+    expect((out.match(/^\[[A-Z]/gm) || []).length).toBe(5);
+    // Errors lead: both failing rules sit above every warning.
+    expect(out.indexOf("core/x")).toBeLessThan(out.indexOf("=== WARNINGS ==="));
+    expect(out.indexOf("perf/x")).toBeLessThan(out.indexOf("=== WARNINGS ==="));
   });
 
   test("html: no group/category headings — every rule carries its parent group label", () => {
@@ -236,16 +244,19 @@ describe("single-category groups collapse the redundant heading (#626)", () => {
     }
   });
 
-  test("markdown: drops the #### category heading for single-category groups & keeps levels contiguous", () => {
+  test("markdown: severity (h3) → category (h4) → rule (h5), levels contiguous", () => {
     const md = renderMarkdown(reportWithGroups());
-    expect(md).toContain("### Performance"); // group heading (h3)
-    expect(md).not.toContain("#### Performance"); // no duplicate category heading
-    // Single-category group: rule promoted to h4 directly under the group (h3 → h4, no skip).
-    expect(md).toContain("#### perf/x");
-    // Multi-category seo keeps category headings (h4) with rules nested at h5.
+    expect(md).toContain("### Errors");
+    expect(md).toContain("### Warnings");
+    // Group headings are gone — "SEO" was one and has no category of that name.
+    expect(md).not.toMatch(/^### SEO$/m);
+    // Every category gets an h4 now, single-category groups included.
+    expect(md).toContain("#### Performance");
     expect(md).toContain("#### Core SEO");
     expect(md).toContain("#### Links");
     expect(md).toContain("##### core/x");
+    expect(md).toContain("##### perf/x");
+    expect(md.indexOf("##### perf/x")).toBeLessThan(md.indexOf("### Warnings"));
   });
 
   // A single-category group whose sole category has subcategories (blocking →
@@ -308,13 +319,13 @@ describe("single-category groups collapse the redundant heading (#626)", () => {
     ).toBe(2);
   });
 
-  test("markdown: single-category group with subcategories promotes levels (### group → #### sub → ##### rule)", () => {
+  test("markdown: subcategories nest under the category (### sev → #### cat → ##### sub → ###### rule)", () => {
     const md = renderMarkdown(reportBlockingOnly());
-    expect(md).toContain("### Security"); // group heading (h3)
-    expect(md).not.toContain("#### Blocking"); // collapsed category heading
-    // subBase = 4 for a single-category group: subcategory at h4, rule at h5 — contiguous.
-    expect(md).toContain("#### Ad blocking");
-    expect(md).toContain("##### blocking/tracker");
+    expect(md).toContain("### Errors"); // severity heading (h3), #1536
+    expect(md).toContain("#### Blocking"); // category heading (h4)
+    // Levels stay contiguous: subcategory at h5, rule demoted to h6 beneath it.
+    expect(md).toContain("##### Ad blocking");
+    expect(md).toContain("###### blocking/tracker");
   });
 
   test("html: rules from multiple categories share one group section and label", () => {

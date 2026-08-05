@@ -157,8 +157,11 @@ export function isValidGroup(code: string): boolean {
  */
 export function severityLabel(
   severity: "error" | "warning" | "info",
-  options?: { titleCase?: boolean }
+  options?: { titleCase?: boolean; plural?: boolean }
 ): string {
-  const label = severity === "info" ? "recommendation" : severity;
+  const singular = severity === "info" ? "recommendation" : severity;
+  // Every label is regular, so a bare "s" is enough for the section headings
+  // the severity-first renderers emit (#1536).
+  const label = options?.plural ? `${singular}s` : singular;
   return options?.titleCase ? label.charAt(0).toUpperCase() + label.slice(1) : label;
 }

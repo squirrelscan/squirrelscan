@@ -435,3 +435,51 @@ export function groupCategoriesByGroup(
   }
   return groups;
 }
+
+/** A rule lifted out of its category, carrying the category context a flat renderer needs. */
+export interface FlatIssue extends GroupedRule {
+  /** Category code, e.g. "crawl". */
+  categoryCode: string;
+  /** Category display name, e.g. "Crawlability". */
+  categoryName: string;
+  /** Top-level group code (#626), e.g. "seo". */
+  group: string;
+}
+
+/**
+ * Flatten every category's rules into ONE list ordered by severity first
+ * (#1536): error → recommendation (info) → warning, then category priority,
+ * then rule weight, then rule id.
+ *
+ * {@link groupIssuesByCategory} sorts severity only WITHIN a category, so a
+ * renderer that concatenates categories interleaves severities — crawl's
+ * errors and warnings both land above a11y's errors. Severity is the property
+ * a reader (or a coding agent) triages on, so it has to be the outermost key.
+ * Renderers that still want the category tree keep using the grouped shape.
+ */
+export function flattenIssuesBySeverity(categories: GroupedCategory[]): FlatIssue[] {
+  const flat: FlatIssue[] = categories.flatMap((category) =>
+    category.rules.map((rule) => ({
+      ...rule,
+      categoryCode: category.code,
+      categoryName: category.name,
+      group: category.group,
+    }))
+  );
+
+  return flat.sort((a, b) => {
+    const sevDiff = RULE_SEVERITY_RANK[a.severity] - RULE_SEVERITY_RANK[b.severity];
+    if (sevDiff !== 0) return sevDiff;
+    const priDiff = getCategoryPriority(b.categoryCode) - getCategoryPriority(a.categoryCode);
+    if (priDiff !== 0) return priDiff;
+    // Equal-priority categories: keep each one's rules together rather than
+    // interleaving two categories that happen to share a priority.
+    if (a.categoryCode !== b.categoryCode) {
+      return a.categoryCode < b.categoryCode ? -1 : 1;
+    }
+    const weightDiff = b.weight - a.weight;
+    if (weightDiff !== 0) return weightDiff;
+    // Stable across repeat audits (#150).
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}

@@ -5,7 +5,7 @@ import type { AuditReport } from "../types";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { getScoreGrade } from "../scoring";
 import { REPORT_TEXT_WRAP_WIDTH } from "../constants";
-import { groupIssuesByCategory, groupCategoriesByGroup } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
@@ -206,73 +206,71 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   }
 
   const categoryIssues = groupIssuesByCategory(report.ruleResults);
-  // Group → category → rules (#626): issues nest under their top-level group.
-  const groupedIssues = groupCategoriesByGroup(categoryIssues);
+  // Severity → category → weight (#1536): one global order, so everything you
+  // must fix sits above everything you might. Categories are labeled per rule
+  // rather than used as headings, since a category now spans severity sections.
+  const flatIssues = flattenIssuesBySeverity(categoryIssues);
 
   if (categoryIssues.length > 0) {
     write("ISSUES");
     write("-".repeat(40));
     write("");
 
-    for (const group of groupedIssues) {
-      write(`=== ${group.name.toUpperCase()} ===`);
+    let lastSeverity: string | undefined;
+    let lastCategory: string | undefined;
+    let lastSub: string | undefined;
+    for (const rule of flatIssues) {
+      if (rule.severity !== lastSeverity) {
+        lastSeverity = rule.severity;
+        lastCategory = undefined;
+        write(`=== ${severityLabel(rule.severity, { plural: true }).toUpperCase()} ===`);
+        write("");
+      }
+      if (rule.categoryCode !== lastCategory) {
+        lastCategory = rule.categoryCode;
+        lastSub = undefined;
+        write(`[${rule.categoryName.toUpperCase()}]`);
+        write("");
+      }
+      if (rule.subcategory && rule.subcategory !== lastSub) {
+        lastSub = rule.subcategory;
+        write(`  ${getSubcategoryName(rule.subcategory)}`);
+        write("");
+      }
+      write(`  [${severityLabel(rule.severity)}] ${rule.id} - ${rule.name}`);
+      if (rule.description) write(`  Description: ${rule.description}`);
+      if (rule.solution) {
+        const wrapped = wrapText(rule.solution, REPORT_TEXT_WRAP_WIDTH);
+        write(`  Solution: ${wrapped[0]}`);
+        for (const line of wrapped.slice(1)) write(`            ${line}`);
+      }
       write("");
 
-      // Skip the category header when the group has a single category (#626):
-      // the group heading above already names it (avoids "=== PERF ===" / "[PERF]").
-      const showCatHeader = group.categories.length > 1;
-      for (const category of group.categories) {
-        if (showCatHeader) {
-          write(`[${category.name.toUpperCase()}]`);
-          write("");
+      for (const check of rule.checks) {
+        // #1023 R-F: authoritative page count (true pre-sample total) + the
+        // union sample (pages + item page-refs), labeled examples when clipped.
+        const { sample, count, hasMore } = affectedPages(check);
+        const countStr = count > 1 ? ` (${count} pages)` : "";
+        const icon = check.status === "fail" ? "X" : "!";
+        write(`    [${icon}] ${check.name}: ${check.message}${countStr}${carriedTag(check)}`);
+
+        if (sample.length > 0) {
+          for (const page of sample) write(`        -> ${pathOnly(page)}`);
+          if (hasMore) write(`        ... and ${count - sample.length} more`);
         }
 
-        const hasSub = category.rules.some((r) => r.subcategory);
-        let lastSub: string | undefined;
-        for (const rule of category.rules) {
-          if (hasSub && rule.subcategory !== lastSub) {
-            lastSub = rule.subcategory;
-            if (rule.subcategory) {
-              write(`  ${getSubcategoryName(rule.subcategory)}`);
-              write("");
+        if (check.items && check.items.length > 0) {
+          for (const item of check.items) {
+            const label = item.label ?? item.id;
+            write(`        -> ${label}`);
+            if (item.snippet) write(`           ${item.snippet}`);
+            if (item.sourcePages && item.sourcePages.length > 0) {
+              for (const src of item.sourcePages) write(`            from: ${pathOnly(src)}`);
             }
           }
-          write(`  [${severityLabel(rule.severity)}] ${rule.id} - ${rule.name}`);
-          if (rule.description) write(`  Description: ${rule.description}`);
-          if (rule.solution) {
-            const wrapped = wrapText(rule.solution, REPORT_TEXT_WRAP_WIDTH);
-            write(`  Solution: ${wrapped[0]}`);
-            for (const line of wrapped.slice(1)) write(`            ${line}`);
-          }
-          write("");
-
-          for (const check of rule.checks) {
-            // #1023 R-F: authoritative page count (true pre-sample total) + the
-            // union sample (pages + item page-refs), labeled examples when clipped.
-            const { sample, count, hasMore } = affectedPages(check);
-            const countStr = count > 1 ? ` (${count} pages)` : "";
-            const icon = check.status === "fail" ? "X" : "!";
-            write(`    [${icon}] ${check.name}: ${check.message}${countStr}${carriedTag(check)}`);
-
-            if (sample.length > 0) {
-              for (const page of sample) write(`        -> ${pathOnly(page)}`);
-              if (hasMore) write(`        ... and ${count - sample.length} more`);
-            }
-
-            if (check.items && check.items.length > 0) {
-              for (const item of check.items) {
-                const label = item.label ?? item.id;
-                write(`        -> ${label}`);
-                if (item.snippet) write(`           ${item.snippet}`);
-                if (item.sourcePages && item.sourcePages.length > 0) {
-                  for (const src of item.sourcePages) write(`            from: ${pathOnly(src)}`);
-                }
-              }
-            }
-          }
-          write("");
         }
       }
+      write("");
     }
   } else if (report.status !== "failed" && report.status !== "blocked") {
     // #792: don't claim "No issues found" for a 0-page failed/blocked run —
