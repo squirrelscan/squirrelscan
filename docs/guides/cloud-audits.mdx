@@ -10,13 +10,13 @@ Everything here builds on the free [local audit](/guides/local-audits-cli). The 
 
 ## Log in
 
-Sign in once so your audits can reach the cloud:
+Log in once so your audits can reach the cloud:
 
 ```bash
 squirrel auth login
 ```
 
-This opens your browser to sign in. What runs next depends on the audit's coverage mode. Once you are signed in (free or Pro), audits default to `surface` coverage, which runs the cloud rules and merges their results into the same report as the local rules, spending credits as they run. Only anonymous, logged-out runs default to `quick`. Want a fast, free scan while signed in? Pass `-C quick`. Free accounts get 500 credits a month to spend; Pro includes 3,000. See [`squirrel auth`](/cli/auth) for API-key auth and credential precedence, and [`squirrel audit`](/cli/audit#coverage-modes) for the coverage modes.
+This opens your browser so you can log in. What runs next depends on the audit's coverage mode. Once you are logged in (free or Pro), audits default to `surface` coverage, which runs the cloud rules and merges their results into the same report as the local rules, spending credits as they run. Only anonymous, logged-out runs default to `quick`. Want a fast, free scan while logged in? Pass `-C quick`. Free accounts get 500 credits a month to spend; Pro includes 3,000. See [`squirrel auth`](/cli/auth) for API-key auth and credential precedence, and [`squirrel audit`](/cli/audit#coverage-modes) for the coverage modes.
 
 ## Credits are pay-as-you-go
 
@@ -40,7 +40,7 @@ The audit is the same underneath. Pick whichever surface fits how you work.
 
 <Tabs>
   <Tab title="CLI">
-    Run an audit with the cloud rules included. Signed in, the default `surface` coverage already runs them (and, when relevant, pages render in a cloud browser); the flag below just makes it explicit:
+    Run an audit with the cloud rules included. Logged in, the default `surface` coverage already runs them (and, when relevant, pages render in a cloud browser); the flag below just makes it explicit:
 
     ```bash
     squirrel audit https://example.com -C surface
@@ -52,7 +52,7 @@ The audit is the same underneath. Pick whichever surface fits how you work.
     Trigger a run from [app.squirrelscan.com](https://app.squirrelscan.com): open a website and use its Run dialog. Cloud audits use the website's own [audit settings](/dashboard/audit-settings) (which rules run, external link checking, the spend cap), not your local `squirrel.toml`.
   </Tab>
   <Tab title="MCP">
-    Your agent runs the audit as a tool call. Point any MCP client at the [hosted MCP server](/developers/mcp) and it calls `run_audit` with the URL, confirms the credit estimate, then polls `get_audit_status` and reads the report. The full agent workflow is in [Fix your website with an AI agent](/guides/fix-your-site-with-an-ai-agent).
+    Your agent runs the audit as a tool call. Point any MCP client at the [hosted MCP server](/developers/mcp) and it calls `run_audit` with the URL, confirms the credit estimate, then polls `get_audit_status` and reads the report. The full agent workflow is in [Fix your website with a coding agent](/guides/fix-your-site-with-an-ai-agent).
   </Tab>
 </Tabs>
 
@@ -64,10 +64,10 @@ You work the tracker in the [dashboard](/dashboard), or your agent works it over
 
 ## Published reports
 
-When you are signed in and online, every audit auto-publishes to your dashboard as an **unlisted** report, giving you a shareable link plus issue history with no extra flags. Publishing is included in the audit base charge, whatever the visibility.
+When you are logged in and online, every audit auto-publishes to your dashboard as an **unlisted** report, giving you a shareable link plus issue history with no extra flags. Publishing is included in the audit base charge, whatever the visibility.
 
 ```bash
-# signed in: auto-publishes (unlisted) and prints the URL
+# logged in: auto-publishes (unlisted) and prints the URL
 squirrel audit https://example.com
 
 # make it public and listed
@@ -97,4 +97,4 @@ Instead of remembering to re-audit, have the cloud do it. Scheduled audits re-ru
 - [Credits and pricing](/cloud/credits) - costs, plans, and spend controls
 - [Hosted MCP server](/developers/mcp) - run cloud audits from your agent
 - [Browser rendering](/guides/browser-rendering) - audit JavaScript-heavy sites
-- [Fix your website with an AI agent](/guides/fix-your-site-with-an-ai-agent) - the full agent fix loop
+- [Fix your website with a coding agent](/guides/fix-your-site-with-an-ai-agent) - the full agent fix loop

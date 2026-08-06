@@ -217,9 +217,9 @@ concurrency = 15
 
 ---
 
-## How External Link Checking Works
+## How external link checking works
 
-### Request Strategy
+### Request strategy
 
 1. **HEAD request first**
    - Faster (no body download)
@@ -236,7 +236,7 @@ concurrency = 15
    - Detects WAF/bot protection (Cloudflare, Akamai, etc.)
    - WAF-blocked 403s reported separately from broken links
 
-### Status Detection
+### Status detection
 
 | Status | Meaning | Reported As |
 |--------|---------|-------------|
@@ -247,7 +247,7 @@ concurrency = 15
 | Timeout | No response | Broken link |
 | DNS failure | Domain not found | Broken link |
 
-### Caching Behavior
+### Caching behavior
 
 **Cached for TTL period:**
 - 200-299 (success)
@@ -261,9 +261,9 @@ concurrency = 15
 
 ---
 
-## Configuration Examples
+## Configuration examples
 
-### Fast Crawl (Disable External Links)
+### Fast crawl (disable external Links)
 
 For local development or quick audits:
 
@@ -276,7 +276,7 @@ Skips all external link validation.
 
 ---
 
-### Aggressive External Link Checking
+### Aggressive external link checking
 
 For comprehensive link validation:
 
@@ -295,7 +295,7 @@ concurrency = 15          # High parallelism
 
 ---
 
-### Polite External Link Checking
+### Polite external link checking
 
 Conservative settings for respectful crawling:
 
@@ -314,7 +314,7 @@ concurrency = 2           # Low parallelism
 
 ---
 
-### CI/CD Pipeline
+### CI/CD pipeline
 
 Fast feedback with fresh data:
 
@@ -333,7 +333,7 @@ concurrency = 10          # Speed up validation
 
 ---
 
-## Performance Impact
+## Performance impact
 
 External link checking adds overhead to crawls. Typical impact:
 
@@ -368,7 +368,7 @@ Second crawl (within cache TTL):
 
 ---
 
-## External Link Rules
+## External link rules
 
 External link configuration affects these rules:
 
@@ -493,7 +493,7 @@ squirrel audit https://example.com  # Rebuild cache
 
 ---
 
-## Complete Example
+## Complete example
 
 ```toml
 [project]

@@ -10,6 +10,7 @@ One term per concept. The right-hand column is not "worse phrasing", it is wrong
 |---|---|---|
 | The user's own agent, the one reading our output and editing their code | **coding agent** | AI agent, AI coding assistant, coding assistant, AI assistant |
 | Third-party crawlers that fetch the site (GPTBot, Claude-User, PerplexityBot) | **AI crawler**, or name it | AI agent, bot |
+| A third-party product a person uses (ChatGPT, Perplexity) | **AI assistant** | AI agent |
 | Authenticating to the cloud | **log in**, logged in, logged out | sign in, signed in, sign-in |
 | The property being audited | **website** | site, except in fixed names (`sitemap`, Site Integrity) |
 | One execution of the tool | **audit** (noun and verb) | scan, run (as a noun) |
@@ -24,6 +25,12 @@ One term per concept. The right-hand column is not "worse phrasing", it is wrong
 Sentence case. "Rule categories", not "Rule Categories". Proper names keep their capitals: "Core SEO", "Agent Experience", "Claude Code".
 
 Prefer a noun phrase or an imperative to a gerund: "Use with coding agents" beats "Using with coding agents".
+
+Three things are not sentence case and must not be "corrected":
+
+- **Rule and category names** are proper names, in headings and in `<Card title>` alike: "Agent Blocking", "Article Schema", "Gap Analysis". They match what the report prints, so changing them desynchronises the docs from the product.
+- **Command and format names used as a heading** stay exactly as typed: `## login`, `### json`, `### console (default)`. The heading *is* the identifier.
+- **Acronyms** keep their case anywhere in the heading: AX, SEO, MCP, LLM, ARIA, E-E-A-T.
 
 ## Sentences
 
@@ -58,3 +65,12 @@ Prefer "and" to "&" outside proper names.
 - The ~900-word approved dictionary. Our domain vocabulary (crawl, render, canonical, hreflang, viewport) would all need registering as technical names, for no gain.
 - The ban on humor and figurative language. The mascot stays.
 - The ban on `-ing` forms outside technical names, except in headings, where we apply it because it reads better.
+
+## Not yet applied
+
+Two rules in this document are written down but not yet enforced across the corpus:
+
+- **`site` vs `website`.** Roughly 500 occurrences of "site", many of them legitimate (`sitemap`, `--site` flags, "cross-site scripting", Site Integrity). It needs a reading pass, not a replace.
+- **Sentence and paragraph limits.** The rule-category prose and several AX rule pages run well past 25 words per sentence.
+
+The Agent Experience pages are a deliberate exception to the crawler-naming rule: they say "AI agents" to mean every non-human consumer of a page, including chat assistants and autonomous browsers, which "AI crawler" would narrow incorrectly.

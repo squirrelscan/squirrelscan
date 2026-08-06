@@ -82,7 +82,7 @@ disable = ["content/word-count", "images/modern-format"]
 
 ---
 
-## Rule Categories
+## Rule categories
 
 All 18 audit rule categories:
 
@@ -111,7 +111,7 @@ disable = []
 
 ---
 
-### Content Quality
+### Content quality
 
 **ID:** `content/*`
 **Rules:** 11
@@ -360,7 +360,7 @@ enable = ["url/*"]
 
 ---
 
-### Mobile Optimization
+### Mobile optimization
 
 **ID:** `mobile/*`
 **Rules:** 6
@@ -423,7 +423,7 @@ enable = ["local/*"]
 
 ---
 
-### Video Optimization
+### Video optimization
 
 **ID:** `video/*`
 **Rules:** 3
@@ -464,7 +464,7 @@ enable = ["analytics/*"]
 
 ---
 
-### E-E-A-T (Expertise, Authoritativeness, Trustworthiness)
+### E-E-A-T (expertise, authoritativeness, trustworthiness)
 
 **ID:** `eeat/*`
 **Rules:** 14
@@ -533,9 +533,9 @@ enable = ["adblock/*"]
 
 ---
 
-## Configuration Examples
+## Configuration examples
 
-### SEO-Focused Audit
+### SEO-focused audit
 
 Focus on SEO rules only:
 
@@ -545,7 +545,7 @@ enable = ["core/*", "content/*", "crawl/*", "url/*", "schema/*"]
 disable = []
 ```
 
-### Accessibility Audit
+### Accessibility audit
 
 Focus on accessibility and mobile:
 
@@ -555,7 +555,7 @@ enable = ["a11y/*", "mobile/*"]
 disable = []
 ```
 
-### Performance Audit
+### Performance audit
 
 Focus on performance and images:
 
@@ -565,7 +565,7 @@ enable = ["perf/*", "images/*"]
 disable = []
 ```
 
-### Security Audit
+### Security audit
 
 Focus on security headers and HTTPS:
 
@@ -575,7 +575,7 @@ enable = ["security/*"]
 disable = []
 ```
 
-### All Rules Except AI
+### All rules except AI
 
 Enable everything except AI-powered rules:
 
@@ -585,7 +585,7 @@ enable = ["*"]
 disable = ["ai/*"]
 ```
 
-### Fast Audit (Core Only)
+### Fast audit (core only)
 
 Quick audit with just essential checks:
 
@@ -595,7 +595,7 @@ enable = ["core/*"]
 disable = []
 ```
 
-### Disable Slow Rules
+### Disable slow rules
 
 Exclude computationally expensive rules:
 
@@ -605,7 +605,7 @@ enable = ["*"]
 disable = ["ai/*", "content/quality", "perf/cls-hints"]
 ```
 
-### CI/CD Pipeline
+### CI/CD pipeline
 
 Strict subset for automated checks:
 
@@ -615,7 +615,7 @@ enable = ["core/*", "security/*", "links/broken-links"]
 disable = []
 ```
 
-## Pattern Matching
+## Pattern matching
 
 ### Wildcards
 
@@ -625,7 +625,7 @@ enable = ["core/*"]      # All core rules
 disable = ["core/og-*"]  # Disable all OG rules
 ```
 
-### Multiple Patterns
+### Multiple patterns
 
 ```toml
 [rules]
@@ -633,7 +633,7 @@ enable = ["core/*", "links/*", "images/*"]
 disable = ["images/modern-format", "links/orphan-pages"]
 ```
 
-### Disable Takes Precedence
+### Disable takes precedence
 
 ```toml
 [rules]
@@ -643,7 +643,7 @@ disable = ["ai/*"]       # But disable AI (wins)
 
 Result: All rules except AI category.
 
-## Rule Weights
+## Rule weights
 
 Each rule has a weight (1-10) reflecting its importance:
 

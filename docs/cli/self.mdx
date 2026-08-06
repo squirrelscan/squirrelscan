@@ -49,7 +49,7 @@ Add to your shell profile:
   export PATH="~/.local/bin:$PATH"
 ```
 
-### What it Does
+### What it does
 
 - Creates `~/.squirrel/` for settings
 - Creates `~/.local/share/squirrel/releases/` for cached releases
@@ -116,7 +116,7 @@ squirrel self update [options]
 
 ### Examples
 
-#### Check for Updates
+#### Check for updates
 
 ```bash
 squirrel self update --check
@@ -133,7 +133,7 @@ Output if up to date:
 Already on latest version (0.1.0)
 ```
 
-#### Install Update
+#### Install update
 
 ```bash
 squirrel self update
@@ -145,7 +145,7 @@ Updated to v0.2.0
 See release notes: https://github.com/squirrelscan/squirrelscan/releases/tag/v0.2.0
 ```
 
-#### Dismiss Update Notification
+#### Dismiss update notification
 
 ```bash
 squirrel self update --dismiss
@@ -153,7 +153,7 @@ squirrel self update --dismiss
 
 This dismisses the update notification until the next version is released. A dismissed version is also skipped by automatic updates.
 
-### Update Channels
+### Update channels
 
 squirrel has two update channels configured via settings:
 
@@ -210,7 +210,7 @@ Add to `~/.config/fish/config.fish`:
 squirrel self completion fish | source
 ```
 
-### What it Provides
+### What it provides
 
 Completions include:
 - Command names
@@ -245,7 +245,7 @@ Running health checks...
 Passed: 5 | Warnings: 1 | Failed: 0
 ```
 
-### What it Checks
+### What it checks
 
 - Binary installation and permissions
 - Config file validity
@@ -253,7 +253,7 @@ Passed: 5 | Warnings: 1 | Failed: 0
 - Cache size and location
 - Update status
 
-### Exit Codes
+### Exit codes
 
 | Code | Meaning |
 |------|---------|
@@ -280,7 +280,7 @@ squirrel self version [options]
 
 ### Examples
 
-#### Human-Readable
+#### Human-readable
 
 ```bash
 squirrel self version
@@ -294,7 +294,7 @@ squirrel v0.1.0
   Bun: 1.1.38
 ```
 
-#### JSON Output
+#### JSON output
 
 ```bash
 squirrel self version --json
@@ -342,7 +342,7 @@ squirrel self settings show [options]
 
 #### Examples
 
-##### Effective Settings (default)
+##### Effective settings (default)
 
 Shows merged settings with source tracking:
 
@@ -363,7 +363,7 @@ User:  ~/.squirrel/settings.json
 Local: /path/to/project/.squirrel/settings.json
 ```
 
-##### User Settings Only
+##### User settings only
 
 ```bash
 squirrel self settings show --user
@@ -378,7 +378,7 @@ User Settings (~/.squirrel/settings.json):
   user_feedback_email  = you@example.com
 ```
 
-##### Local Settings Only
+##### Local settings only
 
 ```bash
 squirrel self settings show --local
@@ -417,7 +417,7 @@ squirrel self settings set <key> <value> [options]
 | `--local` | Set in local project settings (.squirrel/settings.json) |
 | `--user` | Set in user settings (~/.squirrel/settings.json) (default) |
 
-#### Available Settings
+#### Available settings
 
 | Key | Type | Description | Values |
 |-----|------|-------------|--------|
@@ -430,7 +430,7 @@ squirrel self settings set <key> <value> [options]
 
 #### Examples
 
-##### Switch to Beta Channel
+##### Switch to beta channel
 
 ```bash
 squirrel self settings set channel beta
@@ -442,13 +442,13 @@ Set channel = beta (user)
   Written to: ~/.squirrel/settings.json
 ```
 
-##### Disable Update Notifications
+##### Disable update notifications
 
 ```bash
 squirrel self settings set notifications false
 ```
 
-##### Set Local Project Setting
+##### Set local project setting
 
 ```bash
 squirrel self settings set notifications false --local
@@ -493,7 +493,7 @@ squirrel self uninstall [options]
 
 ### Examples
 
-#### Interactive Uninstall
+#### Interactive uninstall
 
 ```bash
 squirrel self uninstall
@@ -511,7 +511,7 @@ Use --purge to also remove settings.
 Continue? [y/N]
 ```
 
-#### Uninstall with Settings
+#### Uninstall with settings
 
 ```bash
 squirrel self uninstall --purge
@@ -522,13 +522,13 @@ This removes:
 - Cached releases
 - User settings
 
-#### Force Uninstall (No Prompt)
+#### Force uninstall (no prompt)
 
 ```bash
 squirrel self uninstall --force
 ```
 
-### What Gets Removed
+### What gets removed
 
 | Item | Default | With --purge |
 |------|---------|--------------|
