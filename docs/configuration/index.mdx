@@ -6,7 +6,7 @@ description: "Understanding squirrelscan's configuration system"
 
 squirrelscan uses a layered configuration system that combines TOML config files and JSON settings to customize behavior.
 
-## Configuration is Optional
+## Configuration is optional
 
 squirrelscan works out of the box with sensible defaults. You only need configuration when you want to customize behavior.
 
@@ -20,11 +20,11 @@ squirrelscan works out of the box with sensible defaults. You only need configur
 - Logged-in audits render pages in a cloud browser by default (one-time opt-in; `--http` to skip)
 - Console output format
 
-## Configuration System
+## Configuration system
 
 squirrelscan has two separate configuration systems:
 
-### 1. Project Configuration (`squirrel.toml`)
+### 1. Project configuration (`squirrel.toml`)
 
 **What it controls:**
 - How the crawler behaves (limits, delays, patterns)
@@ -38,7 +38,7 @@ squirrelscan has two separate configuration systems:
 
 **Learn more:** [Project Configuration](#project-configuration)
 
-### 2. CLI Settings (`settings.json`)
+### 2. CLI settings (`settings.json`)
 
 **What it controls:**
 - Update channel (stable/beta)
@@ -52,11 +52,11 @@ squirrelscan has two separate configuration systems:
 
 **Learn more:** [CLI Settings](#cli-settings)
 
-## Configuration Hierarchy
+## Configuration hierarchy
 
 Settings are merged from multiple sources in this priority order:
 
-### 1. Project Config (`squirrel.toml`)
+### 1. Project config (`squirrel.toml`)
 
 **Priority:** Highest (overrides everything)
 
@@ -84,7 +84,7 @@ squirrel init
 - Output format
 - External link checking
 
-### 2. Local CLI Settings (`.squirrel/settings.json`)
+### 2. Local CLI settings (`.squirrel/settings.json`)
 
 **Priority:** Medium
 
@@ -107,7 +107,7 @@ squirrel self settings set notifications false --local
 }
 ```
 
-### 3. User CLI Settings (`~/.squirrel/settings.json`)
+### 3. User CLI settings (`~/.squirrel/settings.json`)
 
 **Priority:** Low
 
@@ -128,13 +128,13 @@ squirrel self settings set channel beta
 - Feedback email
 - Dismissed update versions
 
-### 4. Built-in Defaults
+### 4. Built-in defaults
 
 **Priority:** Lowest
 
 **Scope:** All settings have defaults
 
-## Project Configuration
+## Project configuration
 
 Project configuration is stored in `squirrel.toml` using TOML format.
 
@@ -154,7 +154,7 @@ Project configuration is stored in `squirrel.toml` using TOML format.
 ### Smart Audits
 
 `smart_audits` (top-level boolean) keeps issues from disappearing when you
-audit fewer pages than last time. Default: on when you are signed in (any plan),
+audit fewer pages than last time. Default: on when you are logged in (any plan),
 off for anonymous runs. Set it explicitly to override either way.
 
 With it **on**, squirrelscan persists per-page issue state across audits (a local
@@ -216,7 +216,7 @@ format = "console"
 # Per-rule configuration
 ```
 
-### Example Configurations
+### Example configurations
 
 See [Configuration Examples](/configuration/examples) for common use cases:
 - High-volume crawl
@@ -225,11 +225,11 @@ See [Configuration Examples](/configuration/examples) for common use cases:
 - Accessibility audit
 - Performance audit
 
-## CLI Settings
+## CLI settings
 
 CLI settings control squirrel's own behavior (updates, notifications).
 
-### User Settings
+### User settings
 
 Global settings in `~/.squirrel/settings.json`:
 
@@ -255,7 +255,7 @@ squirrel self settings set channel beta
 squirrel self settings set notifications false
 ```
 
-### Local Settings
+### Local settings
 
 Project-scoped settings in `.squirrel/settings.json`:
 
@@ -280,9 +280,9 @@ squirrel self settings show --local
 - Use beta channel for one project only
 - Different settings for work vs personal projects
 
-## Managing Configuration
+## Managing configuration
 
-### View Configuration
+### View configuration
 
 Show effective config (merged from all sources):
 
@@ -296,7 +296,7 @@ Show config file path:
 squirrel config path
 ```
 
-### Modify Configuration
+### Modify configuration
 
 Edit file directly:
 
@@ -316,7 +316,7 @@ Preview changes:
 squirrel config set crawler.max_pages 200 --dry-run
 ```
 
-### Validate Configuration
+### Validate configuration
 
 Check for errors:
 
@@ -334,7 +334,7 @@ Output on error:
 Invalid config: crawler.max_pages: Expected number, received string
 ```
 
-## Configuration vs Settings
+## Configuration vs settings
 
 | Aspect | Project Config (`squirrel.toml`) | CLI Settings (`settings.json`) |
 |--------|----------------------------------|--------------------------------|
@@ -345,7 +345,7 @@ Invalid config: crawler.max_pages: Expected number, received string
 | **Location** | Project directory (walks up) | `~/.squirrel/` or `.squirrel/` |
 | **Examples** | Max pages, rule patterns, delays | Update channel, notifications |
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card title="Project Settings" icon="folder" href="/configuration/project">

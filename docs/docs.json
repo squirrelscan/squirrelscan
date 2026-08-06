@@ -44,7 +44,7 @@
         "icon": "book-open",
         "groups": [
           {
-            "group": "Getting Started",
+            "group": "Getting started",
             "pages": [
               "index",
               "quickstart"
@@ -150,7 +150,7 @@
         "icon": "list-checks",
         "groups": [
           {
-            "group": "Rules Reference",
+            "group": "Rules reference",
             "pages": [
               "rules/index"
             ]

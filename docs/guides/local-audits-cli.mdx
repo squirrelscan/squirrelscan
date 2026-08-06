@@ -110,7 +110,7 @@ The console output is for humans. For everything else, pick a format with `-f` a
 | `console` | (default) | Reading in the terminal |
 | `json` | `-f json` | CI pipelines and scripts |
 | `markdown` | `-f markdown` | Dropping into a README or PR |
-| `llm` | `-f llm` | Feeding an AI agent (compact, token-efficient) |
+| `llm` | `-f llm` | Feeding a coding agent (compact, token-efficient) |
 | `html` | `-f html` | A visual report you open in a browser |
 | `text` | `-f text` | Plain text for logs and email |
 
@@ -151,10 +151,10 @@ squirrel mcp
 
 Local MCP audits are free and need no account. Setup and the tool list are in [`squirrel mcp`](/cli/mcp) and the [Hosted MCP server](/developers/mcp#local-mcp-server) guide.
 
-**Install the skill.** `squirrel skills install` teaches your agent the audit workflow so a prompt like "audit this site and fix the issues" just works. See [AI agent integration](/developers/agents).
+**Install the skill.** `squirrel skills install` teaches your agent the audit workflow so a prompt like "audit this site and fix the issues" just works. See [Coding agent integration](/developers/agents).
 
 <Tip>
-To fully close the loop, where the agent fixes issues, you redeploy, and it re-audits until they clear, use the hosted MCP with the shared issue tracker: [Fix your website with an AI agent](/guides/fix-your-site-with-an-ai-agent).
+To fully close the loop, where the agent fixes issues, you redeploy, and it re-audits until they clear, use the hosted MCP with the shared issue tracker: [Fix your website with a coding agent](/guides/fix-your-site-with-an-ai-agent).
 </Tip>
 
 ## Gate CI on a local audit
@@ -173,4 +173,4 @@ Quote each expression, since shells read bare `<` and `>` as redirection. The fu
 - [`squirrel report`](/cli/report) - query and export stored audits
 - [Reports and scoring](/reports) - how the health score works
 - [Cloud audits](/guides/cloud-audits) - add AI analysis, rendering, and a shared tracker
-- [AI agent integration](/developers/agents) - pipe, skill, and MCP workflows
+- [Coding agent integration](/developers/agents) - pipe, skill, and MCP workflows

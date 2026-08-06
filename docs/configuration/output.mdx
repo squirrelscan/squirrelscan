@@ -30,14 +30,14 @@ Output format for audit reports.
 - `"json"` - Machine-readable JSON for automation
 - `"html"` - Interactive HTML report in browser
 - `"markdown"` - Markdown format for documentation
-- `"llm"` - Compact token-optimized XML/text for AI agents (40% smaller than xml)
+- `"llm"` - Compact token-optimized XML/text for coding agents (40% smaller than xml)
 - `"xml"` - Verbose structured XML for enterprise integration
 
 **Note:** The `sarif` format is only available via the `report` command, not during `audit`. See [Reports documentation](/reports) for details.
 
 ---
 
-### `"console"` (Default)
+### `"console"` (default)
 
 Rich terminal output optimized for human readability.
 
@@ -231,7 +231,7 @@ squirrel audit https://example.com --format html --output reports/my-audit.html
 
 ### `"llm"`
 
-**Compact token-optimized format for AI agents** - hybrid XML/text structure designed to minimize tokens while maintaining structured data.
+**Compact token-optimized format for coding agents** - hybrid XML/text structure designed to minimize tokens while maintaining structured data.
 
 **Features:**
 
@@ -272,7 +272,7 @@ For a 51-page audit:
 
 **Use Cases:**
 
-- Piping to Claude Code, Cursor, GPT, or other AI assistants
+- Piping to Claude Code, Cursor, GPT, or other coding agents
 - Token-limited API contexts (cost optimization)
 - Agent-based workflows requiring structured output
 - AI code review and analysis
@@ -286,7 +286,7 @@ squirrel audit https://example.com --format llm
 # Or export from stored audit
 squirrel report <audit-id> --format llm
 
-# Pipe directly to AI agent
+# Pipe directly to a coding agent
 squirrel audit https://example.com --format llm | claude "analyze and prioritize fixes"
 ```
 
@@ -351,7 +351,7 @@ See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/squirrelscan/blob/main/sk
 | Indentation | 1 space | 2 spaces |
 | Structure | Hybrid XML/text | Pure XML |
 | Metadata | Inline attributes | Nested elements |
-| Best For | AI agents, tokens | Enterprise, archival |
+| Best For | Coding agents, tokens | Enterprise, archival |
 
 **Use Cases:**
 
@@ -448,9 +448,9 @@ path = "reports/2026/january/audit.json"
 
 ---
 
-## Configuration Examples
+## Configuration examples
 
-### Console Output (Default)
+### console output (default)
 
 Terminal output with colors:
 
@@ -484,7 +484,7 @@ cat reports/audit.json | jq '.health.score'
 
 ---
 
-### HTML for Sharing
+### HTML for sharing
 
 Generate shareable HTML report:
 
@@ -502,7 +502,7 @@ squirrel audit https://client.com
 
 ---
 
-### Multiple Outputs
+### Multiple outputs
 
 Use CLI to generate multiple formats:
 
@@ -519,7 +519,7 @@ squirrel audit https://example.com --format html --output reports/visual.html
 
 ---
 
-## CLI Override
+## CLI override
 
 CLI flags override config file:
 
@@ -544,7 +544,7 @@ squirrel audit https://example.com --format json --output custom.json
 
 ---
 
-## Format Comparison
+## Format comparison
 
 | Feature | Console | JSON | HTML |
 |---------|---------|------|------|
@@ -560,9 +560,9 @@ squirrel audit https://example.com --format json --output custom.json
 
 ---
 
-## Output Schema
+## Output schema
 
-### JSON Output Schema
+### JSON output schema
 
 Full JSON output structure:
 
@@ -626,7 +626,7 @@ Full JSON output structure:
 
 ---
 
-### HTML Report Structure
+### HTML report structure
 
 HTML reports include:
 
@@ -667,9 +667,9 @@ HTML reports include:
 
 ---
 
-## Automation Examples
+## Automation examples
 
-### CI/CD Pipeline
+### CI/CD pipeline
 
 Extract health score in CI:
 
@@ -689,7 +689,7 @@ Extract health score in CI:
 
 ---
 
-### Compare Audits
+### Compare audits
 
 Compare two audits using JSON:
 
@@ -709,7 +709,7 @@ echo "After:  $(cat after.json | jq '.health.score')"
 
 ---
 
-### Generate Multiple Reports
+### Generate multiple reports
 
 Run once, output multiple formats:
 
@@ -779,7 +779,7 @@ chmod 755 reports
 
 ---
 
-## Complete Example
+## Complete example
 
 ```toml
 [project]

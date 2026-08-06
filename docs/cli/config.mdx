@@ -133,13 +133,13 @@ squirrel config set rules.disable '["ai/*", "content/quality"]'
 squirrel config validate && echo "Config OK"
 ```
 
-## Config File Resolution
+## Config file resolution
 
 squirrelscan searches for `squirrel.toml` starting from the current directory and walking up to your home directory. The first config file found is used.
 
 If no config file exists, commands that require one will prompt you to run `squirrel init`.
 
-## See Also
+## See also
 
 - [Configuration Reference](/configuration) - Full config file documentation
 - [init](/cli/init) - Create a new config file

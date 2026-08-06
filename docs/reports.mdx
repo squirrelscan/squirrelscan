@@ -6,7 +6,7 @@ description: "Understanding audit reports and health score calculation"
 
 squirrelscan generates comprehensive audit reports with a health score and detailed issue breakdown.
 
-## Health Score
+## Health score
 
 The health score is calculated from 0-100 based on:
 
@@ -15,7 +15,7 @@ The health score is calculated from 0-100 based on:
 - **Scoring curve** - Compresses high scores to reward perfection
 - **Penalties** - Applied for critical crawlability issues and high issue density
 
-### Scoring Formula
+### Scoring formula
 
 ```
 Base Score = (Earned Weight / Total Weight) × 100
@@ -49,7 +49,7 @@ Penalties are multiplicative. For example, an 80% score with missing robots.txt 
 80 × (1 - 0.15) × (1 - 0.20) = 80 × 0.85 × 0.80 = 54.4
 ```
 
-### Grade Scale
+### Grade scale
 
 | Score | Grade |
 |-------|-------|
@@ -59,7 +59,7 @@ Penalties are multiplicative. For example, an 80% score with missing robots.txt 
 | 60-69 | D |
 | 0-59 | F |
 
-### Group Scores
+### Group scores
 
 Every category rolls up into one of four top-level groups, and each group gets its own 0-100 score. These are the four scores shown on reports and in the dashboard alongside the overall health score:
 
@@ -72,7 +72,7 @@ Every category rolls up into one of four top-level groups, and each group gets i
 
 Group scores use the same weighted formula and scoring curve as the health score. The crawlability penalties apply only to the overall health score.
 
-### Category Scores
+### Category scores
 
 Each category (core, content, links, etc.) receives its own score:
 
@@ -81,7 +81,7 @@ Each category (core, content, links, etc.) receives its own score:
 - Sorted by error count (most errors first)
 - Perfect categories (100%, no issues) shown last
 
-## Output Formats
+## Output formats
 
 squirrelscan supports multiple report formats optimized for different use cases.
 
@@ -98,7 +98,7 @@ the work to do first:
 Categories are not top-level sections: a category with both an error and a
 warning appears under both severities.
 
-### console (Default)
+### console (default)
 
 Human-readable terminal output with colors and formatting.
 
@@ -293,7 +293,7 @@ squirrel report -f text > report.txt
 
 ### llm
 
-**Compact token-optimized format for AI agents** - hybrid XML/text structure designed for LLM consumption.
+**Compact token-optimized format for coding agents** - hybrid XML/text structure designed for LLM consumption.
 
 ```bash
 squirrel report -f llm -o report.xml
@@ -358,7 +358,7 @@ The LLM format achieves significant size reduction through:
 - Text prefixes instead of wrapping tags
 
 **Use Cases:**
-- Piping to Claude Code, Cursor, or other AI assistants
+- Piping to Claude Code, Cursor, or other coding agents
 - Token-limited API contexts (Claude API, GPT)
 - Cost optimization for LLM processing
 - Agent-based workflows requiring structured output
@@ -425,7 +425,7 @@ squirrel report -f xml -o report.xml
 | Structure | Hybrid XML/text | Pure XML |
 | Metadata | Inline attributes | Nested elements |
 | Lists | Comma-separated | Multiple elements |
-| Best For | AI agents, tokens | Enterprise, archival |
+| Best For | Coding agents, tokens | Enterprise, archival |
 
 **Use Cases:**
 - Enterprise data integration
@@ -434,9 +434,9 @@ squirrel report -f xml -o report.xml
 - XML processing pipelines
 - Long-term storage with full metadata
 
-## Filtering Reports
+## Filtering reports
 
-### By Severity
+### By severity
 
 Show only errors:
 ```bash
@@ -448,7 +448,7 @@ Show only warnings:
 squirrel report --severity warning
 ```
 
-### By Category
+### By category
 
 Filter by single category:
 ```bash
@@ -481,14 +481,14 @@ squirrel report --category core,links,images
 - `eeat` - E-E-A-T signals (author, expertise, trust)
 - `blocking` - Ad-blocker & privacy-filter impact (`adblock` still accepted)
 
-### Combined Filters
+### Combined filters
 
 Combine severity and category filters:
 ```bash
 squirrel report --severity error --category links,images
 ```
 
-## Diff Reports
+## Diff reports
 
 Compare a baseline audit to the current report:
 
@@ -506,9 +506,9 @@ squirrel report --regression-since example.com --format llm
 Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and `xml` are not supported in diff mode. Diff reports cannot be published with `--publish`.
 </Note>
 
-## CI/CD Integration
+## CI/CD integration
 
-### Fail Build on Low Score
+### Fail build on low score
 
 ```bash
 #!/bin/bash
@@ -519,7 +519,7 @@ if [ "$SCORE" -lt 80 ]; then
 fi
 ```
 
-### Fail on Errors
+### Fail on errors
 
 ```bash
 #!/bin/bash
@@ -530,7 +530,7 @@ if [ "$ERRORS" -gt 0 ]; then
 fi
 ```
 
-### GitHub Actions Example
+### GitHub Actions example
 
 Use the official action and gate the build with [`--fail-on`](/cli/audit): it
 exits `2` when a threshold trips, so the job fails automatically:
@@ -558,7 +558,7 @@ This gates pull requests; swap the trigger to `on: [push]` (or add `branches`)
 to gate pushes to a branch instead. See the [CI integration guide](/guides/ci)
 for GitLab, generic runners, and token setup.
 
-## Report Storage
+## Report storage
 
 Audit reports are stored in a local SQLite database at:
 
@@ -566,7 +566,7 @@ Audit reports are stored in a local SQLite database at:
 ~/.local/share/squirrel/audits.db
 ```
 
-### List Stored Audits
+### List stored audits
 
 ```bash
 squirrel report --list
@@ -586,7 +586,7 @@ a7b3c2d1 1/17/2026, 10:30 AM    42       complete
 Total: 2 audits
 ```
 
-### View Specific Audit
+### View specific audit
 
 By ID:
 ```bash
@@ -598,7 +598,7 @@ By domain:
 squirrel report example.com
 ```
 
-### Delete Old Audits
+### Delete old audits
 
 Reports are kept indefinitely. To clean up:
 
@@ -609,7 +609,7 @@ rm -rf ~/.local/share/squirrel/audits.db
 # This will be regenerated on next audit
 ```
 
-## Publishing Reports
+## Publishing reports
 
 Share audit reports online by publishing to `reports.squirrelscan.com`. Published reports can be shared with clients, included in documentation, or consumed programmatically by LLMs and CI pipelines.
 
@@ -617,12 +617,12 @@ Share audit reports online by publishing to `reports.squirrelscan.com`. Publishe
 Publishing requires authentication. Run `squirrel auth login` first.
 </Note>
 
-### Auto-publish (default when signed in)
+### Auto-publish (default when logged in)
 
-When you're **signed in and online, every `squirrel audit` auto-publishes to your dashboard as `unlisted`** - you get a shareable link and issue history with no extra flags. **Publishing is included in the audit base charge**, whatever the visibility. Logged-out and `--offline` runs never publish.
+When you're **logged in and online, every `squirrel audit` auto-publishes to your dashboard as `unlisted`** - you get a shareable link and issue history with no extra flags. **Publishing is included in the audit base charge**, whatever the visibility. Logged-out and `--offline` runs never publish.
 
 ```bash
-# signed in → auto-publishes (unlisted) and prints the URL
+# logged in → auto-publishes (unlisted) and prints the URL
 squirrel audit example.com
 ```
 
@@ -672,7 +672,7 @@ squirrel report --publish --visibility private
 Publishing is included in the audit base charge, whatever the visibility. Flipping an existing report's visibility later (in the [dashboard](/dashboard) or via the API) is free.
 </Note>
 
-### Output Formats via URL
+### Output formats via URL
 
 Published reports support multiple output formats. Append a file extension to the report URL to get a specific format:
 
@@ -683,7 +683,7 @@ Published reports support multiple output formats. Append a file extension to th
 | Markdown | [/SJEItpldwW.md](https://reports.squirrelscan.com/SJEItpldwW.md) | Documentation, READMEs |
 | Plain Text | [/SJEItpldwW.txt](https://reports.squirrelscan.com/SJEItpldwW.txt) | Email, logs |
 | XML | [/SJEItpldwW.xml](https://reports.squirrelscan.com/SJEItpldwW.xml) | Enterprise integration |
-| LLM | [/SJEItpldwW.llm](https://reports.squirrelscan.com/SJEItpldwW.llm) | AI agents, token-efficient |
+| LLM | [/SJEItpldwW.llm](https://reports.squirrelscan.com/SJEItpldwW.llm) | Coding agents, token-efficient |
 
 Without an extension, the format is determined by the `Accept` header. Browsers receive HTML, while tools like `curl` can request specific formats:
 
@@ -698,7 +698,7 @@ curl https://reports.squirrelscan.com/SJEItpldwW.json
 curl -s https://reports.squirrelscan.com/SJEItpldwW.llm | claude "prioritize fixes"
 ```
 
-### Managing Published Reports
+### Managing published reports
 
 Visit the [dashboard](https://app.squirrelscan.com) to manage published reports:
 

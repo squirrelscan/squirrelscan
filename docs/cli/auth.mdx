@@ -8,12 +8,12 @@ The `auth` command manages authentication for [cloud features](/cloud) - cloud r
 
 There are two ways to authenticate:
 
-- **`squirrel auth login`**: interactive browser sign-in, tied to your user. Best for local development.
+- **`squirrel auth login`**: interactive browser login, tied to your user. Best for local development.
 - **`SQUIRRELSCAN_API_KEY` env var**: a long-lived, org-scoped API key. Best for CI, headless agents, and automation. See [API token](#api-token-ci--headless).
 
 ## Subcommands
 
-- [login](#login) - Sign in to squirrelscan
+- [login](#login) - Log in to squirrelscan
 - [logout](#logout) - Sign out and revoke token
 - [status](#status) / [whoami](#whoami) - Show the active credential (source, scopes, org)
 - [`squirrel keys`](/cli/keys) - Mint, list, and revoke org API keys without leaving the terminal

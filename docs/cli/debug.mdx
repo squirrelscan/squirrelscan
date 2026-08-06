@@ -6,7 +6,7 @@ description: "Configure debug logging and performance tracing"
 
 SquirrelScan writes debug logs to `~/.squirrel/logs/` for diagnosing issues. By default, only errors are logged. Increase the log level for more detail.
 
-## Log Levels
+## Log levels
 
 | Level | What's Logged |
 |-------|---------------|
@@ -17,7 +17,7 @@ SquirrelScan writes debug logs to `~/.squirrel/logs/` for diagnosing issues. By 
 
 ## Configuration
 
-### Settings File
+### Settings file
 
 ```bash
 squirrel config set log_level debug
@@ -25,7 +25,7 @@ squirrel config set log_level debug
 
 Valid values: `error`, `warn`, `info`, `debug`
 
-### Environment Variable
+### Environment variable
 
 Override the setting for a single run:
 
@@ -35,7 +35,7 @@ SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com
 
 The environment variable takes precedence over the settings file.
 
-## Console Debug Flag
+## Console debug flag
 
 The `--debug` flag shows debug messages in the console, independent of file logging:
 
@@ -45,7 +45,7 @@ squirrel audit https://example.com --debug
 
 This is useful for real-time debugging without changing your log level setting.
 
-## Log Files
+## Log files
 
 Logs are written to `~/.squirrel/logs/`:
 
@@ -55,14 +55,14 @@ Logs are written to `~/.squirrel/logs/`:
 | `trace.log` | Performance traces (when `--trace` enabled) |
 | `debug.log.*.gz` | Rotated/compressed old logs |
 
-### Log Format
+### Log format
 
 ```
 2025-01-10T14:30:45.123Z [debug] [request] url="https://example.com" status=200 loadTimeMs=120
 2025-01-10T14:30:45.200Z [info] ========== COMMAND END: audit (success, 5432ms) ==========
 ```
 
-## Log Rotation
+## Log rotation
 
 Logs rotate automatically:
 
@@ -80,7 +80,7 @@ squirrel config set log_compress_after_days 7
 squirrel config set log_delete_after_days 30
 ```
 
-## Performance Tracing
+## Performance tracing
 
 For performance analysis, enable tracing:
 
@@ -100,7 +100,7 @@ Traces include:
 - Rule execution duration
 - Crawl phase boundaries
 
-## Sensitive Data Redaction
+## Sensitive data redaction
 
 Logs automatically redact sensitive data:
 
@@ -117,7 +117,7 @@ Headers like `Authorization`, `Cookie`, and `X-Api-Key` are also redacted.
 While redaction covers common patterns, avoid logging highly sensitive data. Review logs before sharing.
 </Warning>
 
-## Sharing Logs for Support
+## Sharing logs for support
 
 When reporting issues, include relevant log excerpts:
 
@@ -133,7 +133,7 @@ For full context, attach the log file to your GitHub issue.
 
 ## Examples
 
-### Diagnose a Failed Crawl
+### Diagnose a failed crawl
 
 ```bash
 # Run with debug logging
@@ -143,7 +143,7 @@ SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com
 cat ~/.squirrel/logs/debug.log | grep -i error
 ```
 
-### Profile Slow Audits
+### Profile slow audits
 
 ```bash
 # Enable tracing
@@ -153,7 +153,7 @@ squirrel audit https://example.com --trace
 grep "duration=" ~/.squirrel/logs/trace.log | sort -t= -k2 -rn | head
 ```
 
-### Temporary Verbose Mode
+### Temporary verbose mode
 
 ```bash
 # One-off debug session

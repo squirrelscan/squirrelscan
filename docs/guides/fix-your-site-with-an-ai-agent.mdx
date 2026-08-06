@@ -1,5 +1,5 @@
 ---
-title: "Fix your website with an AI agent"
+title: "Fix your website with a coding agent"
 description: "Connect your coding agent to squirrelscan over MCP, audit your live site, and loop through the fixes until the issues close"
 icon: "wand-sparkles"
 ---
@@ -18,7 +18,7 @@ The agent does the tool calls; you mostly type prompts in plain English. The too
 - A squirrelscan account. Cloud audits are pay-as-you-go and free accounts get 500 credits a month, so you can run this loop today without a card. See [Credits](/cloud/credits).
 - The repository for the site you want to fix, checked out locally.
 
-## Step 1: Connect the hosted MCP and install the skills
+## Step 1: connect the hosted MCP and install the skills
 
 Point your agent at the hosted MCP server. There is nothing to install and no local process to keep running:
 
@@ -34,13 +34,13 @@ Then install the squirrelscan skills so your agent knows the audit workflow with
 squirrel skills install
 ```
 
-This adds all the squirrelscan skills, currently `squirrelscan` (operate the CLI: login, publish reports, MCP, credits) and `audit-website` (the audit-and-fix loop). It runs `npx skills add` under the hood. See [`squirrel skills`](/cli/skills) and the [AI agent integration](/developers/agents) guide for what the skills do.
+This adds all the squirrelscan skills, currently `squirrelscan` (operate the CLI: login, publish reports, MCP, credits) and `audit-website` (the audit-and-fix loop). It runs `npx skills add` under the hood. See [`squirrel skills`](/cli/skills) and the [Coding agent integration](/developers/agents) guide for what the skills do.
 
 <Tip>
 The MCP server and the skills complement each other. The MCP server is how the agent runs cloud audits and reaches the shared issue tracker. The skill is the procedure it follows. Install both.
 </Tip>
 
-## Step 2: Start your agent from the project folder
+## Step 2: start your agent from the project folder
 
 Change into the repository for the site you are fixing and start your agent there. This matters: when the agent is inside the repo, it can read your source, make the edits, and open the files that produce the pages the audit flags.
 
@@ -56,7 +56,7 @@ Each client connects to the same hosted endpoint. Here is the one-step connect f
     claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
     ```
 
-    Start `claude` in the project, run `/mcp`, select **squirrelscan**, and choose **Authenticate**. Your browser opens for sign-in and organization selection.
+    Start `claude` in the project, run `/mcp`, select **squirrelscan**, and choose **Authenticate**. Your browser opens so you can log in and organization selection.
   </Tab>
   <Tab title="Codex CLI">
     ```bash
@@ -64,7 +64,7 @@ Each client connects to the same hosted endpoint. Here is the one-step connect f
     codex mcp login squirrelscan
     ```
 
-    `codex mcp login` runs the browser sign-in and stores the token encrypted.
+    `codex mcp login` runs the browser login and stores the token encrypted.
   </Tab>
   <Tab title="Cursor">
     Add a remote server entry to `.cursor/mcp.json` in the project:
@@ -103,7 +103,7 @@ Each client connects to the same hosted endpoint. Here is the one-step connect f
 
 Before the first audit, have the agent confirm who it is acting for. A quick prompt like "run whoami" makes it call the `whoami` tool, which reports your organization and current credit balance. If the balance and org look right, you are ready.
 
-## Step 3: Run the loop
+## Step 3: run the loop
 
 The loop is: audit, read, fix, deploy, re-audit. Here is what the agent does on the first pass, tool by tool:
 
@@ -159,6 +159,6 @@ A full loop reads like a short conversation: audit, review the summary together,
 
 - [Hosted MCP server](/developers/mcp) - the full tool list, auth, and credits
 - [MCP client setup](/developers/mcp-clients) - exact config for every client
-- [AI agent integration](/developers/agents) - skills, plan mode, and subagent patterns
+- [Coding agent integration](/developers/agents) - skills, plan mode, and subagent patterns
 - [Cloud audits](/guides/cloud-audits) - login, credits, and the issue tracker in depth
 - [Local audits with the CLI](/guides/local-audits-cli) - the free, no-login version of the same audit
