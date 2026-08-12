@@ -47,6 +47,7 @@
             "group": "Getting started",
             "pages": [
               "index",
+              "agent-setup/index",
               "quickstart"
             ]
           },

@@ -1,0 +1,97 @@
+---
+title: "Agent setup prompt"
+sidebarTitle: "Setup prompt"
+description: "The instructions a coding agent fetches and follows to install squirrelscan, connect MCP, and run a first audit."
+mode: "center"
+---
+
+These are instructions for a coding agent, not a guide for a person. If you are
+a person, start at [Agent setup](/agent-setup) and press **Copy prompt**. If you
+are an agent, the rest of this page is your task.
+
+## Task
+
+Set up squirrelscan for this project so you can audit the website and fix what
+you find. Work through the steps in order. Report what you did at the end.
+
+## 1. Install the CLI
+
+squirrelscan ships as a single binary with no runtime dependency.
+
+```bash
+curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+```
+
+On Windows, use PowerShell:
+
+```powershell
+iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+```
+
+Verify the install:
+
+```bash
+squirrel self doctor
+```
+
+If the binary is not on `PATH`, it installs to `~/.local/bin/squirrel`. Add that
+directory to `PATH` rather than moving the binary, because `squirrel self update`
+expects it there.
+
+On Alpine or another musl Linux, the binary needs `libstdc++`. The installer
+adds it when run as root; otherwise `apk add libstdc++` first.
+
+## 2. Run a local audit
+
+Local audits are free, need no account, and cost no credits. Run one now against
+the project's site so there is something concrete to work from:
+
+```bash
+squirrel audit <url> --format json
+```
+
+Use the site's production URL if you can find one in the project (check
+`package.json`, a sitemap, `README`, or the deploy config). Otherwise ask the
+user which URL to audit, or point it at the local dev server.
+
+`--format json` gives you structured output. Each issue carries a rule id, a
+severity, the affected URL, and a description of the fix.
+
+## 3. Connect over MCP
+
+MCP gives you the audit tools directly, so you can run audits and read issues
+without shelling out. Pick the line matching the agent you are:
+
+- **Claude Code**: `claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp`
+- **Codex**: `codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp`
+- **Cursor**, **Windsurf**, **VS Code**, **opencode**, or any other MCP client:
+  add an HTTP MCP server named `squirrelscan` pointing at
+  `https://mcp.squirrelscan.com/mcp`, in whatever config file that client uses.
+
+The server works unauthenticated for anonymous audits. Cloud features
+(AI page analysis, browser rendering, the shared issue tracker, published
+reports) need an account: tell the user to run `squirrel auth login`.
+
+Full per-client instructions: https://docs.squirrelscan.com/developers/mcp-clients
+
+## 4. Fix what you found
+
+Work the issues in severity order, highest first. For each one:
+
+1. Read the rule's explanation. Every issue references a rule id, documented at
+   `https://docs.squirrelscan.com/rules/<category>/<rule-id>`.
+2. Find the code that produces the offending output. Fix the source, not the
+   rendered HTML: a template, a layout component, a config file, or a
+   content file.
+3. Re-run the audit to confirm the issue is gone and nothing regressed.
+
+Do not suppress a rule to make a number go up. If a finding is a genuine false
+positive for this project, say so and explain why rather than silencing it.
+
+## Notes
+
+- Local audits never cost credits. Cloud audits cost 50 credits plus 2 per
+  rendered page, and free accounts get 500 credits a month.
+- `squirrel audit --help` lists coverage modes, output formats, and crawl limits.
+- If the site blocks the crawler, check `robots.txt` first: squirrelscan
+  respects it, and a blocked root produces an audit with no pages.
