@@ -85,12 +85,6 @@
             ]
           },
           {
-            "group": "CI/CD",
-            "pages": [
-              "guides/ci"
-            ]
-          },
-          {
             "group": "Agents & MCP",
             "pages": [
               "developers/agents/index",
@@ -107,13 +101,13 @@
               "developers/mcp",
               "developers/mcp-clients"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "API",
-        "icon": "braces",
-        "groups": [
+          },
+          {
+            "group": "CI/CD",
+            "pages": [
+              "guides/ci"
+            ]
+          },
           {
             "group": "REST API",
             "pages": [

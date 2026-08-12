@@ -10,21 +10,26 @@ the stable REST API, CI/CD integration, outbound webhooks, headless
 authentication, and the agent/MCP workflow.
 
 <Info>
-New here? Most integrations start in one of two places: gate a build with
-[CI/CD](/guides/ci), or drive audits from the [REST API](/api/index). Both
+New here? Most people start by connecting their coding agent: one line at
+[Agent setup](/agent-setup) wires up the CLI and MCP together. Nothing there
+needs an account. The REST API and webhooks are cloud surfaces and
 authenticate with an [API key](/developers/authentication).
 </Info>
 
 ## Pick your surface
 
 <CardGroup cols={2}>
-  <Card title="REST API" icon="square-code" href="/api/index">
-    The stable `/v1` surface: create audits, read reports, check credits.
-    OpenAPI-described, agent- and MCP-friendly.
+  <Card title="Agents & MCP" icon="sparkles" href="/developers/agents">
+    Connect Claude Code, Cursor, Codex, opencode, and any MCP client to the
+    hosted server at `mcp.squirrelscan.com`. Free, no account needed.
   </Card>
   <Card title="CI/CD" icon="git-branch" href="/guides/ci">
     Gate builds on audits with `--fail-on` exit codes. GitHub Actions, GitLab,
     and any shell runner.
+  </Card>
+  <Card title="REST API" icon="square-code" href="/api/index">
+    The stable `/v1` surface: create audits, read reports, check credits.
+    OpenAPI-described. Cloud, so it needs an API key.
   </Card>
   <Card title="Webhooks" icon="bell" href="/cloud/webhooks">
     Push audit events to any HTTPS endpoint. Signed, versioned, retried: react
@@ -32,10 +37,6 @@ authenticate with an [API key](/developers/authentication).
   </Card>
   <Card title="Authentication" icon="key" href="/developers/authentication">
     API keys, scopes, and `SQUIRRELSCAN_API_KEY` for headless and CI auth.
-  </Card>
-  <Card title="Agents & MCP" icon="sparkles" href="/developers/mcp">
-    Connect any agent to the hosted MCP server at `mcp.squirrelscan.com`, or wire
-    squirrelscan into Claude Code, Cursor, and autonomous workflows.
   </Card>
 </CardGroup>
 

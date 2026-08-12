@@ -10,19 +10,19 @@ Projects let you group related audits together. Each project stores its crawl hi
 
 When you run an audit, squirrelscan creates a project folder to store all data:
 
-```
-~/.squirrel/projects/
-├── example-com/
-│   └── project.db
-├── my-blog/
-│   └── project.db
-└── localhost-3000/
-    └── project.db
-```
+<FileTree>
+- ~/.squirrel/projects/
+  - example-com/
+    - project.db
+  - my-blog/
+    - project.db
+  - localhost-3000/
+    - project.db
+</FileTree>
 
 By default, the project name is derived from the domain you're auditing. You can override this to:
 - Group multiple domains under one project
-- Track the same site across environments (dev, staging, prod)
+- Track the same website across environments (dev, staging, prod)
 - Keep separate audit histories for different purposes
 
 ## Setting the project name
