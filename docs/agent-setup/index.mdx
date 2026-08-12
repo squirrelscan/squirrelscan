@@ -1,24 +1,16 @@
 ---
-title: "Agent setup"
+title: "Give your agent the keys"
 sidebarTitle: "Agent setup"
-description: "Hand one line to your coding agent and it installs squirrelscan, wires up MCP, and audits your website."
+description: "One line, pasted into any coding agent. It installs the CLI, wires up MCP, audits your website, and starts fixing what it finds."
 icon: "bot"
-mode: "custom"
 ---
 
-{/* `mode: custom` hands us the bare slot, so the prose class the default
-     shell would have applied has to come from here. */}
-<div class="agent-setup-page prose-tang">
+{/* Default page mode, so the shell keeps the sidebar, breadcrumb and TOC and
+    renders the frontmatter title as the h1. This wrapper only scopes the
+    design-system tokens the sections below use. */}
+<div class="agent-setup-page">
 
 <div class="agent-hero">
-  <p class="agent-hero-eyebrow">Agent setup</p>
-  <h1>Give your agent the keys</h1>
-  <p class="agent-hero-sub">
-    One line, pasted into any coding agent. It installs the CLI, wires up MCP,
-    audits your website, and starts fixing what it finds. You go and do
-    something else.
-  </p>
-
   <div class="agent-prompt">
     <div class="agent-prompt-bar">
       <span class="agent-prompt-dot" /><span class="agent-prompt-dot" /><span class="agent-prompt-dot" />
@@ -130,45 +122,22 @@ published reports) need an account: run `squirrel auth login`. Free accounts get
    defaults: mono type throughout, warm cream surfaces, green primary with the
    orange accent used sparingly, and a terminal block as the one piece of high
    contrast on the page. */
+/* The shell owns the measure and gutters now; this only carries tokens. */
 .agent-setup-page {
   --sq-green: oklch(0.52 0.12 145);
   --sq-orange: oklch(0.62 0.14 45);
   --sq-term-bg: oklch(0.18 0.01 260);
   --sq-term-text: oklch(0.8 0.12 145);
-  max-width: 58rem;
-  margin: 0 auto;
-  padding: 0 1.5rem 5rem;
 }
 
 .agent-hero {
-  padding: 3.5rem 0 3rem;
-}
-.agent-hero-eyebrow {
-  font-family: var(--tangly-font-mono);
-  font-size: 0.6875rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--sq-orange);
-  margin: 0 0 0.75rem;
-}
-.agent-hero h1 {
-  font-size: 2.5rem;
-  line-height: 1.1;
-  margin: 0 0 1rem;
-  border-bottom: 0;
-}
-.agent-hero-sub {
-  max-width: 36rem;
-  margin: 0;
-  font-size: 1.0625rem;
-  color: var(--tangly-color-muted);
+  margin-bottom: 2.5rem;
 }
 
 /* Terminal block. Showing the prompt beats hiding it behind a button: you can
    read exactly what is going on your clipboard before you paste it into
    something that will act on it. */
 .agent-prompt {
-  margin-top: 2.25rem;
   border: 1px solid var(--tangly-color-border);
   border-radius: 0.375rem;
   overflow: hidden;
@@ -324,7 +293,6 @@ published reports) need an account: run `squirrel auth login`. Free accounts get
 }
 
 @media (max-width: 34rem) {
-  .agent-hero h1 { font-size: 2rem; }
   .agent-fact { grid-template-columns: 1fr; gap: 0.25rem; }
 }
 `}
