@@ -1,0 +1,331 @@
+---
+title: "Agent setup"
+sidebarTitle: "Agent setup"
+description: "Hand one line to your coding agent and it installs squirrelscan, wires up MCP, and audits your website."
+icon: "bot"
+mode: "custom"
+---
+
+{/* `mode: custom` hands us the bare slot, so the prose class the default
+     shell would have applied has to come from here. */}
+<div class="agent-setup-page prose-tang">
+
+<div class="agent-hero">
+  <p class="agent-hero-eyebrow">Agent setup</p>
+  <h1>Give your agent the keys</h1>
+  <p class="agent-hero-sub">
+    One line, pasted into any coding agent. It installs the CLI, wires up MCP,
+    audits your website, and starts fixing what it finds. You go and do
+    something else.
+  </p>
+
+  <div class="agent-prompt">
+    <div class="agent-prompt-bar">
+      <span class="agent-prompt-dot" /><span class="agent-prompt-dot" /><span class="agent-prompt-dot" />
+      <span class="agent-prompt-title">the whole setup</span>
+    </div>
+    <div class="agent-prompt-body">
+      <span class="agent-prompt-caret">&gt;</span>
+      <code>Fetch and follow the setup instructions for squirrelscan at https://docs.squirrelscan.com/agent-setup/prompt.md</code>
+    </div>
+    <div class="agent-prompt-foot">
+      <CopyPrompt
+        href="/agent-setup/prompt.md"
+        subject="squirrelscan"
+        icons={[
+          "/logo/agents/claude-code.png",
+          "/logo/agents/codex.png",
+          "/logo/agents/cursor.png",
+          "/logo/agents/opencode.png",
+        ]}
+        title="Sets your agent up for squirrelscan"
+      />
+      <span class="agent-prompt-note">Works in all six below. And most of the ones that are not.</span>
+    </div>
+  </div>
+</div>
+
+## Rather do it by hand
+
+Fair enough. Six agents we actually test against, each with a real guide. Any
+other MCP client works too: see [MCP clients](/developers/mcp-clients).
+
+<div class="agent-grid">
+  <a class="agent-card" href="/developers/agents/claude-code">
+    <img src="/logo/agents/claude-code.png" alt="" />
+    <span class="agent-card-name">Claude Code</span>
+    <span class="agent-card-vendor">anthropic</span>
+    <span class="agent-card-desc">Install the plugin and get skills and MCP in one go, or add MCP on its own.</span>
+    <span class="agent-card-cta">Guide →</span>
+  </a>
+  <a class="agent-card" href="/developers/agents/codex">
+    <img src="/logo/agents/codex.png" alt="" />
+    <span class="agent-card-name">Codex</span>
+    <span class="agent-card-vendor">openai</span>
+    <span class="agent-card-desc">One <code>codex mcp add</code>, or a block in <code>~/.codex/config.toml</code>.</span>
+    <span class="agent-card-cta">Guide →</span>
+  </a>
+  <a class="agent-card" href="/developers/agents/cursor">
+    <img src="/logo/agents/cursor.png" alt="" />
+    <span class="agent-card-name">Cursor</span>
+    <span class="agent-card-vendor">cursor</span>
+    <span class="agent-card-desc">One-click install, or two lines in <code>mcp.json</code> if you prefer to see the wiring.</span>
+    <span class="agent-card-cta">Guide →</span>
+  </a>
+  <a class="agent-card" href="/developers/agents/opencode">
+    <img src="/logo/agents/opencode.png" alt="" />
+    <span class="agent-card-name">opencode</span>
+    <span class="agent-card-vendor">opencode</span>
+    <span class="agent-card-desc">Open source, terminal native. Remote MCP in <code>opencode.json</code>.</span>
+    <span class="agent-card-cta">Guide →</span>
+  </a>
+  <a class="agent-card" href="/developers/mcp-clients">
+    <img src="/logo/agents/copilot.svg" alt="" />
+    <span class="agent-card-name">Copilot</span>
+    <span class="agent-card-vendor">github</span>
+    <span class="agent-card-desc">Editor extension and CLI with agent mode. Add squirrelscan as an HTTP MCP server.</span>
+    <span class="agent-card-cta">Guide →</span>
+  </a>
+  <a class="agent-card" href="/developers/mcp-clients">
+    <img src="/logo/agents/windsurf.png" alt="" />
+    <span class="agent-card-name">Windsurf</span>
+    <span class="agent-card-vendor">cognition</span>
+    <span class="agent-card-desc">Agentic IDE with Cascade. Add squirrelscan as an HTTP MCP server.</span>
+    <span class="agent-card-cta">Guide →</span>
+  </a>
+</div>
+
+## What it can do once it is in
+
+<div class="agent-facts">
+  <div class="agent-fact">
+    <span class="agent-fact-key">Audit</span>
+    <span class="agent-fact-val">267 rules across SEO, performance, security, accessibility, and agent experience.</span>
+  </div>
+  <div class="agent-fact">
+    <span class="agent-fact-key">Read</span>
+    <span class="agent-fact-val">Every issue carries a rule id, a severity, the affected URL, and the fix. Structured tool output, not a PDF.</span>
+  </div>
+  <div class="agent-fact">
+    <span class="agent-fact-key">Track</span>
+    <span class="agent-fact-val">Cloud audits keep a per-website issue tracker your agent can read and comment on.</span>
+  </div>
+  <div class="agent-fact">
+    <span class="agent-fact-key">Spend</span>
+    <span class="agent-fact-val">Nothing, locally. Local audits need no account and cost no credits.</span>
+  </div>
+</div>
+
+<Note>
+Cloud features (AI page analysis, browser rendering, the shared issue tracker,
+published reports) need an account: run `squirrel auth login`. Free accounts get
+500 credits a month, no card.
+</Note>
+
+</div>
+
+<style>
+{`
+/* This page follows the squirrelscan design system, not the docs prose
+   defaults: mono type throughout, warm cream surfaces, green primary with the
+   orange accent used sparingly, and a terminal block as the one piece of high
+   contrast on the page. */
+.agent-setup-page {
+  --sq-green: oklch(0.52 0.12 145);
+  --sq-orange: oklch(0.62 0.14 45);
+  --sq-term-bg: oklch(0.18 0.01 260);
+  --sq-term-text: oklch(0.8 0.12 145);
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 5rem;
+}
+
+.agent-hero {
+  padding: 3.5rem 0 3rem;
+}
+.agent-hero-eyebrow {
+  font-family: var(--tangly-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sq-orange);
+  margin: 0 0 0.75rem;
+}
+.agent-hero h1 {
+  font-size: 2.5rem;
+  line-height: 1.1;
+  margin: 0 0 1rem;
+  border-bottom: 0;
+}
+.agent-hero-sub {
+  max-width: 36rem;
+  margin: 0;
+  font-size: 1.0625rem;
+  color: var(--tangly-color-muted);
+}
+
+/* Terminal block. Showing the prompt beats hiding it behind a button: you can
+   read exactly what is going on your clipboard before you paste it into
+   something that will act on it. */
+.agent-prompt {
+  margin-top: 2.25rem;
+  border: 1px solid var(--tangly-color-border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+.agent-prompt-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--tangly-color-bg-elevated);
+  border-bottom: 1px solid var(--tangly-color-border);
+}
+.agent-prompt-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--tangly-color-border);
+}
+.agent-prompt-title {
+  margin-left: 0.4rem;
+  font-family: var(--tangly-font-mono);
+  font-size: 0.6875rem;
+  color: var(--tangly-color-muted);
+}
+.agent-prompt-body {
+  display: flex;
+  gap: 0.6rem;
+  padding: 1rem 1rem 1.1rem;
+  background: var(--sq-term-bg);
+}
+.agent-prompt-caret {
+  color: var(--sq-term-text);
+  font-family: var(--tangly-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  user-select: none;
+}
+/* Scoped under .prose-tang deliberately: the theme styles inline code as a
+   light chip (background + hairline border), which is invisible on the
+   terminal's dark surface. Matching its specificity is the only way to undo
+   it without !important. */
+.prose-tang .agent-prompt-body code {
+  font-family: var(--tangly-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #e8e8e8;
+  word-break: break-word;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.agent-prompt-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--tangly-color-border);
+}
+.agent-prompt-note {
+  font-size: 0.75rem;
+  color: var(--tangly-color-muted);
+}
+
+/* Agent grid. Hairline gaps come from the grid background showing through, so
+   each cell needs an opaque surface of its own. */
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1px;
+  background: var(--tangly-color-border);
+  border: 1px solid var(--tangly-color-border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+  margin: 1.5rem 0;
+}
+.agent-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "icon name"
+    "icon vendor"
+    "desc desc"
+    "cta  cta";
+  align-items: center;
+  gap: 0 0.65rem;
+  padding: 1.1rem;
+  background: var(--tangly-color-bg);
+  text-decoration: none;
+  color: inherit;
+  transition: background 120ms;
+}
+.agent-card:hover { background: var(--tangly-color-bg-elevated); }
+.agent-card img {
+  grid-area: icon;
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: contain;
+}
+.agent-card-name {
+  grid-area: name;
+  align-self: end;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.agent-card-vendor {
+  grid-area: vendor;
+  align-self: start;
+  font-family: var(--tangly-font-mono);
+  font-size: 0.6875rem;
+  color: var(--tangly-color-muted);
+}
+.agent-card-desc {
+  grid-area: desc;
+  margin-top: 0.7rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--tangly-color-muted);
+}
+.agent-card-cta {
+  grid-area: cta;
+  margin-top: 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--sq-green);
+}
+
+/* Replaces a headerless markdown table, which rendered an empty header row. */
+.agent-facts {
+  border: 1px solid var(--tangly-color-border);
+  border-radius: 0.375rem;
+  margin: 1.5rem 0;
+}
+.agent-fact {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--tangly-color-border);
+}
+.agent-fact:last-child { border-bottom: 0; }
+.agent-fact-key {
+  font-family: var(--tangly-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sq-green);
+  padding-top: 0.15rem;
+}
+.agent-fact-val {
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 34rem) {
+  .agent-hero h1 { font-size: 2rem; }
+  .agent-fact { grid-template-columns: 1fr; gap: 0.25rem; }
+}
+`}
+</style>
