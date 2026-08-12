@@ -98,9 +98,11 @@ Or use environment-specific config files:
 
 Project data is stored in `~/.squirrel/projects/<project-name>/`:
 
-| File | Contents |
-|------|----------|
-| `project.db` | SQLite database with crawl sessions, pages, and audit results |
+<FileTree>
+- ~/.squirrel/projects/
+  - **&lt;project-name&gt;**/
+    - project.db SQLite database with crawl sessions, pages, and audit results
+</FileTree>
 
 You can inspect the database directly or use the CLI:
 
@@ -150,10 +152,14 @@ squirrel audit https://example.com -n example-2024-02
 
 ## Project storage location
 
-All projects are stored in:
+All projects are stored under a single root, and each project gets its own
+subdirectory with a SQLite database containing all crawl and audit data:
 
-```
-~/.squirrel/projects/
-```
-
-Each project gets its own subdirectory with a SQLite database containing all crawl and audit data.
+<FileTree>
+- **~/.squirrel/projects/** every project lives here
+  - example-com/
+    - project.db
+  - my-app-dev/
+    - project.db
+  - ...
+</FileTree>
