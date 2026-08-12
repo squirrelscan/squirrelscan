@@ -376,13 +376,13 @@ Turn `respect_robots` on when auditing a site you don't own, or when you want a 
 
 Crawl data is stored in SQLite databases organized by domain:
 
-```
-~/.squirrel/projects/
-├── example-com/
-│   └── project.db      # All crawl sessions for example.com
-├── blog-example-com/
-│   └── project.db      # Separate for subdomains
-```
+<FileTree>
+- ~/.squirrel/projects/
+  - example-com/
+    - project.db all crawl sessions for example.com
+  - blog-example-com/
+    - project.db separate for subdomains
+</FileTree>
 
 Each database contains:
 - **crawls** - Session metadata and config
