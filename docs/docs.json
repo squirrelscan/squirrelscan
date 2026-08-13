@@ -242,7 +242,8 @@
                   "rules/content/quality",
                   "rules/content/stale-copyright",
                   "rules/content/mojibake",
-                  "rules/content/thin-vs-site-norm"
+                  "rules/content/thin-vs-site-norm",
+                  "rules/content/title-pattern-outlier"
                 ]
               },
               {
