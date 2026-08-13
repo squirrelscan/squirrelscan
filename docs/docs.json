@@ -190,6 +190,7 @@
                   "rules/core/meta-description",
                   "rules/core/canonical",
                   "rules/core/canonical-header",
+                  "rules/core/canonical-form-drift",
                   "rules/core/h1",
                   "rules/core/robots-meta",
                   "rules/core/nosnippet",
