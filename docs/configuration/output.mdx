@@ -260,14 +260,12 @@ For a 51-page audit:
 </score>
 <summary passed="83" warnings="13" failed="9"/>
 <issues>
- <category name="Content" errors="2" warnings="3">
-  <rule id="content/word-count" severity="warning" status="warn">
-   Low word count detected
-   Desc: Pages should have sufficient content for good SEO
-   Fix: Add more relevant content to improve page depth
-   Pages (3): /blog/post-1, /blog/post-2, /about
-  </rule>
- </category>
+ <rule id="content/word-count" severity="warning" category="Content" group="seo" status="warn">
+  Low word count detected
+  Desc: Pages should have sufficient content for good SEO
+  Fix: Add more relevant content to improve page depth
+  Pages (3): /blog/post-1, /blog/post-2, /about
+ </rule>
 </issues>
 </audit>
 ```
@@ -329,20 +327,18 @@ See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/squirrelscan/blob/main/sk
     </categories>
   </score>
   <issues>
-    <category>
-      <name>Content</name>
-      <rules>
-        <rule>
-          <id>content/word-count</id>
-          <description>Pages should have sufficient content</description>
-          <solution>Add more relevant content</solution>
-          <pages>
-            <page>/blog/post-1</page>
-            <page>/blog/post-2</page>
-          </pages>
-        </rule>
-      </rules>
-    </category>
+    <rule id="content/word-count" severity="warning" category="Content" group="seo">
+      <name>Word Count</name>
+      <description>Pages should have sufficient content</description>
+      <solution>Add more relevant content</solution>
+      <check name="word-count" status="warn">
+        <message>Low word count: 150 words (min: 300)</message>
+        <affected-pages count="2" examples="2" has-more="false">
+          <page url="https://example.com/blog/post-1"/>
+          <page url="https://example.com/blog/post-2"/>
+        </affected-pages>
+      </check>
+    </rule>
   </issues>
 </audit>
 ```

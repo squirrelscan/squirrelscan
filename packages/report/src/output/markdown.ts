@@ -5,7 +5,7 @@ import type { AuditReport } from "../types";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
-import { groupIssuesByCategory, groupCategoriesByGroup } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE } from "../editor-summary";
@@ -240,167 +240,166 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("## Issues");
     lines.push("");
 
-    // Group → category → rules (#626): categories nest under their group heading.
-    for (const group of groupCategoriesByGroup(categoryIssues)) {
-      lines.push(`### ${group.name}`);
+    // Severity → category → weight (#1536): one global order under severity
+    // headings, so the whole "fix these first" block is contiguous. A category
+    // can appear under more than one severity, which is the point.
+    const flatIssues = flattenIssuesBySeverity(categoryIssues);
+    const subBase = 5;
+    let lastSeverity: string | undefined;
+    let lastCategory: string | undefined;
+    let lastSub: string | undefined;
+    for (const rule of flatIssues) {
+      if (rule.severity !== lastSeverity) {
+        lastSeverity = rule.severity;
+        lastCategory = undefined;
+        const bucket = flatIssues.filter((r) => r.severity === rule.severity);
+        lines.push(`### ${severityLabel(rule.severity, { titleCase: true, plural: true })}`);
+        lines.push("");
+        lines.push(`*${bucket.length} rule(s)*`);
+        lines.push("");
+      }
+      if (rule.categoryCode !== lastCategory) {
+        lastCategory = rule.categoryCode;
+        lastSub = undefined;
+        lines.push(`#### ${rule.categoryName}`);
+        lines.push("");
+      }
+      const hasSub = Boolean(rule.subcategory);
+      if (rule.subcategory && rule.subcategory !== lastSub) {
+        lastSub = rule.subcategory;
+        lines.push(`${"#".repeat(subBase)} ${getSubcategoryName(rule.subcategory)}`);
+        lines.push("");
+      }
+      const severityBadge =
+        rule.severity === "error"
+          ? "**[ERROR]**"
+          : rule.severity === "warning"
+            ? "**[WARN]**"
+            : `*[${severityLabel(rule.severity, { titleCase: true })}]*`;
+      // Demote one level under a sub-header so the hierarchy stays valid.
+      const ruleHeading = "#".repeat(hasSub ? subBase + 1 : subBase);
+      lines.push(`${ruleHeading} ${rule.name} ${severityBadge}`);
       lines.push("");
-      lines.push(`*${group.failCount} error(s), ${group.warnCount} warning(s)*`);
+      lines.push(`\`${rule.id}\``);
       lines.push("");
 
-      // Single-category group (#626): skip the redundant category heading and
-      // promote deeper headings up one level so md heading order stays valid.
-      const single = group.categories.length === 1;
-      const subBase = single ? 4 : 5;
-      for (const category of group.categories) {
-        if (!single) {
-          lines.push(`#### ${category.name}`);
+      if (rule.description) {
+        lines.push(`> ${rule.description}`);
+        lines.push("");
+      }
+
+      if (rule.solution) {
+        lines.push("**Solution:**");
+        lines.push("");
+        lines.push(rule.solution);
+        lines.push("");
+      }
+
+      // #1135: carried-forward rollup + the "clean on every page checked
+      // this run, only carried pages still red" note.
+      const carriedRollup = ruleCarriedRollupLine(
+        ruleCarriedPageCount(rule.checks),
+        ruleAffectedPageCount(rule.checks),
+      );
+      if (carriedRollup) {
+        lines.push(`_${carriedRollup}_`);
+        lines.push("");
+      }
+      if (rule.mixedProvenanceNote) {
+        lines.push(`_${rule.mixedProvenanceNote}_`);
+        lines.push("");
+      }
+
+      lines.push("| Check | Status | Message |");
+      lines.push("|-------|--------|---------|");
+      for (const check of rule.checks) {
+        const statusIcon = check.status === "fail" ? "X" : "!";
+        const escapedMessage = escapeMarkdownTableCell(check.message + carriedTag(check));
+        lines.push(`| ${check.name} | ${statusIcon} ${check.status} | ${escapedMessage} |`);
+      }
+      lines.push("");
+
+      for (const check of rule.checks) {
+        // #1136 review round 3: a site-scope check (blocked-links,
+        // duplicate-title, sitemap-*) stores its affected pages ONLY on
+        // check.items[].sourcePages, not check.pages — reading check.pages
+        // alone left the per-rule rollup above (which DOES use the union)
+        // and this per-check list disagreeing: the rollup would say "N of
+        // M pages carried" while this block listed zero pages. Uses the
+        // SAME checkAffectedPages union html.tsx's PagesList uses.
+        // #1023 R-F: count is the AUTHORITATIVE affected-page total (from the
+        // shared accessor), the listed pages are a labeled example subset.
+        const ap = affectedPages(check);
+        if (ap.sample.length > 0) {
+          const materialized =
+            ap.sample.length > REPORT_PAGES_HARD_CAP
+              ? ap.sample.slice(0, REPORT_PAGES_HARD_CAP)
+              : ap.sample;
+          lines.push(
+            `<details><summary><strong>${check.name}:</strong> ${ap.count} page(s) affected</summary>`,
+          );
           lines.push("");
-          lines.push(`*${category.failCount} error(s), ${category.warnCount} warning(s)*`);
+          if (ap.count > materialized.length) {
+            lines.push(
+              `_Showing ${materialized.length} examples of ${ap.count} affected pages._`,
+            );
+            lines.push("");
+          }
+          // #1135: per-URL provenance — carriedPages is the exact subset
+          // (stamped per check before merging), not inferred from a ratio.
+          const carriedPageSet =
+            check.carriedPages && check.carriedPages.length > 0
+              ? new Set(check.carriedPages)
+              : undefined;
+          for (const page of materialized) {
+            const carried = carriedPageSet?.has(page) ? " (carried)" : "";
+            lines.push(`- [${getPathname(page) || "/"}](${page})${carried}`);
+          }
+          lines.push("");
+          lines.push("</details>");
           lines.push("");
         }
 
-        const hasSub = category.rules.some((r) => r.subcategory);
-        let lastSub: string | undefined;
-        for (const rule of category.rules) {
-          if (hasSub && rule.subcategory !== lastSub) {
-            lastSub = rule.subcategory;
-            if (rule.subcategory) {
-              lines.push(`${"#".repeat(subBase)} ${getSubcategoryName(rule.subcategory)}`);
-              lines.push("");
-            }
-          }
-          const severityBadge =
-            rule.severity === "error"
-              ? "**[ERROR]**"
-              : rule.severity === "warning"
-                ? "**[WARN]**"
-                : `*[${severityLabel(rule.severity, { titleCase: true })}]*`;
-          // Demote one level under a sub-header so the hierarchy stays valid.
-          const ruleHeading = "#".repeat(hasSub ? subBase + 1 : subBase);
-          lines.push(`${ruleHeading} ${rule.name} ${severityBadge}`);
-          lines.push("");
-          lines.push(`\`${rule.id}\``);
-          lines.push("");
-
-          if (rule.description) {
-            lines.push(`> ${rule.description}`);
-            lines.push("");
-          }
-
-          if (rule.solution) {
-            lines.push("**Solution:**");
-            lines.push("");
-            lines.push(rule.solution);
-            lines.push("");
-          }
-
-          // #1135: carried-forward rollup + the "clean on every page checked
-          // this run, only carried pages still red" note.
-          const carriedRollup = ruleCarriedRollupLine(
-            ruleCarriedPageCount(rule.checks),
-            ruleAffectedPageCount(rule.checks),
+        // Items already covered by the unified page list above (a pure
+        // page-URL id with no sourcePages) are dropped here so the same
+        // URL isn't listed twice; items with sourcePages or a non-URL id
+        // (a resource's own identity) keep their row.
+        const visibleItems = check.items?.filter((item) => !isRedundantPageItem(item));
+        if (visibleItems && visibleItems.length > 0) {
+          lines.push(
+            `<details><summary><strong>${check.name}:</strong> ${visibleItems.length} item(s)</summary>`,
           );
-          if (carriedRollup) {
-            lines.push(`_${carriedRollup}_`);
-            lines.push("");
-          }
-          if (rule.mixedProvenanceNote) {
-            lines.push(`_${rule.mixedProvenanceNote}_`);
-            lines.push("");
-          }
-
-          lines.push("| Check | Status | Message |");
-          lines.push("|-------|--------|---------|");
-          for (const check of rule.checks) {
-            const statusIcon = check.status === "fail" ? "X" : "!";
-            const escapedMessage = escapeMarkdownTableCell(check.message + carriedTag(check));
-            lines.push(`| ${check.name} | ${statusIcon} ${check.status} | ${escapedMessage} |`);
+          lines.push("");
+          for (const item of visibleItems) {
+            const label = item.label ?? item.id;
+            const isUrl =
+              item.id.startsWith("http://") ||
+              item.id.startsWith("https://") ||
+              item.id.startsWith("/");
+            const display = isUrl ? `[${label}](${item.id})` : label;
+            lines.push(`- ${display}`);
+            if (item.sourcePages && item.sourcePages.length > 0) {
+              for (const src of item.sourcePages.slice(0, REPORT_SOURCE_PAGES_PREVIEW)) {
+                lines.push(`  - from: [${getPathname(src) || "/"}](${src})`);
+              }
+              if (item.sourcePages.length > REPORT_SOURCE_PAGES_PREVIEW) {
+                // The capped preview here is just for per-item context —
+                // the full, interactive list is the unified page block
+                // above, which already covers this item's sourcePages.
+                lines.push(
+                  `  - +${item.sourcePages.length - REPORT_SOURCE_PAGES_PREVIEW} more (see full list above)`,
+                );
+              }
+            }
           }
           lines.push("");
-
-          for (const check of rule.checks) {
-            // #1136 review round 3: a site-scope check (blocked-links,
-            // duplicate-title, sitemap-*) stores its affected pages ONLY on
-            // check.items[].sourcePages, not check.pages — reading check.pages
-            // alone left the per-rule rollup above (which DOES use the union)
-            // and this per-check list disagreeing: the rollup would say "N of
-            // M pages carried" while this block listed zero pages. Uses the
-            // SAME checkAffectedPages union html.tsx's PagesList uses.
-            // #1023 R-F: count is the AUTHORITATIVE affected-page total (from the
-            // shared accessor), the listed pages are a labeled example subset.
-            const ap = affectedPages(check);
-            if (ap.sample.length > 0) {
-              const materialized =
-                ap.sample.length > REPORT_PAGES_HARD_CAP
-                  ? ap.sample.slice(0, REPORT_PAGES_HARD_CAP)
-                  : ap.sample;
-              lines.push(
-                `<details><summary><strong>${check.name}:</strong> ${ap.count} page(s) affected</summary>`,
-              );
-              lines.push("");
-              if (ap.count > materialized.length) {
-                lines.push(
-                  `_Showing ${materialized.length} examples of ${ap.count} affected pages._`,
-                );
-                lines.push("");
-              }
-              // #1135: per-URL provenance — carriedPages is the exact subset
-              // (stamped per check before merging), not inferred from a ratio.
-              const carriedPageSet =
-                check.carriedPages && check.carriedPages.length > 0
-                  ? new Set(check.carriedPages)
-                  : undefined;
-              for (const page of materialized) {
-                const carried = carriedPageSet?.has(page) ? " (carried)" : "";
-                lines.push(`- [${getPathname(page) || "/"}](${page})${carried}`);
-              }
-              lines.push("");
-              lines.push("</details>");
-              lines.push("");
-            }
-
-            // Items already covered by the unified page list above (a pure
-            // page-URL id with no sourcePages) are dropped here so the same
-            // URL isn't listed twice; items with sourcePages or a non-URL id
-            // (a resource's own identity) keep their row.
-            const visibleItems = check.items?.filter((item) => !isRedundantPageItem(item));
-            if (visibleItems && visibleItems.length > 0) {
-              lines.push(
-                `<details><summary><strong>${check.name}:</strong> ${visibleItems.length} item(s)</summary>`,
-              );
-              lines.push("");
-              for (const item of visibleItems) {
-                const label = item.label ?? item.id;
-                const isUrl =
-                  item.id.startsWith("http://") ||
-                  item.id.startsWith("https://") ||
-                  item.id.startsWith("/");
-                const display = isUrl ? `[${label}](${item.id})` : label;
-                lines.push(`- ${display}`);
-                if (item.sourcePages && item.sourcePages.length > 0) {
-                  for (const src of item.sourcePages.slice(0, REPORT_SOURCE_PAGES_PREVIEW)) {
-                    lines.push(`  - from: [${getPathname(src) || "/"}](${src})`);
-                  }
-                  if (item.sourcePages.length > REPORT_SOURCE_PAGES_PREVIEW) {
-                    // The capped preview here is just for per-item context —
-                    // the full, interactive list is the unified page block
-                    // above, which already covers this item's sourcePages.
-                    lines.push(
-                      `  - +${item.sourcePages.length - REPORT_SOURCE_PAGES_PREVIEW} more (see full list above)`,
-                    );
-                  }
-                }
-              }
-              lines.push("");
-              lines.push("</details>");
-              lines.push("");
-            }
-          }
-
-          lines.push("---");
+          lines.push("</details>");
           lines.push("");
         }
       }
+
+      lines.push("---");
+      lines.push("");
     }
   } else if (report.status !== "failed" && report.status !== "blocked") {
     // #792: only claim "No issues found" for a real completed audit. A 0-page
