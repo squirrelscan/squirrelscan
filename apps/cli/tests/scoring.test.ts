@@ -254,6 +254,72 @@ describe("calculateHealthScore", () => {
     expect(score.overall).toBe(37);
   });
 
+  test("applies penalty for missing robots.txt with fail status (#1535)", () => {
+    // A missing robots.txt is reported as "fail" (not "warn") so the rule
+    // sorts into the error block, but the -15% penalty must still apply.
+    const mockRobotsMeta = {
+      id: "crawl/robots-txt",
+      name: "Robots.txt",
+      description: "Robots.txt check",
+      solution: "Add robots.txt",
+      category: "crawl" as const,
+      scope: "site" as const,
+      severity: "error" as const,
+      weight: 8,
+    };
+
+    const results = new Map<string, RuleRunResult>([
+      [
+        "core/test-rule",
+        {
+          meta: mockCoreMeta,
+          checks: [
+            { name: "test1", status: "pass", message: "Passed" },
+            { name: "test2", status: "warn", message: "Warning" },
+          ],
+        },
+      ],
+      [
+        "crawl/robots-txt",
+        {
+          meta: mockRobotsMeta,
+          checks: [
+            {
+              name: "robots-txt-exists",
+              status: "fail",
+              message: "No robots.txt found",
+            },
+          ],
+        },
+      ],
+    ]);
+
+    const withPenalty = calculateHealthScore({ results });
+
+    // Same shape but robots-txt-exists passes, isolating the penalty's effect.
+    const passingResults = new Map<string, RuleRunResult>(results);
+    passingResults.set("crawl/robots-txt", {
+      meta: mockRobotsMeta,
+      checks: [
+        {
+          name: "robots-txt-exists",
+          status: "pass",
+          message: "robots.txt exists",
+        },
+      ],
+    });
+    const withoutFailingCheck = calculateHealthScore({
+      results: passingResults,
+    });
+
+    // A failed robots-txt-exists check both drags down the base score (0
+    // credit vs full credit) AND applies the -15% multiplier on top of that.
+    // Base: (10*0.75 + 8*0) / 18 = 41.67%, Curve: 100*0.4167^1.2 ≈ 35,
+    // Penalty: 15% reduction, Overall: 35 × 0.85 ≈ 30
+    expect(withPenalty.overall).toBe(30);
+    expect(withPenalty.overall!).toBeLessThan(withoutFailingCheck.overall!);
+  });
+
   test("applies penalty for robots blocking all", () => {
     const mockRobotsMeta = {
       id: "crawl/robots-txt",
