@@ -610,6 +610,21 @@ export interface PageFeatureRow {
   napTelLink: boolean;
   /** The page carries at least one `mailto:` link. */
   napMailtoLink: boolean;
+  /**
+   * The page's site-chrome assets, from `extractSiteChromeSignal`
+   * (@squirrelscan/rules). `social/asset-divergence` compares these across the
+   * corpus to find pages running a different (usually stale) layout, so the SAME
+   * extractor feeds this row and the rule's legacy `ctx.site.pages` path — the
+   * two must never diverge. Each is bounded to
+   * `SITE_CHROME_MAX_VALUE_CHARS` (200).
+   *
+   * Absolute URL of the primary `<link rel="icon">`, or null.
+   */
+  faviconHref: string | null;
+  /** `<meta name="theme-color">` content, lowercased, or null. */
+  themeColor: string | null;
+  /** Absolute URL of the page's `og:image` (the default/fallback one), or null. */
+  ogImage: string | null;
 }
 
 /** Which hashed field a {@link SiteQuery.duplicateGroups} scan is keyed on. */

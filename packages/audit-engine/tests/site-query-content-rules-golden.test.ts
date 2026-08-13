@@ -75,6 +75,9 @@ function feat(row: Row): PageFeatureRow {
     napAddressFormat: null,
     napTelLink: false,
     napMailtoLink: false,
+    faviconHref: null,
+    themeColor: null,
+    ogImage: null,
   };
 }
 

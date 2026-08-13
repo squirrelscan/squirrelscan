@@ -327,6 +327,9 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     napAddressFormat: null,
     napTelLink: false,
     napMailtoLink: false,
+    faviconHref: null,
+    themeColor: null,
+    ogImage: null,
     ...over,
   };
 }

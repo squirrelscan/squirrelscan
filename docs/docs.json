@@ -288,6 +288,7 @@
                 "group": "Social Media",
                 "pages": [
                   "rules/social/index",
+                  "rules/social/asset-divergence",
                   "rules/social/og-image-size",
                   "rules/social/og-url-match",
                   "rules/social/social-profiles",

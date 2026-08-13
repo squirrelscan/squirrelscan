@@ -17,6 +17,14 @@ export {
   ruleApplies,
 } from "./applicability";
 export { setRequestAsync, setLlmCall } from "./tools";
+// Page-time extractor for the social/asset-divergence page_features columns —
+// audit-engine's extractPageFeatures calls the SAME code the rule's legacy path
+// does, so the stored scalars and the re-derived ones can never diverge (#1371).
+export {
+  emptySiteChromeSignal,
+  extractSiteChromeSignal,
+  type SiteChromeSignal,
+} from "./social/asset-divergence";
 
 // Domain re-exports
 export * as content from "./content";
