@@ -4,6 +4,7 @@ import type { Rule } from "../types";
 
 import { articleSchemaRule } from "./article";
 import { breadcrumbSchemaRule } from "./breadcrumb";
+import { schemaCoverageOutlierRule } from "./coverage-outlier";
 import { faqSchemaRule } from "./faq";
 import { jsonLdValidRule } from "./json-ld-valid";
 import { localBusinessSchemaRule } from "./local-business";
@@ -24,6 +25,7 @@ export const rules: Rule[] = [
   organizationSchemaRule,
   videoSchemaRule,
   reviewSchemaRule,
+  schemaCoverageOutlierRule,
 ];
 
 export {
@@ -35,6 +37,7 @@ export {
   organizationSchemaRule,
   productSchemaRule,
   reviewSchemaRule,
+  schemaCoverageOutlierRule,
   videoSchemaRule,
   websiteSearchSchemaRule,
 };

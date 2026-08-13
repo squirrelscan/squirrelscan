@@ -1,0 +1,76 @@
+---
+title: "Structured Data Coverage Outlier"
+description: "Finds pages missing the structured data the rest of their page type carries"
+---
+
+Finds pages missing the structured data the rest of their page type carries
+
+| | |
+|---|---|
+| **Rule ID** | `schema/coverage-outlier` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## How it works
+
+"This page has no structured data" is weak advice, because plenty of pages
+legitimately carry none. "40 of 45 product pages have `Product` schema, these 5 do
+not" is strong advice, because the site has already proved it knows how to emit the
+markup and simply missed some pages.
+
+So this rule never asks whether a page has schema in the abstract. It groups the
+crawled pages by page type (product, article, category, docs, and so on), works out
+which schema.org `@type`s most of each group agrees on, and reports only the members
+that break their own group's pattern.
+
+It stays quiet unless it has grounds to speak:
+
+- Fewer than 10 crawled pages: no site norm exists, so the rule is skipped.
+- Fewer than 8 pages of a given page type: that type is dropped, not guessed at.
+- A `@type` carried by under 70% of a page type: the group has no established
+  pattern, so nothing in it is a deviant. A site with no structured data anywhere
+  therefore reports nothing here. That is the job of the per-type rules such as
+  [Product Schema](/rules/schema/product) and [Article Schema](/rules/schema/article).
+
+Pages built from one template all carry the same markup, so they sit inside their
+own norm and are never reported. Page types the classifier could not identify are
+excluded, as are pages that did not return a 2xx.
+
+The finding names the ratio it is arguing from, and lists the pages that break it.
+
+## Solution
+
+These pages break your own site's pattern: most pages of the same type emit this
+schema `@type` and these do not. That is almost always a template or CMS gap rather
+than a deliberate choice, a product without its `Product` markup or an article
+without its `Article` markup, and it costs those pages the rich results their
+siblings are eligible for. Find where the working pages get their JSON-LD and make
+sure the listed pages run through the same path. If a page genuinely should not
+carry the markup (a discontinued product stub, a landing page filed under the same
+type), leave it: the point is that it is currently the exception.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/coverage-outlier"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/coverage-outlier"]
+disable = ["*"]
+```

@@ -21,7 +21,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 ## Features
 
-- **267 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **269 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **Fast crawler** - Highly optimized memory efficient crawler 
 - **Agent Experience** - Audit agent experience to assist agents in using your site
 - **Security Audit** - Detect phishing kits, leaked credentials, and more 
@@ -59,7 +59,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
 | Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
 
-**Total: 267 rules across 21 categories**
+**Total: 269 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
