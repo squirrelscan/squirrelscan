@@ -46,9 +46,15 @@ rather than deviate from it. A consistently param-bearing canonical is a form li
 any other: if every page does it, the site is not contradicting itself and nothing
 is reported.
 
-Two axes are only measured where the page had a choice. The site root (`/`) and
-file-like paths (`/feed.xml`) never carry a trailing slash, so they are left out of
-that comparison entirely.
+Two refinements keep the trailing-slash axis honest, because it is the one most
+likely to accuse a healthy site:
+
+- It is compared **within a section** (the first path segment of the canonical),
+  not site-wide. Using a slash in `/blog/how-to/` and none in `/product` is a normal
+  shape, so each section is judged against itself and needs its own 10 pages and 70%
+  agreement.
+- The site root (`/`) and file-like paths (`/feed.xml`) never carry a trailing slash,
+  so they are left out of that comparison entirely.
 
 ## Validity is a different rule
 
@@ -61,6 +67,11 @@ This rule reports **form only**, so one root cause is never reported twice:
   as well, and its form follows the other site's conventions, so it is excluded here.
 
 Pages in any of those states are dropped before the comparison runs.
+
+[Canonical URL](/rules/core/canonical) also notes, as `info`, that a page's canonical
+points somewhere other than itself. That is a per-page observation with no claim
+about the rest of the site, and it is exactly the input this rule reads: the finding
+here is the site-wide pattern those individual notes add up to.
 
 ## Solution
 

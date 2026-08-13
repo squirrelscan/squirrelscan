@@ -258,7 +258,7 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
     expect(check.value).toBe(30);
     expect(check.message).toContain("scheme https");
     expect(check.message).toContain("host apex");
-    expect(check.message).toContain("trailing slash no trailing slash");
+    expect(check.message).toContain("trailing slash in / no trailing slash");
     expect(check.message).toContain("tracking params tracking params stripped");
   });
 
@@ -276,7 +276,7 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
     );
     expect(check.status).toBe("pass");
     expect(check.message).toContain("host www");
-    expect(check.message).toContain("trailing slash trailing slash");
+    expect(check.message).toContain("trailing slash in / trailing slash");
   });
 
   test("the site root and file-like paths do not join the trailing-slash norm", async () => {
@@ -293,6 +293,49 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
       (n) => n.dimension === "trailing slash"
     );
     expect(slashNorm?.pages).toBe(12);
+  });
+
+  test("a section that uses trailing slashes does not make the section that does not a deviant", async () => {
+    // The expensive false positive this rule has to avoid: /blog/ pages with a
+    // trailing slash and top-level /product pages without one is a normal shape,
+    // not a site contradicting itself. Each section is judged against itself.
+    const specs = [
+      ...Array.from({ length: 21 }, (_, i) => ({
+        url: `https://example.com/product-${i}`,
+        canonical: `https://example.com/product-${i}`,
+      })),
+      ...Array.from({ length: 12 }, (_, i) => ({
+        url: `https://example.com/blog/post-${i}/`,
+        canonical: `https://example.com/blog/post-${i}/`,
+      })),
+    ];
+    const check = await bothPaths(specs);
+    expect(check.status).toBe("pass");
+    expect(
+      (check.details?.norms as { dimension: string; scope: string; form: string }[])
+        .filter((n) => n.dimension === "trailing slash")
+        .map((n) => [n.scope, n.form])
+    ).toEqual([
+      ["/", "no trailing slash"],
+      ["/blog", "trailing slash"],
+    ]);
+  });
+
+  test("a section under the sample floor is dropped rather than judged by the rest of the site", async () => {
+    const specs = [
+      ...uniform(20, healthy),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        url: `https://example.com/blog/post-${i}/`,
+        canonical: `https://example.com/blog/post-${i}/`,
+      })),
+    ];
+    const check = await bothPaths(specs);
+    expect(check.status).toBe("pass");
+    expect(
+      (check.details?.norms as { dimension: string; scope: string }[])
+        .filter((n) => n.dimension === "trailing slash")
+        .map((n) => n.scope)
+    ).toEqual(["/"]);
   });
 
   test("query strings that are not tracking parameters never split the norm", async () => {
@@ -313,11 +356,12 @@ describe("core/canonical-form-drift — drift", () => {
     );
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0]?.label).toBe(
-      "26 of 30 canonicals use no trailing slash, these 4 use trailing slash"
+      "26 of 30 canonicals in / use no trailing slash, these 4 use trailing slash"
     );
     expect(check.items?.[0]?.sourcePages).toHaveLength(4);
     expect(check.items?.[0]?.meta).toEqual({
       dimension: "trailing slash",
+      scope: "/",
       norm: "no trailing slash",
       deviant: "trailing slash",
       have: 26,
@@ -349,6 +393,23 @@ describe("core/canonical-form-drift — drift", () => {
     expect(check.status).toBe("warn");
     expect(check.items?.[0]?.meta?.dimension).toBe("tracking params");
     expect(check.items?.[0]?.meta?.deviant).toBe("tracking params retained");
+  });
+
+  test("drift INSIDE a section is still caught, and named against that section", async () => {
+    const specs = [
+      ...uniform(20, healthy),
+      ...Array.from({ length: 14 }, (_, i) => ({
+        url: `https://example.com/blog/post-${i}`,
+        canonical: `https://example.com/blog/post-${i}${i < 12 ? "/" : ""}`,
+      })),
+    ];
+    const check = await bothPaths(specs);
+    expect(check.status).toBe("warn");
+    expect(check.items).toHaveLength(1);
+    expect(check.items?.[0]?.label).toBe(
+      "12 of 14 canonicals in /blog use trailing slash, these 2 use no trailing slash"
+    );
+    expect(check.items?.[0]?.meta?.scope).toBe("/blog");
   });
 
   test("fails once the drifted share crosses the fail threshold", async () => {

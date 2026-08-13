@@ -15,15 +15,23 @@
 //     canonical those two would already have something to say about. A page with
 //     no canonical, a relative one, an unparseable one, or one pointing at
 //     another registrable host is dropped from the sample before any comparison.
+//     core/canonical additionally emits an `info` on any non-self-referential
+//     canonical; that is a per-page note with no site-wide claim in it, and it is
+//     deliberately left alone - it is what this rule reads as its input, not a
+//     finding this rule repeats.
 //
 // Guards, in the order they matter:
 //   1. Site floor (CANONICAL_FORM_MIN_PAGES) - a small crawl has no norm.
-//   2. Per-dimension sample floor (CANONICAL_FORM_MIN_SAMPLE) - a dimension only
-//      a handful of pages can express is dropped, not guessed at.
-//   3. Modal agreement (CANONICAL_FORM_MIN_AGREEMENT) - a dimension needs a clear
+//   2. Per-bucket sample floor (CANONICAL_FORM_MIN_SAMPLE) - an axis only a
+//      handful of pages can express is dropped, not guessed at.
+//   3. Modal agreement (CANONICAL_FORM_MIN_AGREEMENT) - an axis needs a clear
 //      dominant form before the minority can be called deviant. A site that
 //      genuinely mixes forms 50/50 has no norm and produces no finding: that is a
 //      judgement call for a human, not an accusation from a rule.
+//   4. Sectioning (SECTIONED_DIMENSIONS) - the trailing-slash axis is compared
+//      within a section rather than site-wide, because using a slash in /blog and
+//      not in /product is a normal, healthy pattern and a site-wide vote would
+//      call the smaller section drift.
 //
 // Template-uniform pages are safe by construction: pages from one template emit
 // canonicals in one form, so they define the norm rather than deviate from it.
@@ -55,6 +63,7 @@ export const CANONICAL_FORM_FAIL_SHARE = 0.2;
 
 /** Caps on reported drifts / summarized norms, so one rule cannot bloat a report. */
 const CANONICAL_FORM_MAX_ITEMS = 10;
+const CANONICAL_FORM_MAX_NORMS = 10;
 
 /** Cap on URLs listed per drift, so one broken template cannot spray a report. */
 const CANONICAL_FORM_MAX_URLS_PER_ITEM = 20;
@@ -89,6 +98,16 @@ const TRACKING_PARAM_NAMES = new Set([
 const DIMENSIONS = ["scheme", "host", "trailing slash", "tracking params"] as const;
 type Dimension = (typeof DIMENSIONS)[number];
 
+/**
+ * Scheme, host and tracking params are ONE decision for a whole site, so they are
+ * compared site-wide. Trailing slash is not: plenty of healthy sites use a slash
+ * for one section (`/blog/how-to/`) and none for another (`/product`), and a
+ * site-wide comparison would call the smaller section drift. So that axis is
+ * compared inside a section - the first path segment of the canonical - and each
+ * section must clear the sample floor and the agreement bar on its own.
+ */
+const SECTIONED_DIMENSIONS = new Set<Dimension>(["trailing slash"]);
+
 /** One page's contribution, from either path. */
 interface CanonicalPageRecord {
   url: string;
@@ -97,6 +116,9 @@ interface CanonicalPageRecord {
 }
 
 interface DimensionSample {
+  dimension: Dimension;
+  /** "" for a site-wide axis; the section path (e.g. "/blog") otherwise. */
+  scope: string;
   /** Parallel arrays: the page url and the form it expressed on this axis. */
   urls: string[];
   forms: string[];
@@ -105,14 +127,14 @@ interface DimensionSample {
 interface CanonicalRollup {
   /** Pages seen by the rule (both paths count the same universe). */
   pageCount: number;
-  /** Pages with a canonical this rule is allowed to compare (see precedence). */
-  sampleUrls: string[];
-  samples: Map<Dimension, DimensionSample>;
+  /** Keyed `dimension scope`; insertion order is crawl order on both paths. */
+  samples: Map<string, DimensionSample>;
 }
 
 /** One "N of M canonicals use X, these N use Y" finding. */
 interface FormDrift {
   dimension: Dimension;
+  scope: string;
   norm: string;
   deviant: string;
   have: number;
@@ -122,14 +144,24 @@ interface FormDrift {
 
 interface JudgedDimension {
   dimension: Dimension;
+  scope: string;
   pages: number;
   norm: string;
 }
 
 function emptyRollup(): CanonicalRollup {
-  const samples = new Map<Dimension, DimensionSample>();
-  for (const dimension of DIMENSIONS) samples.set(dimension, { urls: [], forms: [] });
-  return { pageCount: 0, sampleUrls: [], samples };
+  return { pageCount: 0, samples: new Map() };
+}
+
+/**
+ * The section a sectioned axis compares within: the first path segment, but only
+ * for paths that HAVE a sub-path. A flat site (`/about`, `/pricing`) keeps every
+ * page in the one root section rather than shattering into a section per page,
+ * where nothing could ever reach the sample floor.
+ */
+function sectionOf(pathname: string): string {
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.length > 1 ? `/${segments[0]}` : "/";
 }
 
 function stripWww(host: string): string {
@@ -182,10 +214,15 @@ function accumulatePage(rollup: CanonicalRollup, record: CanonicalPageRecord): v
     return;
   }
 
-  rollup.sampleUrls.push(record.url);
   const push = (dimension: Dimension, form: string | null): void => {
     if (!form) return;
-    const sample = rollup.samples.get(dimension)!;
+    const scope = SECTIONED_DIMENSIONS.has(dimension) ? sectionOf(target.pathname) : "";
+    const key = `${dimension} ${scope}`;
+    let sample = rollup.samples.get(key);
+    if (!sample) {
+      sample = { dimension, scope, urls: [], forms: [] };
+      rollup.samples.set(key, sample);
+    }
     sample.urls.push(record.url);
     sample.forms.push(form);
   };
@@ -229,9 +266,21 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
   const judged: JudgedDimension[] = [];
   const drifts: FormDrift[] = [];
   const deviantPages = new Set<string>();
+  // Only pages inside a bucket that actually got judged. Pages an axis had to
+  // exclude (the site root on the trailing-slash axis, a section under the floor)
+  // must not dilute the deviant share they were never eligible for.
+  const judgedUrls = new Set<string>();
 
-  for (const dimension of DIMENSIONS) {
-    const sample = rollup.samples.get(dimension)!;
+  // Fixed axis order, sections sorted by path: neither path can depend on the
+  // order pages happened to arrive in.
+  const buckets = [...rollup.samples.values()].sort(
+    (a, b) =>
+      DIMENSIONS.indexOf(a.dimension) - DIMENSIONS.indexOf(b.dimension) ||
+      byString(a.scope, b.scope)
+  );
+
+  for (const sample of buckets) {
+    const { dimension, scope } = sample;
     const total = sample.forms.length;
     if (total < CANONICAL_FORM_MIN_SAMPLE) continue;
 
@@ -249,10 +298,11 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
     }
     if (normCount / total < CANONICAL_FORM_MIN_AGREEMENT) continue;
 
-    judged.push({ dimension, pages: total, norm });
+    judged.push({ dimension, scope, pages: total, norm });
 
     const deviantUrls = new Map<string, string[]>();
     for (const [i, form] of sample.forms.entries()) {
+      judgedUrls.add(sample.urls[i]!);
       if (form === norm) continue;
       const url = sample.urls[i]!;
       deviantPages.add(url);
@@ -266,6 +316,7 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
     )) {
       drifts.push({
         dimension,
+        scope,
         norm,
         deviant,
         have: normCount,
@@ -283,13 +334,21 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
     ];
   }
 
-  const judgedPages = rollup.sampleUrls.length;
-  const normSummary = judged.map((d) => `${d.dimension} ${d.norm}`).join(", ");
+  const judgedPages = judgedUrls.size;
+  const normSummary = judged
+    .slice(0, CANONICAL_FORM_MAX_NORMS)
+    .map((d) => `${d.dimension}${d.scope ? ` in ${d.scope}` : ""} ${d.norm}`)
+    .join(", ");
   const details: Record<string, unknown> = {
     judgedPages,
     judgedDimensions: judged.length,
     flaggedPages: deviantPages.size,
-    norms: judged.map((d) => ({ dimension: d.dimension, pages: d.pages, form: d.norm })),
+    norms: judged.slice(0, CANONICAL_FORM_MAX_NORMS).map((d) => ({
+      dimension: d.dimension,
+      scope: d.scope,
+      pages: d.pages,
+      form: d.norm,
+    })),
   };
 
   if (drifts.length === 0) {
@@ -304,20 +363,22 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
     ];
   }
 
-  // Widest drift first; dimension order then form name break ties so the list
-  // never depends on crawl order.
+  // Widest drift first; axis order, then section, then form name break ties so
+  // the list never depends on crawl order.
   drifts.sort(
     (a, b) =>
       b.deviantUrls.length - a.deviantUrls.length ||
       DIMENSIONS.indexOf(a.dimension) - DIMENSIONS.indexOf(b.dimension) ||
+      byString(a.scope, b.scope) ||
       byString(a.deviant, b.deviant)
   );
   const items: CheckItem[] = drifts.slice(0, CANONICAL_FORM_MAX_ITEMS).map((d) => ({
-    id: `${d.dimension}:${d.deviant}`,
-    label: `${d.have} of ${d.total} canonicals use ${d.norm}, these ${d.deviantUrls.length} use ${d.deviant}`,
+    id: `${d.dimension}${d.scope ? `@${d.scope}` : ""}:${d.deviant}`,
+    label: `${d.have} of ${d.total} canonicals${d.scope ? ` in ${d.scope}` : ""} use ${d.norm}, these ${d.deviantUrls.length} use ${d.deviant}`,
     sourcePages: d.deviantUrls.slice(0, CANONICAL_FORM_MAX_URLS_PER_ITEM),
     meta: {
       dimension: d.dimension,
+      scope: d.scope,
       norm: d.norm,
       deviant: d.deviant,
       have: d.have,
