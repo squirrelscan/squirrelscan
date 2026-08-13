@@ -22,11 +22,20 @@ import { resolveCredential } from "@/self/credentials";
 import { logger } from "@/utils/logger";
 import { parseUserUrl } from "@/utils/url";
 
-// register blocks the audit start by one round-trip, so keep it short; the
-// credits call that established `signedIn` just proved the API is reachable, so
-// 5s is a safe ceiling — a slower response means something just broke and we'd
-// rather start the local audit than wait.
-const REGISTER_TIMEOUT_MS = 5_000;
+// Register runs CONCURRENTLY with the crawl (audit.ts kicks the promise off
+// without awaiting), so a generous ceiling costs nothing at audit start. The old
+// 5s ceiling did cost something else: a register the SERVER committed (run row +
+// 50cr base debit) but whose response arrived late resolved null here, and the
+// audit then ran fully untracked — no markRunning, no finalize, no runId in
+// publish — so the run was reaped as an orphan pending and the delivered audit
+// was refunded to free (#1534, ~9% of CLI runs, concentrated far from us-west).
+// Give the round-trip room, then retry once; only a genuinely dead API falls
+// through to an untracked audit.
+const REGISTER_TIMEOUT_MS = 12_000;
+// The retry's shorter ceiling bounds the total register budget (~20s) so a dead
+// API can't hold the end-of-run finalizer (which awaits this promise) that long
+// past a very fast audit.
+const REGISTER_RETRY_TIMEOUT_MS = 8_000;
 const PATCH_TIMEOUT_MS = 10_000;
 // Progress is the most frequent signal (throttled to ≤1/s at the call site) and
 // the least important — keep its timeout short so a slow tick never piles up.
@@ -139,6 +148,12 @@ function runPath(runId: string, suffix = "", base = lifecycleBase()): string {
   return `${base}/${encodeURIComponent(runId)}${suffix}`;
 }
 
+/** What `POST /register` answers with — ids plus the pricing-v10 extras. */
+type RegisterResponseBody = Partial<RegisteredRun> & {
+  balance?: { total?: number } | null;
+  error?: { code?: string; message?: string };
+};
+
 /**
  * Register-failure codes worth interrupting the user for: persistent, actionable
  * account-state problems where the run then goes untracked/unpublished and the
@@ -160,6 +175,12 @@ const DEFINITIVE_REGISTER_FAILURE_CODES = new Set([
  * it live, or null on ANY failure (no credential, network error, non-2xx, bad
  * body) — the audit then simply proceeds untracked.
  *
+ * A LOST response (timeout / transport failure) is retried ONCE under the same
+ * client-generated idempotency key (#1534). Falling through to null is the
+ * expensive outcome, not the slow one: the server may already have committed the
+ * run row and its 50cr base debit, and an untracked audit then gets reaped as an
+ * orphan pending run and refunded — a delivered audit, for free.
+ *
  * `onWarn` is invoked with the server message ONLY on a DEFINITIVE, actionable
  * failure (see DEFINITIVE_REGISTER_FAILURE_CODES) so the caller can surface it
  * loudly (#816): at the website limit / out of credits / org locked means the
@@ -178,21 +199,35 @@ export async function registerRun(
   // proceeds untracked. Add the scheme for scheme-less input; anything the
   // user typed as a real URL is sent verbatim.
   const parsed = input.url.includes("://") ? null : parseUserUrl(input.url);
-  const { ok, status, data } = await cliApi.request<
-    Partial<RegisteredRun> & {
-      balance?: { total?: number } | null;
-      error?: { code?: string; message?: string };
-    }
-  >(`${base}/register`, {
-    method: "POST",
-    auth: "required",
-    timeoutMs: REGISTER_TIMEOUT_MS,
-    body: {
-      url: parsed?.ok ? parsed.url : input.url,
-      mode: input.mode ?? "audit",
-      ...(input.config ? { config: JSON.stringify(input.config) } : {}),
-    },
-  });
+  // #1534: one key for BOTH attempts, so a retry that races a first attempt the
+  // server is still committing converges on the SAME run row and the SAME
+  // audit_base debit rather than creating (and charging for) a second run.
+  // Servers before #1534 ignore the unknown field, so the retry is only as safe
+  // as the old behavior there — which is why the timeout is generous first.
+  const idempotencyKey = crypto.randomUUID();
+  const body = {
+    url: parsed?.ok ? parsed.url : input.url,
+    mode: input.mode ?? "audit",
+    idempotencyKey,
+    ...(input.config ? { config: JSON.stringify(input.config) } : {}),
+  };
+
+  let ok = false;
+  let status = 0;
+  let data: RegisterResponseBody | null = null;
+  // Attempt 2 is for a LOST response only (`status === 0`: timeout, socket
+  // reset, DNS blip) — that is the #1534 failure mode. A server that answered,
+  // with any status, has decided; re-asking would only duplicate the request.
+  for (const timeoutMs of [REGISTER_TIMEOUT_MS, REGISTER_RETRY_TIMEOUT_MS]) {
+    ({ ok, status, data } = await cliApi.request<RegisterResponseBody>(
+      `${base}/register`,
+      { method: "POST", auth: "required", timeoutMs, body }
+    ));
+    if (ok || status !== 0) break;
+    logger.debug("run-tracker: register lost its response, retrying once", {
+      timeoutMs,
+    });
+  }
 
   if (!ok || !data) {
     if (status !== 0) {

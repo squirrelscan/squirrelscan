@@ -194,9 +194,14 @@ describe("registerRun", () => {
   });
 
   test("returns null on a non-2xx response", async () => {
-    globalThis.fetch = (async () =>
-      new Response("nope", { status: 500 })) as unknown as typeof fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response("nope", { status: 500 });
+    }) as unknown as typeof fetch;
     expect(await registerRun({ url: "https://example.com" })).toBeNull();
+    // A server that ANSWERED has decided — re-asking would only duplicate work.
+    expect(calls).toBe(1);
   });
 
   test("returns null on a network error (never throws)", async () => {
@@ -204,6 +209,79 @@ describe("registerRun", () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as typeof fetch;
     expect(await registerRun({ url: "https://example.com" })).toBeNull();
+  });
+
+  // #1534: the server can commit the run + its 50cr base and still lose the
+  // RESPONSE. The old behavior — resolve null, audit untracked — got that run
+  // reaped as an orphan pending and the delivered audit refunded to free. So a
+  // lost response is retried, under one key the server uses to converge.
+  test("sends a client-generated idempotency key with register", async () => {
+    let sent: Record<string, unknown> = {};
+    globalThis.fetch = (async (_i: unknown, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({ runId: "r", websiteId: "w", auditId: "a" }),
+        { status: 201 }
+      );
+    }) as unknown as typeof fetch;
+
+    await registerRun({ url: "https://example.com" });
+    expect(typeof sent.idempotencyKey).toBe("string");
+    expect((sent.idempotencyKey as string).length).toBeGreaterThanOrEqual(8);
+  });
+
+  test("retries a LOST response once, under the SAME idempotency key", async () => {
+    const keys: unknown[] = [];
+    globalThis.fetch = (async (_i: unknown, init?: RequestInit) => {
+      keys.push(
+        (JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>)
+          .idempotencyKey
+      );
+      if (keys.length === 1) throw new Error("The operation timed out.");
+      return new Response(
+        JSON.stringify({
+          runId: "run_r",
+          websiteId: "web_r",
+          auditId: "aud_r",
+        }),
+        { status: 201 }
+      );
+    }) as unknown as typeof fetch;
+
+    const run = await registerRun({ url: "https://example.com" });
+    expect(run?.runId).toBe("run_r");
+    expect(keys).toHaveLength(2);
+    // Same key both times — that is what makes the retry free of a second run
+    // row and a second debit server-side.
+    expect(keys[1]).toBe(keys[0] as string);
+  });
+
+  test("gives up after the retry rather than blocking the audit forever", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      throw new Error("The operation timed out.");
+    }) as unknown as typeof fetch;
+    expect(await registerRun({ url: "https://example.com" })).toBeNull();
+    expect(calls).toBe(2);
+  });
+
+  test("a fresh key per audit — one lost register never adopts another's run", async () => {
+    const keys: unknown[] = [];
+    globalThis.fetch = (async (_i: unknown, init?: RequestInit) => {
+      keys.push(
+        (JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>)
+          .idempotencyKey
+      );
+      return new Response(
+        JSON.stringify({ runId: "r", websiteId: "w", auditId: "a" }),
+        { status: 201 }
+      );
+    }) as unknown as typeof fetch;
+
+    await registerRun({ url: "https://example.com" });
+    await registerRun({ url: "https://example.com" });
+    expect(keys[0]).not.toBe(keys[1] as string);
   });
 
   test("returns null when the response omits required ids", async () => {
