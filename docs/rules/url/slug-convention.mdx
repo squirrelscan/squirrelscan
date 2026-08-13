@@ -1,0 +1,93 @@
+---
+title: "URL Convention Consistency"
+description: "Finds URLs that break the site's own URL conventions"
+---
+
+Finds URLs that break the site's own URL conventions
+
+| | |
+|---|---|
+| **Rule ID** | `url/slug-convention` |
+| **Category** | [URL Structure](/rules/url) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## How it works
+
+Every other URL rule judges one URL against a fixed idea of a good URL. None of them
+can see that a site is internally inconsistent, which is what actually produces
+duplicate-content and canonical bugs: `/My_Page`, `/my-page` and `/my-page/` are
+three different URLs to a crawler even when they serve the same thing.
+
+So the mixing is the finding here, never an individual URL. The rule computes your
+site's own dominant convention in each of five dimensions and reports only the
+minority form standing against it:
+
+| Dimension | Scope | Compares |
+|---|---|---|
+| Slug word separator | site-wide | kebab-case vs snake_case vs camelCase |
+| URL letter case | site-wide | all-lowercase paths vs paths carrying uppercase |
+| Trailing slash | site-wide | present vs absent, on extensionless paths |
+| Date in slug | per page type | dated vs undated posts of the same type |
+| Path depth | per page type | path-segment count within one page type |
+
+A site that is uniformly snake_case, or uniformly slash-terminated, is clean here:
+there is no minority to report. The rule only ever describes the deviants against
+the dominant form.
+
+It stays quiet unless it has grounds to speak:
+
+- Fewer than 10 crawled pages: no site norm exists, so the rule is skipped.
+- Fewer than 10 pages voting in a site-wide dimension (or 8 pages of one page type
+  for the per-type dimensions): the dimension is dropped, not guessed at.
+- No form reaching 70% of a dimension: the site mixes deliberately there, so
+  nothing in it is a deviant.
+
+## Precedence over the per-page URL rules
+
+The per-page rules own their pages, and this rule defers to them so one root cause
+is never reported twice:
+
+- [URL Lowercase](/rules/url/lowercase) already warns on every path containing an
+  uppercase letter, so those pages are dropped from the letter-case dimension.
+- [URL Hyphens](/rules/url/hyphens) already warns on every path containing an
+  underscore, so those pages are dropped from the separator dimension.
+- [Trailing Slash](/rules/url/trailing-slash) only raises on paths with a file
+  extension, so this rule judges the trailing-slash dimension over extensionless
+  paths only.
+
+A dimension whose deviants are entirely deferred is still named in the finding, so
+nothing is silently dropped.
+
+## Solution
+
+Your site uses more than one URL convention: some paths follow one form and a
+minority follow another. Pick the dominant form already used by most of your site,
+migrate the minority onto it, and 301-redirect the old paths so links and rankings
+follow. If a section deliberately differs (a dated archive, a deeper product tree),
+that is fine: the point is that a handful of pages should not be the exception.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["url/slug-convention"]
+```
+
+### Disable all URL Structure rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["url/slug-convention"]
+disable = ["*"]
+```

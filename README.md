@@ -21,7 +21,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 ## Features
 
-- **269 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **270 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **Fast crawler** - Highly optimized memory efficient crawler 
 - **Agent Experience** - Audit agent experience to assist agents in using your site
 - **Security Audit** - Detect phishing kits, leaked credentials, and more 
@@ -50,7 +50,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
 | Mobile | 6 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials |
 | Social Media | 4 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links |
-| URL Structure | 8 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency |
+| URL Structure | 9 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency, site-wide convention consistency |
 | E-E-A-T | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
 | Legal Compliance | 4 | Privacy policy, terms of service, real cookie-consent machinery, subprocessor disclosure |
 | Internationalization | 2 | hreflang correctness and the document language declaration |
@@ -59,7 +59,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
 | Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
 
-**Total: 269 rules across 21 categories**
+**Total: 270 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 

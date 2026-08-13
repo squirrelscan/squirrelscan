@@ -382,7 +382,8 @@
                   "rules/url/trailing-slash",
                   "rules/url/parameters",
                   "rules/url/special-chars",
-                  "rules/url/stop-words"
+                  "rules/url/stop-words",
+                  "rules/url/slug-convention"
                 ]
               },
               {
