@@ -3,7 +3,7 @@
 import type { AuditReport, AuditStatus, CheckItem } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
-import { groupIssuesByCategory } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
@@ -181,16 +181,16 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
           },
         }
       : {}),
-    issues: categoryIssues.flatMap((category) =>
-      category.rules.map((rule) => ({
-        ruleId: rule.id,
-        name: rule.name,
-        description: rule.description,
-        solution: rule.solution,
-        category: category.name,
-        group: category.group,
-        ...(rule.subcategory ? { subcategory: rule.subcategory } : {}),
-        severity: rule.severity,
+    // Severity-first across the whole report (#1536), not category-by-category.
+    issues: flattenIssuesBySeverity(categoryIssues).map((rule) => ({
+      ruleId: rule.id,
+      name: rule.name,
+      description: rule.description,
+      solution: rule.solution,
+      category: rule.categoryName,
+      group: rule.group,
+      ...(rule.subcategory ? { subcategory: rule.subcategory } : {}),
+      severity: rule.severity,
         checks: rule.checks.map((check) => {
           // #1023 R-F: affectedPages is a labeled sample; count is authoritative.
           const ap = affectedPages(check);
@@ -212,9 +212,8 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
                 }
               : {}),
           };
-        }),
-      })),
-    ),
+      }),
+    })),
     ...(report.technologies && report.technologies.items.length > 0
       ? {
           technologies: {

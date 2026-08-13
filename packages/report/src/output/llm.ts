@@ -3,7 +3,7 @@
 import type { AuditReport, CheckItem } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
-import { groupIssuesByCategory } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { ruleAffectedPages, ruleAffectedRollup, ruleCarriedPageCount } from "../affected-pages";
 import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
@@ -232,118 +232,116 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
 
   if (categoryIssues.length > 0) {
     lines.push("<issues>");
-    for (const category of categoryIssues) {
-      lines.push(
-        `${indent(1)}<category name="${escapeXml(category.name)}" group="${escapeXml(category.group)}" errors="${category.failCount}" warnings="${category.warnCount}">`,
-      );
-      for (const rule of category.rules) {
-        let ruleStatus = "pass";
-        for (const check of rule.checks) {
-          if (check.status === "fail") {
-            ruleStatus = "fail";
-            break;
-          }
-          if (check.status === "warn") ruleStatus = "warn";
+    // Flat and severity-first (#1536): errors, then recommendations, then
+    // warnings, across the whole report. No <category> wrapper — the rule
+    // carries category/group as attributes, so the order an agent reads IS the
+    // order it should fix in.
+    for (const rule of flattenIssuesBySeverity(categoryIssues)) {
+      let ruleStatus = "pass";
+      for (const check of rule.checks) {
+        if (check.status === "fail") {
+          ruleStatus = "fail";
+          break;
         }
-
-        // Smart audits (#110): a rule's findings are "carried" when every
-        // surfaced check came from pages not re-crawled this run.
-        const carriedChecks = rule.checks.filter(
-          (c) => c.carriedCount && c.carriedCount >= c.count,
-        ).length;
-        const allPagesForRule = ruleAffectedPages(rule.checks);
-        const carriedPageCount = ruleCarriedPageCount(rule.checks);
-        // #1135: fully carried → provenance="carried"; some-but-not-all → a
-        // "N/M" fraction attribute so an agent can tell "mixed" from "fresh"
-        // without walking every check.
-        const carriedAttr =
-          carriedChecks > 0 && carriedChecks === rule.checks.length
-            ? ` provenance="carried"`
-            : carriedPageCount > 0
-              ? ` carried_pages="${carriedPageCount}/${allPagesForRule.size}"`
-              : "";
-
-        const docsUrl = getDocsUrl(rule.id);
-        lines.push(
-          `${indent(2)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""} status="${ruleStatus}"${carriedAttr} docs="${escapeXml(docsUrl)}">`,
-        );
-
-        const messages = rule.checks.map((c) => c.message).filter((m) => m);
-        if (messages.length > 0) lines.push(`${indent(3)}${escapeXml(messages.join("; "))}`);
-        if (rule.mixedProvenanceNote) {
-          lines.push(`${indent(3)}${escapeXml(rule.mixedProvenanceNote)}`);
-        }
-
-        // Union of check.pages + item-level sourcePages / page-URL ids so
-        // site-scope rules (blocked-links, sitemap-*) report real page counts.
-        const allPages = ruleAffectedPages(rule.checks);
-        // #1023 R-F / #1306: authoritative rule total = a max-based FLOOR (per-
-        // check accessor), not the sampled union size — a folded/sampled rule
-        // would otherwise report only its retained sample (e.g. 200/200, not
-        // 200/600). `hasMore` marks the floor as a lower bound (2+ truncated
-        // checks with possibly-disjoint hidden pages) → suffix "+".
-        const rollup = ruleAffectedRollup(rule.checks);
-        const totalPages = rollup.count;
-        const totalLabel = `${totalPages}${rollup.hasMore ? "+" : ""}`;
-
-        if (allPages.size > 0) {
-          const sampledPages = sampleAffectedPagesBreadthFirst(Array.from(allPages), baseOrigin);
-          const pageList = sampledPages
-            .map((p) => escapeXml(compressUrl(p, baseOrigin)))
-            .join(", ");
-          if (sampledPages.length < totalPages) {
-            lines.push(`${indent(3)}Pages (${sampledPages.length}/${totalLabel}): ${pageList}`);
-          } else {
-            lines.push(`${indent(3)}Pages (${totalLabel}): ${pageList}`);
-          }
-        }
-
-        const allItems: CheckItem[] = [];
-        for (const check of rule.checks) {
-          if (check.items && check.items.length > 0) allItems.push(...check.items);
-        }
-
-        if (allItems.length > 0) {
-          const sampledItems = allItems.slice(0, LLM_REPORT.maxItems);
-          lines.push(
-            sampledItems.length < allItems.length
-              ? `${indent(3)}Items (${sampledItems.length}/${allItems.length}):`
-              : `${indent(3)}Items (${allItems.length}):`,
-          );
-
-          for (const item of sampledItems) {
-            const itemId = item.id.startsWith("http") ? compressUrl(item.id, baseOrigin) : item.id;
-            let itemLine = `${indent(4)}- ${escapeXml(itemId)}`;
-            if (item.label && item.label !== item.id) itemLine += ` (${escapeXml(item.label)})`;
-            if (item.snippet) itemLine += ` | ${escapeXml(item.snippet)}`;
-            if (item.meta) {
-              const metaParts: string[] = [];
-              for (const [k, v] of Object.entries(item.meta)) {
-                if (v !== undefined && v !== null) {
-                  const serialized = serializeMetaValue(v);
-                  if (serialized) metaParts.push(`${k}: ${escapeXml(serialized)}`);
-                }
-              }
-              if (metaParts.length > 0) itemLine += ` [${metaParts.join(", ")}]`;
-            }
-            if (item.sourcePages && item.sourcePages.length > 0) {
-              const sourcePages = item.sourcePages.slice(0, LLM_REPORT.maxItemSourcePages);
-              const sources = sourcePages
-                .map((s) => escapeXml(compressUrl(s, baseOrigin)))
-                .join(", ");
-              if (sourcePages.length < item.sourcePages.length) {
-                itemLine += ` (from: ${sources}; +${item.sourcePages.length - sourcePages.length} more)`;
-              } else {
-                itemLine += ` (from: ${sources})`;
-              }
-            }
-            lines.push(itemLine);
-          }
-        }
-
-        lines.push(`${indent(2)}</rule>`);
+        if (check.status === "warn") ruleStatus = "warn";
       }
-      lines.push(`${indent(1)}</category>`);
+  
+      // Smart audits (#110): a rule's findings are "carried" when every
+      // surfaced check came from pages not re-crawled this run.
+      const carriedChecks = rule.checks.filter(
+        (c) => c.carriedCount && c.carriedCount >= c.count,
+      ).length;
+      const allPagesForRule = ruleAffectedPages(rule.checks);
+      const carriedPageCount = ruleCarriedPageCount(rule.checks);
+      // #1135: fully carried → provenance="carried"; some-but-not-all → a
+      // "N/M" fraction attribute so an agent can tell "mixed" from "fresh"
+      // without walking every check.
+      const carriedAttr =
+        carriedChecks > 0 && carriedChecks === rule.checks.length
+          ? ` provenance="carried"`
+          : carriedPageCount > 0
+            ? ` carried_pages="${carriedPageCount}/${allPagesForRule.size}"`
+            : "";
+  
+      const docsUrl = getDocsUrl(rule.id);
+      lines.push(
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""} status="${ruleStatus}"${carriedAttr} docs="${escapeXml(docsUrl)}">`,
+      );
+  
+      const messages = rule.checks.map((c) => c.message).filter((m) => m);
+      if (messages.length > 0) lines.push(`${indent(2)}${escapeXml(messages.join("; "))}`);
+      if (rule.mixedProvenanceNote) {
+        lines.push(`${indent(2)}${escapeXml(rule.mixedProvenanceNote)}`);
+      }
+  
+      // Union of check.pages + item-level sourcePages / page-URL ids so
+      // site-scope rules (blocked-links, sitemap-*) report real page counts.
+      const allPages = ruleAffectedPages(rule.checks);
+      // #1023 R-F / #1306: authoritative rule total = a max-based FLOOR (per-
+      // check accessor), not the sampled union size — a folded/sampled rule
+      // would otherwise report only its retained sample (e.g. 200/200, not
+      // 200/600). `hasMore` marks the floor as a lower bound (2+ truncated
+      // checks with possibly-disjoint hidden pages) → suffix "+".
+      const rollup = ruleAffectedRollup(rule.checks);
+      const totalPages = rollup.count;
+      const totalLabel = `${totalPages}${rollup.hasMore ? "+" : ""}`;
+  
+      if (allPages.size > 0) {
+        const sampledPages = sampleAffectedPagesBreadthFirst(Array.from(allPages), baseOrigin);
+        const pageList = sampledPages
+          .map((p) => escapeXml(compressUrl(p, baseOrigin)))
+          .join(", ");
+        if (sampledPages.length < totalPages) {
+          lines.push(`${indent(2)}Pages (${sampledPages.length}/${totalLabel}): ${pageList}`);
+        } else {
+          lines.push(`${indent(2)}Pages (${totalLabel}): ${pageList}`);
+        }
+      }
+  
+      const allItems: CheckItem[] = [];
+      for (const check of rule.checks) {
+        if (check.items && check.items.length > 0) allItems.push(...check.items);
+      }
+  
+      if (allItems.length > 0) {
+        const sampledItems = allItems.slice(0, LLM_REPORT.maxItems);
+        lines.push(
+          sampledItems.length < allItems.length
+            ? `${indent(2)}Items (${sampledItems.length}/${allItems.length}):`
+            : `${indent(2)}Items (${allItems.length}):`,
+        );
+  
+        for (const item of sampledItems) {
+          const itemId = item.id.startsWith("http") ? compressUrl(item.id, baseOrigin) : item.id;
+          let itemLine = `${indent(3)}- ${escapeXml(itemId)}`;
+          if (item.label && item.label !== item.id) itemLine += ` (${escapeXml(item.label)})`;
+          if (item.snippet) itemLine += ` | ${escapeXml(item.snippet)}`;
+          if (item.meta) {
+            const metaParts: string[] = [];
+            for (const [k, v] of Object.entries(item.meta)) {
+              if (v !== undefined && v !== null) {
+                const serialized = serializeMetaValue(v);
+                if (serialized) metaParts.push(`${k}: ${escapeXml(serialized)}`);
+              }
+            }
+            if (metaParts.length > 0) itemLine += ` [${metaParts.join(", ")}]`;
+          }
+          if (item.sourcePages && item.sourcePages.length > 0) {
+            const sourcePages = item.sourcePages.slice(0, LLM_REPORT.maxItemSourcePages);
+            const sources = sourcePages
+              .map((s) => escapeXml(compressUrl(s, baseOrigin)))
+              .join(", ");
+            if (sourcePages.length < item.sourcePages.length) {
+              itemLine += ` (from: ${sources}; +${item.sourcePages.length - sourcePages.length} more)`;
+            } else {
+              itemLine += ` (from: ${sources})`;
+            }
+          }
+          lines.push(itemLine);
+        }
+      }
+
+      lines.push(`${indent(1)}</rule>`);
     }
     lines.push("</issues>");
   } else {

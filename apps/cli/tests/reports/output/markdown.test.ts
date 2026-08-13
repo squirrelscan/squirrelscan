@@ -84,11 +84,11 @@ describe("generateMarkdownReport", () => {
     const content = readFileSync(outputPath, "utf-8");
 
     expect(content).toContain("## Issues");
-    // #626: issues nest under a top-level group heading. The SEO group here has a
-    // single issue-category (core), so its redundant category heading collapses and
-    // the rule promotes directly under the group (h3 → h4).
-    expect(content).toContain("### SEO");
-    expect(content).toContain("#### Meta Title");
+    // #1536: issues nest under a SEVERITY heading (global order), with the
+    // category as the sub-heading beneath it.
+    expect(content).toContain("### Errors");
+    expect(content).toContain("#### Core SEO");
+    expect(content).toContain("##### Meta Title");
     expect(content).toContain("**[ERROR]**");
   });
 
