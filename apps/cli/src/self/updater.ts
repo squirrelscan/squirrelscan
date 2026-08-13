@@ -2,16 +2,16 @@ import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   statSync,
   writeFileSync,
   unlinkSync,
-  symlinkSync,
   chmodSync,
 } from "node:fs";
 import { platform } from "node:os";
-import { dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import { AUTO_UPDATE_FALLBACK_THRESHOLD } from "@/constants";
 import { type Result, ok, err, commandError } from "@/controllers/types";
@@ -21,6 +21,7 @@ import type { ReleaseManifest, UpdateResult, UserSettings } from "./types";
 
 import { version } from "../../package.json";
 import { updateSuppressedReason } from "./install-meta";
+import { linkBinary } from "./link-binary";
 import {
   getReleasePath,
   getBinaryPath,
@@ -786,6 +787,27 @@ export async function installVersion(
 }
 
 /**
+ * Delete the `.old-<pid>` binaries a previous Windows update renamed aside.
+ * Best effort: one still being executed stays until the run after that.
+ */
+function sweepReplacedBinaries(symlinkPath: string): void {
+  const dir = dirname(symlinkPath);
+  const prefix = `${basename(symlinkPath)}.old-`;
+  try {
+    for (const entry of readdirSync(dir)) {
+      if (!entry.startsWith(prefix)) continue;
+      try {
+        unlinkSync(join(dir, entry));
+      } catch {
+        // Still loaded by a running process — try again next update.
+      }
+    }
+  } catch {
+    // Unreadable bin dir; the swap below reports the real failure.
+  }
+}
+
+/**
  * Update the symlink to point to a new version
  * Old versions are kept for potential rollback
  */
@@ -814,7 +836,20 @@ export function updateSymlink(
     } catch {
       // no stale tmp link
     }
-    symlinkSync(binaryPath, tmpLink);
+    linkBinary(binaryPath, tmpLink);
+    // On Windows the thing on PATH is a COPY of the binary (link-binary.ts),
+    // and that copy is what's running during an update — Windows refuses to
+    // overwrite or delete a loaded .exe, but it does allow RENAMING one. Move
+    // the old exe aside so the swap below lands, and sweep the leftovers
+    // (deletable once nothing runs them) on the next update. #1538
+    if (platform() === "win32" && existsSync(symlinkPath)) {
+      sweepReplacedBinaries(symlinkPath);
+      try {
+        renameSync(symlinkPath, `${symlinkPath}.old-${process.pid}`);
+      } catch {
+        // Still occupied — the rename below may yet succeed.
+      }
+    }
     try {
       renameSync(tmpLink, symlinkPath);
     } catch {
@@ -822,7 +857,7 @@ export function updateSymlink(
       // links — fall back to the old swap and clean up the tmp link.
       try {
         if (existsSync(symlinkPath)) unlinkSync(symlinkPath);
-        symlinkSync(binaryPath, symlinkPath);
+        linkBinary(binaryPath, symlinkPath);
       } finally {
         try {
           unlinkSync(tmpLink);

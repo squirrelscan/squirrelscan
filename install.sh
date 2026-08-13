@@ -43,12 +43,20 @@ info() { echo -e "${BLUE}::${NC} $1" >&2; }
 # NO_TELEMETRY (mirrors the CLI, apps/cli/src/self/telemetry.ts), fire-and-
 # forget (never blocks or fails the install), and carries only coarse context
 # (os/arch/step/exit code) — never paths, env, hostname, or secrets. #1013
-INSTALLER_REPORT_VERSION="1"
+# v2 adds `error_output` — the tail of the failing command's own output (#1538).
+INSTALLER_REPORT_VERSION="2"
 ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 RELEASES_ENDPOINT="${SQUIRREL_RELEASES_ENDPOINT:-https://install.squirrelscan.com/releases}"
+ERROR_LINE_MAX=200
+# Chars of captured command output carried in a report. The worker clamps again.
+ERROR_OUTPUT_MAX=1000
 CURRENT_STEP="init"
 LAST_ERROR_MSG=""
+# Captured stdout/stderr of the step that failed, when we ran it under tee.
+LAST_ERROR_OUTPUT=""
+# Real exit code of a failed sub-command, when it isn't the one error() exits with.
+LAST_ERROR_CODE=""
 TMPDIR_TO_CLEAN=""
 # Survives command-substitution subshells where LAST_ERROR_MSG can't (see error()).
 ERROR_MSG_FILE="$(mktemp 2>/dev/null || true)"
@@ -61,36 +69,52 @@ json_escape() {
   printf '%s' "$1" | LC_ALL=C tr -cd '\40-\176' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+# Reduce a value to printable ASCII (control chars incl. newlines AND non-ASCII
+# bytes → space) BEFORE truncating, so `cut -c` can't split a multibyte char
+# into invalid UTF-8. Scrub $HOME → '~' so no local path leaks. Command output
+# keeps its TAIL (that's where the error is); a message keeps its head. The
+# worker re-clamps and redacts too.
+scrub_for_report() {
+  local text="$1" max="$2" keep_tail="${3:-head}" scrubbed tilde="~"
+  if [ -z "$text" ]; then
+    return 0
+  fi
+  scrubbed=$(printf '%s' "$text" | LC_ALL=C tr -c '\40-\176' ' ')
+  if [ -n "${HOME:-}" ]; then
+    scrubbed=${scrubbed//"$HOME"/$tilde}
+  fi
+  if [ "$keep_tail" = tail ] && [ "${#scrubbed}" -gt "$max" ]; then
+    printf '%s' "${scrubbed:${#scrubbed}-max}"
+  else
+    printf '%s' "$scrubbed" | cut -c"1-$max"
+  fi
+}
+
 report_error() {
-  local step="$1" code="$2" line="${3:-}"
+  local step="$1" code="$2" line="${3:-}" output="${4:-}"
   # Presence disables reporting, including an explicitly empty value.
   [ "${NO_TELEMETRY+x}" = x ] && return 0
   command -v curl >/dev/null 2>&1 || return 0
 
-  local os arch scrubbed=""
+  local os arch scrubbed="" scrubbed_output=""
   os=$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]')
   arch=$(uname -m 2>/dev/null)
 
-  if [ -n "$line" ]; then
-    # Reduce to printable ASCII (control chars incl. newlines AND non-ASCII bytes
-    # → space) BEFORE truncating, so `cut -c` can't split a multibyte char into
-    # invalid UTF-8. Scrub $HOME → '~' so no local path leaks. The worker
-    # re-clamps and redacts too.
-    local tilde="~"
-    scrubbed=$(printf '%s' "$line" | LC_ALL=C tr -c '\40-\176' ' ')
-    [ -n "${HOME:-}" ] && scrubbed=${scrubbed//"$HOME"/$tilde}
-    scrubbed=$(printf '%s' "$scrubbed" | cut -c1-200)
-  fi
+  scrubbed=$(scrub_for_report "$line" "$ERROR_LINE_MAX")
+  # The failing command's own stdout/stderr: without it a self_install failure
+  # carried an exit code and nothing else (#1538).
+  scrubbed_output=$(scrub_for_report "$output" "$ERROR_OUTPUT_MAX" tail)
 
   local payload
-  payload=$(printf '{"script":"sh","script_version":"%s","channel":"%s","os":"%s","arch":"%s","step":"%s","exit_code":%s,"error_line":"%s"}' \
+  payload=$(printf '{"script":"sh","script_version":"%s","channel":"%s","os":"%s","arch":"%s","step":"%s","exit_code":%s,"error_line":"%s","error_output":"%s"}' \
     "$(json_escape "$INSTALLER_REPORT_VERSION")" \
     "$(json_escape "${SQUIRREL_CHANNEL:-stable}")" \
     "$(json_escape "$os")" \
     "$(json_escape "$arch")" \
     "$(json_escape "$step")" \
     "${code:-1}" \
-    "$(json_escape "$scrubbed")")
+    "$(json_escape "$scrubbed")" \
+    "$(json_escape "$scrubbed_output")")
 
   # Fire-and-forget: run the POST in a DETACHED subshell so it never blocks the
   # installer. `( cmd & )` backgrounds curl and lets the subshell exit
@@ -115,7 +139,10 @@ report_on_exit() {
   fi
   [ -n "${ERROR_MSG_FILE:-}" ] && rm -f "$ERROR_MSG_FILE"
   [ "$code" -eq 0 ] && return 0
-  report_error "$CURRENT_STEP" "$code" "$msg"
+  # error() always exits 1; prefer the failing sub-command's own code when the
+  # call site recorded one (self install, which runs under tee).
+  [ -n "$LAST_ERROR_CODE" ] && code="$LAST_ERROR_CODE"
+  report_error "$CURRENT_STEP" "$code" "$msg" "$LAST_ERROR_OUTPUT"
 }
 trap report_on_exit EXIT
 
@@ -489,7 +516,22 @@ download_and_install() {
 
   CURRENT_STEP="self_install"
   log "Running self install..."
-  "$tmpdir/squirrel" self install --bin-dir "$bin_dir"
+  # Tee rather than run bare: the user still sees the output live, and a failure
+  # can report what the binary actually said instead of a bare exit code
+  # (#1538). PIPESTATUS[0] is the binary's code, not tee's.
+  local self_install_log="$tmpdir/self-install.log"
+  set +e
+  "$tmpdir/squirrel" self install --bin-dir "$bin_dir" 2>&1 | tee "$self_install_log"
+  local rc=${PIPESTATUS[0]}
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    # Last lines, not last bytes: a byte cut can split a $HOME path so the
+    # scrubber no longer recognizes it and the username rides along. The tail
+    # is where the failure is; report_error scrubs and clamps what we pass.
+    LAST_ERROR_OUTPUT=$(tail -n 40 "$self_install_log" 2>/dev/null || true)
+    LAST_ERROR_CODE="$rc"
+    error "Self install failed with exit code $rc"
+  fi
 }
 
 # Detect user's shell and config file

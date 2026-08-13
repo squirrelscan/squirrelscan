@@ -220,12 +220,23 @@ export function getUpdateLockPath(): string {
  * `self install` / install.sh / npm postinstall and `self update` can
  * safely swap the symlink. False for npm-fallback binaries inside
  * node_modules, manual copies, and dev mode (execPath = bun itself).
+ *
+ * Windows is the exception: `self install` lands a COPY at the managed bin
+ * path there (symlinks need a privilege most users don't have — see
+ * link-binary.ts), so the running exe is never under releases/. Without the
+ * win32 branch every Windows install would read as hand-rolled and both
+ * `self update` and auto-update would refuse to run (#1538). Only the DEFAULT
+ * bin path counts; a --bin-dir install stays unmanaged, as it was before.
  */
 export function isManagedInstall(): boolean {
   try {
     const exe = realpathSync(process.execPath);
     const releases = realpathSync(getSquirrelPaths().releases);
-    return exe.startsWith(releases + sep);
+    if (exe.startsWith(releases + sep)) return true;
+    if (platform() === "win32") {
+      return exe === realpathSync(getSymlinkPath());
+    }
+    return false;
   } catch {
     // releases dir missing or execPath unresolvable → not managed
     return false;

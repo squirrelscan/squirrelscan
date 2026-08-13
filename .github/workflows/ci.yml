@@ -48,6 +48,31 @@ jobs:
       - uses: ./.github/actions/setup-bun
       - run: bun test
 
+  installer-scripts:
+    name: Installer script syntax
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # install.ps1 only ever runs on Windows machines, and the install test
+      # workflow fetches the PUBLISHED script from main — so nothing here ever
+      # parsed a change to it before users did. pwsh ships on the ubuntu runner
+      # and exposes the same parser Windows PowerShell uses.
+      - name: Parse install.ps1
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path './install.ps1').Path, [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) {
+            $errors | ForEach-Object { Write-Host $_ }
+            exit 1
+          }
+          Write-Host 'install.ps1 parsed clean'
+      - name: Parse install.sh
+        run: bash -n install.sh
+
   dependency-audit:
     name: Dependency audit
     needs: quality
