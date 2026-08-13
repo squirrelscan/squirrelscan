@@ -77,7 +77,7 @@ runtime dependency closure of `apps/cli`.
 | `gradient-string@3.0.0` | MIT | [source](https://github.com/bokub/gradient-string) |
 | `has-symbols@1.1.0` | MIT | [source](https://github.com/inspect-js/has-symbols) |
 | `hasown@2.0.4` | MIT | [source](https://github.com/inspect-js/hasOwn) |
-| `hono@4.12.31` | MIT | [source](https://github.com/honojs/hono) |
+| `hono@4.13.1` | MIT | [source](https://github.com/honojs/hono) |
 | `html-escaper@3.0.3` | MIT | [source](https://github.com/WebReflection/html-escaper) |
 | `htmlparser2@10.1.0` | MIT | [source](https://github.com/fb55/htmlparser2) |
 | `http-errors@2.0.1` | MIT | [source](https://github.com/jshttp/http-errors) |
@@ -996,7 +996,7 @@ Packages: `xml2js@0.6.2`
 
 ### LICENSE (2e0a854a1106)
 
-Packages: `hono@4.12.31`
+Packages: `hono@4.13.1`
 
     MIT License
 
