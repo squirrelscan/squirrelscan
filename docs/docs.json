@@ -257,7 +257,8 @@
                   "rules/schema/website-search",
                   "rules/schema/organization",
                   "rules/schema/video",
-                  "rules/schema/review"
+                  "rules/schema/review",
+                  "rules/schema/coverage-outlier"
                 ]
               },
               {
