@@ -1,0 +1,100 @@
+---
+title: "Canonical Form Drift"
+description: "Finds canonical URLs that disagree in form (www, scheme, trailing slash, tracking params) across the site"
+---
+
+Finds canonical URLs that disagree in form (www, scheme, trailing slash, tracking params) across the site
+
+| | |
+|---|---|
+| **Rule ID** | `core/canonical-form-drift` |
+| **Category** | [Core SEO](/rules/core) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## How it works
+
+Every canonical this rule looks at is individually valid. What is wrong is
+collective: half your site canonicalises to `https://www.example.com/thing/` and
+half to `https://example.com/thing`, so the two halves consolidate onto different
+URLs and the ranking signal splits between them. No per-page rule can see this,
+because a page only knows its own canonical.
+
+The rule compares four axes of URL form across every canonical in the crawl:
+
+- **Scheme**: `https` versus `http`.
+- **Host**: `www` versus apex.
+- **Trailing slash**: present versus absent.
+- **Tracking parameters**: retained versus stripped (`utm_*`, `gclid`, `fbclid`,
+  `ref`, and friends).
+
+For each axis it works out the site's dominant form and reports only the pages that
+break it.
+
+It stays quiet unless it has grounds to speak:
+
+- Fewer than 10 crawled pages: no site norm exists, so the rule is skipped.
+- Fewer than 10 comparable canonicals on an axis: that axis is dropped, not guessed
+  at.
+- No form reaching 70% on an axis: the site has no convention there, so nobody on
+  that axis is a deviant. A site that genuinely mixes forms is a judgement call for
+  a human, not an accusation from a rule.
+
+Pages built from one template emit canonicals in one form, so they define the norm
+rather than deviate from it. A consistently param-bearing canonical is a form like
+any other: if every page does it, the site is not contradicting itself and nothing
+is reported.
+
+Two axes are only measured where the page had a choice. The site root (`/`) and
+file-like paths (`/feed.xml`) never carry a trailing slash, so they are left out of
+that comparison entirely.
+
+## Validity is a different rule
+
+This rule reports **form only**, so one root cause is never reported twice:
+
+- A missing, relative or unparseable canonical is [Canonical URL](/rules/core/canonical).
+- A `Link: rel="canonical"` header that disagrees with the tag is
+  [Canonical Header](/rules/core/canonical-header).
+- A canonical pointing at another host is [Canonical URL](/rules/core/canonical)
+  as well, and its form follows the other site's conventions, so it is excluded here.
+
+Pages in any of those states are dropped before the comparison runs.
+
+## Solution
+
+Each of these canonicals is valid on its own, but the site does not agree with
+itself: some pages canonicalise to one URL form and some to another. Search engines
+treat the two forms as different URLs, so links, crawl budget and ranking signals
+split between them.
+
+Pick one form, the one your redirects already send traffic to, and emit it
+everywhere: one scheme (`https`), one host (`www` or apex, not both), one
+trailing-slash convention, and never any tracking parameters in the canonical.
+Canonicals are usually generated in one template or middleware, so this is normally
+a single fix in the place that builds the URL rather than a per-page edit.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["core/canonical-form-drift"]
+```
+
+### Disable all Core SEO rules
+
+```toml squirrel.toml
+[rules]
+disable = ["core/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["core/canonical-form-drift"]
+disable = ["*"]
+```

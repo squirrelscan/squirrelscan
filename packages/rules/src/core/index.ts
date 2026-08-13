@@ -3,6 +3,7 @@
 import type { Rule } from "../types";
 
 import { canonicalRule } from "./canonical";
+import { canonicalFormDriftRule } from "./canonical-form-drift";
 import { canonicalHeaderRule } from "./canonical-header";
 import { charsetRule } from "./charset";
 import { doctypeRule } from "./doctype";
@@ -23,6 +24,7 @@ export const rules: Rule[] = [
   metaDescriptionRule,
   canonicalRule,
   canonicalHeaderRule,
+  canonicalFormDriftRule,
   h1Rule,
   robotsMetaRule,
   nosnippetRule,
@@ -34,6 +36,7 @@ export const rules: Rule[] = [
 
 // Re-export individual rules
 export {
+  canonicalFormDriftRule,
   canonicalHeaderRule,
   canonicalRule,
   charsetRule,
