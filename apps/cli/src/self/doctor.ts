@@ -130,6 +130,18 @@ function checkSymlink(): DoctorCheck {
   try {
     const stats = lstatSync(symlinkPath);
     if (!stats.isSymbolicLink()) {
+      // On Windows a plain FILE copy IS how `self install` lands the binary
+      // when symlinks need a privilege the user doesn't have (see
+      // link-binary.ts), so it's the expected shape there, not a suspicious
+      // manual install. Anything else at that path (a directory, a socket)
+      // still warns.
+      if (platform() === "win32" && stats.isFile()) {
+        return {
+          name: "Symlink",
+          status: "pass",
+          message: `Binary copy at: ${symlinkPath}`,
+        };
+      }
       return {
         name: "Symlink",
         status: "warn",

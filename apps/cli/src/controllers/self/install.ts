@@ -2,7 +2,6 @@ import {
   existsSync,
   mkdirSync,
   copyFileSync,
-  symlinkSync,
   unlinkSync,
   chmodSync,
 } from "node:fs";
@@ -11,6 +10,7 @@ import { dirname } from "node:path";
 import type { InstallResult } from "@/self/types";
 
 import { type Result, ok, err, commandError } from "@/controllers/types";
+import { linkBinary } from "@/self/link-binary";
 import {
   getSquirrelPaths,
   getReleasePath,
@@ -55,11 +55,11 @@ export async function runSelfInstall(
       chmodSync(binaryPath, 0o755);
     }
 
-    // Create/update symlink
+    // Create/update symlink (a copy on Windows, where symlinks need privilege)
     if (existsSync(symlinkPath)) {
       unlinkSync(symlinkPath);
     }
-    symlinkSync(binaryPath, symlinkPath);
+    linkBinary(binaryPath, symlinkPath);
 
     // Initialize settings — preserve anything already there (auth, telemetry
     // opt-out, channel); a reinstall/upgrade must never reset user state.

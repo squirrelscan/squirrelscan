@@ -14,7 +14,14 @@ $Platform = "windows-x64"
 function Write-Log { param($Message) Write-Host "==> " -ForegroundColor Green -NoNewline; Write-Host $Message }
 function Write-Info { param($Message) Write-Host ":: " -ForegroundColor Blue -NoNewline; Write-Host $Message }
 function Write-Warn { param($Message) Write-Host "Warning: " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
-function Write-Err { param($Message) Write-Host "Error: " -ForegroundColor Red -NoNewline; Write-Host $Message; Send-ErrorReport -Step $script:CurrentStep -ExitCode 1 -Line "$Message"; exit 1 }
+function Write-Err {
+    param([string]$Message, [string]$Output = "", [int]$ExitCode = 1)
+    Write-Host "Error: " -ForegroundColor Red -NoNewline
+    Write-Host $Message
+    # $Output is the failing command's own stdout/stderr, when we captured it.
+    Send-ErrorReport -Step $script:CurrentStep -ExitCode $ExitCode -Line "$Message" -Output $Output
+    exit 1
+}
 
 # --- Failure reporting -------------------------------------------------
 # On failure, fire a tiny anonymous report to the installer worker (→ Sentry)
@@ -22,28 +29,71 @@ function Write-Err { param($Message) Write-Host "Error: " -ForegroundColor Red -
 # non-empty value, mirroring install.sh and apps/cli/src/self/telemetry.ts).
 # Fire-and-forget: never blocks or fails the install; carries only coarse
 # context (os/arch/step/exit code), never paths/env/hostname/secrets. #1013
-$InstallerReportVersion = "1"
+# v2 adds `error_output` — the tail of the failing command's own output (#1538).
+$InstallerReportVersion = "2"
 $ErrorEndpoint = if ($env:SQUIRREL_ERROR_ENDPOINT) { $env:SQUIRREL_ERROR_ENDPOINT } else { "https://install.squirrelscan.com/error" }
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 $ReleasesEndpoint = if ($env:SQUIRREL_RELEASES_ENDPOINT) { $env:SQUIRREL_RELEASES_ENDPOINT } else { "https://install.squirrelscan.com/releases" }
+$ErrorLineMax = 200
+$ErrorOutputMax = 1000
 $script:CurrentStep = "init"
+$script:LastCapturedExitCode = 0
+
+# Make an arbitrary string safe to put in a report: reduce to printable ASCII
+# (control chars AND non-ASCII -> space) so truncation can't split a
+# surrogate/multibyte char and no ANSI escape reaches the JSON, scrub the home
+# path -> '~' so no local path leaks, then hard-truncate. Command output keeps
+# its TAIL (-KeepTail) because that's where the error is; a one-line message
+# keeps its head. The worker re-clamps and redacts too.
+function Get-ScrubbedText {
+    param([string]$Text, [int]$MaxLength = 200, [switch]$KeepTail)
+    if (-not $Text) { return "" }
+    $scrubbed = $Text -replace '[^\x20-\x7E]', ' '
+    if ($env:USERPROFILE) { $scrubbed = $scrubbed.Replace($env:USERPROFILE, "~") }
+    if ($HOME) { $scrubbed = $scrubbed.Replace($HOME, "~") }
+    if ($scrubbed.Length -gt $MaxLength) {
+        if ($KeepTail) {
+            $scrubbed = $scrubbed.Substring($scrubbed.Length - $MaxLength)
+        } else {
+            $scrubbed = $scrubbed.Substring(0, $MaxLength)
+        }
+    }
+    return $scrubbed
+}
+
+# Run a native command, echoing its output live AND returning it as one string.
+# `2>&1` merges the command's stderr into the pipeline; under
+# $ErrorActionPreference = "Stop" anything a native command writes to stderr
+# would otherwise become a terminating NativeCommandError, so drop to
+# "Continue" for the duration and restore afterwards. The exit code lands in
+# $script:LastCapturedExitCode.
+function Invoke-CapturedCommand {
+    param([string]$FilePath, [string[]]$Arguments = @())
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $lines = & $FilePath @Arguments 2>&1 | ForEach-Object {
+            $text = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { "$_" }
+            Write-Host $text
+            $text
+        }
+        $script:LastCapturedExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    return ($lines -join "`n")
+}
 
 function Send-ErrorReport {
-    param([string]$Step, [int]$ExitCode = 1, [string]$Line = "")
+    param([string]$Step, [int]$ExitCode = 1, [string]$Line = "", [string]$Output = "")
     # Presence disables reporting, including an explicitly empty value.
     if (Test-Path Env:NO_TELEMETRY) { return }
     try {
-        $scrubbed = ""
-        if ($Line) {
-            # Reduce to printable ASCII (control chars AND non-ASCII -> space) so
-            # truncation can't split a surrogate/multibyte char, scrub the home
-            # path -> '~' so no local path leaks, then hard-truncate. The worker
-            # re-clamps and redacts too.
-            $scrubbed = $Line -replace '[^\x20-\x7E]', ' '
-            if ($env:USERPROFILE) { $scrubbed = $scrubbed.Replace($env:USERPROFILE, "~") }
-            if ($HOME) { $scrubbed = $scrubbed.Replace($HOME, "~") }
-            if ($scrubbed.Length -gt 200) { $scrubbed = $scrubbed.Substring(0, 200) }
-        }
+        $scrubbed = Get-ScrubbedText -Text $Line -MaxLength $ErrorLineMax
+        # The tail of the failing command's own stdout/stderr. Without it a
+        # self_install failure carried an exit code and nothing else (#1538).
+        $scrubbedOutput = Get-ScrubbedText -Text $Output -MaxLength $ErrorOutputMax -KeepTail
         $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
             "AMD64" { "x64" }
             "ARM64" { "arm64" }
@@ -59,6 +109,7 @@ function Send-ErrorReport {
             step           = $Step
             exit_code      = $ExitCode
             error_line     = $scrubbed
+            error_output   = $scrubbedOutput
         } | ConvertTo-Json -Compress
         # Fire-and-forget: run the POST in a background job so it never blocks
         # the installer. Not awaited; the 3s timeout inside is the backstop and
@@ -226,13 +277,17 @@ function Install-Squirrel {
         }
         Write-Info "Checksum verified: $($expectedHash.Substring(0, 16))..."
 
-        # Run self install
+        # Run self install. Its output is echoed live AND captured, so a failure
+        # reports what the binary actually said instead of a bare exit code
+        # (#1538) — the tail rides along on the error report.
         $script:CurrentStep = "self_install"
         Write-Log "Running self install..."
-        & $binaryPath self install
+        $selfInstallOutput = Invoke-CapturedCommand -FilePath $binaryPath -Arguments @("self", "install")
+        $selfInstallExit = $script:LastCapturedExitCode
 
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "Self install failed with exit code $LASTEXITCODE"
+        if ($selfInstallExit -ne 0) {
+            Write-Err "Self install failed with exit code $selfInstallExit" `
+                -Output $selfInstallOutput -ExitCode $selfInstallExit
         }
     } finally {
         # Cleanup
