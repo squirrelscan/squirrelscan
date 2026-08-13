@@ -20,6 +20,109 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.85
+
+Five new rules that grade a page against the rest of your own site instead of
+against a fixed threshold. Every audit rule until now asked the same question of
+every site on the internet: is this title too long, is this page too thin. That
+works for the rules where one right answer exists, and it is useless for the
+much larger class of problem where the only evidence something is wrong is that
+one page disagrees with the other nine hundred. A 200 word page is thin on a
+documentation site and normal on a news site. A product page missing `Product`
+markup only matters because its siblings have it.
+
+These rules learn the norm from your crawl and report the deviants, which means
+they need a crawl big enough to have a norm. All five stay silent below 10
+crawled pages, and stay silent when no clear majority exists, reporting a
+skipped check that says which condition was not met rather than guessing. A site
+that is legitimately heterogeneous should see nothing from them, and that is the
+intended result, not a failure.
+
+The engine is now at 272 rules across 21 categories.
+
+### Added
+
+- **`content/thin-vs-site-norm`** reports pages far shorter than comparable pages
+  on the same site. Pages are grouped by section first, so a terse tag listing is
+  not measured against your long-form posts, and the outlier test uses a robust
+  spread rather than a mean, so a handful of very long pages cannot drag the
+  threshold up and hide the thin ones.
+
+- **`content/title-pattern-outlier`** learns your title template and reports the
+  titles that break it. Most sites settle on one shape, `Page | Brand` or
+  `Brand: Page`, usually because a template emits it. The pages that do not match
+  are usually the ones a human wrote by hand or a migration missed: brand missing
+  entirely, brand on the wrong end, a different separator.
+
+- **`schema/coverage-outlier`** reports pages missing the structured-data markup
+  their siblings have. If 90% of your product pages carry `Product` and a dozen
+  do not, those dozen lose rich results, and nothing in a per-page check can see
+  it because each page is individually valid.
+
+- **`url/slug-convention`** reports URLs that break your site's own conventions:
+  case, word separator, trailing slash, file extension. Mixed conventions
+  usually mean two generations of routing coexisting, which is where duplicate
+  content comes from.
+
+- **`core/canonical-form-drift`** reports canonical URLs that disagree in form
+  across the site, for example some absolute and some relative, or some with the
+  `www` host and some without. Each one is individually valid, so per-page
+  validation passes while search engines see an inconsistent story about which
+  URL is the real one.
+
+### Fixed
+
+- **A site behind a WAF challenge is no longer reported as unreachable.** Adding
+  a domain probed it first and accepted only a normal response. A site sitting
+  behind Vercel's Attack Challenge Mode, Cloudflare's, or any similar protection
+  answers that probe with a challenge rather than the page, and the domain was
+  refused as if the site were down. The probe now treats any HTTP response as
+  proof the site is there, because it is.
+
+- **A crawl that lost its handshake no longer disappears.** If the network
+  dropped the call that registers a run, the CLI retried and the server treated
+  the retry as a second, unrelated run. The original became an orphan: work that
+  had been done, could not be found, and showed up later as a failed audit. The
+  registration now carries an idempotency key, so a retry resolves to the same
+  run, and an orphaned run is adopted when its report is published.
+
+- **Long crawls are no longer killed while they are working.** The job that
+  cleans up abandoned runs measured age alone, so a genuinely slow crawl of a
+  large site could be marked failed while it was still making progress. It now
+  looks at progress before deciding a run is dead, and audits that were reaped
+  and then delivered anyway are repaid.
+
+- **Renders you did not get are no longer charged.** A page render that failed
+  was still billed, and a run could spend past the estimate it quoted you when
+  it started. Failed renders are refunded and spend is capped at the run's own
+  quote.
+
+- **Cloud audits run every rule you are paying for.** Audits started from a
+  website or from the GitHub integration were dispatched without the flag that
+  enables the paid services the rules depend on, so eight rules quietly skipped
+  while the audit billed in full. Both paths now dispatch with those services
+  enabled and a bounded credit cap.
+
+- **A failed audit refunds the organization that was actually charged.** When a
+  run failed after its base charge, the refund was aimed at the organization
+  named in the request rather than the one billed. If you had not named one
+  explicitly, those two were different and nothing was refunded at all.
+
+- **A missing `robots.txt` is reported as an error, not a warning.** No
+  `robots.txt` means no place to declare a sitemap and no control over crawling.
+  That is not a nice-to-have.
+
+- **Report issues are ordered by severity across the whole report.** Sorting
+  happened inside each category, so a critical issue in the last category sat
+  below a warning in the first, and the top of the report was not the worst of
+  the findings.
+
+- **Windows installs no longer fail with a permission error.** The installer
+  linked the binary with a symlink, which needs Developer Mode or an elevated
+  shell on Windows, and failed with `EPERM` otherwise. It now falls back to a
+  copy. A failing `squirrel self install` also prints what actually went wrong
+  instead of a bare exit code.
+
 ## v0.0.84
 
 A crawl-correctness release. squirrelscan was requesting URLs your site never
