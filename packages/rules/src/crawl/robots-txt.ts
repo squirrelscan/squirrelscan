@@ -32,7 +32,7 @@ export const robotsTxtRule: Rule = {
     if (!robotsTxt.exists) {
       checks.push({
         name: "robots-txt-exists",
-        status: "warn",
+        status: "fail",
         message: "No robots.txt found",
         value: "Search engines will crawl all accessible pages",
       });
