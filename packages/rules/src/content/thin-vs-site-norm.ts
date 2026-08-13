@@ -271,6 +271,13 @@ function buildChecks(rollup: ThinRollup, sitePageCount: number): CheckResult[] {
  * Streaming path (#1362): read (pageType, wordCount) off the page_features cursor
  * in normalized_url order (== the legacy `site.pages` order). Only the per-group
  * word-count arrays stay resident; no parsed page is held.
+ *
+ * The site floor is judged on `pageCount()`, which counts page_features rows; the
+ * legacy universe additionally carries the error pages v1 appends to `site.pages`.
+ * Only a crawl sitting exactly on the floor with non-auditable pages can word the
+ * skip differently, and neither path can judge such a crawl anyway. That is a
+ * property of this seam shared with every site rule on it (see
+ * content/duplicate-title), not something specific to this rule.
  */
 async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
   const rollup = emptyRollup();
