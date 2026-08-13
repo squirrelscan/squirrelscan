@@ -172,6 +172,37 @@ describe("diff reports", () => {
     expect(diff.changed[0].changeType).toBe("regression");
   });
 
+  // #1535: missing robots.txt moved from "warn" to "fail". A report scored
+  // before that fix still has "warn" on disk; diffing it against a re-audit
+  // of the SAME still-missing robots.txt must not read as a status change.
+  test("legacy warn robots-txt-exists vs current fail is not a regression", () => {
+    const baseline = makeReport({
+      "crawl/robots-txt": makeRuleResult("crawl/robots-txt", [
+        {
+          name: "robots-txt-exists",
+          status: "warn",
+          message: "No robots.txt found",
+        },
+      ]),
+    });
+
+    const current = makeReport({
+      "crawl/robots-txt": makeRuleResult("crawl/robots-txt", [
+        {
+          name: "robots-txt-exists",
+          status: "fail",
+          message: "No robots.txt found",
+        },
+      ]),
+    });
+
+    const diff = diffReports(baseline, current);
+
+    expect(diff.added.length).toBe(0);
+    expect(diff.removed.length).toBe(0);
+    expect(diff.changed.length).toBe(0);
+  });
+
   // #586: diffing a scored baseline against a failed (0-page) current must keep
   // the failed side's score null (N/A), not coerce it to 0 — else the diff reads
   // as a bogus "-85 point / grade-F regression" instead of "current audit failed".

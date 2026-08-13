@@ -7,6 +7,7 @@ import type {
 } from "@/types";
 
 import { getScoreGrade } from "@/audit/scoring";
+import { CHECK_NAME_ROBOTS_EXISTS, RULE_ID_ROBOTS_TXT } from "@/constants";
 
 import type {
   DiffChange,
@@ -22,6 +23,25 @@ import {
   normalizeTargetId,
   type IssueTargetType,
 } from "./fingerprint";
+
+// Missing robots.txt used to be reported as a "warn" check; reports scored
+// before #1535 still carry that status in storage. Normalize it to "fail"
+// here so diffing an old report against a re-audit of the same still-missing
+// robots.txt doesn't read as a false regression (or an improvement, in the
+// other diff direction).
+function normalizeLegacyCheckStatus(
+  ruleId: string,
+  check: CheckResult
+): CheckResult {
+  if (
+    ruleId === RULE_ID_ROBOTS_TXT &&
+    check.name === CHECK_NAME_ROBOTS_EXISTS &&
+    check.status === "warn"
+  ) {
+    return { ...check, status: "fail" };
+  }
+  return check;
+}
 
 function shouldIncludeCheck(
   check: CheckResult,
@@ -93,7 +113,8 @@ export function buildIssueInstances(
       : Object.entries(report.ruleResults);
 
   for (const [ruleId, rule] of ruleEntries) {
-    for (const check of rule.checks) {
+    for (const rawCheck of rule.checks) {
+      const check = normalizeLegacyCheckStatus(ruleId, rawCheck);
       if (!shouldIncludeCheck(check, severity)) continue;
 
       if (check.items && check.items.length > 0) {

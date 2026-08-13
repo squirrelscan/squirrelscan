@@ -510,7 +510,9 @@ function calculatePenaltyMultiplier(
     if (disallowCheck?.status === "fail") {
       multiplier *= 1 - PENALTY_ROBOTS_BLOCKS_ALL; // Blocks all
     }
-    if (existsCheck?.status === "warn") {
+    // "fail" is the current status for a missing robots.txt; "warn" is kept
+    // for reports scored before this check's severity was corrected (#1535).
+    if (existsCheck?.status === "fail" || existsCheck?.status === "warn") {
       multiplier *= 1 - PENALTY_NO_ROBOTS_TXT; // Missing
     }
   }
