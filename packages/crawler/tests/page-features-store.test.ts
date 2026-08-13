@@ -36,6 +36,9 @@ const NAP_COLUMNS = [
   "nap_mailto_link",
 ];
 
+/** The v22 site-chrome columns (#1371) — asserted on both the fresh and migrated paths. */
+const CHROME_COLUMNS = ["favicon_href", "theme_color", "og_image"];
+
 function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
   return {
     normalizedUrl: "https://example.com/a",
@@ -66,6 +69,9 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     napAddressFormat: null,
     napTelLink: false,
     napMailtoLink: false,
+    faviconHref: null,
+    themeColor: null,
+    ogImage: null,
     ...over,
   };
 }
@@ -122,6 +128,36 @@ describe("page_features store — round-trip", () => {
     expect(got?.napPhoneFormats).toEqual(["(555) 123-4567", "+1 555 765 4321"]);
     expect(got?.napTelLink).toBe(true);
     expect(got?.napMailtoLink).toBe(false);
+    await run(store.close());
+  });
+
+  test("site-chrome columns round-trip (favicon, theme-color, default OG image)", async () => {
+    const store = await freshStore();
+    const row = feat({
+      normalizedUrl: "https://example.com/chrome",
+      faviconHref: "https://example.com/favicon.ico",
+      themeColor: "#0a5c36",
+      ogImage: "https://cdn.example.com/share/default.png",
+    });
+    await run(store.upsertPageFeatures(CRAWL, row));
+
+    const got = await run(store.getPageFeatures(CRAWL, "https://example.com/chrome"));
+    expect(got).toEqual(row);
+    expect(got?.faviconHref).toBe("https://example.com/favicon.ico");
+    expect(got?.themeColor).toBe("#0a5c36");
+    expect(got?.ogImage).toBe("https://cdn.example.com/share/default.png");
+    await run(store.close());
+  });
+
+  test("a page declaring no chrome assets round-trips as null, not empty strings", async () => {
+    const store = await freshStore();
+    await run(
+      store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/no-chrome" }))
+    );
+    const got = await run(store.getPageFeatures(CRAWL, "https://example.com/no-chrome"));
+    expect(got?.faviconHref).toBeNull();
+    expect(got?.themeColor).toBeNull();
+    expect(got?.ogImage).toBeNull();
     await run(store.close());
   });
 
@@ -477,6 +513,8 @@ describe("page_features migration (v17 → current)", () => {
     expect(cols).toContain("rich_result_types");
     // v20 NAP columns present after migration.
     for (const col of NAP_COLUMNS) expect(cols).toContain(col);
+    // v22 site-chrome columns present after migration.
+    for (const col of CHROME_COLUMNS) expect(cols).toContain(col);
     check.close();
   });
 
@@ -495,6 +533,68 @@ describe("page_features migration (v17 → current)", () => {
       check.prepare("PRAGMA table_info(page_features)").all() as Array<{ name: string }>
     ).map((c) => c.name);
     for (const col of NAP_COLUMNS) expect(cols).toContain(col);
+    check.close();
+  });
+
+  test("v22 site-chrome columns exist on a FRESH database (SCHEMA path, not the migration)", async () => {
+    const path = tmpDbPath();
+    const store = new SQLiteStorage(path);
+    await run(store.init());
+    await run(store.close());
+
+    const check = new Database(path);
+    const cols = (
+      check.prepare("PRAGMA table_info(page_features)").all() as Array<{ name: string }>
+    ).map((c) => c.name);
+    for (const col of CHROME_COLUMNS) expect(cols).toContain(col);
+    check.close();
+  });
+
+  test("a DB already at v20 gains the site-chrome columns and keeps its existing rows", async () => {
+    const path = tmpDbPath();
+    // Build a real v22 store, seed a row, then wind the version marker back so the
+    // append-only migration is the only thing that can add the columns.
+    const seed = new SQLiteStorage(path);
+    await run(seed.init());
+    await run(seed.upsertPageFeatures("c1", feat({ normalizedUrl: "https://example.com/legacy" })));
+    await run(seed.close());
+
+    const downgrade = new Database(path);
+    for (const col of CHROME_COLUMNS) {
+      downgrade.exec(`ALTER TABLE page_features DROP COLUMN ${col}`);
+    }
+    downgrade.exec("UPDATE schema_version SET version = 20");
+    downgrade.close();
+
+    const store = new SQLiteStorage(path);
+    await run(store.init());
+    const migrated = await run(store.getPageFeatures("c1", "https://example.com/legacy"));
+    // Pre-v22 rows read back as "declared no chrome assets" rather than throwing.
+    expect(migrated?.title).toBe("Title A");
+    expect(migrated?.faviconHref).toBeNull();
+    expect(migrated?.themeColor).toBeNull();
+    expect(migrated?.ogImage).toBeNull();
+    // ...and the migrated table accepts a full v22 write.
+    await run(
+      store.upsertPageFeatures(
+        "c1",
+        feat({
+          normalizedUrl: "https://example.com/new",
+          faviconHref: "https://example.com/favicon.ico",
+          themeColor: "#0a5c36",
+          ogImage: "https://cdn.example.com/share/default.png",
+        })
+      )
+    );
+    const fresh = await run(store.getPageFeatures("c1", "https://example.com/new"));
+    expect(fresh?.faviconHref).toBe("https://example.com/favicon.ico");
+    await run(store.close());
+
+    const check = new Database(path);
+    const version = check.prepare("SELECT version FROM schema_version LIMIT 1").get() as {
+      version: number;
+    };
+    expect(version.version).toBe(21);
     check.close();
   });
 
