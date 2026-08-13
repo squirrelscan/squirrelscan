@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  existsSync,
   lstatSync,
   mkdtempSync,
   readFileSync,
@@ -47,8 +46,6 @@ describe("linkBinary", () => {
       writeFileSync(target, "binary");
 
       linkBinary(target, link, { isWindows: true, symlink: eperm });
-
-      expect(existsSync(link)).toBe(true);
       expect(lstatSync(link).isSymbolicLink()).toBe(false);
       expect(readFileSync(link, "utf-8")).toBe("binary");
     } finally {
