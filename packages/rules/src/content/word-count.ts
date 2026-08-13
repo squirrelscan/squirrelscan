@@ -4,8 +4,15 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+/**
+ * Absolute thin-content floor. Also the precedence boundary with
+ * content/thin-vs-site-norm (#1362): this rule owns every page BELOW it, and the
+ * site-norm rule never considers one, so the two never both flag a page.
+ */
+export const WORD_COUNT_MIN_WORDS = 300;
+
 export const optionsSchema = z.object({
-  min_words: z.number().default(300).describe("Minimum word count"),
+  min_words: z.number().default(WORD_COUNT_MIN_WORDS).describe("Minimum word count"),
   warn_threshold: z
     .number()
     .default(500)
