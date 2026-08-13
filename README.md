@@ -43,10 +43,10 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
 | Security | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
 | Links | 14 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, HTTPS downgrades |
-| Content | 15 | Text quality and honesty: duplicate titles and descriptions, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
+| Content | 16 | Text quality and honesty: duplicate titles and descriptions, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
 | Performance | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
 | Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
-| Structured Data | 10 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search |
+| Structured Data | 11 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search |
 | Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
 | Mobile | 6 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials |
 | Social Media | 4 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links |
