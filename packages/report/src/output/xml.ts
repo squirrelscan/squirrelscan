@@ -4,7 +4,7 @@ import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
-import { groupIssuesByCategory } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 
@@ -144,55 +144,53 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
 
   if (categoryIssues.length > 0) {
     lines.push(`${indent(1)}<issues>`);
-    for (const category of categoryIssues) {
-      lines.push(`${indent(2)}<category name="${escapeXml(category.name)}" group="${escapeXml(category.group)}" errors="${category.failCount}" warnings="${category.warnCount}">`);
-      for (const rule of category.rules) {
-        lines.push(`${indent(3)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""}>`);
-        lines.push(`${indent(4)}<name>${escapeXml(rule.name)}</name>`);
-        lines.push(`${indent(4)}<description>${escapeXml(rule.description)}</description>`);
-        if (rule.solution) lines.push(`${indent(4)}<solution>${escapeXml(rule.solution)}</solution>`);
+    // Flat and severity-first (#1536): no <category> wrapper — each rule carries
+    // its category and group as attributes, so document order IS fix order.
+    for (const rule of flattenIssuesBySeverity(categoryIssues)) {
+      lines.push(`${indent(2)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""}>`);
+      lines.push(`${indent(3)}<name>${escapeXml(rule.name)}</name>`);
+      lines.push(`${indent(3)}<description>${escapeXml(rule.description)}</description>`);
+      if (rule.solution) lines.push(`${indent(3)}<solution>${escapeXml(rule.solution)}</solution>`);
 
-        for (const check of rule.checks) {
-          lines.push(`${indent(4)}<check name="${escapeXml(check.name)}" status="${check.status}">`);
-          lines.push(`${indent(5)}<message>${escapeXml(check.message)}</message>`);
+      for (const check of rule.checks) {
+        lines.push(`${indent(3)}<check name="${escapeXml(check.name)}" status="${check.status}">`);
+        lines.push(`${indent(4)}<message>${escapeXml(check.message)}</message>`);
 
-          // #1023 R-F: count is the authoritative total; the listed pages are a
-          // labeled sample (examples) when has-more.
-          const pages = affectedPages(check);
-          if (pages.sample.length > 0) {
-            lines.push(
-              `${indent(5)}<affected-pages count="${pages.count}" examples="${pages.sample.length}" has-more="${pages.hasMore}">`,
-            );
-            for (const page of pages.sample)
-              lines.push(`${indent(6)}<page url="${escapeXml(page)}"/>`);
-            lines.push(`${indent(5)}</affected-pages>`);
-          }
-
-          if (check.items && check.items.length > 0) {
-            lines.push(`${indent(5)}<items count="${check.items.length}">`);
-            for (const item of check.items) {
-              lines.push(`${indent(6)}<item id="${escapeXml(item.id)}">`);
-              if (item.label && item.label !== item.id) lines.push(`${indent(7)}<label>${escapeXml(item.label)}</label>`);
-              if (item.meta) {
-                for (const [k, v] of Object.entries(item.meta)) {
-                  if (v !== undefined && v !== null) lines.push(`${indent(7)}<${k}>${escapeXml(String(v))}</${k}>`);
-                }
-              }
-              if (item.sourcePages && item.sourcePages.length > 0) {
-                lines.push(`${indent(7)}<source-pages>`);
-                for (const src of item.sourcePages) lines.push(`${indent(8)}<page url="${escapeXml(src)}"/>`);
-                lines.push(`${indent(7)}</source-pages>`);
-              }
-              lines.push(`${indent(6)}</item>`);
-            }
-            lines.push(`${indent(5)}</items>`);
-          }
-
-          lines.push(`${indent(4)}</check>`);
+        // #1023 R-F: count is the authoritative total; the listed pages are a
+        // labeled sample (examples) when has-more.
+        const pages = affectedPages(check);
+        if (pages.sample.length > 0) {
+          lines.push(
+            `${indent(4)}<affected-pages count="${pages.count}" examples="${pages.sample.length}" has-more="${pages.hasMore}">`,
+          );
+          for (const page of pages.sample)
+            lines.push(`${indent(5)}<page url="${escapeXml(page)}"/>`);
+          lines.push(`${indent(4)}</affected-pages>`);
         }
-        lines.push(`${indent(3)}</rule>`);
+
+        if (check.items && check.items.length > 0) {
+          lines.push(`${indent(4)}<items count="${check.items.length}">`);
+          for (const item of check.items) {
+            lines.push(`${indent(5)}<item id="${escapeXml(item.id)}">`);
+            if (item.label && item.label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(item.label)}</label>`);
+            if (item.meta) {
+              for (const [k, v] of Object.entries(item.meta)) {
+                if (v !== undefined && v !== null) lines.push(`${indent(6)}<${k}>${escapeXml(String(v))}</${k}>`);
+              }
+            }
+            if (item.sourcePages && item.sourcePages.length > 0) {
+              lines.push(`${indent(6)}<source-pages>`);
+              for (const src of item.sourcePages) lines.push(`${indent(7)}<page url="${escapeXml(src)}"/>`);
+              lines.push(`${indent(6)}</source-pages>`);
+            }
+            lines.push(`${indent(5)}</item>`);
+          }
+          lines.push(`${indent(4)}</items>`);
+        }
+
+        lines.push(`${indent(3)}</check>`);
       }
-      lines.push(`${indent(2)}</category>`);
+      lines.push(`${indent(2)}</rule>`);
     }
     lines.push(`${indent(1)}</issues>`);
   } else {

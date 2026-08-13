@@ -92,7 +92,11 @@ describe("generateLlmReport", () => {
     const content = readFileSync(outputPath, "utf-8");
 
     expect(content).toContain("<issues>");
-    expect(content).toContain("<category");
+    // #1536: no <category> wrapper — issues are one flat severity-ordered list
+    // and each rule carries its category/group as attributes.
+    expect(content).not.toContain("<category");
+    expect(content).toContain('category="Core SEO"');
+    expect(content).toContain('group="seo"');
     expect(content).toContain('rule id="core/meta-title"');
     // Docs URL for LLM to look up rule details
     expect(content).toContain(
