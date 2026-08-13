@@ -18,6 +18,7 @@ import { contentQualityRule } from "./quality";
 import { readingLevelRule } from "./reading-level";
 import { staleCopyrightRule } from "./stale-copyright";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
+import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { wordCountRule } from "./word-count";
 
 export const rules: Rule[] = [
@@ -38,6 +39,7 @@ export const rules: Rule[] = [
   mojibakeRule,
   staleCopyrightRule,
   thinVsSiteNormRule,
+  titlePatternOutlierRule,
 ];
 
 export {
@@ -57,5 +59,6 @@ export {
   readingLevelRule,
   staleCopyrightRule,
   thinVsSiteNormRule,
+  titlePatternOutlierRule,
   wordCountRule,
 };

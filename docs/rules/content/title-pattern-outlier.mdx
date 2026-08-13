@@ -1,0 +1,87 @@
+---
+title: "Title Template Consistency"
+description: "Finds pages whose title breaks the template the rest of the site follows"
+---
+
+Finds pages whose title breaks the template the rest of the site follows
+
+| | |
+|---|---|
+| **Rule ID** | `content/title-pattern-outlier` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## How it works
+
+Most sites title their pages with one template: a page name, a separator, and the
+brand. No per-page check can see that template, because it only exists across the
+corpus. This rule infers it from your own crawled titles and reports the pages that
+break it.
+
+It works out two things from the titles themselves:
+
+- the **brand affix**: the segment most titles carry at the same end, first or last
+- the **separator** that sits next to that brand (`|`, `::`, `»`, `>`, ` - `, `: `)
+
+Then it reports four kinds of deviation:
+
+| Deviation | What it means |
+|---|---|
+| Missing brand | The title never mentions the brand the rest of the site carries |
+| Inverted order | The brand is at the opposite end from the norm |
+| Different separator | The brand is separated by something other than the modal separator |
+| Brand only | The title is nothing but the brand, so the page has no name of its own |
+
+Each page is reported once, for its most meaningful deviation.
+
+It stays quiet unless it has grounds to speak:
+
+- Fewer than 10 crawled pages, or fewer than 10 pages with a title: there is no
+  template to infer, so the rule is skipped.
+- No brand affix reaching 70% agreement: the site's titles genuinely follow no
+  single template, so nothing in it is a deviant.
+- On a site with more than one section, a candidate brand only ever seen inside one
+  section is treated as a section label, not the brand.
+- The homepage is exempt: "Acme - tools for X" is a normal home title and a normal
+  departure from the template every other page follows.
+- Pages with no title at all belong to [Meta Title](/rules/core/meta-title), which
+  stays per-page. The two rules never both flag the same page.
+
+Pages generated from the same template sit inside the norm by construction, so a
+large templated site is clean here unless a pocket of pages genuinely drifted.
+
+## Solution
+
+Most of your pages title themselves the same way - a page name, a separator, and your
+brand - and these pages do not. Inconsistent titles cost you brand recall in the
+search results and make templated pages look hand-edited or broken. Fix the template
+at its source (the layout or CMS field that builds the title) rather than page by
+page, keeping the brand on the same side with the same separator everywhere. A page
+that deliberately differs, like the homepage or a campaign landing page, is fine: the
+point is that a handful of pages should not be the exception.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/title-pattern-outlier"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/title-pattern-outlier"]
+disable = ["*"]
+```
