@@ -78,15 +78,18 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // own single whole-crawl check (#1366).
       // 98215 -> 98216: content/title-pattern-outlier, likewise site-scoped, adds
       // its own single whole-crawl check (#1361).
-      expect(v1.findings.length).toBe(98216);
+      // 98216 -> 98217: social/asset-divergence, likewise site-scoped, adds its
+      // own single whole-crawl check (#1371). healthScore.overall is UNMOVED at
+      // 48: one weight-3 warning check in a 4-rule category cannot dominate it.
+      expect(v1.findings.length).toBe(98217);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
       // schema/coverage-outlier, 269 -> 270 url/slug-convention, 270 -> 271
-      // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier;
-      // anything else means a rule id leaked in, so fix that rather than this
-      // number.
-      expect(v1.perRuleTally.length).toBe(272);
+      // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier,
+      // 272 -> 273 social/asset-divergence; anything else means a rule id leaked
+      // in, so fix that rather than this number.
+      expect(v1.perRuleTally.length).toBe(273);
     },
     180_000,
   );

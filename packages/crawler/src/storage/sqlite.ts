@@ -57,7 +57,7 @@ export interface ContentStoreAdapter {
 }
 
 // Schema version - increment when schema changes
-const SCHEMA_VERSION = 20;
+const SCHEMA_VERSION = 21;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -285,6 +285,23 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE page_features ADD COLUMN nap_address_format TEXT`,
     `ALTER TABLE page_features ADD COLUMN nap_tel_link INTEGER`,
     `ALTER TABLE page_features ADD COLUMN nap_mailto_link INTEGER`,
+  ],
+  // Version 21: page_features site-chrome scalars — the per-page favicon,
+  // theme-color and default OG image the social/asset-divergence rule compares
+  // across the corpus to find pages running a stale layout (#1371), so its
+  // streaming path reads these instead of re-holding every parsed page. ADDITIVE
+  // columns; ALTER is idempotent (the runner swallows "duplicate column name").
+  // Local sqlite only — NOT a prod migration.
+  //
+  // No backfill, for the v19/v20 reason: `extractPageFeatures` always writes a
+  // FULL row via INSERT OR REPLACE keyed by (crawl_id, normalized_url), each
+  // crawl writes only its own crawl_id, and the streaming loop re-extracts every
+  // scored page in the current run — so no pre-v21 row is ever read. NULL reads
+  // back as null, which is the same as "this page declared no such asset".
+  21: [
+    `ALTER TABLE page_features ADD COLUMN favicon_href TEXT`,
+    `ALTER TABLE page_features ADD COLUMN theme_color TEXT`,
+    `ALTER TABLE page_features ADD COLUMN og_image TEXT`,
   ],
 };
 
@@ -685,6 +702,9 @@ CREATE TABLE IF NOT EXISTS page_features (
   nap_address_format TEXT,
   nap_tel_link INTEGER,
   nap_mailto_link INTEGER,
+  favicon_href TEXT,
+  theme_color TEXT,
+  og_image TEXT,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -3430,8 +3450,9 @@ export class SQLiteStorage implements CrawlStorage {
       visible_author, visible_date, transfer_bytes, template_fp, secret_hits,
       meta_noindex, indexable_reasons, rich_result_types,
       nap_name, nap_phones, nap_phone_formats, nap_address, nap_address_format,
-      nap_tel_link, nap_mailto_link
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      nap_tel_link, nap_mailto_link,
+      favicon_href, theme_color, og_image
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   private pageFeatureParams(
@@ -3468,6 +3489,9 @@ export class SQLiteStorage implements CrawlStorage {
       row.napAddressFormat,
       row.napTelLink ? 1 : 0,
       row.napMailtoLink ? 1 : 0,
+      row.faviconHref,
+      row.themeColor,
+      row.ogImage,
     ];
   }
 
@@ -3826,6 +3850,9 @@ export class SQLiteStorage implements CrawlStorage {
       napAddressFormat: (row.nap_address_format as string | null) ?? null,
       napTelLink: row.nap_tel_link === 1,
       napMailtoLink: row.nap_mailto_link === 1,
+      faviconHref: (row.favicon_href as string | null) ?? null,
+      themeColor: (row.theme_color as string | null) ?? null,
+      ogImage: (row.og_image as string | null) ?? null,
     };
   }
 }

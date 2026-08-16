@@ -19,6 +19,8 @@
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
 
+import { extractSiteChromeSignal } from "@squirrelscan/rules";
+
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
 import type { ParsedPage } from "@squirrelscan/rules";
 
@@ -95,6 +97,10 @@ export function extractPageFeatures(page: PageRecord, parsed: ParsedPage): PageF
   // Same extractor local/nap-consistency's legacy path calls on the live parsed
   // page, so the stored signal and the re-derived one are identical by construction.
   const nap = extractNapSignal(parsed);
+  // Same extractor social/asset-divergence's legacy path calls on the live parsed
+  // page, resolved against the SAME base URL (`site.pages[].url` is this exact
+  // value), so the stored assets and the re-derived ones are identical.
+  const chrome = extractSiteChromeSignal(parsed, page.normalizedUrl);
 
   return {
     normalizedUrl: page.normalizedUrl,
@@ -128,5 +134,8 @@ export function extractPageFeatures(page: PageRecord, parsed: ParsedPage): PageF
     napAddressFormat: nap.addressFormat,
     napTelLink: nap.telLink,
     napMailtoLink: nap.mailtoLink,
+    faviconHref: chrome.faviconHref,
+    themeColor: chrome.themeColor,
+    ogImage: chrome.ogImage,
   };
 }

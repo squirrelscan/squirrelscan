@@ -1,0 +1,95 @@
+---
+title: "Site Asset Consistency"
+description: "Finds pages whose favicon, theme-color or default OG image differs from the rest of the site"
+---
+
+Finds pages whose favicon, theme-color or default OG image differs from the rest of the site
+
+| | |
+|---|---|
+| **Rule ID** | `social/asset-divergence` |
+| **Category** | [Social Media](/rules/social) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## How it works
+
+Your favicon, your `theme-color` and your fallback share image all come from one
+layout, so every page should carry the same three. When a pocket of pages carries
+different ones, those pages are usually running an older template: a section that
+missed a redesign, a cached shell, or a second layout nobody remembers owning.
+Nothing about such a page looks wrong on its own, which is why no per-page check
+can see it.
+
+Three axes are compared across the crawl:
+
+| Axis | What is read |
+|---|---|
+| Favicon | The first `<link rel="icon">` href, resolved to an absolute URL |
+| Theme color | `<meta name="theme-color">` content |
+| Default OG image | `og:image`, on the pages that should share one |
+
+Each axis is judged against your site's own modal value, and only the minority
+form is reported.
+
+### Per-page share images are not a finding
+
+Articles and products (plus recipes, events, profiles and media pages) **should**
+ship their own `og:image`. Those page types never vote on the OG axis and are
+never reported on it. Neither is any page whose `og:image` is used by that page
+alone, whatever its type: a fallback is by definition shared, so a one-off image
+is a per-page asset rather than a template running behind. What the rule compares
+there is the fallback the rest of the site shares. Favicon and theme-color have no
+such exemption: they are browser chrome, not content, and stay uniform even on an
+article.
+
+### It stays quiet unless it has grounds to speak
+
+- Fewer than 10 crawled pages: there is no norm to judge against, so the rule is
+  skipped.
+- Fewer than 10 pages declaring an asset: that axis is not judged at all.
+- No value reaching 70% agreement on any axis: your site genuinely varies its
+  chrome, so nothing in it is a deviant.
+- A page that declares nothing never votes and is never a deviant. A missing
+  favicon belongs to [Favicon](/rules/core/favicon) and a missing share image to
+  the Open Graph rules, so the two never both flag the same page.
+- Apple touch icons and mask icons legitimately differ from the tab icon and never
+  stand in for it. A light/dark `theme-color` pair is normal and reads as one
+  value.
+
+## Solution
+
+Your favicon, theme-color and fallback share image come from one layout, so every
+page should carry the same three. Pages that carry different ones are usually
+running an older template: a section that missed a redesign, a cached shell, or a
+second layout nobody remembers owning. The visible cost is inconsistent link
+previews and a tab icon that changes as visitors move around the site. Fix it
+where the assets are declared (the shared head partial or theme config) rather
+than page by page. Per-page share images on articles and products are correct and
+are not reported here: what this rule compares is the fallback the rest of the
+site shares.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["social/asset-divergence"]
+```
+
+### Disable all Social Media rules
+
+```toml squirrel.toml
+[rules]
+disable = ["social/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["social/asset-divergence"]
+disable = ["*"]
+```

@@ -94,6 +94,9 @@ function featureRow(spec: PageSpec, i: number): PageFeatureRow {
     napAddressFormat: null,
     napTelLink: false,
     napMailtoLink: false,
+    faviconHref: null,
+    themeColor: null,
+    ogImage: null,
   };
 }
 
