@@ -22,13 +22,53 @@ const GENERIC_ANCHORS = [
   "continue",
 ];
 
+function hasAccessibleName(link: Element, doc: Document): boolean {
+  const text = link.textContent?.trim() || "";
+  const hasImage = link.querySelector("img");
+  const imageAlt = hasImage?.getAttribute("alt") || "";
+  if (text || imageAlt) return true;
+
+  const ariaLabel = link.getAttribute("aria-label")?.trim();
+  if (ariaLabel) return true;
+
+  const labelledBy = link.getAttribute("aria-labelledby");
+  if (labelledBy) {
+    const ids = labelledBy.split(/\s+/);
+    const hasLabel = ids.some((id) => {
+      const el = doc.getElementById(id);
+      return el?.textContent?.trim();
+    });
+    if (hasLabel) return true;
+  }
+
+  const title = link.getAttribute("title")?.trim();
+  if (title) return true;
+
+  const svg = link.querySelector("svg");
+  if (svg) {
+    const svgTitle = svg.querySelector("title")?.textContent?.trim();
+    const svgAriaLabel = svg.getAttribute("aria-label")?.trim();
+    if (svgTitle || svgAriaLabel) return true;
+  }
+
+  const roleImg = link.querySelector('[role="img"]');
+  if (roleImg?.getAttribute("aria-label")?.trim()) return true;
+
+  return false;
+}
+
+function isGeneric(link: Element): boolean {
+  const text = link.textContent?.trim().toLowerCase() || "";
+  return GENERIC_ANCHORS.includes(text);
+}
+
 export const anchorTextRule: Rule = {
   meta: {
     id: "links/anchor-text",
     name: "Anchor Text",
     description: "Checks for empty or generic anchor text",
     solution:
-      "Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing.",
+      "Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing. When a card links to the same target more than once (e.g. an image link and a headline link), only one of those links needs descriptive text — the group is evaluated together, not link by link.",
     category: "links",
     scope: "page",
     severity: "warning",
@@ -41,66 +81,52 @@ export const anchorTextRule: Rule = {
     if (!doc) return { checks: [] };
 
     const links = doc.querySelectorAll("a[href]");
-    const emptyAnchors: Array<{ href: string; snippet: string }> = [];
-    const genericAnchors: string[] = [];
+
+    // Group links by resolved target URL so redundant links to the same
+    // destination (image + headline + "Read more") are evaluated as one unit.
+    const groups = new Map<string, Element[]>();
 
     for (const link of links) {
       const href = link.getAttribute("href");
       if (!href) continue;
-
-      // Skip anchor-only links
       if (href.startsWith("#")) continue;
 
-      // Get text content, excluding images
-      const text = link.textContent?.trim() || "";
-      const hasImage = link.querySelector("img");
-      const imageAlt = hasImage?.getAttribute("alt") || "";
+      let target: string;
+      try {
+        target = new URL(href, ctx.page.url).href;
+      } catch {
+        target = href;
+      }
 
-      // Check for empty anchor
-      if (!text && !imageAlt) {
-        // Check aria-label on <a>
-        const ariaLabel = link.getAttribute("aria-label")?.trim();
-        if (ariaLabel) continue;
+      const group = groups.get(target);
+      if (group) group.push(link);
+      else groups.set(target, [link]);
+    }
 
-        // Check aria-labelledby on <a>
-        const labelledBy = link.getAttribute("aria-labelledby");
-        if (labelledBy) {
-          const ids = labelledBy.split(/\s+/);
-          const hasLabel = ids.some((id) => {
-            const el = doc.getElementById(id);
-            return el?.textContent?.trim();
-          });
-          if (hasLabel) continue;
-        }
+    const emptyAnchors: Array<{ href: string; snippet: string }> = [];
+    const genericAnchors: string[] = [];
 
-        // Check title on <a>
-        const title = link.getAttribute("title")?.trim();
-        if (title) continue;
+    for (const [target, groupLinks] of groups) {
+      // A group passes if any member carries a descriptive (non-generic) accessible name.
+      const hasDescriptiveLink = groupLinks.some(
+        (link) => hasAccessibleName(link, doc) && !isGeneric(link),
+      );
+      if (hasDescriptiveLink) continue;
 
-        // Check SVG with accessible name
-        const svg = link.querySelector("svg");
-        if (svg) {
-          const svgTitle = svg.querySelector("title")?.textContent?.trim();
-          const svgAriaLabel = svg.getAttribute("aria-label")?.trim();
-          if (svgTitle || svgAriaLabel) continue;
-        }
+      const anyAccessible = groupLinks.some((link) => hasAccessibleName(link, doc));
 
-        // Check role="img" with aria-label
-        const roleImg = link.querySelector('[role="img"]');
-        if (roleImg?.getAttribute("aria-label")?.trim()) continue;
-
+      if (!anyAccessible) {
+        const first = groupLinks[0];
         emptyAnchors.push({
-          href,
-          snippet: truncateHtml(link.outerHTML),
+          href: target,
+          snippet: truncateHtml(first.outerHTML),
         });
         continue;
       }
 
-      // Check for generic anchor text
-      const anchor = text.toLowerCase();
-      if (GENERIC_ANCHORS.includes(anchor)) {
-        genericAnchors.push(`"${text}"`);
-      }
+      const genericLink = groupLinks.find((link) => isGeneric(link));
+      const text = genericLink?.textContent?.trim() || "";
+      genericAnchors.push(`"${text}"`);
     }
 
     if (emptyAnchors.length > 0) {
