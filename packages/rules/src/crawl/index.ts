@@ -20,6 +20,7 @@ import { sitemapCoverageRule } from "./sitemap-coverage";
 import { sitemapDomainRule } from "./sitemap-domain";
 import { sitemapExistsRule } from "./sitemap-exists";
 import { sitemapLastmodChurnRule } from "./sitemap-lastmod-churn";
+import { sitemapLastmodDriftRule } from "./sitemap-lastmod-drift";
 import { sitemapValidRule } from "./sitemap-valid";
 import { soft404Rule } from "./soft-404";
 
@@ -31,6 +32,7 @@ export const rules: Rule[] = [
   sitemapDomainRule,
   sitemapCoverageRule,
   sitemapLastmodChurnRule,
+  sitemapLastmodDriftRule,
   robotsMetaConflictRule,
   noindexInSitemapRule,
   indexabilityCheck,
@@ -63,6 +65,7 @@ export {
   sitemapExistsRule,
   sitemap4xxRule,
   sitemapLastmodChurnRule,
+  sitemapLastmodDriftRule,
   sitemapValidRule,
   soft404Rule,
 };
