@@ -1,0 +1,80 @@
+---
+title: "Sitemap Lastmod Drift"
+description: "Checks that sitemap lastmod matches the page's own dateModified"
+---
+
+Checks that sitemap lastmod matches the page's own dateModified
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/sitemap-lastmod-drift` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## What it checks
+
+For every crawled page that appears in a sitemap with a `lastmod`, the rule compares that
+`lastmod` against the page's own strongest date signal: schema.org `dateModified`, else the
+`dateModified`-equivalent markup (`[itemprop="dateModified"]` meta / `<time>`), else the visible
+published date. Pages with no date signal at all are skipped: that is
+[Content Freshness](/rules/content/freshness) territory, not drift.
+
+The two directions are reported as separate checks, because they point at different code:
+
+| Check | Fires when | Usual cause |
+|-------|-----------|-------------|
+| `sitemap-lastmod-behind-page` | `lastmod` is older than the page's `dateModified` by more than 7 days | Stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` |
+| `sitemap-lastmod-ahead-of-page` | `lastmod` is newer than the page's `dateModified` by more than 30 days | `lastmod` stamped at build/deploy time instead of on content change |
+
+Each finding reports both dates and the gap in days. Same-day and within-threshold differences
+never warn.
+
+Lastmod being *older* than the page's own `dateModified` is the more clearly wrong of the two:
+it tells crawlers not to bother re-fetching a page that has in fact changed.
+
+## Solution
+
+A sitemap lastmod that disagrees with the page's own dateModified points at the sitemap generator, not the content. Lastmod OLDER than the page's dateModified tells crawlers not to bother with a page that has in fact changed - usually a stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` (a precedence inversion; both fields are present, so presence checks pass). Lastmod NEWER than the page's dateModified usually means lastmod is stamped at build/deploy time. Drive both values from the same content-modification timestamp.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `ahead_days` | number | `30` | Days a sitemap lastmod may run ahead of the page's own dateModified before warning |
+| `behind_days` | number | `7` | Days a sitemap lastmod may lag the page's own dateModified before warning |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rules."crawl/sitemap-lastmod-drift"]
+ahead_days = 30
+behind_days = 7
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/sitemap-lastmod-drift"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/sitemap-lastmod-drift"]
+disable = ["*"]
+```

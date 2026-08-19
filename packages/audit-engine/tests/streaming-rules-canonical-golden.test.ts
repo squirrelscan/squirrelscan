@@ -83,16 +83,18 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // at all — so it contributes a tally key below without a single finding.
       // 98216 -> 98217: crawl/sitemap-lastmod-churn, likewise site-scoped, adds
       // its own single whole-crawl check (#105).
-      expect(v1.findings.length).toBe(98217);
+      // 98217 -> 98218: crawl/sitemap-lastmod-drift, likewise site-scoped, adds
+      // its own single whole-crawl check (#107).
+      expect(v1.findings.length).toBe(98218);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
       // schema/coverage-outlier, 269 -> 270 url/slug-convention, 270 -> 271
       // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier,
-      // 272 -> 273 schema/rating-scope, 273 -> 274 crawl/sitemap-lastmod-churn;
-      // anything else means a rule id leaked in, so fix that rather than this
-      // number.
-      expect(v1.perRuleTally.length).toBe(274);
+      // 272 -> 273 schema/rating-scope, 273 -> 274 crawl/sitemap-lastmod-churn,
+      // 274 -> 275 crawl/sitemap-lastmod-drift; anything else means a rule id
+      // leaked in, so fix that rather than this number.
+      expect(v1.perRuleTally.length).toBe(275);
     },
     180_000,
   );
