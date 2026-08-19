@@ -177,6 +177,7 @@
                   "rules/crawl/sitemap-4xx",
                   "rules/crawl/sitemap-coverage",
                   "rules/crawl/sitemap-domain",
+                  "rules/crawl/sitemap-lastmod-churn",
                   "rules/crawl/html-size",
                   "rules/crawl/pdf-size",
                   "rules/crawl/soft-404"

@@ -1,0 +1,42 @@
+---
+title: "Sitemap Lastmod Churn"
+description: "Checks that sitemap lastmod values aren't all stamped with the same build date"
+---
+
+Checks that sitemap lastmod values aren't all stamped with the same build date
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/sitemap-lastmod-churn` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Solution
+
+If every URL in your sitemap carries the same (or nearly the same) lastmod date, the field is being stamped at build/deploy time rather than reflecting real content changes. This makes lastmod useless as a freshness signal - search engines may learn to ignore it entirely. Update lastmod only when a page's content actually changes, driven by your CMS or version control history, not by the deploy pipeline.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/sitemap-lastmod-churn"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/sitemap-lastmod-churn"]
+disable = ["*"]
+```
