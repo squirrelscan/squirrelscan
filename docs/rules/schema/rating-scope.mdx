@@ -1,0 +1,94 @@
+---
+title: "Rating Scope"
+description: "Finds AggregateRating markup that is not about the page it sits on, or that no reader can see"
+---
+
+Finds AggregateRating markup that is not about the page it sits on, or that no reader can see
+
+| | |
+|---|---|
+| **Rule ID** | `schema/rating-scope` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## How it works
+
+[Review Schema](/rules/schema/review) checks the *shape* of `AggregateRating`: does it have a
+`ratingValue`, does it have a `ratingCount` or `reviewCount`. A single sitewide rating block
+emitted by a template satisfies all of that on every page of the site — including the privacy
+policy, the terms page and every blog post. This rule asks the two questions the shape check
+cannot:
+
+1. **Can a reader see a rating on this page at all?** Google requires the rating to be visible in
+   the page content. Rating markup that exists only in the JSON-LD is a structured-data policy
+   violation, not a validation error, and it is the classic cause of a manual action.
+2. **Is the rated entity the subject of this page?** A `LocalBusiness` rating attached to a
+   privacy policy, a terms page or a blog post is a rating of the site, not of the page carrying
+   it.
+
+Repetition on its own is deliberately **not** the signal. On a legitimate local-business site the
+review badge really is on screen on most pages, and the rating really is about the business the
+page is about — a rule that fired on "AggregateRating appears on many pages" would flag every one
+of them. What is reported is the relationship between the rating and the page it sits on.
+
+The rule stays quiet unless it has grounds to speak:
+
+- A page with no `AggregateRating` produces no output at all.
+- A rating visible anywhere in the rendered page text clears the visibility check — a star badge
+  (`★★★★★ 4.9`), "4.9 out of 5", "18 reviews", a decimal rating printed in the copy, or the same
+  wording in `alt` / `aria-label` / `title` text.
+- A third-party review widget (Trustpilot, Yotpo, Judge.me, Elfsight and friends) renders its
+  badge client-side, so the rating is legitimately absent from a raw-HTML crawl. Its presence
+  clears the visibility check rather than accusing the page.
+- The subject check runs only on page types where a rating cannot be about the page: privacy
+  policies, terms pages and articles or blog posts. Everything else — homepages, location pages,
+  product pages, category pages — is left alone.
+- On an article the subject check reports only a rating attached to the site's own business or
+  organization entity. An article that reviews a `Product` legitimately carries that product's
+  rating.
+
+Each finding names the page type and the rated entity, so it reads as "this `LocalBusiness` rating
+is on your privacy policy", not as a missing field.
+
+## Solution
+
+`AggregateRating` must describe the thing **this** page is about, and the rating has to be visible
+to the reader in the page content. A single sitewide rating emitted by a template lands on pages
+that cannot be rated, where it becomes a self-serving rating of the site rather than markup about
+the page.
+
+Google treats invisible or off-topic rating markup as a structured-data policy violation and
+issues manual actions for it, which costs the whole site its rich results — not just the page that
+was flagged.
+
+- Move the rating onto the pages whose subject it actually describes: the `LocalBusiness` on the
+  homepage and location pages, the `Product` on its own product page.
+- Drop the rating block from templates that render legal pages and blog posts.
+- Where a page keeps the markup, make sure the same rating is on screen for readers, with the same
+  value the markup claims.
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/rating-scope"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/rating-scope"]
+disable = ["*"]
+```

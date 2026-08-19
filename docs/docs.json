@@ -260,6 +260,7 @@
                   "rules/schema/organization",
                   "rules/schema/video",
                   "rules/schema/review",
+                  "rules/schema/rating-scope",
                   "rules/schema/coverage-outlier"
                 ]
               },

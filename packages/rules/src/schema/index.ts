@@ -10,6 +10,7 @@ import { jsonLdValidRule } from "./json-ld-valid";
 import { localBusinessSchemaRule } from "./local-business";
 import { organizationSchemaRule } from "./organization";
 import { productSchemaRule } from "./product";
+import { ratingScopeRule } from "./rating-scope";
 import { reviewSchemaRule } from "./review";
 import { videoSchemaRule } from "./video";
 import { websiteSearchSchemaRule } from "./website-search";
@@ -25,6 +26,7 @@ export const rules: Rule[] = [
   organizationSchemaRule,
   videoSchemaRule,
   reviewSchemaRule,
+  ratingScopeRule,
   schemaCoverageOutlierRule,
 ];
 
@@ -36,6 +38,7 @@ export {
   localBusinessSchemaRule,
   organizationSchemaRule,
   productSchemaRule,
+  ratingScopeRule,
   reviewSchemaRule,
   schemaCoverageOutlierRule,
   videoSchemaRule,
