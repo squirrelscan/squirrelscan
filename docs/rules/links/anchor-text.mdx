@@ -15,7 +15,20 @@ Checks for empty or generic anchor text
 
 ## Solution
 
-Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing.
+Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing. When a card links to the same target more than once (e.g. an image link and a headline link), only one of those links needs descriptive text — the group is evaluated together, not link by link.
+
+## How this rule evaluates links
+
+This rule groups a page's outgoing links by resolved target URL before evaluating them, rather than scoring every `<a>` tag on its own. That matters for the common card pattern — an image link, a headline link, and a "Read more" link all pointing at the same destination — where the headline already names the target and the other two links are intentionally redundant.
+
+A target group is flagged as:
+
+- **`empty-anchor`** only when *no* link in the group carries any accessible name (text content, image `alt`, `aria-label`, `aria-labelledby`, `title`, or an accessible SVG name).
+- **`generic-anchor`** only when *every* link in the group uses generic text (e.g. "read more", "click here") and none carries a descriptive accessible name.
+
+A group with at least one descriptively-labeled link passes, even if its sibling links (an image wrapper, a "Read more" affordance) are empty or generic.
+
+Note this is narrower than it sounds: a genuinely empty single link, or a card where every link is empty or generic, is still reported. If you need to flag empty links in the tab order regardless of sibling context, that's an accessibility concern handled by the `a11y` category — this rule is an SEO check on whether the destination is described.
 
 ## Enable / Disable
 
