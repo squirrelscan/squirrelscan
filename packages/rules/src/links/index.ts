@@ -11,6 +11,7 @@ import { externalLinksRule } from "./external-links";
 import { httpsDowngradeRule } from "./https-downgrade";
 import { internalLinksRule } from "./internal-links";
 import { invalidLinksRule } from "./invalid-links";
+import { noContextualInboundRule } from "./no-contextual-inbound";
 import { nofollowInternalRule } from "./nofollow-internal";
 import { orphanPagesRule } from "./orphan-pages";
 import { redirectChainsRule } from "./redirect-chains";
@@ -30,6 +31,7 @@ export const rules: Rule[] = [
   nofollowInternalRule,
   orphanPagesRule,
   weakInternalLinksRule,
+  noContextualInboundRule,
   deadEndPages,
   anchorTextRule,
   httpsDowngradeRule,
@@ -46,6 +48,7 @@ export {
   httpsDowngradeRule,
   internalLinksRule,
   invalidLinksRule,
+  noContextualInboundRule,
   nofollowInternalRule,
   orphanPagesRule,
   redirectChainsRule,

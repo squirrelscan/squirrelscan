@@ -21,7 +21,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 ## Features
 
-- **276 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **277 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **Fast crawler** - Highly optimized memory efficient crawler 
 - **Agent Experience** - Audit agent experience to assist agents in using your site
 - **Security Audit** - Detect phishing kits, leaked credentials, and more 
@@ -42,7 +42,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Agent Experience | 17 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, pay-per-crawl, response token weight |
 | Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
 | Security | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
-| Links | 14 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, HTTPS downgrades |
+| Links | 15 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, pages linked only from sitewide chrome, HTTPS downgrades |
 | Content | 18 | Text quality and honesty: duplicate titles and descriptions, title-template consistency, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
 | Performance | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
 | Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
@@ -59,7 +59,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
 | Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
 
-**Total: 276 rules across 21 categories**
+**Total: 277 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
