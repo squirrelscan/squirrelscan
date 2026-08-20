@@ -834,6 +834,8 @@ export interface SitemapRecord {
   childSitemaps: string[];
   errors: string[];
   fetchedAt: number;
+  /** Declared `xmlns:news`. See SitemapData.isNewsSitemap — lastmod heuristics must exclude these. */
+  isNewsSitemap?: boolean;
 }
 
 export interface SitemapUrlRecord {

@@ -15,7 +15,15 @@ Checks that sitemap lastmod values aren't all stamped with the same build date
 
 ## Solution
 
-If every URL in your sitemap carries the same (or nearly the same) lastmod date, the field is being stamped at build/deploy time rather than reflecting real content changes. This makes lastmod useless as a freshness signal - search engines may learn to ignore it entirely. Update lastmod only when a page's content actually changes, driven by your CMS or version control history, not by the deploy pipeline.
+If every URL in your sitemap carries the same (or nearly the same) lastmod date, the field is being stamped at build/deploy time rather than reflecting real content changes. This makes lastmod useless as a freshness signal - search engines may learn to ignore it entirely. Update lastmod only when a page's content actually changes, driven by your CMS or version control history, not by the deploy pipeline. Google News sitemaps are excluded from this check: they hold only about 48 hours of articles by design, so their lastmod values are supposed to cluster.
+
+## What this rule does not count
+
+**Google News sitemaps are excluded.** A news sitemap (one declaring the `xmlns:news` namespace) carries roughly the last 48 hours of articles by specification, so its `lastmod` values always fall on one or two days. Counting them would flag every publisher that has one. Detection is by namespace, not filename, so a news sitemap served from any path is recognised.
+
+If the only `lastmod` values found on your site come from a news sitemap, the check reports as skipped and says so, rather than reporting a problem you do not have.
+
+The check needs at least 20 URLs carrying a `lastmod` (news-sitemap URLs excluded) before it will judge anything. Below that it skips, because a handful of pages legitimately updated in the same week is indistinguishable from a build stamp.
 
 ## Enable / Disable
 

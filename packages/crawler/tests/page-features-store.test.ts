@@ -11,7 +11,7 @@ import { join } from "path";
 import { Effect } from "effect";
 
 import type { PageFeatureRow } from "../src/storage/types";
-import { SQLiteStorage } from "../src/storage/sqlite";
+import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -465,7 +465,7 @@ describe("page_features migration (v17 → current)", () => {
     const version = check.prepare("SELECT version FROM schema_version LIMIT 1").get() as {
       version: number;
     };
-    expect(version.version).toBe(20);
+    expect(version.version).toBe(SCHEMA_VERSION);
     const cols = (
       check.prepare("PRAGMA table_info(page_features)").all() as Array<{ name: string }>
     ).map((c) => c.name);
@@ -546,7 +546,7 @@ describe("page_features migration (v17 → current)", () => {
     const version = check.prepare("SELECT version FROM schema_version LIMIT 1").get() as {
       version: number;
     };
-    expect(version.version).toBe(20);
+    expect(version.version).toBe(SCHEMA_VERSION);
     check.close();
   });
 });
