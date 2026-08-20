@@ -1,0 +1,116 @@
+---
+title: "Date Agreement"
+description: "Checks the visible date, schema dates and URL/title year agree"
+---
+
+Checks the visible date, schema dates and URL/title year agree
+
+| | |
+|---|---|
+| **Rule ID** | `content/date-agreement` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## What it checks
+
+A page states its date up to five times: the visible byline, schema.org
+`datePublished` / `dateModified`, a year in the URL or the title, the sitemap `lastmod`, and the
+`Last-Modified` header. [Content Freshness](/rules/content/freshness) passes as soon as **any** of
+them exists and [Content Dates](/rules/eeat/content-dates) reports how many pages carry them, so a
+page whose signals contradict each other passes both. The disagreement is the defect, and this rule
+is the only one that looks for it. (The sitemap side of the same question is
+[Sitemap Lastmod Drift](/rules/crawl/sitemap-lastmod-drift); this rule stays on the page.)
+
+Four page-side signals are extracted and reported on every finding:
+
+| Signal | Read from |
+|--------|-----------|
+| Visible date | The date the reader sees: a rendered `<time>`, byline/entry-meta markup, or a short date-only line at the top of main content |
+| Schema document date | `datePublished` / `dateModified` on a node that describes the DOCUMENT (`Article`, `BlogPosting`, `NewsArticle`, `WebPage`, `FAQPage`, ...), `@graph` included |
+| URL / title year | A four-digit year in the URL path, else in the `<title>` |
+| `Last-Modified` | The HTTP response header |
+
+| Check | Fires when |
+|-------|-----------|
+| `byline-vs-schema-date` | The visible date and the schema document date are more than `tolerance_days` apart. Both values are named in the finding |
+| `visible-date-missing` | An `Article`-family node states dates the page never renders — a date only crawlers can see |
+| `url-title-year` | The year in the URL, else in the title, is not the year of either schema document date |
+| `schema-date-source` | Informational: the page shows a date, but its only schema date sits on a node that does not describe the page |
+
+Every visible date is measured against the **closest** schema date and the best pairing decides, so
+a page showing "Published 6 January · Updated 10 February" is telling the truth about both and stays
+quiet. A page-level node (`WebPage`, `CollectionPage`) alongside several visible dates is an index
+or an archive — those dates belong to the entries it lists, so nothing is compared.
+
+`visible-date-missing` fires only when main content prints no date-shaped string **anywhere**. A
+date this rule declined to read as a byline is still a date on the reader's screen, and "this page
+shows no date" has to be literally true to be worth saying.
+
+`Last-Modified` is reported alongside the others but never raises a warning on its own: origins
+stamp it at deploy time far more often than at content-change time, so a disagreement there is not
+evidence of a defect.
+
+### What it deliberately does not report
+
+Both of these are false positives that a naive version of this check produced in bulk, so they are
+guarded rather than tuned:
+
+- **A date on a node that does not describe the page.** A sitewide `SoftwareApplication`, `Product`
+  or `Organization` node carries its own `datePublished` — the release date of that entity, not the
+  publication date of the post it happens to sit beside. Taking the first `datePublished` in the
+  document attributes one placeholder date to every page on the site. Only document-describing
+  `@type`s can raise a disagreement; a date from anywhere else is reported with its node type noted
+  (`schema-date-source`) and never compared.
+- **A date-shaped string that is not a byline.** A byline is a position, not a pattern: running
+  prose ("INP replaced FID on March 12, 2024") and outbound citations
+  (`<a href="https://web.dev/...">March 12, 2024</a>`) are date-shaped and are not this page's
+  publication date. A candidate must sit near the top of main content **and** look like byline
+  markup — a `<time>` element, `byline`/`entry-meta`-style markup, or a short line that says nothing
+  beyond the date. An anchor's own text never counts.
+
+A `WebPage` node carrying dates is not required to render them: WordPress SEO plugins emit one on
+every page of a site, contact form included, so demanding a visible date there would warn on
+everything.
+
+## Solution
+
+A page states its date more than once - the visible byline, schema.org datePublished/dateModified, a year in the URL or title, the sitemap lastmod, the Last-Modified header - and readers and crawlers do not all read the same one. When they disagree, at least one is wrong, and presence checks cannot tell you which: they pass as soon as any single signal exists. Drive every date on the page from ONE content timestamp. If the visible byline disagrees with the schema, fix whichever renders from the wrong field (a common cause is the template printing a build-time or hardcoded value while the schema prints the CMS field). If the schema carries dates the reader never sees, render the date in the article header - Google asks for a visible date on dated content, and a date only crawlers can see is not one. Check the schema date is attached to the node describing the page (Article/BlogPosting/WebPage): a datePublished on a sitewide SoftwareApplication or Organization node is that entity's own date and says nothing about this page.
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `tolerance_days` | number | `1` | Days the visible byline date may differ from the schema document date before warning |
+
+### Configuration Example
+
+```toml squirrel.toml
+[rule_options."content/date-agreement"]
+tolerance_days = 1
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/date-agreement"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/date-agreement"]
+disable = ["*"]
+```

@@ -5,6 +5,7 @@ import type { Rule } from "../types";
 import { articleLinksRule } from "./article-links";
 import { authorInfoRule } from "./author-info";
 import { brokenHtmlRule } from "./broken-html";
+import { dateAgreementRule } from "./date-agreement";
 import { duplicateDescriptionRule } from "./duplicate-description";
 import { duplicateTitleRule } from "./duplicate-title";
 import { freshnessRule } from "./freshness";
@@ -40,6 +41,7 @@ export const rules: Rule[] = [
   staleCopyrightRule,
   thinVsSiteNormRule,
   titlePatternOutlierRule,
+  dateAgreementRule,
 ];
 
 export {
@@ -47,6 +49,7 @@ export {
   authorInfoRule,
   brokenHtmlRule,
   contentQualityRule,
+  dateAgreementRule,
   duplicateDescriptionRule,
   duplicateTitleRule,
   freshnessRule,

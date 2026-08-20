@@ -245,7 +245,8 @@
                   "rules/content/stale-copyright",
                   "rules/content/mojibake",
                   "rules/content/thin-vs-site-norm",
-                  "rules/content/title-pattern-outlier"
+                  "rules/content/title-pattern-outlier",
+                  "rules/content/date-agreement"
                 ]
               },
               {
