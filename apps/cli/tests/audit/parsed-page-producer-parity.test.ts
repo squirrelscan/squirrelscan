@@ -103,3 +103,34 @@ describe("ParsedPage producer parity — contactLinks", () => {
     }
   });
 });
+
+// #109 — `links/no-contextual-inbound` reads `LinkData.isChrome`, and which
+// producer ran depends on whether the crawl stored `parsedData`. A flag set in
+// only some of them would make the rule silently pass on half the audit paths.
+const CHROME_HTML = `<!DOCTYPE html><html><head><title>t</title></head><body>
+<nav><a href="/nav">nav</a></nav>
+<main><p><a href="/body">body</a></p></main>
+<footer><a href="/legal">legal</a></footer>
+</body></html>`;
+
+function chromeRecord(): PageRecord {
+  return { ...pageRecord(), html: CHROME_HTML } as PageRecord;
+}
+
+describe("ParsedPage producer parity — isChrome", () => {
+  test("all three producers classify nav/footer as chrome and body copy as not", () => {
+    const produced = [
+      parsePage(CHROME_HTML, URL),
+      parseHtmlForRules(CHROME_HTML, URL),
+      parsePageRecord(chromeRecord())!,
+    ];
+
+    for (const parsed of produced) {
+      expect(parsed.links.map((l) => [l.url, l.isChrome])).toEqual([
+        ["https://example.com/nav", true],
+        ["https://example.com/body", false],
+        ["https://example.com/legal", true],
+      ]);
+    }
+  });
+});

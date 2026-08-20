@@ -21,6 +21,8 @@ import type {
   TwitterData,
 } from "@squirrelscan/core-contracts";
 
+import { isInSiteChrome } from "./extractors/chrome";
+
 import type { AuthorInfo } from "./schema";
 import type { PageType } from "./page-type";
 import type { SchemaCollection } from "./schema/collection";
@@ -122,8 +124,14 @@ export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
       const url = new URL(normalizedHref, baseUrl).toString();
       const text = (anchor as Element).textContent?.trim() ?? "";
       const isInternal = new URL(url).hostname === baseUrlObj.hostname;
+      // Whether the anchor sat in sitewide chrome (#109). This extractor is the
+      // one whose output the crawler SERIALIZES into `parsedData`, which both the
+      // legacy `site.pages` path and `createSiteQuery` re-read — so a flag set
+      // only in the extractors/links.ts variant would be absent everywhere it
+      // matters. Cheap: an ancestor tagName walk, no attribute reads.
+      const isChrome = isInSiteChrome(anchor as Element);
 
-      links.push({ url, text, isInternal });
+      links.push({ url, text, isInternal, isChrome });
     } catch {
       // Skip invalid URLs
       links.push({

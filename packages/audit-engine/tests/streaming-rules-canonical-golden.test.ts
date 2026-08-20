@@ -89,7 +89,12 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // page-scoped but speaks ONLY when a page carries a date on a
       // document-describing schema node, and the fixture emits no JSON-LD at all —
       // so it contributes a tally key below without a single finding.
-      expect(v1.findings.length).toBe(98218);
+      // 98218 -> 98219: links/no-contextual-inbound, likewise site-scoped, adds
+      // its own single whole-crawl check (#109). It PASSES on this fixture: the
+      // only chrome link the renderer emits is the header nav's link to `/`, and
+      // the homepage is exempt, so every other page's contextual count equals its
+      // raw count.
+      expect(v1.findings.length).toBe(98219);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -97,9 +102,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier,
       // 272 -> 273 schema/rating-scope, 273 -> 274 crawl/sitemap-lastmod-churn,
       // 274 -> 275 crawl/sitemap-lastmod-drift, 275 -> 276
-      // content/date-agreement; anything else means a rule id
+      // content/date-agreement, 276 -> 277 links/no-contextual-inbound;
+      // anything else means a rule id
       // leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(276);
+      expect(v1.perRuleTally.length).toBe(277);
     },
     180_000,
   );

@@ -1045,6 +1045,14 @@ export interface LinkData {
   error?: string;
   rel?: string[];
   isNofollow?: boolean;
+  /**
+   * The anchor sat inside a `nav`/`header`/`footer`/`aside` landmark, i.e. in
+   * sitewide chrome rather than editorial body copy (#109). Optional because
+   * crawls stored before this field existed simply omit it; readers MUST treat
+   * `undefined` as "not chrome" so an old crawl degrades to the previous
+   * behaviour (every link contextual) instead of flagging the whole site.
+   */
+  isChrome?: boolean;
 }
 
 /**

@@ -661,6 +661,15 @@ export interface SiteQuery {
    * cannot answer internal orphan / weak-internal-link questions.
    */
   incomingLinkCounts(): Map<string, number>;
+  /**
+   * Incoming internal-link counts restricted to CONTEXTUAL links — those that
+   * did NOT sit in sitewide chrome (`LinkData.isChrome`); see #109. Same keys,
+   * same order, same filtering as {@link incomingLinkCounts}, so a page's value
+   * here is always <= its value there. A page with a healthy raw count but zero
+   * here is reachable only through chrome and receives no editorial support —
+   * the case `links/orphan-pages` and `links/weak-internal-links` cannot see.
+   */
+  contextualIncomingLinkCounts(): Map<string, number>;
   /** Normalized URLs of pages classified as `type`. */
   pagesByType(type: string): string[];
   /** URL sets sharing one template fingerprint (count > 1). */

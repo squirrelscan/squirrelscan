@@ -1,0 +1,91 @@
+---
+title: "No Contextual Inbound Links"
+description: "Detects pages whose only internal inbound links come from sitewide chrome"
+---
+
+Detects pages whose only internal inbound links come from sitewide chrome (nav, header, footer, sidebar)
+
+| | |
+|---|---|
+| **Rule ID** | `links/no-contextual-inbound` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## What it checks
+
+Every internal link the crawl finds is recorded with whether its anchor sat inside site
+chrome - an ancestor `<nav>`, `<header>`, `<footer>` or `<aside>`. A link from any of those
+is repeated verbatim on every page of the site, so it carries no signal about what the
+target page is about or how important it is. A link from body copy does.
+
+This rule counts only the **contextual** (non-chrome) inbound links per page and warns when
+that count is zero.
+
+Chrome detection is deliberately strict: only those four landmark elements count. A wrapper
+named `class="post-nav"` is *not* treated as chrome, because misclassifying body copy would
+turn a genuinely well-linked page into a false warning.
+
+## Why the existing link rules miss this
+
+[Orphan Pages](/rules/links/orphan-pages) and [Weak Internal Links](/rules/links/weak-internal-links)
+both count **raw** inbound links, with no distinction by container. A page linked from the
+sitewide footer of a 200-page site has 200 inbound links and passes both - while receiving no
+editorial support at all.
+
+To keep the three rules from reporting the same page twice, this rule speaks only about the
+gap the other two cannot see: a page is flagged when it has **zero** contextual inbound links
+**and** a raw inbound count at or above the orphan threshold (`minInboundLinks`, default `2`).
+Below that threshold the page is already reported as an orphan.
+
+The homepage is always skipped - it is reached from every page's header and footer by design.
+
+## Solution
+
+These pages look well-linked but receive no editorial support: every link pointing at them is repeated on every page of the site, so it carries no signal about what the page is about or how important it is. Add links from the body copy of related articles, hub pages, or category descriptions using descriptive anchor text. Sitewide navigation links help discovery, but contextual links are what pass topical relevance and internal link equity.
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `minInboundLinks` | number | `2` | Raw inbound-link threshold from links/orphan-pages; only pages at or above it are considered here (below it they are already reported as orphans) |
+| `excludePatterns` | array | `[]` | URL patterns to exclude from contextual inbound link detection |
+
+Keep `minInboundLinks` in sync with the same option on
+[Orphan Pages](/rules/links/orphan-pages) - the two are the same threshold viewed from
+either side.
+
+### Configuration Example
+
+```toml squirrel.toml
+[rule_options."links/no-contextual-inbound"]
+minInboundLinks = 2
+excludePatterns = ["/tags/", "/authors/"]
+```
+
+## Enable / Disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/no-contextual-inbound"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/no-contextual-inbound"]
+disable = ["*"]
+```
