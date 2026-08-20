@@ -37,7 +37,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 
 | Category | Rules | What it covers |
 |----------|-------|----------------|
-| Crawlability | 18 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
+| Crawlability | 20 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
 | Core SEO | 14 | The per-page fundamentals: title, meta description, H1, canonical, charset, doctype, robots meta, Open Graph and Twitter cards, plus canonical form drift across the site |
 | Agent Experience | 17 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, pay-per-crawl, response token weight |
 | Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
@@ -59,7 +59,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
 | Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
 
-**Total: 273 rules across 21 categories**
+**Total: 275 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
