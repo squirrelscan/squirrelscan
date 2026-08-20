@@ -20,6 +20,52 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.86
+
+Three rules about the gap between what your markup claims and what your pages
+actually show. Structured data is a promise made to a machine that never reads
+the page, so nothing in a per-page validity check can tell you the promise is
+false: a rating block is well-formed whether or not anyone can see a rating, and
+a `lastmod` is a valid date whether or not anything changed that day. These
+rules ask the second question.
+
+The engine is now at 275 rules across 21 categories.
+
+### Added
+
+- **`schema/rating-scope`** reports `AggregateRating` markup that is not about
+  the page it sits on. `schema/review` validates the shape of a rating block, so
+  one sitewide rating emitted by a template passes on every page of a site,
+  including the privacy policy. Two checks: whether a rating is visible anywhere
+  in the page's own text, and whether the rated entity is the subject of a page
+  where a rating could apply at all. A third-party review widget clears the
+  first, since its badge is injected client-side and a raw crawl cannot see it.
+  The finding names the page type and the rated entity, and frames the risk as a
+  structured-data manual action rather than a validation error, because that is
+  what it is.
+
+- **`crawl/sitemap-lastmod-drift`** reports sitemap `lastmod` values that
+  disagree with the page's own date. Two directions, because they come from
+  different mistakes: a `lastmod` older than the page's `dateModified` usually
+  means a stale sitemap or an inverted published/updated precedence, and one
+  newer by more than a month usually means the field is stamped when the site
+  builds. Each finding reports both dates and the gap in days. Pages carrying no
+  date of their own are skipped rather than guessed at.
+
+- **`crawl/sitemap-lastmod-churn`** reports `lastmod` values that have collapsed
+  onto one or two days across the whole sitemap, which means they are stamped at
+  build time and carry no freshness signal at all. Google News sitemaps are
+  excluded: they hold about 48 hours of articles by design, so their dates are
+  supposed to cluster.
+
+### Fixed
+
+- **Anchor text is judged per destination, not per link.** A card that links to
+  the same page twice, once from its image and once from its headline, was
+  reported as having empty anchor text for the image link. Only one link in such
+  a group needs to describe the destination, and screen readers announce the
+  group together, so the checks now evaluate links to a target as a unit.
+
 ## v0.0.85
 
 Five new rules that grade a page against the rest of your own site instead of
