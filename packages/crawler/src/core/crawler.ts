@@ -1746,6 +1746,7 @@ export function createCrawler(
             childSitemaps: sitemap.childSitemaps,
             errors: sitemap.errors,
             fetchedAt: Date.now(),
+            isNewsSitemap: sitemap.isNewsSitemap,
           });
 
           // Store sitemap URLs for coverage checking
