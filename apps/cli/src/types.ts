@@ -268,6 +268,8 @@ export interface LinkData {
   error?: string;
   rel?: string[];
   isNofollow?: boolean;
+  /** Anchor sat in a `nav`/`header`/`footer`/`aside` landmark (#109). */
+  isChrome?: boolean;
 }
 
 export interface ResourceSizeData {

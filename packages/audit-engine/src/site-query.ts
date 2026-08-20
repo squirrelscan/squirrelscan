@@ -77,7 +77,8 @@ export function createSiteQuery(
 
     return {
       pageCount: () => pageCount,
-      incomingLinkCounts: () => incoming,
+      incomingLinkCounts: () => incoming.all,
+      contextualIncomingLinkCounts: () => incoming.contextual,
       homepage: () => homepageRow,
       duplicateGroups: (field) => duplicates[field] ?? [],
       templateClusters: () => templateGroups,
@@ -104,6 +105,14 @@ export function createSiteQuery(
  * the count for its normalized URL, so pages that collapse to one normalized URL
  * (e.g. query-string variants) share a count exactly as the legacy Map does.
  *
+ * CONTEXTUAL VARIANT (#109): the same pass also accumulates a second bucket that
+ * skips links flagged `isChrome` (anchor sat in a `nav`/`header`/`footer`/`aside`
+ * landmark). Both maps are built in ONE scan and share every other filter, key
+ * and iteration order, so `contextual <= all` holds per page by construction.
+ * `isChrome === undefined` (a crawl stored before the flag existed) counts as
+ * contextual — an old DB degrades to the pre-#109 numbers rather than reporting
+ * every page as chrome-only.
+ *
  * PAGE-UNIVERSE RECONCILIATION (#1021 E-E2 (b)): when `universe` is supplied (the
  * streaming loop passes v1's assembled `site.pages` URLs), Pass A projects onto
  * exactly that set/order (HTML + appended 4xx/5xx, WAF/non-HTML/redirect pages
@@ -117,11 +126,17 @@ function buildIncomingLinkCounts(
   storage: SQLiteStorage,
   crawlId: string,
   universe?: readonly string[]
-): Effect.Effect<Map<string, number>, StorageError, never> {
+): Effect.Effect<
+  { all: Map<string, number>; contextual: Map<string, number> },
+  StorageError,
+  never
+> {
   return Effect.gen(function* () {
     const orderedUrls: string[] = [];
     // Keyed by normalizeUrl(page.url) — the legacy incoming-count bucket key.
     const bucket = new Map<string, number>();
+    // Same keys; counts only links that did NOT sit in site chrome (#109).
+    const contextualBucket = new Map<string, number>();
     // Link SOURCES are restricted to the universe so a WAF-challenge page's links
     // (its parsedData is populated but v1 excludes it from site.pages) never inflate
     // a target's incoming count. Undefined → count from every stored page (legacy).
@@ -134,11 +149,13 @@ function buildIncomingLinkCounts(
       for (const url of universe) {
         orderedUrls.push(url);
         bucket.set(normalizeUrl(url), 0);
+        contextualBucket.set(normalizeUrl(url), 0);
       }
     } else {
       yield* streamPages(storage, crawlId, (page) => {
         orderedUrls.push(page.normalizedUrl);
         bucket.set(normalizeUrl(page.normalizedUrl), 0);
+        contextualBucket.set(normalizeUrl(page.normalizedUrl), 0);
       });
     }
 
@@ -152,7 +169,12 @@ function buildIncomingLinkCounts(
           try {
             const target = normalizeUrl(new URL(link.url, page.normalizedUrl).href);
             const current = bucket.get(target);
-            if (current !== undefined) bucket.set(target, current + 1);
+            if (current !== undefined) {
+              bucket.set(target, current + 1);
+              if (!link.isChrome) {
+                contextualBucket.set(target, (contextualBucket.get(target) ?? 0) + 1);
+              }
+            }
           } catch {
             // Invalid link URL — ignored, matching the legacy rules' try/catch.
           }
@@ -162,11 +184,14 @@ function buildIncomingLinkCounts(
 
     // Project normalized-URL buckets onto each page's stored identity URL, in
     // crawl order — mirrors the legacy `incomingLinkCount.get(normalizeUrl(page.url))`.
-    const incoming = new Map<string, number>();
+    const all = new Map<string, number>();
+    const contextual = new Map<string, number>();
     for (const url of orderedUrls) {
-      incoming.set(url, bucket.get(normalizeUrl(url)) ?? 0);
+      const key = normalizeUrl(url);
+      all.set(url, bucket.get(key) ?? 0);
+      contextual.set(url, contextualBucket.get(key) ?? 0);
     }
-    return incoming;
+    return { all, contextual };
   });
 }
 

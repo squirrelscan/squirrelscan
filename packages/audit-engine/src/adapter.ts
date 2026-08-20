@@ -360,6 +360,7 @@ export function parseHtmlForRules(html: string, baseUrl: string): ParsedPage {
       isInternal: l.isInternal,
       rel: l.rel,
       isNofollow: l.isNofollow,
+      isChrome: l.isChrome,
     })),
     // tel:/mailto: anchors, which `extractLinks` drops as non-crawlable. This is
     // the parse path production actually runs (parsePageRecord + the #263 page-rule

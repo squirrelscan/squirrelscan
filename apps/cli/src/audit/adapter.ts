@@ -245,6 +245,7 @@ export function parsePageRecord(page: PageRecord): ParsedPage | null {
           isInternal: l.isInternal,
           rel: l.rel,
           isNofollow: l.isNofollow,
+          isChrome: l.isChrome,
         })),
         // tel:/mailto: anchors, which `extractLinks` drops as non-crawlable.
         // This is the THIRD ParsedPage producer (see @squirrelscan/parser's
