@@ -282,6 +282,7 @@ export async function reportProgress(
   input: ProgressInput,
   base = lifecycleBase()
 ): Promise<void> {
+  lastProgressSentAtMs = Date.now();
   await cliApi.send(runPath(runId, "/progress", base), {
     method: "POST",
     auth: "required",
@@ -292,6 +293,70 @@ export async function reportProgress(
       pagesFailed: Math.max(0, Math.round(input.pagesFailed)),
     },
   });
+}
+
+// ── Liveness heartbeat (#1583) ────────────────────────────────────────────
+//
+// The server reaps a CLI run that has shown no activity for its budget, and a
+// progress POST is the ONLY activity signal a CLI run produces (it writes no
+// agent_run_events; the handler stamps config.lastProgressAtMs instead). But
+// progress was emitted from the `crawling` branch of onProgress ALONE, so every
+// post-crawl phase — external links, cloud fetch, rules, scoring, render,
+// publish — was silent. On a large site that stretch outruns the deadline and a
+// perfectly healthy run gets reaped with its work discarded: darussalam.id
+// crawled 454 pages, went quiet at its last page, and was killed 76 minutes
+// later having never stopped working.
+//
+// The heartbeat is deliberately phase-AGNOSTIC — a timer spanning markRunning →
+// finalize rather than a reportProgress call added to each of today's phases.
+// Per-phase plumbing would fix the four phases that exist now and silently
+// reintroduce the bug the next time one is added; a timer cannot miss a phase
+// it does not know about.
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
+// Timestamp of the newest progress POST from any source, so a heartbeat tick
+// during the crawl (when real progress is already flowing at ≤1/s) skips its
+// redundant request instead of doubling the cadence.
+let lastProgressSentAtMs = 0;
+
+// A CLI process tracks at most one run, so one active heartbeat is the whole
+// story and module state is honest here.
+let activeHeartbeat: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start the liveness heartbeat for a registered run. `snapshot` is read at each
+ * tick so the beat always carries the CURRENT counts — during the crawl that is
+ * live progress, and after it the final tally, which is what keeps the run's
+ * page total honest while the post-crawl phases work through it.
+ *
+ * Best-effort like the rest of the lifecycle: the timer is unref'd so it can
+ * never hold the process open, and a failed tick is swallowed — the next one is
+ * 30s away and the deadline is far wider than that.
+ */
+export function startRunHeartbeat(
+  runId: string,
+  snapshot: () => ProgressInput,
+  base = lifecycleBase(),
+  intervalMs = HEARTBEAT_INTERVAL_MS
+): void {
+  stopRunHeartbeat();
+  activeHeartbeat = setInterval(() => {
+    // Real progress is already keeping the run alive — don't double the cadence.
+    if (Date.now() - lastProgressSentAtMs < intervalMs) return;
+    void reportProgress(runId, snapshot(), base).catch(() => {
+      // Best-effort: a dropped beat is recoverable, a thrown one is not.
+    });
+  }, intervalMs);
+  // Never let the heartbeat be the reason the CLI does not exit.
+  activeHeartbeat.unref?.();
+}
+
+/** Stop the heartbeat. Idempotent; safe to call when none is running. */
+export function stopRunHeartbeat(): void {
+  if (activeHeartbeat) {
+    clearInterval(activeHeartbeat);
+    activeHeartbeat = null;
+  }
 }
 
 /** Close the run out at the end (after publish). Fire-and-forget. */
@@ -346,6 +411,11 @@ export function createRunFinalizer(
   return async (input: FinalizeRunInput): Promise<void> => {
     if (finalized) return;
     finalized = true;
+    // #1583: the finalizer is the one guarded path every exit funnels through
+    // (success, error, publish failure, Ctrl-C), so stopping the heartbeat here
+    // covers them all — and stopping BEFORE the terminal PATCH means a beat can
+    // never race in behind it and re-stamp activity on a finished run.
+    stopRunHeartbeat();
     const run = await registerPromise.catch(() => null);
     if (run) await finalizeRun(run.runId, input, run.lifecycleBase);
   };

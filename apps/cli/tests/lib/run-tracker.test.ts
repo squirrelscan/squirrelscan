@@ -8,6 +8,8 @@ import {
   reportProgress,
   type RegisteredRun,
   resolveRunFinalizeScore,
+  startRunHeartbeat,
+  stopRunHeartbeat,
 } from "@/lib/run-tracker";
 
 // run-tracker resolves a credential from SQUIRREL_API_TOKEN (env path of
@@ -672,5 +674,135 @@ describe("org API key (sq_) → org-scoped lifecycle routes (#280)", () => {
 
     await finalizeRun("run_1", { status: "completed", completedAt: "t" });
     expect(url).toContain("/v1/agent-runs/org/run_1");
+  });
+});
+
+describe("run heartbeat (#1583)", () => {
+  // Collect every progress POST body so a test can assert on cadence + payload.
+  function captureProgress(): { bodies: Record<string, number>[] } {
+    const bodies: Record<string, number>[] = [];
+    globalThis.fetch = (async (
+      _input: string | URL | Request,
+      init?: RequestInit
+    ) => {
+      if (init?.body)
+        bodies.push(JSON.parse(String(init.body)) as Record<string, number>);
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    return { bodies };
+  }
+
+  const settle = (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Timer cadence under a loaded test runner is not exact, so every assertion
+  // below is on the SHAPE of the behaviour (beats keep arriving / stop
+  // arriving), never on a precise beat count. BEAT_MS is kept well above the
+  // runner's timer jitter for the same reason.
+  const BEAT_MS = 20;
+
+  afterEach(() => stopRunHeartbeat());
+
+  test("keeps reporting after the crawl stops advancing", async () => {
+    // The darussalam.id case: the crawl ends at N pages and the run then spends a
+    // long time in rules/render/publish. Nothing calls reportProgress in those
+    // phases, so before #1583 the server saw silence and reaped a live run.
+    const { bodies } = captureProgress();
+    const frozen = { pagesFetched: 454, pagesTotal: 454, pagesFailed: 2 };
+
+    startRunHeartbeat("run_1", () => frozen, undefined, BEAT_MS);
+    await settle(BEAT_MS * 8);
+
+    // The regression this guards: zero beats once the crawl stopped advancing.
+    expect(bodies.length).toBeGreaterThanOrEqual(2);
+    // Every beat carries the final tally — the beat asserts liveness, it does
+    // not invent progress the crawl never made.
+    for (const body of bodies) {
+      expect(body).toEqual({
+        pagesFetched: 454,
+        pagesTotal: 454,
+        pagesFailed: 2,
+      });
+    }
+  });
+
+  test("reads the snapshot at each tick, so counts stay current", async () => {
+    const { bodies } = captureProgress();
+    let fetched = 10;
+
+    startRunHeartbeat(
+      "run_1",
+      () => ({ pagesFetched: fetched, pagesTotal: 500, pagesFailed: 0 }),
+      undefined,
+      BEAT_MS
+    );
+    await settle(BEAT_MS * 3);
+    fetched = 99;
+    await settle(BEAT_MS * 4);
+
+    expect(bodies.at(0)?.pagesFetched).toBe(10);
+    expect(bodies.at(-1)?.pagesFetched).toBe(99);
+  });
+
+  test("stops on finalize, so no beat lands behind the terminal PATCH", async () => {
+    // Ordering matters: a beat arriving after the run is terminal would re-stamp
+    // activity on a finished run.
+    const { bodies } = captureProgress();
+    startRunHeartbeat(
+      "run_1",
+      () => ({ pagesFetched: 1, pagesTotal: 1, pagesFailed: 0 }),
+      undefined,
+      BEAT_MS
+    );
+    await settle(BEAT_MS * 3);
+
+    await createRunFinalizer(
+      Promise.resolve({
+        runId: "run_1",
+        websiteId: "w",
+        auditId: "a",
+        lifecycleBase: "/v1/agent-runs/org",
+        baseCharged: 0,
+        balanceAfterBase: null,
+      } as RegisteredRun)
+    )({ status: "completed", completedAt: "t" });
+
+    const afterFinalize = bodies.length;
+    await settle(BEAT_MS * 5);
+    // Only the finalize PATCH may have been recorded; no further progress beats.
+    expect(bodies.length).toBe(afterFinalize);
+  });
+
+  test("a failing beat never throws — the audit must not be affected", async () => {
+    globalThis.fetch = (async () => {
+      throw new Error("network down");
+    }) as unknown as typeof fetch;
+
+    startRunHeartbeat(
+      "run_1",
+      () => ({ pagesFetched: 1, pagesTotal: 1, pagesFailed: 0 }),
+      undefined,
+      BEAT_MS
+    );
+    // An unhandled rejection here would fail the test run.
+    await settle(BEAT_MS * 4);
+    expect(true).toBe(true);
+  });
+
+  test("starting twice leaves a single timer that one stop fully clears", async () => {
+    // A stacked second timer would survive the single stop and keep beating —
+    // which on a real run means progress stamped onto an already-terminal run.
+    const { bodies } = captureProgress();
+    const snap = () => ({ pagesFetched: 1, pagesTotal: 1, pagesFailed: 0 });
+
+    startRunHeartbeat("run_1", snap, undefined, BEAT_MS);
+    startRunHeartbeat("run_1", snap, undefined, BEAT_MS);
+    await settle(BEAT_MS * 3);
+    expect(bodies.length).toBeGreaterThan(0); // it was genuinely running
+
+    stopRunHeartbeat();
+    const afterStop = bodies.length;
+    await settle(BEAT_MS * 5);
+    expect(bodies.length).toBe(afterStop);
   });
 });
