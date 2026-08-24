@@ -14,6 +14,8 @@ const logger = {
 
 import type { ExtractedLink, LinkPosition } from "./types";
 
+import { isInSiteChrome } from "./chrome";
+
 /**
  * Detect link position in document structure.
  *
@@ -137,6 +139,8 @@ export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
         position,
         rel,
         isNofollow: hasNofollow(rel),
+        // Landmark-strict, unlike `position` above (#109) — see ./chrome.ts.
+        isChrome: isInSiteChrome(element),
       });
     } catch {
       // Skip invalid URLs

@@ -16,6 +16,7 @@ import { Effect } from "effect";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { loadAllRules } from "@squirrelscan/rules";
+import { normalizeUrl } from "@squirrelscan/utils";
 import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 import type { LinkData, PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
 
@@ -37,6 +38,7 @@ const BASE = "https://example.com/";
 const rules = loadAllRules();
 const orphanRule = rules.get("links/orphan-pages")!;
 const weakRule = rules.get("links/weak-internal-links")!;
+const contextualRule = rules.get("links/no-contextual-inbound")!;
 
 // ── fixture builders ──────────────────────────────────────────────────────────
 
@@ -48,6 +50,10 @@ function nofollow(url: string): LinkData {
 }
 function external(url: string): LinkData {
   return { url, text: "ext", isInternal: false };
+}
+/** A sitewide-chrome link — counted by incomingLinkCounts, NOT by the contextual map (#109). */
+function chrome(url: string): LinkData {
+  return { url, text: "chrome", isInternal: true, isChrome: true };
 }
 
 function pageRow(normalizedUrl: string, links: LinkData[]): PageRecord {
@@ -262,6 +268,163 @@ describe("SiteQuery dual-path — links/weak-internal-links", () => {
   });
 });
 
+// ── #109: contextual (non-chrome) inbound links ───────────────────────────────
+
+// Every page carries the same footer link to /legal, so /legal has a HEALTHY raw
+// inbound count (4) and zero contextual support — the exact case orphan-pages and
+// weak-internal-links cannot see. /deep is linked once, from body copy.
+const CHROME_FIXTURE: PageRecord[] = [
+  pageRow(BASE, [link("/a"), link("/b"), chrome("/legal")]),
+  pageRow("https://example.com/a", [link("/b"), link("/deep"), chrome("/legal")]),
+  pageRow("https://example.com/b", [link("/a"), chrome("/legal")]),
+  pageRow("https://example.com/deep", [link("/a")]),
+  pageRow("https://example.com/legal", [chrome("/legal")]),
+];
+
+async function seedChromeFixture(store: SQLiteStorage): Promise<void> {
+  for (const p of CHROME_FIXTURE) await run(store.upsertPage(CRAWL, p));
+}
+
+/** Rebuild both inbound counts the way the LEGACY `site.pages` path does. */
+function legacyCounts(pages: PageRecord[]): {
+  all: Map<string, number>;
+  contextual: Map<string, number>;
+} {
+  const all = new Map<string, number>();
+  const contextual = new Map<string, number>();
+  for (const p of pages) {
+    all.set(normalizeUrl(p.normalizedUrl), 0);
+    contextual.set(normalizeUrl(p.normalizedUrl), 0);
+  }
+  for (const p of pages) {
+    for (const l of parseLinks(p.parsedData)) {
+      if (!l.isInternal || !l.url || l.isNofollow) continue;
+      const target = normalizeUrl(new URL(l.url, p.normalizedUrl).href);
+      if (!all.has(target)) continue;
+      all.set(target, all.get(target)! + 1);
+      if (!l.isChrome) contextual.set(target, contextual.get(target)! + 1);
+    }
+  }
+  // Project back onto each page's stored identity URL, in crawl order.
+  return {
+    all: new Map(pages.map((p) => [p.normalizedUrl, all.get(normalizeUrl(p.normalizedUrl))!])),
+    contextual: new Map(
+      pages.map((p) => [p.normalizedUrl, contextual.get(normalizeUrl(p.normalizedUrl))!])
+    ),
+  };
+}
+
+describe("SiteQuery — contextual inbound link counts (#109)", () => {
+  test("chrome links count toward the raw map but not the contextual one", async () => {
+    const store = await freshStore();
+    await seedChromeFixture(store);
+
+    const sq = await run(createSiteQuery(store, CRAWL));
+    const all = sq.incomingLinkCounts();
+    const contextual = sq.contextualIncomingLinkCounts();
+
+    // Same keys, same order — the two maps are built in one pass.
+    expect([...contextual.keys()]).toEqual([...all.keys()]);
+
+    // /legal: four footer links, zero contextual → healthy on paper, unsupported.
+    expect(all.get("https://example.com/legal")).toBe(4);
+    expect(contextual.get("https://example.com/legal")).toBe(0);
+    // /deep: one body-copy link.
+    expect(all.get("https://example.com/deep")).toBe(1);
+    expect(contextual.get("https://example.com/deep")).toBe(1);
+    // contextual <= all holds for every page.
+    for (const [url, count] of contextual) {
+      expect(count).toBeLessThanOrEqual(all.get(url)!);
+    }
+
+    await run(store.close());
+  });
+
+  test("the legacy site.pages rebuild produces IDENTICAL counts to the accumulator", async () => {
+    const store = await freshStore();
+    await seedChromeFixture(store);
+
+    const sq = await run(createSiteQuery(store, CRAWL));
+    const legacy = legacyCounts(await run(store.getPages(CRAWL)));
+
+    expect([...sq.incomingLinkCounts()]).toEqual([...legacy.all]);
+    expect([...sq.contextualIncomingLinkCounts()]).toEqual([...legacy.contextual]);
+
+    await run(store.close());
+  });
+});
+
+describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
+  test("streaming path is deep-equal to legacy AND flags the chrome-only page", async () => {
+    const store = await freshStore();
+    await seedChromeFixture(store);
+
+    const { legacy, streamed } = await runBothWays(store, contextualRule, {
+      minInboundLinks: 2,
+      excludePatterns: [],
+    });
+
+    expect(streamed).toEqual(legacy);
+    expect(legacy).toEqual([
+      {
+        name: "no-contextual-inbound",
+        status: "warn",
+        message: "1 page(s) are linked only from sitewide chrome",
+        items: [{ id: "https://example.com/legal" }],
+        details: { total: 1 },
+        value: "/legal",
+      },
+    ]);
+    await run(store.close());
+  });
+
+  test("links/orphan-pages does NOT report that page — the blind spot is real", async () => {
+    const store = await freshStore();
+    await seedChromeFixture(store);
+
+    const { legacy, streamed } = await runBothWays(store, orphanRule, {
+      minInboundLinks: 2,
+      excludePatterns: [],
+    });
+
+    expect(streamed).toEqual(legacy);
+    // Only /deep (one inbound link) is an orphan; /legal's four footer links
+    // keep it comfortably above the threshold on both paths.
+    expect(legacy[0]!.items).toEqual([{ id: "https://example.com/deep" }]);
+    await run(store.close());
+  });
+
+  test("a page linked once from body copy is not flagged, on either path", async () => {
+    const store = await freshStore();
+    // Raise the threshold so /deep's single body-copy link clears it and the rule
+    // is forced to judge it on contextual support alone.
+    await seedChromeFixture(store);
+
+    const { legacy, streamed } = await runBothWays(store, contextualRule, {
+      minInboundLinks: 1,
+      excludePatterns: [],
+    });
+
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]!.items).toEqual([{ id: "https://example.com/legal" }]);
+    await run(store.close());
+  });
+
+  test("excludePatterns are honoured identically on both paths", async () => {
+    const store = await freshStore();
+    await seedChromeFixture(store);
+
+    const { legacy, streamed } = await runBothWays(store, contextualRule, {
+      minInboundLinks: 2,
+      excludePatterns: ["/legal"],
+    });
+
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]!.status).toBe("pass");
+    await run(store.close());
+  });
+});
+
 describe("SiteQuery dual-path — edge cases parity", () => {
   test("a crawl with <2 pages skips identically on both paths", async () => {
     const store = await freshStore();
@@ -376,6 +539,7 @@ describe("createSiteQuery — page_features-backed aggregates", () => {
     const sq = await run(createSiteQuery(store, CRAWL));
     expect(sq.pageCount()).toBe(0);
     expect(sq.incomingLinkCounts().size).toBe(0);
+    expect(sq.contextualIncomingLinkCounts().size).toBe(0);
     expect(sq.homepage()).toBeNull();
     expect(sq.duplicateGroups("content")).toEqual([]);
     expect(sq.templateClusters()).toEqual([]);

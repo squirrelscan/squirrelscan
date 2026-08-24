@@ -42,6 +42,12 @@ export interface ExtractedLink {
   position: LinkPosition;
   rel?: string[];
   isNofollow: boolean;
+  /**
+   * The anchor sat inside a `nav`/`header`/`footer`/`aside` landmark — sitewide
+   * chrome, not editorial body copy (#109). Stricter than {@link position},
+   * which also matches on class/id substrings.
+   */
+  isChrome: boolean;
 }
 
 // Extended image data
