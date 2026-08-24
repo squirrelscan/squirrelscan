@@ -13,6 +13,12 @@ Checks for geographic meta tags for local targeting
 | **Severity** | info |
 | **Weight** | 2/10 |
 
+## What geo.placename is, and whether it still does anything
+
+`geo.placename` is a `<meta>` tag naming the city or locality a page targets, one of a small family alongside `geo.region` (a country-state code), `geo.position` (`latitude;longitude`), and `ICBM`. squirrelscan checks for them, but scores them in its lowest tier: severity `info`, weight 2/10.
+
+That weighting is the answer to whether they still do anything. This rule treats geo meta tags as a supplement to [LocalBusiness structured data](/rules/schema), never a substitute for it, and squirrelscan makes no claim that any particular search engine reads them. They are cheap to add to location-specific landing pages and cost nothing to keep, which is why the rule is `info` rather than a warning, but a missing `geo.placename` is not what is holding a page back in local search. Fix your LocalBusiness schema and NAP consistency first.
+
 ## Solution
 
 Geo meta tags help indicate your business location for local search. Add: geo.region (country-state code), geo.placename (city name), geo.position (latitude;longitude), and ICBM meta tag. These supplement LocalBusiness schema. Most useful for location-specific landing pages.
