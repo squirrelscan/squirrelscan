@@ -177,6 +177,8 @@
                   "rules/crawl/sitemap-4xx",
                   "rules/crawl/sitemap-coverage",
                   "rules/crawl/sitemap-domain",
+                  "rules/crawl/sitemap-lastmod-churn",
+                  "rules/crawl/sitemap-lastmod-drift",
                   "rules/crawl/html-size",
                   "rules/crawl/pdf-size",
                   "rules/crawl/soft-404"
@@ -243,7 +245,8 @@
                   "rules/content/stale-copyright",
                   "rules/content/mojibake",
                   "rules/content/thin-vs-site-norm",
-                  "rules/content/title-pattern-outlier"
+                  "rules/content/title-pattern-outlier",
+                  "rules/content/date-agreement"
                 ]
               },
               {
@@ -260,6 +263,7 @@
                   "rules/schema/organization",
                   "rules/schema/video",
                   "rules/schema/review",
+                  "rules/schema/rating-scope",
                   "rules/schema/coverage-outlier"
                 ]
               },

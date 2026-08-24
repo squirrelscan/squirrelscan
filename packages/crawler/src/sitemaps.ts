@@ -74,6 +74,7 @@ export function parseSitemap(content: string, url: string): SitemapData {
 
     if (parsed.urlset) {
       const urlset = parsed.urlset as {
+        "@_xmlns:news"?: string;
         url?:
           | {
               loc?: string;
@@ -119,6 +120,9 @@ export function parseSitemap(content: string, url: string): SitemapData {
         childSitemaps: [],
         errors,
         urlCount: urls.length,
+        // Namespace, not filename: `google-news-sitemap.xml` is convention, and a news sitemap served
+        // from any path still declares xmlns:news. See SitemapData.isNewsSitemap for why it matters.
+        isNewsSitemap: typeof urlset["@_xmlns:news"] === "string",
       };
     }
 

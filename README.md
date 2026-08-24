@@ -21,7 +21,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 ## Features
 
-- **272 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **276 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **Fast crawler** - Highly optimized memory efficient crawler 
 - **Agent Experience** - Audit agent experience to assist agents in using your site
 - **Security Audit** - Detect phishing kits, leaked credentials, and more 
@@ -37,16 +37,16 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 
 | Category | Rules | What it covers |
 |----------|-------|----------------|
-| Crawlability | 18 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
+| Crawlability | 20 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s |
 | Core SEO | 14 | The per-page fundamentals: title, meta description, H1, canonical, charset, doctype, robots meta, Open Graph and Twitter cards, plus canonical form drift across the site |
 | Agent Experience | 17 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, pay-per-crawl, response token weight |
 | Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
 | Security | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
 | Links | 14 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, HTTPS downgrades |
-| Content | 17 | Text quality and honesty: duplicate titles and descriptions, title-template consistency, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
+| Content | 18 | Text quality and honesty: duplicate titles and descriptions, title-template consistency, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
 | Performance | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
 | Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
-| Structured Data | 11 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search |
+| Structured Data | 12 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search, plus rating markup that is not about the page it sits on |
 | Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
 | Mobile | 6 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials |
 | Social Media | 4 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links |
@@ -59,7 +59,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
 | Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
 
-**Total: 272 rules across 21 categories**
+**Total: 276 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 

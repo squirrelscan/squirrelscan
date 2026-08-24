@@ -78,15 +78,28 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // own single whole-crawl check (#1366).
       // 98215 -> 98216: content/title-pattern-outlier, likewise site-scoped, adds
       // its own single whole-crawl check (#1361).
-      expect(v1.findings.length).toBe(98216);
+      // Unmoved by schema/rating-scope (#106): it is page-scoped but speaks ONLY
+      // when a page carries an AggregateRating, and the fixture emits no JSON-LD
+      // at all — so it contributes a tally key below without a single finding.
+      // 98216 -> 98217: crawl/sitemap-lastmod-churn, likewise site-scoped, adds
+      // its own single whole-crawl check (#105).
+      // 98217 -> 98218: crawl/sitemap-lastmod-drift, likewise site-scoped, adds
+      // its own single whole-crawl check (#107).
+      // Unmoved by content/date-agreement (#108): like schema/rating-scope it is
+      // page-scoped but speaks ONLY when a page carries a date on a
+      // document-describing schema node, and the fixture emits no JSON-LD at all —
+      // so it contributes a tally key below without a single finding.
+      expect(v1.findings.length).toBe(98218);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
       // schema/coverage-outlier, 269 -> 270 url/slug-convention, 270 -> 271
-      // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier;
-      // anything else means a rule id leaked in, so fix that rather than this
-      // number.
-      expect(v1.perRuleTally.length).toBe(272);
+      // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier,
+      // 272 -> 273 schema/rating-scope, 273 -> 274 crawl/sitemap-lastmod-churn,
+      // 274 -> 275 crawl/sitemap-lastmod-drift, 275 -> 276
+      // content/date-agreement; anything else means a rule id
+      // leaked in, so fix that rather than this number.
+      expect(v1.perRuleTally.length).toBe(276);
     },
     180_000,
   );

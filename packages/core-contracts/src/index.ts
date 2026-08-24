@@ -1145,6 +1145,15 @@ export interface SitemapData {
   childSitemaps: string[];
   errors: string[];
   urlCount: number;
+  /**
+   * The sitemap declared the Google News namespace (`xmlns:news`).
+   *
+   * A news sitemap holds only ~48 hours of articles by specification, so its `lastmod` values always
+   * collapse onto one or two days. Any freshness heuristic that pools lastmod across sitemaps has to
+   * exclude these, or it accuses every publisher of stamping lastmod at build time. Detected from the
+   * namespace, never the filename: `google-news-sitemap.xml` is a convention, not part of the spec.
+   */
+  isNewsSitemap?: boolean;
 }
 
 export interface SitemapFetchFailure {

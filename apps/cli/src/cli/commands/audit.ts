@@ -66,6 +66,7 @@ import {
   reportProgress,
   type RegisteredRun,
   resolveRunFinalizeScore,
+  startRunHeartbeat,
 } from "@/lib/run-tracker";
 import { syncTechnologies } from "@/lib/technology-sync";
 import { getApiUrl } from "@/self/api";
@@ -1289,6 +1290,15 @@ export const audit = defineCommand({
       const onSignal = (signal: NodeJS.Signals): void => {
         // Note the cancel so the user isn't left wondering during the PATCH (stderr keeps piped stdout clean).
         if (trackedRunId) process.stderr.write("\nCancelling run…\n");
+        // #1583: the crawl is checkpointed in the project's SQLite store, so the
+        // pages fetched so far survive this exit — but nothing ever said so, and
+        // a user who has just lost a 450-page crawl reasonably assumes it is gone
+        // and starts over. Name the exact command while the context is on screen.
+        if (lastPagesFetched > 0) {
+          process.stderr.write(
+            `${lastPagesFetched} pages are saved. Resume with:\n  squirrel audit ${args.url} --resume\n`
+          );
+        }
         void finalizeTracked({
           status: "cancelled",
           completedAt: new Date().toISOString(),
@@ -1311,6 +1321,30 @@ export const audit = defineCommand({
       let lastProgressAt = 0;
       let crawlPagesFailed = 0;
       const PROGRESS_MIN_INTERVAL_MS = 1_000;
+
+      // #1583: newest counts seen from the crawl, kept OUTSIDE onProgress so the
+      // heartbeat can still report them once onProgress has moved past
+      // `crawling` (or returned entirely). They stop advancing when the crawl
+      // ends, which is correct — the beat is then asserting "still alive, still
+      // this many pages", not inventing progress.
+      let lastPagesFetched = 0;
+      let lastPagesTotal = maxPages;
+
+      // Start the liveness beat as soon as the run exists. Every phase after the
+      // crawl is silent on the wire, and the server reaps on silence, so without
+      // this a long rules/render/publish stretch reads as a dead process.
+      void registerPromise.then((run) => {
+        if (!run) return;
+        startRunHeartbeat(
+          run.runId,
+          () => ({
+            pagesFetched: lastPagesFetched,
+            pagesTotal: lastPagesTotal,
+            pagesFailed: crawlPagesFailed,
+          }),
+          run.lifecycleBase
+        );
+      });
 
       const progress = createProgress("Initializing");
       let currentPhase = "init";
@@ -1415,6 +1449,8 @@ export const audit = defineCommand({
                   }
                   // Show discovered count + the in-flight URL (live per-page
                   // progress so a slow render upgrade doesn't look frozen).
+                  lastPagesFetched = p.current;
+                  lastPagesTotal = p.total ?? maxPages;
                   const found =
                     discoveredCount > 0 ? ` [${discoveredCount} found]` : "";
                   const active = p.detail ? ` ${fmt.dim(p.detail)}` : "";

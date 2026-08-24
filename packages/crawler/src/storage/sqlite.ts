@@ -56,8 +56,10 @@ export interface ContentStoreAdapter {
   getString(hash: string): string | null;
 }
 
-// Schema version - increment when schema changes
-const SCHEMA_VERSION = 20;
+// Schema version - increment when schema changes.
+// Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
+// literal, which turned every schema bump into two unrelated test failures.
+export const SCHEMA_VERSION = 21;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -286,6 +288,13 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE page_features ADD COLUMN nap_tel_link INTEGER`,
     `ALTER TABLE page_features ADD COLUMN nap_mailto_link INTEGER`,
   ],
+  // Version 21: whether a sitemap declared the Google News namespace (#115).
+  // A news sitemap holds ~48h of articles by spec, so its lastmod values always
+  // collapse onto 1-2 days; without this flag crawl/sitemap-lastmod-churn accused
+  // every publisher that has one of build-stamping lastmod. NULL reads back as
+  // false, which is the pre-v21 behaviour for every already-stored sitemap.
+  // Local sqlite only (crawler's own store) — NOT a prod migration.
+  21: ["ALTER TABLE sitemaps ADD COLUMN is_news_sitemap INTEGER"],
 };
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
@@ -530,6 +539,7 @@ CREATE TABLE IF NOT EXISTS sitemaps (
   child_sitemaps TEXT NOT NULL,
   errors TEXT NOT NULL,
   fetched_at INTEGER NOT NULL,
+  is_news_sitemap INTEGER,
   PRIMARY KEY (crawl_id, url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -2336,8 +2346,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT OR REPLACE INTO sitemaps (crawl_id, url, type, url_count, child_sitemaps, errors, fetched_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO sitemaps (crawl_id, url, type, url_count, child_sitemaps, errors, fetched_at, is_news_sitemap)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -2346,7 +2356,8 @@ export class SQLiteStorage implements CrawlStorage {
           sitemap.urlCount,
           JSON.stringify(sitemap.childSitemaps),
           JSON.stringify(sitemap.errors),
-          sitemap.fetchedAt
+          sitemap.fetchedAt,
+          sitemap.isNewsSitemap ? 1 : 0
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2371,6 +2382,8 @@ export class SQLiteStorage implements CrawlStorage {
           ),
           errors: this.safeJsonParse<string[]>(row.errors as string, []),
           fetchedAt: row.fetched_at as number,
+          // NULL on any sitemap stored before v21 — reads back false, the old behaviour.
+          isNewsSitemap: Boolean(row.is_news_sitemap),
         }));
       },
       catch: (e) => StorageError.read(e),
