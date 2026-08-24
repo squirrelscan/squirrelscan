@@ -17,7 +17,11 @@ jobs:
           fetch-depth: 0
       - name: Check DCO sign-offs
         env:
-          ACTOR: ${{ github.actor }}
+          # The PR's author, NOT github.actor. github.actor is whoever
+          # triggered *this run*, so it flips to a human the moment anyone
+          # rebases, updates, or re-runs a dependabot PR, silently revoking
+          # the exemption below and failing a PR that passed when opened.
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -31,7 +35,7 @@ jobs:
             author=$(git show -s --format='%an <%ae>' "$commit")
             committer=$(git show -s --format='%cn <%ce>' "$commit")
             message=$(git show -s --format=%B "$commit")
-            if [ "$ACTOR" = "dependabot[bot]" ] && \
+            if [ "$PR_AUTHOR" = "dependabot[bot]" ] && \
                [ "$author" = "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>" ]; then
               continue
             fi
