@@ -98,6 +98,9 @@
                   "developers/agents/cursor",
                   "developers/agents/codex",
                   "developers/agents/chatgpt",
+                  "developers/agents/copilot",
+                  "developers/agents/gemini-cli",
+                  "developers/agents/windsurf",
                   "developers/agents/opencode"
                 ]
               },
