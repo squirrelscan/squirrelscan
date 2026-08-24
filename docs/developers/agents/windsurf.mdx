@@ -1,0 +1,118 @@
+---
+title: "squirrelscan for Windsurf"
+sidebarTitle: "Windsurf"
+description: "Add the squirrelscan MCP server to Windsurf (Devin Desktop): mcp_config.json setup, Cascade authorization, and the audit-and-fix loop."
+icon: "wind"
+---
+
+Windsurf's Cascade agent runs terminal commands and acts on what comes back, so it can drive the `squirrel` CLI with no setup at all. Connecting the hosted MCP server goes further: audits, rules, issues, and reports arrive as native tools instead of terminal output Cascade has to parse.
+
+<Note>Cognition rebranded Windsurf as **Devin Desktop** in 2026, and Cascade is folding into the Devin brand as Devin Local. The in-app names changed; the config file paths and JSON keys below did not.</Note>
+
+## 1. Install the CLI
+
+Run this in Windsurf's integrated terminal.
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+Local audits are free, need no account, and run entirely on your machine. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+Windsurf uses `serverUrl` for a remote server, not `url`. Create the file if it does not exist yet, Windsurf will not create it for you.
+
+<Tabs>
+  <Tab title="OAuth (recommended)">
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "serverUrl": "https://mcp.squirrelscan.com/mcp"
+        }
+      }
+    }
+    ```
+
+    Save it, then open the MCP panel (the **MCPs** icon at the top right of Cascade, or **Devin Settings → Cascade → MCP Servers**), refresh, and click **Authorize** next to squirrelscan to finish the browser sign-in.
+  </Tab>
+  <Tab title="API key">
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "serverUrl": "https://mcp.squirrelscan.com/mcp",
+          "headers": {
+            "Authorization": "Bearer ${env:SQUIRRELSCAN_API_KEY}"
+          }
+        }
+      }
+    }
+    ```
+
+    `${env:VAR}` and `${file:/path}` interpolation both work inside `headers`, so export the key rather than hardcoding it. Mint one with `squirrel keys create --shell`.
+  </Tab>
+</Tabs>
+
+**Which file.** The standalone editor reads `~/.codeium/windsurf/mcp_config.json`. The Windsurf plugin for JetBrains or VS Code reads `~/.codeium/mcp_config.json`, with no `windsurf` segment. There is no project-scoped MCP config in Windsurf, this is a global, user-level file, so the server is available in every workspace once it is added.
+
+<Warning>Cascade caps total active MCP tools at 100 across every connected server. If you are near that ceiling, squirrelscan's tools will not load, disable unused tools or servers in the MCP panel first.</Warning>
+
+## 3. Run an audit
+
+With the MCP server connected, ask Cascade in plain language and it calls the tools directly:
+
+```
+Audit example.com with squirrelscan, then fix the high-severity SEO issues in this repo.
+```
+
+Without the MCP server, Cascade can still run the CLI for you. The `llm` output format is compact and structured, so it works from the report without you summarizing it first:
+
+```bash
+squirrel audit https://example.com --format llm
+```
+
+Scope large sites so runs stay fast and cheap:
+
+```
+Audit only /blog/* on example.com, cap it at 20 pages, and list the SEO regressions.
+```
+
+<Tip>Windsurf does not implement the [Agent Skills](https://agentskills.io) standard, so `npx skills add` has no effect here, unlike Cursor or Claude Code. The MCP tools and the CLI are the two supported paths.</Tip>
+
+## 4. The fix loop
+
+A typical pass in Cascade looks like this:
+
+1. Cascade runs the audit and groups findings by severity.
+2. It maps each finding to a file in your workspace, `core/title-missing` to a layout component, `images/alt-missing` to the templates that render them.
+3. It edits in batches, then re-audits to confirm the score moved.
+
+Re-auditing matters: a fix that looks right in the diff can still fail the rule, and the second run is what tells you.
+
+## What squirrelscan checks, and what it does not
+
+The audit covers 276 rules across 21 categories, rolling up into four scores: **SEO**, **Performance**, **Security**, and **Agents** (how well AI crawlers and agents can consume the site).
+
+Two limits worth knowing before you point Cascade at a site:
+
+- **Local versus cloud.** The CLI audits anything your machine can reach, including `localhost` and private staging. The hosted MCP server crawls from squirrelscan's cloud, so it needs a publicly reachable URL. Use the CLI or [`squirrel mcp`](/cli/mcp) for anything private.
+- **It is not a rank tracker.** squirrelscan checks what is on the page and how it is served. It does not report keyword positions, backlinks, or competitor rankings.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+    A full worked example of the audit-and-fix loop.
+  </Card>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#windsurf-devin-desktop">
+    Scopes, API-key auth, and JSON config.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule and how it's fixed.
+  </Card>
+</CardGroup>
