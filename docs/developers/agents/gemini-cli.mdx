@@ -1,0 +1,128 @@
+---
+title: "squirrelscan for Gemini CLI"
+sidebarTitle: "Gemini CLI"
+description: "Set up squirrelscan in Google's Gemini CLI: gemini mcp add, settings.json config, the skills, and running audits from the REPL."
+icon: "gem"
+---
+
+Gemini CLI is Google's open-source terminal agent. It speaks MCP natively, so squirrelscan's audit, report, and issue tools appear alongside Gemini's built-in tools and can be called without shelling out to the CLI each time.
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+<Tabs>
+  <Tab title="OAuth (recommended)">
+    ```bash
+    gemini mcp add --transport http --scope user \
+      squirrelscan https://mcp.squirrelscan.com/mcp
+    ```
+
+    OAuth is auto-discovered on first connect, or you can trigger it from the REPL with `/mcp auth squirrelscan`. Tokens cache in `~/.gemini/mcp-oauth-tokens.json`, never in your settings file.
+  </Tab>
+  <Tab title="API key">
+    ```bash
+    gemini mcp add --transport http --scope user \
+      --header "Authorization: Bearer $SQUIRRELSCAN_API_KEY" \
+      squirrelscan https://mcp.squirrelscan.com/mcp
+    ```
+
+    Env-var expansion (`$VAR`, `${VAR}`) works in any settings value, so export the key rather than writing it into the file. A static header stops OAuth discovery from ever firing, which is what you want in CI.
+  </Tab>
+  <Tab title="settings.json">
+    Gemini CLI writes `httpUrl` for a streamable-HTTP server. The resulting entry, in `~/.gemini/settings.json` (user) or `.gemini/settings.json` (project):
+
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "httpUrl": "https://mcp.squirrelscan.com/mcp"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>`gemini mcp add` defaults to **project** scope, not user scope. Without `--scope user` the server is written to `.gemini/settings.json` in the current directory and will not be there in your next project. This is the single most common Gemini CLI setup mistake.</Warning>
+
+Confirm the server registered with `gemini mcp list`, or run `/mcp` inside the REPL to see the connection state and the tools it exposes.
+
+## 3. Install the skills
+
+Gemini CLI supports the [Agent Skills](https://agentskills.io) standard, so the skills install the same way they do for every other supported agent:
+
+```bash
+npx skills add squirrelscan/squirrelscan
+```
+
+That adds `audit-website` (the fix loop) and `squirrelscan` (operating the CLI). See [`squirrel skills`](/cli/skills) for what each one does.
+
+<Note>squirrelscan is not packaged as an official Gemini CLI extension yet. Extensions can bundle MCP servers and commands, so this may change, but the `settings.json` entry above is the supported path today.</Note>
+
+## 4. Run an audit
+
+Start a REPL session and describe the task. Gemini calls `run_audit`, polls until the report is ready, then works the findings:
+
+```
+Audit https://example.com with squirrelscan and list the top 3 fixes.
+```
+
+Because Gemini CLI is a coding agent, not just a chat client, it can go straight from the report into your source:
+
+```
+Audit example.com, then fix every images/alt-missing finding in this repo and re-audit to confirm.
+```
+
+Keep runs fast on a large site by capping the crawl up front:
+
+```
+Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
+```
+
+<Tip>Cloud audits cost credits (50 per audit plus 2 per rendered page), and `run_audit` returns a cost estimate before anything runs. Local `squirrel audit` runs are free and unlimited, so use those for quick iteration and the cloud for browser-rendered checks.</Tip>
+
+## Headless and CI
+
+The OAuth flow needs a local browser and a reachable localhost redirect, so it fails over headless SSH or in a browser-less container. Use the API-key header there instead, exported from `SQUIRRELSCAN_API_KEY`.
+
+For a plain pass/fail deploy gate you do not need the agent at all, the free CLI exits non-zero when a threshold trips:
+
+```bash
+squirrel audit https://example.com --fail-on 'score<90'
+```
+
+See the [CI guide](/guides/ci) for the full pattern.
+
+## What squirrelscan checks, and what it does not
+
+The audit covers 260+ rules, rolling up into four scores: **SEO**, **Performance**, **Security**, and **Agents** (how well AI crawlers and agents can consume the site).
+
+Some rules are [cloud rules](/cloud/rules), they use AI analysis, full filter lists, or live search data, so they need login and are skipped when you are signed out. The hosted MCP server crawls from squirrelscan's cloud and needs a publicly reachable URL; for `localhost` or private staging, point Gemini at the local CLI or [`squirrel mcp`](/cli/mcp) instead.
+
+squirrelscan does not track keyword rankings, backlinks, or competitors. It reports what is on the page and how it is served.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+    A full worked example of the audit-and-fix loop.
+  </Card>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#gemini-cli">
+    Scopes, API-key auth, and JSON config.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule and how it's fixed.
+  </Card>
+</CardGroup>

@@ -49,6 +49,24 @@ Local audits are free and run entirely on your machine. Verify with `squirrel --
 
 <Note>Don't set `experimental_environment` for this server, it's for stdio-over-remote-executor and doesn't support streamable HTTP. More detail on the [MCP client setup](/developers/mcp-clients#codex-cli) page.</Note>
 
+## How to check which MCP servers are enabled in Codex
+
+Run `codex mcp list`. Each server is listed with a **Status** column reading `enabled` or `disabled`, so that one command tells you whether squirrelscan is registered and switched on.
+
+Remote servers like squirrelscan print in their own table, keyed by **Url** rather than **Command**, alongside the **Bearer Token Env Var** column that shows whether you configured API-key auth. Add `--json` if you want to parse the result:
+
+```bash
+codex mcp list --json
+```
+
+To inspect one server instead of all of them, pass its name to `codex mcp get`:
+
+```bash
+codex mcp get squirrelscan
+```
+
+If squirrelscan is missing from the list entirely, the `codex mcp add` step above did not write to the config file Codex is reading. Remember that `codex mcp add` only ever touches the global `~/.codex/config.toml`, so a hand-written project-level `.codex/config.toml` will not appear until that project is trusted.
+
 ## 3. Install the skills
 
 Codex reads Agent Skills from `~/.agents/skills`, so the same install works:
