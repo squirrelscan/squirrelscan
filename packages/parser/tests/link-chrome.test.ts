@@ -78,8 +78,10 @@ describe("extractLinks — isChrome agrees with parsePage", () => {
       ["c", false],
       ["a", false],
     ]);
-    // The looser `position` label keeps its previous behaviour: class/id
-    // heuristics still apply there, which is exactly why isChrome is separate.
-    expect(links.map((l) => l.position)).toEqual(["header", "content", "nav"]);
+    // The looser `position` label keeps its previous behaviour: it resolves on
+    // the *closest* ancestor, so the `<header><nav>` link is "nav" rather than
+    // "header", and class/id heuristics still apply (`post-nav` → "nav"). That
+    // looseness is exactly why isChrome is a separate, landmark-strict signal.
+    expect(links.map((l) => l.position)).toEqual(["nav", "content", "nav"]);
   });
 });
