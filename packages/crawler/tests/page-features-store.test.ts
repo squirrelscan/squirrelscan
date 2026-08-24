@@ -594,7 +594,7 @@ describe("page_features migration (v17 → current)", () => {
     const version = check.prepare("SELECT version FROM schema_version LIMIT 1").get() as {
       version: number;
     };
-    expect(version.version).toBe(21);
+    expect(version.version).toBe(SCHEMA_VERSION);
     check.close();
   });
 
