@@ -1,0 +1,139 @@
+---
+title: "squirrelscan for GitHub Copilot"
+sidebarTitle: "GitHub Copilot"
+description: "Set up squirrelscan in GitHub Copilot for VS Code: mcp.json config, agent mode, the skills, and running audits from Copilot Chat."
+icon: "github"
+---
+
+Copilot agent mode in VS Code can already run terminal commands on your behalf, so it can run `squirrel` with no configuration at all. Connecting the hosted MCP server replaces that parsed terminal output with native tools for cloud audits, the issue tracker, and the rule catalog.
+
+<Note>MCP runs through VS Code's built-in client (v1.101+), not through Copilot itself, so the config below lives in VS Code's `mcp.json`, not in a Copilot setting.</Note>
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+VS Code uses a top-level `servers` key, not `mcpServers`, and remote entries need `"type": "http"`.
+
+<Tabs>
+  <Tab title="OAuth (recommended)">
+    ```json
+    {
+      "servers": {
+        "squirrelscan": {
+          "type": "http",
+          "url": "https://mcp.squirrelscan.com/mcp"
+        }
+      }
+    }
+    ```
+
+    On first connection VS Code discovers the authorization server, registers a client, and opens a browser so you can sign in. Manage or revoke the grant later under **Accounts → Manage Trusted MCP Servers**.
+  </Tab>
+  <Tab title="API key">
+    For a config you intend to commit, use a prompted input so the key lands in VS Code's secret storage rather than in the file:
+
+    ```json
+    {
+      "inputs": [
+        {
+          "type": "promptString",
+          "id": "squirrelscan-api-key",
+          "description": "squirrelscan API key",
+          "password": true
+        }
+      ],
+      "servers": {
+        "squirrelscan": {
+          "type": "http",
+          "url": "https://mcp.squirrelscan.com/mcp",
+          "headers": {
+            "Authorization": "Bearer ${input:squirrelscan-api-key}"
+          }
+        }
+      }
+    }
+    ```
+
+    This also spares teammates an OAuth round trip just to open the project. Mint a key with `squirrel keys create --shell`.
+  </Tab>
+</Tabs>
+
+**Where it goes.** Save either block through **Command Palette → MCP: Add Server** (choose **HTTP**), or write it yourself to `.vscode/mcp.json` for this workspace (safe to commit, no token is stored in it) or to the user `mcp.json` via **Command Palette → MCP: Open User Configuration** to get it everywhere.
+
+<Warning>
+Use a top-level `headers` object. The `"requestInit": { "headers": ... }` form belongs to the separate Visual Studio IDE and silently no-ops in VS Code, you get a server that connects unauthenticated and fails on the first tool call.
+</Warning>
+
+## 3. Install the skills
+
+VS Code with Copilot supports the [Agent Skills](https://agentskills.io) standard:
+
+```bash
+npx skills add squirrelscan/squirrelscan
+```
+
+That installs `audit-website` (the fix loop) and `squirrelscan` (operating the CLI). See [`squirrel skills`](/cli/skills) for the details.
+
+## 4. Run an audit
+
+Open Copilot Chat and switch to **agent mode**. Ask mode can read your code but cannot run tools or edit files, so audits and fixes both need agent mode.
+
+```
+Audit https://example.com with squirrelscan and list the top issues by severity.
+```
+
+Then hand it the fixes. Agent mode edits across the repo the same way it acts on a failing test:
+
+```
+Fix every core/title-missing and images/alt-missing finding, then re-audit to confirm the score went up.
+```
+
+Cap the crawl on a large site so the run stays fast:
+
+```
+Audit only /blog/* on example.com, cap it at 20 pages, and fix the broken links.
+```
+
+<Tip>Copilot proposes each edit for review before applying it. On a batch of 20 image-alt fixes that gets tedious, so ask it to group the changes by file and apply them per file rather than per finding.</Tip>
+
+## Copilot Business and Enterprise
+
+Manual MCP servers are gated by org policy on paid plans, and both switches are needed. An org or enterprise owner has to enable the **MCP servers in Copilot** policy, which is off by default, and set **Restrict MCP access to registry servers** to **Allow all**, because squirrelscan is configured by hand and is not in GitHub's MCP registry.
+
+If squirrelscan connects on your personal account but not your work one, this is almost always why. The CLI path has no such restriction, so agent mode can still run `squirrel` in the integrated terminal while you wait on the policy change.
+
+## What squirrelscan checks, and what it does not
+
+The audit covers 260+ rules, rolling up into four scores: **SEO**, **Performance**, **Security**, and **Agents** (how well AI crawlers and agents can consume the site).
+
+The CLI audits anything your machine can reach, including `localhost` and private staging. The hosted MCP server crawls from squirrelscan's cloud, so it needs a publicly reachable URL, use the CLI or [`squirrel mcp`](/cli/mcp) for anything private.
+
+Copilot runs interactively in your editor, so it is the wrong tool for a per-deploy gate. Run the CLI in CI for that, it exits non-zero when a `--fail-on` threshold trips. Use Copilot for the fix loop and [CI](/guides/ci) for the gate.
+
+squirrelscan does not track keyword rankings, backlinks, or competitors. It reports what is on the page and how it is served.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+    A full worked example of the audit-and-fix loop.
+  </Card>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#vs-code-copilot">
+    Scopes, API-key auth, and JSON config.
+  </Card>
+  <Card title="Rules reference" icon="list-checks" href="/rules">
+    Every audit rule and how it's fixed.
+  </Card>
+</CardGroup>
