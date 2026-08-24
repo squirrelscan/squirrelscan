@@ -20,6 +20,34 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.87
+
+A reliability fix for long audits. An audit is not just its crawl: once the last
+page is fetched there is still link checking, rule evaluation, scoring,
+rendering and publishing to do, and on a large site that second half can take
+longer than the first. The CLI reported its progress only while pages were being
+crawled, so for the whole of that second half it went quiet, and a run that was
+working normally became indistinguishable from one that had died. Past a point
+the server concluded it had died and marked it failed, discarding a completed
+crawl and delivering no report.
+
+The bigger the site, the more likely this was, which is the wrong way round.
+
+### Fixed
+
+- **A long audit is no longer given up on while it is still running.** The CLI
+  now reports that it is alive for the entire run rather than only during the
+  crawl, so the time spent on rules, scoring and rendering no longer counts
+  against it. Audits of large sites that previously failed near the end, after
+  the crawl had already finished, should now complete and publish. If one of
+  yours did this, re-running it on this version is worth a try.
+
+- **Interrupting a crawl now tells you how to resume it.** Crawls have always
+  been saved as they go, and an interrupted one can be picked up where it
+  stopped with `--resume` instead of started again. Nothing said so, so a
+  cancelled crawl of a few hundred pages looked like lost work. Cancelling now
+  reports how many pages are saved and prints the exact command to continue.
+
 ## v0.0.86
 
 Three rules about the gap between what your markup claims and what your pages
