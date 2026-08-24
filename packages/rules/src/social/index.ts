@@ -3,6 +3,7 @@
 
 import type { Rule } from "../types";
 
+import { assetDivergenceRule } from "./asset-divergence";
 import { ogImageSizeRule } from "./og-image-size";
 import { ogUrlMatchRule } from "./og-url-match";
 import { shareButtonsRule } from "./share-buttons";
@@ -13,9 +14,11 @@ export const rules: Rule[] = [
   ogUrlMatchRule,
   socialProfilesRule,
   shareButtonsRule,
+  assetDivergenceRule,
 ];
 
 export {
+  assetDivergenceRule,
   ogImageSizeRule,
   ogUrlMatchRule,
   shareButtonsRule,
