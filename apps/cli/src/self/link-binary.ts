@@ -1,5 +1,36 @@
-import { copyFileSync, symlinkSync } from "node:fs";
+import { copyFileSync, symlinkSync, unlinkSync } from "node:fs";
 import { platform } from "node:os";
+
+export interface UnlinkIfPresentDeps {
+  unlink?: (path: string) => void;
+}
+
+/**
+ * Remove whatever currently sits at `path` — file, live symlink, or dangling
+ * symlink — and do nothing if there is genuinely nothing there.
+ *
+ * Callers used to guard the unlink with `existsSync(path)`, which FOLLOWS
+ * symlinks: a link whose release directory has been cleaned up reads as
+ * missing, the unlink is skipped, and the symlink/copy that follows dies with
+ * `EEXIST: file already exists`. That is the whole of the "Self install failed
+ * with exit code 1" the installer has been reporting on reinstall.
+ *
+ * Unlinking unconditionally and swallowing only ENOENT is the fix: unlink
+ * operates on the link itself, so every case above collapses to one call. Any
+ * other errno (EACCES on an unwritable bin dir, EBUSY on a running Windows
+ * .exe) still surfaces, because those are real problems.
+ */
+export function unlinkIfPresent(
+  path: string,
+  deps: UnlinkIfPresentDeps = {}
+): void {
+  const unlink = deps.unlink ?? unlinkSync;
+  try {
+    unlink(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
 
 export interface LinkBinaryDeps {
   symlink?: (target: string, path: string) => void;

@@ -1,4 +1,26 @@
 #!/bin/bash
+
+# Everything below needs bash: `local`, `[[ ]]`, and the `set -o pipefail` on
+# the next line. Piped into a POSIX shell — `curl ... | sh`, and /bin/sh is
+# dash on Debian/Ubuntu — that `set` aborts on line 1 with
+#   sh: set: Illegal option -o pipefail
+# before the error reporting below is even defined, so the failure is opaque
+# to the user and invisible to us. `| sh` one-liners are published in places we
+# can't edit, so hand over to bash rather than trusting the shebang.
+if [ -z "${BASH_VERSION:-}" ]; then
+  if command -v bash > /dev/null 2>&1; then
+    # Saved to a file: just re-run it. Piped: this script has already been
+    # consumed from stdin and cannot be rewound, so refetch it under bash.
+    case "$0" in
+      */install.sh | install.sh) exec bash "$0" "$@" ;;
+    esac
+    exec bash -c 'curl -fsSL https://install.squirrelscan.com/install.sh | bash'
+  fi
+  echo "Error: the squirrelscan installer requires bash, and none was found." >&2
+  echo "  Install bash, or grab a binary from https://github.com/squirrelscan/squirrelscan/releases" >&2
+  exit 1
+fi
+
 set -euo pipefail
 
 # squirrelscan installer
