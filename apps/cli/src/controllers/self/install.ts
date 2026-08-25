@@ -1,16 +1,10 @@
-import {
-  existsSync,
-  mkdirSync,
-  copyFileSync,
-  unlinkSync,
-  chmodSync,
-} from "node:fs";
+import { mkdirSync, copyFileSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
 
 import type { InstallResult } from "@/self/types";
 
 import { type Result, ok, err, commandError } from "@/controllers/types";
-import { linkBinary } from "@/self/link-binary";
+import { linkBinary, unlinkIfPresent } from "@/self/link-binary";
 import {
   getSquirrelPaths,
   getReleasePath,
@@ -55,10 +49,10 @@ export async function runSelfInstall(
       chmodSync(binaryPath, 0o755);
     }
 
-    // Create/update symlink (a copy on Windows, where symlinks need privilege)
-    if (existsSync(symlinkPath)) {
-      unlinkSync(symlinkPath);
-    }
+    // Create/update symlink (a copy on Windows, where symlinks need privilege).
+    // unlinkIfPresent, not an existsSync guard: existsSync follows the link, so
+    // a dangling one survived the guard and made linkBinary throw EEXIST.
+    unlinkIfPresent(symlinkPath);
     linkBinary(binaryPath, symlinkPath);
 
     // Initialize settings — preserve anything already there (auth, telemetry

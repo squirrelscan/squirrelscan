@@ -21,7 +21,7 @@ import type { ReleaseManifest, UpdateResult, UserSettings } from "./types";
 
 import { version } from "../../package.json";
 import { updateSuppressedReason } from "./install-meta";
-import { linkBinary } from "./link-binary";
+import { linkBinary, unlinkIfPresent } from "./link-binary";
 import {
   getReleasePath,
   getBinaryPath,
@@ -856,7 +856,7 @@ export function updateSymlink(
       // Some filesystems/Windows policies refuse rename-over-existing for
       // links — fall back to the old swap and clean up the tmp link.
       try {
-        if (existsSync(symlinkPath)) unlinkSync(symlinkPath);
+        unlinkIfPresent(symlinkPath);
         linkBinary(binaryPath, symlinkPath);
       } finally {
         try {
