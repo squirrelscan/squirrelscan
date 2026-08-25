@@ -62,7 +62,7 @@ Settings are merged from multiple sources in this priority order:
 
 **Location:** squirrelscan walks up from current directory to home directory looking for `squirrel.toml`
 
-```
+```text
 Current: /Users/you/projects/mysite/blog
 Searches:
   1. /Users/you/projects/mysite/blog/squirrel.toml  ← Most specific
@@ -325,12 +325,12 @@ squirrel config validate
 ```
 
 Output on success:
-```
+```text
 Config valid: /path/to/squirrel.toml
 ```
 
 Output on error:
-```
+```text
 Invalid config: crawler.max_pages: Expected number, received string
 ```
 

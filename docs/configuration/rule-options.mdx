@@ -232,7 +232,7 @@ density_threshold = 0.05   # 5% max
 
 **How density is calculated:**
 
-```
+```text
 density = (keyword_occurrences / total_words)
 ```
 
@@ -673,7 +673,7 @@ squirrel rules show core/meta-title
 ```
 
 Output:
-```
+```text
 core/meta-title - Meta Title
   Validates page title presence and length
 
@@ -800,12 +800,12 @@ squirrel config validate
 ```
 
 **Valid config:**
-```
+```text
 ✓ Config valid: /path/to/squirrel.toml
 ```
 
 **Invalid config:**
-```
+```text
 ✗ Invalid config:
   rule_options.core/meta-title.min_length: Expected number, received string
 ```

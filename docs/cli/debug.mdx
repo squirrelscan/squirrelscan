@@ -57,7 +57,7 @@ Logs are written to `~/.squirrel/logs/`:
 
 ### Log format
 
-```
+```text
 2025-01-10T14:30:45.123Z [debug] [request] url="https://example.com" status=200 loadTimeMs=120
 2025-01-10T14:30:45.200Z [info] ========== COMMAND END: audit (success, 5432ms) ==========
 ```
@@ -90,7 +90,7 @@ squirrel audit https://example.com --trace
 
 This writes timing data to `~/.squirrel/logs/trace.log`:
 
-```
+```text
 2025-01-10T14:30:45.123Z [trace] [fetch:https://example.com] duration=145.32ms
 2025-01-10T14:30:45.300Z [trace] [rule:meta/title] duration=2.15ms {"checks":1}
 ```

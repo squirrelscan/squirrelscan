@@ -16,7 +16,7 @@ When you run `squirrel audit https://example.com`, the crawler:
 4. **Crawls breadth-first** to prioritize important pages
 5. **Stores everything** in a local SQLite database
 
-```
+```bash
 squirrel audit https://example.com
 ```
 
@@ -134,7 +134,7 @@ squirrel audit gymshark.com
 ```
 
 Behind the scenes:
-```
+```text
 HTTP redirect:        gymshark.com → us.checkout.gymshark.com
 Client-side redirect: us.checkout.gymshark.com → www.gymshark.com
 Final crawl target:   www.gymshark.com
@@ -230,7 +230,7 @@ After a re-audit, the report includes a compact **cache** line: hit rate,
 bytes saved, and a hits-by-reason breakdown (`max-age` vs `304` vs
 content-hash, …) across **pages and sub-resources**:
 
-```
+```text
 Cache: 4/4 hits (100%), 87.2 KB saved
   by reason: max-age 2, s-maxage 2
 ```

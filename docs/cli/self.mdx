@@ -36,7 +36,7 @@ squirrel self install
 
 ### Output
 
-```
+```text
 Installed v0.1.0
   Binary: ~/.local/share/squirrel/releases/0.1.0/squirrel
   Symlink: ~/.local/bin/squirrel
@@ -44,7 +44,7 @@ Installed v0.1.0
 
 If `~/.local/bin` is not in your `$PATH`, the command will show:
 
-```
+```text
 Add to your shell profile:
   export PATH="~/.local/bin:$PATH"
 ```
@@ -66,7 +66,7 @@ Check for and apply updates to the CLI.
 
 You usually don't need this command. With `auto_update` enabled (the default), squirrel updates itself: any CLI run checks for a new release in the background, and when one is found a detached background process downloads it, verifies its SHA-256 checksum, and switches over silently. Your next run prints a one-line notice:
 
-```
+```text
 ✓ squirrel auto-updated v0.0.42 → v0.0.43
 ```
 
@@ -123,13 +123,13 @@ squirrel self update --check
 ```
 
 Output if update available:
-```
+```text
 Update available: v0.2.0
 Run 'squirrel self update' to install
 ```
 
 Output if up to date:
-```
+```text
 Already on latest version (0.1.0)
 ```
 
@@ -140,7 +140,7 @@ squirrel self update
 ```
 
 Output:
-```
+```text
 Updated to v0.2.0
 See release notes: https://github.com/squirrelscan/squirrelscan/releases/tag/v0.2.0
 ```
@@ -232,7 +232,7 @@ squirrel self doctor
 
 ### Output
 
-```
+```text
 Running health checks...
 
 [OK] Binary: Executable found at ~/.local/bin/squirrel
@@ -287,7 +287,7 @@ squirrel self version
 ```
 
 Output:
-```
+```bash
 squirrel v0.1.0
   Channel: stable
   Platform: darwin-arm64
@@ -351,7 +351,7 @@ squirrel self settings show
 ```
 
 Output:
-```
+```text
 Effective Settings:
 
   channel                  = stable       (default)
@@ -370,7 +370,7 @@ squirrel self settings show --user
 ```
 
 Output:
-```
+```text
 User Settings (~/.squirrel/settings.json):
 
   channel              = stable
@@ -385,7 +385,7 @@ squirrel self settings show --local
 ```
 
 Output:
-```
+```text
 Local Settings (/path/to/project/.squirrel/settings.json):
 
   notifications        = false
@@ -437,7 +437,7 @@ squirrel self settings set channel beta
 ```
 
 Output:
-```
+```text
 Set channel = beta (user)
   Written to: ~/.squirrel/settings.json
 ```
@@ -500,7 +500,7 @@ squirrel self uninstall
 ```
 
 Output:
-```
+```text
 This will remove:
   - Symlink at ~/.local/bin/squirrel
   - Cached releases at ~/.local/share/squirrel

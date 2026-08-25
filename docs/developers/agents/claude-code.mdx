@@ -32,7 +32,7 @@ Local audits are free and run entirely on your machine. Verify with `squirrel --
   <Tab title="Plugin (recommended)">
     The plugin bundles both skills plus the hosted MCP server:
 
-    ```
+    ```text
     /plugin marketplace add squirrelscan/squirrelscan
     /plugin install squirrelscan@squirrelscan
     ```
@@ -75,19 +75,19 @@ Tokens are stored in your OS keychain, never in a config file, so a committed `.
 
 Trigger the skill with a slash command:
 
-```
+```text
 /audit-website
 ```
 
 Claude detects your project's website, runs the audit, and summarizes issues by severity. Or be explicit:
 
-```
+```text
 /audit-website https://example.com focusing on accessibility and performance
 ```
 
 Or just ask in natural language:
 
-```
+```text
 Use the audit-website skill to audit example.com and fix all high-severity issues.
 ```
 
@@ -95,7 +95,7 @@ Use the audit-website skill to audit example.com and fix all high-severity issue
 
 For larger efforts, let Claude plan before it edits:
 
-```
+```text
 Enter plan mode. Use the audit-website skill to audit example.com,
 then create a plan to fix all high and medium severity issues.
 ```
@@ -104,7 +104,7 @@ Claude runs the audit, groups fixes, orders them by dependency, and waits for yo
 
 ### Parallel fixes with subagents
 
-```
+```text
 Audit example.com, then spawn subagents to fix in parallel:
 accessibility, SEO meta tags, and performance.
 ```

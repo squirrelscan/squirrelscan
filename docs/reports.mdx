@@ -17,7 +17,7 @@ The health score is calculated from 0-100 based on:
 
 ### Scoring formula
 
-```
+```text
 Base Score = (Earned Weight / Total Weight) × 100
 Curved Score = Base Score ^ 1.2
 Issue Density Penalty = up to -45% when many errors/warnings (kicks in after 10+ issue units)
@@ -45,7 +45,7 @@ Critical crawlability issues reduce the final score:
 
 Penalties are multiplicative. For example, an 80% score with missing robots.txt (-15%) and no sitemap (-20%):
 
-```
+```text
 80 × (1 - 0.15) × (1 - 0.20) = 80 × 0.85 × 0.80 = 54.4
 ```
 
@@ -107,7 +107,7 @@ squirrel report
 ```
 
 **Output:**
-```
+```text
 ================================================================================
 SQUIRRELSCAN REPORT
 https://example.com • 42 pages • 87/100 (B)
@@ -562,7 +562,7 @@ for GitLab, generic runners, and token setup.
 
 Audit reports are stored in a local SQLite database at:
 
-```
+```text
 ~/.local/share/squirrel/audits.db
 ```
 
@@ -573,7 +573,7 @@ squirrel report --list
 ```
 
 **Output:**
-```
+```text
 Recent Audits:
 ================================================================================
 ID       Date                   Pages    Status
@@ -652,7 +652,7 @@ squirrel report a7b3c2d1 --publish --visibility unlisted
 
 The CLI prints the published URL:
 
-```
+```text
 https://reports.squirrelscan.com/SJEItpldwW
 ```
 

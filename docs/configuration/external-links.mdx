@@ -104,7 +104,7 @@ cache_ttl_days = 0  # Not recommended
 
 **Cache location:**
 
-```
+```text
 ~/.squirrel/cache/external-links/
 ```
 
@@ -339,7 +339,7 @@ External link checking adds overhead to crawls. Typical impact:
 
 **With external links enabled (default):**
 
-```
+```text
 100 internal pages
 50 unique external links
 = 100 page fetches + 50 external checks (if not cached)
@@ -348,7 +348,7 @@ External link checking adds overhead to crawls. Typical impact:
 
 **With external links disabled:**
 
-```
+```text
 100 internal pages
 = 100 page fetches
 = ~100 total HTTP requests
@@ -357,12 +357,12 @@ External link checking adds overhead to crawls. Typical impact:
 **Cache impact:**
 
 First crawl:
-```
+```text
 50 external links × 10s timeout = up to 10s total (5 concurrent)
 ```
 
 Second crawl (within cache TTL):
-```
+```text
 50 external links cached = 0s overhead
 ```
 

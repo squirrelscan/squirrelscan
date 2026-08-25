@@ -72,19 +72,19 @@ That adds `audit-website` (the fix loop) and `squirrelscan` (operating the CLI).
 
 Start a REPL session and describe the task. Gemini calls `run_audit`, polls until the report is ready, then works the findings:
 
-```
+```text
 Audit https://example.com with squirrelscan and list the top 3 fixes.
 ```
 
 Because Gemini CLI is a coding agent, not just a chat client, it can go straight from the report into your source:
 
-```
+```text
 Audit example.com, then fix every images/alt-missing finding in this repo and re-audit to confirm.
 ```
 
 Keep runs fast on a large site by capping the crawl up front:
 
-```
+```text
 Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
 ```
 
