@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -89,23 +90,36 @@ describe("linkBinary", () => {
 });
 
 describe("unlinkIfPresent", () => {
+  // Why the bug existed: the old code guarded its unlink with existsSync.
+  test("existsSync reports a dangling symlink as absent, lstat does not", () => {
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-unlink-"));
+    try {
+      const link = join(dir, "squirrel");
+      // An older release directory was cleaned up, leaving the bin symlink
+      // pointing at nothing — the shape of the reported failure.
+      symlinkSync(join(dir, "releases", "0.0.86", "squirrel"), link);
+
+      expect(existsSync(link)).toBe(false); // follows the link to a missing file
+      expect(lstatSync(link).isSymbolicLink()).toBe(true); // the link is right there
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("removes a dangling symlink so the relink can't hit EEXIST", () => {
     const dir = mkdtempSync(join(tmpdir(), "squirrel-unlink-"));
     try {
       const link = join(dir, "squirrel");
-      const gone = join(dir, "releases", "0.0.86", "squirrel");
-      // The exact shape of the reported failure: an older release directory
-      // was cleaned up, leaving the bin symlink pointing at nothing.
-      symlinkSync(gone, link);
-      expect(existsSync(link)).toBe(false); // existsSync follows the link
-      expect(lstatSync(link).isSymbolicLink()).toBe(true); // ...but it is there
+      const target = join(dir, "new-squirrel");
+      symlinkSync(join(dir, "releases", "0.0.86", "squirrel"), link);
+      writeFileSync(target, "binary");
 
       unlinkIfPresent(link);
-
-      const target = join(dir, "new-squirrel");
-      writeFileSync(target, "binary");
       linkBinary(target, link, { isWindows: false });
-      expect(readFileSync(link, "utf-8")).toBe("binary");
+
+      // readlink, not readFileSync: assert the link was repointed, which is
+      // what the fix is about, rather than reading through it.
+      expect(readlinkSync(link)).toBe(target);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
