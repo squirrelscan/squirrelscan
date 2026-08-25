@@ -11,9 +11,18 @@ squirrelscan plugs straight into Claude Code. The plugin bundles both skills and
 
 The skills and local audits run through the `squirrel` binary.
 
-```bash
-curl -fsSL https://install.squirrelscan.com | bash
-```
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://install.squirrelscan.com | bash
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
 
 Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
 
