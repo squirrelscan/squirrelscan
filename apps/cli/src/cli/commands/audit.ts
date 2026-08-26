@@ -65,10 +65,12 @@ import {
   registerRun,
   reportProgress,
   type RegisteredRun,
+  type RegisterFailure,
   resolveRunFinalizeScore,
   startRunHeartbeat,
 } from "@/lib/run-tracker";
 import { syncTechnologies } from "@/lib/technology-sync";
+import { AUDIT_PRICING_LINE, proPitchLines, upgradeUrl } from "@/lib/upgrade";
 import { getApiUrl } from "@/self/api";
 import {
   API_TOKEN_ENV_VAR,
@@ -190,6 +192,81 @@ export function computePreflightAffordability(opts: {
       ]
     : [];
   return { base, renderCost, estimate, shortfall, warningLines };
+}
+
+/**
+ * Lines printed when register failed definitively and the run went untracked.
+ *
+ * Out of credits gets the full offer rather than the server's one sentence: the
+ * CLI is the surface most of these users live in, and 12 of the 13 orgs that
+ * ever ran out of credits never came back, having never been shown a price. The
+ * other definitive codes (website limit, org locked) are not a plan problem, so
+ * they keep the plain one-liner.
+ *
+ * Exported for tests. Returns plain lines; the caller does the printing.
+ */
+export function registerFailureLines(failure: RegisterFailure): string[] {
+  if (failure.code !== "INSUFFICIENT_CREDITS") {
+    return [`⚠ Run not tracked in your dashboard: ${failure.message}`];
+  }
+  const balanceLine =
+    failure.balance != null
+      ? `You have ${failure.balance.toLocaleString("en-US")} credits. ${AUDIT_PRICING_LINE}`
+      : AUDIT_PRICING_LINE;
+  return [
+    fmt.yellow(
+      "⚠ Out of cloud credits. This run is not tracked in your dashboard."
+    ),
+    `  ${balanceLine}`,
+    // Say plainly that nothing was lost. A warning that reads like a failure is
+    // why "the audit still ran" never landed.
+    `  ${fmt.dim("The audit itself ran locally and its results below are complete.")}`,
+    ...proPitchLines("cli-audit"),
+  ];
+}
+
+/** Warn once the balance drops below this share of the plan's monthly grant. */
+const LOW_BALANCE_FRACTION = 0.2;
+
+/**
+ * End-of-run low-balance warning, mirroring the dashboard's banner for people
+ * who never open the dashboard.
+ *
+ * Fires at 20% of the plan's monthly grant — while there are still credits to
+ * spend and a decision to make — and again, more sharply, once the balance is
+ * under the flat base and can buy nothing. Free plans get the Pro offer; paid
+ * plans get a top-up link, not a pitch for the plan they're already on.
+ *
+ * Exported for tests.
+ */
+export function lowBalanceFooterLines(opts: {
+  balance: number | null;
+  monthlyCredits: number;
+  plan: "anonymous" | "free" | "paid";
+}): string[] {
+  const { balance, monthlyCredits, plan } = opts;
+  if (balance == null || plan === "anonymous") return [];
+
+  const base = computeCost("audit_base", 1);
+  const spent = balance < base;
+  // A plan with no monthly grant (Team pools per seat) has no share to measure
+  // against, so it only warns once the balance can't buy an audit.
+  const threshold =
+    monthlyCredits > 0
+      ? Math.floor(monthlyCredits * LOW_BALANCE_FRACTION)
+      : base;
+  if (!spent && balance >= threshold) return [];
+
+  const headline = spent
+    ? fmt.yellow(
+        `${balance.toLocaleString("en-US")} credits left, below the ${base}-credit audit base: the next cloud audit can't start.`
+      )
+    : fmt.yellow(
+        `${balance.toLocaleString("en-US")} credits left. ${AUDIT_PRICING_LINE}`
+      );
+
+  if (plan === "free") return [headline, ...proPitchLines("cli-audit")];
+  return [headline, `  Top up: ${fmt.cyan(upgradeUrl("cli-audit"))}`];
 }
 
 /**
@@ -831,6 +908,9 @@ export const audit = defineCommand({
       // "paid" → genuinely-unavailable framing, "anonymous" → free-account upsell.
       // Also picks the default coverage mode below (signed-in → surface).
       let accountPlan: "anonymous" | "free" | "paid" = "anonymous";
+      // Monthly grant for the signed-in plan, so the footer can warn at a
+      // share of it rather than only once the balance is already spent.
+      let planMonthlyCredits = 0;
       // White-label branding for local html/markdown/text/xml exports (#810).
       // Present only when the signed-in org is on the Team plan (API decides).
       let reportBranding: ReportBranding | undefined;
@@ -844,6 +924,7 @@ export const audit = defineCommand({
           const { balance, plan, branding } = await statusClient.getBalance();
           startingBalance = balance.total;
           accountPlan = plan.id === "free" ? "free" : "paid";
+          planMonthlyCredits = plan.monthlyCredits;
           reportBranding = branding;
           // Pricing v10 (#391): every cloud audit debits a flat base at
           // registration. A balance below it can't start one — run local-only
@@ -853,7 +934,7 @@ export const audit = defineCommand({
           if (balance.total < auditBase) {
             kv(
               "Account",
-              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${auditBase}-credit audit base, running local-only`)} · top up: ${fmt.cyan(DASHBOARD_URL)}`
+              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${auditBase}-credit audit base, running local-only`)} · upgrade: ${fmt.cyan(upgradeUrl("cli-audit"))}`
             );
           } else {
             signedIn = true;
@@ -1194,7 +1275,7 @@ export const audit = defineCommand({
           balance: startingBalance,
           maxPages,
           cloudRendering,
-          topUpUrl: DASHBOARD_URL,
+          topUpUrl: upgradeUrl("cli-audit"),
         });
         if (preflight.shortfall) {
           log("");
@@ -1244,7 +1325,7 @@ export const audit = defineCommand({
       // Captures a loud, actionable register failure (#816) — e.g. at the
       // website limit — surfaced once after the crawl (progress stopped) so it
       // isn't clobbered mid-crawl. Only set for definitive 4xx, not transient.
-      let registerWarning: string | null = null;
+      let registerWarning: RegisterFailure | null = null;
       const registerPromise: Promise<RegisteredRun | null> =
         signedIn && !args.offline
           ? registerRun(
@@ -1260,8 +1341,8 @@ export const audit = defineCommand({
                   runner: runnerInfo,
                 },
               },
-              (msg) => {
-                registerWarning = msg;
+              (failure) => {
+                registerWarning = failure;
               }
             )
           : Promise.resolve(null);
@@ -1527,7 +1608,7 @@ export const audit = defineCommand({
       // which used to be swallowed silently. Progress is stopped by now (finally
       // above), so this prints cleanly.
       if (registerWarning && !registeredRun) {
-        log(`⚠ Run not tracked in your dashboard: ${registerWarning}`);
+        for (const line of registerFailureLines(registerWarning)) log(line);
       }
 
       // Handle errors
@@ -1951,6 +2032,16 @@ export const audit = defineCommand({
           // CTA below, so skip this line there to avoid printing two.
           const lockedLine = lockedRulesFooterLine(report);
           if (lockedLine) footerLines.push(lockedLine);
+          // The advance warning the dashboard now shows as a banner, in the
+          // one place a CLI-only user will actually read it. Fires while there
+          // are still credits left, not at zero.
+          footerLines.push(
+            ...lowBalanceFooterLines({
+              balance: after,
+              monthlyCredits: planMonthlyCredits,
+              plan: accountPlan,
+            })
+          );
         } else {
           footerLines.push(
             `${fmt.dim("Unlock cloud features:")} squirrel auth login  •  ${fmt.cyan(DASHBOARD_URL)}`
