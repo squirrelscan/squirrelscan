@@ -215,7 +215,7 @@ export function registerFailureLines(failure: RegisterFailure): string[] {
       : AUDIT_PRICING_LINE;
   return [
     fmt.yellow(
-      "⚠ Out of cloud credits — this run is not tracked in your dashboard."
+      "⚠ Out of cloud credits. This run is not tracked in your dashboard."
     ),
     `  ${balanceLine}`,
     // Say plainly that nothing was lost. A warning that reads like a failure is
@@ -259,7 +259,7 @@ export function lowBalanceFooterLines(opts: {
 
   const headline = spent
     ? fmt.yellow(
-        `${balance.toLocaleString("en-US")} credits left — below the ${base}-credit audit base, so the next cloud audit can't start.`
+        `${balance.toLocaleString("en-US")} credits left, below the ${base}-credit audit base: the next cloud audit can't start.`
       )
     : fmt.yellow(
         `${balance.toLocaleString("en-US")} credits left. ${AUDIT_PRICING_LINE}`
