@@ -200,6 +200,10 @@ _squirrel_completions() {
       COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --coverage -C --refresh -r --fresh-ua --resume --help" -- "\${cur}") )
       return 0
       ;;
+    credits)
+      COMPREPLY=( $(compgen -W "--json --upgrade --help" -- "\${cur}") )
+      return 0
+      ;;
     analyze)
       COMPREPLY=( $(compgen -W "--id --help" -- "\${cur}") )
       return 0
@@ -469,6 +473,11 @@ _squirrel() {
             '--fresh-ua[Re-roll the pinned random user-agent]' \\
             '--resume[Resume interrupted crawl]'
           ;;
+        credits)
+          _arguments \\
+            '--json[Output as JSON]' \\
+            '--upgrade[Open the upgrade page in your browser]'
+          ;;
         analyze)
           _arguments \\
             '--id[Crawl ID to analyze]:crawl-id:'
@@ -645,7 +654,10 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "C
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l summary -d "Print score, category breakdown, and issue counts only"
+
+# Credits options
 complete -c squirrel -n "__fish_seen_subcommand_from credits" -l json -d "Output as JSON"
+complete -c squirrel -n "__fish_seen_subcommand_from credits" -l upgrade -d "Open the upgrade page in your browser"
 
 # Crawl options
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -s m -l max-pages -d "Maximum pages to crawl"

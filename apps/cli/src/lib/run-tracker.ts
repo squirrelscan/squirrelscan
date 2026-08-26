@@ -171,6 +171,20 @@ const DEFINITIVE_REGISTER_FAILURE_CODES = new Set([
 ]);
 
 /**
+ * What the caller is told about a definitive register failure. The `code` is
+ * carried, not just the message, because the three failures need three
+ * different answers: out of credits is an upgrade, at the website limit is a
+ * cleanup, locked is a billing fix. Collapsing them to one string left the CLI
+ * printing the server's sentence and nothing the user could act on.
+ */
+export interface RegisterFailure {
+  code: string;
+  message: string;
+  /** Balance at the time of the failure; null when the server didn't say. */
+  balance: number | null;
+}
+
+/**
  * Register the run at audit START. Returns the ids the dashboard needs to track
  * it live, or null on ANY failure (no credential, network error, non-2xx, bad
  * body) — the audit then simply proceeds untracked.
@@ -181,16 +195,16 @@ const DEFINITIVE_REGISTER_FAILURE_CODES = new Set([
  * run row and its 50cr base debit, and an untracked audit then gets reaped as an
  * orphan pending run and refunded — a delivered audit, for free.
  *
- * `onWarn` is invoked with the server message ONLY on a DEFINITIVE, actionable
- * failure (see DEFINITIVE_REGISTER_FAILURE_CODES) so the caller can surface it
- * loudly (#816): at the website limit / out of credits / org locked means the
- * run runs untracked and unpublished-to-dashboard and the user should know why.
+ * `onWarn` is invoked ONLY on a DEFINITIVE, actionable failure (see
+ * DEFINITIVE_REGISTER_FAILURE_CODES) so the caller can surface it loudly
+ * (#816): at the website limit / out of credits / org locked means the run runs
+ * untracked and unpublished-to-dashboard and the user should know why.
  * Everything else — transient network/5xx, rate limits, generic 400s — stays
  * silent: best-effort tracking must not spam noise on a flaky connection.
  */
 export async function registerRun(
   input: RegisterRunInput,
-  onWarn?: (message: string) => void
+  onWarn?: (failure: RegisterFailure) => void
 ): Promise<RegisteredRun | null> {
   // Resolve the base ONCE here; thread it through the returned RegisteredRun.
   const base = lifecycleBase();
@@ -238,9 +252,15 @@ export async function registerRun(
       // string `error` body (e.g. rate-limit) has no `.code` → stays silent.
       const code = data?.error?.code;
       if (onWarn && code && DEFINITIVE_REGISTER_FAILURE_CODES.has(code)) {
-        onWarn(
-          data?.error?.message ?? "the run won't appear in your dashboard"
-        );
+        onWarn({
+          code,
+          message:
+            data?.error?.message ?? "the run won't appear in your dashboard",
+          balance:
+            typeof data?.balance?.total === "number"
+              ? data.balance.total
+              : null,
+        });
       }
     }
     return null;
