@@ -13,9 +13,18 @@ Windsurf's Cascade agent runs terminal commands and acts on what comes back, so 
 
 Run this in Windsurf's integrated terminal.
 
-```bash
-curl -fsSL https://install.squirrelscan.com | bash
-```
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://install.squirrelscan.com | bash
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
 
 Local audits are free, need no account, and run entirely on your machine. Verify with `squirrel --version`.
 
