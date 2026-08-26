@@ -62,7 +62,7 @@ squirrel audit http://localhost:8080
 
 If crawling localhost without a configured name and in a TTY, squirrelscan prompts for a name:
 
-```
+```text
 Crawling local address: http://localhost:3000
 Project name [mysite]: staging-frontend
 ```
@@ -92,7 +92,7 @@ Setting `domains = ["example.com"]` automatically allows all subdomains:
 
 ## Examples
 
-### Single Domain (Default)
+### Single domain (default)
 
 Crawl only the seed domain and its subdomains:
 
@@ -106,7 +106,7 @@ Running `squirrel audit https://example.com` crawls:
 - `https://www.example.com` ✓ (subdomain)
 - Internal links to `https://blog.example.com` ✗ (not followed without config)
 
-### Multi-Domain Site
+### Multi-domain site
 
 Allow main site plus specific subdomains:
 
@@ -124,7 +124,7 @@ Running `squirrel audit https://example.com` crawls:
 
 All subdomains are automatically allowed.
 
-### Multiple Root Domains
+### Multiple root domains
 
 Crawl multiple distinct domains (rare):
 
@@ -137,7 +137,7 @@ Crawls both domains and all their subdomains.
 
 **Note:** This is uncommon. Most sites should use `include` patterns in the crawler section instead.
 
-### Local Development
+### Local development
 
 For local projects:
 
@@ -151,9 +151,9 @@ Then run:
 squirrel audit http://localhost:3000
 ```
 
-## Domain Matching Rules
+## Domain matching rules
 
-### Subdomain Matching
+### Subdomain matching
 
 Domain `"example.com"` matches:
 
@@ -168,7 +168,7 @@ Domain `"example.com"` matches:
 | `https://example.org` | ✗ | Different TLD |
 | `https://exampleXcom` | ✗ | Not a domain |
 
-### Port Handling
+### Port handling
 
 Ports are ignored for matching:
 
@@ -182,7 +182,7 @@ Matches:
 - `http://localhost:8080` ✓
 - `http://localhost` ✓
 
-### Protocol Handling
+### Protocol handling
 
 Protocols (http/https) are ignored for matching:
 
@@ -195,7 +195,7 @@ Matches:
 - `http://example.com` ✓
 - `https://example.com` ✓
 
-## When to Use `domains` vs `include`
+## When to use `domains` vs `include`
 
 ### Use `domains` when:
 
@@ -222,7 +222,7 @@ include = [
 
 See [Crawler Settings](/configuration/crawler#include) for URL patterns.
 
-## Interaction with Crawler Settings
+## Interaction with crawler settings
 
 ### Priority
 
@@ -251,29 +251,31 @@ include = []  # Empty = all URLs from seed domain
 exclude = ["/admin/*", "*.pdf"]
 ```
 
-## Data Storage
+## Data storage
 
 Project data is stored at:
 
-```
+```text
 ~/.squirrel/projects/<project-name>/
 ```
 
 **For production domains:**
-```
-~/.squirrel/projects/example.com/
-  └── crawls/
-      └── 2026-01-17T10-30-00/
-```
+
+<FileTree>
+- ~/.squirrel/projects/example.com/
+  - crawls/
+    - 2026-01-17T10-30-00/
+</FileTree>
 
 **For local domains:**
-```
-~/.squirrel/projects/my-app-local/
-  └── crawls/
-      └── 2026-01-17T10-30-00/
-```
 
-## Complete Example
+<FileTree>
+- ~/.squirrel/projects/my-app-local/
+  - crawls/
+    - 2026-01-17T10-30-00/
+</FileTree>
+
+## Complete example
 
 ```toml
 [project]

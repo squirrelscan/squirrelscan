@@ -45,7 +45,7 @@ Add squirrelscan to your `opencode.json` (project root) or `~/.config/opencode/o
     }
     ```
 
-    On first connect opencode discovers the authorization server and runs a browser sign-in. Check status with `opencode mcp list`.
+    On first connect opencode discovers the authorization server and runs a browser login. Check status with `opencode mcp list`.
   </Tab>
   <Tab title="API key">
     ```json
@@ -72,13 +72,13 @@ Add squirrelscan to your `opencode.json` (project root) or `~/.config/opencode/o
 
 Ask opencode in natural language, it will call the squirrelscan tools:
 
-```
+```text
 Use squirrelscan to audit example.com, then fix the high-severity issues.
 ```
 
 Scope large sites to keep runs fast:
 
-```
+```text
 Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
 ```
 
@@ -87,7 +87,7 @@ Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Fix your site with an AI agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
+  <Card title="Fix your website with a coding agent" icon="wand-sparkles" href="/guides/fix-your-site-with-an-ai-agent">
     A full worked example of the audit-and-fix loop.
   </Card>
   <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">

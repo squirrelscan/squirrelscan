@@ -87,19 +87,19 @@ That installs `audit-website` (the fix loop) and `squirrelscan` (operating the C
 
 Open Copilot Chat and switch to **agent mode**. Ask mode can read your code but cannot run tools or edit files, so audits and fixes both need agent mode.
 
-```
+```text
 Audit https://example.com with squirrelscan and list the top issues by severity.
 ```
 
 Then hand it the fixes. Agent mode edits across the repo the same way it acts on a failing test:
 
-```
+```text
 Fix every core/title-missing and images/alt-missing finding, then re-audit to confirm the score went up.
 ```
 
 Cap the crawl on a large site so the run stays fast:
 
-```
+```text
 Audit only /blog/* on example.com, cap it at 20 pages, and fix the broken links.
 ```
 

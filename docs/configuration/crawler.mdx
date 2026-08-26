@@ -28,7 +28,7 @@ user_agent = ""
 follow_redirects = true
 ```
 
-## Crawl Limits
+## Crawl limits
 
 ### `max_pages`
 
@@ -69,7 +69,7 @@ The resolution order is **`--max-pages` / `-m` > non-default `[crawler] max_page
 **Default:** unset (auth-aware for `audit`; always `quick` for `crawl`)
 **Values:** `quick`, `surface`, `full`
 
-Default [coverage mode](/crawl) for crawls and audits. When unset, `audit` picks the mode by auth state (`surface` signed in, `quick` anonymous) while `crawl` always uses `quick`. Each mode sets the default page budget (`quick` 25, `surface` 100, `full` 500) and controls link discovery and cloud enrichment.
+Default [coverage mode](/crawl) for crawls and audits. When unset, `audit` picks the mode by auth state (`surface` logged in, `quick` anonymous) while `crawl` always uses `quick`. Each mode sets the default page budget (`quick` 25, `surface` 100, `full` 500) and controls link discovery and cloud enrichment.
 
 ```toml
 [crawler]
@@ -131,7 +131,7 @@ timeout_ms = 45000  # 45 seconds
 
 ---
 
-## Rate Limiting
+## Rate limiting
 
 ### `delay_ms`
 
@@ -294,7 +294,7 @@ engaged.
 
 ---
 
-## URL Filtering
+## URL filtering
 
 ### `include`
 
@@ -390,7 +390,7 @@ exclude = [
 
 ---
 
-### Pattern Matching Examples
+### Pattern matching examples
 
 | Pattern | Matches | Doesn't Match |
 |---------|---------|---------------|
@@ -402,7 +402,7 @@ exclude = [
 
 ---
 
-## Query Parameters
+## Query parameters
 
 ### `allow_query_params`
 
@@ -492,7 +492,7 @@ drop_query_prefixes = []
 
 ---
 
-## Crawl Strategy
+## Crawl strategy
 
 ### `breadth_first`
 
@@ -563,7 +563,7 @@ max_prefix_budget = 1.0   # No limit
 **Use case:**
 
 Site with large blog:
-```
+```text
 /blog/post-1
 /blog/post-2
 ...
@@ -578,7 +578,7 @@ With `max_prefix_budget = 0.25` and `max_pages = 500`:
 
 ---
 
-## Request Configuration
+## Request configuration
 
 ### `user_agent`
 
@@ -590,7 +590,7 @@ Custom user agent string.
 **Default behavior (empty string):**
 
 A random modern browser user agent is drawn on the first crawl and pinned to the project, so every later run reuses the same one:
-```
+```text
 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
 ```
 
@@ -806,9 +806,9 @@ can be scoped separately.
 
 ---
 
-## Complete Examples
+## Complete examples
 
-### Fast Local Development
+### Fast local development
 
 ```toml
 [crawler]
@@ -819,7 +819,7 @@ concurrency = 10
 respect_robots = false
 ```
 
-### Polite Production Crawl
+### Polite production crawl
 
 ```toml
 [crawler]
@@ -831,7 +831,7 @@ per_host_concurrency = 2
 respect_robots = true
 ```
 
-### High-Volume Crawl
+### High-volume crawl
 
 ```toml
 [crawler]
@@ -844,7 +844,7 @@ breadth_first = true
 max_prefix_budget = 0.2
 ```
 
-### Focused Blog Crawl
+### Focused blog crawl
 
 ```toml
 [crawler]
@@ -854,7 +854,7 @@ exclude = ["*.pdf", "/blog/drafts/**"]
 allow_query_params = ["page"]
 ```
 
-### E-commerce Site
+### E-commerce site
 
 ```toml
 [crawler]

@@ -1,6 +1,6 @@
 {
   "$schema": "https://tangly.dev/schema/docs.json",
-  "theme": "tang",
+  "theme": "cirrus",
   "name": "squirrelscan",
   "siteUrl": "https://docs.squirrelscan.com",
   "description": "The website QA tool for your coding agent",
@@ -26,7 +26,9 @@
       "theme": {
         "light": "github-light",
         "dark": "github-dark"
-      }
+      },
+      "chrome": "bare",
+      "copyButton": "hover"
     }
   },
   "background": {
@@ -44,9 +46,10 @@
         "icon": "book-open",
         "groups": [
           {
-            "group": "Getting Started",
+            "group": "Getting started",
             "pages": [
               "index",
+              "agent-setup/index",
               "quickstart"
             ]
           },
@@ -82,12 +85,6 @@
             ]
           },
           {
-            "group": "CI/CD",
-            "pages": [
-              "guides/ci"
-            ]
-          },
-          {
             "group": "Agents & MCP",
             "pages": [
               "developers/agents/index",
@@ -107,13 +104,13 @@
               "developers/mcp",
               "developers/mcp-clients"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "API",
-        "icon": "braces",
-        "groups": [
+          },
+          {
+            "group": "CI/CD",
+            "pages": [
+              "guides/ci"
+            ]
+          },
           {
             "group": "REST API",
             "pages": [
@@ -150,7 +147,7 @@
         "icon": "list-checks",
         "groups": [
           {
-            "group": "Rules Reference",
+            "group": "Rules reference",
             "pages": [
               "rules/index"
             ]

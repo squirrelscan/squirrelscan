@@ -28,7 +28,7 @@ Checks that form actions use HTTPS
 
 Forms should always submit to HTTPS URLs to protect user data in transit. Update form action attributes from http:// to https://, and check `formaction` on any submit button that overrides the form. A form on an HTTPS page that posts to http:// is the worst case: the padlock tells the user they are safe while the submission itself travels in the clear, and browsers block or interstitial it. Be especially careful with login forms, payment forms, and any forms collecting personal data. For relative URLs, ensure the page itself is on HTTPS.
 
-## Enable / Disable
+## Enable / disable
 
 ### Disable this rule
 

@@ -19,7 +19,7 @@ squirrel feedback --category bug_report
 | ------ | ----------- |
 | `--category` | Feedback category: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other` |
 
-## Interactive Prompts
+## Interactive prompts
 
 The command will prompt you for:
 
@@ -27,7 +27,7 @@ The command will prompt you for:
 2. **Feedback** - Your feedback message (minimum 5 characters)
 3. **Category** - An optional category (skipped when `--category` is passed; press Enter to skip)
 
-## Example Session
+## Example session
 
 ```bash
 $ squirrel feedback
@@ -47,7 +47,7 @@ Category [Enter to skip]: 2
 Thank you for your feedback!
 ```
 
-## Subsequent Uses
+## Subsequent uses
 
 Your email is cached, so you can press Enter to reuse it:
 
@@ -59,9 +59,9 @@ Feedback: The HTML report looks great!
 Thank you for your feedback!
 ```
 
-## What to Send
+## What to send
 
-### Bug Reports
+### Bug reports
 
 Include:
 - What you were doing
@@ -69,26 +69,26 @@ Include:
 - What happened instead
 - Error messages if any
 
-```
+```text
 Bug: squirrel audit fails on localhost URLs
 Expected: Should crawl localhost
 Got: Error "Invalid URL"
 ```
 
-### Feature Requests
+### Feature requests
 
 Describe the feature and why it would be useful:
 
-```
+```text
 Feature request: Add XML sitemap export
 Use case: Want to generate sitemap from crawl results
 ```
 
-### General Feedback
+### General feedback
 
 Share your experience:
 
-```
+```text
 Loving the CLI speed! JSON export is perfect for CI/CD
 ```
 
@@ -99,7 +99,7 @@ Loving the CLI speed! JSON export is perfect for CI/CD
 - Your install ID is included (anonymous identifier)
 - No crawl data or audit results are transmitted
 
-## Alternative: GitHub Issues
+## Alternative: GitHub issues
 
 For public bug reports and feature requests, you can also use GitHub:
 

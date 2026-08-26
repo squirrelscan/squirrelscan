@@ -6,7 +6,7 @@ description: "Install squirrelscan skills for coding agents"
 
 The `skills` command installs squirrelscan capabilities into coding agents that support the [Agent Skills](https://agentskills.io/home) standard.
 
-## What are Agent Skills?
+## What are agent skills?
 
 Agent Skills are folders of instructions, scripts, and resources that coding agents can discover and use to perform tasks more accurately. Skills give agents access to procedural knowledge they can load on demand.
 
@@ -19,7 +19,7 @@ The Agent Skills format is an open standard supported by many coding agents incl
 - **OpenAI Codex** - OpenAI's coding agent
 - **Goose** - Block's open source agent
 - **Amp** - Sourcegraph's coding agent
-- **Roo Code** - AI coding assistant
+- **Roo Code** - coding agent
 
 For the full list of supported agents, see [agentskills.io](https://agentskills.io/home).
 
@@ -44,17 +44,17 @@ Install the squirrelscan skills for your coding agent.
 squirrel skills install
 ```
 
-### What it Does
+### What it does
 
 The command runs `npx skills add` to install all the squirrelscan skills from the [squirrelscan skills repository](https://github.com/squirrelscan/squirrelscan).
 
 Once installed, you can invoke them in your coding agent:
 
-```
+```text
 /audit-website
 ```
 
-```
+```text
 /squirrelscan
 ```
 
@@ -94,7 +94,7 @@ Update the squirrelscan skills to the latest version.
 squirrel skills update
 ```
 
-### What it Does
+### What it does
 
 The command runs `npx skills update` to fetch the latest versions of the skills from the [squirrelscan skills repository](https://github.com/squirrelscan/squirrelscan).
 
@@ -128,7 +128,7 @@ View skills: https://skills.sh/squirrelscan
 
 Claude Code users can install everything (all skills plus the hosted MCP server) as a plugin instead:
 
-```
+```text
 /plugin marketplace add squirrelscan/squirrelscan
 /plugin install squirrelscan@squirrelscan
 ```
@@ -137,7 +137,7 @@ The plugin updates automatically as new commits land in the skills repository.
 
 ---
 
-## The audit-website Skill
+## The audit-website skill
 
 The `audit-website` skill gives your coding agent the ability to run comprehensive website audits using squirrelscan and drive the findings to fixed code. When invoked, the agent will:
 
@@ -145,17 +145,17 @@ The `audit-website` skill gives your coding agent the ability to run comprehensi
 2. Analyze the results and map issues to your code
 3. Propose and apply fixes, then re-audit
 
-### Invoking the Skill
+### Invoking the skill
 
 In Claude Code or other compatible agents:
 
-```
+```text
 /audit-website https://example.com
 ```
 
 The agent will handle running the audit and interpreting results for you.
 
-## The squirrelscan Skill
+## The squirrelscan skill
 
 The `squirrelscan` skill teaches your agent the CLI itself: installation, authentication, publishing reports, cloud credits, API keys, MCP setup, and configuration. Agents load it whenever a task touches squirrelscan beyond a basic audit, for example "publish this report" or "connect squirrelscan over MCP".
 

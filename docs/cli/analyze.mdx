@@ -20,13 +20,13 @@ squirrel analyze [options]
 
 ## Examples
 
-### Analyze Latest Crawl
+### Analyze latest crawl
 
 ```bash
 squirrel analyze
 ```
 
-### Analyze Specific Crawl
+### Analyze specific crawl
 
 ```bash
 squirrel analyze --id a7b3c2d1
@@ -34,7 +34,7 @@ squirrel analyze --id a7b3c2d1
 
 ## Output
 
-```
+```text
 Analyzing latest crawl...
 
 ✓ Ran 87 rules in 2.3s
@@ -46,9 +46,9 @@ Analysis complete: a7b3c2d1
 Run 'squirrel report' to view results.
 ```
 
-## Use Cases
+## Use cases
 
-### Iterate on Rule Configuration
+### Iterate on rule configuration
 
 ```bash
 # Crawl once
@@ -60,14 +60,14 @@ squirrel analyze
 squirrel analyze
 ```
 
-### Re-analyze After Code Changes
+### Re-analyze after code changes
 
 ```bash
 # While developing custom rules
 squirrel analyze
 ```
 
-### Separate Crawl and Analysis
+### Separate crawl and analysis
 
 ```bash
 # Crawl during off-hours
@@ -92,7 +92,7 @@ disable = ["ai/*", "content/quality"]
 
 See [Configuration](/configuration) for all options.
 
-## Exit Codes
+## Exit codes
 
 | Code | Meaning |
 |------|---------|

@@ -28,7 +28,7 @@ This rule overlaps with [LCP Hints](/rules/perf/lcp-hints) on the no-preload cas
 
 Give the LCP image an early, high-priority fetch. Add `fetchpriority="high"` to the `<img>`, or preload it with `<link rel="preload" as="image" href="..." fetchpriority="high">`. You do not need both. Frameworks such as React 19 emit an image preload for eager images automatically. Only apply this to the single above-fold LCP image, never to below-fold images, which should stay lazy.
 
-## Enable / Disable
+## Enable / disable
 
 ### Disable this rule
 

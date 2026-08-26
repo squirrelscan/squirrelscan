@@ -17,7 +17,7 @@ squirrel config show
 ```
 
 Output:
-```
+```text
 Config file: /path/to/squirrel.toml
 
 [project]
@@ -57,7 +57,7 @@ squirrel config set crawler.max_pages 100 --dry-run
 ```
 
 Output:
-```
+```text
 Would set crawler.max_pages = 100
 
 [project]
@@ -77,7 +77,7 @@ squirrel config path
 ```
 
 Output:
-```
+```text
 /Users/you/project/squirrel.toml
 ```
 
@@ -92,12 +92,12 @@ squirrel config validate
 ```
 
 Output on success:
-```
+```text
 Config valid: /path/to/squirrel.toml
 ```
 
 Output on error:
-```
+```text
 Invalid config: crawler.max_pages: Expected number, received string
 ```
 
@@ -133,13 +133,13 @@ squirrel config set rules.disable '["ai/*", "content/quality"]'
 squirrel config validate && echo "Config OK"
 ```
 
-## Config File Resolution
+## Config file resolution
 
 squirrelscan searches for `squirrel.toml` starting from the current directory and walking up to your home directory. The first config file found is used.
 
 If no config file exists, commands that require one will prompt you to run `squirrel init`.
 
-## See Also
+## See also
 
 - [Configuration Reference](/configuration) - Full config file documentation
 - [init](/cli/init) - Create a new config file

@@ -46,7 +46,7 @@ squirrel keys create [options]
 squirrel keys create --name "CI" --scopes audits:write,audits:read,credits:read
 ```
 
-```
+```text
 ✓ Created API key CI (sq_ab12cd…) for Acme Inc
   Scopes: audits:write, audits:read, credits:read
   Expires: never
@@ -66,7 +66,7 @@ Ready to copy:
 squirrel keys create --shell
 ```
 
-```
+```text
 About to append to /Users/you/.zshenv:
   export SQUIRRELSCAN_API_KEY=sq_ab12cd…  # added by squirrel keys create
 Append this line? [y/N]
@@ -98,7 +98,7 @@ squirrel keys list [options]
 squirrel keys list
 ```
 
-```
+```text
 sq_ab12cd…  CI  active
   Scopes: audits:write, audits:read, credits:read
   Created: Jun 1, 2026  Last used: Jul 3, 2026
@@ -129,7 +129,7 @@ squirrel keys revoke <prefix-or-id> [options]
 squirrel keys revoke sq_ab12cd
 ```
 
-```
+```text
 About to revoke CI (sq_ab12cd…).
 Continue? [y/N] y
 ✓ Revoked CI (sq_ab12cd…)
