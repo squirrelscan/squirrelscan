@@ -2,7 +2,10 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
 
-import { SECRET_CONTEXT_WINDOW_SIZE } from "@squirrelscan/utils/constants";
+import {
+  SECRET_CONTEXT_WINDOW_SIZE,
+  SECRET_KEY_LOOKBEHIND_SIZE,
+} from "@squirrelscan/utils/constants";
 
 // Secret detection patterns with service names
 // Sources: secrets-patterns-db, secret-regex-list, gitleaks patterns
@@ -23,6 +26,13 @@ type FastPattern = {
 
 // Type for context patterns (generic patterns, only run if keyword present)
 // These avoid catastrophic backtracking from (?=.*keyword) lookaheads
+//
+// Every pattern in this tier is BARE-SHAPE: a run of hex/base64/alphanumeric
+// characters with no distinctive prefix, which is also the shape of a SHA-256
+// digest, an SRI hash, a git object id, an ETag and a UUID. The brand keyword
+// ("together", "datadog"…) is the only thing separating them from ordinary page
+// content, and brand words show up in ordinary prose. So a match here must also
+// sit under a key that says the value is a credential — see classifyKeyContext.
 type ContextPattern = {
   name: string;
   keyword: string; // Lowercase keyword to check via includes() first
@@ -31,6 +41,12 @@ type ContextPattern = {
 };
 
 // Fast patterns - have distinctive prefixes, safe to run on all content
+//
+// Every entry here carries its own literal marker — a prefix (`sk-`, `ghp_`,
+// `AKIA`, `pk_live_`), a suffix (`NRAL`, `-us1`), a URL host, a PEM header, or a
+// required keyword in the pattern itself (AWS secret key, the generic
+// assignments, `Bearer`). None of them match a bare digest, so none of them
+// needs the key-context gate the CONTEXT_PATTERNS tier uses.
 const FAST_PATTERNS: FastPattern[] = [
   // AI/ML Services
   {
@@ -517,12 +533,10 @@ const CONTEXT_PATTERNS: ContextPattern[] = [
     pattern: /[a-f0-9]{32}/gi,
     confidence: "medium",
   },
-  {
-    name: "LogRocket App ID",
-    keyword: "logrocket",
-    pattern: /[a-z0-9]{6}\/[a-z0-9-]+/gi,
-    confidence: "medium",
-  },
+  // "LogRocket App ID" (/[a-z0-9]{6}\/[a-z0-9-]+/) was dropped: it matches any
+  // short path segment ("assets/logo-dark"), and a LogRocket app id is a public
+  // client-side identifier anyway — LogRocket.init() ships it to the browser by
+  // design. No amount of key context makes a path shape mean "credential".
 
   // Auth Services (need context)
   {
@@ -644,6 +658,117 @@ function isInValuePosition(
   }
 
   return false;
+}
+
+// Keys whose value is a digest, hash or object id — never a credential. A
+// release page publishing `sha256:"01e4fbb0…"` next to a download is doing the
+// right thing, and so is an SRI `integrity=` attribute or a git commit id.
+const DIGEST_KEY_WORDS = new Set([
+  "sha",
+  "sha1",
+  "sha256",
+  "sha384",
+  "sha512",
+  "md5",
+  "hash",
+  "hashes",
+  "digest",
+  "checksum",
+  "checksums",
+  "integrity",
+  "etag",
+  "commit",
+  "revision",
+  "fingerprint",
+]);
+
+// Keys that say the value is meant to be secret.
+const SECRET_KEY_WORDS = new Set([
+  "apikey",
+  "api",
+  "key",
+  "keys",
+  "token",
+  "secret",
+  "password",
+  "passwd",
+  "pwd",
+  "auth",
+  "authorization",
+  "bearer",
+  "credential",
+  "credentials",
+]);
+
+// `x-api-key`, `apiKey`, `SHA256`, `"sha256"` -> the words a key is made of.
+function keyWords(key: string): string[] {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+}
+
+// The key an assignment puts immediately in front of a value:
+// `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`
+const PRECEDING_KEY_RE =
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*[:=]\s*["'`]?\s*$/;
+
+// SRI and prefixed-digest values: integrity="sha384-…", `sha256-…`, `md5:…`
+const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
+
+// An HTML integrity attribute, whatever the algorithm prefix looks like
+const INTEGRITY_ATTR_RE = /\bintegrity\s*=\s*["'][^"']*$/i;
+
+// Header-style credentials: `Authorization: Bearer <value>`, `Basic <value>`
+const AUTH_SCHEME_RE = /\b(?:bearer|basic)\s+$/i;
+
+// Attributes that only carry a value; the key naming it sits on a sibling
+// attribute (`<meta name="algolia-api-key" content="…">`).
+const CARRIER_KEYS = new Set(["content", "value", "data", "text"]);
+const NAMED_ATTR_RE =
+  /\b(?:name|id|property|itemprop)\s*=\s*["']([^"']{1,64})["'][^<>]{0,40}$/i;
+
+type KeyContext = "digest" | "secret" | "unknown";
+
+function classifyKeyName(key: string, keyword: string): KeyContext {
+  const words = keyWords(key);
+  if (words.some((word) => DIGEST_KEY_WORDS.has(word))) return "digest";
+  if (words.some((word) => SECRET_KEY_WORDS.has(word) || word === keyword)) {
+    return "secret";
+  }
+  return "unknown";
+}
+
+/**
+ * Classify the text immediately before a bare-shape match by the key it is
+ * assigned to. Digest keys win over secret ones (`sha256Key` is a checksum),
+ * and anything we cannot name is "unknown" — bare shapes only report under a
+ * key that positively says "credential".
+ */
+export function classifyKeyContext(
+  before: string,
+  keyword: string
+): KeyContext {
+  if (DIGEST_PREFIX_RE.test(before) || INTEGRITY_ATTR_RE.test(before)) {
+    return "digest";
+  }
+
+  const match = PRECEDING_KEY_RE.exec(before);
+  if (match?.[1]) {
+    const direct = classifyKeyName(match[1], keyword);
+    if (direct !== "unknown") return direct;
+
+    if (CARRIER_KEYS.has(match[1].toLowerCase())) {
+      const named = NAMED_ATTR_RE.exec(before);
+      if (named?.[1]) return classifyKeyName(named[1], keyword);
+    }
+    return "unknown";
+  }
+
+  if (AUTH_SCHEME_RE.test(before)) return "secret";
+
+  return "unknown";
 }
 
 export interface LeakedSecret {
@@ -789,6 +914,17 @@ export function scanContent(
         // For context patterns, require the value to be in a value position
         // (assigned via = or :) to reduce false positives from array elements
         if (!isInValuePosition(window, value, match.index)) {
+          continue;
+        }
+
+        // Bare-shape patterns are the shape of a SHA-256 digest, so the key in
+        // front of the value decides: report only under a key that says
+        // "credential", never under sha256/integrity/checksum/commit.
+        const before = window.slice(
+          Math.max(0, match.index - SECRET_KEY_LOOKBEHIND_SIZE),
+          match.index
+        );
+        if (classifyKeyContext(before, keyword) !== "secret") {
           continue;
         }
 
