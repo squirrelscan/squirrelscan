@@ -7,6 +7,7 @@ import {
   registerRun,
   reportProgress,
   type RegisteredRun,
+  type RegisterFailure,
   resolveRunFinalizeScore,
   startRunHeartbeat,
   stopRunHeartbeat,
@@ -306,14 +307,18 @@ describe("registerRun", () => {
         { status: 402 }
       )) as unknown as typeof fetch;
 
-    const warnings: string[] = [];
-    const result = await registerRun({ url: "https://newsite.com" }, (m) =>
-      warnings.push(m)
+    const warnings: RegisterFailure[] = [];
+    const result = await registerRun({ url: "https://newsite.com" }, (f) =>
+      warnings.push(f)
     );
 
     expect(result).toBeNull();
     expect(warnings).toEqual([
-      "Website limit reached. Contact support if you need more.",
+      {
+        code: "WEBSITE_LIMIT",
+        message: "Website limit reached. Contact support if you need more.",
+        balance: null,
+      },
     ]);
   });
 
@@ -329,9 +334,17 @@ describe("registerRun", () => {
         { status: 402 }
       )) as unknown as typeof fetch;
 
-    const warnings: string[] = [];
-    await registerRun({ url: "https://example.com" }, (m) => warnings.push(m));
-    expect(warnings).toEqual(["Not enough credits"]);
+    const warnings: RegisterFailure[] = [];
+    await registerRun({ url: "https://example.com" }, (f) => warnings.push(f));
+    // The CODE, not just the sentence: audit.ts needs it to tell "out of
+    // credits" (an upgrade) from "website limit" (a cleanup).
+    expect(warnings).toEqual([
+      {
+        code: "INSUFFICIENT_CREDITS",
+        message: "Not enough credits",
+        balance: null,
+      },
+    ]);
   });
 
   test("does NOT warn on a transient 5xx — best-effort tracking stays quiet (#816)", async () => {
@@ -340,9 +353,9 @@ describe("registerRun", () => {
         status: 503,
       })) as unknown as typeof fetch;
 
-    const warnings: string[] = [];
+    const warnings: RegisterFailure[] = [];
     expect(
-      await registerRun({ url: "https://example.com" }, (m) => warnings.push(m))
+      await registerRun({ url: "https://example.com" }, (f) => warnings.push(f))
     ).toBeNull();
     expect(warnings).toEqual([]);
   });
@@ -352,9 +365,9 @@ describe("registerRun", () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as typeof fetch;
 
-    const warnings: string[] = [];
+    const warnings: RegisterFailure[] = [];
     expect(
-      await registerRun({ url: "https://example.com" }, (m) => warnings.push(m))
+      await registerRun({ url: "https://example.com" }, (f) => warnings.push(f))
     ).toBeNull();
     expect(warnings).toEqual([]);
   });
@@ -370,9 +383,9 @@ describe("registerRun", () => {
         }
       )) as unknown as typeof fetch;
 
-    const warnings: string[] = [];
+    const warnings: RegisterFailure[] = [];
     expect(
-      await registerRun({ url: "https://example.com" }, (m) => warnings.push(m))
+      await registerRun({ url: "https://example.com" }, (f) => warnings.push(f))
     ).toBeNull();
     expect(warnings).toEqual([]);
   });
@@ -391,8 +404,8 @@ describe("registerRun", () => {
         { status: 400 }
       )) as unknown as typeof fetch;
 
-    const warnings: string[] = [];
-    await registerRun({ url: "https://example.com" }, (m) => warnings.push(m));
+    const warnings: RegisterFailure[] = [];
+    await registerRun({ url: "https://example.com" }, (f) => warnings.push(f));
     expect(warnings).toEqual([]);
   });
 });

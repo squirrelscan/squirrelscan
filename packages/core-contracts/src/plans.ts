@@ -29,7 +29,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   free: {
     id: "free",
     name: "Free",
-    // Recurring calendar-month grant, applied by the `credits:free-monthly-grant`
+    // Recurring grant on the org's signup anniversary, applied by the `credits:free-monthly-grant`
     // scheduler task + instantly at org creation (grantFreeMonthly). NOT
     // Stripe-driven — free orgs have no subscription, so no invoice.paid fires.
     monthlyCredits: 500,
@@ -38,7 +38,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxMembers: 1,
     renderConcurrency: 1,
     scheduledCrawls: false,
-    customHeaders: false,
+    // Free on purpose: custom headers are how you audit a staging site behind
+    // auth, which is evaluation, not a paid job.
+    customHeaders: true,
     // #1020 ladder: matches Screaming Frog's free-tier crawl cap and today's
     // `full` coverage preset ceiling.
     maxPagesPerAudit: 500,

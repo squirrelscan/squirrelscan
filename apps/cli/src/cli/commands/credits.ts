@@ -1,11 +1,14 @@
-// squirrel credits - cloud credit balance + pricing
+// squirrelscan credits - cloud credit balance + pricing
 
 import { defineCommand } from "citty";
 
+import { fmt } from "@/cli/format";
+import { openBrowser } from "@/lib/browser";
+import { AUDIT_BASE_CREDITS, proPitchLines, upgradeUrl } from "@/lib/upgrade";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { safeExit } from "@/self/updater";
 
-const TOP_UP_URL = "https://squirrelscan.com/account/credits";
+const UPGRADE_URL = upgradeUrl("cli-credits");
 
 export const credits = defineCommand({
   meta: {
@@ -17,8 +20,26 @@ export const credits = defineCommand({
       type: "boolean",
       description: "Output as JSON",
     },
+    upgrade: {
+      type: "boolean",
+      description: "Open the upgrade page in your browser",
+    },
   },
   async run({ args }) {
+    // --upgrade is deliberately answered BEFORE the credential check: someone
+    // who wants to pay should not have to log in to the CLI first to be told
+    // where. It is also the whole point of the flag for users who never open
+    // the dashboard.
+    if (args.upgrade) {
+      console.log(`Upgrade: ${fmt.cyan(UPGRADE_URL)}`);
+      // Best-effort: a headless box, WSL without a handler, or no DESKTOP
+      // session just leaves the printed URL above as the answer.
+      await openBrowser(UPGRADE_URL).catch(() => {
+        console.log(fmt.dim("Couldn't open a browser. Copy the URL above."));
+      });
+      return;
+    }
+
     warnIfSessionUnreadable();
     const { createCloudClientFromSettings } = await import("@/tools/cloud");
 
@@ -49,6 +70,14 @@ export const credits = defineCommand({
       if (balance.periodEnd) {
         console.log(
           `         monthly credits reset ${balance.periodEnd.slice(0, 10)}`
+        );
+      }
+      // A balance under the flat base can buy NOTHING, however positive it
+      // reads. Say so here rather than letting the next `squirrel audit`
+      // silently drop to local-only.
+      if (balance.total < AUDIT_BASE_CREDITS) {
+        console.log(
+          `         ${fmt.yellow(`below the ${AUDIT_BASE_CREDITS}-credit audit base — cloud audits can't start`)}`
         );
       }
       console.log("");
@@ -88,7 +117,14 @@ export const credits = defineCommand({
         );
       }
       console.log("");
-      console.log(`Top up: ${TOP_UP_URL}`);
+      // The free plan is where the wall gets hit, so that is where the offer
+      // goes. Paid plans get the top-up link, not a plan pitch they're on.
+      if (plan.id === "free") {
+        for (const line of proPitchLines("cli-credits")) console.log(line);
+        console.log(fmt.dim("  Or run `squirrel credits --upgrade`."));
+      } else {
+        console.log(`Top up: ${fmt.cyan(UPGRADE_URL)}`);
+      }
     } catch (error) {
       console.error(`Could not fetch balance: ${(error as Error).message}`);
       return safeExit(1);

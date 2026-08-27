@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { audit } from "@/cli/commands/audit";
+import { credits } from "@/cli/commands/credits";
 import { report } from "@/cli/commands/report";
 import { skills } from "@/cli/commands/skills";
 import { OUTPUT_FORMATS } from "@/constants";
@@ -41,12 +42,15 @@ function commandFlags(cmd: { args?: unknown }): {
 
 const auditDef = commandFlags(audit);
 const reportDef = commandFlags(report);
+const creditsDef = commandFlags(credits);
 
 // Flags completion may offer beyond the def: citty's built-in --help, and
 // auto-negation of boolean args (--no-incremental).
 const ALLOWED_EXTRAS: Record<string, string[]> = {
   audit: ["help", "no-incremental"],
   report: ["help"],
+  // citty auto-negates booleans, and bash/zsh offer --help.
+  credits: ["help", "no-json", "no-upgrade"],
 };
 
 const shells: Shell[] = ["bash", "zsh", "fish"];
@@ -62,6 +66,7 @@ function script(shell: Shell): string {
 const BASH_BLOCK_END: Record<string, string> = {
   audit: "crawl)",
   report: "feedback)",
+  credits: "analyze)",
 };
 
 /** Slice out the completion block for one command in a shell script. */
@@ -150,6 +155,30 @@ describe.each(shells)("%s completion", (shell) => {
 
     test("format list matches OUTPUT_FORMATS exactly", () => {
       expect(formatListIn(shell, block)).toEqual([...OUTPUT_FORMATS]);
+    });
+  });
+
+  // credits had NO bash or zsh arm at all before #1604 — `squirrel credits
+  // --<TAB>` fell through to the global default and offered only --config-file,
+  // so --json had been invisible in two of three shells since it shipped.
+  describe("credits", () => {
+    const block = commandBlock(shell, text, "credits");
+
+    test("every citty flag is offered", () => {
+      expect(creditsDef.flags).toContain("upgrade");
+      for (const flag of creditsDef.flags) {
+        expectOffersFlag(shell, block, flag);
+      }
+    });
+
+    test("every offered flag exists on the citty def", () => {
+      const allowed = new Set([
+        ...creditsDef.flags,
+        ...ALLOWED_EXTRAS.credits!,
+      ]);
+      for (const offered of longFlagsIn(shell, block)) {
+        expect(allowed).toContain(offered);
+      }
     });
   });
 
