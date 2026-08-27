@@ -308,14 +308,16 @@ export function buildV1Report(
             .pipe(Effect.catchAll(() => Effect.succeed([])));
       if (!hasBatchImageMethod) imageQueryCount++;
 
-      const hasAlt = appearances.some(hasAltAttribute);
-      if (!hasAlt) {
-        for (const appearance of appearances) {
-          summary.missingAltText.push({
-            page: appearance.pageUrl,
-            image: image.src,
-          });
-        }
+      // Per APPEARANCE, not per image URL: the same src can be decorative on
+      // one page and bare on another, and only the bare page is a defect. The
+      // rule and reconstruct.ts both judge per page, so grouping here would
+      // disagree with them (#143).
+      for (const appearance of appearances) {
+        if (hasAltAttribute(appearance)) continue;
+        summary.missingAltText.push({
+          page: appearance.pageUrl,
+          image: image.src,
+        });
       }
     }
     logger.traceEnd(imageAppearancesSpan, {
@@ -658,12 +660,11 @@ export function buildV2Report(
             .getImageAppearances(crawlId, image.src)
             .pipe(Effect.catchAll(() => Effect.succeed([])));
 
-      const hasAlt = appearances.some(hasAltAttribute);
-      if (!hasAlt) {
-        for (const appearance of appearances) {
-          if (summary.missingAltText.length >= maxSummaryItems) break;
-          summary.missingAltText.push({ page: appearance.pageUrl, image: image.src });
-        }
+      // Per APPEARANCE, not per image URL — see the v1 pass above (#143).
+      for (const appearance of appearances) {
+        if (summary.missingAltText.length >= maxSummaryItems) break;
+        if (hasAltAttribute(appearance)) continue;
+        summary.missingAltText.push({ page: appearance.pageUrl, image: image.src });
       }
     }
     logger.traceEnd(imageAppearancesSpan, { images: images.length });
