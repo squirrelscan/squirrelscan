@@ -1,6 +1,9 @@
 // Tests for extractors/images.ts - Image extraction
 
-import { extractImages, getImagesWithoutAlt } from "@squirrelscan/parser/extractors";
+import {
+  extractImages,
+  getImagesWithoutAlt,
+} from "@squirrelscan/parser/extractors";
 import { describe, it, expect } from "bun:test";
 import { parseHTML } from "linkedom";
 
