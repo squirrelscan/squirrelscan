@@ -340,6 +340,15 @@ const PAGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "source_hash", type: "TEXT" },
 ];
 
+// Same guard for `sitemaps`. Migration 21 added is_news_sitemap; a DB stamped
+// past 21 by a build that numbered its own migration 21 skips it forever, and
+// then the first sitemap write throws "no column named is_news_sitemap" and the
+// whole audit fails at the crawl's first step. Seen on DBs recorded at 22 with
+// the column absent. Any new ALTER-added `sitemaps` column MUST be listed here.
+const SITEMAPS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "is_news_sitemap", type: "INTEGER" },
+];
+
 const SCHEMA = `
 -- Crawl sessions
 CREATE TABLE IF NOT EXISTS crawls (
@@ -915,12 +924,13 @@ export class SQLiteStorage implements CrawlStorage {
       }
     }
 
-    // Self-heal: re-add any `pages` column a version-number collision skipped.
-    // Runs unconditionally (PRAGMA table_info is the source of truth, not the
-    // schema_version counter), so a DB stuck at the current version with a
-    // missing column recovers instead of throwing on every upsertPage. See
-    // PAGES_ALTER_COLUMNS.
+    // Self-heal: re-add any ALTER-added column a version-number collision
+    // skipped. Runs unconditionally (PRAGMA table_info is the source of truth,
+    // not the schema_version counter), so a DB stuck at the current version
+    // with a missing column recovers instead of throwing on every write. See
+    // PAGES_ALTER_COLUMNS and SITEMAPS_ALTER_COLUMNS.
     this.reconcilePagesColumns();
+    this.reconcileColumns("sitemaps", SITEMAPS_ALTER_COLUMNS);
   }
 
   /**
@@ -931,20 +941,27 @@ export class SQLiteStorage implements CrawlStorage {
    * (one PRAGMA read + at most one ALTER per missing column).
    */
   private reconcilePagesColumns(): void {
+    this.reconcileColumns("pages", PAGES_ALTER_COLUMNS);
+  }
+
+  private reconcileColumns(
+    table: "pages" | "sitemaps",
+    columns: ReadonlyArray<{ name: string; type: string }>
+  ): void {
     const db = this.getDb();
     const existing = new Set(
-      (db.prepare("PRAGMA table_info(pages)").all() as Array<{ name: string }>).map(
+      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
         (c) => c.name
       )
     );
-    // No pages table yet (shouldn't happen — SCHEMA creates it first) → nothing
-    // to reconcile; a fresh CREATE TABLE already has every column.
+    // No table yet (shouldn't happen — SCHEMA creates it first) → nothing to
+    // reconcile; a fresh CREATE TABLE already has every column.
     if (existing.size === 0) return;
 
-    for (const col of PAGES_ALTER_COLUMNS) {
+    for (const col of columns) {
       if (existing.has(col.name)) continue;
       try {
-        db.exec(`ALTER TABLE pages ADD COLUMN ${col.name} ${col.type}`);
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${col.name} ${col.type}`);
       } catch (e) {
         // Idempotent: tolerate a concurrent add; surface anything else.
         const msg = e instanceof Error ? e.message : String(e);

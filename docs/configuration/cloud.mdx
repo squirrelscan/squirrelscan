@@ -19,7 +19,7 @@ batch_size = 20               # pages per cloud service request
 editor_summary = true         # auto-generate an editor's summary (included in the audit base)
 # rendering                   # omit = auto (render when logged in); set "http" or "browser" to force
 render_concurrency = 6        # concurrent browser-render jobs (1-10)
-publish = true                # auto-publish to your dashboard when signed in
+publish = true                # auto-publish to your dashboard when logged in
 visibility = "unlisted"       # default visibility for published reports
 ```
 
@@ -90,7 +90,7 @@ Your plan also caps this value: **Free runs 1 render at a time, Pro runs 5, Team
 
 **Default:** `true`
 
-Auto-publish the audit report to your [dashboard](/dashboard) when you're **signed in and online** - independent of cloud rendering or enrichment. **Publishing is included in the audit base charge**, whatever the visibility. Logged-out and `--offline` runs never publish. Set to `false` to never auto-publish for this project; you can still publish a single run with `--publish` (it overrides this). Skip publishing one run with `--no-publish`.
+Auto-publish the audit report to your [dashboard](/dashboard) when you're **logged in and online** - independent of cloud rendering or enrichment. **Publishing is included in the audit base charge**, whatever the visibility. Logged-out and `--offline` runs never publish. Set to `false` to never auto-publish for this project; you can still publish a single run with `--publish` (it overrides this). Skip publishing one run with `--no-publish`.
 
 ### `visibility`
 

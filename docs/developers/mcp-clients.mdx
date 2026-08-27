@@ -6,13 +6,13 @@ icon: "toy-brick"
 
 Every client below connects to the same hosted endpoint:
 
-```
+```text
 https://mcp.squirrelscan.com/mcp
 ```
 
 The transport is streamable HTTP, and each client gives you the same two ways in:
 
-- **OAuth (recommended for a human at an editor).** Point the client at the URL with no auth headers. It discovers the authorization server, registers itself, and runs a browser sign-in. Nothing secret lands in a config file.
+- **OAuth (recommended for a human at an editor).** Point the client at the URL with no auth headers. It discovers the authorization server, registers itself, and runs a browser login. Nothing secret lands in a config file.
 - **API key (recommended for CI, containers, and shared configs).** Set an `Authorization: Bearer sq_...` header, ideally from the `SQUIRRELSCAN_API_KEY` environment variable so the key stays out of the file. Mint one with `squirrel keys create --shell`.
 
 <Warning>
@@ -29,7 +29,7 @@ The one-liner does the OAuth flow for you (dynamic client registration, no clien
 claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
 ```
 
-Then, inside a session, run `/mcp`, select **squirrelscan**, and choose **Authenticate**. Your browser opens for sign-in and org selection. From the shell without a session, `claude mcp login squirrelscan` (Claude Code v2.1.186+) does the same; add `--no-browser` for headless or SSH (v2.1.191+). Clear tokens with `claude mcp logout squirrelscan`.
+Then, inside a session, run `/mcp`, select **squirrelscan**, and choose **Authenticate**. Your browser opens so you can log in and org selection. From the shell without a session, `claude mcp login squirrelscan` (Claude Code v2.1.186+) does the same; add `--no-browser` for headless or SSH (v2.1.191+). Clear tokens with `claude mcp logout squirrelscan`.
 
 <Tabs>
   <Tab title="OAuth (recommended)">
@@ -180,7 +180,7 @@ VS Code's built-in MCP client (v1.101+) auto-runs the OAuth handshake for a remo
     }
     ```
 
-    On first connection VS Code discovers the authorization server, registers a client, and opens a browser for sign-in. Manage the grant under **Accounts → Manage Trusted MCP Servers**.
+    On first connection VS Code discovers the authorization server, registers a client, and opens a browser so you can log in. Manage the grant under **Accounts → Manage Trusted MCP Servers**.
   </Tab>
   <Tab title="API key">
     Use a prompted input so the key is stored in secret storage, not plaintext:
@@ -215,7 +215,7 @@ Save either block via **Command Palette → MCP: Add Server** (choose **HTTP**),
 Use a top-level `"headers"` object. The `"requestInit": { "headers": ... }` form is for the separate Visual Studio IDE, not VS Code, and silently no-ops here. On a GitHub Copilot Business or Enterprise plan, an org owner must enable MCP servers and set MCP access to allow all servers, since squirrelscan is not in GitHub's public registry.
 </Warning>
 
-## Windsurf (Devin Desktop)
+## Windsurf (devin desktop)
 
 Windsurf was rebranded **Devin Desktop** by Cognition in 2026. The in-app name changed, but the config file paths and JSON keys are unchanged. The remote-server key is `serverUrl`.
 

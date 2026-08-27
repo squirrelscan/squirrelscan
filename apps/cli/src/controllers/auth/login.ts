@@ -10,6 +10,7 @@ import { hostname } from "node:os";
 
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { cliApi } from "@/lib/api-client";
+import { openBrowser } from "@/lib/browser";
 import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
 import { loadUserSettings, updateSettings } from "@/self/settings";
 
@@ -115,51 +116,10 @@ async function findAvailablePort(): Promise<number> {
   });
 }
 
-/**
- * Open a URL in the default browser
- */
-async function openBrowser(url: string): Promise<void> {
-  const safeUrl = normalizeBrowserUrl(url);
-  const { platform } = process;
-
-  let command: string;
-  let args: string[];
-
-  if (platform === "darwin") {
-    command = "open";
-    args = [safeUrl];
-  } else if (platform === "win32") {
-    // Do not pass the API-provided URL through cmd.exe: shell metacharacters in
-    // the URL would otherwise be interpreted as commands. Explorer delegates
-    // HTTP(S) URLs to the default browser without invoking a command shell.
-    command = "explorer.exe";
-    args = [safeUrl];
-  } else {
-    // Linux
-    command = "xdg-open";
-    args = [safeUrl];
-  }
-
-  const { spawn } = await import("node:child_process");
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-    child.on("error", reject);
-    // Don't wait for close - browser stays open
-    setTimeout(resolve, 500);
-  });
-}
-
-export function normalizeBrowserUrl(rawUrl: string): string {
-  const url = new URL(rawUrl);
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Authentication URL must use HTTP or HTTPS");
-  }
-  return url.toString();
-}
+// Moved to lib/browser.ts so non-auth commands can open a URL without pulling
+// in this module's callback server. Re-exported: existing callers and tests
+// import normalizeBrowserUrl from here.
+export { normalizeBrowserUrl } from "@/lib/browser";
 
 export function fetchSessionStatus(
   apiUrl: string,

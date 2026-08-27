@@ -19,6 +19,14 @@ Requires login - run [`squirrel auth login`](/cli/auth) first.
 | Option | Description |
 |--------|-------------|
 | `--json` | Output as JSON |
+| `--upgrade` | Print the upgrade URL and open it in your browser |
+
+`--upgrade` does not require login, so you can go straight to the upgrade page
+from any machine:
+
+```bash
+squirrel credits --upgrade
+```
 
 ## Example
 
@@ -26,7 +34,7 @@ Requires login - run [`squirrel auth login`](/cli/auth) first.
 squirrel credits
 ```
 
-```
+```text
 Plan:    Pro
 Balance: 2340 credits (2000 monthly + 340 purchased)
          monthly credits reset 2026-07-08
@@ -38,8 +46,21 @@ Pricing:
   issue_enrich           3 per issue
   keyword_gaps          25 per run
 
-Top up: https://squirrelscan.com/account/credits
+Top up: https://squirrelscan.com/upgrade?src=cli-credits
 ```
+
+On the free plan the output ends with the Pro offer instead:
+
+```text
+  Pro: $19/month (or $190/year) for 3,000 credits a month
+  Also unlocks scheduled audits, custom request headers, and up to 2,000 pages per audit.
+  Upgrade: https://squirrelscan.com/upgrade?src=cli-credits
+  Or run `squirrel credits --upgrade`.
+```
+
+A balance below 50 credits cannot start any cloud audit, since every audit
+charges a flat 50 credit base before a page renders. `squirrel credits` calls
+that out rather than showing a positive number you cannot spend.
 
 JSON output:
 

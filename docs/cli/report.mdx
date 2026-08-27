@@ -43,7 +43,7 @@ Share reports online by publishing to `reports.squirrelscan.com`.
 Publishing requires authentication. Run `squirrel auth login` first.
 </Note>
 
-### Visibility Levels
+### Visibility levels
 
 | Level | Description |
 |-------|-------------|
@@ -51,7 +51,7 @@ Publishing requires authentication. Run `squirrel auth login` first.
 | `unlisted` | Accessible via link only, not listed |
 | `private` | Only visible to you when logged in |
 
-### Publish Report
+### Publish report
 
 ```bash
 squirrel report --publish
@@ -59,19 +59,19 @@ squirrel report --publish
 
 On success the command prints the published report URL (and nothing else, so it pipes cleanly):
 
-```
+```text
 https://reports.squirrelscan.com/XVv4NO7aPr
 ```
 
 Manage published reports in the [dashboard](https://app.squirrelscan.com).
 
-### Publish with Visibility
+### Publish with visibility
 
 ```bash
 squirrel report --publish --visibility unlisted
 ```
 
-### Publish Specific Audit
+### Publish specific audit
 
 ```bash
 squirrel report a7b3c2d1 --publish --visibility private
@@ -79,20 +79,20 @@ squirrel report a7b3c2d1 --publish --visibility private
 
 ## Examples
 
-### View Latest Audit
+### View latest audit
 
 ```bash
 squirrel report
 ```
 
-### List All Audits
+### List all audits
 
 ```bash
 squirrel report --list
 ```
 
 Output:
-```
+```text
 Recent Audits:
 ================================================================================
 ID                                     Date                   Pages    Status
@@ -105,13 +105,13 @@ a7b3c2d1                              1/17/2026, 10:30 AM    42       complete
 Total: 2 audits
 ```
 
-### View Specific Audit by ID
+### View specific audit by ID
 
 ```bash
 squirrel report a7b3c2d1
 ```
 
-### View Latest Audit for Domain
+### View latest audit for domain
 
 ```bash
 squirrel report example.com
@@ -142,7 +142,7 @@ open report.html
 squirrel report -f markdown -o report.md
 ```
 
-### Filter by Severity
+### Filter by severity
 
 Show only errors:
 
@@ -156,7 +156,7 @@ Show only warnings:
 squirrel report --severity warning
 ```
 
-### Filter by Category
+### Filter by category
 
 Show only core SEO issues:
 
@@ -170,7 +170,7 @@ Show multiple categories:
 squirrel report --category core,links,images
 ```
 
-### Diff Reports
+### Diff reports
 
 Compare the latest report against a baseline audit:
 
@@ -191,7 +191,7 @@ Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and 
 Diff mode cannot be published with `--publish`.
 </Note>
 
-### LLM-Optimized Format
+### LLM-optimized format
 
 Export in format optimized for LLM consumption:
 
@@ -205,13 +205,13 @@ Or pipe directly to Claude:
 squirrel report -f llm | claude "analyze this SEO report"
 ```
 
-## Output Formats
+## Output formats
 
 ### console (default)
 
 Human-readable colored output for terminal:
 
-```
+```text
 SquirrelScan Report
 ========================================
 Site: https://example.com
@@ -282,7 +282,7 @@ squirrel report -f html -o report.html
 
 Opens in browser with interactive filtering and sorting.
 
-## Valid Categories
+## Valid categories
 
 Filter reports by these categories:
 
@@ -306,7 +306,7 @@ Filter reports by these categories:
 - `eeat` - E-E-A-T signals
 - `blocking` - Ad-blocker & privacy-filter impact (`adblock` still accepted)
 
-## Exit Codes
+## Exit codes
 
 | Code | Meaning |
 |------|---------|

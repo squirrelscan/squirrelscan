@@ -20,6 +20,61 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.88
+
+Two rules about the difference between a page that is linked and a page that is
+supported. A site's navigation links every page from every other page, which
+makes the whole site look evenly connected when most of it is not: a page whose
+only inbound links are the ones repeated in the header and footer carries no
+signal about what it is for or why it matters. The same template logic cuts the
+other way for the site's own assets, where one shared layout should give every
+page the same favicon and share image, and a page that disagrees is usually
+running an older template nobody remembers owning.
+
+The engine is now at 278 rules across 21 categories.
+
+### Added
+
+- **`links/no-contextual-inbound`** reports pages whose only internal inbound
+  links come from sitewide chrome: the nav, header, footer or sidebar. Those
+  links help discovery, but they are identical on every page, so they say
+  nothing about the page they point at. The fix is a link from the body copy of
+  a related article, hub or category page with anchor text that describes the
+  destination, which is what passes topical relevance. The minimum count is
+  configurable for sites that treat a single contextual link as enough.
+
+- **`social/asset-divergence`** reports pages whose favicon, theme-color or
+  fallback share image differs from the rest of the site. These come from one
+  layout, so every page should carry the same three, and the ones that do not
+  are a section that missed a redesign or a second layout still in service. The
+  visible cost is a tab icon that changes as visitors move around and link
+  previews that do not match. Per-page share images on articles and products
+  are correct and are not reported: the comparison is against the fallback the
+  rest of the site shares.
+
+### Changed
+
+- **Custom request headers are available on every plan.** Auditing a staging
+  site behind an auth header is how you check work before it ships, and it was
+  gated behind Pro. It is not any more.
+
+### Fixed
+
+- **`squirrel credits` linked to a page that did not exist.** The top-up link
+  it printed had never resolved to anything. It now lands on the billing page
+  for your account, and older versions of the CLI that still print the old
+  address are redirected there too.
+
+- **Running out of credits during an audit now says what to do about it.** The
+  CLI printed a bare warning with no price and nowhere to go. It now reports
+  the balance, what the audit needed, and where to top up or upgrade.
+
+- **Reinstalling over a stale `squirrel` symlink no longer fails.** If
+  `~/.local/bin/squirrel` pointed at a release that had been cleaned up, the
+  installer refused to replace it. It now does. The install script also no
+  longer dies part way through on systems where `sh` is dash, which is the
+  default on Debian and Ubuntu.
+
 ## v0.0.87
 
 A reliability fix for long audits. An audit is not just its crawl: once the last

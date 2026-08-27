@@ -34,7 +34,7 @@ squirrel crawl <url> [options]
 [Crawler Configuration](/configuration/crawler)): against your own dev server, `crawl`
 otherwise raises concurrency and drops the per-host delay automatically.
 
-### Coverage Modes
+### Coverage modes
 
 | Mode | Default Pages | Description |
 |------|---------------|-------------|
@@ -53,37 +53,37 @@ with `--max-pages`. See [Crawling & Coverage](/crawl) for how each mode behaves.
 
 ## Examples
 
-### Basic Crawl
+### Basic crawl
 
 ```bash
 squirrel crawl https://example.com
 ```
 
-### Comprehensive Crawl
+### Comprehensive crawl
 
 ```bash
 squirrel crawl https://example.com -C full
 ```
 
-### Crawl More Pages
+### Crawl more pages
 
 ```bash
 squirrel crawl https://example.com -m 1000
 ```
 
-### Fresh Crawl (Ignore Cache)
+### Fresh crawl (ignore cache)
 
 ```bash
 squirrel crawl https://example.com --refresh
 ```
 
-### Resume Interrupted Crawl
+### Resume interrupted crawl
 
 ```bash
 squirrel crawl https://example.com --resume
 ```
 
-## Crawl Behavior
+## Crawl behavior
 
 The crawl command:
 - Fetches and stores HTML content for each page
@@ -94,7 +94,7 @@ The crawl command:
 
 ## Output
 
-```
+```text
 Crawling: https://example.com
 Coverage: quick (max 25 pages)
 
@@ -105,7 +105,7 @@ Crawl ID: a7b3c2d1
 
 After crawling, use `squirrel analyze` to run audit rules on the stored data.
 
-## Exit Codes
+## Exit codes
 
 | Code | Meaning |
 |------|---------|

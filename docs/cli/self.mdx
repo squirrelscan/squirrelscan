@@ -36,7 +36,7 @@ squirrel self install
 
 ### Output
 
-```
+```text
 Installed v0.1.0
   Binary: ~/.local/share/squirrel/releases/0.1.0/squirrel
   Symlink: ~/.local/bin/squirrel
@@ -44,12 +44,12 @@ Installed v0.1.0
 
 If `~/.local/bin` is not in your `$PATH`, the command will show:
 
-```
+```text
 Add to your shell profile:
   export PATH="~/.local/bin:$PATH"
 ```
 
-### What it Does
+### What it does
 
 - Creates `~/.squirrel/` for settings
 - Creates `~/.local/share/squirrel/releases/` for cached releases
@@ -66,7 +66,7 @@ Check for and apply updates to the CLI.
 
 You usually don't need this command. With `auto_update` enabled (the default), squirrel updates itself: any CLI run checks for a new release in the background, and when one is found a detached background process downloads it, verifies its SHA-256 checksum, and switches over silently. Your next run prints a one-line notice:
 
-```
+```text
 ✓ squirrel auto-updated v0.0.42 → v0.0.43
 ```
 
@@ -116,36 +116,36 @@ squirrel self update [options]
 
 ### Examples
 
-#### Check for Updates
+#### Check for updates
 
 ```bash
 squirrel self update --check
 ```
 
 Output if update available:
-```
+```text
 Update available: v0.2.0
 Run 'squirrel self update' to install
 ```
 
 Output if up to date:
-```
+```text
 Already on latest version (0.1.0)
 ```
 
-#### Install Update
+#### Install update
 
 ```bash
 squirrel self update
 ```
 
 Output:
-```
+```text
 Updated to v0.2.0
 See release notes: https://github.com/squirrelscan/squirrelscan/releases/tag/v0.2.0
 ```
 
-#### Dismiss Update Notification
+#### Dismiss update notification
 
 ```bash
 squirrel self update --dismiss
@@ -153,7 +153,7 @@ squirrel self update --dismiss
 
 This dismisses the update notification until the next version is released. A dismissed version is also skipped by automatic updates.
 
-### Update Channels
+### Update channels
 
 squirrel has two update channels configured via settings:
 
@@ -210,7 +210,7 @@ Add to `~/.config/fish/config.fish`:
 squirrel self completion fish | source
 ```
 
-### What it Provides
+### What it provides
 
 Completions include:
 - Command names
@@ -232,7 +232,7 @@ squirrel self doctor
 
 ### Output
 
-```
+```text
 Running health checks...
 
 [OK] Binary: Executable found at ~/.local/bin/squirrel
@@ -245,7 +245,7 @@ Running health checks...
 Passed: 5 | Warnings: 1 | Failed: 0
 ```
 
-### What it Checks
+### What it checks
 
 - Binary installation and permissions
 - Config file validity
@@ -253,7 +253,7 @@ Passed: 5 | Warnings: 1 | Failed: 0
 - Cache size and location
 - Update status
 
-### Exit Codes
+### Exit codes
 
 | Code | Meaning |
 |------|---------|
@@ -280,21 +280,21 @@ squirrel self version [options]
 
 ### Examples
 
-#### Human-Readable
+#### Human-readable
 
 ```bash
 squirrel self version
 ```
 
 Output:
-```
+```bash
 squirrel v0.1.0
   Channel: stable
   Platform: darwin-arm64
   Bun: 1.1.38
 ```
 
-#### JSON Output
+#### JSON output
 
 ```bash
 squirrel self version --json
@@ -342,7 +342,7 @@ squirrel self settings show [options]
 
 #### Examples
 
-##### Effective Settings (default)
+##### Effective settings (default)
 
 Shows merged settings with source tracking:
 
@@ -351,7 +351,7 @@ squirrel self settings show
 ```
 
 Output:
-```
+```text
 Effective Settings:
 
   channel                  = stable       (default)
@@ -363,14 +363,14 @@ User:  ~/.squirrel/settings.json
 Local: /path/to/project/.squirrel/settings.json
 ```
 
-##### User Settings Only
+##### User settings only
 
 ```bash
 squirrel self settings show --user
 ```
 
 Output:
-```
+```text
 User Settings (~/.squirrel/settings.json):
 
   channel              = stable
@@ -378,14 +378,14 @@ User Settings (~/.squirrel/settings.json):
   user_feedback_email  = you@example.com
 ```
 
-##### Local Settings Only
+##### Local settings only
 
 ```bash
 squirrel self settings show --local
 ```
 
 Output:
-```
+```text
 Local Settings (/path/to/project/.squirrel/settings.json):
 
   notifications        = false
@@ -417,7 +417,7 @@ squirrel self settings set <key> <value> [options]
 | `--local` | Set in local project settings (.squirrel/settings.json) |
 | `--user` | Set in user settings (~/.squirrel/settings.json) (default) |
 
-#### Available Settings
+#### Available settings
 
 | Key | Type | Description | Values |
 |-----|------|-------------|--------|
@@ -430,25 +430,25 @@ squirrel self settings set <key> <value> [options]
 
 #### Examples
 
-##### Switch to Beta Channel
+##### Switch to beta channel
 
 ```bash
 squirrel self settings set channel beta
 ```
 
 Output:
-```
+```text
 Set channel = beta (user)
   Written to: ~/.squirrel/settings.json
 ```
 
-##### Disable Update Notifications
+##### Disable update notifications
 
 ```bash
 squirrel self settings set notifications false
 ```
 
-##### Set Local Project Setting
+##### Set local project setting
 
 ```bash
 squirrel self settings set notifications false --local
@@ -493,14 +493,14 @@ squirrel self uninstall [options]
 
 ### Examples
 
-#### Interactive Uninstall
+#### Interactive uninstall
 
 ```bash
 squirrel self uninstall
 ```
 
 Output:
-```
+```text
 This will remove:
   - Symlink at ~/.local/bin/squirrel
   - Cached releases at ~/.local/share/squirrel
@@ -511,7 +511,7 @@ Use --purge to also remove settings.
 Continue? [y/N]
 ```
 
-#### Uninstall with Settings
+#### Uninstall with settings
 
 ```bash
 squirrel self uninstall --purge
@@ -522,13 +522,13 @@ This removes:
 - Cached releases
 - User settings
 
-#### Force Uninstall (No Prompt)
+#### Force uninstall (no prompt)
 
 ```bash
 squirrel self uninstall --force
 ```
 
-### What Gets Removed
+### What gets removed
 
 | Item | Default | With --purge |
 |------|---------|--------------|

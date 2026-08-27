@@ -24,7 +24,7 @@ maxMatchesToReport = 10
 lists = ["easylist", "easyprivacy"]
 ```
 
-## How Rule Options Work
+## How rule options work
 
 ### Structure
 
@@ -54,9 +54,9 @@ Run `squirrel config validate` to check for errors.
 
 ---
 
-## Common Rule Options
+## Common rule options
 
-### Core Rules
+### Core rules
 
 #### `core/meta-title`
 
@@ -136,7 +136,7 @@ max_length = 200
 
 ---
 
-### Content Rules
+### Content rules
 
 #### `content/word-count`
 
@@ -232,7 +232,7 @@ density_threshold = 0.05   # 5% max
 
 **How density is calculated:**
 
-```
+```text
 density = (keyword_occurrences / total_words)
 ```
 
@@ -278,7 +278,7 @@ min_external_links = 0
 
 ---
 
-### Link Rules
+### Link rules
 
 #### `links/orphan-pages`
 
@@ -384,7 +384,7 @@ min_internal_links = 1
 
 ---
 
-### Performance Rules
+### Performance rules
 
 #### `performance/ttfb`
 
@@ -475,7 +475,7 @@ error_threshold = 4000
 
 ---
 
-### Accessibility Rules
+### Accessibility rules
 
 #### `a11y/skip-link`
 
@@ -506,7 +506,7 @@ required = false
 
 ---
 
-### Security Rules
+### Security rules
 
 #### `security/http-to-https`
 
@@ -550,7 +550,7 @@ allow_patterns = []
 
 ---
 
-### Crawl Rules
+### Crawl rules
 
 #### `crawl/all-noindex-pages`
 
@@ -589,7 +589,7 @@ If 90%+ of crawled pages are noindexed → `warn` (possible misconfiguration)
 
 ---
 
-### Blocking Rules
+### Blocking rules
 
 #### `adblock/element-hiding`
 
@@ -662,7 +662,7 @@ lists = ["easyprivacy"]   # Filter lists
 
 ---
 
-## Finding Rule Options
+## Finding rule options
 
 ### View rule schema
 
@@ -673,7 +673,7 @@ squirrel rules show core/meta-title
 ```
 
 Output:
-```
+```text
 core/meta-title - Meta Title
   Validates page title presence and length
 
@@ -698,9 +698,9 @@ Shows effective configuration including rule option defaults.
 
 ---
 
-## Configuration Examples
+## Configuration examples
 
-### Blog Site
+### Blog site
 
 ```toml
 [rule_options."core/meta-title"]
@@ -722,7 +722,7 @@ min_external_links = 3
 
 ---
 
-### E-commerce Site
+### E-commerce site
 
 ```toml
 [rule_options."core/meta-title"]
@@ -748,7 +748,7 @@ min_external_links = 0  # Products don't need citations
 
 ---
 
-### Documentation Site
+### Documentation site
 
 ```toml
 [rule_options."content/word-count"]
@@ -769,7 +769,7 @@ density_threshold = 0.05  # Technical terms repeat
 
 ---
 
-### Landing Pages
+### Landing pages
 
 ```toml
 [rule_options."content/word-count"]
@@ -800,12 +800,12 @@ squirrel config validate
 ```
 
 **Valid config:**
-```
+```text
 ✓ Config valid: /path/to/squirrel.toml
 ```
 
 **Invalid config:**
-```
+```text
 ✗ Invalid config:
   rule_options.core/meta-title.min_length: Expected number, received string
 ```
@@ -824,7 +824,7 @@ min_length = 30
 
 ---
 
-## Complete Example
+## Complete example
 
 ```toml
 [project]
