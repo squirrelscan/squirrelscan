@@ -12,7 +12,7 @@ import { parseHTML } from "linkedom";
 
 import { keywordStuffingRule } from "../src/content/keyword-stuffing";
 import { readingLevelRule } from "../src/content/reading-level";
-import { getTextExcludingScripts } from "../src/content/text-content";
+import { getProseTextExcludingCode, getTextExcludingScripts } from "../src/content/text-content";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 const HTML = `<html><body>
@@ -41,6 +41,22 @@ describe("content rules do not mutate the shared DOM", () => {
     const reference = b.textContent || "";
 
     expect(getTextExcludingScripts(a)).toBe(reference);
+  });
+
+  test("getProseTextExcludingCode matches remove-then-textContent for code-like tags too", () => {
+    const html = `<html><body><p>prose <code>literal</code> more</p>
+      <pre>block</pre><samp>output</samp><kbd>keys</kbd>
+      <script>var s = "noise";</script></body></html>`;
+    const a = parseHTML(html).document.querySelector("body")!;
+    const b = parseHTML(html).document.querySelector("body")!;
+
+    for (const el of b.querySelectorAll("script, style, noscript, code, pre, samp, kbd")) {
+      el.remove();
+    }
+
+    expect(getProseTextExcludingCode(a)).toBe(b.textContent || "");
+    // And it leaves the DOM it read intact.
+    expect(a.querySelectorAll("code, pre, samp, kbd").length).toBe(4);
   });
 
   test("keyword-stuffing leaves script/style/noscript nodes in the DOM", async () => {

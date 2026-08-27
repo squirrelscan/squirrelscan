@@ -10,7 +10,18 @@ import type { Element } from "linkedom";
 
 import { collectTextExcluding, tagExcluder } from "@squirrelscan/parser/extractors";
 
-const isScriptLike = tagExcluder(new Set(["script", "style", "noscript"]));
+const SCRIPT_LIKE_TAGS = ["script", "style", "noscript"] as const;
+
+/**
+ * Markup that says "this is a literal, not prose": whatever is inside was written
+ * to be read as source, so a rule that judges the words a visitor reads must not
+ * judge these. `<code>` and `<pre>` cover the common cases; `<samp>` (program
+ * output) and `<kbd>` (keys to press) are the same promise in different words.
+ */
+const CODE_LIKE_TAGS = ["code", "pre", "samp", "kbd"] as const;
+
+const isScriptLike = tagExcluder(new Set<string>(SCRIPT_LIKE_TAGS));
+const isScriptOrCodeLike = tagExcluder(new Set<string>([...SCRIPT_LIKE_TAGS, ...CODE_LIKE_TAGS]));
 
 /**
  * `element`'s text with `<script>`/`<style>`/`<noscript>` subtrees excluded —
@@ -19,4 +30,17 @@ const isScriptLike = tagExcluder(new Set(["script", "style", "noscript"]));
  */
 export function getTextExcludingScripts(element: Element): string {
   return collectTextExcluding(element, isScriptLike);
+}
+
+/**
+ * `element`'s PROSE text: `getTextExcludingScripts` minus code-like subtrees
+ * (`<code>`, `<pre>`, `<samp>`, `<kbd>`).
+ *
+ * For rules that judge the sentences a visitor reads rather than every character
+ * on the page. A page documenting a string — a changelog quoting the exact bytes
+ * a rule detects, a docs page listing shell output — should not be judged as if
+ * it had written that string by accident.
+ */
+export function getProseTextExcludingCode(element: Element): string {
+  return collectTextExcluding(element, isScriptOrCodeLike);
 }

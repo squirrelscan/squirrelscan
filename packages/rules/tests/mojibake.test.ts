@@ -120,6 +120,64 @@ describe("mojibakeRule", () => {
     expect(check?.status).toBe("pass");
   });
 
+  // The rule fired on the release note that ANNOUNCED it, because that note quotes
+  // the sequences it detects inside <code>. A code span is markup for "this is a
+  // literal": the page is documenting the corruption, not suffering from it.
+  describe("code-like elements are quoted literals, not prose", () => {
+    test("mojibake only inside <code> passes", () => {
+      const [check] = run(page("<p>Catches garbled sequences like <code>â€™</code>.</p>"));
+      expect(check?.status).toBe("pass");
+    });
+
+    test("mojibake only inside <pre> passes", () => {
+      const [check] = run(page("<pre>Itâ€™s a cafÃ©</pre>"));
+      expect(check?.status).toBe("pass");
+    });
+
+    test("<samp> and <kbd> are excluded too", () => {
+      const [check] = run(page("<p><samp>cafÃ©</samp> then <kbd>â€œ</kbd></p>"));
+      expect(check?.status).toBe("pass");
+    });
+
+    test("a <code> span nested mid-sentence does not leak into the prose scan", () => {
+      const [check] = run(page("<p>text <code>Ã©</code> more</p>"));
+      expect(check?.status).toBe("pass");
+    });
+
+    test("a quoted <code> sample plus one real prose hit counts exactly one", () => {
+      const [check] = run(page("<p>Quotes <code>â€™</code> but Itâ€™s broken here.</p>"));
+      expect(check?.status).toBe("warn");
+      expect(check?.value).toBe(1);
+    });
+
+    test("code exclusion applies to the whole subtree, not just direct text", () => {
+      const [check] = run(page("<pre><span><em>Itâ€™s</em></span></pre><p>Clean.</p>"));
+      expect(check?.status).toBe("pass");
+    });
+
+    test("prose siblings of a code block are still read", () => {
+      const [check] = run(page("<pre>clean sample</pre><p>Itâ€™s broken</p>"));
+      expect(check?.status).toBe("warn");
+      expect(check?.value).toBe(1);
+    });
+
+    test("the replacement character inside code does not escalate to fail", () => {
+      const [check] = run(page("<p>Renders as <code>caf�</code>.</p>"));
+      expect(check?.status).toBe("pass");
+    });
+
+    test("reading a code block does not mutate the shared DOM", () => {
+      const { document } = parseHTML(page("<p>a <code>Ã©</code> b</p>"));
+      const before = document.querySelectorAll("code").length;
+      mojibakeRule.run({
+        page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+        parsed: { document } as unknown as ParsedPage,
+        options: {},
+      } as RuleContext);
+      expect(document.querySelectorAll("code").length).toBe(before);
+    });
+  });
+
   // Reachable: linkedom does NOT synthesize a <body>, so a head-only document really
   // does reach the rule with nothing to read. Skipped, not passed — "we could not look"
   // must never be recorded as "we looked and it was fine".
