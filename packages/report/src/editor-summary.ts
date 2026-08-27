@@ -162,13 +162,15 @@ export function toEditorSummary(res: unknown): EditorSummary | null {
   };
 }
 
-/** The already-validated slice every output format renders. */
-export interface EditorSummaryView {
+/**
+ * The validated summary every output format renders, plus the paragraph split
+ * they all used to do for themselves. The raw fields ride along so the formats
+ * that persist the summary verbatim (json) go through this same guard instead
+ * of a second one.
+ */
+export interface EditorSummaryView extends EditorSummary {
   /** Prose split on blank lines, trimmed, empties dropped; never empty. */
   paragraphs: string[];
-  bigTicket: string[];
-  verdict: string;
-  model: string;
 }
 
 /**
@@ -186,12 +188,10 @@ export function editorSummaryView(
   const summary = toEditorSummary(es);
   if (!summary) return null;
   return {
+    ...summary,
     paragraphs: summary.prose
       .split(/\n{2,}/)
       .map((para) => para.trim())
       .filter(Boolean),
-    bigTicket: summary.bigTicket,
-    verdict: summary.verdict,
-    model: summary.model,
   };
 }

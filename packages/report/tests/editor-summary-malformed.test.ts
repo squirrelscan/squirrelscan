@@ -137,8 +137,38 @@ describe("renderers with a well-formed summary still render it", () => {
     expect(renderLlm(report)).toContain("<para>First paragraph.</para>");
     expect(renderXml(report)).toContain("<para>First paragraph.</para>");
     expect(renderHtml(report)).toContain('class="editor-summary-section"');
+  });
+
+  test("json emits the section byte-for-byte unchanged", () => {
+    // --format json is a user-facing shape, and routing it through the guard
+    // must not perturb a single byte of a well-formed summary: not the field
+    // set, not the key ORDER, not the two-space indentation, not the prose
+    // (which the guard splits into paragraphs for the other formats but must
+    // persist verbatim, blank lines and all). A field-by-field toEqual would
+    // pass on reordered keys or re-joined prose; this pins the actual output.
+    const JSON_FIXTURE = [
+      '  "editorSummary": {',
+      '    "prose": "First paragraph.\\n\\nSecond paragraph.",',
+      '    "bigTicket": [',
+      '      "Fix the titles"',
+      "    ],",
+      '    "verdict": "Ship it",',
+      '    "model": "test-model",',
+      '    "generatedAt": "2026-06-16T14:30:00.000Z"',
+      "  },",
+    ].join("\n");
+    expect(renderJson(report)).toContain(JSON_FIXTURE);
+
     const parsed = JSON.parse(renderJson(report)) as { editorSummary?: EditorSummary };
-    expect(parsed.editorSummary?.prose).toBe(GOOD.prose);
+    expect(parsed.editorSummary).toEqual(GOOD);
+    // `paragraphs` is a rendering aid on the view; it must never reach the shape.
+    expect(Object.keys(parsed.editorSummary as object)).toEqual([
+      "prose",
+      "bigTicket",
+      "verdict",
+      "model",
+      "generatedAt",
+    ]);
   });
 
   test("a summary missing only bigTicket renders the prose and no bullet list", () => {
