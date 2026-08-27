@@ -43,7 +43,7 @@ describe("content rules do not mutate the shared DOM", () => {
     expect(getTextExcludingScripts(a)).toBe(reference);
   });
 
-  test("getProseTextExcludingCode matches remove-then-textContent for code-like tags too", () => {
+  test("getProseTextExcludingCode drops code-like tags and nothing else", () => {
     const html = `<html><body><p>prose <code>literal</code> more</p>
       <pre>block</pre><samp>output</samp><kbd>keys</kbd>
       <script>var s = "noise";</script></body></html>`;
@@ -54,7 +54,13 @@ describe("content rules do not mutate the shared DOM", () => {
       el.remove();
     }
 
-    expect(getProseTextExcludingCode(a)).toBe(b.textContent || "");
+    // Deliberately NOT byte-identical to remove-then-textContent: a newline stands
+    // in for each skipped subtree, because removing an element glues its
+    // neighbours and the caller scans the result for character sequences. Ignoring
+    // the inserted newlines, no surviving text is lost, gained or reordered.
+    const stripNewlines = (s: string) => s.replaceAll("\n", "");
+    expect(stripNewlines(getProseTextExcludingCode(a))).toBe(stripNewlines(b.textContent || ""));
+    expect(getProseTextExcludingCode(a)).toContain("\n");
     // And it leaves the DOM it read intact.
     expect(a.querySelectorAll("code, pre, samp, kbd").length).toBe(4);
   });

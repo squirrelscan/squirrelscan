@@ -166,6 +166,22 @@ describe("mojibakeRule", () => {
       expect(check?.status).toBe("pass");
     });
 
+    // Skipping a subtree GLUES its neighbours: without a boundary, the `Ã` before
+    // the code span and the `©` after it concatenate into `Ã©` — a sequence present
+    // in neither fragment. Excluding code must not invent corruption.
+    test("skipping a code span does not glue its neighbours into a sequence", () => {
+      const [check] = run(page("<p>Ã<code>literal</code>©</p>"));
+      expect(check?.status).toBe("pass");
+    });
+
+    // The boundary must be a newline, NOT a space: `Ã ` (à) and `Â ` (nbsp) are
+    // themselves mojibake sequences, so a space boundary would trade one false
+    // positive for another. This fixture fails if anyone "simplifies" it to " ".
+    test("the boundary itself cannot form a sequence with the text before it", () => {
+      expect(run(page("<p>Ã<code>sample</code></p>"))[0]?.status).toBe("pass");
+      expect(run(page("<p>Â<pre>sample</pre></p>"))[0]?.status).toBe("pass");
+    });
+
     test("reading a code block does not mutate the shared DOM", () => {
       const { document } = parseHTML(page("<p>a <code>Ã©</code> b</p>"));
       const before = document.querySelectorAll("code").length;

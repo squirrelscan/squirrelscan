@@ -33,8 +33,20 @@ export function getTextExcludingScripts(element: Element): string {
 }
 
 /**
+ * A newline, never a space, stands in for each skipped subtree.
+ *
+ * Skipping a subtree glues its neighbours: `Ã<code>x</code>©` would otherwise
+ * read back as `Ã©` and look like corruption that is in neither fragment. A
+ * space does not fix that — `"Ã "` (à) and `"Â "` (nbsp) are themselves mojibake
+ * sequences, so a space boundary trades one false positive for another. No
+ * mojibake sequence contains a newline.
+ */
+const SKIPPED_SUBTREE_BOUNDARY = "\n";
+
+/**
  * `element`'s PROSE text: `getTextExcludingScripts` minus code-like subtrees
- * (`<code>`, `<pre>`, `<samp>`, `<kbd>`).
+ * (`<code>`, `<pre>`, `<samp>`, `<kbd>`), with a newline where each skipped
+ * subtree was.
  *
  * For rules that judge the sentences a visitor reads rather than every character
  * on the page. A page documenting a string — a changelog quoting the exact bytes
@@ -42,5 +54,5 @@ export function getTextExcludingScripts(element: Element): string {
  * it had written that string by accident.
  */
 export function getProseTextExcludingCode(element: Element): string {
-  return collectTextExcluding(element, isScriptOrCodeLike);
+  return collectTextExcluding(element, isScriptOrCodeLike, SKIPPED_SUBTREE_BOUNDARY);
 }

@@ -16,10 +16,17 @@ const TEXT_NODE = 3;
  * removing the excluded elements then reading `.textContent` (comments and
  * processing instructions are never visited, matching `.textContent`), but
  * without mutating or cloning the DOM.
+ *
+ * `separator` is emitted in place of each skipped subtree. It defaults to "",
+ * which reproduces remove-then-`.textContent` exactly — including the fact that
+ * removing an element GLUES its neighbours together, so `Ã<code>x</code>©` reads
+ * back as `Ã©`. Callers that scan the result for character sequences must pass a
+ * separator, or they will see sequences that exist in neither fragment.
  */
 export function collectTextExcluding(
   root: Node,
-  isExcluded: (el: Element) => boolean
+  isExcluded: (el: Element) => boolean,
+  separator = ""
 ): string {
   const out: string[] = [];
   // Explicit stack of remaining child lists; index tracks position in each.
@@ -34,7 +41,10 @@ export function collectTextExcluding(
     if (type === TEXT_NODE) {
       out.push((node as { data?: string }).data ?? "");
     } else if (type === ELEMENT_NODE) {
-      if (isExcluded(node as Element)) continue;
+      if (isExcluded(node as Element)) {
+        if (separator) out.push(separator);
+        continue;
+      }
       const children = node.childNodes;
       for (let i = children.length - 1; i >= 0; i--) {
         stack.push(children[i] as Node);
