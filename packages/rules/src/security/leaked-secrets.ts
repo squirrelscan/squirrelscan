@@ -724,12 +724,40 @@ function keyWords(key: string): string[] {
   return words;
 }
 
-// A minifier's key carries no meaning: `t.a = "…"`, `e.x2 = "…"`. Suppressing
-// on those would blind the rule to every minified bundle, so they are treated
-// as "no key at all" rather than as a key that failed to say "credential".
-function isUninformativeKey(key: string): boolean {
+/**
+ * A minifier's member access carries no meaning: `t.a = "…"`, `e.x2 = "…"`,
+ * `n["a"] = "…"`. Suppressing on those would blind the rule to every bundled
+ * script, so they count as "no key at all" rather than as a key that failed to
+ * say "credential".
+ *
+ * Being short is not enough — it has to be a member access on an object. A
+ * query parameter (`?v=<hex>`), a JSON key (`"id":"<hex>"`) and a plain
+ * property (`id: "<hex>"`) are short but they do name their value, and what
+ * they name is not a credential.
+ */
+function isMinifiedMemberKey(key: string, viaBracket: boolean): boolean {
   const last = key.split(".").pop() ?? key;
-  return last.replace(/[^A-Za-z0-9]/g, "").length <= 2;
+  if (last.replace(/[^A-Za-z0-9]/g, "").length > 2) return false;
+  return viaBracket || key.includes(".");
+}
+
+// Characters that can be part of a key, so cutting the look-back in the middle
+// of a run of them would hand classifyKeyContext a truncated key.
+const KEY_CHAR_RE = /[A-Za-z0-9_$.-]/;
+
+/**
+ * The text immediately before a match, for reading the key off.
+ *
+ * SECRET_KEY_LOOKBEHIND_SIZE is a budget, not a hard cut: slicing at exactly
+ * that offset can land inside the key itself, and `redential="` classifies as
+ * nothing at all. So the slice walks back to the nearest non-key character,
+ * spending at most the same budget again before giving up.
+ */
+export function lookBehind(text: string, index: number): string {
+  const floor = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE * 2);
+  let start = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE);
+  while (start > floor && KEY_CHAR_RE.test(text[start - 1] ?? "")) start--;
+  return text.slice(start, index);
 }
 
 // The key an assignment puts immediately in front of a value:
@@ -824,7 +852,8 @@ export function classifyKeyContext(
     return "digest";
   }
 
-  const match = BRACKET_KEY_RE.exec(before) ?? PRECEDING_KEY_RE.exec(before);
+  const bracket = BRACKET_KEY_RE.exec(before);
+  const match = bracket ?? PRECEDING_KEY_RE.exec(before);
   const key = match?.[1];
 
   if (key) {
@@ -838,7 +867,9 @@ export function classifyKeyContext(
     if (fromTag !== "unknown") return fromTag;
   }
 
-  if (key) return isUninformativeKey(key) ? "assigned" : "none";
+  if (key) {
+    return isMinifiedMemberKey(key, bracket !== null) ? "assigned" : "none";
+  }
 
   if (AUTH_SCHEME_RE.test(before)) return "credential";
 
@@ -870,12 +901,16 @@ function maskSecret(value: string): string {
 }
 
 /**
- * A window around one keyword occurrence. `text` carries an extra
- * SECRET_KEY_LOOKBEHIND_SIZE characters of lead-in so a value sitting at the
- * very start of the scanned region still has its key visible; `scanFrom` marks
- * where matching begins, keeping the scanned span exactly as wide as before.
+ * A window around one keyword occurrence. `text` carries a lead-in — the full
+ * budget lookBehind can spend — so a value sitting at the very start of the
+ * scanned region still has its key visible. `scanFrom` marks where the region
+ * proper begins: a match must reach into it to count, which keeps the scanned
+ * span exactly as wide as it was before the lead-in existed.
  */
 type KeywordWindow = { text: string; scanFrom: number };
+
+// How much lead-in a window carries: whatever lookBehind is allowed to spend.
+const WINDOW_LEAD_IN = SECRET_KEY_LOOKBEHIND_SIZE * 2;
 
 // Extract windows around all keyword occurrences
 function extractKeywordWindows(
@@ -888,7 +923,7 @@ function extractKeywordWindows(
 
   while ((pos = contentLower.indexOf(keyword, pos)) !== -1) {
     const start = Math.max(0, pos - SECRET_CONTEXT_WINDOW_SIZE);
-    const leadIn = Math.max(0, start - SECRET_KEY_LOOKBEHIND_SIZE);
+    const leadIn = Math.max(0, start - WINDOW_LEAD_IN);
     const end = Math.min(
       content.length,
       pos + keyword.length + SECRET_CONTEXT_WINDOW_SIZE
@@ -976,12 +1011,19 @@ export function scanContent(
 
     // Only scan the windows, not the entire content
     for (const { text: window, scanFrom } of windows) {
-      // Start matching past the lead-in, which is context for the key only
-      pattern.lastIndex = scanFrom;
+      // Match across the lead-in too: a value can START there and run into the
+      // region proper, and skipping those loses the leak at a window boundary.
+      pattern.lastIndex = 0;
 
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(window)) !== null) {
         const value = match[0];
+
+        // A match that both starts and ends inside the lead-in belongs to the
+        // previous window, which already scanned it. The lead-in is context.
+        if (match.index + value.length <= scanFrom) {
+          continue;
+        }
 
         // Skip duplicates, overlapping rematches, and false positives
         if (
@@ -1006,12 +1048,8 @@ export function scanContent(
         // Bare-shape patterns are the shape of a SHA-256 digest, so the key in
         // front of the value decides: never report under sha256/integrity/
         // checksum/commit/cache, or with no assignment context at all.
-        const before = window.slice(
-          Math.max(0, match.index - SECRET_KEY_LOOKBEHIND_SIZE),
-          match.index
-        );
         const keyContext = classifyKeyContext(
-          before,
+          lookBehind(window, match.index),
           keyword,
           enclosingTag(window, match.index)
         );

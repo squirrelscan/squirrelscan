@@ -17,9 +17,17 @@
 import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
-import { SECRET_CONTEXT_WINDOW_SIZE } from "@squirrelscan/utils/constants";
+import {
+  SECRET_CONTEXT_WINDOW_SIZE,
+  SECRET_KEY_LOOKBEHIND_SIZE,
+} from "@squirrelscan/utils/constants";
 
-import { classifyKeyContext, leakedSecretsRule, scanContent } from "../src/security/leaked-secrets";
+import {
+  classifyKeyContext,
+  leakedSecretsRule,
+  lookBehind,
+  scanContent,
+} from "../src/security/leaked-secrets";
 import type { RuleContext } from "../src/types";
 
 // A real SHA-256 of a release artifact: 64 hex characters, which is also the
@@ -140,6 +148,20 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
     const content = `<p>together</p><meta content="${DIGEST}" name="release-sha256">`;
     expect(scanContent(content, "html")).toEqual([]);
   });
+
+  test("a short key that names something is not a minified member access", () => {
+    // A cache-busting query param and a JSON id are short but they do name
+    // their value, and it is not a credential.
+    const cases = [
+      `<a href="/bundle.js?v=${DIGEST}">built together</a>`,
+      `<script>x={"id":"${DIGEST}",vendor:"together"}</script>`,
+      `<script>x={id:"${DIGEST}",vendor:"together"}</script>`,
+      `<script>x={a:"${DIGEST}",vendor:"together"}</script>`,
+    ];
+    for (const content of cases) {
+      expect(scanContent(content, "html")).toEqual([]);
+    }
+  });
 });
 
 describe("security/leaked-secrets: real credentials still report", () => {
@@ -228,6 +250,36 @@ describe("security/leaked-secrets: real credentials still report", () => {
     expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
   });
 
+  test("a long key beginning past the look-back budget still reports", () => {
+    // End to end version of the look-back test: silent from N+1 before the fix.
+    const N = SECRET_KEY_LOOKBEHIND_SIZE;
+    for (const distance of [N, N + 1, N + 2]) {
+      const key = `key${"Z".padEnd(distance - 2 - "key".length, "z")}`;
+      const content = `;${key}="${TOGETHER_KEY}" // together.ai`; // pragma: allowlist secret
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toContain(
+        TOGETHER_KEY
+      );
+    }
+  });
+
+  test("a value straddling the start of the window is still reported once", () => {
+    // The value begins in the lead-in and runs into the scanned region. Cutting
+    // matching at the region boundary drops it entirely; scanning the lead-in
+    // and requiring the match to reach the region keeps it, exactly once.
+    const straddle = 32;
+    const key = `credential="`;
+    const lead = `${"x".repeat(199)};`;
+    const valueStart = lead.length + key.length;
+    // Put the brand word so the window opens partway through the value.
+    const keywordAt = valueStart + straddle + SECRET_CONTEXT_WINDOW_SIZE;
+    const upto = valueStart + TOGETHER_KEY.length + 1;
+    const filler = "x".repeat(keywordAt - upto);
+    const content = `${lead}${key}${TOGETHER_KEY}"${filler}together.ai`; // pragma: allowlist secret
+
+    const found = scanContent(content, "inline-script");
+    expect(found.map((f) => f.value)).toEqual([TOGETHER_KEY]);
+  });
+
   test("public-by-design client keys stay informational, not leaks", () => {
     const page = html(
       `<script>const cfg={apiKey:"AIzaSyD3mQ8xR2vT7pLnK4hW9cB1sE6yU0zJfXa"};</script>`, // pragma: allowlist secret
@@ -264,13 +316,37 @@ describe("classifyKeyContext", () => {
     expect(classifyKeyContext(`cfg["filename"] = "`, "together")).toBe("none");
   });
 
-  test("a minifier's key is treated as no key, not as a key that failed", () => {
+  test("a minifier's member access is treated as no key at all", () => {
     expect(classifyKeyContext(`t.a = "`, "together")).toBe("assigned");
     expect(classifyKeyContext(`e.x2="`, "together")).toBe("assigned");
-    expect(classifyKeyContext(`n={a:"`, "together")).toBe("assigned");
+    expect(classifyKeyContext(`n["a"]="`, "together")).toBe("assigned");
     // A key long enough to mean something still has to say "credential".
     expect(classifyKeyContext(`filename: "`, "together")).toBe("none");
     expect(classifyKeyContext(`description = "`, "together")).toBe("none");
+  });
+
+  test("a short key that is not a member access still names its value", () => {
+    // Short is not the same as meaningless: these all name something, and what
+    // they name is not a credential.
+    expect(classifyKeyContext(`?v=`, "together")).toBe("none");
+    expect(classifyKeyContext(`&v="`, "together")).toBe("none");
+    expect(classifyKeyContext(`{"id":"`, "together")).toBe("none");
+    expect(classifyKeyContext(`id: "`, "together")).toBe("none");
+    expect(classifyKeyContext(`n={a:"`, "together")).toBe("none");
+  });
+
+  test("a long key is read whole, never cut in half by the look-back", () => {
+    // The credential word sits at the FRONT of the key, so a slice landing one
+    // character inside it decapitates `keyZzz…` into `eyZzz…` and the key stops
+    // meaning anything. Distances N, N+1 and N+2 all have to survive that.
+    const N = SECRET_KEY_LOOKBEHIND_SIZE;
+    for (const distance of [N, N + 1, N + 2]) {
+      const key = `key${"Z".padEnd(distance - 2 - "key".length, "z")}`;
+      const text = `;${key}="`;
+      expect(classifyKeyContext(lookBehind(text, text.length), "together")).toBe(
+        "credential"
+      );
+    }
   });
 
   test("cache keys are digests; bare api is not a credential, bare key still is", () => {
