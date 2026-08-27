@@ -29,7 +29,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   free: {
     id: "free",
     name: "Free",
-    // Recurring calendar-month grant, applied by the `credits:free-monthly-grant`
+    // Recurring grant on the org's signup anniversary, applied by the `credits:free-monthly-grant`
     // scheduler task + instantly at org creation (grantFreeMonthly). NOT
     // Stripe-driven — free orgs have no subscription, so no invoice.paid fires.
     monthlyCredits: 500,
