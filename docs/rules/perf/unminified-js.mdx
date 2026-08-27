@@ -17,7 +17,9 @@ Detects unminified JavaScript that could be optimized
 
 Unminified JavaScript, based on newline ratio, comment volume, identifier length, indentation, and whitespace. Preserved `/*! ... */` and `//!` license banners (the standard "keep on minify" convention used by Terser, esbuild, Vite, and Webpack) are stripped before analysis, so a fully minified bundle that legitimately retains license comments is not flagged.
 
-Comment counting is string aware. The `//` in a URL such as `"https://example.com"`, and comment openers inside template literals and regular expressions, are not counted as comments, so a minified bundle that ships URLs is not reported as unminified with an inflated savings estimate.
+Comment counting is string aware. The `//` in a URL such as `"https://example.com"`, and comment openers inside single-quoted, double-quoted and template literals, are not counted as comments, so a minified bundle that ships URLs is not reported as unminified with an inflated savings estimate.
+
+Regular expression literals are recognised heuristically rather than parsed. A `/` is read as the start of a regex after an operator, after a keyword such as `return` or `typeof`, and after the `)` of an `if`, `while` or `for` head. In rarer positions, such as directly after another `)` or `]`, it is read as division instead, and the regex body is scanned as ordinary code. A regex used directly as the left operand of `/` or `*`, as in `/a/*2`, is also read as division, since dividing or multiplying by a regular expression is not something real code does. Both cases are rare, and neither affects whether ordinary minified output is flagged. Shebang lines (`#!`) and Annex B `<!--` comments are not counted.
 
 ## Solution
 

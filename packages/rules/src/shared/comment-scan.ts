@@ -17,11 +17,6 @@ export interface CommentScan {
 }
 
 // A `/` after one of these keywords opens a regex literal rather than dividing.
-// After an identifier, a literal, `)` or `]` it is treated as division, which is
-// the conservative choice: mistaking a regex for division at worst scans its
-// body as code, while mistaking division for a regex swallows real comments.
-// `if(x)/re/.test(y)` is therefore read as division; that is legal JavaScript but
-// rare enough not to be worth a backwards paren match.
 const REGEX_KEYWORDS = new Set([
   "await",
   "case",
@@ -57,6 +52,24 @@ function isSchemeChar(ch: string): boolean {
   return isIdentPart(ch) || ch === "+" || ch === "-" || ch === ".";
 }
 
+/**
+ * A URL authority starts right after `//`. Testing for a host character rather
+ * than for "not whitespace" avoids depending on an ASCII-only whitespace test,
+ * so `http:// text` is still read as a comment.
+ */
+function isUrlHostStart(ch: string | undefined): boolean {
+  if (ch === undefined) return false;
+  return (
+    (ch >= "a" && ch <= "z") ||
+    (ch >= "A" && ch <= "Z") ||
+    (ch >= "0" && ch <= "9") ||
+    ch === "-" ||
+    ch === "_" ||
+    ch === "[" ||
+    ch === "%"
+  );
+}
+
 // Only these make the `x://` guard fire, so a JS label really named `foo` still
 // gets its `foo:// comment` counted.
 const URL_SCHEMES = new Set(["blob", "data", "file", "ftp", "http", "https", "ws", "wss"]);
@@ -69,17 +82,46 @@ function endsUrlScheme(src: string, colon: number): boolean {
   return URL_SCHEMES.has(src.slice(start + 1, colon).toLowerCase());
 }
 
-function regexCanStartAfter(src: string, lastCode: number): boolean {
+// A `)` closing one of these heads is followed by a statement, so a `/` there
+// opens a regex (`if(ok)/re/.test(s)`). After any other `)` the `/` divides.
+const CONTROL_FLOW_HEADS = new Set(["catch", "for", "if", "while", "with"]);
+// Caps the memory the open-paren stack can be made to hold. Far beyond any real
+// nesting depth, so reaching it means the input is not ordinary JavaScript.
+const PAREN_STACK_LIMIT = 4096;
+
+/** True when the `(` at `open` is the one belonging to an `if`/`while`/`for` head. */
+function opensControlFlowHead(src: string, open: number): boolean {
+  let end = open - 1;
+  while (end >= 0 && isWhitespace(src[end] as string)) end--;
+  let start = end;
+  while (start >= 0 && isIdentPart(src[start] as string)) start--;
+  return CONTROL_FLOW_HEADS.has(src.slice(start + 1, end + 1));
+}
+
+/**
+ * @param controlFlowClose index of the most recent `)` that closed a control
+ * flow head, or -1. Matched forward by the scanner, so parens inside strings,
+ * comments and regex literals never enter the count.
+ */
+function regexCanStartAfter(src: string, lastCode: number, controlFlowClose: number): boolean {
   if (lastCode < 0) return true;
   const ch = src[lastCode] as string;
-  if (ch === ")" || ch === "]" || ch === '"' || ch === "'" || ch === "`") return false;
+  if (ch === '"' || ch === "'" || ch === "`" || ch === "]") return false;
+  // `/` here is the closing delimiter of a regex literal with no flags, or a
+  // division sign; either way the operand is complete, so this `/` divides.
+  if (ch === "/") return false;
+  // `x++ / n` and `x-- / n` divide. A single `+` or `-` is a sign, not a suffix.
+  if ((ch === "+" || ch === "-") && src[lastCode - 1] === ch) return false;
+  if (ch === ")") return lastCode === controlFlowClose;
   if (isIdentPart(ch)) {
     let start = lastCode;
     while (start >= 0 && isIdentPart(src[start] as string)) start--;
     return REGEX_KEYWORDS.has(src.slice(start + 1, lastCode + 1));
   }
   // `}` closes a block far more often than it closes an object literal being
-  // divided, so a `/` after it is read as a regex at statement position.
+  // divided, so a `/` after it is read as a regex at statement position. When
+  // that guess is wrong, skipRegex refuses to close a regex on a comment
+  // opener, so the comment behind it is still counted.
   return true;
 }
 
@@ -119,6 +161,12 @@ function skipRegex(src: string, start: number): number {
     } else if (ch === "[") {
       inClass = true;
     } else if (ch === "/") {
+      // A regex whose closing delimiter is immediately followed by `/` or `*`
+      // would be a regex being divided or multiplied, which is never real code.
+      // `i++ / n // real` is division followed by a comment, so refusing here
+      // keeps the comment countable instead of swallowing it as a regex body.
+      const after = src[i + 1];
+      if (after === "/" || after === "*") return -1;
       return i + 1;
     }
     i++;
@@ -146,6 +194,15 @@ export function scanJsComments(src: string): CommentScan {
   // quadratic on a multi-MB bundle. If nothing could close a regex opened at i,
   // treat the rest of that line as division rather than probing again.
   let noRegexBefore = -1;
+  // Open `(` positions, pushed only in code context, and the index of the most
+  // recent `)` that closed a control flow head. Matching parens forward keeps
+  // this O(1) per paren; walking backwards from each `)` was quadratic. Script
+  // bodies come from crawled pages, so the stack is capped: 5MB of `(` grew RSS
+  // by 131MB unbounded. Past the cap only the depth is tracked, which can lose
+  // one control flow head far past any real nesting.
+  const parens: number[] = [];
+  let parenOverflow = 0;
+  let controlFlowClose = -1;
   let i = 0;
 
   while (i < src.length) {
@@ -181,8 +238,14 @@ export function scanJsComments(src: string): CommentScan {
       if (next === "/") {
         // Backstop for a URL that reached code context anyway, e.g. inside a
         // regex this scanner read as division. A real comment never abuts the
-        // colon of a URL scheme.
-        if (i > 0 && src[i - 1] === ":" && endsUrlScheme(src, i - 1)) {
+        // colon of a URL scheme, and a URL always has a host right after the
+        // slashes, so `http:// text` stays a comment on a label named `http`.
+        if (
+          i > 0 &&
+          src[i - 1] === ":" &&
+          isUrlHostStart(src[i + 2]) &&
+          endsUrlScheme(src, i - 1)
+        ) {
           lastCode = i + 1;
           i += 2;
           continue;
@@ -206,7 +269,7 @@ export function scanJsComments(src: string): CommentScan {
         i = close + 2;
         continue;
       }
-      if (i >= noRegexBefore && regexCanStartAfter(src, lastCode)) {
+      if (i >= noRegexBefore && regexCanStartAfter(src, lastCode, controlFlowClose)) {
         const end = skipRegex(src, i);
         if (end !== -1) {
           lastCode = end - 1;
@@ -231,6 +294,26 @@ export function scanJsComments(src: string): CommentScan {
     if (ch === "`") {
       frames.push({ mode: "code", braceDepth });
       mode = "template";
+      i++;
+      continue;
+    }
+
+    if (ch === "(") {
+      if (parens.length < PAREN_STACK_LIMIT) parens.push(i);
+      else parenOverflow++;
+      lastCode = i;
+      i++;
+      continue;
+    }
+
+    if (ch === ")") {
+      if (parenOverflow > 0) {
+        parenOverflow--;
+      } else {
+        const open = parens.pop();
+        if (open !== undefined && opensControlFlowHead(src, open)) controlFlowClose = i;
+      }
+      lastCode = i;
       i++;
       continue;
     }

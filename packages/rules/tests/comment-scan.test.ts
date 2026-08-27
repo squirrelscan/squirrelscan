@@ -89,6 +89,16 @@ describe("scanJsComments — genuine comments are still counted", () => {
 
   test("the URL-scheme guard does not swallow a comment after a label", () => {
     expect(count("outer:// genuine comment\nfor(;;)break outer;")).toBe(1);
+    // Even a label named after a scheme: a URL has a host right after the
+    // slashes, so anything else there means this is a comment.
+    const src = Array.from({ length: 4 }, (_, i) => `http:// real comment ${i}`).join("\n");
+    const r = scanJsComments(src);
+    expect(r.lineComments).toBe(4);
+    expect(r.commentBytes).toBe((src.match(/\/\/[^\n]*/g) ?? []).join("").length);
+    // The host check must not depend on an ASCII-only whitespace test.
+    expect(count("http:// real comment\n0;")).toBe(1);
+    // A real URL still suppresses the guard.
+    expect(count("var u=x;https://example.com/a\n")).toBe(0);
   });
 
   test("a sourceMappingURL comment is a comment", () => {
@@ -97,6 +107,81 @@ describe("scanJsComments — genuine comments are still counted", () => {
 
   test("an unterminated block comment is not counted, matching the previous regex", () => {
     expect(count("var a=1;/* never closed")).toBe(0);
+  });
+});
+
+// Review round 2 found the regex/division classifier swallowing comments: a `/`
+// read as a regex opener scans forward for a closing `/` and can consume the
+// `//` of a real comment. Each case below is checked against the byte total the
+// old `/\/\/[^\n]*/g` produced, which was correct for these inputs.
+describe("scanJsComments — division is not a regex opener", () => {
+  const x4 = (line: string) => Array.from({ length: 4 }, (_, i) => `${line} ${i}`).join("\n");
+
+  test.each([
+    ["postfix increment", "i++ / n // real"],
+    ["postfix decrement", "i-- / n // real"],
+    ["object literal", "const q = {} / n // real"],
+    ["regex literal with no flags", "var r=/a/ / n // real"],
+  ])("`/` after %s divides, so the comment behind it is still counted", (_label, line) => {
+    const src = x4(line);
+    const r = scanJsComments(src);
+    expect(r.lineComments).toBe(4);
+    expect(r.commentBytes).toBe((src.match(/\/\/[^\n]*/g) ?? []).join("").length);
+  });
+
+  test("a regex is never closed on a comment opener", () => {
+    // `/ n //` is division then a comment, not a regex body ending at the `//`.
+    // A regex being divided or multiplied is not real code, so `//` and `/*`
+    // immediately after a candidate closing slash reject the whole probe.
+    expect(count("x = y / n /* real */ z")).toBe(1);
+  });
+
+  test("`/` after the `)` of a control flow head opens a regex", () => {
+    // The `//` here sits inside a character class, so it is not a comment.
+    for (const head of ["if(ok)", "while(ok)", "for(;;)"]) {
+      expect(count(x4(`${head}/[//]/.test(s);`))).toBe(0);
+    }
+  });
+
+  test("`/` after any other `)` divides", () => {
+    expect(count(x4("var v = f(a) / n // real"))).toBe(4);
+  });
+
+  test("parens inside strings and comments never enter the paren matching", () => {
+    // The `(` lives in a string, so the `)` below belongs to `if(`, not to it.
+    expect(count('if(t("(")) /[//]/.test(s);')).toBe(0);
+  });
+
+  test("the open-paren stack is capped, so unmatched `(` cannot grow memory", () => {
+    const before = process.memoryUsage().heapUsed;
+    expect(count("(".repeat(2_000_000))).toBe(0);
+    // Unbounded, this held one array slot per `(`: ~45MB of heap for 5M parens.
+    expect(process.memoryUsage().heapUsed - before).toBeLessThan(8_000_000);
+  });
+});
+
+// Known, deliberate residuals of treating `/` heuristically instead of parsing.
+// Pinned so a future change makes a considered decision rather than an accident.
+describe("scanJsComments — accepted misreadings", () => {
+  test("a regex used as the left operand of `*` or `/` is read as division", () => {
+    // `/a/*2` is valid JavaScript, and multiplying by a regex is not real code,
+    // so the scanner prefers to keep `/*` and `//` countable as comments.
+    expect(count("const x=/a/*2;// real")).toBe(0);
+    expect(count("const x=/[//]//2;")).toBe(1);
+  });
+
+  test("a regex directly after a non control flow `)` is read as division", () => {
+    expect(count("f(a)/[//]/.test(s);")).toBe(1);
+  });
+});
+
+describe("scanJsComments — deliberately not counted", () => {
+  test("a `#!` shebang is not a comment, matching the old regex", () => {
+    expect(count("#!/usr/bin/env node\nvar a=1;")).toBe(0);
+  });
+
+  test("an Annex B `<!--` HTML-style comment is not counted, matching the old regex", () => {
+    expect(count("<!-- not counted\nvar a=1;")).toBe(0);
   });
 });
 
