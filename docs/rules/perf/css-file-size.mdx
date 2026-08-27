@@ -1,9 +1,15 @@
 ---
 title: "CSS File Size Too Large"
-description: "Checks for CSS files that exceed recommended size limits"
+description: "How large is too large for a CSS file: squirrelscan warns at 150KB per stylesheet, fails at 500KB, and both thresholds are configurable."
 ---
 
 Checks for CSS files that exceed recommended size limits
+
+## How large is too large for a CSS file
+
+squirrelscan warns on any single stylesheet over 150KB and fails the check at 500KB. The measurement is per file, not per page, and it is the size the server actually transfers (`Content-Length`), so a stylesheet served with gzip or brotli is judged on its compressed bytes and both thresholds are configurable below. Compressed CSS above 150KB is unusual outside an unpurged utility framework or a theme that ships every component's styles on every page, which is why the default sits there.
+
+Size matters here more than the download time suggests: CSS is render blocking, so the browser paints nothing until it has fetched and parsed the whole file, and one oversized stylesheet is usually loaded by every page on the site, including the pages that use a fraction of it.
 
 | | |
 |---|---|
