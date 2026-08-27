@@ -17,6 +17,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
+import { SECRET_CONTEXT_WINDOW_SIZE } from "@squirrelscan/utils/constants";
 
 import { classifyKeyContext, leakedSecretsRule, scanContent } from "../src/security/leaked-secrets";
 import type { RuleContext } from "../src/types";
@@ -127,6 +128,18 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
     const content = `<p>bundled together</p>${SRI_TAG}`;
     expect(scanContent(content, "html")).toEqual([]);
   });
+
+  test("a cache key built by hashing its inputs reports nothing", () => {
+    for (const key of ["cacheKey", "cache_key", "cachekey", "cache", "eTag", "eTagKey"]) {
+      const content = `{together:true,${key}:"${DIGEST}"}`;
+      expect(scanContent(content, "inline-script")).toEqual([]);
+    }
+  });
+
+  test("a naming attribute after the value still suppresses a digest", () => {
+    const content = `<p>together</p><meta content="${DIGEST}" name="release-sha256">`;
+    expect(scanContent(content, "html")).toEqual([]);
+  });
 });
 
 describe("security/leaked-secrets: real credentials still report", () => {
@@ -172,6 +185,49 @@ describe("security/leaked-secrets: real credentials still report", () => {
     }
   });
 
+  test("a key written as a bracket access is still read", () => {
+    for (const assignment of [
+      `cfg["apiKey"] = "${TOGETHER_KEY}"; // together`, // pragma: allowlist secret
+      `cfg['x-api-key'] = "${TOGETHER_KEY}"; // together`, // pragma: allowlist secret
+      `cfg["together"] = "${TOGETHER_KEY}"`, // pragma: allowlist secret
+    ]) {
+      const found = scanContent(assignment, "inline-script");
+      expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
+    }
+  });
+
+  test("a minified assignment is still scanned", () => {
+    // `t.a = "…"` is what a bundler leaves behind, and it is exactly where a
+    // leaked key hides. The brand word is elsewhere in the window.
+    const content = `var t={};t.a="${TOGETHER_KEY}";/* together.ai client */`; // pragma: allowlist secret
+    const found = scanContent(content, "inline-script");
+    expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
+  });
+
+  test("a naming attribute after the value is still read", () => {
+    const content = `<meta content="${TOGETHER_KEY}" name="algolia-api-key">`; // pragma: allowlist secret
+    const found = scanContent(content, "html");
+    // Algolia's 32-hex pattern claims the leading half of the value first, so
+    // assert the report, not which pattern's slice of it won.
+    expect(found).not.toEqual([]);
+    expect(TOGETHER_KEY.startsWith(found[0]?.value ?? "\0")).toBe(true);
+  });
+
+  test("a brand word at the far edge of the window still sees the key", () => {
+    // The window opens on the value itself and the key sits in the lead-in, so
+    // this only reports if the extracted window carries look-back context.
+    // No FAST pattern matches `credential=`, so the context tier is on its own.
+    const lead = `${"x".repeat(199)};`;
+    const assignment = `credential="${TOGETHER_KEY}"`; // pragma: allowlist secret
+    const valueStart = lead.length + `credential="`.length;
+    const keywordAt = valueStart + SECRET_CONTEXT_WINDOW_SIZE;
+    const filler = "x".repeat(keywordAt - (lead.length + assignment.length));
+    const content = `${lead}${assignment}${filler}together.ai`;
+
+    const found = scanContent(content, "inline-script");
+    expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
+  });
+
   test("public-by-design client keys stay informational, not leaks", () => {
     const page = html(
       `<script>const cfg={apiKey:"AIzaSyD3mQ8xR2vT7pLnK4hW9cB1sE6yU0zJfXa"};</script>`, // pragma: allowlist secret
@@ -188,28 +244,79 @@ describe("classifyKeyContext", () => {
     expect(classifyKeyContext(`{filename:"x",sha256:"`, "together")).toBe("digest");
     expect(classifyKeyContext(`<code>sha256: `, "together")).toBe("digest");
     expect(classifyKeyContext(`integrity="sha384-`, "together")).toBe("digest");
-    expect(classifyKeyContext(`"x-api-key": "`, "together")).toBe("secret");
-    expect(classifyKeyContext(`api_key = "`, "together")).toBe("secret");
-    expect(classifyKeyContext(`Authorization: Bearer `, "together")).toBe("secret");
-    expect(classifyKeyContext(`together: "`, "together")).toBe("secret");
-    expect(classifyKeyContext(`<td>`, "together")).toBe("unknown");
-    expect(classifyKeyContext(`monkey: "`, "together")).toBe("unknown");
+    expect(classifyKeyContext(`"x-api-key": "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`api_key = "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`Authorization: Bearer `, "together")).toBe("credential");
+    expect(classifyKeyContext(`together: "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`<td>`, "together")).toBe("none");
+    expect(classifyKeyContext(`monkey: "`, "together")).toBe("none");
   });
 
   test("a digest key wins over a credential word in the same key", () => {
     expect(classifyKeyContext(`sha256Key: "`, "together")).toBe("digest");
   });
 
-  test("reads through a value-carrier attribute to the sibling that names it", () => {
-    // <meta name="algolia-api-key" content="…"> keeps the key one attribute back.
-    expect(classifyKeyContext(`<meta name="algolia-api-key" content="`, "algolia")).toBe(
-      "secret",
-    );
-    expect(classifyKeyContext(`<meta name="release-sha256" content="`, "together")).toBe(
-      "digest",
-    );
-    expect(classifyKeyContext(`<meta name="description" content="`, "together")).toBe(
-      "unknown",
-    );
+  test("parses a bracket access as the preceding key", () => {
+    expect(classifyKeyContext(`cfg["apiKey"] = "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`cfg['x-api-key'] = "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`cfg["together"] = "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`cfg["sha256"] = "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`cfg["filename"] = "`, "together")).toBe("none");
+  });
+
+  test("a minifier's key is treated as no key, not as a key that failed", () => {
+    expect(classifyKeyContext(`t.a = "`, "together")).toBe("assigned");
+    expect(classifyKeyContext(`e.x2="`, "together")).toBe("assigned");
+    expect(classifyKeyContext(`n={a:"`, "together")).toBe("assigned");
+    // A key long enough to mean something still has to say "credential".
+    expect(classifyKeyContext(`filename: "`, "together")).toBe("none");
+    expect(classifyKeyContext(`description = "`, "together")).toBe("none");
+  });
+
+  test("cache keys are digests; bare api is not a credential, bare key still is", () => {
+    expect(classifyKeyContext(`cacheKey: "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`cache_key: "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`cachekey: "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`cache: "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`api: "`, "together")).toBe("none");
+    // Deliberate: `key:"…"` is a weak signal but these are medium-confidence
+    // findings, and dropping it costs real detections.
+    expect(classifyKeyContext(`key: "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`api_key: "`, "together")).toBe("credential");
+  });
+
+  test("etag is recognised in lower-camel form", () => {
+    expect(classifyKeyContext(`eTag: "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`eTagKey: "`, "together")).toBe("digest");
+  });
+
+  test("reads the naming attribute of the same tag in either order", () => {
+    const tag = (attrs: string) => `<meta ${attrs}>`;
+    expect(
+      classifyKeyContext(
+        `<meta name="algolia-api-key" content="`,
+        "algolia",
+        tag(`name="algolia-api-key" content="x"`)
+      )
+    ).toBe("credential");
+    // content first, name second — the old look-back could never see this.
+    expect(
+      classifyKeyContext(
+        `<meta content="`,
+        "algolia",
+        tag(`content="x" name="algolia-api-key"`)
+      )
+    ).toBe("credential");
+    expect(
+      classifyKeyContext(`<meta content="`, "together", tag(`content="x" name="release-sha256"`))
+    ).toBe("digest");
+    // Intervening attributes past the 64-char look-back no longer break it.
+    expect(
+      classifyKeyContext(
+        `" data-testid="release-row" content="`,
+        "algolia",
+        tag(`name="algolia-api-key" lang="en" dir="ltr" data-testid="release-row" content="x"`)
+      )
+    ).toBe("credential");
   });
 });
