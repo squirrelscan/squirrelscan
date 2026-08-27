@@ -152,6 +152,28 @@ describe("scanJsComments — division is not a regex opener", () => {
     expect(count('if(t("(")) /[//]/.test(s);')).toBe(0);
   });
 
+  test("a comment between the keyword and its `(` does not hide the head", () => {
+    // The head is decided from the scanner's own token state, so the comment is
+    // already stepped over. Reading the raw source backwards could not cross it,
+    // and counted the `//` inside the character class as a second comment.
+    expect(count("if/*c*/(ok)/[//]/.test(s);")).toBe(1);
+    expect(count("while /*c*/ (x) /[//]/.test(s);")).toBe(1);
+    expect(count("for/*c*/(;;)/[//]/.test(s);")).toBe(1);
+  });
+
+  test.each([
+    ["NBSP", "\u00a0"],
+    ["LINE SEPARATOR", "\u2028"],
+    ["PARAGRAPH SEPARATOR", "\u2029"],
+    ["IDEOGRAPHIC SPACE", "\u3000"],
+    ["BOM", "\ufeff"],
+    ["NARROW NO-BREAK SPACE", "\u202f"],
+  ])("%s between the keyword and its `(` is whitespace, not a token", (_label, space) => {
+    const src = Array.from({ length: 4 }, (_, i) => `if${space}(ok)/[//]/.test(s${i});`).join("\n");
+    // Four of these crossed COMMENT_COUNT_THRESHOLD and flagged comment-free code.
+    expect(count(src)).toBe(0);
+  });
+
   test("the open-paren stack is capped, so unmatched `(` cannot grow memory", () => {
     const before = process.memoryUsage().heapUsed;
     expect(count("(".repeat(2_000_000))).toBe(0);
@@ -172,6 +194,13 @@ describe("scanJsComments — accepted misreadings", () => {
 
   test("a regex directly after a non control flow `)` is read as division", () => {
     expect(count("f(a)/[//]/.test(s);")).toBe(1);
+  });
+
+  test("a regex as the right operand of `/` after `}` is read as division", () => {
+    // `{}` is treated as a closed block, so the `/` after it opens a regex, and
+    // that regex probe stops at the second `/`. More regex arithmetic, and the
+    // same trade as above: `}` at statement position is the common case.
+    expect(count("const x = {} / /[//]/;")).toBe(1);
   });
 });
 

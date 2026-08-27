@@ -44,8 +44,22 @@ function isIdentPart(ch: string): boolean {
   );
 }
 
+// Non-ASCII ECMAScript WhiteSpace and LineTerminator code points: NBSP, OGHAM
+// SPACE MARK, EN QUAD through HAIR SPACE, LINE and PARAGRAPH SEPARATOR, NARROW
+// NO-BREAK SPACE, MEDIUM MATHEMATICAL SPACE, IDEOGRAPHIC SPACE and the BOM.
+// Anything omitted reads as a significant token, which would wrongly separate a
+// keyword from the `(` after it.
+const NON_ASCII_SPACES = new Set([
+  0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009,
+  0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
+]);
+
 function isWhitespace(ch: string): boolean {
-  return ch === " " || ch === "\t" || ch === "\n" || ch === "\r" || ch === "\f" || ch === "\v";
+  if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r" || ch === "\f" || ch === "\v") {
+    return true;
+  }
+  const code = ch.charCodeAt(0);
+  return code > 0x7f && NON_ASCII_SPACES.has(code);
 }
 
 function isSchemeChar(ch: string): boolean {
@@ -89,13 +103,19 @@ const CONTROL_FLOW_HEADS = new Set(["catch", "for", "if", "while", "with"]);
 // nesting depth, so reaching it means the input is not ordinary JavaScript.
 const PAREN_STACK_LIMIT = 4096;
 
-/** True when the `(` at `open` is the one belonging to an `if`/`while`/`for` head. */
-function opensControlFlowHead(src: string, open: number): boolean {
-  let end = open - 1;
-  while (end >= 0 && isWhitespace(src[end] as string)) end--;
-  let start = end;
+/**
+ * The identifier token ending at `identEnd`, but only when it is still the most
+ * recent significant token, i.e. nothing but whitespace and comments has been
+ * consumed since. Reading this from the scanner's own token state rather than
+ * walking backwards over raw source is what lets `if /*c*\/ (x)` and
+ * `if (x)` be recognised: the scanner has already stepped over the comment,
+ * and every flavour of whitespace is skipped in one place.
+ */
+function precedingIdent(src: string, lastCode: number, identEnd: number): string {
+  if (identEnd < 0 || lastCode + 1 !== identEnd) return "";
+  let start = identEnd - 1;
   while (start >= 0 && isIdentPart(src[start] as string)) start--;
-  return CONTROL_FLOW_HEADS.has(src.slice(start + 1, end + 1));
+  return src.slice(start + 1, identEnd);
 }
 
 /**
@@ -200,9 +220,13 @@ export function scanJsComments(src: string): CommentScan {
   // bodies come from crawled pages, so the stack is capped: 5MB of `(` grew RSS
   // by 131MB unbounded. Past the cap only the depth is tracked, which can lose
   // one control flow head far past any real nesting.
-  const parens: number[] = [];
+  // Each entry says whether that `(` opened a control flow head, decided from
+  // token state at push time rather than by re-reading the source behind it.
+  const parens: boolean[] = [];
   let parenOverflow = 0;
   let controlFlowClose = -1;
+  // Index just past the most recent identifier token consumed in code context.
+  let identEnd = -1;
   let i = 0;
 
   while (i < src.length) {
@@ -299,7 +323,8 @@ export function scanJsComments(src: string): CommentScan {
     }
 
     if (ch === "(") {
-      if (parens.length < PAREN_STACK_LIMIT) parens.push(i);
+      const head = CONTROL_FLOW_HEADS.has(precedingIdent(src, lastCode, identEnd));
+      if (parens.length < PAREN_STACK_LIMIT) parens.push(head);
       else parenOverflow++;
       lastCode = i;
       i++;
@@ -309,9 +334,8 @@ export function scanJsComments(src: string): CommentScan {
     if (ch === ")") {
       if (parenOverflow > 0) {
         parenOverflow--;
-      } else {
-        const open = parens.pop();
-        if (open !== undefined && opensControlFlowHead(src, open)) controlFlowClose = i;
+      } else if (parens.pop() === true) {
+        controlFlowClose = i;
       }
       lastCode = i;
       i++;
@@ -340,7 +364,12 @@ export function scanJsComments(src: string): CommentScan {
       continue;
     }
 
-    if (!isWhitespace(ch)) lastCode = i;
+    if (isIdentPart(ch)) {
+      lastCode = i;
+      identEnd = i + 1;
+    } else if (!isWhitespace(ch)) {
+      lastCode = i;
+    }
     i++;
   }
 
