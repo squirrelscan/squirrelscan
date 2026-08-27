@@ -1,6 +1,6 @@
 // Tests for extractors/images.ts - Image extraction
 
-import { extractImages } from "@squirrelscan/parser/extractors";
+import { extractImages, getImagesWithoutAlt } from "@squirrelscan/parser/extractors";
 import { describe, it, expect } from "bun:test";
 import { parseHTML } from "linkedom";
 
@@ -74,6 +74,42 @@ describe("extractImages", () => {
     expect(images[0].alt).toBeNull();
     expect(images[1].alt).toBe("");
     expect(images[2].alt).toBe("Description");
+  });
+
+  it("reads alt case-insensitively, so ALT= is not an absent attribute", () => {
+    // HTML attribute names are case-insensitive, but linkedom preserves the
+    // source case. Reading only "alt" turned ALT="" into a missing attribute
+    // and made images/alt-text report it (squirrelscan/squirrelscan#143).
+    const doc = parseDoc(`
+      <html>
+        <body>
+          <img src="/upper-empty.png" ALT="">
+          <img src="/upper-described.png" ALT="Description">
+          <img src="/mixed.png" Alt="Mixed">
+        </body>
+      </html>
+    `);
+
+    const images = extractImages(doc, baseUrl);
+    expect(images[0].alt).toBe("");
+    expect(images[1].alt).toBe("Description");
+    expect(images[2].alt).toBe("Mixed");
+  });
+
+  it("getImagesWithoutAlt excludes decorative images", () => {
+    const doc = parseDoc(`
+      <html>
+        <body>
+          <img src="/no-alt.png">
+          <img src="/decorative.png" alt="">
+          <img src="/with-alt.png" alt="Description">
+        </body>
+      </html>
+    `);
+
+    expect(getImagesWithoutAlt(doc, baseUrl).map((i) => i.src)).toEqual([
+      `${baseUrl}/no-alt.png`,
+    ]);
   });
 
   it("detects lazy loaded images with loading attribute", () => {
