@@ -407,7 +407,12 @@ export function scanJsComments(src: string): CommentScan {
         ident.prevIsProperty = ident.isProperty;
         ident.prevAdjacent = ident.end >= 0 && lastCode + 1 === ident.end;
         ident.start = i;
-        ident.isProperty = lastCode >= 0 && src[lastCode] === ".";
+        // `.` makes it a member name. `#` makes it a private name, which only
+        // ever appears as `this.#x`, `#x in o` or a `#x = 1` field. Neither
+        // form can be a keyword, and testing `#` on its own also covers
+        // `this. #x`, where a space sits between the dot and the hash.
+        const prev = lastCode >= 0 ? src[lastCode] : "";
+        ident.isProperty = prev === "." || prev === "#";
       }
       lastCode = i;
       ident.end = i + 1;

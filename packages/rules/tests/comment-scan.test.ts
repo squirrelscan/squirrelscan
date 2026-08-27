@@ -243,6 +243,25 @@ describe("scanJsComments — keyword lookup", () => {
     expect(count("obj.typeof /[//]/;")).toBe(1);
   });
 
+  test("a private name is never a keyword", () => {
+    const src = "class C { #return = 1; m() { return this.#return /[/* c */ 1] / 2; } }";
+    const r = scanJsComments(src);
+    expect(r.blockComments).toBe(1);
+    expect(r.commentBytes).toBe("/* c */".length);
+    // A space may sit between the dot and the hash, so the hash alone decides.
+    expect(count("class C { m() { this. #return /[/* c */ 1] / 2; } }")).toBe(1);
+    expect(count("class C { m() { this.#if(x) /[/* c */ 1] / 2; } }")).toBe(1);
+  });
+
+  test("a `#` name outside a class body does not inflate or throw", () => {
+    // Invalid JavaScript, but crawled input is not required to be valid. It is
+    // still a private name shape, so it is not a keyword, and the count matches
+    // what the old regex produced.
+    expect(count("#if(x)/[//]/.test(s);")).toBe(1);
+    expect(count("#x in o;")).toBe(0);
+    expect(count("class C { #count = 0; }")).toBe(0);
+  });
+
   test("real keywords still work after the property fix", () => {
     expect(count(x4("if(x)/[//]/.test(s);"))).toBe(4);
     expect(count("function f(){return /[//]/;}")).toBe(0);
