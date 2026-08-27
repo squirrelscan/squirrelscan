@@ -27,7 +27,10 @@ import {
 } from "@squirrelscan/audit-engine";
 import { computeCost } from "@squirrelscan/core-contracts";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { buildEditorSummaryRequest } from "@squirrelscan/report";
+import {
+  buildEditorSummaryRequest,
+  toEditorSummary,
+} from "@squirrelscan/report";
 import {
   filterRules,
   loadAllRules,
@@ -861,20 +864,22 @@ export async function runCloudEditorSummary(
 
     opts.onProgress?.("cloud: editor's summary");
     const res = await client.editorSummary(request);
+    // A 2xx is not proof of a usable body: the client casts JSON to the response
+    // type without validating it, so a partial rollout / proxy JSON envelope /
+    // truncated body types as valid while missing `prose`. Degrade exactly like
+    // a 5xx (and don't report spend for a summary we're not rendering) rather
+    // than let it through to throw in a renderer after the crawl is paid for.
+    const editorSummary = toEditorSummary(res);
+    if (!editorSummary) {
+      opts.onProgress?.("cloud: editor's summary skipped");
+      logger.debug("editor-summary skipped", "unusable response body");
+      return null;
+    }
     // A digest-cache hit (#1012) is served free — never bill it or report it
     // as spend (same contract as the domain-stats 30-day cache below).
     const credits = res.cached ? 0 : estimate;
     if (credits > 0) opts.onSpend?.(credits);
-    return {
-      editorSummary: {
-        prose: res.prose,
-        bigTicket: res.bigTicket,
-        verdict: res.verdict,
-        model: res.model,
-        generatedAt: res.generatedAt,
-      },
-      credits,
-    };
+    return { editorSummary, credits };
   } catch (error) {
     // Any failure (402 out of credits / auth / network / 5xx / build) →
     // degrade silently (no editor-summary section). Never fails the audit.

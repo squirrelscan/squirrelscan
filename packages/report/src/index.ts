@@ -130,7 +130,10 @@ export {
 export {
   EDITOR_SUMMARY_NOTE,
   buildEditorSummaryRequest,
+  editorSummaryView,
+  toEditorSummary,
   type BuildEditorSummaryRequestOptions,
+  type EditorSummaryView,
 } from "./editor-summary";
 
 // Re-export the persisted editor-summary report type for renderers + consumers.

@@ -9,6 +9,7 @@
 
 import type {
   AuditReport,
+  EditorSummary,
   EditorSummaryCategoryInput,
   EditorSummaryIssueInput,
   EditorSummaryRequest,
@@ -129,5 +130,68 @@ export function buildEditorSummaryRequest(
     topIssues: buildTopIssues(report, SERVICE_LIMITS.editorSummaryMaxIssues),
     ...(opts.delta ? { delta: opts.delta } : {}),
     ...(report.siteMetadata ? { siteProfile: toSiteProfile(report.siteMetadata) } : {}),
+  };
+}
+
+/**
+ * Coerce a cloud editor-summary response body into the report-stored shape, or
+ * null when the body is unusable.
+ *
+ * The cloud client CASTS its JSON to the declared response type without
+ * validating it. That is additive-safe (an unknown extra field is harmless) but
+ * not subtractive-safe: a 2xx body missing `prose` still types as `string` while
+ * being `undefined` at runtime, and the failure then lands far from the fetch,
+ * inside a renderer, after the crawl has already been paid for. Callers treat
+ * null exactly like a 5xx: no editor-summary section, never a throw.
+ *
+ * `prose` IS the section, so a missing or blank one rejects the whole body; the
+ * remaining fields are decorative and are defaulted rather than rejected.
+ */
+export function toEditorSummary(res: unknown): EditorSummary | null {
+  if (!res || typeof res !== "object") return null;
+  const r = res as Partial<Record<keyof EditorSummary, unknown>>;
+  if (typeof r.prose !== "string" || r.prose.trim() === "") return null;
+  return {
+    prose: r.prose,
+    bigTicket: Array.isArray(r.bigTicket)
+      ? r.bigTicket.filter((item): item is string => typeof item === "string")
+      : [],
+    verdict: typeof r.verdict === "string" ? r.verdict : "",
+    model: typeof r.model === "string" ? r.model : "",
+    generatedAt: typeof r.generatedAt === "string" ? r.generatedAt : "",
+  };
+}
+
+/** The already-validated slice every output format renders. */
+export interface EditorSummaryView {
+  /** Prose split on blank lines, trimmed, empties dropped; never empty. */
+  paragraphs: string[];
+  bigTicket: string[];
+  verdict: string;
+  model: string;
+}
+
+/**
+ * Renderer-side guard: normalize a report's stored editor summary into what the
+ * output formats need, or null when there is nothing safe to render.
+ *
+ * Every format goes through here so that none of them dereferences `prose` (or
+ * `bigTicket`) directly. Reports are persisted and re-rendered later, so a
+ * report stored before the fetch-side guard existed can still carry a malformed
+ * summary: the guard has to live at render time too, not only at fetch time.
+ */
+export function editorSummaryView(
+  es: EditorSummary | undefined | null,
+): EditorSummaryView | null {
+  const summary = toEditorSummary(es);
+  if (!summary) return null;
+  return {
+    paragraphs: summary.prose
+      .split(/\n{2,}/)
+      .map((para) => para.trim())
+      .filter(Boolean),
+    bigTicket: summary.bigTicket,
+    verdict: summary.verdict,
+    model: summary.model,
   };
 }
