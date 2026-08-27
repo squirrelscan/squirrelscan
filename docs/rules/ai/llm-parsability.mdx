@@ -1,11 +1,15 @@
 ---
 title: "LLM Parsability"
-description: "Analyzes how well LLMs can parse and understand the content"
+description: "What LLM parsability means: how reliably a language model can extract a page's facts, and how squirrelscan scores it from 0 to 100 per page."
 ---
 
 <Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge** (shared with [Page Type Match](/rules/ai/page-type-match) - both read the same analysis). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
 
 Analyzes how well LLMs can parse and understand the content
+
+## What LLM parsability means
+
+LLM parsability is how reliably a language model can read a page and come away with the right facts: what the page is about, what it claims, and what the reader is meant to do next. It is not the same thing as human readability, and it is not a search ranking factor. It matters because AI search answers, chat assistants, and coding agents quote the pages they parsed cleanly and quietly skip the ones where the real content is tangled up with navigation, banners, and layout text. squirrelscan scores each page from 0 to 100 with a cloud model and treats 70 as the pass mark, on the scale below.
 
 | | |
 |---|---|

@@ -1,9 +1,32 @@
 ---
 title: "Geo Meta Tags"
-description: "Checks for geographic meta tags for local targeting"
+description: "What the geo.placename meta tag is, whether search engines still read it, and how squirrelscan checks geo meta tags on local pages."
 ---
 
 Checks for geographic meta tags for local targeting
+
+## What the geo.placename meta tag is, and whether you still need it
+
+`geo.placename` is a `<meta>` tag naming the city or locality a page is about. It travels with three others: `geo.region` (an ISO 3166-2 country and subdivision code), `geo.position` (`latitude;longitude`), and `ICBM` (the same coordinates, comma separated, named after an old joke about missile targeting). A complete set on a location page looks like this:
+
+```html
+<meta name="geo.region" content="US-CA" />
+<meta name="geo.placename" content="San Francisco" />
+<meta name="geo.position" content="37.7749;-122.4194" />
+<meta name="ICBM" content="37.7749, -122.4194" />
+```
+
+None of them is a web standard. The `geo.*` family was proposed in an [IETF Internet-Draft](https://datatracker.ietf.org/doc/html/draft-daviel-html-geo-tag-07) that expired in 2008 and never became an RFC, and all four names sit in the [WHATWG meta extensions registry](https://wiki.whatwg.org/wiki/MetaExtensions) marked "Proposal". They are a convention that stuck, not a specification any consumer is obliged to honor.
+
+Google is explicit that it does not honor them. Its guidance on [managing multi-regional and multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) says Google "ignores locational `meta` tags (like `geo.position` or `distribution`) or geotargeting HTML attributes". Adding `geo.placename` will not move a page in local search. [LocalBusiness structured data](/rules/schema/local-business), a consistent [NAP](/rules/local/nap-consistency), and a Google Business Profile will.
+
+They are still worth the four lines on a location page. They are machine readable and cost nothing to serve, so a directory crawler or an in-house tool can lift a coordinate without parsing JSON-LD, and keeping them in step with your `LocalBusiness` schema is a free consistency check: if the meta tag names one city and the JSON-LD names another, one of them is wrong.
+
+## What this rule checks
+
+squirrelscan looks for the four tags by name and passes the page as soon as it finds at least one, reporting which ones are present. It does not validate the values, so a stale city name, a bad ISO code, or coordinates in the wrong hemisphere all pass. `ICBM` is matched with that exact uppercase spelling. Severity is `info` and weight is 2/10, the lowest tier squirrelscan scores, because a missing `geo.placename` is not what holds a page back in local search.
+
+The rule is also gated on the site profile: it is skipped, with a visible reason, when a confident profile says the site is not a local business, so a global SaaS product or a blog is never marked down for it.
 
 | | |
 |---|---|
@@ -12,12 +35,6 @@ Checks for geographic meta tags for local targeting
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## What geo.placename is, and whether it still does anything
-
-`geo.placename` is a `<meta>` tag naming the city or locality a page targets, one of a small family alongside `geo.region` (a country-state code), `geo.position` (`latitude;longitude`), and `ICBM`. squirrelscan checks for them, but scores them in its lowest tier: severity `info`, weight 2/10.
-
-That weighting is the answer to whether they still do anything. This rule treats geo meta tags as a supplement to [LocalBusiness structured data](/rules/schema), never a substitute for it, and squirrelscan makes no claim that any particular search engine reads them. They are cheap to add to location-specific landing pages and cost nothing to keep, which is why the rule is `info` rather than a warning, but a missing `geo.placename` is not what is holding a page back in local search. Fix your LocalBusiness schema and NAP consistency first.
 
 ## Solution
 
