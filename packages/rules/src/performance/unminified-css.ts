@@ -3,6 +3,7 @@
 
 import { z } from "zod";
 
+import { scanCssComments } from "../shared/comment-scan";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const optionsSchema = z.object({
@@ -48,12 +49,12 @@ function analyzeCss(css: string): {
     potentialSavings += newlines; // Each newline could be removed
   }
 
-  // Count comments
-  const comments = css.match(/\/\*[\s\S]*?\*\//g) || [];
-  const commentBytes = comments.reduce((sum, c) => sum + c.length, 0);
-  if (comments.length > COMMENT_COUNT_THRESHOLD) {
-    issues.push(`${comments.length} comments`);
-    potentialSavings += commentBytes;
+  // Count comments. #142: string-aware, so a `/*` inside `content: "..."` or a
+  // data URI does not open a comment that swallows to the next `*/`.
+  const comments = scanCssComments(css);
+  if (comments.blockComments > COMMENT_COUNT_THRESHOLD) {
+    issues.push(`${comments.blockComments} comments`);
+    potentialSavings += comments.commentBytes;
   }
 
   // Count whitespace

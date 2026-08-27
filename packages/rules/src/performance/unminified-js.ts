@@ -3,6 +3,7 @@
 
 import { z } from "zod";
 
+import { scanJsComments } from "../shared/comment-scan";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const optionsSchema = z.object({
@@ -62,17 +63,14 @@ function analyzeJs(rawJs: string): {
     potentialSavings += newlines;
   }
 
-  // Count comments
-  const singleLineComments = js.match(/\/\/[^\n]*/g) || [];
-  const multiLineComments = js.match(/\/\*[\s\S]*?\*\//g) || [];
-  const totalCommentCount = singleLineComments.length + multiLineComments.length;
-  const commentBytes =
-    singleLineComments.reduce((sum, c) => sum + c.length, 0) +
-    multiLineComments.reduce((sum, c) => sum + c.length, 0);
+  // Count comments. #142: string-aware, because a plain /\/\/[^\n]*/ match counts
+  // every `"https://..."` in the bundle as a comment running to end of line.
+  const comments = scanJsComments(js);
+  const totalCommentCount = comments.lineComments + comments.blockComments;
 
   if (totalCommentCount > COMMENT_COUNT_THRESHOLD) {
     issues.push(`${totalCommentCount} comments`);
-    potentialSavings += commentBytes;
+    potentialSavings += comments.commentBytes;
   }
 
   // Check for readable variable names (minified typically has single-char vars)

@@ -17,6 +17,8 @@ Detects unminified JavaScript that could be optimized
 
 Unminified JavaScript, based on newline ratio, comment volume, identifier length, indentation, and whitespace. Preserved `/*! ... */` and `//!` license banners (the standard "keep on minify" convention used by Terser, esbuild, Vite, and Webpack) are stripped before analysis, so a fully minified bundle that legitimately retains license comments is not flagged.
 
+Comment counting is string aware. The `//` in a URL such as `"https://example.com"`, and comment openers inside template literals and regular expressions, are not counted as comments, so a minified bundle that ships URLs is not reported as unminified with an inflated savings estimate.
+
 ## Solution
 
 Minify JavaScript to reduce file size and improve load times. Use build tools like Terser, esbuild, or UglifyJS. Most bundlers (Webpack, Vite, Rollup) minify automatically in production. Minification shortens variable names, removes whitespace, and dead code.
