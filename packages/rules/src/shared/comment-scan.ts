@@ -69,7 +69,7 @@ function isSchemeChar(ch: string): boolean {
 /**
  * A URL authority starts right after `//`. Testing for a host character rather
  * than for "not whitespace" avoids depending on an ASCII-only whitespace test,
- * so `http:// text` is still read as a comment.
+ * so `http://<NBSP>text` is still read as a comment.
  */
 function isUrlHostStart(ch: string | undefined): boolean {
   if (ch === undefined) return false;
@@ -104,18 +104,51 @@ const CONTROL_FLOW_HEADS = new Set(["catch", "for", "if", "while", "with"]);
 const PAREN_STACK_LIMIT = 4096;
 
 /**
- * The identifier token ending at `identEnd`, but only when it is still the most
- * recent significant token, i.e. nothing but whitespace and comments has been
- * consumed since. Reading this from the scanner's own token state rather than
- * walking backwards over raw source is what lets `if /*c*\/ (x)` and
- * `if (x)` be recognised: the scanner has already stepped over the comment,
- * and every flavour of whitespace is skipped in one place.
+ * The last two identifier tokens seen in code context. Keeping this as the
+ * scanner walks forward is what lets a comment or any flavour of whitespace sit
+ * between a keyword and what follows it: the scanner has already stepped over
+ * both, so nothing ever re-reads raw source behind the cursor.
  */
-function precedingIdent(src: string, lastCode: number, identEnd: number): string {
-  if (identEnd < 0 || lastCode + 1 !== identEnd) return "";
-  let start = identEnd - 1;
-  while (start >= 0 && isIdentPart(src[start] as string)) start--;
-  return src.slice(start + 1, identEnd);
+interface IdentState {
+  /** Bounds of the most recent identifier token, or -1 when there is none. */
+  start: number;
+  end: number;
+  /** The token is a property name (`obj.if`), so it is never a keyword. */
+  isProperty: boolean;
+  /** The same, for the identifier before it. */
+  prevStart: number;
+  prevEnd: number;
+  prevIsProperty: boolean;
+  /** Only whitespace and comments separated those two identifiers. */
+  prevAdjacent: boolean;
+}
+
+function newIdentState(): IdentState {
+  return {
+    start: -1,
+    end: -1,
+    isProperty: false,
+    prevStart: -1,
+    prevEnd: -1,
+    prevIsProperty: false,
+    prevAdjacent: false,
+  };
+}
+
+/** The keyword immediately before the cursor, or "" when there is not one. */
+function precedingKeyword(src: string, lastCode: number, ident: IdentState): string {
+  if (ident.isProperty || ident.end < 0 || lastCode + 1 !== ident.end) return "";
+  return src.slice(ident.start, ident.end);
+}
+
+/** True when the `(` about to be pushed opens an `if`/`while`/`for`/`for await` head. */
+function opensControlFlowHead(src: string, lastCode: number, ident: IdentState): boolean {
+  const word = precedingKeyword(src, lastCode, ident);
+  if (CONTROL_FLOW_HEADS.has(word)) return true;
+  // `for await (` puts the head keyword one token further back. Plain `await (`
+  // is grouping, so only a preceding `for` promotes it.
+  if (word !== "await" || !ident.prevAdjacent || ident.prevIsProperty) return false;
+  return src.slice(ident.prevStart, ident.prevEnd) === "for";
 }
 
 /**
@@ -123,7 +156,12 @@ function precedingIdent(src: string, lastCode: number, identEnd: number): string
  * flow head, or -1. Matched forward by the scanner, so parens inside strings,
  * comments and regex literals never enter the count.
  */
-function regexCanStartAfter(src: string, lastCode: number, controlFlowClose: number): boolean {
+function regexCanStartAfter(
+  src: string,
+  lastCode: number,
+  controlFlowClose: number,
+  ident: IdentState,
+): boolean {
   if (lastCode < 0) return true;
   const ch = src[lastCode] as string;
   if (ch === '"' || ch === "'" || ch === "`" || ch === "]") return false;
@@ -133,11 +171,8 @@ function regexCanStartAfter(src: string, lastCode: number, controlFlowClose: num
   // `x++ / n` and `x-- / n` divide. A single `+` or `-` is a sign, not a suffix.
   if ((ch === "+" || ch === "-") && src[lastCode - 1] === ch) return false;
   if (ch === ")") return lastCode === controlFlowClose;
-  if (isIdentPart(ch)) {
-    let start = lastCode;
-    while (start >= 0 && isIdentPart(src[start] as string)) start--;
-    return REGEX_KEYWORDS.has(src.slice(start + 1, lastCode + 1));
-  }
+  // A property name is never a keyword, so `obj.return /re/` divides.
+  if (isIdentPart(ch)) return REGEX_KEYWORDS.has(precedingKeyword(src, lastCode, ident));
   // `}` closes a block far more often than it closes an object literal being
   // divided, so a `/` after it is read as a regex at statement position. When
   // that guess is wrong, skipRegex refuses to close a regex on a comment
@@ -210,7 +245,7 @@ export function scanJsComments(src: string): CommentScan {
   // transparent, so they never update it.
   let lastCode = -1;
   // A failed regex probe scans to end of line. Without remembering the failure,
-  // a line such as `x=/\/\/\/…` re-probes at every slash and the scan goes
+  // a line such as `x=/\/\/\/...` re-probes at every slash and the scan goes
   // quadratic on a multi-MB bundle. If nothing could close a regex opened at i,
   // treat the rest of that line as division rather than probing again.
   let noRegexBefore = -1;
@@ -225,8 +260,7 @@ export function scanJsComments(src: string): CommentScan {
   const parens: boolean[] = [];
   let parenOverflow = 0;
   let controlFlowClose = -1;
-  // Index just past the most recent identifier token consumed in code context.
-  let identEnd = -1;
+  const ident = newIdentState();
   let i = 0;
 
   while (i < src.length) {
@@ -293,7 +327,7 @@ export function scanJsComments(src: string): CommentScan {
         i = close + 2;
         continue;
       }
-      if (i >= noRegexBefore && regexCanStartAfter(src, lastCode, controlFlowClose)) {
+      if (i >= noRegexBefore && regexCanStartAfter(src, lastCode, controlFlowClose, ident)) {
         const end = skipRegex(src, i);
         if (end !== -1) {
           lastCode = end - 1;
@@ -323,7 +357,7 @@ export function scanJsComments(src: string): CommentScan {
     }
 
     if (ch === "(") {
-      const head = CONTROL_FLOW_HEADS.has(precedingIdent(src, lastCode, identEnd));
+      const head = opensControlFlowHead(src, lastCode, ident);
       if (parens.length < PAREN_STACK_LIMIT) parens.push(head);
       else parenOverflow++;
       lastCode = i;
@@ -365,8 +399,18 @@ export function scanJsComments(src: string): CommentScan {
     }
 
     if (isIdentPart(ch)) {
+      // `ident.end !== i` means this character opens a new identifier token
+      // rather than continuing the one already being consumed.
+      if (ident.end !== i) {
+        ident.prevStart = ident.start;
+        ident.prevEnd = ident.end;
+        ident.prevIsProperty = ident.isProperty;
+        ident.prevAdjacent = ident.end >= 0 && lastCode + 1 === ident.end;
+        ident.start = i;
+        ident.isProperty = lastCode >= 0 && src[lastCode] === ".";
+      }
       lastCode = i;
-      identEnd = i + 1;
+      ident.end = i + 1;
     } else if (!isWhitespace(ch)) {
       lastCode = i;
     }

@@ -204,6 +204,52 @@ describe("scanJsComments — accepted misreadings", () => {
   });
 });
 
+// Review round 4: the preceding-keyword lookup answered from one identifier
+// token, so a two-word head went unrecognised and a property name was mistaken
+// for a keyword. Both misread the `/` that follows and swallowed or invented a
+// comment. Byte totals are checked against the old regex, which was right here.
+describe("scanJsComments — keyword lookup", () => {
+  const x4 = (line: string) => Array.from({ length: 4 }, (_, i) => `${line} // ${i}`).join("\n");
+
+  test("`for await (` is a control flow head", () => {
+    expect(count("async function f(){for await(const x of xs)/[//]/.test(x);}")).toBe(0);
+    expect(count("async function f(){for await (const x of xs)/[//]/.test(x);}")).toBe(0);
+    // The comment between the two keywords is stepped over, and is the only one.
+    expect(count("async function f(){for/*c*/await(const x of xs)/[//]/.test(x);}")).toBe(1);
+  });
+
+  test("plain `await (` is grouping, so the `/` after it divides", () => {
+    const src = "async function f(){await (x) / 2 // real\n}";
+    const r = scanJsComments(src);
+    expect(r.lineComments).toBe(1);
+    expect(r.commentBytes).toBe("// real".length);
+    expect(count("async function f(){await(x)/[//]/;}")).toBe(1);
+  });
+
+  test.each([
+    ["obj.if", "obj.if(x) /[/* c */ 1] / 2"],
+    ["a?.if", "a?.if(x) /[/* c */ 1] / 2"],
+    ["x.while", "x.while(y) /[/* c */ 1] / 2"],
+  ])("a keyword used as a property name (%s) is not a head", (_label, line) => {
+    const r = scanJsComments(line);
+    expect(r.blockComments).toBe(1);
+    expect(r.commentBytes).toBe("/* c */".length);
+  });
+
+  test("a keyword used as a property name does not open a regex either", () => {
+    // `obj.return` is a member access, so the `/` after it divides and the
+    // `//` inside what follows is a comment, exactly as the old regex had it.
+    expect(count("obj.return /[//]/;")).toBe(1);
+    expect(count("obj.typeof /[//]/;")).toBe(1);
+  });
+
+  test("real keywords still work after the property fix", () => {
+    expect(count(x4("if(x)/[//]/.test(s);"))).toBe(4);
+    expect(count("function f(){return /[//]/;}")).toBe(0);
+    expect(count("var t = typeof /[//]/;")).toBe(0);
+  });
+});
+
 describe("scanJsComments — deliberately not counted", () => {
   test("a `#!` shebang is not a comment, matching the old regex", () => {
     expect(count("#!/usr/bin/env node\nvar a=1;")).toBe(0);
