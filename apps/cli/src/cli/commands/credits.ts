@@ -133,13 +133,13 @@ export const credits = defineCommand({
       // goes. Paid plans get the top-up link, not a plan pitch they're on.
       // An unmetered plan gets NEITHER: there is no balance to top up and no
       // plan above it to sell (see SELF_SERVE_PLAN_IDS).
-      if (unlimited) {
-        // nothing to sell
-      } else if (plan.id === "free") {
-        for (const line of proPitchLines("cli-credits")) console.log(line);
-        console.log(fmt.dim("  Or run `squirrel credits --upgrade`."));
-      } else {
-        console.log(`Top up: ${fmt.cyan(UPGRADE_URL)}`);
+      if (!unlimited) {
+        if (plan.id === "free") {
+          for (const line of proPitchLines("cli-credits")) console.log(line);
+          console.log(fmt.dim("  Or run `squirrel credits --upgrade`."));
+        } else {
+          console.log(`Top up: ${fmt.cyan(UPGRADE_URL)}`);
+        }
       }
     } catch (error) {
       console.error(`Could not fetch balance: ${(error as Error).message}`);

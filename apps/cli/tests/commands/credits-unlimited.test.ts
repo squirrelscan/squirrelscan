@@ -38,11 +38,15 @@ const PRICING = {
   render: { cost: 2, per: 1, unit: "page" },
 };
 
-spyOn(credentialsModule, "warnIfSessionUnreadable").mockImplementation(
-  () => {}
-);
+const warnSpy = spyOn(
+  credentialsModule,
+  "warnIfSessionUnreadable"
+).mockImplementation(() => {});
 
-spyOn(cloudModule, "createCloudClientFromSettings").mockImplementation(
+const cloudClientSpy = spyOn(
+  cloudModule,
+  "createCloudClientFromSettings"
+).mockImplementation(
   () =>
     ({
       getBalance: async () => ({
@@ -63,8 +67,13 @@ const logSpy = spyOn(console, "log").mockImplementation(
   }
 );
 
+// Restore EVERY top-level spy, not just console.log: these patch shared module
+// namespaces, so a leaked credential or cloud-client stub would silently serve a
+// canned balance to any later test file in the same bun process.
 afterAll(() => {
   logSpy.mockRestore();
+  warnSpy.mockRestore();
+  cloudClientSpy.mockRestore();
 });
 
 beforeEach(() => {

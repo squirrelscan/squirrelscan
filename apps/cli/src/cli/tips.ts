@@ -3,32 +3,97 @@
 
 import { COVERAGE_FULL_MAX_PAGES } from "@/constants";
 
-export const TIPS: readonly string[] = [
-  "New rules ship all the time. `squirrel self update` gets you the latest.",
-  "Give your coding agent audit superpowers: `squirrel mcp` is a full MCP server → docs.squirrelscan.com/developers/mcp",
-  "Teach your agent to fix sites: `squirrel skills install` works with Claude Code, Cursor, Codex and friends.",
-  "Something rough? Something great? `squirrel feedback` goes straight to the team.",
-  `This scratches the surface. \`--coverage full\` goes deep: up to ${COVERAGE_FULL_MAX_PAGES} pages.`,
-  "Big site? `--incremental` only re-crawls what changed since your last audit.",
-  "Suspect stale pages? `--refresh` ignores the cache and fetches everything fresh.",
-  '`--format llm` renders the report for agents: pipe it to Claude and say "fix it".',
-  "The fix loop: audit, let your agent fix, re-audit → docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent",
-  "Client-side rendered? Browser rendering audits what browsers (and Google) actually see → docs.squirrelscan.com/guides/browser-rendering",
-  "Pro: scheduled cloud audits watch your sites while you sleep → docs.squirrelscan.com/cloud/scheduled-audits",
-  "Tweaking config? `squirrel analyze` re-runs rules on the stored crawl. No re-crawl needed.",
-  "`squirrel report list` shows every past audit. Re-render any of them in any format.",
-  "Audit this site often? `squirrel init` writes a squirrel.toml so your flags become defaults.",
-  "Run squirrel in CI: `squirrel keys create` mints an org API key → docs.squirrelscan.com/guides/ci",
-  "Weird behavior? `squirrel self doctor` checks your install, auth, and connectivity.",
-  "`squirrel credits` shows your balance and what each cloud feature costs. No surprises.",
-  "Staging behind a login or bot wall? Send custom headers with the crawl → docs.squirrelscan.com/guides/web-bot-auth",
-  "Robots read your site too. The ax rules score agent experience, not just SEO.",
-  "Signed-in audits track every issue across runs in your dashboard. Regressions get caught.",
+interface Tip {
+  text: string;
+  /**
+   * Sells a plan. Only shown to an account that could actually act on it: a
+   * paid account already has the feature, and an unmetered (enterprise) account
+   * cannot buy a plan at all — pitching one there reads as a mis-sold upsell and
+   * leaks an internal plan's existence into a promo.
+   */
+  sales?: boolean;
+}
+
+const ALL_TIPS: readonly Tip[] = [
+  {
+    text: "New rules ship all the time. `squirrel self update` gets you the latest.",
+  },
+  {
+    text: "Give your coding agent audit superpowers: `squirrel mcp` is a full MCP server → docs.squirrelscan.com/developers/mcp",
+  },
+  {
+    text: "Teach your agent to fix sites: `squirrel skills install` works with Claude Code, Cursor, Codex and friends.",
+  },
+  {
+    text: "Something rough? Something great? `squirrel feedback` goes straight to the team.",
+  },
+  {
+    text: `This scratches the surface. \`--coverage full\` goes deep: up to ${COVERAGE_FULL_MAX_PAGES} pages.`,
+  },
+  {
+    text: "Big site? `--incremental` only re-crawls what changed since your last audit.",
+  },
+  {
+    text: "Suspect stale pages? `--refresh` ignores the cache and fetches everything fresh.",
+  },
+  {
+    text: '`--format llm` renders the report for agents: pipe it to Claude and say "fix it".',
+  },
+  {
+    text: "The fix loop: audit, let your agent fix, re-audit → docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent",
+  },
+  {
+    text: "Client-side rendered? Browser rendering audits what browsers (and Google) actually see → docs.squirrelscan.com/guides/browser-rendering",
+  },
+  {
+    text: "Pro: scheduled cloud audits watch your sites while you sleep → docs.squirrelscan.com/cloud/scheduled-audits",
+    // Sells a plan a paid account already has and an unmetered one can never buy.
+    sales: true,
+  },
+  {
+    text: "Tweaking config? `squirrel analyze` re-runs rules on the stored crawl. No re-crawl needed.",
+  },
+  {
+    text: "`squirrel report list` shows every past audit. Re-render any of them in any format.",
+  },
+  {
+    text: "Audit this site often? `squirrel init` writes a squirrel.toml so your flags become defaults.",
+  },
+  {
+    text: "Run squirrel in CI: `squirrel keys create` mints an org API key → docs.squirrelscan.com/guides/ci",
+  },
+  {
+    text: "Weird behavior? `squirrel self doctor` checks your install, auth, and connectivity.",
+  },
+  {
+    text: "`squirrel credits` shows your balance and what each cloud feature costs. No surprises.",
+  },
+  {
+    text: "Staging behind a login or bot wall? Send custom headers with the crawl → docs.squirrelscan.com/guides/web-bot-auth",
+  },
+  {
+    text: "Robots read your site too. The ax rules score agent experience, not just SEO.",
+  },
+  {
+    text: "Signed-in audits track every issue across runs in your dashboard. Regressions get caught.",
+  },
 ] as const;
 
-/** Uniformly random tip. No rotation/persistence — every run is a fresh draw. */
-export function pickTip(): string {
-  return TIPS[Math.floor(Math.random() * TIPS.length)];
+/** Every tip's text, in order. The visible surface, for tests and docs. */
+export const TIPS: readonly string[] = ALL_TIPS.map((tip) => tip.text);
+
+/**
+ * Uniformly random tip. No rotation/persistence — every run is a fresh draw.
+ *
+ * `includeSales` defaults to FALSE: a plan pitch has to be opted into by a
+ * caller that knows the account can act on it, so a caller which forgets to
+ * pass the plan through shows no promo rather than the wrong one.
+ */
+export function pickTip(opts: { includeSales?: boolean } = {}): string {
+  const pool = opts.includeSales
+    ? ALL_TIPS
+    : ALL_TIPS.filter((tip) => !tip.sales);
+  return pool[Math.floor(Math.random() * pool.length)]!.text;
 }
 
 export interface TipVisibilityOptions {

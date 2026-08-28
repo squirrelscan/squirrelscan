@@ -1245,7 +1245,15 @@ export const audit = defineCommand({
           outputPath: options.outputPath,
         })
       ) {
-        console.error(`${fmt.dim(tipLabel())}${pickTip()}`);
+        console.error(
+          `${fmt.dim(tipLabel())}${pickTip({
+            // A plan pitch only goes to someone who could act on it. A paid
+            // account already has the feature being sold, and an unmetered one
+            // cannot buy a plan at all — `unlimitedCredits` is checked as well as
+            // the tier because it is the flag that must never leak an upsell.
+            includeSales: accountPlan !== "paid" && !unlimitedCredits,
+          })}`
+        );
         console.error("");
       }
 
