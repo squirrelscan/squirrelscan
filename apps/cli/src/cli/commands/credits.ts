@@ -3,6 +3,7 @@
 import { defineCommand } from "citty";
 
 import { fmt } from "@/cli/format";
+import { isUnlimitedBalance } from "@/lib/balance";
 import { openBrowser } from "@/lib/browser";
 import { AUDIT_BASE_CREDITS, proPitchLines, upgradeUrl } from "@/lib/upgrade";
 import { warnIfSessionUnreadable } from "@/self/credentials";
@@ -60,25 +61,36 @@ export const credits = defineCommand({
       }
 
       const { balance, plan, pricing } = res;
+      const unlimited = isUnlimitedBalance(balance);
       console.log(`Plan:    ${plan.name}`);
-      console.log(
-        `Balance: ${balance.total} credits` +
-          (balance.monthly > 0
-            ? ` (${balance.monthly} monthly + ${balance.pack} purchased)`
-            : "")
-      );
-      if (balance.periodEnd) {
+      if (unlimited) {
+        // The stored numbers are frozen on an unmetered plan, so printing them
+        // (or the monthly/reset/below-base lines) would describe a balance that
+        // does not govern anything. Usage is still recorded and invoiced.
+        console.log("Balance: unlimited");
         console.log(
-          `         monthly credits reset ${balance.periodEnd.slice(0, 10)}`
+          fmt.dim("         usage is recorded on your account and invoiced")
         );
-      }
-      // A balance under the flat base can buy NOTHING, however positive it
-      // reads. Say so here rather than letting the next `squirrel audit`
-      // silently drop to local-only.
-      if (balance.total < AUDIT_BASE_CREDITS) {
+      } else {
         console.log(
-          `         ${fmt.yellow(`below the ${AUDIT_BASE_CREDITS}-credit audit base — cloud audits can't start`)}`
+          `Balance: ${balance.total} credits` +
+            (balance.monthly > 0
+              ? ` (${balance.monthly} monthly + ${balance.pack} purchased)`
+              : "")
         );
+        if (balance.periodEnd) {
+          console.log(
+            `         monthly credits reset ${balance.periodEnd.slice(0, 10)}`
+          );
+        }
+        // A balance under the flat base can buy NOTHING, however positive it
+        // reads. Say so here rather than letting the next `squirrel audit`
+        // silently drop to local-only.
+        if (balance.total < AUDIT_BASE_CREDITS) {
+          console.log(
+            `         ${fmt.yellow(`below the ${AUDIT_BASE_CREDITS}-credit audit base — cloud audits can't start`)}`
+          );
+        }
       }
       console.log("");
       console.log("Pricing:");
@@ -119,7 +131,11 @@ export const credits = defineCommand({
       console.log("");
       // The free plan is where the wall gets hit, so that is where the offer
       // goes. Paid plans get the top-up link, not a plan pitch they're on.
-      if (plan.id === "free") {
+      // An unmetered plan gets NEITHER: there is no balance to top up and no
+      // plan above it to sell (see SELF_SERVE_PLAN_IDS).
+      if (unlimited) {
+        // nothing to sell
+      } else if (plan.id === "free") {
         for (const line of proPitchLines("cli-credits")) console.log(line);
         console.log(fmt.dim("  Or run `squirrel credits --upgrade`."));
       } else {

@@ -86,7 +86,23 @@ export interface CallOpts {
 
 /** `GET /v1/credits` response. */
 export interface CreditsResponse {
-  balance: { monthly: number; pack: number; total: number; periodEnd: string | null };
+  balance: {
+    monthly: number;
+    pack: number;
+    total: number;
+    periodEnd: string | null;
+    /**
+     * The org's plan is not metered against this balance: usage is recorded in
+     * the ledger and invoiced out of band, and no debit is ever refused. The
+     * raw numbers above stay whatever the frozen balance holds — read this
+     * flag, never `total`, to decide whether the org can afford something.
+     *
+     * OPTIONAL on purpose: servers older than the enterprise plan omit it, and
+     * an absent value must read as `false` (metered). Use `isUnlimitedBalance`
+     * rather than testing it directly.
+     */
+    unlimited?: boolean;
+  };
   plan: PlanDefinition;
   pricing: Record<CreditFeature, CreditPrice>;
   pricingVersion: number;
