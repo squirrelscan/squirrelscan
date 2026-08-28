@@ -14,9 +14,11 @@ import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { describe, expect, test } from "bun:test";
 
 import {
+  canStartCloudAudit,
   computePreflightAffordability,
   consentEstimateLine,
   lowBalanceFooterLines,
+  registerFailureLines,
 } from "../../src/cli/commands/audit";
 import { renderConcurrencyUpsellHint } from "../../src/controllers/audit";
 import {
@@ -169,6 +171,81 @@ describe("consentEstimateLine on an unmetered plan", () => {
       maxCredits: 0,
     });
     expect(line).toContain("Balance: 1,234 credits.");
+  });
+});
+
+describe("canStartCloudAudit — the local-only degrade gate", () => {
+  // #1588's failure mode, reproduced on a healthy account: an unmetered org's
+  // stored total is frozen at 0, so a numeric comparison drops EVERY run to
+  // local-only (exit 0, no register, no publish) and every cloud assertion
+  // downstream fails for a reason unrelated to what it is testing.
+  test("an unmetered account can always start, at any frozen total", () => {
+    for (const total of [0, 1, AUDIT_BASE - 1]) {
+      expect(canStartCloudAudit({ total, unlimited: true })).toBe(true);
+    }
+  });
+
+  test("a metered account still needs the full audit base (control)", () => {
+    expect(canStartCloudAudit({ total: AUDIT_BASE })).toBe(true);
+    expect(canStartCloudAudit({ total: AUDIT_BASE - 1 })).toBe(false);
+    expect(canStartCloudAudit({ total: 0 })).toBe(false);
+  });
+
+  test("an absent or false flag is metered", () => {
+    expect(canStartCloudAudit({ total: 0, unlimited: false })).toBe(false);
+    expect(canStartCloudAudit({ total: 0, unlimited: undefined })).toBe(false);
+  });
+});
+
+describe("registerFailureLines on an unmetered account", () => {
+  const outOfCredits = {
+    code: "INSUFFICIENT_CREDITS" as const,
+    message: "Out of credits",
+    balance: 0,
+  };
+
+  // An unmetered account cannot genuinely run out, so this code can only mean
+  // the server disagrees with the preflight (a stale deploy, or a plan change
+  // mid-run). Pitching Pro at a contracted customer is wrong on its own, and it
+  // also leaks the existence of an internal plan into a sales pitch.
+  test("never pitches Pro, prices or an upgrade URL", () => {
+    const lines = text(registerFailureLines(outOfCredits, true));
+    expect(lines).not.toContain("Pro:");
+    expect(lines).not.toContain("$19");
+    expect(lines).not.toContain("squirrelscan.com/upgrade");
+    expect(lines).not.toContain("You have 0 credits");
+  });
+
+  test("says what actually happened, including that the server may be stale", () => {
+    const lines = text(registerFailureLines(outOfCredits, true));
+    expect(lines).toContain("unmetered");
+    expect(lines).toContain("older build");
+    // The run itself still succeeded locally; a warning that reads like a
+    // failure is the thing this copy exists to avoid.
+    expect(lines).toContain("results below are complete");
+  });
+
+  test("a metered account still gets the full offer (control)", () => {
+    const lines = text(registerFailureLines(outOfCredits));
+    expect(lines).toContain("Pro:");
+    expect(lines).toContain("You have 0 credits");
+  });
+
+  test("the flag defaults to metered when omitted", () => {
+    expect(text(registerFailureLines(outOfCredits))).toContain("Pro:");
+  });
+
+  test("a non-credit failure is unchanged on both plans", () => {
+    const limit = {
+      code: "WEBSITE_LIMIT" as const,
+      message: "at your website limit",
+      balance: null,
+    };
+    for (const unlimited of [true, false]) {
+      const lines = text(registerFailureLines(limit, unlimited));
+      expect(lines).toContain("at your website limit");
+      expect(lines).not.toContain("Pro:");
+    }
   });
 });
 

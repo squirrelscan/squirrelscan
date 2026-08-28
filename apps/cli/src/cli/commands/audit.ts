@@ -216,9 +216,28 @@ export function computePreflightAffordability(opts: {
  *
  * Exported for tests. Returns plain lines; the caller does the printing.
  */
-export function registerFailureLines(failure: RegisterFailure): string[] {
+export function registerFailureLines(
+  failure: RegisterFailure,
+  /**
+   * The account's plan is not metered. An unmetered account CANNOT genuinely be
+   * out of credits, so this code can only mean the server disagrees with what
+   * the preflight told us: a stale deploy, or a plan change mid-run. Report that
+   * honestly instead of pitching Pro at someone on a contracted plan, which is
+   * both wrong and leaks an internal plan's existence into a sales pitch.
+   */
+  unlimited = false
+): string[] {
   if (failure.code !== "INSUFFICIENT_CREDITS") {
     return [`⚠ Run not tracked in your dashboard: ${failure.message}`];
+  }
+  if (unlimited) {
+    return [
+      fmt.yellow(
+        "⚠ Run not tracked in your dashboard: the server refused it as"
+      ),
+      `  ${fmt.yellow("insufficient credits, but this account is unmetered.")}`,
+      `  ${fmt.dim("The server may be running an older build. The audit itself ran locally and its results below are complete.")}`,
+    ];
   }
   const balanceLine =
     failure.balance != null
@@ -234,6 +253,32 @@ export function registerFailureLines(failure: RegisterFailure): string[] {
     `  ${fmt.dim("The audit itself ran locally and its results below are complete.")}`,
     ...proPitchLines("cli-audit"),
   ];
+}
+
+/**
+ * Can this signed-in account start a CLOUD audit, given its balance preflight?
+ *
+ * Pricing v10 (#391): every cloud audit debits a flat base at registration, so a
+ * balance below it cannot start one and the run drops to local-only (no
+ * register, no cloud calls, no publish) rather than letting the server 402 the
+ * register mid-crawl.
+ *
+ * An unmetered plan is EXEMPT. Its stored total is frozen and usually 0, and the
+ * server records the debit rather than deducting it, so comparing the number
+ * here would silently drop an enterprise org to local-only on every run: #1588's
+ * failure mode (eleven nights of anonymous audits misread as a rule regression)
+ * reproduced on a perfectly healthy account.
+ *
+ * Extracted from the command body so this branch is unit-testable. The inline
+ * version could only be reached by running a full audit, which is exactly why a
+ * missing flag check here would go unnoticed.
+ */
+export function canStartCloudAudit(balance: {
+  total: number;
+  unlimited?: boolean;
+}): boolean {
+  if (isUnlimitedBalance(balance)) return true;
+  return balance.total >= computeCost("audit_base", 1);
 }
 
 /** Warn once the balance drops below this share of the plan's monthly grant. */
@@ -958,7 +1003,7 @@ export const audit = defineCommand({
           // silently drop an enterprise org to local-only every run (#1588 is
           // the same failure mode with a real empty balance).
           const auditBase = computeCost("audit_base", 1);
-          if (!unlimitedCredits && balance.total < auditBase) {
+          if (!canStartCloudAudit(balance)) {
             kv(
               "Account",
               `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${auditBase}-credit audit base, running local-only`)} · upgrade: ${fmt.cyan(upgradeUrl("cli-audit"))}`
@@ -1642,7 +1687,11 @@ export const audit = defineCommand({
       // which used to be swallowed silently. Progress is stopped by now (finally
       // above), so this prints cleanly.
       if (registerWarning && !registeredRun) {
-        for (const line of registerFailureLines(registerWarning)) log(line);
+        for (const line of registerFailureLines(
+          registerWarning,
+          unlimitedCredits
+        ))
+          log(line);
       }
 
       // Handle errors
