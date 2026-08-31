@@ -487,11 +487,13 @@ export function capChecksForPublish(checks: CheckResult[], maxChecks: number): C
  * nothing downstream can tell it happened — the array already fits under the
  * cap by the time it reaches the schema, so `collectCheckTruncations`' count
  * check never trips. #1503: that made the loss invisible. The last kept check
- * now carries `details.checksTruncated` = the pre-slice array length, the same
- * "true pre-clip total" contract as `details.pagesTruncated`, so the drop is
- * recorded in the payload rather than inferred from nothing. Preserved-if-larger
- * for the same reason `pagesTruncated` is: a second cap pass over an
- * already-capped array must not overwrite the bigger original total.
+ * now carries `details.checksTruncated` — the pre-slice length reconciled with
+ * any total an earlier cap already recorded ({@link maxChecksTruncated}) — the
+ * same "true pre-clip total" contract as `details.pagesTruncated`, so the drop
+ * is recorded in the payload rather than inferred from nothing.
+ * Preserved-if-larger for the same reason `pagesTruncated` is: a second cap
+ * pass over an already-capped array must not overwrite the bigger original
+ * total with its own smaller one.
  *
  * In practice these arrays rarely exceed `maxChecks` (this is a last-resort
  * safety net, not the primary #1003 producer) — `pages[].checks` runs closest,
