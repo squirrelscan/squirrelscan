@@ -19,7 +19,7 @@ import type {
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type { Config } from "@squirrelscan/config";
-import { buildEditorSummaryRequest } from "@squirrelscan/report/editor-summary";
+import { buildEditorSummaryRequest, toEditorSummary } from "@squirrelscan/report/editor-summary";
 import { filterRules, loadAllRules, type RuleCloudSpec } from "@squirrelscan/rules";
 import { getHostname, getOrigin, getPathname, hasUnsafeUrlScheme } from "@squirrelscan/utils/url";
 
@@ -503,16 +503,11 @@ export async function runContainerEditorSummary(input: {
   if (input.remainingBudget < credits) return null;
   try {
     const res = await client.editorSummary(buildEditorSummaryRequest(report, { auditId }));
-    return {
-      editorSummary: {
-        prose: res.prose,
-        bigTicket: res.bigTicket,
-        verdict: res.verdict,
-        model: res.model,
-        generatedAt: res.generatedAt,
-      },
-      credits,
-    };
+    // Same guard as the CLI path: a 2xx body is cast, not validated, so one that
+    // is missing `prose` has to degrade here instead of throwing in a renderer.
+    const editorSummary = toEditorSummary(res);
+    if (!editorSummary) return null;
+    return { editorSummary, credits };
   } catch {
     return null;
   }

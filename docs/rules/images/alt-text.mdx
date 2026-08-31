@@ -1,9 +1,9 @@
 ---
 title: "Image Alt Text"
-description: "Validates image alt attributes"
+description: "Checks that every image carries an alt attribute, counting an empty alt as a decorative marker"
 ---
 
-Validates image alt attributes
+Checks that every image carries an alt attribute, counting an empty alt as a decorative marker
 
 | | |
 |---|---|
@@ -15,7 +15,25 @@ Validates image alt attributes
 
 ## Solution
 
-Alt text describes images for screen readers and displays when images fail to load. It's essential for accessibility and helps with image search SEO. Add descriptive alt text to all meaningful images. Keep it concise (under 125 characters) but descriptive. For decorative images, use empty alt="" to indicate they should be skipped by screen readers. Avoid keyword stuffing in alt text.
+Alt text describes images for screen readers and displays when images fail to load. It is essential for accessibility and helps with image search SEO. Add descriptive alt text to every image that carries information, keeping it concise (under 125 characters) and free of keyword stuffing. An image that is purely decorative should carry an empty alt attribute (alt="") instead: that is the correct markup for "skip me" and this rule accepts it. Only an image with no alt attribute at all is reported here.
+
+## What counts as missing
+
+| Markup | Reported |
+|---|---|
+| `<img src="photo.jpg" alt="A red barn">` | No |
+| `<img src="divider.svg" alt="">` | No, this is a decorative image |
+| `<img src="photo.jpg">` | Yes, the alt attribute is absent |
+
+A decorative image is one that carries no information the surrounding text does
+not already give: a spacer, a background flourish, or an icon sitting beside a
+label that already names it. Giving such an image invented alt text makes the
+page worse for screen reader users, which is why `alt=""` is the right answer
+and why this rule accepts it.
+
+If an `alt=""` image is the only content of a link, the link itself has no
+accessible name. That is a real defect, and [`a11y/link-text`](/rules/a11y/link-text)
+reports it.
 
 ## Enable / disable
 

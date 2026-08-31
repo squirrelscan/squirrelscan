@@ -300,9 +300,10 @@ export function reconstructReport(
           summary.thinContentPages.push(page.normalizedUrl);
       }
 
-      // Check missing alt text
+      // Check missing alt text. alt="" is the correct markup for a decorative
+      // image (HTML spec, WCAG H67), so only an absent attribute counts (#143).
       for (const imgAppearance of pageImageAppearances) {
-        if (!imgAppearance.alt || imgAppearance.alt.trim() === "") {
+        if (imgAppearance.alt === undefined || imgAppearance.alt === null) {
           summary.missingAltText.push({
             page: page.normalizedUrl,
             image: imgAppearance.src,

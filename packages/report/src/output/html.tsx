@@ -35,7 +35,7 @@ import {
   checkCarriedLabel,
   ruleCarriedRollupLine,
 } from "../coverage";
-import { EDITOR_SUMMARY_NOTE } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
 import { DOMAIN_STATS_NOTE, domainStatRows, allPositionBands } from "../domain-stats";
 import { CACHE_STATS_NOTE, cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
 import { formatBytes, formatHumanDateTime, sanitizeUrl } from "../utils";
@@ -1118,12 +1118,9 @@ function screenshotImgSrc(report: AuditReport): string | null {
 }
 
 function EditorSummarySection({ report }: { report: AuditReport }) {
-  const es = report.editorSummary;
+  const es = editorSummaryView(report.editorSummary);
   if (!es) return null;
-  const paragraphs = es.prose
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const paragraphs = es.paragraphs;
   return (
     <div className="editor-summary-section">
       <h2>Editor&apos;s summary</h2>
