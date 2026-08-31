@@ -7,6 +7,8 @@ import type { SitemapData } from "@squirrelscan/core-contracts";
 
 import { flattenJsonLdNodes, normalizeUrl } from "@squirrelscan/utils";
 
+import { documentTypes, isArticleType, schemaDateString } from "../shared/schema-document";
+
 const MS_PER_DAY = 86_400_000;
 
 // Findings are capped so a site whose whole sitemap is build-stamped reports a
@@ -41,22 +43,48 @@ function parseDate(value: string | null | undefined): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** The `dateModified` carried by any JSON-LD node (including `@graph` children). */
+const isUsableDate = (value: string): boolean => parseDate(value) !== null;
+
+/**
+ * The `dateModified` of the JSON-LD node that describes THIS DOCUMENT.
+ *
+ * Nodes for things the page merely mentions are ignored: a sitewide
+ * `WebSite`/`Organization` node carries its own stale `dateModified`, and Yoast
+ * and Rank Math emit it FIRST in `@graph`, ahead of the `Article`. Reading the
+ * first dated node made the verdict depend on `@graph` order — the same trap
+ * `content/date-agreement` guards with the shared `documentTypes` (#1570).
+ *
+ * Selection is position-independent: an Article-family node wins wherever it
+ * sits, since the post's own node speaks for the content, and a node claiming
+ * both (`["WebPage", "BlogPosting"]`) counts as the article whichever half was
+ * written first. Among nodes of one kind the first with a USABLE `dateModified`
+ * wins; unparseable values are skipped while scanning rather than returned, so a
+ * malformed date cannot hide a good one later in the graph or later in the same
+ * node's date list. When no document node carries a usable date the answer is
+ * null, and the caller falls through to the page's own visible date signals
+ * rather than borrowing a sitewide one.
+ */
 function schemaDateModified(parsed: ParsedPage): string | null {
   if (!parsed.schema?.raw) return null;
+  let pageLevel: string | null = null;
   // Flattened nodes include @graph children — a top-level-only read misses every
   // date on Yoast-style sites (same reason eeat/content-dates flattens).
   for (const node of flattenJsonLdNodes(parsed.schema.raw)) {
-    const value = node["dateModified"];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    const types = documentTypes(node);
+    if (types.length === 0) continue;
+    const value = schemaDateString(node["dateModified"], isUsableDate);
+    if (!value) continue;
+    if (types.some(isArticleType)) return value;
+    pageLevel ??= value;
   }
-  return null;
+  return pageLevel;
 }
 
 /**
- * The page's strongest own date signal: schema `dateModified`, else the
- * `dateModified`-equivalent markup the parser lifts from `[itemprop=dateModified]`
- * meta/`<time>` (`visibleDateModified`), else the visible published date.
+ * The page's strongest own date signal: the document node's schema
+ * `dateModified`, else the `dateModified`-equivalent markup the parser lifts from
+ * `[itemprop=dateModified]` meta/`<time>` (`visibleDateModified`), else the
+ * visible published date.
  *
  * Only parsed-page SCALARS are read — never `parsed.document` — so the rule sees
  * the same input on the legacy `site.pages` path and on the streaming path, where
@@ -194,9 +222,11 @@ export const sitemapLastmodDriftRule: Rule = {
 
       comparedPages++;
 
-      // Magnitude only — direction is read off the comparison below. Whole days,
-      // so a same-day (and any sub-threshold) difference can never warn.
-      const deltaDays = Math.round(Math.abs(pageDate.ms - lastmodMs) / MS_PER_DAY);
+      // Magnitude only — direction is read off the comparison below. Truncated,
+      // not rounded: rounding moved the real thresholds half a day past the
+      // documented ones (a 7.5-day gap warned, and was quoted back to the user
+      // as "8 day(s)" under a message reading "more than 7 day(s)").
+      const deltaDays = Math.floor(Math.abs(pageDate.ms - lastmodMs) / MS_PER_DAY);
       const drift: Drift = {
         url: page.url,
         lastmod,
