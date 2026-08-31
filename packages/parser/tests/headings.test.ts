@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "../src/dom";
 
 import { parsePage } from "../src/index";
 import { extractHeadings } from "../src/extractors/headings";

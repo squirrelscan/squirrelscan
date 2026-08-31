@@ -6,7 +6,7 @@
 // replacement) must come back clean, or the rule libels the sites using them.
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { hiddenTextRule, parseColor, parseLengthPx } from "../src/content/hidden-text";
 import type { ParsedPage, RuleContext } from "../src/types";

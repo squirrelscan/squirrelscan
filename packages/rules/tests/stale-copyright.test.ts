@@ -4,7 +4,7 @@
 // year and fail every 1 January, which is the worst possible time to learn about it.
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { latestCopyrightYear, staleCopyrightRule } from "../src/content/stale-copyright";
 import type { ParsedPage, RuleContext } from "../src/types";

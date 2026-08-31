@@ -1,5 +1,5 @@
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
 
 import {
   getAttrCI,

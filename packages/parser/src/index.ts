@@ -1,6 +1,6 @@
 // @squirrelscan/parser - HTML parsing and extraction
 
-import { parseHTML } from "linkedom";
+import { parseHTML } from "./dom";
 
 export {
   parsePage,

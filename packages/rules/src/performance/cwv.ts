@@ -1,6 +1,8 @@
 // Core Web Vitals static hints checker
-import { parseHTML, type Document } from "linkedom";
 // Analyzes HTML for performance indicators without runtime measurement
+import type { Document } from "linkedom";
+
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import type { CheckResult, CWVHints } from "@squirrelscan/core-contracts";
 

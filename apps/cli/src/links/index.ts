@@ -1,8 +1,8 @@
 // Internal link analysis - crawl depth, orphan pages, link equity
 // Phase 4 enhancement for comprehensive link analysis
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { shouldSkipUrl } from "@squirrelscan/utils";
-import { parseHTML } from "linkedom";
 
 import type {
   CheckResult,

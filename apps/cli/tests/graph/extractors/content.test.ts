@@ -5,13 +5,13 @@
 // tests pin the exact exclusion semantics (tags, aria-hidden, sr-only classes),
 // comment handling, and whitespace preservation.
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   extractContent,
   getCleanTextContent,
   getMainContent,
 } from "@squirrelscan/parser/extractors";
 import { describe, it, expect } from "bun:test";
-import { parseHTML } from "linkedom";
 
 function parseDoc(html: string) {
   return parseHTML(html).document;

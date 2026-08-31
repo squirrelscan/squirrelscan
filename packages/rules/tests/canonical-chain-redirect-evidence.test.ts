@@ -9,7 +9,7 @@
 // from the field report.
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import type { RedirectChain, RedirectHop } from "@squirrelscan/core-contracts";
 import type { RuleContext } from "../src/types";

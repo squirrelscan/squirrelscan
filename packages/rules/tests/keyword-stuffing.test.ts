@@ -4,7 +4,7 @@
 // density check on ordinary pages. Real prose stuffing must still flag.
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { keywordStuffingRule } from "../src/content/keyword-stuffing";
 import type { ParsedPage, RuleContext } from "../src/types";

@@ -1,11 +1,11 @@
 // Tests for extractors/images.ts - Image extraction
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   extractImages,
   getImagesWithoutAlt,
 } from "@squirrelscan/parser/extractors";
 import { describe, it, expect } from "bun:test";
-import { parseHTML } from "linkedom";
 
 function parseDoc(html: string) {
   return parseHTML(html).document;
