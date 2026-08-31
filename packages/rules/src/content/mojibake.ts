@@ -2,7 +2,7 @@
 
 import { getAttrCI, querySelectorByAttrValueCI } from "@squirrelscan/utils";
 
-import { getTextExcludingScripts } from "./text-content";
+import { getProseTextExcludingCode } from "./text-content";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
@@ -138,9 +138,12 @@ export const mojibakeRule: Rule = {
       return { checks };
     }
 
-    // Visible text only, never raw HTML: a `&amp;nbsp;` in an attribute or an
-    // encoded sequence inside a <script> is not something a reader ever sees.
-    const text = getTextExcludingScripts(body);
+    // Prose only, never raw HTML: a `&amp;nbsp;` in an attribute or an encoded
+    // sequence inside a <script> is not something a reader ever sees. Code-like
+    // elements are excluded for the opposite reason — a reader DOES see them, but
+    // <code>â€™</code> is a page quoting the sequence on purpose, not a page whose
+    // bytes are broken. Without this the rule fires on its own documentation.
+    const text = getProseTextExcludingCode(body);
     const found = findMojibake(text);
 
     if (found.length === 0) {

@@ -24,6 +24,8 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 
+import type { PreflightBalance } from "@/lib/balance";
+
 import {
   fetchResourceAssets,
   runRulesOnStorage,
@@ -67,6 +69,7 @@ import {
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
+import { preflightBalanceOf } from "@/lib/balance";
 import { reconstructReport } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
@@ -153,7 +156,7 @@ export interface RunAuditOptions extends AuditOptions {
    */
   confirmCloudSpend?: (
     estimatedCredits: number,
-    balance: number
+    balance: PreflightBalance
   ) => Promise<boolean>;
   /** User accepted the cost-disclosing consent prompt under a cap → skip the
    * post-crawl prefetch confirm. Uncapped spend (dead-links) is still gated. */
@@ -1137,7 +1140,8 @@ export async function runAudit(
           auditId: crawlId,
           siteContext,
           getBalance: deadLinksClient
-            ? async () => (await deadLinksClient.getBalance()).balance.total
+            ? async () =>
+                preflightBalanceOf((await deadLinksClient.getBalance()).balance)
             : undefined,
           confirm: options.confirmCloudSpend,
           onSpend: (units, credits) => {
@@ -1262,7 +1266,8 @@ export async function runAudit(
           siteContext,
           scripts: assets.scripts,
           getBalance: techClient
-            ? async () => (await techClient.getBalance()).balance.total
+            ? async () =>
+                preflightBalanceOf((await techClient.getBalance()).balance)
             : undefined,
           confirm: options.confirmCloudSpend,
           onProgress: (detail) => onProgress({ phase: "cloud", detail }),
@@ -1475,7 +1480,8 @@ export async function runAudit(
           auditId: crawlId,
           report,
           getBalance: summaryClient
-            ? async () => (await summaryClient.getBalance()).balance.total
+            ? async () =>
+                preflightBalanceOf((await summaryClient.getBalance()).balance)
             : undefined,
           confirm: options.confirmCloudSpend,
           onProgress: (detail) => onProgress({ phase: "cloud", detail }),
@@ -1509,7 +1515,8 @@ export async function runAudit(
           auditId: crawlId,
           baseUrl: url,
           getBalance: statsClient
-            ? async () => (await statsClient.getBalance()).balance.total
+            ? async () =>
+                preflightBalanceOf((await statsClient.getBalance()).balance)
             : undefined,
           confirm: options.confirmCloudSpend,
           onProgress: (detail) => onProgress({ phase: "cloud", detail }),

@@ -8,7 +8,7 @@ import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import {
   carriedTag,
@@ -101,16 +101,14 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push("");
 
   // Editor's summary — report-only (Pro exec-email narrative), surfaced first.
-  if (report.editorSummary) {
-    const es = report.editorSummary;
+  const es = editorSummaryView(report.editorSummary);
+  if (es) {
     lines.push("## Editor's Summary");
     lines.push("");
     lines.push(`_${EDITOR_SUMMARY_NOTE}_`);
     lines.push("");
-    for (const para of es.prose.split(/\n{2,}/)) {
-      const trimmed = para.trim();
-      if (!trimmed) continue;
-      lines.push(trimmed);
+    for (const para of es.paragraphs) {
+      lines.push(para);
       lines.push("");
     }
     if (es.bigTicket.length > 0) {
