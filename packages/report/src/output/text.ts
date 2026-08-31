@@ -9,7 +9,7 @@ import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import {
   carriedTag,
@@ -104,16 +104,14 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
 
   // Editor's summary — report-only (Pro exec-email narrative; not part of the score).
   // Surfaced at the very top of the report, before the health score.
-  if (report.editorSummary) {
-    const es = report.editorSummary;
+  const es = editorSummaryView(report.editorSummary);
+  if (es) {
     write("EDITOR'S SUMMARY");
     write("-".repeat(40));
     write(EDITOR_SUMMARY_NOTE);
     write("");
-    for (const para of es.prose.split(/\n{2,}/)) {
-      const trimmed = para.trim();
-      if (!trimmed) continue;
-      for (const line of wrapText(trimmed, REPORT_TEXT_WRAP_WIDTH)) write(line);
+    for (const para of es.paragraphs) {
+      for (const line of wrapText(para, REPORT_TEXT_WRAP_WIDTH)) write(line);
       write("");
     }
     if (es.bigTicket.length > 0) {

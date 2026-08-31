@@ -44,6 +44,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // #1020 ladder: matches Screaming Frog's free-tier crawl cap and today's
     // `full` coverage preset ceiling.
     maxPagesPerAudit: 500,
+    unlimitedCredits: false,
+    selfServe: true,
   },
   starter: {
     id: "starter",
@@ -69,6 +71,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     customHeaders: true,
     // #1020 ladder: today's cloud REPORT_LIMITS.maxPages ceiling.
     maxPagesPerAudit: 2000,
+    unlimitedCredits: false,
+    selfServe: true,
   },
   team: {
     id: "team",
@@ -97,6 +101,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // once the report/publish ingest ceiling is raised separately (see the
     // maxPagesPerAudit doc comment on PlanDefinition in index.ts).
     maxPagesPerAudit: 5000,
+    unlimitedCredits: false,
+    selfServe: true,
     perSeat: {
       priceMonthUsd: 29,
       // Annual per-seat = 12 months prepaid at the cost of 10.
@@ -105,7 +111,54 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       minSeats: 2,
     },
   },
+  /**
+   * INTERNAL / invite-only (decided 2026-08-28). This is how enterprise billing
+   * will work: usage is not metered against a prepaid balance, it is ACCOUNTED
+   * in `credit_ledger` and invoiced out of band.
+   *
+   * Deliberately absent: `priceMonthUsd` / `priceYearUsd` / `perSeat` — there is
+   * no price and no Stripe checkout for it. `selfServe: false` keeps it out of
+   * every public surface (pricing page, dashboard plan comparison and upgrade
+   * funnel, CLI/MCP upsells). The only way into it is an admin moving the org
+   * from the admin dashboard; the only way out is an admin moving it back.
+   *
+   * `monthlyCredits: 0` because there is nothing to grant — `unlimitedCredits`
+   * means the balance is never consulted or mutated. The recurring-grant
+   * scheduler tasks skip the plan for the same reason.
+   */
+  enterprise: {
+    id: "enterprise",
+    name: "Enterprise",
+    // No recurring grant: unlimitedCredits makes the balance irrelevant, and
+    // granting into a frozen balance would corrupt the value the org resumes
+    // from if it is ever moved back to a metered plan.
+    monthlyCredits: 0,
+    maxOrgs: 1,
+    // -1 = uncapped (same sentinel Team uses for maxMembers). The 100-website
+    // abuse cap is a hosted-tier guard; a contracted org is not that risk.
+    maxWebsites: -1,
+    maxMembers: -1,
+    renderConcurrency: 10,
+    scheduledCrawls: true,
+    customHeaders: true,
+    // NOT subject to TEAM_MAX_PAGES_UNLOCKED — that flag gates Team's ladder
+    // step specifically (#1274). Enterprise carries its own allowance, still
+    // clamped at dispatch by `REPORT_LIMITS.maxPages` like every other plan.
+    maxPagesPerAudit: 5000,
+    unlimitedCredits: true,
+    selfServe: false,
+  },
 } as const;
+
+/**
+ * The plans a customer can reach on their own. Every public/marketing/upgrade
+ * surface must enumerate THIS, never `Object.keys(PLANS)` — otherwise an
+ * internal plan leaks into pricing or a plan picker the moment it is added.
+ * Ordered low → high tier.
+ */
+export const SELF_SERVE_PLAN_IDS: readonly PlanId[] = (Object.keys(PLANS) as PlanId[]).filter(
+  (id) => PLANS[id].selfServe,
+);
 
 // Accepts a raw string (DB columns are plain text) and falls back to the free
 // plan for any unknown id — callers never need to cast or null-check.
@@ -113,23 +166,42 @@ export function getPlan(planId: string): PlanDefinition {
   return PLANS[planId as PlanId] ?? PLANS.free;
 }
 
-// Tier hierarchy: free < starter < team. Keep in sync with PlanId — a new tier
-// must be ranked here (an unranked id resolves to 0 = free, matching getPlan).
+// Tier hierarchy: free < starter < team < enterprise. Keep in sync with PlanId —
+// a new tier must be ranked here (an unranked id resolves to 0 = free, matching
+// getPlan). Enterprise ranks top so it inherits every `planAtLeast` entitlement.
 const PLAN_RANK: Record<PlanId, number> = {
   free: 0,
   starter: 1,
   team: 2,
+  enterprise: 3,
 };
 
 /**
  * True when `planId` sits at or above `floor` in the tier hierarchy
- * (free < starter < team). Accepts a raw string; an unknown id ranks as free.
+ * (free < starter < team < enterprise). Accepts a raw string; an unknown id ranks as free.
  * Use for "at least this tier" entitlement gates (e.g. `planAtLeast(id,
  * "starter")` = "any paid plan") instead of a binary `id !== "free"` so a
  * higher tier inherits every entitlement of the tiers below it.
  */
 export function planAtLeast(planId: string, floor: PlanId): boolean {
   return (PLAN_RANK[planId as PlanId] ?? 0) >= PLAN_RANK[floor];
+}
+
+/**
+ * True when the plan is not metered against a prepaid credit balance: debits are
+ * recorded in the ledger but never rejected and never mutate `credit_balances`.
+ * Accepts a raw string (DB columns are plain text); unknown ids are metered.
+ */
+export function planHasUnlimitedCredits(planId: string): boolean {
+  return getPlan(planId).unlimitedCredits;
+}
+
+/**
+ * True when the customer can reach this plan themselves. Gate every upgrade CTA,
+ * plan card and checkout on this rather than on an id denylist.
+ */
+export function isSelfServePlan(planId: string): boolean {
+  return getPlan(planId).selfServe;
 }
 
 /**

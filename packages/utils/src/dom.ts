@@ -11,6 +11,12 @@
  */
 export function getAttrCI(el: Element, name: string): string | null {
   const lower = name.toLowerCase();
+  // Deliberately NOT short-circuiting on getAttribute(lower) first: linkedom
+  // keeps BOTH spellings of a case-variant duplicate (<img ALT="a" alt="b">
+  // yields two attributes), so an exact-match fast path would return the last
+  // one where this scan returns the first — and the first is what a browser
+  // keeps, since its parser drops the duplicate. A hash lookup is not worth
+  // disagreeing with browsers on malformed markup.
   for (const attr of el.attributes) {
     if (attr.name.toLowerCase() === lower) return attr.value;
   }

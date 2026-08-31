@@ -121,7 +121,16 @@ export interface CloudPrefetchInput {
    * TTY confirmation when the estimate exceeds `confirm_threshold`.
    * Absent (non-TTY / --yes) → proceed without asking.
    */
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  confirm?: (
+    estimatedCredits: number,
+    /**
+     * "unlimited" on a plan that is not metered against a balance: its stored
+     * numbers are frozen (usually 0) and showing them in a spend prompt would
+     * read as "you cannot afford this". The prompt itself is still asked, since
+     * the spend is real and gets invoiced.
+     */
+    balance: number | "unlimited",
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
 }
 
@@ -162,6 +171,10 @@ export interface CloudPrefetchResult {
    * ESTIMATED balance after the run: preflight balance minus client-side
    * spend. Concurrent usage by other sessions is not reflected — render with
    * a `~` qualifier; `getBalance()` is the authoritative read.
+   *
+   * `null` when there is no meaningful answer: the prefetch never ran, or the
+   * account's plan is not metered against a balance (its stored numbers are
+   * frozen, so subtracting spend would invent a countdown).
    */
   balanceAfter: number | null;
   /**
@@ -193,6 +206,19 @@ interface BatchOutcome {
   failedUnits: number;
   failedBatches: number;
   failure: { reason: CloudSkipReason; detail: string } | null;
+}
+
+/**
+ * Is this account's plan unmetered (not billed against a prepaid balance)?
+ *
+ * Such an account's stored balance is FROZEN, so `balance - spent` is not an
+ * "estimated balance after the run", it is a fabricated countdown of a number
+ * that never moves. `balanceAfter: null` is the existing "not known" signal and
+ * every renderer already handles it. The field is optional on the wire, so an
+ * older server omitting it correctly reads as metered.
+ */
+function unmeteredBalance(preflight: CreditsResponse): boolean {
+  return preflight.balance.unlimited === true;
 }
 
 function emptyResult(
@@ -442,7 +468,8 @@ async function fetchPageBatch(
     return new Map(results.filter((r) => !isRenderBlocked(r)).map((r) => [r.url, r]));
   }
   const req = { auditId, pages: batch };
-  const res = service === "ai-parse" ? await client.aiParse(req) : await client.authoritySignals(req);
+  const res =
+    service === "ai-parse" ? await client.aiParse(req) : await client.authoritySignals(req);
   return new Map(res.results.map((r) => [r.url, r]));
 }
 
@@ -528,7 +555,10 @@ export async function prefetchCloudData(input: CloudPrefetchInput): Promise<Clou
       metaCost +
       applyCap(stage1Specs, input.pages, stage1Cap).reduce((sum, p) => sum + p.estimate, 0);
     if (upperEstimate > input.config.confirm_threshold) {
-      const proceed = await input.confirm(upperEstimate, preflight.balance.total);
+      const proceed = await input.confirm(
+        upperEstimate,
+        preflight.balance.unlimited === true ? "unlimited" : preflight.balance.total,
+      );
       if (!proceed) {
         for (const [service, spec] of specs) {
           skipService(
@@ -544,7 +574,7 @@ export async function prefetchCloudData(input: CloudPrefetchInput): Promise<Clou
           spend,
           totalSpent,
           failures,
-          balanceAfter: preflight.balance.total,
+          balanceAfter: unmeteredBalance(preflight) ? null : preflight.balance.total,
           siteMetadata: null,
         };
       }
@@ -634,7 +664,9 @@ export async function prefetchCloudData(input: CloudPrefetchInput): Promise<Clou
       spend,
       totalSpent,
       failures,
-      balanceAfter: Math.max(0, preflight.balance.total - totalSpent),
+      balanceAfter: unmeteredBalance(preflight)
+        ? null
+        : Math.max(0, preflight.balance.total - totalSpent),
       siteMetadata,
     };
   }
@@ -870,7 +902,9 @@ export async function prefetchCloudData(input: CloudPrefetchInput): Promise<Clou
     spend,
     totalSpent,
     failures,
-    balanceAfter: Math.max(0, preflight.balance.total - totalSpent),
+    balanceAfter: unmeteredBalance(preflight)
+      ? null
+      : Math.max(0, preflight.balance.total - totalSpent),
     siteMetadata,
   };
 }

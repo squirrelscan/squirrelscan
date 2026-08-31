@@ -7,6 +7,7 @@ import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
+import { editorSummaryView } from "../editor-summary";
 
 export interface JsonRenderOptions {
   version?: string;
@@ -136,6 +137,7 @@ interface SlimJsonReport {
 
 function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
   const categoryIssues = groupIssuesByCategory(report.ruleResults);
+  const es = editorSummaryView(report.editorSummary);
   return {
     meta: {
       version,
@@ -170,14 +172,19 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       warnings: report.warnings,
       failed: report.failed,
     },
-    ...(report.editorSummary
+    // Same guard as every other format, validated rather than just cast: the
+    // declared shape promises string fields, so a malformed stored summary omits
+    // the whole section rather than emitting a half-built one into the
+    // user-facing JSON. Fields are listed out (not spread) to keep `paragraphs`,
+    // which is a rendering aid, out of the persisted shape.
+    ...(es
       ? {
           editorSummary: {
-            prose: report.editorSummary.prose,
-            bigTicket: report.editorSummary.bigTicket,
-            verdict: report.editorSummary.verdict,
-            model: report.editorSummary.model,
-            generatedAt: report.editorSummary.generatedAt,
+            prose: es.prose,
+            bigTicket: es.bigTicket,
+            verdict: es.verdict,
+            model: es.model,
+            generatedAt: es.generatedAt,
           },
         }
       : {}),
