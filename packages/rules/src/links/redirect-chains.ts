@@ -3,59 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { formatRedirectHop, type RedirectChain } from "@squirrelscan/core-contracts";
 
-/**
- * Identity of the resource a URL names, for deciding whether a request LANDED
- * somewhere else and for joining links to redirect targets.
- *
- * This is `@squirrelscan/utils`' `normalizeUrl` with the trailing slash KEPT.
- * `/about` and `/about/` are different request targets, and telling them apart
- * is the entire point of this rule: folding them together both hides a genuine
- * `/about → /about/` move and lets a page that links the canonical form get
- * blamed for the other form's redirect (#1510).
- */
-function targetKey(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return `${parsed.protocol.toLowerCase()}//${parsed.host.toLowerCase()}${parsed.pathname}`;
-  } catch {
-    return url;
-  }
-}
-
-/**
- * A NON-final hop we watched actually redirect: an HTTP hop carrying a 3xx, or
- * any client-side hop at all — a `javascript` / `meta-refresh` hop IS the
- * redirect, whatever status the document that performed it returned.
- */
-function hasObservedRedirect(chain: RedirectChain | undefined): boolean {
-  if (!chain || chain.hops.length < 2) return false;
-  return chain.hops
-    .slice(0, -1)
-    .some((hop) => hop.type !== "http" || (hop.statusCode >= 300 && hop.statusCode < 400));
-}
-
-/**
- * True when the chain contradicts itself: an HTTP hop it says was followed by
- * another hop reports a 2xx, and an HTTP response that returned 200 did not
- * redirect.
- *
- * Such a chain was assembled from a source URL and a landing URL by something
- * that never watched the responses in between, and it is what made every
- * trailing-slash-canonical site report its own pages as redirecting,
- * `(200) → (200)`, blaming every page that linked them (#1510). The producers
- * are fixed to record an unobserved hop as `0` rather than borrowing the landing
- * status; this is the rule refusing to accuse on that shape even if one regresses.
- *
- * Client-side hops are exempt: a `javascript` / `meta-refresh` redirect is by
- * definition a document that returned 200 and then sent the visitor elsewhere,
- * so a 2xx there is the truth, not a borrowed status.
- */
-function contradictsItself(chain: RedirectChain | undefined): boolean {
-  if (!chain || chain.hops.length < 2) return false;
-  return chain.hops
-    .slice(0, -1)
-    .some((hop) => hop.type === "http" && hop.statusCode >= 200 && hop.statusCode < 300);
-}
+import { didRedirect, targetKey } from "../shared/redirect-evidence";
 
 export const redirectChainsRule: Rule = {
   meta: {
@@ -98,15 +46,8 @@ export const redirectChainsRule: Rule = {
 
       const chain = page.redirectChain;
       const original = targetKey(page.url);
-      const final = targetKey(page.finalUrl);
 
-      // Two independent kinds of evidence: the request landed on a different
-      // resource, or we watched a hop return a 3xx. Either is a redirect — the
-      // first covers the render path, which reports the landing page but never
-      // the statuses that led to it. A self-contradicting chain is neither.
-      const redirected = original !== final || hasObservedRedirect(chain);
-
-      if (redirected && !contradictsItself(chain)) {
+      if (didRedirect(page.url, page.finalUrl, chain)) {
         const chainLabel =
           chain && chain.hops.length > 1
             ? chain.hops.map((hop) => formatRedirectHop(hop)).join(" → ")

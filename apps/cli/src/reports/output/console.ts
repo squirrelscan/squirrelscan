@@ -1,5 +1,7 @@
 // Console report output
 
+import type { EditorSummaryView } from "@squirrelscan/report";
+
 import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/control-chars";
 import {
   carriedTag,
@@ -13,6 +15,7 @@ import {
   domainStatRows,
   positionBands,
   EDITOR_SUMMARY_NOTE,
+  editorSummaryView,
   SITE_PROFILE_NOTE,
   siteProfileFlags,
   siteProfileRows,
@@ -21,7 +24,6 @@ import {
 import type {
   AuditReport,
   DomainStats,
-  EditorSummary,
   GroupScore,
   HealthScore,
   ReportTechnologies,
@@ -118,9 +120,10 @@ export function generateConsoleReport(
   log(divider());
 
   // Editor's summary — report-only Pro exec narrative, surfaced at the top.
-  if (report.editorSummary) {
+  const editorSummary = editorSummaryView(report.editorSummary);
+  if (editorSummary) {
     log("");
-    printEditorSummary(report.editorSummary);
+    printEditorSummary(editorSummary);
   }
 
   // Category breakdown
@@ -323,14 +326,12 @@ function partialAuditLine(
   return `partial audit: ${parts.join("; ")}${scored}`;
 }
 
-function printEditorSummary(es: EditorSummary): void {
+function printEditorSummary(es: EditorSummaryView): void {
   log(fmt.bold("EDITOR'S SUMMARY"));
   log(fmt.dim(EDITOR_SUMMARY_NOTE));
   log("");
-  for (const para of es.prose.split(/\n{2,}/)) {
-    const trimmed = para.trim();
-    if (!trimmed) continue;
-    log(trimmed);
+  for (const para of es.paragraphs) {
+    log(para);
     log("");
   }
   if (es.bigTicket.length > 0) {

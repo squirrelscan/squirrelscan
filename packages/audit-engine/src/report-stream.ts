@@ -73,6 +73,16 @@ function offSiteSeedRedirect(baseUrl: string, seedUrl: string | undefined): stri
   }
 }
 
+/**
+ * Whether an image appearance carried an alt attribute at all. alt="" is the
+ * correct markup for a decorative image (HTML spec, WCAG H67), so the summary
+ * must not list it as missing alt text — only an absent attribute counts (#143).
+ * Storage maps a SQL NULL to undefined; null is accepted defensively.
+ */
+function hasAltAttribute(appearance: ImageAppearanceRecord): boolean {
+  return appearance.alt !== undefined && appearance.alt !== null;
+}
+
 export function buildRobotsData(robots: RobotsTxtRecord | null): RobotsTxtData | null {
   if (!robots) return null;
 
@@ -357,14 +367,16 @@ export function buildV1Report(
             .pipe(Effect.catchAll(() => Effect.succeed([])));
       if (!hasBatchImageMethod) imageQueryCount++;
 
-      const hasAlt = appearances.some((a) => a.alt && a.alt.trim() !== "");
-      if (!hasAlt) {
-        for (const appearance of appearances) {
-          summary.missingAltText.push({
-            page: appearance.pageUrl,
-            image: image.src,
-          });
-        }
+      // Per APPEARANCE, not per image URL: the same src can be decorative on
+      // one page and bare on another, and only the bare page is a defect. The
+      // rule and reconstruct.ts both judge per page, so grouping here would
+      // disagree with them (#143).
+      for (const appearance of appearances) {
+        if (hasAltAttribute(appearance)) continue;
+        summary.missingAltText.push({
+          page: appearance.pageUrl,
+          image: image.src,
+        });
       }
     }
     logger.traceEnd(imageAppearancesSpan, {
@@ -697,12 +709,11 @@ export function buildV2Report(
             .getImageAppearances(crawlId, image.src)
             .pipe(Effect.catchAll(() => Effect.succeed([])));
 
-      const hasAlt = appearances.some((a) => a.alt && a.alt.trim() !== "");
-      if (!hasAlt) {
-        for (const appearance of appearances) {
-          if (summary.missingAltText.length >= maxSummaryItems) break;
-          summary.missingAltText.push({ page: appearance.pageUrl, image: image.src });
-        }
+      // Per APPEARANCE, not per image URL — see the v1 pass above (#143).
+      for (const appearance of appearances) {
+        if (summary.missingAltText.length >= maxSummaryItems) break;
+        if (hasAltAttribute(appearance)) continue;
+        summary.missingAltText.push({ page: appearance.pageUrl, image: image.src });
       }
     }
     logger.traceEnd(imageAppearancesSpan, { images: images.length });

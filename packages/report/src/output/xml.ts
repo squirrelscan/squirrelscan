@@ -7,6 +7,7 @@ import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
+import { editorSummaryView } from "../editor-summary";
 
 export interface XmlRenderOptions {
   version?: string;
@@ -60,12 +61,11 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   lines.push(`${indent(1)}<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`);
 
   // Editor's summary — report-only exec narrative (does not affect the health score).
-  if (report.editorSummary) {
-    const es = report.editorSummary;
+  const es = editorSummaryView(report.editorSummary);
+  if (es) {
     lines.push(`${indent(1)}<editor-summary model="${escapeXml(es.model)}">`);
-    for (const para of es.prose.split(/\n{2,}/)) {
-      const trimmed = para.trim();
-      if (trimmed) lines.push(`${indent(2)}<para>${escapeXml(trimmed)}</para>`);
+    for (const para of es.paragraphs) {
+      lines.push(`${indent(2)}<para>${escapeXml(para)}</para>`);
     }
     if (es.bigTicket.length > 0) {
       lines.push(`${indent(2)}<big-ticket>`);
