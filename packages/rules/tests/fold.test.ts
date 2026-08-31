@@ -822,6 +822,28 @@ describe("truncation is never silent (#1503)", () => {
     expect(folded[0]!.details?.pagesTruncated).toBe(600);
   });
 
+  test("fold → unfold → re-fold does not INFLATE the page total", () => {
+    // unfoldAggregateCheck copies details (minus aggregated/occurrences/
+    // additional) onto EVERY synthetic per-page check, so a re-fold sees N
+    // copies of the same marker. Reconciling with max() collapses them back to
+    // the one true total; summing them — the obvious way to write this — would
+    // multiply the count on every publish round trip.
+    const LIMITS: FoldLimits = { ...SMALL, maxChecks: 2 };
+    const checks = Array.from({ length: 10 }, (_, i) =>
+      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+    );
+    const folded = foldOverflowChecks(checks, LIMITS);
+    expect(folded[0]!.details?.pagesTruncated).toBe(10);
+
+    const unfolded = unfoldAggregateCheck(folded[0]!);
+    expect(unfolded.length).toBeGreaterThan(1);
+    for (const c of unfolded) expect(c.details?.pagesTruncated).toBe(10);
+
+    const refolded = foldOverflowChecks(unfolded, LIMITS);
+    expect(refolded).toHaveLength(1);
+    expect(refolded[0]!.details?.pagesTruncated).toBe(10);
+  });
+
   test("more issue classes than the cap stamps checksTruncated on the last kept check", () => {
     // The one drop the downstream report-stream backstop can NEVER see: by the
     // time it runs, fold has already bounded the array to maxChecks, so its own
