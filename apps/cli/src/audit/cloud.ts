@@ -40,6 +40,7 @@ import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
 
 import type { ExternalBulkChecker, SiteContextPage } from "@/audit/adapter";
 import type { Config } from "@/config";
+import type { PreflightBalance } from "@/lib/balance";
 
 import { buildBlocklistPayload } from "@/audit/cloud-payloads-blocklist";
 import { buildGapsPayloads } from "@/audit/cloud-payloads-gaps";
@@ -354,7 +355,10 @@ export interface RunCloudPrefetchOptions {
   auditId: string;
   /** Stage-1 gating policy (CLI-owned) threaded into the engine's prefetch. */
   gate?: (meta: SiteMetadata, service: CloudServiceId) => boolean;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /**
    * Fires after every request payload has been built (synchronously) and
@@ -496,8 +500,11 @@ export async function resolveDeadLinksBulkChecker(opts: {
   auditId: string;
   siteContext: SiteContextPage[];
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   /**
    * Called after every SUCCESSFUL bulk call with the urls submitted and the
    * credits the server debited for it. Lets the audit controller account
@@ -521,7 +528,7 @@ export async function resolveDeadLinksBulkChecker(opts: {
   // when a confirm callback is available (TTY). Non-TTY/--yes proceeds silently,
   // bounded by the server-side per-url charge.
   if (confirm && estimate > config.cloud.confirm_threshold) {
-    let balance = 0;
+    let balance: PreflightBalance = 0;
     try {
       balance = (await opts.getBalance?.()) ?? 0;
     } catch (error) {
@@ -618,8 +625,11 @@ export interface RunCloudTechDetectOptions {
   /** Fetched scripts from the resource-assets phase (carries inline content). */
   scripts: FetchedScript[];
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /** Called once after a SUCCESSFUL charged call with the credits debited. */
   onSpend?: (credits: number) => void;
@@ -815,8 +825,11 @@ export interface RunCloudEditorSummaryOptions {
   /** Deltas vs the previous audit, when the caller has a prior run. */
   delta?: EditorSummaryRequest["delta"];
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /** Called once after a SUCCESSFUL charged call with the credits debited. */
   onSpend?: (credits: number) => void;
@@ -899,8 +912,11 @@ export interface RunCloudDomainStatsOptions {
   /** Registered website id, when this audit is tied to a tracked site. */
   websiteId?: string;
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /** Called once after a SUCCESSFUL charged call with the credits debited. */
   onSpend?: (credits: number) => void;

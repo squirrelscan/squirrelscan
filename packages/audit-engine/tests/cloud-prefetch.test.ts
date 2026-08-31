@@ -258,6 +258,115 @@ describe("prefetchCloudData", () => {
     expect(res.store.get("keyword-gaps")?.get(CLOUD_SITE_KEY)?.skipReason).toBe("not-prefetched");
   });
 
+  describe("an unmetered plan (frozen balance)", () => {
+    const gapsRule = [
+      {
+        id: "seo/keyword-gaps",
+        cloud: {
+          service: "keyword-gaps" as const,
+          unit: "site" as const,
+          creditFeature: "keyword_gaps" as const,
+        },
+      },
+    ];
+    const gapsPayload = { "keyword-gaps": { domain: "example.com" } };
+    // The realistic enterprise shape: nothing was ever granted or deducted, so
+    // the stored total sits at 0 forever.
+    const unmetered = {
+      ...BALANCE,
+      balance: { monthly: 0, pack: 0, total: 0, periodEnd: null, unlimited: true },
+    };
+
+    test('the confirm prompt is still asked, but shows "unlimited" not the frozen 0', async () => {
+      let seen: unknown;
+      await prefetchCloudData(
+        input({
+          client: okClient({ getBalance: async () => unmetered }),
+          rules: gapsRule,
+          sitePayloads: gapsPayload,
+          config: { ...config, confirm_threshold: 1 },
+          confirm: async (_estimate, balance) => {
+            seen = balance;
+            return true;
+          },
+        }),
+      );
+      // Showing 0 here would read as "you cannot afford this" on an account
+      // that can afford everything.
+      expect(seen).toBe("unlimited");
+    });
+
+    test("balanceAfter is null, not a countdown of a number that never moves", async () => {
+      const res = await prefetchCloudData(
+        input({
+          client: okClient({ getBalance: async () => unmetered }),
+          rules: gapsRule,
+          sitePayloads: gapsPayload,
+          config: { ...config, confirm_threshold: 1 },
+          confirm: async () => true,
+        }),
+      );
+      expect(res.balanceAfter).toBeNull();
+      // The spend itself is real and still tracked — it gets invoiced.
+      expect(res.totalSpent).toBeGreaterThan(0);
+    });
+
+    test("a declined confirm also reports a null balanceAfter", async () => {
+      const res = await prefetchCloudData(
+        input({
+          client: okClient({ getBalance: async () => unmetered }),
+          rules: gapsRule,
+          sitePayloads: gapsPayload,
+          config: { ...config, confirm_threshold: 1 },
+          confirm: async () => false,
+        }),
+      );
+      expect(res.balanceAfter).toBeNull();
+      expect(res.totalSpent).toBe(0);
+    });
+
+    test("a metered account is unchanged: it sees its number and a real balanceAfter", async () => {
+      let seen: unknown;
+      const res = await prefetchCloudData(
+        input({
+          rules: gapsRule,
+          sitePayloads: gapsPayload,
+          config: { ...config, confirm_threshold: 1 },
+          confirm: async (_estimate, balance) => {
+            seen = balance;
+            return true;
+          },
+        }),
+      );
+      expect(seen).toBe(1000);
+      expect(res.balanceAfter).toBe(1000 - res.totalSpent);
+    });
+
+    // A binary already on someone's machine talks to whatever server it finds.
+    test("a response with no `unlimited` field reads as metered", async () => {
+      let seen: unknown;
+      const res = await prefetchCloudData(
+        input({
+          client: okClient({
+            getBalance: async () => ({
+              ...BALANCE,
+              balance: { monthly: 0, pack: 40, total: 40, periodEnd: null },
+            }),
+          }),
+          rules: gapsRule,
+          sitePayloads: gapsPayload,
+          config: { ...config, confirm_threshold: 1 },
+          confirm: async (_estimate, balance) => {
+            seen = balance;
+            return true;
+          },
+        }),
+      );
+      expect(seen).toBe(40);
+      expect(res.balanceAfter).not.toBeNull();
+    });
+  });
+
   test("estimate at/below threshold does not prompt", async () => {
     let prompted = false;
     // keyword-gaps estimate (25) == threshold (25): `estimate > threshold` is
@@ -427,14 +536,12 @@ describe("prefetchCloudData", () => {
   test("partial batch: pages missing from results are skipped, batch still billed", async () => {
     const client = okClient({
       aiParse: async (req) => ({
-        results: req.pages
-          .slice(1)
-          .map((p) => ({
-            url: p.url,
-            pageType: "article" as const,
-            parsabilityScore: 50,
-            confidence: 0.5,
-          })),
+        results: req.pages.slice(1).map((p) => ({
+          url: p.url,
+          pageType: "article" as const,
+          parsabilityScore: 50,
+          confidence: 0.5,
+        })),
       }),
     });
     const res = await prefetchCloudData(input({ rules: [RULES[0]], client }));
@@ -949,7 +1056,10 @@ describe("chunkPagesBySize", () => {
 
 // ── render service (#673): job-based (submit → poll), gated off on rendered crawls ──
 const RENDER_RULES: CloudPrefetchInput["rules"] = [
-  { id: "ax/content-without-js", cloud: { service: "render", unit: "page", creditFeature: "render" } },
+  {
+    id: "ax/content-without-js",
+    cloud: { service: "render", unit: "page", creditFeature: "render" },
+  },
 ];
 
 /** okClient + a render job that resolves `done` immediately, returning HTML for the requested urls. */
@@ -963,7 +1073,11 @@ function renderClient(overrides: Partial<CloudServicesClient> = {}): CloudServic
     renderResult: async () => ({
       jobId: "job-1",
       status: "done",
-      results: submitted.map((url) => ({ url, status: 200, html: `<html><body>${url}</body></html>` })),
+      results: submitted.map((url) => ({
+        url,
+        status: 200,
+        html: `<html><body>${url}</body></html>`,
+      })),
     }),
     ...overrides,
   });
@@ -1003,7 +1117,9 @@ describe("prefetchCloudData — render service (#673)", () => {
         return { jobId: "j", status: "queued" };
       },
     });
-    const res = await prefetchCloudData(input({ client, rules: RENDER_RULES, crawlRendered: true }));
+    const res = await prefetchCloudData(
+      input({ client, rules: RENDER_RULES, crawlRendered: true }),
+    );
     expect(submitted).toBe(false);
     const render = res.store.get("render");
     expect(render?.get(pages[0].url)?.status).toBe("skipped");
@@ -1017,7 +1133,9 @@ describe("prefetchCloudData — render service (#673)", () => {
         jobId: "j",
         status: "done",
         // Only the first 3 of 5 pages came back.
-        results: pages.slice(0, 3).map((p) => ({ url: p.url, status: 200, html: `<html>${p.url}</html>` })),
+        results: pages
+          .slice(0, 3)
+          .map((p) => ({ url: p.url, status: 200, html: `<html>${p.url}</html>` })),
       }),
     });
     const res = await prefetchCloudData(input({ client, rules: RENDER_RULES }));
@@ -1101,7 +1219,9 @@ describe("prefetchCloudData — render service (#673)", () => {
         results: [
           { url: pages[0].url, status: 200, html: `<html>${pages[0].url}</html>` },
           { url: pages[1].url, status: 403, html: "<html>Access denied</html>" }, // bot wall
-          ...pages.slice(2).map((p) => ({ url: p.url, status: 200, html: `<html>${p.url}</html>` })),
+          ...pages
+            .slice(2)
+            .map((p) => ({ url: p.url, status: 200, html: `<html>${p.url}</html>` })),
         ],
       }),
     });

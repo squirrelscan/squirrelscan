@@ -3,6 +3,7 @@
 import { defineCommand } from "citty";
 
 import { DASHBOARD_URL, STATUS_REQUEST_TIMEOUT_MS } from "@/constants";
+import { formatBalance, isUnlimitedBalance } from "@/lib/balance";
 import {
   API_TOKEN_ENV_VAR,
   activeEnvTokenVar,
@@ -183,7 +184,9 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
     });
     if (client) {
       const { balance } = await client.getBalance();
-      console.log(`  Credits: ${balance.total.toLocaleString("en-US")}`);
+      console.log(
+        `  Credits: ${formatBalance(balance.total, isUnlimitedBalance(balance))}`
+      );
     }
   } catch {
     // ignore — balance is informational here; `squirrel credits` has the full view
