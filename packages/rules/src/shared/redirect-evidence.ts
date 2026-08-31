@@ -66,10 +66,29 @@ export function contradictsItself(chain: RedirectChain | undefined): boolean {
 }
 
 /**
+ * The request target a URL names: everything the server is asked for, query
+ * INCLUDED, fragment excluded because it never leaves the browser.
+ *
+ * Deliberately not `targetKey`. This one answers "did the request land
+ * somewhere else", and a redirect that only rewrites the query string still
+ * redirected. `targetKey` is a join key for matching links to the redirect they
+ * hit, where folding the query in would stop a link carrying a tracking
+ * parameter from matching the path-level redirect it lands on.
+ */
+function requestTarget(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol.toLowerCase()}//${parsed.host.toLowerCase()}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Did this request redirect? Two independent kinds of evidence: it landed on a
- * different resource, or we watched a hop return a 3xx. The first covers the
- * render path, which reports the landing page but never the statuses that led
- * to it. A self-contradicting chain is neither, whatever the URLs say.
+ * different request target, or we watched a hop return a 3xx. The first covers
+ * the render path, which reports the landing page but never the statuses that
+ * led to it. A self-contradicting chain is neither, whatever the URLs say.
  */
 export function didRedirect(
   url: string,
@@ -77,6 +96,7 @@ export function didRedirect(
   chain: RedirectChain | undefined
 ): boolean {
   if (contradictsItself(chain)) return false;
-  const landedElsewhere = finalUrl !== undefined && targetKey(url) !== targetKey(finalUrl);
+  const landedElsewhere =
+    finalUrl !== undefined && requestTarget(url) !== requestTarget(finalUrl);
   return landedElsewhere || hasObservedRedirect(chain);
 }

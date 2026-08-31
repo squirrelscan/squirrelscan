@@ -6,11 +6,7 @@ import { formatRedirectHop } from "@squirrelscan/core-contracts";
 
 import { normalizeUrl } from "@squirrelscan/utils";
 
-import {
-  contradictsItself,
-  didRedirect,
-  hasObservedRedirect,
-} from "../shared/redirect-evidence";
+import { didRedirect } from "../shared/redirect-evidence";
 
 export const canonicalChainRule: Rule = {
   meta: {
@@ -153,8 +149,7 @@ export const canonicalChainRule: Rule = {
         normalizedCanonical === normalizeUrl(pageUrl) &&
         normalizedFinal !== normalizedCanonical &&
         redirectChain &&
-        hasObservedRedirect(redirectChain) &&
-        !contradictsItself(redirectChain)
+        didRedirect(pageUrl, finalUrl, redirectChain)
       ) {
         checks.push({
           name: "canonical-redirects",

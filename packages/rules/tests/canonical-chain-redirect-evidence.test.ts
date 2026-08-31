@@ -121,22 +121,82 @@ describe("crawl/canonical-chain — chain shape is not redirect evidence", () =>
     expect(check?.items?.[0]?.label).toBe("https://example.com/old → https://example.com/new (200)");
   });
 
-  test("a client-side hop returning 200 is a real redirect, not a contradiction", () => {
-    // A meta-refresh redirect IS a document that returned 200 and then sent the
-    // visitor elsewhere, so its 2xx is the truth rather than a borrowed status.
+  test.each([["meta-refresh"], ["javascript"]] as const)(
+    "a %s hop returning 200 is a real redirect, not a contradiction",
+    (type) => {
+      // A client-side redirect IS a document that returned 200 and then sent
+      // the visitor elsewhere, so its 2xx is the truth rather than a borrowed
+      // status.
+      const check = run(
+        {
+          url: "https://example.com/splash",
+          finalUrl: "https://example.com/home",
+          redirectChain: chain("https://example.com/splash", "https://example.com/home", [
+            hop("https://example.com/splash", 200, type),
+            hop("https://example.com/home", 200),
+          ]),
+        },
+        "page-redirect-chain"
+      );
+
+      expect(check?.status).toBe("warn");
+    }
+  );
+
+  test("one contradictory hop suppresses the chain even beside an observed 301", () => {
+    // A 200 on a hop the chain says was followed is proof the chain was
+    // assembled rather than watched, and that taints every status in it.
     const check = run(
       {
-        url: "https://example.com/splash",
-        finalUrl: "https://example.com/home",
-        redirectChain: chain("https://example.com/splash", "https://example.com/home", [
-          hop("https://example.com/splash", 200, "meta-refresh"),
-          hop("https://example.com/home", 200),
+        url: "https://example.com/a",
+        finalUrl: "https://example.com/c",
+        redirectChain: chain("https://example.com/a", "https://example.com/c", [
+          hop("https://example.com/a", 301),
+          hop("https://example.com/b", 200),
+          hop("https://example.com/c", 200),
+        ]),
+      },
+      "page-redirect-chain"
+    );
+
+    expect(check).toBeUndefined();
+  });
+
+  test("a redirect that only rewrites the query string still counts as landing elsewhere", () => {
+    // The query is part of the request target: `/search` and `/search?page=1`
+    // are different resources, so a request aimed at one that landed on the
+    // other redirected, even with no status to prove it.
+    const check = run(
+      {
+        url: "https://example.com/search",
+        finalUrl: "https://example.com/search?page=1",
+        redirectChain: chain("https://example.com/search", "https://example.com/search?page=1", [
+          hop("https://example.com/search", 0),
+          hop("https://example.com/search?page=1", 200),
         ]),
       },
       "page-redirect-chain"
     );
 
     expect(check?.status).toBe("warn");
+  });
+
+  test("a fragment-only difference is not a redirect", () => {
+    // The fragment never leaves the browser, so it cannot differ across an
+    // HTTP request and must not be read as a destination change.
+    const check = run(
+      {
+        url: "https://example.com/docs",
+        finalUrl: "https://example.com/docs#install",
+        redirectChain: chain("https://example.com/docs", "https://example.com/docs#install", [
+          hop("https://example.com/docs", 0),
+          hop("https://example.com/docs#install", 200),
+        ]),
+      },
+      "page-redirect-chain"
+    );
+
+    expect(check).toBeUndefined();
   });
 
   test("a page that never redirected stays silent", () => {
@@ -187,6 +247,25 @@ describe("crawl/canonical-chain — canonical-redirects needs the same evidence"
     expect(check?.status).toBe("warn");
     expect(check?.items?.[0]?.label).toBe(
       "https://example.com/page (301) → https://example.com/elsewhere (200)"
+    );
+  });
+
+  test("an unobserved chain to a different destination still flags the canonical", () => {
+    // Both checks must ask the same question. Demanding a recorded 3xx here
+    // while page-redirect-chain accepts a different destination would drop
+    // every render-path redirect, which reports where the request landed but
+    // never the statuses that led there.
+    const check = run(
+      selfCanonicalThroughChain([
+        hop("https://example.com/page", 0),
+        hop("https://example.com/elsewhere", 200),
+      ]),
+      "canonical-redirects"
+    );
+
+    expect(check?.status).toBe("warn");
+    expect(check?.items?.[0]?.label).toBe(
+      "https://example.com/page → https://example.com/elsewhere (200)"
     );
   });
 });
