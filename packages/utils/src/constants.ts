@@ -54,6 +54,12 @@ export const DEFAULT_CLOUD_AUDIT_MODEL = "google/gemini-3.1-flash-lite";
 // Leaked secrets scanning window
 export const SECRET_CONTEXT_WINDOW_SIZE = 500;
 
+// How far back a bare-shape secret pattern looks for the key it is assigned to.
+// Short on purpose: only the key immediately in front of the value says what the
+// value is (`sha256:"…"` vs `api_key:"…"`), and a wider look-back just picks up
+// an unrelated key from earlier in the payload.
+export const SECRET_KEY_LOOKBEHIND_SIZE = 64;
+
 // Shared marker for a cloud audit blocked by a per-website credit cap (#319):
 // the /cloud route's 402 typed-envelope `error.code`, the scheduler's skip
 // reason, and the dashboard's error check all key off this single string (#562).
