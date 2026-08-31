@@ -4,6 +4,7 @@
 
 import type { PageRecord } from "@squirrelscan/core-contracts/storage";
 
+import { createCloudClient } from "@squirrelscan/cloud-client";
 import { computeCost } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -226,6 +227,70 @@ describe("editor-summary spend accounting", () => {
     });
     expect(result?.credits).toBe(0);
     expect(result?.editorSummary.prose).toBe("All good.");
+    expect(reported).toBe(false);
+  });
+});
+
+/**
+ * A 2xx is not proof of a usable body. The cloud client casts its JSON to the
+ * response type without validating it, so a partial rollout / proxy JSON
+ * envelope / truncated body arrives typed as valid while missing `prose`. That
+ * used to sail past the try/catch here and throw far away, in a renderer
+ * ("undefined is not an object (evaluating 'es.prose.split')") — after the crawl
+ * had already been paid for, discarding the whole audit. It must degrade exactly
+ * like a 5xx: no summary, no spend, no throw.
+ */
+describe("editor-summary malformed 2xx", () => {
+  test("a real 200 whose body is missing prose degrades like a 5xx", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ ok: true }),
+    });
+    try {
+      const config = getDefaultConfig();
+      config.cloud.enabled = true;
+      let reported = false;
+      const result = await runCloudEditorSummary({
+        client: createCloudClient({
+          apiUrl: server.url.origin,
+          token: "sqcli_x",
+          maxAttempts: 1,
+        }),
+        config,
+        auditId: "audit-1",
+        report: makeSummaryReport(),
+        onSpend: () => {
+          reported = true;
+        },
+      });
+      expect(result).toBeNull();
+      expect(reported).toBe(false);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a 200 whose prose is the wrong type degrades the same way", async () => {
+    const config = getDefaultConfig();
+    config.cloud.enabled = true;
+    let reported = false;
+    const result = await runCloudEditorSummary({
+      client: {
+        editorSummary: async () => ({
+          prose: 42,
+          bigTicket: null,
+          verdict: "",
+          model: "",
+        }),
+      } as never,
+      config,
+      auditId: "audit-1",
+      report: makeSummaryReport(),
+      onSpend: () => {
+        reported = true;
+      },
+    });
+    expect(result).toBeNull();
     expect(reported).toBe(false);
   });
 });

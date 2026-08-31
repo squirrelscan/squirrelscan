@@ -383,13 +383,20 @@ function checkAdditional(check: CheckResult): number {
  * Page-scope rules legitimately emit one check per affected page, so a
  * link-heavy 500+ page crawl overflows REPORT_LIMITS.maxChecksPerRule and the
  * publish schema silently slices the array (#817) — pages past the cap vanish
- * from the published report. Folding instead keeps every affected page:
+ * from the published report. Folding instead keeps every affected page, up to
+ * `maxPagesPerCheck` on the aggregate; past that the count stays honest even
+ * though the list is clipped (`details.pagesTruncated`, #1503):
  *  - `pages` = union of the folded checks' pageUrl/pages (schema allows maxPages);
  *  - `items` = union of the folded checks' items, deduped by id, each stamped
  *    with the pages it came from via `sourcePages`;
  *  - `details.occurrences` = folded check count (issue-sync reads this so the
  *    tracker's occurrence count survives the fold);
- *  - `details.additional` = items dropped at the cap + folded per-check remainders.
+ *  - `details.additional` = items dropped at the cap + folded per-check remainders;
+ *  - `details.pagesTruncated` = the affected-page total whenever `pages` is
+ *    clipped OR a constituent was already sampled upstream (re-fold, #916) —
+ *    exact in the first case, a floor in the second (see foldGroup).
+ *    `affectedPages()` reads it as the authoritative count, so every renderer
+ *    shows that number rather than the retained list's length.
  *
  * Rules under the cap pass through UNTOUCHED (same reference) — scoring and
  * report totals are computed from the un-folded map upstream, so this only
@@ -424,8 +431,17 @@ export function foldOverflowChecks(
   });
 
   // No rule emits >maxChecks distinct issue classes; slice keeps the invariant
-  // absolute if one ever does.
-  return out.length > limits.maxChecks ? out.slice(0, limits.maxChecks) : out;
+  // absolute if one ever does. Stamped because this drop is the one the
+  // downstream report-stream backstop can NEVER see (#1503): fold has already
+  // bounded the array to maxChecks by the time it runs, so its own length
+  // check cannot trip and the loss would be invisible everywhere.
+  if (out.length <= limits.maxChecks) return out;
+  const total = Math.max(out.length, maxChecksTruncated(out));
+  const kept = out.slice(0, limits.maxChecks);
+  const lastIndex = kept.length - 1;
+  const last = kept[lastIndex];
+  if (last) kept[lastIndex] = stampChecksTruncated(last, total);
+  return kept;
 }
 
 /**
@@ -462,17 +478,26 @@ export function capChecksForPublish(checks: CheckResult[], maxChecks: number): C
  * rule's check for one page) and `siteChecks` (every site-scoped rule's
  * check, flattened). Clamps oversize item ids/labels (#996) and any single
  * check's oversize `items` array (#1003), same as {@link capChecksForPublish}
- * — but caps the checks COUNT with a plain slice, not a fold: grouping by
+ * — but caps the checks COUNT with a slice, not a fold: grouping by
  * (name, status) across DIFFERENT rules is unsound (see
- * {@link capChecksForPublish}'s doc), so this never merges. A dropped check
- * past `maxChecks` has NO signal at all — the array already fits under the
- * cap by the time it reaches the publish schema, so
- * `collectCheckTruncations`'s count check never trips for it (unlike the
- * schema's own `truncatedArray` slice, which the RAW pre-parse payload diff
- * still catches). Same silent-clamp tradeoff as `clampCheckItemIds` (#996).
- * In practice these arrays rarely exceed
- * `maxChecks` (this is a last-resort safety net, not the primary #1003
- * producer).
+ * {@link capChecksForPublish}'s doc), so this never merges.
+ *
+ * The slice DROPS whole checks, and unlike the publish schema's own
+ * `truncatedArray` (whose cut the RAW pre-parse payload diff still catches)
+ * nothing downstream can tell it happened — the array already fits under the
+ * cap by the time it reaches the schema, so `collectCheckTruncations`' count
+ * check never trips. #1503: that made the loss invisible. The last kept check
+ * now carries `details.checksTruncated` — the pre-slice length reconciled with
+ * any total an earlier cap already recorded ({@link maxChecksTruncated}) — the
+ * same "true pre-clip total" contract as `details.pagesTruncated`, so the drop
+ * is recorded in the payload rather than inferred from nothing.
+ * Preserved-if-larger for the same reason `pagesTruncated` is: a second cap
+ * pass over an already-capped array must not overwrite the bigger original
+ * total with its own smaller one.
+ *
+ * In practice these arrays rarely exceed `maxChecks` (this is a last-resort
+ * safety net, not the primary #1003 producer) — `pages[].checks` runs closest,
+ * at ~198 against a 200 cap on a full rule set.
  */
 export function capMixedRuleChecksForPublish(
   checks: CheckResult[],
@@ -481,7 +506,61 @@ export function capMixedRuleChecksForPublish(
   const clamped = clampCheckItemsOverflow(
     clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks))),
   );
-  return clamped.length > maxChecks ? clamped.slice(0, maxChecks) : clamped;
+  if (clamped.length <= maxChecks) return clamped;
+  const total = Math.max(clamped.length, maxChecksTruncated(clamped));
+  const kept = clamped.slice(0, maxChecks);
+  const last = kept[maxChecks - 1];
+  if (last) kept[maxChecks - 1] = stampChecksTruncated(last, total);
+  return kept;
+}
+
+/**
+ * Largest `checksTruncated` already recorded anywhere in `checks`.
+ *
+ * Must be read from the WHOLE array BEFORE it is sliced: the marker lives on
+ * whichever check was last at the time of the earlier cap, and a tighter second
+ * cap discards exactly that element. Scanning only the survivor would let a
+ * 40 → 10 → 5 sequence report 10, quietly replacing the true 40 with the
+ * already-capped intermediate — the same "smaller number overwrites the real
+ * one" bug the preserved-if-larger rule exists to prevent.
+ */
+export function maxChecksTruncated(checks: CheckResult[]): number {
+  let max = 0;
+  for (const check of checks) {
+    const prior = check.details?.checksTruncated;
+    if (typeof prior === "number" && Number.isFinite(prior) && prior > max) {
+      max = Math.floor(prior);
+    }
+  }
+  return max;
+}
+
+/**
+ * Record `total` as a check-array truncation marker on one surviving check.
+ * Split out so both mixed-rule caps and the report-stream sanitize backstop
+ * (#1503) stamp the identical field with the identical preserved-if-larger
+ * rule. A cap that bites twice keeps the LARGEST total; pass a `total` already
+ * reconciled against {@link maxChecksTruncated} of the pre-slice array.
+ */
+export function stampChecksTruncated(check: CheckResult, total: number): CheckResult {
+  const prior = check.details?.checksTruncated;
+  if (typeof prior === "number" && prior >= total) return check;
+  // Re-clamp: the stamp lands AFTER clampCheckDetails, so on a check already
+  // sitting at maxKeysPerLevel the extra key would push the record past the
+  // structural cap the publish schema enforces.
+  //
+  // The marker goes FIRST, not last. clampDetailsRecord keeps scalars ahead of
+  // everything else but then slices the level to maxKeysPerLevel in order — so
+  // a record already carrying that many scalars would drop a trailing
+  // `checksTruncated` and silently lose the very fact we are recording. First
+  // position puts it among the keys that survive; a pre-existing (smaller)
+  // marker is dropped from the spread so ours is the one that lands.
+  const { checksTruncated: _superseded, ...rest } = check.details ?? {};
+  const details = clampDetailsRecord({ checksTruncated: total, ...rest }) as Record<
+    string,
+    unknown
+  >;
+  return { ...check, details };
 }
 
 /**
@@ -640,7 +719,36 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
     if (check.pageUrl) pageSet.add(check.pageUrl);
     for (const page of check.pages ?? []) pageSet.add(page);
   }
-  const pages = [...pageSet].sort().slice(0, limits.maxPagesPerCheck);
+  const allPages = [...pageSet].sort();
+  const pages =
+    allPages.length > limits.maxPagesPerCheck
+      ? allPages.slice(0, limits.maxPagesPerCheck)
+      : allPages;
+
+  // Affected-page total, independent of what `pages` retains (#1503). Two ways
+  // it exceeds `pages.length`, both of which used to vanish silently:
+  //  1. the slice above, when one issue class spans >maxPagesPerCheck pages;
+  //  2. a constituent that was ALREADY sampled upstream (re-fold path, #916) —
+  //     `details` is rebuilt from scratch below, so its marker is not carried
+  //     forward unless we do it here.
+  // `affectedPages()` reads pagesTruncated as THE authoritative count, so
+  // leaving either unstamped makes a clipped rule report its retained length as
+  // if it were the whole truth.
+  //
+  // EXACT for case 1 (the union is fully known here). For case 2 it is a FLOOR:
+  // a sampled constituent reports how many pages it covered but not WHICH, so
+  // pages contributed by its siblings cannot be tested for membership in that
+  // hidden set. max() is the only non-overstating reconciliation — summing
+  // would double-count every overlap. A floor is the correct bias when the
+  // number is rendered as a coverage claim, and matches the honest-floor
+  // contract `ruleAffectedRollup` already documents.
+  let pagesTotal = pageSet.size;
+  for (const check of group) {
+    const prior = check.details?.pagesTruncated;
+    if (typeof prior === "number" && Number.isFinite(prior) && prior > pagesTotal) {
+      pagesTotal = Math.floor(prior);
+    }
+  }
 
   // Merge items by id; the folded checks' pageUrl becomes each item's
   // sourcePages so per-page attribution survives losing per-check pageUrl.
@@ -688,6 +796,7 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
 
   const details: Record<string, unknown> = { aggregated: true, occurrences: group.length };
   if (additional + droppedIds.size > 0) details.additional = additional + droppedIds.size;
+  if (pagesTotal > pages.length) details.pagesTruncated = pagesTotal;
 
   // Smart audits (#110): stay "carried" only when every folded finding was.
   const allCarried = group.every((c) => c.provenance === "carried");

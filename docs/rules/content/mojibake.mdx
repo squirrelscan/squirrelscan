@@ -27,7 +27,12 @@ Three families of corruption, in visible text only:
 | `replacement-char` | `caf�` | the decoder gave up on those bytes |
 | `double-encoded-entity` | visible `&amp;nbsp;` | the source said `&amp;amp;nbsp;` |
 
-The check reads text with `<script>`, `<style>` and `<noscript>` excluded, never raw HTML, so an encoded sequence inside a script body is not reported. A page with no body is skipped rather than passed.
+The check reads prose, never raw HTML, so an encoded sequence in an attribute is not reported. Two kinds of markup are excluded:
+
+- `<script>`, `<style>` and `<noscript>`, because a visitor never reads them.
+- `<code>`, `<pre>`, `<samp>` and `<kbd>`, because a visitor reads them as a quoted literal. A changelog entry or docs page that quotes `â€™` inside a code span is documenting the corruption, not suffering from it.
+
+A page with no body is skipped rather than passed.
 
 **Severity depends on certainty.** The replacement character is unambiguous corruption and fails. The other families warn.
 
