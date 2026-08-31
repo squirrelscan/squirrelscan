@@ -4,9 +4,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { formatRedirectHop } from "@squirrelscan/core-contracts";
 
-import { normalizeUrl } from "@squirrelscan/utils";
-
-import { didRedirect } from "../shared/redirect-evidence";
+import { didRedirect, requestTarget } from "../shared/redirect-evidence";
 
 export const canonicalChainRule: Rule = {
   meta: {
@@ -141,31 +139,30 @@ export const canonicalChainRule: Rule = {
       }
     }
 
-    // If canonical points to a URL that ultimately redirects, flag it
-    try {
-      const normalizedCanonical = normalizeUrl(absoluteCanonical);
-      const normalizedFinal = normalizeUrl(finalUrl);
-      if (
-        normalizedCanonical === normalizeUrl(pageUrl) &&
-        normalizedFinal !== normalizedCanonical &&
-        redirectChain &&
-        didRedirect(pageUrl, finalUrl, redirectChain)
-      ) {
-        checks.push({
-          name: "canonical-redirects",
-          status: "warn",
-          message: "Canonical URL resolves through a redirect chain",
-          items: [
-            {
-              id: absoluteCanonical,
-              label: redirectChain.hops.map((hop) => formatRedirectHop(hop)).join(" → "),
-              meta: { chain: redirectChain, finalUrl },
-            },
-          ],
-        });
-      }
-    } catch {
-      // Normalization failed; already handled above
+    // If the canonical names the very URL we watched redirect, flag it. Identity
+    // is the request target, not a normalized form: `/page`, `/page/` and
+    // `/page?x=1` are different requests, and only the one we actually fetched
+    // is the one whose chain we hold. Folding them together hands this page's
+    // chain to a canonical that never redirected (#1510).
+    const canonicalTarget = requestTarget(absoluteCanonical);
+    if (
+      canonicalTarget === requestTarget(pageUrl) &&
+      requestTarget(finalUrl) !== canonicalTarget &&
+      redirectChain &&
+      didRedirect(pageUrl, finalUrl, redirectChain)
+    ) {
+      checks.push({
+        name: "canonical-redirects",
+        status: "warn",
+        message: "Canonical URL resolves through a redirect chain",
+        items: [
+          {
+            id: absoluteCanonical,
+            label: redirectChain.hops.map((hop) => formatRedirectHop(hop)).join(" → "),
+            meta: { chain: redirectChain, finalUrl },
+          },
+        ],
+      });
     }
 
     return { checks };

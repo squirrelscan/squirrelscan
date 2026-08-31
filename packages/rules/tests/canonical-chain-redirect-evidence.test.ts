@@ -250,6 +250,52 @@ describe("crawl/canonical-chain — canonical-redirects needs the same evidence"
     );
   });
 
+  test.each([
+    ["a trailing slash", "https://example.com/page/"],
+    ["a query string", "https://example.com/page?ref=nav"],
+  ])(
+    "a canonical differing by %s is not blamed for the fetched URL's redirect",
+    (_label, canonical) => {
+      // `/page`, `/page/` and `/page?ref=nav` are three different requests. We
+      // fetched one of them and hold its chain; handing that chain to a
+      // canonical naming another is the misattribution of #1510, one rule over.
+      const check = run(
+        {
+          url: "https://example.com/page",
+          finalUrl: "https://example.com/elsewhere",
+          canonical,
+          redirectChain: chain("https://example.com/page", "https://example.com/elsewhere", [
+            hop("https://example.com/page", 301),
+            hop("https://example.com/elsewhere", 200),
+          ]),
+        },
+        "canonical-redirects"
+      );
+
+      expect(check).toBeUndefined();
+    }
+  );
+
+  test("an observed redirect landing back on the same target does not flag the canonical", () => {
+    // Deliberate, and not a gap in the shared evidence rule: this check exists
+    // to say "point the canonical at the final URL instead", and there is no
+    // other URL to point it at. Following that advice here would mean
+    // canonicalizing to a fragment. A redirect loop is links/redirects' finding.
+    const page = {
+      url: "https://example.com/page",
+      finalUrl: "https://example.com/page#top",
+      canonical: "https://example.com/page",
+      redirectChain: chain("https://example.com/page", "https://example.com/page#top", [
+        hop("https://example.com/page", 302),
+        hop("https://example.com/page#top", 200),
+      ]),
+    };
+
+    expect(run(page, "canonical-redirects")).toBeUndefined();
+    // The redirect itself is still reported, on the same evidence.
+    expect(run(page, "page-redirect-chain")?.status).toBe("warn");
+  });
+
   test("an unobserved chain to a different destination still flags the canonical", () => {
     // Both checks must ask the same question. Demanding a recorded 3xx here
     // while page-redirect-chain accepts a different destination would drop

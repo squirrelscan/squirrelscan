@@ -66,16 +66,19 @@ export function contradictsItself(chain: RedirectChain | undefined): boolean {
 }
 
 /**
- * The request target a URL names: everything the server is asked for, query
- * INCLUDED, fragment excluded because it never leaves the browser.
+ * The request target a URL names: path AND query, fragment excluded because it
+ * never leaves the browser. Which URL a request was aimed at, and which one it
+ * landed on, are both this.
  *
- * Deliberately not `targetKey`. This one answers "did the request land
- * somewhere else", and a redirect that only rewrites the query string still
- * redirected. `targetKey` is a join key for matching links to the redirect they
- * hit, where folding the query in would stop a link carrying a tracking
- * parameter from matching the path-level redirect it lands on.
+ * Deliberately not `targetKey`. This one decides whether two URLs are the same
+ * resource, and `/page`, `/page/` and `/page?x=1` are three different requests:
+ * a redirect that only rewrites the query still redirected, and only one of the
+ * slash forms is the one that moved (#1510, #1524). `targetKey` is a join key
+ * for matching links to the redirect they hit, where folding the query in would
+ * stop a link carrying a tracking parameter from matching the path-level
+ * redirect it lands on.
  */
-function requestTarget(url: string): string {
+export function requestTarget(url: string): string {
   try {
     const parsed = new URL(url);
     return `${parsed.protocol.toLowerCase()}//${parsed.host.toLowerCase()}${parsed.pathname}${parsed.search}`;
