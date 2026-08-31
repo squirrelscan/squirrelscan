@@ -44,6 +44,52 @@ describe("pickTip", () => {
     }
   });
 
+  // A tip that sells a plan is shown 1-in-20 runs regardless of who is running,
+  // so before this it pitched Pro at paying customers and at unmetered
+  // (enterprise) accounts, which cannot buy a plan at all.
+  test("omits plan-sales tips by default", () => {
+    for (let i = 0; i < 200; i++) {
+      expect(pickTip()).not.toContain("Pro:");
+    }
+  });
+
+  test("omits them for an explicitly non-sales caller", () => {
+    for (let i = 0; i < 200; i++) {
+      expect(pickTip({ includeSales: false })).not.toContain("Pro:");
+    }
+  });
+
+  // Forced index rather than sampling: with the sales tip filtered out the pool
+  // shrinks, so this pins that NO index of the filtered pool can reach it.
+  test("no random draw can reach a sales tip when they are excluded", () => {
+    const originalRandom = Math.random;
+    try {
+      for (const r of [0, 0.25, 0.5, 0.75, 0.9999999999]) {
+        Math.random = () => r;
+        const tip = pickTip();
+        expect(tip).not.toContain("Pro:");
+        expect(TIPS).toContain(tip);
+      }
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  test("a caller that opts in can still reach the sales tip", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 500; i++) seen.add(pickTip({ includeSales: true }));
+    expect([...seen].some((tip) => tip.includes("Pro:"))).toBe(true);
+  });
+
+  test("exactly one tip is tagged as plan sales", () => {
+    const salesTips = TIPS.filter((tip) => tip.includes("Pro:"));
+    expect(salesTips).toHaveLength(1);
+    // The filtered pool is the full list minus exactly that one.
+    const reachable = new Set<string>();
+    for (let i = 0; i < 2000; i++) reachable.add(pickTip());
+    expect(reachable.size).toBe(TIPS.length - 1);
+  });
+
   test("interpolates the coverage constant instead of a hardcoded page count", () => {
     const fullCoverageTip = TIPS.find((t) => t.includes("--coverage full"));
     expect(fullCoverageTip).toBeDefined();
