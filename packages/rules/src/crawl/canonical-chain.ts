@@ -6,6 +6,12 @@ import { formatRedirectHop } from "@squirrelscan/core-contracts";
 
 import { normalizeUrl } from "@squirrelscan/utils";
 
+import {
+  contradictsItself,
+  didRedirect,
+  hasObservedRedirect,
+} from "../shared/redirect-evidence";
+
 export const canonicalChainRule: Rule = {
   meta: {
     id: "crawl/canonical-chain",
@@ -28,11 +34,10 @@ export const canonicalChainRule: Rule = {
     const finalUrl = ctx.page.finalUrl ?? pageUrl;
     const redirectChain = ctx.page.redirectChain;
 
-    // If the page itself redirected, surface the chain context
-    if (
-      redirectChain &&
-      (redirectChain.chainLength > 0 || pageUrl !== finalUrl)
-    ) {
+    // If the page itself redirected, surface the chain context. A chain exists
+    // whenever a fetcher recorded hops; it is evidence of a redirect only when
+    // we watched one happen or the request landed on a different resource.
+    if (redirectChain && didRedirect(pageUrl, finalUrl, redirectChain)) {
       const chainLabel =
         redirectChain.hops.length > 1
           ? redirectChain.hops.map((hop) => formatRedirectHop(hop)).join(" → ")
@@ -148,7 +153,8 @@ export const canonicalChainRule: Rule = {
         normalizedCanonical === normalizeUrl(pageUrl) &&
         normalizedFinal !== normalizedCanonical &&
         redirectChain &&
-        redirectChain.chainLength > 0
+        hasObservedRedirect(redirectChain) &&
+        !contradictsItself(redirectChain)
       ) {
         checks.push({
           name: "canonical-redirects",
