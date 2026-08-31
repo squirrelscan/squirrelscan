@@ -35,7 +35,12 @@ export interface SmartMergeOverride {
   coverage: {
     auditedPages: number;
     knownPages: number;
+    /** Findings a PREVIOUS audit observed. 0 on a first run (#1652). */
     carriedFindings: number;
+    /** Findings on pages no audit has ever rendered (#1652). Optional here (a
+     *  consumer contract) so an override built from an older coverage shape
+     *  still type-checks; `runSmartAudits` always supplies it. */
+    unrenderedFindings?: number;
   };
   carriedLastSeen: Map<string, number>;
 }

@@ -163,12 +163,17 @@ SQLite store keyed by site). On a partial re-audit:
 - **re-crawled pages** get fresh results that supersede their prior state,
 - **un-crawled pages** carry their last-known issues forward (tagged `carried`,
   with a "last seen" time) indefinitely, until you re-crawl them,
+- **pages no audit has ever rendered** (known from a sitemap or a rule's page
+  list, but never inside a run's page budget) are tagged `unrendered` instead:
+  nothing has observed them yet, so they have no "last seen" time and they are
+  counted separately from carried findings. On a first audit every such finding
+  is `unrendered` and the carried count is 0.
 - **removed pages** (404/410) have their issues closed.
 
 The health score is then computed over the **union of all known non-removed
 pages**, so re-auditing a subset never inflates the score by hiding the issues on
 the pages you skipped. Reports show a coverage line ("audited N of M known
-pages") and tag carried findings.
+pages") and tag carried and unrendered findings.
 
 ```toml
 smart_audits = true

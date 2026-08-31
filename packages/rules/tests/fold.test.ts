@@ -152,6 +152,29 @@ describe("foldOverflowChecks", () => {
     expect(notCarried!.provenance).toBeUndefined();
   });
 
+  // #1652: folding must not launder "never rendered by any audit" into
+  // "carried" — that is precisely the claim of a prior audit the aggregate
+  // would then be making on a first run.
+  test("a wholly-unrendered fold stays unrendered, with no lastSeenAt", () => {
+    const unrendered = Array.from({ length: 6 }, (_, i) =>
+      failCheck({ pageUrl: `https://example.com/p/${i}`, provenance: "unrendered" }),
+    );
+    const [aggregate] = foldOverflowChecks(unrendered, SMALL);
+    expect(aggregate!.provenance).toBe("unrendered");
+    expect(aggregate!.lastSeenAt).toBeUndefined();
+
+    // Mixed with a genuinely carried check → neither claim holds for the whole.
+    const mixed = [
+      ...unrendered.slice(0, 5),
+      failCheck({
+        pageUrl: "https://example.com/carried",
+        provenance: "carried",
+        lastSeenAt: 900,
+      }),
+    ];
+    expect(foldOverflowChecks(mixed, SMALL)[0]!.provenance).toBeUndefined();
+  });
+
   test("a pathological rule with more distinct issue classes than the cap still slices to the cap", () => {
     const checks = Array.from({ length: 10 }, (_, i) =>
       failCheck({ name: `class-${i}`, pageUrl: `https://example.com/p/${i}` }),

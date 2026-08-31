@@ -23,7 +23,10 @@ interface SlimJsonReport {
     coverage?: {
       auditedPages: number;
       knownPages: number;
+      /** Findings a PREVIOUS audit observed. 0 on a first run (#1652). */
       carriedFindings: number;
+      /** Findings on pages no audit has ever rendered (#1652). */
+      unrenderedFindings?: number;
     };
   };
   /**
@@ -212,12 +215,17 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
             details: check.details,
             ...(check.value ? { legacyValue: check.value } : {}),
             // Smart audits (#110): provenance for findings carried across audits.
-            ...(check.carriedCount && check.carriedCount >= check.count
-              ? {
-                  provenance: "carried" as const,
-                  ...(check.lastSeenAt ? { lastSeenAt: check.lastSeenAt } : {}),
-                }
-              : {}),
+            // (#1652) "unrendered" is tested FIRST and emits no `lastSeenAt` —
+            // no audit has rendered the page, so there is nothing it was last
+            // seen at, and calling it "carried" would invent a prior audit.
+            ...(check.unrenderedCount && check.unrenderedCount >= check.count
+              ? { provenance: "unrendered" as const }
+              : check.carriedCount && check.carriedCount >= check.count
+                ? {
+                    provenance: "carried" as const,
+                    ...(check.lastSeenAt ? { lastSeenAt: check.lastSeenAt } : {}),
+                  }
+                : {}),
           };
       }),
     })),

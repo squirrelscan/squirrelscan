@@ -47,9 +47,20 @@ export interface SmartAuditResult {
   coverage: {
     auditedPages: number;
     knownPages: number;
+    /** Findings a PREVIOUS audit observed. 0 on a first run (#1652). */
     carriedFindings: number;
+    /**
+     * Findings on pages no audit has ever rendered (#1652). OMITTED when zero so
+     * a site without any is byte-identical to a pre-#1652 report — this object is
+     * copied straight into `report.coverage`.
+     */
+    unrenderedFindings?: number;
   };
-  /** carriedKey → lastSeenAt (epoch ms) for tagging report checks as carried. */
+  /**
+   * carriedKey → lastSeenAt (epoch ms) for tagging report checks as carried.
+   * (#1652) Never-rendered findings are excluded — {@link tagCarriedCheck}
+   * preserves the `provenance: "unrendered"` the union scorer already stamped.
+   */
   carriedLastSeen: Map<string, number>;
 }
 
@@ -148,9 +159,13 @@ export function runSmartAudits(
       if (!crawledUrls.has(url)) carriedPageUrls.add(url);
     }
 
-    // Carried findings = active (open) findings on those carried pages.
+    // Carried findings = active (open) findings on those carried pages, SPLIT by
+    // whether any audit has ever rendered the page (#1652): a never-rendered
+    // page's finding was not inherited from a previous run, so it must not be
+    // counted as carried nor given a last-seen date implying an earlier look.
     const carriedFindings: CarriedFinding[] = [];
     const carriedLastSeen = new Map<string, number>();
+    let unrenderedCount = 0;
     for (const f of merged.findings) {
       if (f.provenance !== "carried") continue;
       carriedFindings.push({
@@ -162,7 +177,12 @@ export function runSmartAudits(
         value: f.value,
         expected: f.expected,
         payload: f.payload,
+        neverRendered: f.neverRendered,
       });
+      if (f.neverRendered) {
+        unrenderedCount++;
+        continue;
+      }
       carriedLastSeen.set(
         carriedKey(f.normalizedUrl, f.ruleId, f.checkName),
         f.lastSeenAt
@@ -214,14 +234,22 @@ export function runSmartAudits(
       coverage: {
         auditedPages: crawledUrls.size,
         knownPages: merged.activePageUrls.size,
-        carriedFindings: carriedFindings.length,
+        carriedFindings: carriedFindings.length - unrenderedCount,
+        ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
       },
       carriedLastSeen,
     };
   });
 }
 
-/** Tag a report check as carried (with lastSeenAt) if it matches a carried key. */
+/**
+ * Tag a report check as carried (with lastSeenAt) if it matches a carried key.
+ *
+ * (#1652) The `?? "fresh"` fallback is load-bearing, not defensive: the union
+ * scorer already stamped `provenance: "unrendered"` on findings whose page no
+ * audit has rendered, and those keys are absent from `carriedLastSeen`, so
+ * preserving an existing provenance is what keeps them out of the carried label.
+ */
 export function tagCarriedCheck(
   pageUrl: string,
   ruleId: string,
