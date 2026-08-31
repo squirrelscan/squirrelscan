@@ -3,6 +3,8 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const MAX_URLS_PER_SITEMAP = 50000;
+// The protocol limit for an index file counts CHILD SITEMAPS, not URLs.
+const MAX_CHILDREN_PER_INDEX = 50000;
 
 export const sitemapValidRule: Rule = {
   meta: {
@@ -62,8 +64,16 @@ export const sitemapValidRule: Rule = {
         sitemapsWithErrors.push({ url: sitemap.url, errors: sitemap.errors });
       }
 
-      // Check URL count limit
-      if (sitemap.urlCount > MAX_URLS_PER_SITEMAP) {
+      // Size limits. The crawler stores the AGGREGATED child URL total as
+      // urlCount on a top-level index (coverage math needs it), so an index
+      // must never be held to the per-file URL limit — a healthy sharded site
+      // with >50k total URLs would fail on its index file (#1651). Indexes
+      // have their own protocol limit: 50,000 child sitemaps.
+      if (sitemap.type === "index") {
+        if (sitemap.childSitemaps.length > MAX_CHILDREN_PER_INDEX) {
+          oversizedSitemaps.push(`${sitemap.url} (${sitemap.childSitemaps.length} child sitemaps)`);
+        }
+      } else if (sitemap.urlCount > MAX_URLS_PER_SITEMAP) {
         oversizedSitemaps.push(`${sitemap.url} (${sitemap.urlCount} URLs)`);
       }
     }
@@ -93,7 +103,7 @@ export const sitemapValidRule: Rule = {
       checks.push({
         name: "sitemap-size",
         status: "warn",
-        message: `${oversizedSitemaps.length} sitemap(s) exceed 50,000 URL limit`,
+        message: `${oversizedSitemaps.length} sitemap(s) exceed the 50,000-entry protocol limit`,
         items: oversizedSitemaps.map((s) => ({ id: s })),
       });
     } else {

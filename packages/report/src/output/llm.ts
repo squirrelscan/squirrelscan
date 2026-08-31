@@ -8,6 +8,7 @@ import { ruleAffectedPages, ruleAffectedRollup, ruleCarriedPageCount } from "../
 import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
+import { editorSummaryView } from "../editor-summary";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
@@ -152,12 +153,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   }
 
   // Editor's summary — report-only exec narrative for the agent (does not affect the score).
-  if (report.editorSummary) {
-    const es = report.editorSummary;
+  const es = editorSummaryView(report.editorSummary);
+  if (es) {
     lines.push(`<editor-summary model="${escapeXml(es.model)}">`);
-    for (const para of es.prose.split(/\n{2,}/)) {
-      const trimmed = para.trim();
-      if (trimmed) lines.push(`${indent(1)}<para>${escapeXml(trimmed)}</para>`);
+    for (const para of es.paragraphs) {
+      lines.push(`${indent(1)}<para>${escapeXml(para)}</para>`);
     }
     if (es.bigTicket.length > 0) {
       lines.push(`${indent(1)}<big-ticket>`);

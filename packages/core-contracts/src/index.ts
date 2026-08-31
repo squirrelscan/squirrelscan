@@ -1309,7 +1309,13 @@ export interface RunSyncDelta {
 
 // ── Organization & Plan types ──────────────────────────────────────
 
-export type PlanId = "free" | "starter" | "team";
+/**
+ * `enterprise` is INTERNAL / invite-only (2026-08-28): it has no price, no
+ * checkout, and never appears on pricing, marketing, docs, dashboard plan
+ * pickers or CLI upsells. An admin assigns it from the admin dashboard. Public
+ * surfaces must enumerate `SELF_SERVE_PLAN_IDS`, never `Object.keys(PLANS)`.
+ */
+export type PlanId = "free" | "starter" | "team" | "enterprise";
 export type OrgRole = "owner" | "admin" | "editor" | "viewer" | "billing";
 
 /** Stripe subscription billing interval. Annual prepays 12 months at the
@@ -1356,6 +1362,26 @@ export interface PlanDefinition {
    * forwards stored headers for a non-capable plan (defense in depth).
    */
   customHeaders: boolean;
+  /**
+   * Credits are not metered for this plan: no debit is ever rejected for
+   * insufficient funds and `credit_balances` is never mutated. Every debit,
+   * credit, refund and grant is still WRITTEN to `credit_ledger` exactly as it
+   * would be on a metered plan (same entry_type/amount/feature/units/
+   * idempotency key) with `metadata.accounting = "unlimited"`, so usage stays
+   * fully accounted for later invoicing. The stored balance is therefore FROZEN
+   * while the org is on such a plan and resumes from that frozen value if the
+   * org moves back to a metered plan.
+   *
+   * `false`/absent = normal metered billing.
+   */
+  unlimitedCredits: boolean;
+  /**
+   * The plan can be bought by the customer without talking to us. Public
+   * surfaces (pricing page, dashboard plan comparison / upgrade funnel, CLI
+   * upsells, checkout) must enumerate only self-serve plans; a non-self-serve
+   * plan is admin-assigned and invisible to end users.
+   */
+  selfServe: boolean;
   /**
    * Per-seat pricing for seat-based plans (Team, #625). Only seat-based plans
    * set it; `undefined` means flat subscription pricing (free/starter). At

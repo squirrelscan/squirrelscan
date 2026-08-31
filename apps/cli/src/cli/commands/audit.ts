@@ -13,6 +13,7 @@ import { existsSync } from "node:fs";
 import { platform } from "node:os";
 
 import type { AuditFailureDetails, CrawlerEvent } from "@/controllers/audit";
+import type { PreflightBalance } from "@/lib/balance";
 import type { UserSettings } from "@/self/types";
 import type { AuditOptions } from "@/types";
 
@@ -58,6 +59,7 @@ import {
   savePublishedReportInfo,
   type ReportVisibility,
 } from "@/controllers/report/publish";
+import { formatBalance, isUnlimitedBalance } from "@/lib/balance";
 import {
   createRunFinalizer,
   type FinalizeRunInput,
@@ -130,6 +132,8 @@ export interface CloudConsentEstimate {
   maxPages: number;
   balance: number | null;
   maxCredits: number;
+  /** Unmetered plan (enterprise): the balance sentence reads "unlimited". */
+  unlimited?: boolean;
 }
 
 /** The single up-front spend disclosure (pricing v10): flat audit base + render
@@ -140,8 +144,9 @@ export function consentEstimateLine(est: CloudConsentEstimate): string {
   const renderEst = computeCost("render", est.maxPages);
   const cap =
     est.maxCredits > 0 ? `, up to ${est.maxCredits} credits/audit` : "";
-  const bal =
-    est.balance != null
+  const bal = est.unlimited
+    ? " Balance: unlimited credits."
+    : est.balance != null
       ? ` Balance: ${est.balance.toLocaleString("en-US")} credits.`
       : "";
   const pages = est.maxPages === 1 ? "page" : "pages";
@@ -175,6 +180,12 @@ export function computePreflightAffordability(opts: {
   maxPages: number;
   cloudRendering: "http" | "browser";
   topUpUrl: string;
+  /**
+   * The plan is not metered against `balance` (enterprise). There is nothing to
+   * fall short of, so the estimate is still computed but never warned about.
+   * Absent = metered.
+   */
+  unlimited?: boolean;
 }): PreflightAffordability {
   const base = computeCost("audit_base", 1);
   const renderCost =
@@ -182,7 +193,7 @@ export function computePreflightAffordability(opts: {
       ? computeCost("render", opts.maxPages)
       : 0;
   const estimate = base + renderCost;
-  const shortfall = opts.balance < estimate;
+  const shortfall = !opts.unlimited && opts.balance < estimate;
   const warningLines = shortfall
     ? [
         `⚠ This audit may cost up to ${estimate.toLocaleString("en-US")} credits ` +
@@ -205,9 +216,28 @@ export function computePreflightAffordability(opts: {
  *
  * Exported for tests. Returns plain lines; the caller does the printing.
  */
-export function registerFailureLines(failure: RegisterFailure): string[] {
+export function registerFailureLines(
+  failure: RegisterFailure,
+  /**
+   * The account's plan is not metered. An unmetered account CANNOT genuinely be
+   * out of credits, so this code can only mean the server disagrees with what
+   * the preflight told us: a stale deploy, or a plan change mid-run. Report that
+   * honestly instead of pitching Pro at someone on a contracted plan, which is
+   * both wrong and leaks an internal plan's existence into a sales pitch.
+   */
+  unlimited = false
+): string[] {
   if (failure.code !== "INSUFFICIENT_CREDITS") {
     return [`⚠ Run not tracked in your dashboard: ${failure.message}`];
+  }
+  if (unlimited) {
+    return [
+      fmt.yellow(
+        "⚠ Run not tracked in your dashboard: the server refused it as"
+      ),
+      `  ${fmt.yellow("insufficient credits, but this account is unmetered.")}`,
+      `  ${fmt.dim("The server may be running an older build. The audit itself ran locally and its results below are complete.")}`,
+    ];
   }
   const balanceLine =
     failure.balance != null
@@ -223,6 +253,32 @@ export function registerFailureLines(failure: RegisterFailure): string[] {
     `  ${fmt.dim("The audit itself ran locally and its results below are complete.")}`,
     ...proPitchLines("cli-audit"),
   ];
+}
+
+/**
+ * Can this signed-in account start a CLOUD audit, given its balance preflight?
+ *
+ * Pricing v10 (#391): every cloud audit debits a flat base at registration, so a
+ * balance below it cannot start one and the run drops to local-only (no
+ * register, no cloud calls, no publish) rather than letting the server 402 the
+ * register mid-crawl.
+ *
+ * An unmetered plan is EXEMPT. Its stored total is frozen and usually 0, and the
+ * server records the debit rather than deducting it, so comparing the number
+ * here would silently drop an enterprise org to local-only on every run: #1588's
+ * failure mode (eleven nights of anonymous audits misread as a rule regression)
+ * reproduced on a perfectly healthy account.
+ *
+ * Extracted from the command body so this branch is unit-testable. The inline
+ * version could only be reached by running a full audit, which is exactly why a
+ * missing flag check here would go unnoticed.
+ */
+export function canStartCloudAudit(balance: {
+  total: number;
+  unlimited?: boolean;
+}): boolean {
+  if (isUnlimitedBalance(balance)) return true;
+  return balance.total >= computeCost("audit_base", 1);
 }
 
 /** Warn once the balance drops below this share of the plan's monthly grant. */
@@ -243,8 +299,15 @@ export function lowBalanceFooterLines(opts: {
   balance: number | null;
   monthlyCredits: number;
   plan: "anonymous" | "free" | "paid";
+  /**
+   * The plan is not metered (enterprise). An unmetered account can never be low
+   * on credits, so this warning — and the top-up/upgrade offer attached to it —
+   * must never fire for one. Absent = metered.
+   */
+  unlimited?: boolean;
 }): string[] {
   const { balance, monthlyCredits, plan } = opts;
+  if (opts.unlimited) return [];
   if (balance == null || plan === "anonymous") return [];
 
   const base = computeCost("audit_base", 1);
@@ -903,6 +966,9 @@ export const audit = defineCommand({
       // an unreachable API both read as signed-out, so cloud never half-runs.
       let signedIn = false;
       let startingBalance: number | null = null;
+      // Enterprise (unmetered) org: the balance numbers are frozen and must
+      // never be compared against a price or shown as a spendable figure.
+      let unlimitedCredits = false;
       // Plan tier of the signed-in account, captured from the balance preflight.
       // Drives the report's locked-rules messaging (#368): "free" → soft Pro hint,
       // "paid" → genuinely-unavailable framing, "anonymous" → free-account upsell.
@@ -923,6 +989,7 @@ export const audit = defineCommand({
         try {
           const { balance, plan, branding } = await statusClient.getBalance();
           startingBalance = balance.total;
+          unlimitedCredits = isUnlimitedBalance(balance);
           accountPlan = plan.id === "free" ? "free" : "paid";
           planMonthlyCredits = plan.monthlyCredits;
           reportBranding = branding;
@@ -930,8 +997,13 @@ export const audit = defineCommand({
           // registration. A balance below it can't start one — run local-only
           // (no register, no cloud calls, no publish) instead of letting the
           // server 402 the register mid-crawl.
+          //
+          // An unmetered plan is exempt: its stored total is frozen (often 0)
+          // and the server never refuses the debit, so comparing it here would
+          // silently drop an enterprise org to local-only every run (#1588 is
+          // the same failure mode with a real empty balance).
           const auditBase = computeCost("audit_base", 1);
-          if (balance.total < auditBase) {
+          if (!canStartCloudAudit(balance)) {
             kv(
               "Account",
               `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${auditBase}-credit audit base, running local-only`)} · upgrade: ${fmt.cyan(upgradeUrl("cli-audit"))}`
@@ -940,7 +1012,7 @@ export const audit = defineCommand({
             signedIn = true;
             kv(
               "Account",
-              `${accountLabel} · ${fmt.bold(balance.total.toLocaleString("en-US"))} credits`
+              `${accountLabel} · ${fmt.bold(formatBalance(balance.total, unlimitedCredits))} credits`
             );
           }
         } catch (error) {
@@ -1173,7 +1245,15 @@ export const audit = defineCommand({
           outputPath: options.outputPath,
         })
       ) {
-        console.error(`${fmt.dim(tipLabel())}${pickTip()}`);
+        console.error(
+          `${fmt.dim(tipLabel())}${pickTip({
+            // A plan pitch only goes to someone who could act on it. A paid
+            // account already has the feature being sold, and an unmetered one
+            // cannot buy a plan at all — `unlimitedCredits` is checked as well as
+            // the tier because it is the flag that must never leak an upsell.
+            includeSales: accountPlan !== "paid" && !unlimitedCredits,
+          })}`
+        );
         console.error("");
       }
 
@@ -1259,6 +1339,7 @@ export const audit = defineCommand({
             maxPages,
             balance: startingBalance,
             maxCredits: config.cloud.max_credits_per_audit,
+            unlimited: unlimitedCredits,
           },
         });
 
@@ -1276,6 +1357,7 @@ export const audit = defineCommand({
           maxPages,
           cloudRendering,
           topUpUrl: upgradeUrl("cli-audit"),
+          unlimited: unlimitedCredits,
         });
         if (preflight.shortfall) {
           log("");
@@ -1444,7 +1526,12 @@ export const audit = defineCommand({
         // controller via `cloudConsented`, not by nulling this callback.
         const confirmCloudSpend =
           process.stdout.isTTY && !args.yes
-            ? async (estimate: number, balance: number): Promise<boolean> => {
+            ? async (
+                estimate: number,
+                // An unmetered org still confirms the spend (it is accounted
+                // and invoiced), it just sees "balance: unlimited".
+                balance: PreflightBalance
+              ): Promise<boolean> => {
                 progress.stop();
                 const { createInterface } = await import("node:readline");
                 const rl = createInterface({
@@ -1608,7 +1695,11 @@ export const audit = defineCommand({
       // which used to be swallowed silently. Progress is stopped by now (finally
       // above), so this prints cleanly.
       if (registerWarning && !registeredRun) {
-        for (const line of registerFailureLines(registerWarning)) log(line);
+        for (const line of registerFailureLines(
+          registerWarning,
+          unlimitedCredits
+        ))
+          log(line);
       }
 
       // Handle errors
@@ -2019,8 +2110,11 @@ export const audit = defineCommand({
           const after =
             report.cloudSpend?.balanceAfter ??
             (spent === 0 ? startingBalance : null);
-          const balancePart =
-            after != null
+          // An unmetered org's "balance after" is meaningless (nothing was
+          // deducted) — say unlimited rather than echo a frozen number.
+          const balancePart = unlimitedCredits
+            ? " · balance unlimited"
+            : after != null
               ? ` · balance ${spent > 0 ? "~" : ""}${after.toLocaleString("en-US")}`
               : "";
           footerLines.push(
@@ -2040,6 +2134,7 @@ export const audit = defineCommand({
               balance: after,
               monthlyCredits: planMonthlyCredits,
               plan: accountPlan,
+              unlimited: unlimitedCredits,
             })
           );
         } else {

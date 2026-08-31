@@ -27,7 +27,10 @@ import {
 } from "@squirrelscan/audit-engine";
 import { computeCost } from "@squirrelscan/core-contracts";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { buildEditorSummaryRequest } from "@squirrelscan/report";
+import {
+  buildEditorSummaryRequest,
+  toEditorSummary,
+} from "@squirrelscan/report";
 import {
   filterRules,
   loadAllRules,
@@ -37,6 +40,7 @@ import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
 
 import type { ExternalBulkChecker, SiteContextPage } from "@/audit/adapter";
 import type { Config } from "@/config";
+import type { PreflightBalance } from "@/lib/balance";
 
 import { buildBlocklistPayload } from "@/audit/cloud-payloads-blocklist";
 import { buildGapsPayloads } from "@/audit/cloud-payloads-gaps";
@@ -351,7 +355,10 @@ export interface RunCloudPrefetchOptions {
   auditId: string;
   /** Stage-1 gating policy (CLI-owned) threaded into the engine's prefetch. */
   gate?: (meta: SiteMetadata, service: CloudServiceId) => boolean;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /**
    * Fires after every request payload has been built (synchronously) and
@@ -493,8 +500,11 @@ export async function resolveDeadLinksBulkChecker(opts: {
   auditId: string;
   siteContext: SiteContextPage[];
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   /**
    * Called after every SUCCESSFUL bulk call with the urls submitted and the
    * credits the server debited for it. Lets the audit controller account
@@ -518,7 +528,7 @@ export async function resolveDeadLinksBulkChecker(opts: {
   // when a confirm callback is available (TTY). Non-TTY/--yes proceeds silently,
   // bounded by the server-side per-url charge.
   if (confirm && estimate > config.cloud.confirm_threshold) {
-    let balance = 0;
+    let balance: PreflightBalance = 0;
     try {
       balance = (await opts.getBalance?.()) ?? 0;
     } catch (error) {
@@ -615,8 +625,11 @@ export interface RunCloudTechDetectOptions {
   /** Fetched scripts from the resource-assets phase (carries inline content). */
   scripts: FetchedScript[];
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /** Called once after a SUCCESSFUL charged call with the credits debited. */
   onSpend?: (credits: number) => void;
@@ -812,8 +825,11 @@ export interface RunCloudEditorSummaryOptions {
   /** Deltas vs the previous audit, when the caller has a prior run. */
   delta?: EditorSummaryRequest["delta"];
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /** Called once after a SUCCESSFUL charged call with the credits debited. */
   onSpend?: (credits: number) => void;
@@ -861,20 +877,22 @@ export async function runCloudEditorSummary(
 
     opts.onProgress?.("cloud: editor's summary");
     const res = await client.editorSummary(request);
+    // A 2xx is not proof of a usable body: the client casts JSON to the response
+    // type without validating it, so a partial rollout / proxy JSON envelope /
+    // truncated body types as valid while missing `prose`. Degrade exactly like
+    // a 5xx (and don't report spend for a summary we're not rendering) rather
+    // than let it through to throw in a renderer after the crawl is paid for.
+    const editorSummary = toEditorSummary(res);
+    if (!editorSummary) {
+      opts.onProgress?.("cloud: editor's summary skipped");
+      logger.debug("editor-summary skipped", "unusable response body");
+      return null;
+    }
     // A digest-cache hit (#1012) is served free — never bill it or report it
     // as spend (same contract as the domain-stats 30-day cache below).
     const credits = res.cached ? 0 : estimate;
     if (credits > 0) opts.onSpend?.(credits);
-    return {
-      editorSummary: {
-        prose: res.prose,
-        bigTicket: res.bigTicket,
-        verdict: res.verdict,
-        model: res.model,
-        generatedAt: res.generatedAt,
-      },
-      credits,
-    };
+    return { editorSummary, credits };
   } catch (error) {
     // Any failure (402 out of credits / auth / network / 5xx / build) →
     // degrade silently (no editor-summary section). Never fails the audit.
@@ -894,8 +912,11 @@ export interface RunCloudDomainStatsOptions {
   /** Registered website id, when this audit is tied to a tracked site. */
   websiteId?: string;
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
-  getBalance?: () => Promise<number>;
-  confirm?: (estimatedCredits: number, balance: number) => Promise<boolean>;
+  getBalance?: () => Promise<PreflightBalance>;
+  confirm?: (
+    estimatedCredits: number,
+    balance: PreflightBalance
+  ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /** Called once after a SUCCESSFUL charged call with the credits debited. */
   onSpend?: (credits: number) => void;

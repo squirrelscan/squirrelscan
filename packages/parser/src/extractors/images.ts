@@ -5,6 +5,8 @@ import type { Document, Element } from "linkedom";
 
 import { Effect } from "effect";
 
+import { getAttrCI } from "@squirrelscan/utils";
+
 import type { ExtractedImage } from "./types";
 
 /**
@@ -99,7 +101,10 @@ export function extractImages(
 
     images.push({
       src,
-      alt: element.getAttribute("alt"),
+      // Case-insensitive: HTML attribute names are, but linkedom keeps the
+      // source case, so getAttribute("alt") misses ALT="" and reads it as an
+      // absent attribute (#143).
+      alt: getAttrCI(element, "alt"),
       width: element.getAttribute("width"),
       height: element.getAttribute("height"),
       isLazyLoaded: isLazyLoaded(element),
@@ -148,15 +153,14 @@ export function getUniqueImageUrls(doc: Document, baseUrl: string): string[] {
 }
 
 /**
- * Get images missing alt text
+ * Get images with no alt attribute at all. alt="" is excluded: it is the
+ * correct markup for a decorative image, not a missing attribute (#143).
  */
 export function getImagesWithoutAlt(
   doc: Document,
   baseUrl: string
 ): ExtractedImage[] {
-  return extractImages(doc, baseUrl).filter(
-    (img) => img.alt === null || img.alt === ""
-  );
+  return extractImages(doc, baseUrl).filter((img) => img.alt === null);
 }
 
 /**
