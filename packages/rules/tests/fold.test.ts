@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { CHECK_DETAILS_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
 import { clampItemId } from "@squirrelscan/core-contracts/clamp";
 
@@ -20,6 +20,7 @@ import {
   clampReportPagesToBudget,
   DEFAULT_FOLD_LIMITS,
   foldOverflowChecks,
+  stampChecksTruncated,
   unfoldAggregateCheck,
   type FoldLimits,
 } from "../src/fold";
@@ -763,5 +764,129 @@ describe("clampCheckDetails (#1288)", () => {
     const bigNoise = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`k${i}`, i]));
     const [c] = capMixedRuleChecksForPublish([failCheck({ details: bigNoise })], 500);
     expect(Object.keys(c!.details!).length).toBeLessThan(30);
+  });
+});
+
+// #1503 — every path that DROPS something now records what it dropped. The
+// report used to look complete either way, which is the failure mode the issue
+// was filed against: a rule reporting on 500 pages of a 2000-page site gave the
+// reader no way to tell the other 1500 were never shown.
+//
+// Note the golden snapshots are built from the UNCAPPED ruleResultsMap, so none
+// of this is observable there — these are the only tests that watch these caps.
+describe("truncation is never silent (#1503)", () => {
+  test("the per-rule check cap is LOSSLESS: a 2000-page rule keeps all 2000 pages", () => {
+    // The premise #1503 was filed on — that the cap slices page-scoped findings
+    // away — does not hold: capChecksForPublish FOLDS, collapsing the issue
+    // class to one aggregate that carries every affected page. Nothing is lost
+    // and no marker is needed, because nothing was clipped.
+    const checks = Array.from({ length: 2000 }, (_, i) =>
+      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+    );
+    const capped = capChecksForPublish(checks, REPORT_LIMITS.maxChecksPerRule);
+
+    expect(capped).toHaveLength(1);
+    expect(capped[0]!.pages).toHaveLength(2000);
+    expect(capped[0]!.details?.occurrences).toBe(2000);
+    expect(capped[0]!.details?.pagesTruncated).toBeUndefined();
+  });
+
+  test("clipping pages at maxPagesPerCheck records the TRUE total, not the retained length", () => {
+    // Past the page cap the list must be clipped, but the count must not lie:
+    // affectedPages() reads pagesTruncated as authoritative, so without this
+    // stamp a clipped rule reports its retained length as the whole truth.
+    const checks = Array.from({ length: 10 }, (_, i) =>
+      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+    );
+    const folded = foldOverflowChecks(checks, { ...SMALL, maxChecks: 3 });
+
+    expect(folded).toHaveLength(1);
+    expect(folded[0]!.pages).toHaveLength(SMALL.maxPagesPerCheck);
+    expect(folded[0]!.details?.pagesTruncated).toBe(10);
+  });
+
+  test("a constituent's pagesTruncated survives the fold (re-fold path, #916)", () => {
+    // foldGroup rebuilds `details` from scratch, so an already-sampled check's
+    // marker is carried forward explicitly or it vanishes — and the aggregate
+    // would then undercount to the union of the few pages that survived upstream.
+    const alreadySampled = failCheck({
+      pages: ["https://example.com/a", "https://example.com/b"],
+      details: { aggregated: true, pagesTruncated: 600 },
+    });
+    const folded = foldOverflowChecks(
+      [alreadySampled, ...Array.from({ length: 3 }, (_, i) => failCheck({ pageUrl: `https://example.com/p/${i}` }))],
+      { ...SMALL, maxChecks: 2, maxPagesPerCheck: 100 },
+    );
+
+    expect(folded).toHaveLength(1);
+    expect(folded[0]!.details?.pagesTruncated).toBe(600);
+  });
+
+  test("more issue classes than the cap stamps checksTruncated on the last kept check", () => {
+    // The one drop the downstream report-stream backstop can NEVER see: by the
+    // time it runs, fold has already bounded the array to maxChecks, so its own
+    // length check cannot trip.
+    const checks = Array.from({ length: 8 }, (_, i) =>
+      failCheck({ name: `class-${i}`, pageUrl: `https://example.com/p/${i}` }),
+    );
+    const folded = foldOverflowChecks(checks, SMALL);
+
+    expect(folded).toHaveLength(SMALL.maxChecks);
+    expect(folded.at(-1)!.details?.checksTruncated).toBe(8);
+  });
+
+  test("capMixedRuleChecksForPublish records its slice instead of dropping in silence", () => {
+    // Mixed-rule arrays cannot fold (grouping across DIFFERENT rules is
+    // unsound), so this one really does slice — it just says so now.
+    const checks = Array.from({ length: 12 }, (_, i) =>
+      failCheck({ name: `rule-${i}`, pageUrl: `https://example.com/p/${i}` }),
+    );
+    const capped = capMixedRuleChecksForPublish(checks, 5);
+
+    expect(capped).toHaveLength(5);
+    expect(capped.at(-1)!.details?.checksTruncated).toBe(12);
+  });
+
+  test("under both caps nothing is stamped (no marker on an untruncated array)", () => {
+    const checks = Array.from({ length: 3 }, (_, i) =>
+      failCheck({ name: `rule-${i}`, pageUrl: `https://example.com/p/${i}` }),
+    );
+    const capped = capMixedRuleChecksForPublish(checks, 5);
+
+    expect(capped).toHaveLength(3);
+    for (const c of capped) expect(c.details?.checksTruncated).toBeUndefined();
+  });
+
+  test("a SECOND, tighter cap keeps the original total (40 → 10 → 5 still reads 40)", () => {
+    // The marker sits on whichever check was last at the previous cap — exactly
+    // the element a tighter cap slices away. Reading it only off the survivor
+    // would report 10 here, quietly substituting the already-capped
+    // intermediate for the real 40 and re-hiding most of the loss.
+    const once = capMixedRuleChecksForPublish(
+      Array.from({ length: 40 }, (_, i) => failCheck({ name: `rule-${i}` })),
+      10,
+    );
+    expect(once.at(-1)!.details?.checksTruncated).toBe(40);
+
+    const twice = capMixedRuleChecksForPublish(once, 5);
+    expect(twice).toHaveLength(5);
+    expect(twice.at(-1)!.details?.checksTruncated).toBe(40);
+  });
+
+  test("stampChecksTruncated never replaces a larger recorded total with a smaller one", () => {
+    const stamped = stampChecksTruncated(failCheck({ details: { checksTruncated: 2000 } }), 500);
+    expect(stamped.details?.checksTruncated).toBe(2000);
+  });
+
+  test("the marker survives a details record already full of scalar keys", () => {
+    // clampDetailsRecord keeps scalars ahead of other values but still slices
+    // the level to maxKeysPerLevel in order, so a marker appended LAST to an
+    // already-full record is dropped — losing the very fact being recorded, on
+    // the two call sites that do not also log it.
+    const full = Object.fromEntries(
+      Array.from({ length: CHECK_DETAILS_LIMITS.maxKeysPerLevel }, (_, i) => [`n${i}`, i]),
+    );
+    const stamped = stampChecksTruncated(failCheck({ details: full }), 1234);
+    expect(stamped.details?.checksTruncated).toBe(1234);
   });
 });

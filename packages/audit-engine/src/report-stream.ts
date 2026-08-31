@@ -12,7 +12,13 @@
 
 import { Effect } from "effect";
 
-import { capChecksForPublish, capMixedRuleChecksForPublish } from "@squirrelscan/rules";
+import {
+  capChecksForPublish,
+  capMixedRuleChecksForPublish,
+  clampCheckItemsOverflow,
+  maxChecksTruncated,
+  stampChecksTruncated,
+} from "@squirrelscan/rules";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 
@@ -157,6 +163,59 @@ function toReportRuleResults(
   }
 
   return Object.fromEntries(entries);
+}
+
+/**
+ * Last-resort schema backstop over the assembled `ruleResults` — ONE copy,
+ * shared by buildV1Report and buildV2Report (they carried byte-identical
+ * twins of this loop, and #1503 was filed against one of them).
+ *
+ * It is a BACKSTOP, not the cap that does the work. `toReportRuleResults` has
+ * already run `capChecksForPublish`, which FOLDS an over-cap rule down to one
+ * aggregate per (name, status) issue class and keeps every affected page on
+ * the aggregate's `pages[]` — so by the time a checks array reaches here it is
+ * bounded losslessly and these caps do not bite. Measured on a 1200-page
+ * crawl: 186 rules fold, the widest emits 4 issue classes against a cap of
+ * 500, and zero affected pages are lost.
+ *
+ * #1503 read the bare `slice(0, 500)` this replaces as the primary cap and
+ * concluded page-scoped findings were being dropped. They were not — but a
+ * silent unconditional slice sitting downstream of a lossless fold is a
+ * landmine either way: if the fold's invariant ever weakens (a rule emitting
+ * more distinct issue classes than the cap), the loss would be invisible.
+ * Both caps now record what they cut — items into `details.additional`,
+ * checks into `details.checksTruncated` — and warn, so the failure mode is
+ * loud rather than a report that merely looks complete.
+ */
+function sanitizeReportRuleResults(ruleResults: Record<string, ReportRuleResult>): void {
+  for (const [ruleId, ruleResult] of Object.entries(ruleResults)) {
+    // Display-string clamps, unchanged: in-place, and `name` IS clamped here
+    // (unlike clampCheckStrings, which leaves it alone as a fold join key) —
+    // fold has already run, so nothing downstream joins on it.
+    for (const check of ruleResult.checks) {
+      if (check.message.length > 1000) check.message = `${check.message.slice(0, 997)}...`;
+      if (check.name.length > 255) check.name = `${check.name.slice(0, 252)}...`;
+    }
+
+    // Rolls the drop into `details.additional` instead of slicing items away.
+    let checks = clampCheckItemsOverflow(ruleResult.checks, REPORT_LIMITS.maxItemsPerCheck);
+
+    if (checks.length > REPORT_LIMITS.maxChecksPerRule) {
+      // Reconciled against any marker an upstream cap already left, so a
+      // second cut never replaces the real total with this smaller one.
+      const total = Math.max(checks.length, maxChecksTruncated(checks));
+      logger.warn(
+        `report: rule ${ruleId} emitted ${total} checks past the fold, capping at ` +
+          `${REPORT_LIMITS.maxChecksPerRule} (details.checksTruncated records the total)`,
+      );
+      checks = checks.slice(0, REPORT_LIMITS.maxChecksPerRule);
+      const lastIndex = checks.length - 1;
+      const last = checks[lastIndex];
+      if (last) checks[lastIndex] = stampChecksTruncated(last, total);
+    }
+
+    ruleResult.checks = checks;
+  }
 }
 
 // ============================================
@@ -487,17 +546,7 @@ export function buildV1Report(
       }
     }
 
-    // Sanitize: truncate strings that exceed API schema limits
-    for (const ruleResult of Object.values(result.ruleResults)) {
-      for (const check of ruleResult.checks) {
-        if (check.message.length > 1000) check.message = `${check.message.slice(0, 997)}...`;
-        if (check.name.length > 255) check.name = `${check.name.slice(0, 252)}...`;
-        if (check.items) {
-          check.items = check.items.slice(0, 1000);
-        }
-      }
-      ruleResult.checks = ruleResult.checks.slice(0, 500);
-    }
+    sanitizeReportRuleResults(result.ruleResults);
 
     logger.traceEnd(reportSpan, { totalPages: pages.length });
     return result;
@@ -743,18 +792,8 @@ export function buildV2Report(
       if (result.healthScore) result.healthScore.overall = null;
     }
 
-    // Sanitize: truncate ruleResults strings that exceed API schema limits (same
-    // as v1). The page-schema.raw loop is a no-op here (pages: []), omitted.
-    for (const ruleResult of Object.values(result.ruleResults)) {
-      for (const check of ruleResult.checks) {
-        if (check.message.length > 1000) check.message = `${check.message.slice(0, 997)}...`;
-        if (check.name.length > 255) check.name = `${check.name.slice(0, 252)}...`;
-        if (check.items) {
-          check.items = check.items.slice(0, 1000);
-        }
-      }
-      ruleResult.checks = ruleResult.checks.slice(0, 500);
-    }
+    // Same backstop as v1. The page-schema.raw loop is a no-op here (pages: []).
+    sanitizeReportRuleResults(result.ruleResults);
 
     logger.traceEnd(reportSpan, { totalPages: pagesCrawled });
     return result;
