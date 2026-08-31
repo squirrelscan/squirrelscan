@@ -2,7 +2,10 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
 
-import { SECRET_CONTEXT_WINDOW_SIZE } from "@squirrelscan/utils/constants";
+import {
+  SECRET_CONTEXT_WINDOW_SIZE,
+  SECRET_KEY_LOOKBEHIND_SIZE,
+} from "@squirrelscan/utils/constants";
 
 // Secret detection patterns with service names
 // Sources: secrets-patterns-db, secret-regex-list, gitleaks patterns
@@ -23,6 +26,14 @@ type FastPattern = {
 
 // Type for context patterns (generic patterns, only run if keyword present)
 // These avoid catastrophic backtracking from (?=.*keyword) lookaheads
+//
+// Every pattern in this tier is BARE-SHAPE: a run of hex/base64/alphanumeric
+// characters with no distinctive prefix, which is also the shape of a SHA-256
+// digest, an SRI hash, a git object id, an ETag and a UUID. The brand keyword
+// ("together", "datadog"…) is the only thing separating them from ordinary page
+// content, and brand words show up in ordinary prose. So a match here is also
+// read against the key it is assigned to: never reported under a digest key or
+// with no assignment at all — see classifyKeyContext.
 type ContextPattern = {
   name: string;
   keyword: string; // Lowercase keyword to check via includes() first
@@ -31,6 +42,12 @@ type ContextPattern = {
 };
 
 // Fast patterns - have distinctive prefixes, safe to run on all content
+//
+// Every entry here carries its own literal marker — a prefix (`sk-`, `ghp_`,
+// `AKIA`, `pk_live_`), a suffix (`NRAL`, `-us1`), a URL host, a PEM header, or a
+// required keyword in the pattern itself (AWS secret key, the generic
+// assignments, `Bearer`). None of them match a bare digest, so none of them
+// needs the key-context gate the CONTEXT_PATTERNS tier uses.
 const FAST_PATTERNS: FastPattern[] = [
   // AI/ML Services
   {
@@ -517,12 +534,10 @@ const CONTEXT_PATTERNS: ContextPattern[] = [
     pattern: /[a-f0-9]{32}/gi,
     confidence: "medium",
   },
-  {
-    name: "LogRocket App ID",
-    keyword: "logrocket",
-    pattern: /[a-z0-9]{6}\/[a-z0-9-]+/gi,
-    confidence: "medium",
-  },
+  // "LogRocket App ID" (/[a-z0-9]{6}\/[a-z0-9-]+/) was dropped: it matches any
+  // short path segment ("assets/logo-dark"), and a LogRocket app id is a public
+  // client-side identifier anyway — LogRocket.init() ships it to the browser by
+  // design. No amount of key context makes a path shape mean "credential".
 
   // Auth Services (need context)
   {
@@ -646,6 +661,221 @@ function isInValuePosition(
   return false;
 }
 
+// Keys whose value is a digest, hash, cache entry or object id — never a
+// credential. A release page publishing `sha256:"01e4fbb0…"` next to a download
+// is doing the right thing, and so is an SRI `integrity=` attribute, a git
+// commit id, or a cache key built by hashing its inputs.
+const DIGEST_KEY_WORDS = new Set([
+  "sha",
+  "sha1",
+  "sha256",
+  "sha384",
+  "sha512",
+  "md5",
+  "hash",
+  "hashes",
+  "digest",
+  "checksum",
+  "checksums",
+  "integrity",
+  "etag",
+  "commit",
+  "revision",
+  "fingerprint",
+  "cache",
+  "cachekey",
+]);
+
+// Keys that say the value is meant to be secret. Bare `api` is deliberately
+// absent — `api:"…"` names a service, not a credential — while bare `key` is
+// deliberately present: `key:"…"` is a weak signal, but these are all
+// medium-confidence findings and dropping it costs real detections.
+const CREDENTIAL_KEY_WORDS = new Set([
+  "apikey",
+  "key",
+  "keys",
+  "token",
+  "secret",
+  "password",
+  "passwd",
+  "pwd",
+  "auth",
+  "authorization",
+  "bearer",
+  "credential",
+  "credentials",
+]);
+
+// `x-api-key`, `apiKey`, `SHA256`, `"sha256"` -> the words a key is made of.
+// A one-letter word is also glued to its successor so lower-camel `eTagKey`
+// yields `etag`, not `e` + `tag`.
+function keyWords(key: string): string[] {
+  const parts = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+
+  const words = [...parts];
+  for (const [index, part] of parts.entries()) {
+    const next = parts[index + 1];
+    if (part.length === 1 && next) words.push(part + next);
+  }
+  return words;
+}
+
+/**
+ * A minifier's member access carries no meaning: `t.a = "…"`, `e.x2 = "…"`,
+ * `n["a"] = "…"`. Suppressing on those would blind the rule to every bundled
+ * script, so they count as "no key at all" rather than as a key that failed to
+ * say "credential".
+ *
+ * Being short is not enough — it has to be a member access on an object. A
+ * query parameter (`?v=<hex>`), a JSON key (`"id":"<hex>"`) and a plain
+ * property (`id: "<hex>"`) are short but they do name their value, and what
+ * they name is not a credential.
+ */
+function isMinifiedMemberKey(key: string, viaBracket: boolean): boolean {
+  const last = key.split(".").pop() ?? key;
+  if (last.replace(/[^A-Za-z0-9]/g, "").length > 2) return false;
+  return viaBracket || key.includes(".");
+}
+
+// Characters that can be part of a key, so cutting the look-back in the middle
+// of a run of them would hand classifyKeyContext a truncated key.
+const KEY_CHAR_RE = /[A-Za-z0-9_$.-]/;
+
+/**
+ * The text immediately before a match, for reading the key off.
+ *
+ * SECRET_KEY_LOOKBEHIND_SIZE is a budget, not a hard cut: slicing at exactly
+ * that offset can land inside the key itself, and `redential="` classifies as
+ * nothing at all. So the slice walks back to the nearest non-key character,
+ * spending at most the same budget again before giving up.
+ */
+export function lookBehind(text: string, index: number): string {
+  const floor = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE * 2);
+  let start = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE);
+  while (start > floor && KEY_CHAR_RE.test(text[start - 1] ?? "")) start--;
+  return text.slice(start, index);
+}
+
+// The key an assignment puts immediately in front of a value:
+// `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`
+const PRECEDING_KEY_RE =
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*[:=]\s*["'`]?\s*$/;
+
+// The same, written as a bracket access: `cfg["apiKey"] = "`, `cfg['sha256'] =`
+const BRACKET_KEY_RE = /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*[:=]\s*["'`]?\s*$/;
+
+// Anything at all in value position, whatever the key turned out to be
+const ASSIGNMENT_RE = /[:=]\s*["'`]?\s*$/;
+
+// SRI and prefixed-digest values: integrity="sha384-…", `sha256-…`, `md5:…`
+const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
+
+// An HTML integrity attribute, whatever the algorithm prefix looks like
+const INTEGRITY_ATTR_RE = /\bintegrity\s*=\s*["'][^"']*$/i;
+
+// Header-style credentials: `Authorization: Bearer <value>`, `Basic <value>`
+const AUTH_SCHEME_RE = /\b(?:bearer|basic)\s+$/i;
+
+// Attributes that name the value carried by a sibling attribute of the same
+// tag, in either order: `<meta name="algolia-api-key" content="…">` and
+// `<meta content="…" name="algolia-api-key">` say the same thing.
+const TAG_NAMING_ATTR_RE =
+  /\b(?:name|id|itemprop|property)\s*=\s*["']([^"']{1,64})["']/gi;
+const TAG_DATA_ATTR_RE = /\b(data-[A-Za-z0-9_-]{1,64})\s*=/g;
+
+type KeyContext = "digest" | "credential" | "assigned" | "none";
+
+function classifyKeyName(key: string, keyword: string): KeyContext | "unknown" {
+  const words = keyWords(key);
+  if (words.some((word) => DIGEST_KEY_WORDS.has(word))) return "digest";
+  if (
+    words.some((word) => CREDENTIAL_KEY_WORDS.has(word) || word === keyword)
+  ) {
+    return "credential";
+  }
+  return "unknown";
+}
+
+/** The whole tag a value sits inside, or undefined if it sits between tags. */
+export function enclosingTag(text: string, index: number): string | undefined {
+  const open = text.lastIndexOf("<", index);
+  if (open === -1) return undefined;
+  // A `>` between the tag opener and the value means the value is text content.
+  if (text.slice(open, index).includes(">")) return undefined;
+  const close = text.indexOf(">", index);
+  return close === -1 ? undefined : text.slice(open, close + 1);
+}
+
+/** Every key a tag names, whichever attribute order it wrote them in. */
+function classifyTagKeys(tag: string, keyword: string): KeyContext | "unknown" {
+  let verdict: KeyContext | "unknown" = "unknown";
+
+  const consider = (key: string) => {
+    const cls = classifyKeyName(key, keyword);
+    // Digest wins outright; a credential hit still yields to a later digest.
+    if (cls === "digest") verdict = "digest";
+    else if (cls === "credential" && verdict === "unknown") verdict = cls;
+  };
+
+  for (const attr of tag.matchAll(TAG_NAMING_ATTR_RE)) {
+    if (attr[1]) consider(attr[1]);
+  }
+  for (const attr of tag.matchAll(TAG_DATA_ATTR_RE)) {
+    if (attr[1]) consider(attr[1]);
+  }
+  return verdict;
+}
+
+/**
+ * Classify a bare-shape match by the key it is assigned to.
+ *
+ * - `digest` — a checksum, SRI hash, cache key or object id. Never reported.
+ * - `credential` — a key that says "secret". Reported.
+ * - `assigned` — in value position under a key that means nothing either way,
+ *   including a minifier's `t.a`. Reported: suppressing here would blind the
+ *   rule to every minified bundle, which is where leaks actually hide.
+ * - `none` — no assignment at all (a hex run in prose or a table cell).
+ *   Not reported.
+ *
+ * Digest beats credential when a key claims both, so `sha256Key` is a checksum.
+ */
+export function classifyKeyContext(
+  before: string,
+  keyword: string,
+  tag?: string
+): KeyContext {
+  if (DIGEST_PREFIX_RE.test(before) || INTEGRITY_ATTR_RE.test(before)) {
+    return "digest";
+  }
+
+  const bracket = BRACKET_KEY_RE.exec(before);
+  const match = bracket ?? PRECEDING_KEY_RE.exec(before);
+  const key = match?.[1];
+
+  if (key) {
+    const direct = classifyKeyName(key, keyword);
+    if (direct !== "unknown") return direct;
+  }
+
+  // The naming attribute may sit on either side of the one holding the value.
+  if (tag) {
+    const fromTag = classifyTagKeys(tag, keyword);
+    if (fromTag !== "unknown") return fromTag;
+  }
+
+  if (key) {
+    return isMinifiedMemberKey(key, bracket !== null) ? "assigned" : "none";
+  }
+
+  if (AUTH_SCHEME_RE.test(before)) return "credential";
+
+  return ASSIGNMENT_RE.test(before) ? "assigned" : "none";
+}
+
 export interface LeakedSecret {
   type: string;
   value: string;
@@ -670,22 +900,38 @@ function maskSecret(value: string): string {
   );
 }
 
+/**
+ * A window around one keyword occurrence. `text` carries a lead-in — the full
+ * budget lookBehind can spend — so a value sitting at the very start of the
+ * scanned region still has its key visible. `scanFrom` marks where the region
+ * proper begins: a match must reach into it to count, which keeps the scanned
+ * span exactly as wide as it was before the lead-in existed.
+ */
+type KeywordWindow = { text: string; scanFrom: number };
+
+// How much lead-in a window carries: whatever lookBehind is allowed to spend.
+const WINDOW_LEAD_IN = SECRET_KEY_LOOKBEHIND_SIZE * 2;
+
 // Extract windows around all keyword occurrences
 function extractKeywordWindows(
   content: string,
   contentLower: string,
   keyword: string
-): string[] {
-  const windows: string[] = [];
+): KeywordWindow[] {
+  const windows: KeywordWindow[] = [];
   let pos = 0;
 
   while ((pos = contentLower.indexOf(keyword, pos)) !== -1) {
     const start = Math.max(0, pos - SECRET_CONTEXT_WINDOW_SIZE);
+    const leadIn = Math.max(0, start - WINDOW_LEAD_IN);
     const end = Math.min(
       content.length,
       pos + keyword.length + SECRET_CONTEXT_WINDOW_SIZE
     );
-    windows.push(content.slice(start, end));
+    windows.push({
+      text: content.slice(leadIn, end),
+      scanFrom: start - leadIn,
+    });
     pos += keyword.length;
   }
 
@@ -764,13 +1010,20 @@ export function scanContent(
     if (windows.length === 0) continue;
 
     // Only scan the windows, not the entire content
-    for (const window of windows) {
-      // Reset pattern state for global regex
+    for (const { text: window, scanFrom } of windows) {
+      // Match across the lead-in too: a value can START there and run into the
+      // region proper, and skipping those loses the leak at a window boundary.
       pattern.lastIndex = 0;
 
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(window)) !== null) {
         const value = match[0];
+
+        // A match that both starts and ends inside the lead-in belongs to the
+        // previous window, which already scanned it. The lead-in is context.
+        if (match.index + value.length <= scanFrom) {
+          continue;
+        }
 
         // Skip duplicates, overlapping rematches, and false positives
         if (
@@ -789,6 +1042,18 @@ export function scanContent(
         // For context patterns, require the value to be in a value position
         // (assigned via = or :) to reduce false positives from array elements
         if (!isInValuePosition(window, value, match.index)) {
+          continue;
+        }
+
+        // Bare-shape patterns are the shape of a SHA-256 digest, so the key in
+        // front of the value decides: never report under sha256/integrity/
+        // checksum/commit/cache, or with no assignment context at all.
+        const keyContext = classifyKeyContext(
+          lookBehind(window, match.index),
+          keyword,
+          enclosingTag(window, match.index)
+        );
+        if (keyContext === "digest" || keyContext === "none") {
           continue;
         }
 

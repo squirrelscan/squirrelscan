@@ -4,7 +4,7 @@
 
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { coerceSchemelessUrl, shouldSkipUrl } from "@squirrelscan/utils";
+import { coerceSchemelessUrl, getAttrCI, shouldSkipUrl } from "@squirrelscan/utils";
 import { parseHTML, type Document, type Element } from "linkedom";
 
 import type {
@@ -203,7 +203,10 @@ export function extractImages(doc: Document, baseUrl: string): ImageData[] {
       const absoluteSrc = new URL(src, baseUrl).toString();
       images.push({
         src: absoluteSrc,
-        alt: (img as Element).getAttribute("alt"),
+        // Case-insensitive: HTML attribute names are, but linkedom keeps the
+        // source case, so getAttribute("alt") misses ALT="" and reads it as an
+        // absent attribute (#143).
+        alt: getAttrCI(img as Element, "alt"),
         width: (img as Element).getAttribute("width"),
         height: (img as Element).getAttribute("height"),
       });

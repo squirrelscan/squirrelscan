@@ -48,8 +48,16 @@ fi
 
 log() { echo -e "${GREEN}==>${NC} $1" >&2; }
 warn() { echo -e "${YELLOW}Warning:${NC} $1" >&2; }
+# error <message> [detail]
+# `message` is shown to the user AND carried in the failure report, where it is
+# clamped to ERROR_LINE_MAX. `detail` is remediation text shown to the user
+# only: a long guidance block passed as `message` would push the actual error
+# out of the report's `error_line`.
 error() {
   echo -e "${RED}Error:${NC} $1" >&2
+  if [ -n "${2:-}" ]; then
+    echo -e "$2" >&2
+  fi
   LAST_ERROR_MSG="$1"
   # Also persist to a file: error() often runs inside a command-substitution
   # subshell (e.g. version=$(get_latest_version)), where the LAST_ERROR_MSG
@@ -146,6 +154,271 @@ report_error() {
   ( curl -fsS -m 3 --connect-timeout 2 -X POST \
       -H 'Content-Type: application/json' \
       --data "$payload" "$ERROR_ENDPOINT" >/dev/null 2>&1 & ) 2>/dev/null || true
+}
+
+# --- Killed-process diagnosis ---------------------------------------------
+# A shell reports a signal-killed child as 128+signal: 137 is SIGKILL, 143 is
+# SIGTERM. In the field 137 is the kernel OOM-killer taking out the bun
+# standalone binary on a small VPS or a memory-capped container. It leaves
+# NOTHING on stdout/stderr, so the exit code is the only evidence there is, and
+# a generic "failed with exit code 137" sent users back to retry it unchanged.
+SELF_INSTALL_KILL_CODES="137 143"
+# Reported instead of `self_install` for these codes. The Sentry fingerprint is
+# (script, step) with the exit code only in event data, so without a distinct
+# step every OOM kill groups into the same issue as a real self-install bug.
+SELF_INSTALL_KILLED_STEP="self_install_killed"
+
+# Indirected so the tests can point the probe at fixtures instead of the real
+# kernel interfaces; SQUIRREL_ERROR_ENDPOINT above is seamed the same way.
+CGROUP_ROOT="${SQUIRREL_CGROUP_ROOT:-/sys/fs/cgroup}"
+PROC_SELF_CGROUP="${SQUIRREL_PROC_SELF_CGROUP:-/proc/self/cgroup}"
+PROC_MEMINFO="${SQUIRREL_PROC_MEMINFO:-/proc/meminfo}"
+# Above this, a "limit" is a not-configured sentinel rather than a real cap:
+# cgroup v1 parks an uncapped controller at PAGE_COUNTER_MAX (~8 EiB).
+CGROUP_LIMIT_SANITY_MAX=1099511627776 # 1TiB
+
+is_uint() {
+  case "${1:-}" in
+    "" | *[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# True when digit-string $1 exceeds digit-string $2, compared WITHOUT bash
+# arithmetic: cgroup limits routinely exceed a signed 64-bit integer (v1 writes
+# UINT64_MAX for "unlimited" on many kernels), and `[ "$v" -gt ... ]` wraps on
+# those, so an unlimited controller would read as a real 16-exabyte cap. Equal
+# length digit strings compare correctly lexically.
+uint_gt() {
+  # Digits collate out of order in a handful of locales, and this decides
+  # whether a cap is real, so pin the comparison.
+  local LC_ALL=C
+  local a="${1#"${1%%[!0]*}"}" b="${2#"${2%%[!0]*}"}"
+  a="${a:-0}"
+  b="${b:-0}"
+  if [ "${#a}" -ne "${#b}" ]; then
+    [ "${#a}" -gt "${#b}" ]
+    return
+  fi
+  [[ "$a" > "$b" ]]
+}
+
+# This process's path within a cgroup hierarchy, selected by an awk program
+# over /proc/self/cgroup. Empty when the hierarchy isn't in use.
+cgroup_rel_path() {
+  local program="$1"
+  if [ -r "$PROC_SELF_CGROUP" ]; then
+    awk -F: "$program" "$PROC_SELF_CGROUP" 2>/dev/null || true
+  fi
+}
+
+# The kernel only ever writes an absolute, traversal-free path here, but this
+# string is about to be concatenated into a filesystem read and fed to a loop
+# that shortens it, so anything else is refused rather than followed.
+is_safe_cgroup_rel() {
+  case "${1:-}" in
+    "") return 0 ;;
+    *//* | */../* | */.. | */./* | */.) return 1 ;;
+    /*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Headroom under one cgroup memory cap, in MiB.
+#   prints a number, returns 0 -> a real cap, and this is what's left under it
+#   prints nothing, returns 0 -> no cap here; the caller may look elsewhere
+#   returns 1                 -> a cap exists but can't be read; the caller must
+#                                stay SILENT rather than quote the host's memory
+cgroup_headroom_mib() {
+  local limit_file="$1" usage_file="$2" limit usage
+  if [ ! -f "$limit_file" ]; then
+    return 0
+  fi
+  limit=$(cat "$limit_file" 2>/dev/null || true)
+  if ! is_uint "$limit" || uint_gt "$limit" "$CGROUP_LIMIT_SANITY_MAX"; then
+    # A literal "max" (v2) or a sentinel (v1) is a genuine "uncapped"; anything
+    # else here is a value we failed to understand, which is not the same thing.
+    if [ "$limit" = "max" ] || is_uint "$limit"; then
+      return 0
+    fi
+    return 1
+  fi
+  usage=$(cat "$usage_file" 2>/dev/null || true)
+  if ! is_uint "$usage"; then
+    return 1
+  fi
+  # Clamp rather than underflow: usage sits at or above the limit at the moment
+  # of an OOM kill, and "0" is the true answer there. Compared without
+  # arithmetic for the same overflow reason as the limit above; past this point
+  # both values are under the sanity bound, so the subtraction is safe.
+  if ! uint_gt "$limit" "$usage"; then
+    printf '0'
+  else
+    printf '%s' "$(((limit - usage) / 1048576))"
+  fi
+}
+
+# Walks from this process's own cgroup up to the mount root: a limit on an
+# ancestor (a systemd slice's MemoryMax, typically) binds exactly as hard as one
+# on the leaf, and the leaf is very often uncapped underneath it. The tightest
+# headroom wins, and a cap anywhere in the chain that we cannot read makes the
+# whole answer unknown rather than optimistic.
+cgroup_tree_headroom_mib() {
+  local base="$1" limit_name="$2" usage_name="$3" rel="$4"
+  local best="" headroom dir previous
+  while :; do
+    dir="${base}${rel}"
+    if headroom=$(cgroup_headroom_mib "$dir/$limit_name" "$dir/$usage_name"); then
+      if [ -n "$headroom" ] && { [ -z "$best" ] || [ "$headroom" -lt "$best" ]; }; then
+        best="$headroom"
+      fi
+    else
+      return 1
+    fi
+    if [ -z "$rel" ]; then
+      break
+    fi
+    # is_safe_cgroup_rel guarantees this shortens, but a loop that walks a
+    # string from a file gets an explicit termination guard regardless: hanging
+    # the installer would be a worse bug than the one being fixed here.
+    previous="$rel"
+    rel="${rel%/*}"
+    if [ "$rel" = "$previous" ]; then
+      break
+    fi
+  done
+  printf '%s' "$best"
+}
+
+# Memory this process could still get, in MiB, or empty when we can't say --
+# every caller must handle empty. cgroups are consulted FIRST, and a cap we can
+# see but not read suppresses the answer entirely, because /proc/meminfo
+# describes the HOST inside a container: it would cheerfully report gigabytes
+# free moments after the kernel killed us for passing a 256MB cap.
+available_memory_mib() {
+  local rel headroom kib
+
+  # cgroup v2: a single "0::<path>" line, relative to the v2 mount.
+  rel=$(cgroup_rel_path '$1 == "0" { print $3; exit }')
+  if [ -n "$rel" ] && is_safe_cgroup_rel "$rel"; then
+    if headroom=$(cgroup_tree_headroom_mib \
+      "$CGROUP_ROOT" memory.max memory.current "${rel%/}"); then
+      if [ -n "$headroom" ]; then
+        printf '%s' "$headroom"
+        return 0
+      fi
+    else
+      return 0
+    fi
+  fi
+
+  # cgroup v1: "<n>:memory:<path>", under the memory controller's own mount.
+  rel=$(cgroup_rel_path '$2 ~ /(^|,)memory(,|$)/ { print $3; exit }')
+  if [ -n "$rel" ] && is_safe_cgroup_rel "$rel"; then
+    if headroom=$(cgroup_tree_headroom_mib \
+      "$CGROUP_ROOT/memory" memory.limit_in_bytes memory.usage_in_bytes "${rel%/}"); then
+      if [ -n "$headroom" ]; then
+        printf '%s' "$headroom"
+        return 0
+      fi
+    else
+      return 0
+    fi
+  fi
+
+  # Demonstrably uncapped, so the host figure is the honest one. MemAvailable,
+  # not MemFree: MemFree ignores reclaimable page cache and reads far too low.
+  if [ -r "$PROC_MEMINFO" ]; then
+    kib=$(awk '/^MemAvailable:/ { print $2; exit }' "$PROC_MEMINFO" 2>/dev/null || true)
+    if is_uint "$kib"; then
+      printf '%s' "$((kib / 1024))"
+    fi
+  fi
+  return 0
+}
+
+# The step name reported for a self-install exit code: signal deaths get their
+# own bucket, everything else keeps reporting as `self_install` (#1654).
+self_install_step_for_code() {
+  local code="$1" kill_code
+  for kill_code in $SELF_INSTALL_KILL_CODES; do
+    if [ "$code" = "$kill_code" ]; then
+      printf '%s' "$SELF_INSTALL_KILLED_STEP"
+      return 0
+    fi
+  done
+  printf 'self_install'
+}
+
+# Names the signal behind a 128+n exit code, for the error line.
+signal_name_for_code() {
+  case "${1:-}" in
+    137) printf 'SIGKILL' ;;
+    143) printf 'SIGTERM' ;;
+    *) printf 'signal %s' "$((${1:-128} - 128))" ;;
+  esac
+}
+
+# The headline for a signal death. Only SIGKILL gets to assert memory: SIGTERM
+# arrives from `timeout` wrappers and cancelled CI jobs too, and this whole fix
+# exists because a confidently wrong diagnosis wastes the user's time.
+self_install_kill_headline() {
+  local code="$1" signal
+  signal=$(signal_name_for_code "$code")
+  if [ "$code" = 137 ]; then
+    printf 'Self install was killed by the system (exit %s, %s), most likely out of memory' \
+      "$code" "$signal"
+  else
+    printf 'Self install was stopped by a signal before it finished (exit %s, %s)' \
+      "$code" "$signal"
+  fi
+}
+
+# Remediation block for a signal-killed self install. Printed as error()'s
+# `detail`, so it never crowds the reported error_line. Only SIGKILL gets the
+# out-of-memory diagnosis and the swap recipe: SIGTERM arrives from `timeout`
+# wrappers, supervisors and cancelled CI jobs at least as often, and telling
+# those users to add swap would send them off fixing the wrong machine.
+self_install_kill_guidance() {
+  local code="$1" mib="" cause=""
+  # Contained: this only ever runs on an already-failing path, so a probe that
+  # trips must cost the user a memory figure, never the guidance itself.
+  mib=$( (available_memory_mib) 2>/dev/null || true)
+
+  if [ "$code" = 137 ]; then
+    cause="  The download itself was fine: the binary passed its checksum, then the
+  system killed it partway through installing. On a small VPS or a
+  memory-capped container that is almost always the out-of-memory killer."
+    if [ -n "$mib" ]; then
+      cause="${cause}
+  Memory available right now: ${mib} MB"
+    fi
+    printf '%s' "${cause}
+
+  Give the machine more memory, then re-run this installer:
+    Add 1GB of swap (usually the quickest fix on a VPS):
+      sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
+      sudo mkswap /swapfile && sudo swapon /swapfile
+    Or resize the machine, or raise the container memory limit, to 1GB or more.
+
+  If you cannot add memory, download the binary directly and put it on your
+  PATH by hand:
+    https://github.com/${REPO}/releases"
+    return 0
+  fi
+
+  cause="  The download itself was fine: the binary passed its checksum, then
+  something outside the installer stopped it partway through. Usually that is a
+  timeout wrapper, a process supervisor, a cancelled job, or a memory limit."
+  if [ -n "$mib" ]; then
+    cause="${cause}
+  Memory available right now: ${mib} MB"
+  fi
+  printf '%s' "${cause}
+
+  Re-run the installer without a timeout or job limit around it. If it keeps
+  happening, download the binary directly and put it on your PATH by hand:
+    https://github.com/${REPO}/releases"
 }
 
 # Single EXIT trap: cleans the temp dir and reports genuine failures. Replaces
@@ -552,6 +825,13 @@ download_and_install() {
     # is where the failure is; report_error scrubs and clamps what we pass.
     LAST_ERROR_OUTPUT=$(tail -n 40 "$self_install_log" 2>/dev/null || true)
     LAST_ERROR_CODE="$rc"
+    # A signal death is not a self-install bug: the binary never got to fail on
+    # its own terms. Move it to its own step so it reports, and fingerprints,
+    # apart from real failures, and say what to actually do about it (#1654).
+    CURRENT_STEP=$(self_install_step_for_code "$rc")
+    if [ "$CURRENT_STEP" = "$SELF_INSTALL_KILLED_STEP" ]; then
+      error "$(self_install_kill_headline "$rc")" "$(self_install_kill_guidance "$rc")"
+    fi
     error "Self install failed with exit code $rc"
   fi
 }
