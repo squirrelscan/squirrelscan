@@ -46,6 +46,13 @@ import { flattenJsonLdNodes, getPathname } from "@squirrelscan/utils";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import {
+  documentTypes,
+  isArticleType,
+  schemaDateString,
+  typeNames,
+} from "../shared/schema-document";
+
 const BYLINE_CHECK = "byline-vs-schema-date";
 const VISIBLE_MISSING_CHECK = "visible-date-missing";
 const URL_TITLE_CHECK = "url-title-year";
@@ -73,60 +80,6 @@ export const optionsSchema = z.object({
       "Days the visible byline date may differ from the schema document date before warning",
     ),
 });
-
-/**
- * Schema `@type`s that stand for a dated piece of CONTENT. These are the types a
- * reader expects a visible date on, so they are also the only ones that can
- * raise `visible-date-missing`.
- */
-const ARTICLE_TYPES = new Set(
-  [
-    "Article",
-    "AdvertiserContentArticle",
-    "BlogPosting",
-    "DiscussionForumPosting",
-    "LiveBlogPosting",
-    "NewsArticle",
-    "ReportageNewsArticle",
-    "ScholarlyArticle",
-    "SocialMediaPosting",
-    "TechArticle",
-  ].map((t) => t.toLowerCase()),
-);
-
-/**
- * Page-level `@type`s: they describe the document without being dated content in
- * their own right. Their dates are comparable, but a page node carrying dates is
- * usually CMS boilerplate (WordPress SEO plugins emit one on every page of a
- * site, contact form included), so it never has to render a visible date —
- * demanding one would warn on every page of every WordPress site, which is the
- * noise this rule exists to avoid.
- */
-const PAGE_TYPES = [
-  "Report",
-  "WebPage",
-  "AboutPage",
-  "CheckoutPage",
-  "CollectionPage",
-  "ContactPage",
-  "FAQPage",
-  "ItemPage",
-  "MedicalWebPage",
-  "ProfilePage",
-  "QAPage",
-  "SearchResultsPage",
-  "Recipe",
-  "HowTo",
-].map((t) => t.toLowerCase());
-
-/**
- * Every `@type` whose node describes the DOCUMENT — the page itself or the
- * single piece of content it exists to publish. A date on one of these is a
- * claim about when THIS page was published or updated. Everything else
- * (SoftwareApplication, Product, Organization, WebSite, Person, ...) describes a
- * thing the page merely mentions, and its dates mean something else entirely.
- */
-const DOCUMENT_TYPES = new Set([...ARTICLE_TYPES, ...PAGE_TYPES]);
 
 // ============================================================================
 // Date parsing
@@ -245,29 +198,6 @@ interface SchemaDates {
   fallback: { type: string; field: string; value: string } | null;
 }
 
-/** `@type` values as authored; generators array-wrap `@type` freely. */
-function typeNames(node: Record<string, unknown>): string[] {
-  const raw = node["@type"];
-  const list: unknown[] = Array.isArray(raw) ? (raw as unknown[]) : [raw];
-  return list.filter((t): t is string => typeof t === "string" && t.length > 0);
-}
-
-/** A JSON-LD date property: a plain string, or a `{"@value": ...}` wrapper. */
-function schemaDateString(value: unknown): string | null {
-  if (typeof value === "string") return value.trim() || null;
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const inner = (value as Record<string, unknown>)["@value"];
-    if (typeof inner === "string") return inner.trim() || null;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const found = schemaDateString(entry);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 /**
  * Split every JSON-LD date on the page by the kind of node carrying it. An
  * Article-family node wins over a generic page node — a Yoast-style `@graph`
@@ -289,17 +219,18 @@ function collectSchemaDates(raw: string | null | undefined): SchemaDates {
     if (!published && !modified) continue;
 
     const types = typeNames(node);
-    const documentType = types.find((t) => DOCUMENT_TYPES.has(t.toLowerCase()));
+    // First document type wins, as it always has here.
+    const docType = documentTypes(node)[0] ?? null;
 
-    if (documentType) {
-      const isArticle = ARTICLE_TYPES.has(documentType.toLowerCase());
+    if (docType) {
+      const isArticle = isArticleType(docType);
       if (isArticle ? articleNode !== null : pageNode !== null) continue;
 
       const publishedSignal = parseDateValue(published, "schema:datePublished");
       const modifiedSignal = parseDateValue(modified, "schema:dateModified");
       if (!publishedSignal && !modifiedSignal) continue;
 
-      const entry = { type: documentType, published: publishedSignal, modified: modifiedSignal };
+      const entry = { type: docType, published: publishedSignal, modified: modifiedSignal };
       if (isArticle) articleNode = entry;
       else pageNode = entry;
       continue;
@@ -612,7 +543,7 @@ export const dateAgreementRule: Rule = {
     // A page-level node (WebPage, CollectionPage, ...) alongside SEVERAL visible
     // dates is an index or archive: those dates belong to the entries it lists,
     // not to the page, so there is nothing here to disagree with.
-    const isListing = visibleDates.length > 1 && !ARTICLE_TYPES.has(docNode.type.toLowerCase());
+    const isListing = visibleDates.length > 1 && !isArticleType(docNode.type);
 
     if (visible && !isListing) {
       // Every visible date is measured against the CLOSEST schema date, and the
@@ -650,7 +581,7 @@ export const dateAgreementRule: Rule = {
               details: { ...baseDetails, visibleDate: best.shown.value, gapDays: best.gap },
             },
       );
-    } else if (!visible && ARTICLE_TYPES.has(docNode.type.toLowerCase()) && !showsAnyDate(doc)) {
+    } else if (!visible && isArticleType(docNode.type) && !showsAnyDate(doc)) {
       // Dates in the markup and none on the page: the /learn/* half of #108.
       // `showsAnyDate` keeps this off a page that prints a date this rule
       // declined to read as a byline — a citation, or a format it cannot parse.

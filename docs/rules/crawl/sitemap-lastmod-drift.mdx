@@ -21,6 +21,25 @@ For every crawled page that appears in a sitemap with a `lastmod`, the rule comp
 published date. Pages with no date signal at all are skipped: that is
 [Content Freshness](/rules/content/freshness) territory, not drift.
 
+### Which JSON-LD node the date comes from
+
+Only the node that describes the **document** is read: an `Article`, `BlogPosting`,
+`NewsArticle` or similar, else a page-level node such as `WebPage`, `FAQPage` or `Recipe`. A
+sitewide `WebSite`, `Organization`, `Product` or `SoftwareApplication` node carries its own
+`dateModified` that has nothing to do with when this page changed, and Yoast and Rank Math emit
+one *first* in `@graph`, ahead of the article. Those nodes are ignored, and an article node is
+preferred over a page-level one wherever the two sit, so moving a sitewide node around the
+`@graph` cannot change the verdict.
+
+Types may be written bare (`Article`), as a full IRI (`https://schema.org/Article`) or against
+the `schema:` prefix, and a node may claim several at once (`["WebPage", "BlogPosting"]` counts
+as the article). The date itself may be a plain string, a `{"@value": "..."}` wrapper, or a
+list of either, in which case the first entry that parses as a date is used.
+
+If no document-describing node carries a usable `dateModified`, the rule falls through to the
+page's own markup and visible date rather than borrowing the sitewide one. The same scoping is
+applied by [Date Agreement](/rules/content/date-agreement).
+
 The two directions are reported as separate checks, because they point at different code:
 
 | Check | Fires when | Usual cause |
@@ -28,8 +47,10 @@ The two directions are reported as separate checks, because they point at differ
 | `sitemap-lastmod-behind-page` | `lastmod` is older than the page's `dateModified` by more than 7 days | Stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` |
 | `sitemap-lastmod-ahead-of-page` | `lastmod` is newer than the page's `dateModified` by more than 30 days | `lastmod` stamped at build/deploy time instead of on content change |
 
-Each finding reports both dates and the gap in days. Same-day and within-threshold differences
-never warn.
+Each finding reports both dates and the gap in days. The gap is counted in whole elapsed days,
+so a difference has to reach the next whole day past the threshold before it warns: with the
+default `behind_days = 7`, a 7.5-day gap passes and an 8-day gap warns. Same-day and
+within-threshold differences never warn.
 
 Lastmod being *older* than the page's own `dateModified` is the more clearly wrong of the two:
 it tells crawlers not to bother re-fetching a page that has in fact changed.
