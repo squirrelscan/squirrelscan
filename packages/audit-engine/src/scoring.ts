@@ -70,6 +70,14 @@ export interface CarriedFinding {
    * the SAME per-item detail as a fresh one.
    */
   payload?: string | null;
+  /**
+   * (#1652) The finding's page has never been rendered by ANY audit of the site,
+   * so no earlier run observed it. The replayed union check is stamped
+   * `provenance: "unrendered"` here, which keeps the downstream carried-tagging
+   * pass (CLI `tagCarriedCheck` / the hosted `applyUnionToReport`) from
+   * relabelling it "carried" — both preserve an already-set provenance.
+   */
+  neverRendered?: boolean;
 }
 
 /** Minimal rule meta the union scorer needs. */
@@ -184,6 +192,12 @@ export function buildScoringResultsFromMerged(
             ...(payload.items ? { items: payload.items } : {}),
             ...(payload.details ? { details: payload.details } : {}),
             ...(payload.pages ? { pages: payload.pages } : {}),
+            // (#1652) Stamp the never-rendered case HERE, at the one place the
+            // union check is created, so every consumer of the union (report
+            // rendering, the hosted rescore, issue-sync) inherits it without a
+            // second lookup — and deliberately WITHOUT `lastSeenAt`: nothing has
+            // ever observed this finding, so there is no date to show.
+            ...(f.neverRendered ? { provenance: "unrendered" as const } : {}),
           });
         }
       }

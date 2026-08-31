@@ -8,7 +8,13 @@ import type { ReportRuleResult } from "@squirrelscan/core-contracts";
 
 import { groupIssuesByCategory } from "../src/grouping";
 import { ruleAffectedPageCount, ruleCarriedPageCount } from "../src/affected-pages";
-import { checkCarriedLabel, ruleCarriedRollupLine } from "../src/coverage";
+import {
+  carriedTag,
+  checkCarriedLabel,
+  checkUnrenderedLabel,
+  coverageLine,
+  ruleCarriedRollupLine,
+} from "../src/coverage";
 
 function rule(id: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
   return {
@@ -245,5 +251,86 @@ describe("carried-page provenance (#1135)", () => {
     expect(grouped[0].rules[0].mixedProvenanceNote).toBe(
       "Fixed on all 1 page checked this run; 1 page pending re-check.",
     );
+  });
+});
+
+// #1652 — a finding on a page NO audit has ever rendered is NOT carry-over.
+// Every surface that says "carried", "last seen", or "pending re-check" is
+// asserting a previous audit observed it; on a first run none did.
+describe("unrendered provenance (#1652)", () => {
+  test("unrendered checks are counted apart from carried, with no lastSeenAt", () => {
+    const grouped = groupIssuesByCategory({
+      "images/alt-text": rule("images/alt-text", [
+        {
+          name: "alt-text-missing",
+          status: "warn",
+          message: "1 image(s) missing alt text",
+          pageUrl: "https://e.com/deep",
+          provenance: "unrendered",
+        },
+      ]),
+    });
+    const check = grouped[0].rules[0].checks[0];
+    expect(check.unrenderedCount).toBe(1);
+    expect(check.carriedCount).toBeUndefined();
+    expect(check.carriedPages).toBeUndefined();
+    expect(check.lastSeenAt).toBeUndefined();
+  });
+
+  test("the label says not-yet-rendered, never re-checked/last-verified", () => {
+    const grouped = groupIssuesByCategory({
+      "images/alt-text": rule("images/alt-text", [
+        {
+          name: "alt-text-missing",
+          status: "warn",
+          message: "1 image(s) missing alt text",
+          pageUrl: "https://e.com/deep",
+          provenance: "unrendered",
+        },
+      ]),
+    });
+    const check = grouped[0].rules[0].checks[0];
+    expect(checkUnrenderedLabel(check)).toBe("Not yet rendered in this scan.");
+    // The carried label must stay silent — it implies an earlier verification.
+    expect(checkCarriedLabel(check)).toBeNull();
+    expect(carriedTag(check)).toBe(" (not yet rendered)");
+  });
+
+  test("unrendered issues never feed the 'pending re-check' note", () => {
+    const grouped = groupIssuesByCategory({
+      "images/alt-text": rule("images/alt-text", [
+        {
+          name: "alt-text-missing",
+          status: "warn",
+          message: "1 image(s) missing alt text",
+          pageUrl: "https://e.com/deep",
+          provenance: "unrendered",
+        },
+        {
+          name: "alt-text-missing",
+          status: "pass",
+          message: "ok",
+          pageUrl: "https://e.com/b",
+          provenance: "fresh",
+        },
+      ]),
+    });
+    // Nothing is pending RE-check: the deep page was never checked to begin with.
+    expect(grouped[0].rules[0].mixedProvenanceNote).toBeUndefined();
+  });
+
+  test("coverageLine reports the two counts separately", () => {
+    expect(
+      coverageLine({
+        coverage: { auditedPages: 100, knownPages: 100, carriedFindings: 0, unrenderedFindings: 4925 },
+      } as never),
+    ).toBe(
+      "Coverage: audited 100 of 100 known pages (4925 findings on pages not yet rendered).",
+    );
+    expect(
+      coverageLine({
+        coverage: { auditedPages: 10, knownPages: 100, carriedFindings: 90 },
+      } as never),
+    ).toBe("Coverage: audited 10 of 100 known pages (90 findings carried forward).");
   });
 });

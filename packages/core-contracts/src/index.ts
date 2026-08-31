@@ -33,6 +33,7 @@ import type {
   AgentAccessProbe,
   CacheHitReason,
   CacheStats,
+  CheckProvenance,
   RslLicenseDoc,
   SecurityHeaders,
   WellKnownProbe,
@@ -66,8 +67,13 @@ export interface CheckResult {
    * `carried` = re-injected from the per-page store for a page not re-crawled
    * this run; absent / `fresh` = evaluated this run. `lastSeenAt` = epoch ms of
    * the last run that observed it. Only set when `smart_audits` is enabled.
+   *
+   * `unrendered` (#1652) = the page has NEVER been rendered by any audit of this
+   * site, so no earlier run observed the finding. It is not carry-over and never
+   * carries a `lastSeenAt` — labelling it `carried` claims a prior audit that may
+   * not exist (on a first run, none does).
    */
-  provenance?: "fresh" | "carried";
+  provenance?: CheckProvenance;
   lastSeenAt?: number;
 }
 
@@ -298,7 +304,18 @@ export interface AuditReport {
   coverage?: {
     auditedPages: number;
     knownPages: number;
+    /**
+     * Findings inherited from an EARLIER audit of this site. 0 on a first run —
+     * there is no earlier audit to inherit from (#1652).
+     */
     carriedFindings: number;
+    /**
+     * (#1652) Findings on pages NO audit has ever rendered — known (sitemap,
+     * aggregate page lists) but outside every run's page budget. Split out of
+     * `carriedFindings` so "carried" keeps meaning "a previous audit saw this".
+     * Optional: reports published before #1652 omit it.
+     */
+    unrenderedFindings?: number;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

@@ -8,17 +8,32 @@ import { checkAffectedPages } from "./affected-pages";
 
 /**
  * One-line coverage summary, e.g.
- *   "Coverage: audited 10 of 100 known pages (90 issues carried forward)."
+ *   "Coverage: audited 10 of 100 known pages (90 findings carried forward)."
+ *   "Coverage: audited 100 of 100 known pages (4925 findings on pages not yet rendered)."
  * Returns null when smart audits did not run (no `coverage` on the report).
+ *
+ * (#1652) The two counts are disjoint and read differently on purpose: "carried
+ * forward" asserts an earlier audit observed the finding, which is false for a
+ * page nothing has ever rendered — and on a first run that would be false for
+ * every one of them.
  */
 export function coverageLine(report: AuditReport): string | null {
   const c = report.coverage;
   if (!c) return null;
-  const carried =
-    c.carriedFindings > 0
-      ? ` (${c.carriedFindings} finding${c.carriedFindings === 1 ? "" : "s"} carried forward)`
-      : "";
-  return `Coverage: audited ${c.auditedPages} of ${c.knownPages} known page${c.knownPages === 1 ? "" : "s"}${carried}.`;
+  const notes: string[] = [];
+  if (c.carriedFindings > 0) {
+    notes.push(
+      `${c.carriedFindings} finding${c.carriedFindings === 1 ? "" : "s"} carried forward`
+    );
+  }
+  const unrendered = c.unrenderedFindings ?? 0;
+  if (unrendered > 0) {
+    notes.push(
+      `${unrendered} finding${unrendered === 1 ? "" : "s"} on pages not yet rendered`
+    );
+  }
+  const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
+  return `Coverage: audited ${c.auditedPages} of ${c.knownPages} known page${c.knownPages === 1 ? "" : "s"}${suffix}.`;
 }
 
 /**
@@ -88,11 +103,19 @@ export function timeAgo(epochMs: number, now: number = Date.now()): string {
 }
 
 /**
- * Provenance tag for a grouped check, e.g. "(carried — last seen 3 days ago)".
- * Returns "" when the check is fresh (not carried). Only fully-carried checks
- * (every merged instance carried) are tagged.
+ * Provenance tag for a grouped check, e.g. "(carried — last seen 3 days ago)"
+ * or, for a page nothing has ever rendered, "(not yet rendered)" (#1652).
+ * Returns "" when the check is fresh. Only FULLY carried / fully unrendered
+ * checks (every merged instance) are tagged.
+ *
+ * The unrendered branch comes first and never shows a "last seen" date: no run
+ * has observed the finding, so any date would be fabricated — and on a first
+ * audit "carried" itself would be.
  */
 export function carriedTag(check: GroupedCheck, now: number = Date.now()): string {
+  if (check.unrenderedCount && check.unrenderedCount >= check.count) {
+    return " (not yet rendered)";
+  }
   if (!check.carriedCount || check.carriedCount < check.count) return "";
   const seen =
     check.lastSeenAt !== undefined ? ` — last seen ${timeAgo(check.lastSeenAt, now)}` : "";
@@ -110,6 +133,19 @@ export function checkCarriedLabel(check: GroupedCheck, now: number = Date.now())
   if (!check.carriedCount || check.carriedCount < check.count) return null;
   const seen = check.lastSeenAt !== undefined ? ` — last verified ${timeAgo(check.lastSeenAt, now)}` : "";
   return `Not re-checked this run${seen}.`;
+}
+
+/**
+ * Full-sentence label for a check whose every instance sits on a page NO audit
+ * has ever rendered (#1652), e.g. "Not yet rendered in this scan."
+ *
+ * Deliberately says nothing about re-checking or last verification: there is no
+ * earlier run to have verified anything. Returns null unless every merged
+ * instance is unrendered, mirroring {@link checkCarriedLabel}.
+ */
+export function checkUnrenderedLabel(check: GroupedCheck): string | null {
+  if (!check.unrenderedCount || check.unrenderedCount < check.count) return null;
+  return "Not yet rendered in this scan.";
 }
 
 /**
@@ -160,6 +196,11 @@ export function ruleMixedProvenanceNote(
     const pages = checkAffectedPages({ pages: check.pages, items: check.items });
     if (check.pageUrl) pages.add(check.pageUrl);
     if (pages.size === 0) continue;
+    // (#1652) An "unrendered" check belongs to NEITHER bucket: its page was
+    // never rendered, so it is not a fresh result (which would suppress the
+    // note) and not carry-over from an earlier run (which would inflate
+    // "pending re-check" with pages nothing has ever checked).
+    if (check.provenance === "unrendered") continue;
     const isCarried = check.provenance === "carried";
     if (check.status === "pass") {
       if (!isCarried) for (const p of pages) freshPassPages.add(p);

@@ -46,6 +46,12 @@ export interface GroupedCheck {
   // so a page's membership here is exact (not inferred from the
   // carriedCount/count ratio).
   carriedPages?: string[];
+  // (#1652) Merged checks on pages NO audit has ever rendered — known (sitemap,
+  // aggregate page lists) but never crawled. Deliberately NOT folded into
+  // `carriedCount`: "carried" tells the reader a previous audit saw the finding,
+  // which on these pages (and on every first run) is false. No `lastSeenAt`
+  // counterpart — there is no earlier observation to date.
+  unrenderedCount?: number;
 }
 
 export interface GroupedRule {
@@ -154,7 +160,10 @@ export function groupIssuesByCategory(
       // affected pages in `pages` instead of a single pageUrl.
       const checkPages = (check as { pages?: string[] }).pages ?? [];
       const items = (check as { items?: CheckItem[] }).items;
-      const isCarried = (check as { provenance?: string }).provenance === "carried";
+      const provenance = (check as { provenance?: string }).provenance;
+      const isCarried = provenance === "carried";
+      // (#1652) Never rendered by any audit — a separate bucket from carried.
+      const isUnrendered = provenance === "unrendered";
 
       if (status !== "fail" && status !== "warn") continue;
 
@@ -189,6 +198,9 @@ export function groupIssuesByCategory(
 
       if (existing) {
         existing.count += occurrences;
+        if (isUnrendered) {
+          existing.unrenderedCount = (existing.unrenderedCount ?? 0) + occurrences;
+        }
         if (isCarried) {
           existing.carriedCount = (existing.carriedCount ?? 0) + occurrences;
           if (checkLastSeen !== undefined) {
@@ -275,6 +287,7 @@ export function groupIssuesByCategory(
             : undefined,
           carriedCount: isCarried ? occurrences : undefined,
           lastSeenAt: isCarried ? checkLastSeen : undefined,
+          unrenderedCount: isUnrendered ? occurrences : undefined,
         });
       }
     }

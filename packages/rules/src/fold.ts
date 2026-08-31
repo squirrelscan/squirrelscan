@@ -800,6 +800,11 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
 
   // Smart audits (#110): stay "carried" only when every folded finding was.
   const allCarried = group.every((c) => c.provenance === "carried");
+  // (#1652) Same all-or-nothing rule for never-rendered pages, kept as its own
+  // value: folding a wholly-unrendered group down to "carried" would reintroduce
+  // the claim that a previous audit saw it. The two are mutually exclusive, and
+  // an "unrendered" aggregate never gets a lastSeenAt (nothing observed it).
+  const allUnrendered = group.every((c) => c.provenance === "unrendered");
   let lastSeenAt: number | undefined;
   if (allCarried) {
     for (const c of group) {
@@ -822,8 +827,10 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
     ...(items.length > 0 ? { items } : {}),
     details,
     ...(first.skipReason !== undefined ? { skipReason: first.skipReason } : {}),
-    ...(allCarried
-      ? { provenance: "carried" as const, ...(lastSeenAt !== undefined ? { lastSeenAt } : {}) }
-      : {}),
+    ...(allUnrendered
+      ? { provenance: "unrendered" as const }
+      : allCarried
+        ? { provenance: "carried" as const, ...(lastSeenAt !== undefined ? { lastSeenAt } : {}) }
+        : {}),
   };
 }

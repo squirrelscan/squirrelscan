@@ -148,8 +148,26 @@ export interface CloudSmartAuditsResult {
   /** UNION rule results (fresh + carried) for authoritative scoring + report. */
   unionRuleResults: Map<string, RuleRunResult>;
   /** Coverage line data for surfacing. */
-  coverage: { auditedPages: number; knownPages: number; carriedFindings: number };
-  /** `${normalizedUrl}|${ruleId}|${checkName}` → lastSeenAt for tagging report checks. */
+  coverage: {
+    auditedPages: number;
+    knownPages: number;
+    /** Findings a PREVIOUS audit observed. 0 on a first run (#1652). */
+    carriedFindings: number;
+    /**
+     * Findings on pages no audit has ever rendered (#1652). OMITTED when zero so
+     * a site without any is byte-identical to a pre-#1652 report — the published
+     * report JSON feeds the publish idempotency hash and the golden fixtures.
+     */
+    unrenderedFindings?: number;
+  };
+  /**
+   * `${normalizedUrl}|${ruleId}|${checkName}` → lastSeenAt for tagging report
+   * checks as carried. (#1652) Never-rendered findings are DELIBERATELY absent:
+   * they are stamped `provenance: "unrendered"` by the union scorer, and the
+   * caller's tagging pass preserves an already-set provenance, so keeping them
+   * out here is what stops them being relabelled "carried" with a bogus
+   * last-seen date.
+   */
   carriedLastSeen: Map<string, number>;
   persistedFindings: number;
   removedPages: number;
@@ -353,9 +371,13 @@ export async function runCloudSmartAudits(
     if (!crawledUrls.has(url)) carriedPageUrls.add(url);
   }
 
-  // Carried findings = active (open) findings on those carried pages.
+  // Carried findings = active (open) findings on those carried pages, SPLIT by
+  // whether any audit has ever rendered the page (#1652): a never-rendered page's
+  // finding was not inherited from a previous run, so it must not be counted as
+  // carried nor given a last-seen date implying an earlier observation.
   const carriedFindings: CarriedFinding[] = [];
   const carriedLastSeen = new Map<string, number>();
+  let unrenderedCount = 0;
   for (const f of merged.findings) {
     if (f.provenance !== "carried") continue;
     carriedFindings.push({
@@ -367,7 +389,12 @@ export async function runCloudSmartAudits(
       value: f.value,
       expected: f.expected,
       payload: f.payload,
+      neverRendered: f.neverRendered,
     });
+    if (f.neverRendered) {
+      unrenderedCount++;
+      continue;
+    }
     carriedLastSeen.set(carriedKey(f.normalizedUrl, f.ruleId, f.checkName), f.lastSeenAt);
   }
 
@@ -407,7 +434,8 @@ export async function runCloudSmartAudits(
     coverage: {
       auditedPages: crawledUrls.size,
       knownPages: merged.activePageUrls.size,
-      carriedFindings: carriedFindings.length,
+      carriedFindings: carriedFindings.length - unrenderedCount,
+      ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
     },
     carriedLastSeen,
     persistedFindings: merged.persisted.length,
