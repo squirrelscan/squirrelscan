@@ -118,6 +118,8 @@ describe("runCloudSmartAudits — cloud parity", () => {
       ruleResults: ruleResultsFor([P2], [P1, P3]),
       pageStatuses: [P1, P2, P3].map((url) => ({ url, status: 200 })),
     });
+    // (#1652) `unrenderedFindings` is OMITTED, not 0 — a site with none must
+    // serialize byte-identically to a pre-#1652 report.
     expect(r.coverage).toEqual({ auditedPages: 3, knownPages: 3, carriedFindings: 0 });
     expect((await store.getFindings("web_1", ["open"])).length).toBe(1);
   });
@@ -622,5 +624,151 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
     // Never evaluated this run — stamps must stay at the seeding crawl.
     expect(unevaluated.lastSeenCrawlId).toBe("audit_1");
     expect(unevaluated.lastSeenAt).not.toBe(now);
+  });
+});
+
+// #1652: the FIRST audit of a site reported thousands of findings with
+// provenance "carried" and a non-zero coverage.carriedFindings, telling the
+// reader a previous audit had seen them when no previous audit existed. The
+// findings were on pages the crawl only KNEW about (sitemap entries / the page
+// lists on folded aggregates): the chunked publish streams a finding row for
+// every such page, and finalize's merge then reads its own ingest back as
+// "prior" state and carries anything sitting on a page outside this run's
+// crawled set.
+describe("first-run findings on never-rendered pages (#1652)", () => {
+  const DEEP = "https://x.test/deep-sitemap-only";
+
+  /** One row exactly as the chunked-publish ingest writes it, pre-finalize. */
+  function ingestedFinding(url: string, crawlId: string): PageFindingRecord {
+    return {
+      siteKey: "web_1",
+      normalizedUrl: normalizeUrl(url),
+      ruleId: "meta-description",
+      checkName: "has-meta-description",
+      locator: "",
+      status: "fail",
+      severity: "warning",
+      message: "Missing meta description",
+      value: null,
+      expected: null,
+      payload: null,
+      fingerprint: "fp",
+      firstSeenAt: 1_000,
+      lastSeenCrawlId: crawlId,
+      lastSeenAt: 1_000,
+      provenance: "fresh",
+      state: "open",
+    };
+  }
+
+  test("first run: never-rendered findings are unrendered, and carriedFindings is 0", async () => {
+    const store = new MemStore();
+    // This run's own ingest — no site_pages row for DEEP, because no audit has
+    // ever crawled it. This is the whole of the site's prior state on a first run.
+    await store.upsertFindings([ingestedFinding(DEEP, "audit_1")]);
+
+    const r = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: ruleResultsFor([], [P1]),
+      pageStatuses: [{ url: P1, status: 200 }],
+    });
+
+    // AC4: nothing was inherited — there was no earlier audit to inherit from.
+    expect(r.coverage.carriedFindings).toBe(0);
+    expect(r.coverage.unrenderedFindings).toBe(1);
+    // AC1: and it is NOT tagged as carried, so no "last seen" date is invented.
+    expect(r.carriedLastSeen.size).toBe(0);
+
+    const replayed = r.unionRuleResults
+      .get("meta-description")!
+      .checks.find((c) => c.pageUrl === normalizeUrl(DEEP))!;
+    expect(replayed.provenance).toBe("unrendered");
+    expect(replayed.lastSeenAt).toBeUndefined();
+  });
+
+  test("second audit: a page an earlier run rendered still carries", async () => {
+    const store = new MemStore();
+    // Run 1 renders P1 + P2 (P2 fails) → both get site_pages rows.
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: ruleResultsFor([P2], [P1]),
+      pageStatuses: [P1, P2].map((url) => ({ url, status: 200 })),
+    });
+
+    // Run 2 re-renders only P1. P2 was rendered before → genuine carry-over.
+    const second = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_2",
+      ruleResults: ruleResultsFor([], [P1]),
+      pageStatuses: [{ url: P1, status: 200 }],
+    });
+
+    // AC2: carried keeps its meaning — an earlier audit really did see this.
+    expect(second.coverage.carriedFindings).toBe(1);
+    expect(second.coverage.unrenderedFindings).toBeUndefined();
+    expect(second.carriedLastSeen.size).toBe(1);
+    const carried = second.unionRuleResults
+      .get("meta-description")!
+      .checks.find((c) => c.pageUrl === P2)!;
+    expect(carried.provenance).toBeUndefined(); // tagged "carried" by the caller
+  });
+
+  test("a never-rendered page stays unrendered on later runs that still skip it", async () => {
+    const store = new MemStore();
+    await store.upsertFindings([ingestedFinding(DEEP, "audit_1")]);
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: ruleResultsFor([], [P1]),
+      pageStatuses: [{ url: P1, status: 200 }],
+    });
+
+    // Run 2 also never reaches DEEP — it is still a page nothing has rendered,
+    // so the label must not drift to "carried" just because time passed.
+    const second = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_2",
+      ruleResults: ruleResultsFor([], [P1]),
+      pageStatuses: [{ url: P1, status: 200 }],
+    });
+    expect(second.coverage.carriedFindings).toBe(0);
+    expect(second.coverage.unrenderedFindings).toBe(1);
+  });
+
+  test("once the page IS rendered, a later skip carries it normally", async () => {
+    const store = new MemStore();
+    await store.upsertFindings([ingestedFinding(DEEP, "audit_1")]);
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: ruleResultsFor([], [P1]),
+      pageStatuses: [{ url: P1, status: 200 }],
+    });
+    // Run 2 finally renders DEEP and still finds it failing.
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_2",
+      ruleResults: ruleResultsFor([normalizeUrl(DEEP)], [P1]),
+      pageStatuses: [P1, DEEP].map((url) => ({ url, status: 200 })),
+    });
+    // Run 3 skips it again — now there IS an earlier observation to carry.
+    const third = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_3",
+      ruleResults: ruleResultsFor([], [P1]),
+      pageStatuses: [{ url: P1, status: 200 }],
+    });
+    expect(third.coverage.carriedFindings).toBe(1);
+    expect(third.coverage.unrenderedFindings).toBeUndefined();
   });
 });

@@ -74,6 +74,8 @@ describe("runSmartAudits end-to-end (no inflation)", () => {
     const fullScore = calculateHealthScore({
       results: full.unionRuleResults,
     }).overall;
+    // (#1652) `unrenderedFindings` is OMITTED, not 0 — a site with none must
+    // serialize byte-identically to a pre-#1652 report.
     expect(full.coverage).toEqual({
       auditedPages: 100,
       knownPages: 100,

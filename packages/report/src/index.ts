@@ -121,6 +121,7 @@ export {
   scanScopeLine,
   fullScanHint,
   checkCarriedLabel,
+  checkUnrenderedLabel,
   ruleCarriedRollupLine,
   ruleMixedProvenanceNote,
   type MixedProvenanceCheck,

@@ -137,8 +137,14 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // findings are carried forward from prior runs (page not re-crawled this run).
   if (report.coverage) {
     const c = report.coverage;
+    // (#1652) `unrendered` is emitted only when non-zero so the attribute set is
+    // byte-identical for every report without never-rendered pages. It is NOT
+    // folded into `carried`: an agent reading carried="N" is entitled to assume
+    // a prior audit observed those N.
+    const unrendered = c.unrenderedFindings ?? 0;
+    const unrenderedAttr = unrendered > 0 ? ` unrendered="${unrendered}"` : "";
     lines.push(
-      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"/>`,
+      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}/>`,
     );
   }
 
@@ -256,12 +262,22 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       // #1135: fully carried → provenance="carried"; some-but-not-all → a
       // "N/M" fraction attribute so an agent can tell "mixed" from "fresh"
       // without walking every check.
+      // (#1652) A rule every one of whose checks sits on a never-rendered page
+      // is `provenance="unrendered"` — checked BEFORE the carried branch so a
+      // first run can never emit provenance="carried" (nothing prior exists to
+      // have carried it). Mixed unrendered/fresh falls through to the carried
+      // logic, which correctly reports no carry.
+      const unrenderedChecks = rule.checks.filter(
+        (c) => c.unrenderedCount && c.unrenderedCount >= c.count,
+      ).length;
       const carriedAttr =
-        carriedChecks > 0 && carriedChecks === rule.checks.length
-          ? ` provenance="carried"`
-          : carriedPageCount > 0
-            ? ` carried_pages="${carriedPageCount}/${allPagesForRule.size}"`
-            : "";
+        unrenderedChecks > 0 && unrenderedChecks === rule.checks.length
+          ? ` provenance="unrendered"`
+          : carriedChecks > 0 && carriedChecks === rule.checks.length
+            ? ` provenance="carried"`
+            : carriedPageCount > 0
+              ? ` carried_pages="${carriedPageCount}/${allPagesForRule.size}"`
+              : "";
   
       const docsUrl = getDocsUrl(rule.id);
       lines.push(

@@ -50,6 +50,19 @@ export interface MergedFinding {
   lastSeenCrawlId: string;
   lastSeenAt: number;
   provenance: FindingProvenance;
+  /**
+   * (#1652) True when this finding is carried but its page has NEVER been
+   * rendered by any audit of the site — not by an earlier run (it is absent from
+   * `priorPages`) and not by this one (absent from `crawledUrls`). Such findings
+   * are seeded from pages the crawl only KNOWS about (sitemap entries, the page
+   * lists on folded aggregates) and were never inherited from a prior audit, so
+   * surfaces must label them "unrendered", not "carried" — on a first run there
+   * is no previous audit for "carried" to refer to.
+   *
+   * DERIVED ONLY: never persisted (the store's `provenance` column is
+   * constrained to fresh|carried), always false for a fresh finding.
+   */
+  neverRendered: boolean;
   state: "open" | "resolved" | "stale";
 }
 
@@ -270,6 +283,31 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
   const activeFindings: MergedFinding[] = [];
   const handledKeys = new Set<string>();
 
+  // (#1652) The site's render history: `site_pages` rows are written only for
+  // pages a run actually crawled (step 3 below), in any lifecycle state — a
+  // "removed" page was still rendered once. A carried finding whose page is in
+  // neither this set nor rendered this run was never observed by a previous
+  // audit: it is "unrendered", not carry-over. Empty on a first run, which is
+  // exactly why a first run must report zero carried findings.
+  //
+  // `renderedThisRun` is passed in rather than re-derived from `crawledUrls`:
+  // the #1185 signal can mark a page crawled this run that never reached the
+  // payload-derived crawled set, and such a page WAS rendered.
+  //
+  // KNOWN BOUNDS — both err toward "unrendered", never toward inventing a prior
+  // audit, so the worst case is a missing "last seen" date rather than a false
+  // claim about an audit that did not happen:
+  //  - a page rendered ONLY per the #1185 signal gets no `site_pages` row (that
+  //    is deliberate — adding one would grow `carriedPageUrls` and with it the
+  //    synthetic-pass denominator, moving scores), so a later run that skips it
+  //    reads it as unrendered;
+  //  - a removed page whose `site_pages` row was pruned by retention and that is
+  //    later rediscovered loses its history the same way.
+  const everRenderedUrls = new Set<string>();
+  for (const p of priorPages) everRenderedUrls.add(p.normalizedUrl);
+  const neverRendered = (normalizedUrl: string, renderedThisRun: boolean): boolean =>
+    !renderedThisRun && !everRenderedUrls.has(normalizedUrl);
+
   // 1) FRESH — upsert findings for crawled URLs.
   for (const [key, f] of freshByKey) {
     const prior = priorByKey.get(key);
@@ -295,7 +333,8 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
       state: "open",
     };
     persisted.push(record);
-    activeFindings.push(toMerged(record));
+    // A fresh finding was evaluated on a page rendered this run, by definition.
+    activeFindings.push(toMerged(record, false));
     handledKeys.add(key);
   }
 
@@ -316,6 +355,13 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
     // sample) so it's absent from the payload-derived `crawledUrls`.
     const signalCrawled =
       !wasCrawled && (resolution?.crawledUrls.has(prior.normalizedUrl) ?? false);
+    // (#1652) Same value for every carry branch below — computed once here so a
+    // new branch can't silently forget it and default a never-rendered page back
+    // to "carried".
+    const unrendered = neverRendered(
+      prior.normalizedUrl,
+      wasCrawled || signalCrawled
+    );
 
     if (wasRemoved) {
       // Page gone — stale this finding. NOTE: site_pages state + the bulk
@@ -350,7 +396,7 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
       if (resolution?.notEvaluatedByCheck.get(checkKey)?.has(priorHash)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         persisted.push(carried);
-        activeFindings.push(toMerged(carried));
+        activeFindings.push(toMerged(carried, unrendered));
         handledKeys.add(key);
         continue;
       }
@@ -371,7 +417,7 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
             lastSeenAt: now,
           };
           persisted.push(carried);
-          activeFindings.push(toMerged(carried));
+          activeFindings.push(toMerged(carried, unrendered));
           handledKeys.add(key);
           continue;
         }
@@ -392,7 +438,7 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
         // the sampled payload — exactly today's un-crawled behavior: carry.
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         persisted.push(carried);
-        activeFindings.push(toMerged(carried));
+        activeFindings.push(toMerged(carried, unrendered));
         handledKeys.add(key);
         continue;
       }
@@ -406,7 +452,7 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
       if (sample && !sample.has(prior.normalizedUrl)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         persisted.push(carried);
-        activeFindings.push(toMerged(carried));
+        activeFindings.push(toMerged(carried, unrendered));
         handledKeys.add(key);
         continue;
       }
@@ -425,7 +471,7 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
     // Un-crawled, still-active page: carry forward unchanged (no TTL).
     const carried: PageFindingRecord = { ...prior, provenance: "carried" };
     persisted.push(carried);
-    activeFindings.push(toMerged(carried));
+    activeFindings.push(toMerged(carried, unrendered));
     handledKeys.add(key);
   }
 
@@ -467,8 +513,12 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
   return { findings: activeFindings, persisted, sitePages, activePageUrls };
 }
 
-function toMerged(r: PageFindingRecord): MergedFinding {
+function toMerged(
+  r: PageFindingRecord,
+  neverRendered: boolean
+): MergedFinding {
   return {
+    neverRendered,
     siteKey: r.siteKey,
     normalizedUrl: r.normalizedUrl,
     ruleId: r.ruleId,

@@ -226,7 +226,9 @@ export interface CheckResult {
   // `carried` = re-injected from the store for a page not re-crawled this run.
   // Absent (or `fresh`) = evaluated this run. `lastSeenAt` = epoch ms of the
   // last run that observed it. Only set when `smart_audits` is enabled.
-  provenance?: "fresh" | "carried";
+  // `unrendered` (#1652) = no audit of this site has ever rendered the page, so
+  // nothing earlier observed the finding and it carries no `lastSeenAt`.
+  provenance?: "fresh" | "carried" | "unrendered";
   lastSeenAt?: number;
 }
 
@@ -481,7 +483,10 @@ export interface AuditReport {
   coverage?: {
     auditedPages: number;
     knownPages: number;
+    /** Findings a PREVIOUS audit observed. 0 on a first run (#1652). */
     carriedFindings: number;
+    /** Findings on pages no audit has ever rendered (#1652). */
+    unrenderedFindings?: number;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

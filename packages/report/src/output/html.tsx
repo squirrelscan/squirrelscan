@@ -33,6 +33,7 @@ import {
   fullScanHint,
   scanScopeLine,
   checkCarriedLabel,
+  checkUnrenderedLabel,
   ruleCarriedRollupLine,
 } from "../coverage";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
@@ -921,7 +922,12 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                               (item) => !isRedundantPageItem(item),
                             );
                             const hasVisibleItems = visibleItems && visibleItems.length > 0;
-                            const carriedLabel = checkCarriedLabel(check);
+                            // (#1652) A check on pages no audit has ever rendered
+                            // gets its own note FIRST — the carried notes below all
+                            // say or imply "previous crawls", which for these pages
+                            // is a claim about an audit that may never have run.
+                            const carriedLabel =
+                              checkUnrenderedLabel(check) ?? checkCarriedLabel(check);
                             // Partial carry (some but not all merged instances): a
                             // per-check fraction here would duplicate the rule-level
                             // rollup above, so only call it out when it diverges from

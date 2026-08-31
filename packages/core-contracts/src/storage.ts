@@ -456,8 +456,27 @@ export interface CachedResourceRecord extends ResourceSizeRecord {
 /** Lifecycle state of a persisted finding. */
 export type FindingState = "open" | "resolved" | "stale";
 
-/** Provenance of a finding in a merged (union) report. */
+/**
+ * Provenance of a PERSISTED finding row. Two values only — the store's column is
+ * constrained to them, so widening this type is a schema change, not a type edit.
+ * The report-level value space is {@link CheckProvenance}, which adds
+ * "unrendered" as a purely derived distinction (#1652).
+ */
 export type FindingProvenance = "fresh" | "carried";
+
+/**
+ * Provenance of a finding as SURFACED in a report (#1652). Derived at merge
+ * time, never persisted:
+ *  - "fresh"      — evaluated on a page rendered this run.
+ *  - "carried"    — inherited from an EARLIER audit that observed it on a page
+ *                   this run did not re-render. Implies a prior audit exists.
+ *  - "unrendered" — the finding's page has never been rendered by ANY audit of
+ *                   this site (it was discovered, e.g. from a sitemap, but sat
+ *                   outside every run's page budget). Nothing earlier observed
+ *                   it, so it must never be labelled "carried" and never
+ *                   carries a `lastSeenAt`.
+ */
+export type CheckProvenance = FindingProvenance | "unrendered";
 
 /**
  * A single persisted finding, keyed by (siteKey, normalizedUrl, ruleId,
