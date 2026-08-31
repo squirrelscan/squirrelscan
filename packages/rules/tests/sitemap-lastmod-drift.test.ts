@@ -222,6 +222,45 @@ describe("crawl/sitemap-lastmod-drift", () => {
     expect(warned.checks[0]?.name).toBe("sitemap-lastmod-behind-page");
   });
 
+  test("a gap between the threshold and the next whole day never warns", () => {
+    // Rounding used to push the effective thresholds half a day out: a 7.5-day
+    // gap warned and was reported as "8 day(s)" under a "more than 7 day(s)"
+    // message, overstating both the verdict and the number.
+    const lastmod = "2024-03-01T00:00:00Z";
+    const behindBy = (hours: number) =>
+      sitemapLastmodDriftRule.run(
+        ctx(
+          [
+            {
+              url: "https://example.com/a",
+              schemaDateModified: new Date(
+                new Date(lastmod).getTime() + hours * 3_600_000
+              ).toISOString(),
+            },
+          ],
+          [{ loc: "https://example.com/a", lastmod }]
+        )
+      );
+
+    expect(behindBy(7 * 24).checks[0]?.status).toBe("pass"); // exactly 7 days
+    expect(behindBy(7 * 24 + 12).checks[0]?.status).toBe("pass"); // 7.5 days
+    expect(behindBy(8 * 24 - 1).checks[0]?.status).toBe("pass"); // just under 8
+    const warned = behindBy(8 * 24);
+    expect(warned.checks[0]?.status).toBe("warn");
+    expect(warned.checks[0]?.items?.[0]?.meta?.deltaDays).toBe(8);
+  });
+
+  test("a same-day difference cannot warn even with the threshold at zero", () => {
+    const { checks } = sitemapLastmodDriftRule.run(
+      ctx(
+        [{ url: "https://example.com/a", schemaDateModified: "2024-03-01T22:00:00Z" }],
+        [{ loc: "https://example.com/a", lastmod: "2024-03-01T02:00:00Z" }],
+        { behind_days: 0 }
+      )
+    );
+    expect(checks[0]?.status).toBe("pass");
+  });
+
   test("both directions on one site → two separate checks", () => {
     const { checks } = sitemapLastmodDriftRule.run(
       ctx(

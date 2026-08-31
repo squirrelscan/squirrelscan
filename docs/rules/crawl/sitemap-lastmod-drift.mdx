@@ -47,8 +47,10 @@ The two directions are reported as separate checks, because they point at differ
 | `sitemap-lastmod-behind-page` | `lastmod` is older than the page's `dateModified` by more than 7 days | Stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` |
 | `sitemap-lastmod-ahead-of-page` | `lastmod` is newer than the page's `dateModified` by more than 30 days | `lastmod` stamped at build/deploy time instead of on content change |
 
-Each finding reports both dates and the gap in days. Same-day and within-threshold differences
-never warn.
+Each finding reports both dates and the gap in days. The gap is counted in whole elapsed days,
+so a difference has to reach the next whole day past the threshold before it warns: with the
+default `behind_days = 7`, a 7.5-day gap passes and an 8-day gap warns. Same-day and
+within-threshold differences never warn.
 
 Lastmod being *older* than the page's own `dateModified` is the more clearly wrong of the two:
 it tells crawlers not to bother re-fetching a page that has in fact changed.

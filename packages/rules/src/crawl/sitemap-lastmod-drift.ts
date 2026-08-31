@@ -222,9 +222,11 @@ export const sitemapLastmodDriftRule: Rule = {
 
       comparedPages++;
 
-      // Magnitude only — direction is read off the comparison below. Whole days,
-      // so a same-day (and any sub-threshold) difference can never warn.
-      const deltaDays = Math.round(Math.abs(pageDate.ms - lastmodMs) / MS_PER_DAY);
+      // Magnitude only — direction is read off the comparison below. Truncated,
+      // not rounded: rounding moved the real thresholds half a day past the
+      // documented ones (a 7.5-day gap warned, and was quoted back to the user
+      // as "8 day(s)" under a message reading "more than 7 day(s)").
+      const deltaDays = Math.floor(Math.abs(pageDate.ms - lastmodMs) / MS_PER_DAY);
       const drift: Drift = {
         url: page.url,
         lastmod,
