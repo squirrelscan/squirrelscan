@@ -741,6 +741,12 @@ describe("updater", () => {
         spyOn(console, "error").mockImplementation((...args: unknown[]) => {
           stderr.push(args.map(String).join(" "));
         });
+        // Production reads the same notification the caller snapshotted; the
+        // apply path re-reads it to detect a concurrent run consuming it.
+        updateSettings({
+          auto_update: true,
+          pending_update_notification: { ...PENDING },
+        });
       });
 
       test("announces the update rather than stalling silently", async () => {
@@ -790,7 +796,10 @@ describe("updater", () => {
         expect(reexec).not.toHaveBeenCalled();
         expect(fetched).toBe(false);
         // Nothing was attempted, so nothing throttles the next run either.
-        expect(existsSync(join(tempHome, "settings.json"))).toBe(false);
+        const saved = loadUserSettings();
+        if (saved.ok) {
+          expect(saved.data.last_auto_update_attempt ?? null).toBeNull();
+        }
       });
 
       test("installs first, then re-execs into the new binary", async () => {
@@ -874,7 +883,10 @@ describe("updater", () => {
         captureTelemetry();
 
         await applyPendingUpdateInForeground(eligible(), {
-          update: async () => null,
+          update: async (_signal, onStart) => {
+            onStart();
+            return null;
+          },
           reexec: () => {},
         });
 
@@ -890,6 +902,135 @@ describe("updater", () => {
           // dispatch, so the two paths can't both download.
           expect(foregroundUpdateTarget(saved.data)).toBeNull();
         }
+      });
+
+      // #1085: the loud "didn't complete on this system" box must not be armed
+      // by an attempt that never got past the update lock — the other updater
+      // is doing the work.
+      test("an update that never starts (lock held) does not count as a failure", async () => {
+        managedPosix();
+        captureTelemetry();
+
+        await applyPendingUpdateInForeground(eligible(), {
+          // Never calls onStart: this is what losing the lock looks like.
+          update: async () => null,
+          reexec: () => {},
+        });
+
+        const saved = loadUserSettings();
+        expect(saved.ok).toBe(true);
+        if (saved.ok) {
+          expect(saved.data.auto_update_attempts ?? null).toBeNull();
+          // The hourly throttle is still recorded, so this run's own background
+          // dispatch can't pile a second download onto the one in flight.
+          expect(saved.data.last_auto_update_attempt).toBeTruthy();
+        }
+      });
+
+      // The user's command must never wait forever on a stalled download: past
+      // the ceiling the install is handed to the detached updater (pre-#170
+      // behaviour) and the command runs now.
+      test("a deadline abort aborts the download and hands it to the detached updater", async () => {
+        managedPosix();
+        captureTelemetry();
+        const spawnSpy = spyOn(childProcess, "spawn").mockReturnValue({
+          unref() {},
+        } as unknown as ReturnType<typeof childProcess.spawn>);
+        let sawAbort = false;
+
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          timeoutMs: 10,
+          update: (signal, onStart) => {
+            onStart();
+            return new Promise<string | null>((resolve) => {
+              signal.addEventListener(
+                "abort",
+                () => {
+                  sawAbort = true;
+                  resolve(null);
+                },
+                { once: true }
+              );
+            });
+          },
+          reexec: () => {},
+        });
+
+        expect(sawAbort).toBe(true);
+        expect(outcome).toBe("failed");
+        expect(spawnSpy).toHaveBeenCalledTimes(1);
+        expect(spawnSpy.mock.calls[0]?.[1]).toEqual([
+          "self",
+          "update",
+          "--auto",
+        ]);
+      });
+
+      test("an ordinary failure does NOT spawn a detached updater", async () => {
+        managedPosix();
+        captureTelemetry();
+        const spawnSpy = spyOn(childProcess, "spawn").mockReturnValue({
+          unref() {},
+        } as unknown as ReturnType<typeof childProcess.spawn>);
+
+        await applyPendingUpdateInForeground(eligible(), {
+          update: async (_signal, onStart) => {
+            onStart();
+            return null;
+          },
+          reexec: () => {},
+        });
+
+        expect(spawnSpy).not.toHaveBeenCalled();
+      });
+
+      test("another run having already applied the update re-execs without downloading", async () => {
+        managedPosix();
+        captureTelemetry();
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v, "squirrel")
+        );
+        mkdirSync(join(tempHome, "releases", "9.9.9"), { recursive: true });
+        writeFileSync(join(tempHome, "releases", "9.9.9", "squirrel"), "bin");
+        // On disk the notification is already consumed; the caller's snapshot
+        // still has it (it was read at startup).
+        updateSettings({ pending_update_notification: undefined });
+
+        const update = mock(async () => null);
+        const reexeced: string[] = [];
+
+        await applyPendingUpdateInForeground(eligible(), {
+          update,
+          reexec: (path) => {
+            reexeced.push(path);
+          },
+        });
+
+        expect(update).not.toHaveBeenCalled();
+        expect(reexeced).toEqual([
+          join(tempHome, "releases", "9.9.9", "squirrel"),
+        ]);
+      });
+
+      test("notification consumed and nothing installed: skip, run the command", async () => {
+        managedPosix();
+        captureTelemetry();
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v, "squirrel")
+        );
+        updateSettings({ pending_update_notification: undefined });
+
+        const update = mock(async () => null);
+        const reexec = mock(() => {});
+
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          update,
+          reexec,
+        });
+
+        expect(outcome).toBe("skipped");
+        expect(update).not.toHaveBeenCalled();
+        expect(reexec).not.toHaveBeenCalled();
       });
 
       test("end to end: downloads, installs, flips the symlink, re-execs the release binary", async () => {
@@ -956,7 +1097,9 @@ describe("updater", () => {
 
         const reexeced: string[] = [];
         await applyPendingUpdateInForeground(eligible(), {
-          reexec: (path) => reexeced.push(path),
+          reexec: (path) => {
+            reexeced.push(path);
+          },
         });
 
         expect(reexeced).toEqual([
@@ -977,43 +1120,85 @@ describe("updater", () => {
     });
 
     // The re-exec is the part that has to behave like execve: same arguments,
-    // same exit status, and the loop marker set for the process that takes over.
-    // Exercised against a real child process, not a stub.
+    // same exit status, signals reaching the child, and the loop marker set for
+    // the process that takes over. Exercised against real child processes.
     describe.skipIf(process.platform === "win32")(
       "reexecIntoUpdatedBinary",
       () => {
-        test("passes argv through, sets the loop marker, propagates the exit code", () => {
-          const script = join(tempHome, "fake-squirrel");
-          const out = join(tempHome, "argv.txt");
-          writeFileSync(
-            script,
-            `#!/bin/sh\nprintf '%s|' "$@" > ${out}\nprintf 'marker=%s' "$${FOREGROUND_UPDATE_ENV}" >> ${out}\nexit 42\n`
-          );
-          chmodSync(script, 0o755);
+        let exits: number[];
 
+        beforeEach(() => {
+          exits = [];
           spyOn(process, "exit").mockImplementation(((code?: number) => {
-            throw new Error(`__exit__:${code}`);
+            exits.push(code ?? -1);
           }) as never);
+        });
 
-          expect(() =>
-            reexecIntoUpdatedBinary(script, ["audit", "https://example.com"])
-          ).toThrow("__exit__:42");
+        function writeScript(name: string, body: string): string {
+          const path = join(tempHome, name);
+          writeFileSync(path, `#!/bin/sh\n${body}\n`);
+          chmodSync(path, 0o755);
+          return path;
+        }
+
+        async function waitFor(
+          predicate: () => boolean,
+          label: string
+        ): Promise<void> {
+          for (let i = 0; i < 400; i++) {
+            if (predicate()) return;
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          throw new Error(`timed out waiting for ${label}`);
+        }
+
+        test("passes argv through, sets the loop marker, propagates the exit code", async () => {
+          const out = join(tempHome, "argv.txt");
+          const script = writeScript(
+            "fake-squirrel",
+            `printf '%s|' "$@" > ${out}\n` +
+              `printf 'marker=%s' "$${FOREGROUND_UPDATE_ENV}" >> ${out}\n` +
+              "exit 42"
+          );
+
+          void reexecIntoUpdatedBinary(script, [
+            "audit",
+            "https://example.com",
+          ]);
+          await waitFor(() => exits.length > 0, "the child to exit");
+
+          expect(exits).toEqual([42]);
           expect(readFileSync(out, "utf-8")).toBe(
             "audit|https://example.com|marker=1"
           );
         });
 
-        test("a child that cannot start returns (so the caller falls back) and restores signals", () => {
+        // The waiting parent must not swallow cancellation: a supervisor that
+        // signals THIS pid has to reach the command the user asked for.
+        test("forwards a signal sent to this process to the child", async () => {
+          const started = join(tempHome, "started");
+          const script = writeScript(
+            "trapping-squirrel",
+            `trap 'exit 7' TERM\ntouch ${started}\nsleep 10 &\nwait`
+          );
+
+          void reexecIntoUpdatedBinary(script, []);
+          await waitFor(() => existsSync(started), "the child to start");
+
+          process.emit("SIGTERM");
+          await waitFor(() => exits.length > 0, "the child to handle SIGTERM");
+
+          expect(exits).toEqual([7]);
+          // The forwarding handlers must not outlive the child.
+          expect(process.listenerCount("SIGTERM")).toBe(0);
+        });
+
+        test("a child that cannot start resolves (so the caller falls back) and restores signals", async () => {
           const before = process.listenerCount("SIGINT");
-          const exitSpy = spyOn(process, "exit").mockImplementation(((
-            code?: number
-          ) => {
-            throw new Error(`__exit__:${code}`);
-          }) as never);
 
-          reexecIntoUpdatedBinary(join(tempHome, "does-not-exist"), []);
+          await reexecIntoUpdatedBinary(join(tempHome, "does-not-exist"), []);
 
-          expect(exitSpy).not.toHaveBeenCalled();
+          expect(exits).toEqual([]);
           expect(process.listenerCount("SIGINT")).toBe(before);
         });
       }
