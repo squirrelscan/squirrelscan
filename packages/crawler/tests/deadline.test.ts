@@ -24,37 +24,57 @@ function serveStalledBody() {
   });
 }
 
+const DEADLINE_MS = 300;
+
 describe("withRequestDeadline (#1699)", () => {
   test("a body that stalls after the headers aborts at the deadline", async () => {
     const server = serveStalledBody();
+    let signal: AbortSignal | undefined;
     const startedAt = Date.now();
     try {
       const read = withRequestDeadline(
-        300,
-        (signal) => fetch(`http://localhost:${server.port}/`, { signal }),
+        DEADLINE_MS,
+        (s) => {
+          signal = s;
+          return fetch(`http://localhost:${server.port}/`, { signal: s });
+        },
         (response) => response.text(),
       );
-      expect(read).rejects.toThrow();
-      await read.catch(() => {});
-      // Bounded by the deadline, not by the origin eventually relenting.
-      expect(Date.now() - startedAt).toBeLessThan(5_000);
+      await expect(read).rejects.toThrow();
+      const elapsed = Date.now() - startedAt;
+
+      // It ended because the deadline fired, not because the origin relented.
+      expect(signal?.aborted).toBe(true);
+      // Close to the deadline, not merely "eventually": a bound that fires an
+      // order of magnitude late is not a bound.
+      expect(elapsed).toBeGreaterThanOrEqual(DEADLINE_MS - 50);
+      expect(elapsed).toBeLessThan(DEADLINE_MS * 5);
     } finally {
       server.stop(true);
     }
   });
 
-  test("a normal response is read in full and the deadline does not fire", async () => {
+  test("a normal response is read in full and the deadline is disarmed", async () => {
     const server = Bun.serve({
       port: 0,
       fetch: () => new Response("hello", { headers: { "content-type": "text/plain" } }),
     });
+    let signal: AbortSignal | undefined;
     try {
       const body = await withRequestDeadline(
-        5_000,
-        (signal) => fetch(`http://localhost:${server.port}/`, { signal }),
+        DEADLINE_MS,
+        (s) => {
+          signal = s;
+          return fetch(`http://localhost:${server.port}/`, { signal: s });
+        },
         (response) => response.text(),
       );
       expect(body).toBe("hello");
+
+      // Wait out the deadline. Still un-aborted ⇒ the timer was cleared;
+      // without the clearTimeout this flips to true here.
+      await Bun.sleep(DEADLINE_MS * 2);
+      expect(signal?.aborted).toBe(false);
     } finally {
       server.stop(true);
     }
@@ -98,12 +118,13 @@ describe("safeFetchWithDeadline (#1699)", () => {
       const read = safeFetchWithDeadline(
         `http://localhost:${server.port}/`,
         { headers: { "User-Agent": "squirrel-test" } },
-        300,
+        DEADLINE_MS,
         (response) => response.text(),
       );
-      expect(read).rejects.toThrow();
-      await read.catch(() => {});
-      expect(Date.now() - startedAt).toBeLessThan(5_000);
+      await expect(read).rejects.toThrow();
+      const elapsed = Date.now() - startedAt;
+      expect(elapsed).toBeGreaterThanOrEqual(DEADLINE_MS - 50);
+      expect(elapsed).toBeLessThan(DEADLINE_MS * 5);
     } finally {
       server.stop(true);
     }

@@ -192,4 +192,48 @@ describe("slow origin does not wedge the crawl (#1699)", () => {
 
     expect(resolved).toBe(`${origin}second`);
   });
+
+  test("a client-redirect target that never serves headers is not adopted", async () => {
+    // The mirror of the test above, and the reason the fallback cannot simply
+    // be `currentUrl`: /dead is a page-supplied meta-refresh target that never
+    // responded at all. Handing it back would let a meta-refresh reroute the
+    // crawl's base to a URL that was never reachable.
+    const origin = serve(async (req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/dead") await new Promise(() => {});
+      return htmlResponse(
+        `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/dead"></head><body>x</body></html>`,
+      );
+    });
+
+    const crawler = await Effect.runPromise(createCrawler({ config: CONFIG }));
+    const resolved = await Effect.runPromise(crawler.detectRedirects(origin));
+
+    expect(resolved).toBe(origin);
+  });
+
+  test("the chain budget stops a redirect chain short of MAX_REDIRECTS hops", async () => {
+    // Each hop is individually inside its per-hop deadline, so only a
+    // whole-chain budget can end this early. Without one, all 10 hops run.
+    const HOP_DELAY_MS = 300;
+    let hits = 0;
+    const origin = serve(async (req) => {
+      hits++;
+      await Bun.sleep(HOP_DELAY_MS);
+      const n = Number(new URL(req.url).pathname.replace("/m", "")) || 0;
+      return htmlResponse(
+        `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/m${n + 1}"></head><body>x</body></html>`,
+      );
+    });
+
+    // hop deadline 600ms (> HOP_DELAY_MS, so no hop times out on its own);
+    // chain budget = 3 × 600ms = 1800ms, i.e. ~6 hops of 300ms.
+    const crawler = await Effect.runPromise(
+      createCrawler({ config: { ...CONFIG, timeoutMs: 600 } }),
+    );
+    await Effect.runPromise(crawler.detectRedirects(`${origin}m0`));
+
+    expect(hits).toBeGreaterThan(1);
+    expect(hits).toBeLessThan(10);
+  });
 });

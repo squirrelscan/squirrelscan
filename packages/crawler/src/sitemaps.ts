@@ -187,7 +187,16 @@ export function fetchSitemap(
             await response.body?.cancel().catch(() => {});
             return { success: false, url, error: `HTTP ${response.status}` };
           }
-          const content = await response.text();
+          // A body that never arrives (including a deadline abort) classifies
+          // as "Empty response", the same as one that arrives empty. This text
+          // reaches persisted sitemap-failure records, so it stays what it was
+          // before the read moved inside the deadline.
+          let content: string;
+          try {
+            content = await response.text();
+          } catch {
+            return { success: false, url, error: "Empty response" };
+          }
           if (!content) return { success: false, url, error: "Empty response" };
           return { success: true, data: parseSitemap(content, url) };
         },

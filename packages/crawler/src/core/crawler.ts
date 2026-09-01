@@ -1466,17 +1466,19 @@ export function createCrawler(
           const MAX_REDIRECTS = 10;
           const REDIRECT_TIMEOUT_MS = 10_000;
           const REDIRECT_TOTAL_BUDGET_MS = 30_000;
+          // The whole chain is worth this many full request timeouts and no
+          // more. Deliberately well under MAX_REDIRECTS: ten individually
+          // bounded hops still add up to 100s on a slow origin, and this runs
+          // BEFORE the crawl emits `started`, so an overrun doesn't read as "the
+          // crawl was slow" — it reads as a crawl that never began (#1699).
+          const REDIRECT_BUDGET_HOPS = 3;
           // Seed resolution is a crawl request like any other, so it honors the
           // crawl's own per-request timeout when that is tighter (the 30s
-          // default leaves the 10s ceiling in place).
+          // default leaves the 10s ceiling, and so the 30s chain budget, in
+          // place).
           const hopTimeoutMs = Math.max(1, Math.min(REDIRECT_TIMEOUT_MS, config.timeoutMs));
-          // Whole-chain budget. Ten bounded hops still add up to 100s on a slow
-          // origin, and this runs BEFORE the crawl emits `started` — so an
-          // overrun doesn't read as "the crawl was slow", it reads as a crawl
-          // that never began (#1699). Seed resolution is not worth more of the
-          // crawl-phase budget than this.
           const deadline =
-            Date.now() + Math.min(REDIRECT_TOTAL_BUDGET_MS, hopTimeoutMs * MAX_REDIRECTS);
+            Date.now() + Math.min(REDIRECT_TOTAL_BUDGET_MS, hopTimeoutMs * REDIRECT_BUDGET_HOPS);
           let currentUrl = targetUrl;
           const visited = new Set<string>();
 
