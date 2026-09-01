@@ -476,7 +476,9 @@ describe("classifyKeyContext", () => {
     // The window's left edge can land mid-key, and the fragment left over can
     // read as a whole key: `sha256"   :"` is what `"api_key_xsha256"` looks
     // like once cut. `cut` is how classifyKeyContext knows not to trust it.
-    const fragment = readKeyLookBack(`sha256"${" ".repeat(200)}:"`, 209);
+    const readBack = (text: string) => readKeyLookBack(text, text.length);
+
+    const fragment = readBack(`sha256"${" ".repeat(200)}:"`);
     expect(fragment.cut).toBe(true);
     expect(classifyKeyContext(fragment.before, "together", undefined, true)).toBe(
       "assigned"
@@ -486,7 +488,7 @@ describe("classifyKeyContext", () => {
     expect(classifyKeyContext(fragment.before, "together")).toBe("digest");
 
     // A key with its left edge in view is not a fragment.
-    const whole = readKeyLookBack(`{"sha256"${" ".repeat(200)}:"`, 211);
+    const whole = readBack(`{"sha256"${" ".repeat(200)}:"`);
     expect(whole.cut).toBe(false);
     expect(classifyKeyContext(whole.before, "together", undefined, whole.cut)).toBe(
       "digest"
@@ -494,7 +496,7 @@ describe("classifyKeyContext", () => {
 
     // Cutting must not cost the assignment itself: a minified member access at
     // the edge still means the value was assigned, and assigned values report.
-    const minified = readKeyLookBack(`t.a||"`, 6);
+    const minified = readBack(`t.a||"`);
     expect(minified.cut).toBe(true);
     expect(classifyKeyContext(minified.before, "together", undefined, true)).toBe(
       "assigned"
