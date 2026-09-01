@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import { ASSET_COMPRESSION_LIMITS } from "@squirrelscan/utils/constants";
+import { isCompressibleContentType } from "@squirrelscan/utils/headers";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -27,32 +28,18 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * Whether this media type gets a real win from a transfer coding. Classified by
- * content-type rather than by which crawl pool the asset came from, so an SVG
- * discovered as an <img> is judged as the XML text it is, while a PNG/JPEG/WebP
- * in that same pool (already entropy-coded) is left alone.
- */
-function isCompressibleType(contentType: string | null): boolean {
-  if (!contentType) return false;
-  const t = contentType.toLowerCase();
-  return (
-    t.includes("text/") ||
-    t.includes("application/json") ||
-    t.includes("application/javascript") ||
-    t.includes("application/xml") ||
-    t.includes("+xml") ||
-    t.includes("+json")
-  );
-}
-
-/**
  * `content-encoding` is a three-state signal here, and conflating the last two
  * is how this rule would earn a reputation for lying:
  *   - a coding string  → compressed, nothing to report
- *   - `null`           → observed on a live response, and there was none
+ *   - `null`           → no coding on the response
  *   - `undefined`      → never observed (the CLI's script content-store cache,
  *                        or a resource record written before #107 added the
  *                        column) — unknown, so stay silent
+ *
+ * `null` alone does NOT prove a live observation: the sub-resource checker also
+ * initializes it to `null` on a timeout or a budget skip. Those records carry no
+ * 2xx status, so the status gate in `run` is what actually establishes "we saw
+ * this response" — not the encoding field on its own.
  */
 function isKnownUncompressed(encoding: string | null | undefined): boolean {
   if (encoding === undefined) return false;
@@ -70,6 +57,7 @@ function isKnownUncompressed(encoding: string | null | undefined): boolean {
 interface Candidate {
   url: string;
   status: number | null;
+  error: string | null;
   contentType: string | null;
   sizeBytes: number | null;
   contentEncoding?: string | null;
@@ -129,9 +117,14 @@ export const assetCompressionRule: Rule = {
         c.status !== null &&
         c.status >= 200 &&
         c.status < 300 &&
+        // A record carrying an error has a size we cannot stand behind: the
+        // script fetcher's "script too large" bail reports the byte where it
+        // stopped reading, not the asset's real length, and this rule's finding
+        // names that size out loud.
+        c.error === null &&
         (c.cacheReason ?? null) === null &&
         c.contentEncoding !== undefined &&
-        isCompressibleType(c.contentType)
+        isCompressibleContentType(c.contentType)
     );
 
     if (observed.length === 0) {

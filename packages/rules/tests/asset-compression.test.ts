@@ -207,6 +207,16 @@ describe("perf/asset-compression — stays silent", () => {
     expect(check.status).toBe("skipped");
   });
 
+  test("a record carrying an error is not reported (its size is not trustworthy)", () => {
+    // The script fetcher's "script too large" bail reports the byte it stopped
+    // reading at, not the asset's real length — and this rule's finding names
+    // that size out loud, so it must not speak for such a record.
+    const check = only(
+      run(ctx({ scripts: [script({ error: "script too large" })] }))
+    );
+    expect(check.status).toBe("skipped");
+  });
+
   test("an unknown size is not reported", () => {
     const check = only(run(ctx({ css: [css({ sizeBytes: null })] })));
     expect(check.status).toBe("pass");

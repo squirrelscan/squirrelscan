@@ -14,6 +14,7 @@ import type {
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
 import { calculateFreshness } from "@squirrelscan/crawler";
 import { RESOURCE_SIZE_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import { isCompressibleContentType } from "@squirrelscan/utils/headers";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 
@@ -297,7 +298,21 @@ async function checkSingleResourceAsync(
         };
       }
 
-      if (headResponse.status < 400 && sizeBytes !== null) {
+      // #9: a HEAD carries no body, so a server whose compression runs as a
+      // body filter (nginx's gzip module is the common one) answers it with NO
+      // Content-Encoding and the UNCOMPRESSED Content-Length — indistinguishable
+      // from a genuinely uncompressed asset. Absence of the header on a bodiless
+      // response is not evidence of absence, so for compressible text that looks
+      // uncompressed we decline the HEAD shortcut and fall through to the GET
+      // below, which is authoritative. A HEAD that DOES name a coding is
+      // positive evidence and still takes the shortcut, as does any asset whose
+      // type gains nothing from compression, so the extra request is confined to
+      // exactly the assets a compression rule would otherwise misreport.
+      const headEncodingIsTrustworthy =
+        meta.contentEncoding !== null ||
+        !isCompressibleContentType(meta.contentType);
+
+      if (headResponse.status < 400 && sizeBytes !== null && headEncodingIsTrustworthy) {
         clearTimeout(timeoutId);
         return {
           ...defaultResult,
