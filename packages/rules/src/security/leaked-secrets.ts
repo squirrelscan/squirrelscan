@@ -458,21 +458,21 @@ const FAST_PATTERNS: FastPattern[] = [
   {
     name: "Generic API Key Assignment",
     pattern:
-      /(?:api[_-]?key|apikey)['"]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:api[_-]?key|apikey)['"]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
   },
   {
     name: "Generic Secret Assignment",
     pattern:
-      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?['"]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][^'"]{8,}['"]/gi,
+      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?['"]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*['"][^'"]{8,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
   },
   {
     name: "Generic Token Assignment",
     pattern:
-      /(?:access[_-]?token|auth[_-]?token)['"]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:access[_-]?token|auth[_-]?token)['"]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
   },
@@ -822,14 +822,14 @@ export function lookBehind(text: string, index: number): string {
 // The key an assignment puts immediately in front of a value:
 // `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`, `SECRET_KEY || "`
 const PRECEDING_KEY_RE =
-  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
 
 // The same, written as a bracket access: `cfg["apiKey"] = "`, `cfg['sha256'] =`
 const BRACKET_KEY_RE =
   /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
 
 // Anything at all in value position, whatever the key turned out to be
-const ASSIGNMENT_RE = /(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
+const ASSIGNMENT_RE = /[:=]\s*["'`]?\s*$/;
 
 // SRI and prefixed-digest values: integrity="sha384-…", `sha256-…`, `md5:…`
 const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
@@ -870,6 +870,11 @@ export function enclosingTag(text: string, index: number): string | undefined {
   return close === -1 ? undefined : text.slice(open, close + 1);
 }
 
+// The characters one key NAME is made of. `.` is absent on purpose: it starts a
+// new name rather than continuing this one, so `cache.apiKey` is the `apiKey`
+// of a cache and not a key called `cache.apiKey`.
+const KEY_SEGMENT_CHAR_RE = /[A-Za-z0-9_$-]/;
+
 /**
  * Does the key this match started in the middle of say "digest"?
  *
@@ -880,14 +885,23 @@ export function enclosingTag(text: string, index: number): string | undefined {
  * design — every other pattern in it carries a literal marker that a digest
  * cannot wear. These three do not, so they read their own left edge.
  *
- * Bounded by the same budget as lookBehind. Running out mid-key can only
- * truncate the prefix, and a truncated prefix suppresses at worst.
+ * Spending the whole lookBehind budget without reaching the start of the key
+ * means the prefix was never read, only cut, and a cut prefix is not evidence
+ * in either direction: it can drop the `cache` off `cache-…-api-key` and it can
+ * invent one out of the tail of `xcache-…`. So an over-long key does not
+ * suppress — a missed digest reads as one extra medium-confidence warning,
+ * where an invented one silently drops a real leak.
  */
 function startsInsideDigestKey(text: string, index: number): boolean {
   const floor = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE * 2);
   let start = index;
-  while (start > floor && KEY_CHAR_RE.test(text[start - 1] ?? "")) start--;
+  while (start > floor && KEY_SEGMENT_CHAR_RE.test(text[start - 1] ?? "")) {
+    start--;
+  }
   if (start === index) return false;
+  if (start === floor && KEY_SEGMENT_CHAR_RE.test(text[start - 1] ?? "")) {
+    return false;
+  }
   return keyWords(text.slice(start, index)).some((word) =>
     DIGEST_KEY_WORDS.has(word)
   );

@@ -503,6 +503,56 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     }
   });
 
+  test("a digest word in a member path is not part of the key", () => {
+    // `cache.apiKey` is the apiKey OF a cache, not a key called
+    // `cache.apiKey` — the walk stops at the dot.
+    for (const path of ["cache.apiKey", "config.cache.apiKey", "sha256.apiKey"]) {
+      expect(scanContent(`${path} = "${COMMIT}";`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+    }
+  });
+
+  test("a key too long to read whole does not suppress", () => {
+    // Spending the whole look-back budget means the prefix was cut, not read.
+    const budget = SECRET_KEY_LOOKBEHIND_SIZE * 2;
+
+    // A cut can lose a digest word off the front…
+    const lost = `cache-${"y".repeat(budget)}-api-key`;
+    expect(scanContent(`{"${lost}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
+
+    // …and it can invent one out of the middle. `cache-` here is the tail of
+    // `xcache-`, not a word, and the cut lands on exactly its first character.
+    // Without the guard the key reads as a digest and the credential goes
+    // silent — the one direction that must never happen by accident.
+    const invented = `xcache-${"y".repeat(budget - 7)}-api-key`;
+    expect(invented.indexOf("api-key")).toBe(budget + 1);
+    expect(scanContent(`{"${invented}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
+
+    // The guard is about the budget, not about giving up: a digest word the
+    // walk reaches within it still suppresses.
+    const read = `cache-${"y".repeat(100)}-api-key`;
+    expect(read.indexOf("api-key")).toBeLessThan(budget);
+    expect(scanContent(`{"${read}":"${COMMIT}"}`, "html")).toEqual([]);
+  });
+
+  test("a fallback with no key in front of it is not an assignment", () => {
+    // `||` only makes a value position when something nameable precedes it.
+    // A call expression names nothing, and a checksum falling back to a
+    // literal is exactly the shape that would be misread.
+    for (const expr of ["getChecksum()", "hashes.get(name)", "digestOf(x)"]) {
+      const content = `const v = ${expr} || "${DIGEST}"; // together.ai`;
+      expect(scanContent(content, "inline-script")).toEqual([]);
+    }
+    // A name in front of the fallback still reports, minified ones included.
+    for (const content of [
+      `const v = cfg.token || "${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
+      `t.a||"${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
+    ]) {
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
+        TOGETHER_KEY,
+      ]);
+    }
+  });
+
   test("a hardcoded fallback behind an env var is reported", () => {
     const cases = [
       `const k = process.env.SECRET_KEY || "${TOGETHER_KEY}";`, // pragma: allowlist secret
@@ -616,6 +666,12 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     const chunk = `var a${"b".repeat(40)}=function(t){return t.apiKey||t.secret||"Bearer "+t.token};`;
     for (const line of [
       chunk.repeat(4000),
+      // A credential word followed by a long whitespace run and no separator.
+      // Two adjacent unbounded `\s*` quantifiers here would partition the run
+      // every possible way before giving up: 12s at 64 KB, and `\s` matches
+      // newlines, so pretty-printed HTML gets there on its own.
+      `apiKey${" ".repeat(200_000)}x`,
+      `{"apiKey"${"\n".repeat(200_000)}:"x"}`,
       // Unterminated quoted values: the generic secret pattern's `[^'"]{8,}`
       // has to give up on each of these without exploring the whole tail.
       `x={${`secret:"${"y".repeat(200)},`.repeat(2000)}}`,
