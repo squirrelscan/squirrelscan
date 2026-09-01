@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -10,7 +10,7 @@ import {
   unlinkSync,
   chmodSync,
 } from "node:fs";
-import { platform } from "node:os";
+import { constants as osConstants, platform } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 import { AUTO_UPDATE_FALLBACK_THRESHOLD } from "@/constants";
@@ -51,6 +51,35 @@ const INLINE_UPDATE_EXIT_GRACE_MS = 10_000;
 // GitHub retries must finish well inside it, or a second updater could
 // take over mid-install.
 const UPDATE_LOCK_STALE_MS = 30 * 60 * 1000;
+
+/**
+ * Set on the process re-executed after a foreground update (#170). Its only
+ * job is loop-proofing: the new binary must never itself try to apply another
+ * update at startup, no matter what the settings on disk say. Inherited by
+ * everything the re-executed run spawns, which is what we want — a squirrel
+ * invoked from inside that run is part of the same already-updated session.
+ */
+export const FOREGROUND_UPDATE_ENV = "SQUIRREL_UPDATE_REEXEC";
+
+// Terminal signals forwarded to the re-executed child instead of killing this
+// waiting parent — a dead parent would hand the shell its prompt back and leave
+// the child writing over it, and a supervisor's SIGTERM would never reach the
+// command the user asked for.
+const REEXEC_FORWARDED_SIGNALS = [
+  "SIGINT",
+  "SIGTERM",
+  "SIGHUP",
+  "SIGQUIT",
+  "SIGUSR1",
+  "SIGUSR2",
+] as const;
+// How long to wait for a re-raised signal to actually kill this process before
+// falling back to exiting with the shell's encoding for it.
+const REEXEC_SIGNAL_RERAISE_GRACE_MS = 50;
+// Ceiling on how long a user's command may wait for a foreground install.
+// Past it the download is handed to the detached updater and the command runs
+// now on the current binary: slow links still get updated, just not in-line.
+const FOREGROUND_UPDATE_TIMEOUT_MS = 120_000;
 
 /**
  * Whether this install can silently self-update: the user hasn't turned
@@ -309,14 +338,9 @@ export function maybeSpawnAutoUpdate(settings: UserSettings): void {
     return;
   }
 
-  if (settings.last_auto_update_attempt) {
-    const hoursSinceAttempt =
-      (Date.now() - new Date(settings.last_auto_update_attempt).getTime()) /
-      (1000 * 60 * 60);
-    // Silent: fires on every run inside the window; the attempt it throttles
-    // against was already reported.
-    if (hoursSinceAttempt < AUTO_UPDATE_ATTEMPT_INTERVAL_HOURS) return;
-  }
+  // Silent: fires on every run inside the window; the attempt it throttles
+  // against was already reported.
+  if (isAutoUpdateAttemptThrottled(settings)) return;
 
   // Record intent-to-attempt before dispatch — a crashing/killed updater must
   // not retry on every subsequent run. This is the THROTTLE only; it does not
@@ -329,21 +353,8 @@ export function maybeSpawnAutoUpdate(settings: UserSettings): void {
     return;
   }
 
-  // Advance the per-version failed-attempt counter ONLY when an update
-  // genuinely starts (#1085): an inline start deferred by commandSettled, or a
-  // spawn that throws, never runs — counting it would trip the loud fallback
-  // ("didn't complete on this system") for an attempt the updater never got to
-  // make. Bumping at genuine start still counts #1074's killed-mid-update runs
-  // (the updater started, then died). Increment for the same target, reset to 1
-  // when the pending version changed; performUpdate clears it on success.
-  const bumpAttemptCounter = () => {
-    const prev = settings.auto_update_attempts;
-    const count =
-      prev && prev.version === notification.to_version ? prev.count + 1 : 1;
-    updateSettings({
-      auto_update_attempts: { version: notification.to_version, count },
-    });
-  };
+  const bumpAttemptCounter = () =>
+    bumpAutoUpdateAttempts(settings, notification.to_version);
 
   if (platform() === "win32") {
     if (startInlineAutoUpdate()) {
@@ -355,22 +366,381 @@ export function maybeSpawnAutoUpdate(settings: UserSettings): void {
     return;
   }
 
+  if (spawnDetachedAutoUpdate()) {
+    bumpAttemptCounter();
+    logger.debug("update-check: spawned background auto-update", {
+      to_version: notification.to_version,
+    });
+  } else {
+    skip("spawn_failed");
+  }
+}
+
+/**
+ * Start the detached `self update --auto` child that installs out of band —
+ * a new session, so it survives this process exiting. Returns whether it
+ * started. Used both as the ordinary POSIX dispatch and as the foreground
+ * path's escape hatch when the download outlasts the user's patience.
+ */
+function spawnDetachedAutoUpdate(): boolean {
   try {
     const child = spawn(process.execPath, ["self", "update", "--auto"], {
       detached: true,
       stdio: "ignore",
     });
-    child.unref();
-    bumpAttemptCounter();
-    logger.debug("update-check: spawned background auto-update", {
-      to_version: notification.to_version,
+    // spawn() only throws for bad arguments; a real failure to start (ENOENT,
+    // EAGAIN, EMFILE) arrives later as an 'error' event, and an unhandled
+    // 'error' on an EventEmitter takes the whole CLI down with it. Attach the
+    // listener BEFORE unref so a failed background dispatch stays background.
+    child.once("error", (error: Error) => {
+      logger.debug("update-check: background auto-update failed to start", {
+        error: error.message,
+      });
     });
+    child.unref();
+    return true;
   } catch (error) {
-    skip("spawn_failed");
     logger.debug("update-check: failed to spawn auto-update", {
       error: error instanceof Error ? error.message : String(error),
     });
+    return false;
   }
+}
+
+/**
+ * Hourly throttle shared by every auto-install dispatch path (background spawn,
+ * Windows inline, foreground apply): one download attempt per hour, however
+ * often the CLI runs. A corrupt timestamp parses to NaN and every comparison
+ * with NaN is false, so it reads as "not throttled" — the safe direction.
+ */
+function isAutoUpdateAttemptThrottled(settings: UserSettings): boolean {
+  if (!settings.last_auto_update_attempt) return false;
+  const hoursSinceAttempt =
+    (Date.now() - Date.parse(settings.last_auto_update_attempt)) /
+    (1000 * 60 * 60);
+  return hoursSinceAttempt < AUTO_UPDATE_ATTEMPT_INTERVAL_HOURS;
+}
+
+/**
+ * Advance the per-version failed-attempt counter, but ONLY when an update
+ * genuinely starts (#1085): an inline start deferred by commandSettled, or a
+ * spawn that throws, never runs — counting it would trip the loud fallback
+ * ("didn't complete on this system") for an attempt the updater never got to
+ * make. Bumping at genuine start still counts #1074's killed-mid-update runs
+ * (the updater started, then died). Increment for the same target, reset to 1
+ * when the pending version changed; performUpdate clears it on success.
+ */
+function bumpAutoUpdateAttempts(
+  settings: UserSettings,
+  toVersion: string
+): void {
+  const prev = settings.auto_update_attempts;
+  const count = prev && prev.version === toVersion ? prev.count + 1 : 1;
+  updateSettings({ auto_update_attempts: { version: toVersion, count } });
+}
+
+/**
+ * The version this run should install BEFORE executing the user's command, or
+ * null to leave startup exactly as it was (#170).
+ *
+ * Cheap and synchronous on purpose: the overwhelmingly common answer is null,
+ * and the caller must be able to decide without awaiting anything or touching
+ * the network. It acts only on a notification an earlier background check
+ * already stored — it never performs a check of its own, so the
+ * `update_check_interval_hours` cadence is untouched.
+ *
+ * Deliberately silent about its skips: the very same settings go through
+ * maybeSpawnAutoUpdate later in this run, which owns the update_auto_skipped
+ * telemetry. Emitting here would double-count every skip reason.
+ */
+export function foregroundUpdateTarget(settings: UserSettings): string | null {
+  // Loop guard first: cheapest check, and the one that must never be bypassed.
+  if (process.env[FOREGROUND_UPDATE_ENV]) {
+    // CONSUME it. The marker's job is to stop THIS process from updating a
+    // second time; leaving it set would also mute every squirrel the command
+    // goes on to spawn, and a nested invocation is a separate run entitled to
+    // its own update. Children spawned before this point are vanishingly
+    // unlikely (nothing runs before the startup gate).
+    delete process.env[FOREGROUND_UPDATE_ENV];
+    return null;
+  }
+
+  const notification = settings.pending_update_notification;
+  // Fast path — nothing recorded, so nothing to do and nothing to fetch.
+  if (!notification) return null;
+  // Belt-and-braces: a notification pointing at the running version would
+  // re-exec into an identical binary forever if it somehow survived an install.
+  if (notification.to_version === version) return null;
+
+  // Windows keeps the existing in-process background updater: the running exe
+  // is the thing being replaced there (a copy, not a symlink — see
+  // link-binary.ts), so a synchronous swap-then-re-exec has to reason about a
+  // loaded image being renamed out from under the process that is about to
+  // spawn from it. Not worth the #1538 class of breakage for the win.
+  if (platform() === "win32") return null;
+
+  if (updateSuppressedReason()) return null; // CI / SQUIRREL_NO_UPDATE
+  if (!isAutoUpdateEligible(settings)) return null; // opted out / unmanaged
+  if (settings.dismissed_update_version === notification.to_version)
+    return null;
+  if (isAutoUpdateAttemptThrottled(settings)) return null;
+  // Another updater already owns the install. Gate on it HERE, not by letting
+  // runAutoUpdate fail on the lock: reaching that point would already have
+  // announced an update to the user and burnt the hourly throttle for work
+  // someone else is doing.
+  if (isUpdateLockHeld()) return null;
+
+  return notification.to_version;
+}
+
+/**
+ * Whether a live update lock exists, WITHOUT taking it — a read-only preview of
+ * acquireUpdateLock's verdict for gating. A lock past the staleness bound is
+ * treated as abandoned, exactly as the acquire does. Unreadable/absent reads as
+ * free: the real acquire still runs and is the authority.
+ */
+function isUpdateLockHeld(): boolean {
+  try {
+    const stat = statSync(getUpdateLockPath());
+    return Date.now() - stat.mtimeMs <= UPDATE_LOCK_STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
+/** What a foreground update attempt did. Success never returns — see below. */
+export type ForegroundUpdateOutcome = "skipped" | "failed";
+
+/**
+ * Apply an already-known pending update, then run the original command on the
+ * new binary (#170). On success this never returns: the new binary runs with
+ * this run's argv and stdio, and the process exits with its status.
+ *
+ * Every other path returns, and the caller runs the command on the current
+ * binary exactly as before — a failed update must never be a failed command.
+ *
+ * `deps` exists so the orchestration (order, fallbacks, loop guard) is testable
+ * without a network or a real binary swap.
+ */
+export async function applyPendingUpdateInForeground(
+  settings: UserSettings,
+  deps: {
+    update?: (
+      signal: AbortSignal,
+      onStart: () => void
+    ) => Promise<string | null>;
+    reexec?: (binaryPath: string) => void | Promise<void>;
+    /** Override the wait ceiling. Tests only. */
+    timeoutMs?: number;
+  } = {}
+): Promise<ForegroundUpdateOutcome> {
+  const target = foregroundUpdateTarget(settings);
+  if (!target) return "skipped";
+
+  // Narrow the window between the startup settings snapshot and the install:
+  // the notification may have been consumed while this run was starting.
+  const current = loadSettings();
+  if (current.ok && !current.data.pending_update_notification) {
+    // Only a completed install may be re-executed. A release binary on disk is
+    // NOT evidence of one — old releases are kept for rollback, and
+    // `self update --dismiss` clears the notification without installing
+    // anything — so require the applied marker for this exact target, and take
+    // a dismissal recorded since the snapshot as a veto.
+    const applied = current.data.auto_update_applied;
+    const alreadyInstalled =
+      applied?.to_version === target &&
+      current.data.dismissed_update_version !== target
+        ? releaseBinaryIfPresent(target)
+        : null;
+    if (alreadyInstalled) {
+      logger.debug("foreground-update: already installed by another run", {
+        to_version: target,
+      });
+      await (deps.reexec ?? reexecIntoUpdatedBinary)(alreadyInstalled);
+      return "failed"; // only reached when the re-exec did not take over
+    }
+    logger.debug("foreground-update: notification consumed by another run");
+    return "skipped";
+  }
+
+  // Record the attempt BEFORE downloading anything, exactly as the background
+  // dispatch does: an update that keeps failing must not re-download on every
+  // single run. The per-version FAILURE counter that drives the loud
+  // manual-update fallback (#1085) is advanced separately, via onStart, so an
+  // attempt that never gets past the update lock is not counted as one.
+  const recorded = updateSettings({
+    last_auto_update_attempt: new Date().toISOString(),
+  });
+  if (!recorded.ok) return "skipped";
+
+  // The download is the one part of startup that can take real seconds; say so
+  // rather than stalling silently. The "✓ auto-updated" confirmation is still
+  // printed once, by the re-executed run (banner.ts).
+  if (settings.notifications) {
+    console.error(`Updating squirrel v${version} → v${target}...`);
+  }
+
+  // Hard ceiling on how long a user's command may wait. The download timeout in
+  // releases.ts only covers response headers, so without this a server that
+  // stalls the body would hang the CLI forever — a risk the detached updater
+  // never carried, because nothing waited on it.
+  const controller = new AbortController();
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, deps.timeoutMs ?? FOREGROUND_UPDATE_TIMEOUT_MS);
+
+  let installed: string | null;
+  try {
+    installed = await (deps.update ?? runForegroundAutoUpdate)(
+      controller.signal,
+      () => bumpAutoUpdateAttempts(settings, target)
+    );
+  } finally {
+    clearTimeout(deadline);
+  }
+
+  if (!installed) {
+    // runAutoUpdate already logged and reported the reason (no network, bad
+    // checksum, install failure, another updater holding the lock).
+    logger.debug("foreground-update: not applied, running current version");
+    if (timedOut) {
+      // Out of patience, not out of luck: hand the download to the detached
+      // updater so a slow link still lands the update, exactly as before #170.
+      logger.debug("foreground-update: deadline reached, finishing detached");
+      spawnDetachedAutoUpdate();
+    }
+    return "failed";
+  }
+
+  const binaryPath = releaseBinaryIfPresent(installed);
+  if (!binaryPath) return "failed";
+
+  await (deps.reexec ?? reexecIntoUpdatedBinary)(binaryPath);
+
+  // Reached only when the re-exec itself failed to take over.
+  trackTelemetryEvent("update_auto_error", settings, {
+    error_type: "REEXEC_FAILED",
+  });
+  return "failed";
+}
+
+/** runAutoUpdate bound to the foreground path's signal + start callback. */
+function runForegroundAutoUpdate(
+  signal: AbortSignal,
+  onStart: () => void
+): Promise<string | null> {
+  return runAutoUpdate({ signal, onStart });
+}
+
+/** The installed binary for `version`, or null when it isn't on disk. */
+function releaseBinaryIfPresent(version: string): string | null {
+  let binaryPath: string;
+  try {
+    binaryPath = getBinaryPath(version);
+  } catch {
+    return null; // version failed the release-path validation
+  }
+  if (existsSync(binaryPath)) return binaryPath;
+  logger.debug("foreground-update: installed binary missing", { binaryPath });
+  return null;
+}
+
+/**
+ * Run `binaryPath` with this process's argv, environment, cwd and stdio, then
+ * exit the way it exited — the closest thing to execve() available on both Node
+ * and Bun. Resolves (instead of exiting) only when the child could not be
+ * started, so the caller can fall back to the current binary.
+ *
+ * The freshly installed release path is used rather than the symlink: it is
+ * the exact version just verified and installed, and it cannot be flipped out
+ * from under us by a concurrent updater between the install and the spawn.
+ *
+ * Terminal signals are FORWARDED rather than held: a supervisor (or `timeout`,
+ * or a harness) signalling this pid must still reach the command the user
+ * actually asked for. A synchronous spawn cannot do that — it blocks the loop
+ * for the whole run, so the CLI would ignore cancellation for as long as an
+ * audit takes. At a tty the child already receives the process-group signal;
+ * the forwarded duplicate is harmless.
+ *
+ * `argv` is a seam for tests only — production always re-runs this process's
+ * own arguments.
+ * @internal
+ */
+export function reexecIntoUpdatedBinary(
+  binaryPath: string,
+  argv: string[] = process.argv.slice(2)
+): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let child: ChildProcess;
+    try {
+      child = spawn(binaryPath, argv, {
+        stdio: "inherit",
+        env: { ...process.env, [FOREGROUND_UPDATE_ENV]: "1" },
+      });
+    } catch (error) {
+      logger.debug("foreground-update: re-exec could not start", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      resolve();
+      return;
+    }
+
+    const handlers = REEXEC_FORWARDED_SIGNALS.map((signal) => {
+      const handler = () => {
+        try {
+          child.kill(signal);
+        } catch {
+          // already gone — nothing to forward to
+        }
+      };
+      process.on(signal, handler);
+      return [signal, handler] as const;
+    });
+    // Always restore the previous disposition: a leaked handler would leave
+    // the fallback command (or a test process) ignoring Ctrl-C.
+    const release = () => {
+      for (const [signal, handler] of handlers) process.off(signal, handler);
+    };
+
+    let settled = false;
+    child.once("error", (error) => {
+      if (settled) return;
+      settled = true;
+      release();
+      logger.debug("foreground-update: re-exec failed", {
+        error: error.message,
+      });
+      resolve();
+    });
+
+    child.once("exit", (code, signal) => {
+      if (settled) return;
+      settled = true;
+      release();
+      if (signal) {
+        // Die the way the child died, so a supervisor sees the signal and not
+        // just a number. Delivery is asynchronous, so if this runtime keeps the
+        // signal handled anyway, fall back to the shell's 128+n encoding.
+        const signalNumber = osConstants.signals[signal];
+        try {
+          process.kill(process.pid, signal);
+        } catch {
+          // signal unsupported here — the timer below still exits
+        }
+        setTimeout(
+          () =>
+            process.exit(
+              typeof signalNumber === "number" ? 128 + signalNumber : 1
+            ),
+          REEXEC_SIGNAL_RERAISE_GRACE_MS
+        );
+        return;
+      }
+      process.exit(code ?? 1);
+    });
+  });
 }
 
 // Single-flight state for the in-process (Windows) updater. The pending
@@ -408,8 +778,9 @@ export function resetUpdaterStateForTests(): void {
  * @internal
  */
 export function startInlineAutoUpdate(
-  runner: (signal: AbortSignal) => Promise<void> = (signal) =>
-    runAutoUpdate({ signal })
+  runner: (signal: AbortSignal) => Promise<void> = async (signal) => {
+    await runAutoUpdate({ signal });
+  }
 ): boolean {
   if (inlineUpdate) return false;
   if (commandSettled) {
@@ -496,21 +867,33 @@ function raceAbort<T>(
 
 /**
  * Silent auto-update — the body of a detached `self update --auto` child
- * (POSIX) or the in-process runner (Windows). No console output — outcomes
- * surface via telemetry and the auto_update_applied notice on the next run.
+ * (POSIX), the in-process runner (Windows), or the foreground apply that
+ * precedes a command (#170). No console output — outcomes surface via
+ * telemetry and the auto_update_applied notice on the next run.
+ *
+ * Returns the version it installed, or null when nothing was installed for any
+ * reason. Callers that need to act on the new binary (the foreground path)
+ * depend on that distinction; the fire-and-forget callers ignore it.
  */
 export async function runAutoUpdate(options?: {
   signal?: AbortSignal;
-}): Promise<void> {
+  /**
+   * Called once the updater OWNS the update lock and real work is about to
+   * begin. The foreground path advances its failed-attempt counter here rather
+   * than at dispatch, so an attempt that lost the lock to a concurrent updater
+   * (which is doing the work) never counts toward the #1085 fallback box.
+   */
+  onStart?: () => void;
+}): Promise<string | null> {
   const settingsResult = loadSettings();
-  if (!settingsResult.ok) return;
+  if (!settingsResult.ok) return null;
 
   const settings = settingsResult.data;
-  if (!isAutoUpdateEligible(settings)) return;
+  if (!isAutoUpdateEligible(settings)) return null;
   // Belt-and-braces: the detached `self update --auto` child re-validates the
   // environment so a CI / opted-out machine never downloads or flips a binary,
   // even if it was somehow invoked directly.
-  if (updateSuppressedReason()) return;
+  if (updateSuppressedReason()) return null;
 
   // Before any slow work: a started-with-no-outcome install is one whose
   // updater was killed mid-flight — #1074's field signature, previously
@@ -519,8 +902,9 @@ export async function runAutoUpdate(options?: {
 
   if (!acquireUpdateLock()) {
     logger.debug("auto-update: another update is in progress");
-    return;
+    return null;
   }
+  options?.onStart?.();
 
   try {
     // Inline (signal-bearing) runs skip the 3x retry so an abort at command
@@ -534,17 +918,17 @@ export async function runAutoUpdate(options?: {
     );
     if (updateResult === ABORTED) {
       logger.debug("auto-update: aborted during update check");
-      return;
+      return null;
     }
     if (!updateResult.ok) {
       if (options?.signal?.aborted) {
         logger.debug("auto-update: aborted at command exit");
-        return;
+        return null;
       }
       trackTelemetryEvent("update_auto_error", settings, {
         error_type: updateResult.error.code,
       });
-      return;
+      return null;
     }
 
     if (!updateResult.data.available || !updateResult.data.manifest) {
@@ -552,25 +936,28 @@ export async function runAutoUpdate(options?: {
       // (release pulled, or we already updated) — clear it so we stop
       // nagging and respawning.
       updateSettings({ pending_update_notification: undefined });
-      return;
+      return null;
     }
 
     const manifest = updateResult.data.manifest;
-    if (settings.dismissed_update_version === manifest.version) return;
+    if (settings.dismissed_update_version === manifest.version) return null;
 
-    const applyResult = await performUpdate(manifest, settings, options);
+    const applyResult = await performUpdate(manifest, settings, {
+      ...options,
+      abortIfDismissed: true,
+    });
     if (!applyResult.ok) {
       if (options?.signal?.aborted) {
         // Expected when the command finished before the download — not an
         // error; the attempt retries on a later run.
         logger.debug("auto-update: aborted at command exit");
-        return;
+        return null;
       }
       trackTelemetryEvent("update_auto_error", settings, {
         error_type: applyResult.error.code,
       });
       logger.debug("auto-update: failed", { error: applyResult.error.message });
-      return;
+      return null;
     }
 
     updateSettings({
@@ -582,10 +969,11 @@ export async function runAutoUpdate(options?: {
     });
     trackTelemetryEvent("update_auto", settings);
     logger.debug("auto-update: installed", { version: manifest.version });
+    return manifest.version;
   } catch (error) {
     if (options?.signal?.aborted) {
       logger.debug("auto-update: aborted at command exit");
-      return;
+      return null;
     }
     trackTelemetryEvent("update_auto_error", settings, {
       error_type: error instanceof Error ? error.name : "Error",
@@ -593,6 +981,7 @@ export async function runAutoUpdate(options?: {
     logger.debug("auto-update: error", {
       error: error instanceof Error ? error.message : String(error),
     });
+    return null;
   } finally {
     releaseUpdateLock();
   }
@@ -606,13 +995,30 @@ export async function runAutoUpdate(options?: {
 async function performUpdate(
   manifest: ReleaseManifest,
   settings: UserSettings,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; abortIfDismissed?: boolean }
 ): Promise<Result<void>> {
   const platformArch = detectPlatformArch();
   const downloadResult = await downloadBinary(manifest, platformArch, {
     signal: options?.signal,
   });
   if (!downloadResult.ok) return downloadResult;
+
+  // A download takes long enough for `self update --dismiss` to land in the
+  // middle of one. Re-read immediately before the swap so an unattended update
+  // never installs a version the user has just refused. Explicit
+  // `squirrel self update` deliberately does NOT pass this: asking for an
+  // update outranks an earlier dismissal.
+  if (options?.abortIfDismissed) {
+    const fresh = loadSettings();
+    if (fresh.ok && fresh.data.dismissed_update_version === manifest.version) {
+      return err(
+        commandError(
+          "UPDATE_DISMISSED",
+          `v${manifest.version} was dismissed while it was downloading`
+        )
+      );
+    }
+  }
 
   const installResult = await installVersion(
     manifest.version,

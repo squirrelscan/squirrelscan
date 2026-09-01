@@ -24,7 +24,6 @@ import {
   printAutoUpdateDisabledReminder,
   promptForUpdate,
   printFooter,
-  printAutoUpdateAppliedNotice,
 } from "../banner";
 import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
 import { fmt, pageLimitHint } from "../format";
@@ -158,7 +157,7 @@ export const crawl = defineCommand({
 
       printHeader(channel);
       if (settings.ok) {
-        await printAutoUpdateAppliedNotice(settings.data);
+        // See audit.ts: the auto-updated notice belongs to the run (#170).
         printUpdateNotification(settings.data);
         if (shouldShowAutoUpdateDisabledReminder(settings.data)) {
           updateSettings({
