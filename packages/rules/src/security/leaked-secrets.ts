@@ -762,6 +762,9 @@ const CREDENTIAL_KEY_WORDS = new Set([
   "credentials",
 ]);
 
+// What keyWords glues into a single word: everything it does not split on.
+const WORD_CHAR_RE = /[A-Za-z0-9]/;
+
 // `x-api-key`, `apiKey`, `SHA256`, `"sha256"` -> the words a key is made of.
 // A one-letter word is also glued to its successor so lower-camel `eTagKey`
 // yields `etag`, not `e` + `tag`.
@@ -801,19 +804,80 @@ function isMinifiedMemberKey(key: string, viaBracket: boolean): boolean {
 // of a run of them would hand classifyKeyContext a truncated key.
 const KEY_CHAR_RE = /[A-Za-z0-9_$.-]/;
 
+// Whitespace between a key and its value is layout, not content: a formatter,
+// an aligned manifest or a minifier's line break can put arbitrarily much of it
+// there without changing a word of what the key says.
+const SPACE_CHAR_RE = /\s/;
+
 /**
- * The text immediately before a match, for reading the key off.
- *
- * SECRET_KEY_LOOKBEHIND_SIZE is a budget, not a hard cut: slicing at exactly
- * that offset can land inside the key itself, and `redential="` classifies as
- * nothing at all. So the slice walks back to the nearest non-key character,
- * spending at most the same budget again before giving up.
+ * `\s` for one position, decided on the code unit. The look-back tests every
+ * character it walks over, and a regex call per character costs more than the
+ * whole rest of the walk — but only the ASCII half is worth open-coding, so the
+ * Unicode spaces `\s` also accepts (NBSP, the line separators) fall through to
+ * it and stay in step with the `\s*` in the key patterns.
  */
-export function lookBehind(text: string, index: number): string {
-  const floor = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE * 2);
-  let start = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE);
+function isSpaceAt(text: string, index: number): boolean {
+  const code = text.charCodeAt(index);
+  if (code === 32 || (code >= 9 && code <= 13)) return true;
+  if (code < 0x80) return false;
+  return SPACE_CHAR_RE.test(text[index] ?? "");
+}
+
+// How far back the walk may reach in total. The budget below buys significant
+// characters only, so without a second bound one long run of spaces would drag
+// the walk across the whole window.
+const LOOKBEHIND_SCAN_LIMIT = SECRET_KEY_LOOKBEHIND_SIZE * 8;
+
+export interface KeyLookBack {
+  /** The text immediately before the match, for reading the key off. */
+  before: string;
+  /** `before` opens part-way through a key, so it opens on a fragment. */
+  cut: boolean;
+}
+
+/**
+ * Read back from a match to the key in front of it.
+ *
+ * SECRET_KEY_LOOKBEHIND_SIZE is a budget over the characters that carry
+ * meaning: whitespace is skipped for free. Charging for it is what lost the
+ * key — `{"sha256"` and `:"<hex>"` are one assignment however many spaces sit
+ * between them, but 62 of them pushed `sha256` out of the window, the digest
+ * read back as a bare `:`, and an unnamed assignment reports.
+ *
+ * The budget is not a hard cut either: stopping at exactly that offset can land
+ * inside the key itself, and `redential="` classifies as nothing at all. So the
+ * walk continues to the nearest non-key character, spending at most the same
+ * budget again before giving up.
+ *
+ * A walk that runs out of room — the scan limit, the second budget, or the left
+ * edge of the window it was handed — never saw where the key began, so `cut`
+ * says the text opens on a fragment rather than on a whole key. Reaching
+ * position 0 settles nothing either: the window carries a lead-in precisely
+ * because its left edge can land mid-key.
+ */
+export function readKeyLookBack(text: string, index: number): KeyLookBack {
+  const scanFloor = Math.max(0, index - LOOKBEHIND_SCAN_LIMIT);
+
+  let start = index;
+  let budget = SECRET_KEY_LOOKBEHIND_SIZE;
+  while (start > scanFloor && budget > 0) {
+    if (!isSpaceAt(text, start - 1)) budget--;
+    start--;
+  }
+
+  const floor = Math.max(scanFloor, start - SECRET_KEY_LOOKBEHIND_SIZE);
   while (start > floor && KEY_CHAR_RE.test(text[start - 1] ?? "")) start--;
-  return text.slice(start, index);
+
+  // Stopping on a non-key character is the walk reaching the key's left edge;
+  // stopping anywhere else is it running out of room part-way through one.
+  const opensOnKeyChar = KEY_CHAR_RE.test(text[start] ?? "");
+  const reachedEdge = start > 0 && !KEY_CHAR_RE.test(text[start - 1] ?? "");
+  return { before: text.slice(start, index), cut: opensOnKeyChar && !reachedEdge };
+}
+
+/** The look-back text on its own, for callers that only read the key off it. */
+export function lookBehind(text: string, index: number): string {
+  return readKeyLookBack(text, index).before;
 }
 
 // The three regexes below all separate a key from its value with
@@ -980,22 +1044,59 @@ function classifyTagKeys(tag: string, keyword: string): KeyContext | "unknown" {
  *   Not reported.
  *
  * Digest beats credential when a key claims both, so `sha256Key` is a checksum.
+ *
+ * `keyCut` says the look-back opens on a fragment (see readKeyLookBack), and a
+ * fragment costs two different things.
+ *
+ * A word read out of it may never have existed: `api_key_xsha256` cut to
+ * `sha256` reads as a checksum and would suppress a real credential. Only a
+ * separator inside the fragment redeems a word — it marks a left edge the walk
+ * did see, so `x.sha256` really does carry `sha256`, whatever `x` was cut from.
+ *
+ * And a key that begins inside the fragment is not the whole key, so "this key
+ * says nothing" is a verdict about a truncated read: the part that was cut off
+ * is exactly where the words live. Such a key leaves the value where an
+ * unreadable key always leaves it — `assigned`, and reported.
  */
 export function classifyKeyContext(
   before: string,
   keyword: string,
-  tag?: string
+  tag?: string,
+  keyCut = false
 ): KeyContext {
-  if (DIGEST_PREFIX_RE.test(before) || INTEGRITY_ATTR_RE.test(before)) {
+  let fragment = 0;
+  while (keyCut && KEY_CHAR_RE.test(before[fragment] ?? "")) fragment++;
+
+  // A match can start past the character the fragment opens with — the key
+  // patterns cannot begin on a digit, a `-` or a `.` — so "starts at index 0"
+  // is not the question. The question is whether the character to its left is
+  // glued to it, which is what keyWords reads as one word.
+  const wordsAreWhole = (found: RegExpExecArray | null) => {
+    if (!found || found.index >= fragment) return found !== null;
+    // Nothing at all to the left is the cut itself, which proves nothing.
+    const left = before[found.index - 1];
+    return left !== undefined && !WORD_CHAR_RE.test(left);
+  };
+
+  if (
+    wordsAreWhole(DIGEST_PREFIX_RE.exec(before)) ||
+    wordsAreWhole(INTEGRITY_ATTR_RE.exec(before))
+  ) {
     return "digest";
   }
 
   const bracket = BRACKET_KEY_RE.exec(before);
   const match = bracket ?? PRECEDING_KEY_RE.exec(before);
   const key = match?.[1];
+  const cutKey = match !== null && match.index < fragment;
 
-  if (key) {
-    const direct = classifyKeyName(key, keyword);
+  // Read the key from wherever its left edge was actually seen: a key opening
+  // on the cut opens on a word taken from the middle of one, and dropping that
+  // word is what stops `…_xsha256` from reading as `sha256`.
+  const readable = key && !wordsAreWhole(match) ? key.replace(/^[A-Za-z0-9]+/, "") : key;
+
+  if (readable) {
+    const direct = classifyKeyName(readable, keyword);
     if (direct !== "unknown") return direct;
   }
 
@@ -1006,7 +1107,7 @@ export function classifyKeyContext(
   }
 
   if (key) {
-    return isMinifiedMemberKey(key, bracket !== null) ? "assigned" : "none";
+    return cutKey || isMinifiedMemberKey(key, bracket !== null) ? "assigned" : "none";
   }
 
   if (AUTH_SCHEME_RE.test(before)) return "credential";
@@ -1206,10 +1307,12 @@ export function scanContent(
         // Bare-shape patterns are the shape of a SHA-256 digest, so the key in
         // front of the value decides: never report under sha256/integrity/
         // checksum/commit/cache, or with no assignment context at all.
+        const back = readKeyLookBack(window, match.index);
         const keyContext = classifyKeyContext(
-          lookBehind(window, match.index),
+          back.before,
           keyword,
-          enclosingTag(window, match.index)
+          enclosingTag(window, match.index),
+          back.cut
         );
         if (keyContext === "digest" || keyContext === "none") {
           continue;
