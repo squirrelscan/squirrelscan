@@ -386,6 +386,15 @@ function spawnDetachedAutoUpdate(): boolean {
       detached: true,
       stdio: "ignore",
     });
+    // spawn() only throws for bad arguments; a real failure to start (ENOENT,
+    // EAGAIN, EMFILE) arrives later as an 'error' event, and an unhandled
+    // 'error' on an EventEmitter takes the whole CLI down with it. Attach the
+    // listener BEFORE unref so a failed background dispatch stays background.
+    child.once("error", (error: Error) => {
+      logger.debug("update-check: background auto-update failed to start", {
+        error: error.message,
+      });
+    });
     child.unref();
     return true;
   } catch (error) {
@@ -499,11 +508,20 @@ export async function applyPendingUpdateInForeground(
   if (!target) return "skipped";
 
   // Narrow the window between the startup settings snapshot and the install:
-  // another run may already have applied this exact update while this one was
-  // starting. Re-exec into what it installed instead of downloading it twice.
+  // the notification may have been consumed while this run was starting.
   const current = loadSettings();
   if (current.ok && !current.data.pending_update_notification) {
-    const alreadyInstalled = releaseBinaryIfPresent(target);
+    // Only a completed install may be re-executed. A release binary on disk is
+    // NOT evidence of one — old releases are kept for rollback, and
+    // `self update --dismiss` clears the notification without installing
+    // anything — so require the applied marker for this exact target, and take
+    // a dismissal recorded since the snapshot as a veto.
+    const applied = current.data.auto_update_applied;
+    const alreadyInstalled =
+      applied?.to_version === target &&
+      current.data.dismissed_update_version !== target
+        ? releaseBinaryIfPresent(target)
+        : null;
     if (alreadyInstalled) {
       logger.debug("foreground-update: already installed by another run", {
         to_version: target,

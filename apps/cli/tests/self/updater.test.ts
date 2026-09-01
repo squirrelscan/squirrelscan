@@ -376,6 +376,7 @@ describe("updater", () => {
     function stubSpawn() {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
       spyOn(childProcess, "spawn").mockReturnValue({
+        once() {},
         unref() {},
       } as unknown as ReturnType<typeof childProcess.spawn>);
     }
@@ -483,6 +484,7 @@ describe("updater", () => {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
       spyOn(os, "platform").mockReturnValue("linux");
       const spawnSpy = spyOn(childProcess, "spawn").mockReturnValue({
+        once() {},
         unref() {},
       } as unknown as ReturnType<typeof childProcess.spawn>);
 
@@ -934,6 +936,7 @@ describe("updater", () => {
         managedPosix();
         captureTelemetry();
         const spawnSpy = spyOn(childProcess, "spawn").mockReturnValue({
+          once() {},
           unref() {},
         } as unknown as ReturnType<typeof childProcess.spawn>);
         let sawAbort = false;
@@ -970,6 +973,7 @@ describe("updater", () => {
         managedPosix();
         captureTelemetry();
         const spawnSpy = spyOn(childProcess, "spawn").mockReturnValue({
+          once() {},
           unref() {},
         } as unknown as ReturnType<typeof childProcess.spawn>);
 
@@ -984,17 +988,31 @@ describe("updater", () => {
         expect(spawnSpy).not.toHaveBeenCalled();
       });
 
+      /** A release binary on disk for `v`, as a rollback copy would be. */
+      function stageRelease(v: string): string {
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((x: string) =>
+          join(tempHome, "releases", x, "squirrel")
+        );
+        mkdirSync(join(tempHome, "releases", v), { recursive: true });
+        writeFileSync(join(tempHome, "releases", v, "squirrel"), "bin");
+        return join(tempHome, "releases", v, "squirrel");
+      }
+
       test("another run having already applied the update re-execs without downloading", async () => {
         managedPosix();
         captureTelemetry();
-        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
-          join(tempHome, "releases", v, "squirrel")
-        );
-        mkdirSync(join(tempHome, "releases", "9.9.9"), { recursive: true });
-        writeFileSync(join(tempHome, "releases", "9.9.9", "squirrel"), "bin");
-        // On disk the notification is already consumed; the caller's snapshot
-        // still has it (it was read at startup).
-        updateSettings({ pending_update_notification: undefined });
+        const binary = stageRelease("9.9.9");
+        // On disk the notification is consumed and the applied marker records
+        // the install; the caller's snapshot still has the notification (it was
+        // read at startup).
+        updateSettings({
+          pending_update_notification: undefined,
+          auto_update_applied: {
+            from_version: "0.0.1",
+            to_version: "9.9.9",
+            at: new Date().toISOString(),
+          },
+        });
 
         const update = mock(async () => null);
         const reexeced: string[] = [];
@@ -1007,18 +1025,20 @@ describe("updater", () => {
         });
 
         expect(update).not.toHaveBeenCalled();
-        expect(reexeced).toEqual([
-          join(tempHome, "releases", "9.9.9", "squirrel"),
-        ]);
+        expect(reexeced).toEqual([binary]);
       });
 
-      test("notification consumed and nothing installed: skip, run the command", async () => {
+      // `self update --dismiss` clears the notification WITHOUT installing, and
+      // old releases are kept on disk for rollback — so a binary being present
+      // must never on its own be read as "another run applied it".
+      test("a dismissed version is never re-execed just because its binary exists", async () => {
         managedPosix();
         captureTelemetry();
-        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
-          join(tempHome, "releases", v, "squirrel")
-        );
-        updateSettings({ pending_update_notification: undefined });
+        stageRelease("9.9.9");
+        updateSettings({
+          pending_update_notification: undefined,
+          dismissed_update_version: "9.9.9",
+        });
 
         const update = mock(async () => null);
         const reexec = mock(() => {});
@@ -1031,6 +1051,117 @@ describe("updater", () => {
         expect(outcome).toBe("skipped");
         expect(update).not.toHaveBeenCalled();
         expect(reexec).not.toHaveBeenCalled();
+      });
+
+      test("a stale rollback copy with no applied marker is not re-execed", async () => {
+        managedPosix();
+        captureTelemetry();
+        stageRelease("9.9.9");
+        updateSettings({ pending_update_notification: undefined });
+
+        const reexec = mock(() => {});
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          update: async () => null,
+          reexec,
+        });
+
+        expect(outcome).toBe("skipped");
+        expect(reexec).not.toHaveBeenCalled();
+      });
+
+      // Real contention, not a stubbed updater: another process owns the lock
+      // file, so runAutoUpdate bails before any network work and onStart never
+      // fires — the #1085 counter must stay untouched.
+      test("real update-lock contention: no download, no failure counted", async () => {
+        managedPosix();
+        captureTelemetry();
+        const fetches: string[] = [];
+        globalThis.fetch = (async (url: string | URL | Request) => {
+          fetches.push(String(url));
+          return new Response("{}", { status: 200 });
+        }) as unknown as typeof fetch;
+        // A fresh lock held by some other pid.
+        writeFileSync(
+          join(tempHome, "update.lock"),
+          JSON.stringify({ pid: process.pid + 1, at: new Date().toISOString() })
+        );
+
+        const reexec = mock(() => {});
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          reexec,
+        });
+
+        expect(outcome).toBe("failed");
+        expect(reexec).not.toHaveBeenCalled();
+        // Only telemetry may have gone out; no release metadata was fetched.
+        expect(
+          fetches.filter((u) => u.includes("install.squirrelscan.com"))
+        ).toEqual([]);
+        const saved = loadUserSettings();
+        if (saved.ok) {
+          expect(saved.data.auto_update_attempts ?? null).toBeNull();
+        }
+        // The other process's lock is left alone.
+        expect(existsSync(join(tempHome, "update.lock"))).toBe(true);
+      });
+
+      // The whole deadline chain with the real runAutoUpdate: abort reaches the
+      // download, the lock is released, and the install is handed off detached.
+      test("deadline through the real updater: aborts the download, releases the lock, hands off", async () => {
+        managedPosix();
+        captureTelemetry();
+        const spawnSpy = spyOn(childProcess, "spawn").mockReturnValue({
+          once() {},
+          unref() {},
+        } as unknown as ReturnType<typeof childProcess.spawn>);
+        spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+          ok: true,
+          data: {
+            available: true,
+            current_version: "0.0.1",
+            latest_version: "9.9.9",
+            release_url: null,
+            manifest: { version: "9.9.9", binaries: {} } as ReleaseManifest,
+          },
+        } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+        let downloadAborted = false;
+        spyOn(releasesModule, "downloadBinary").mockImplementation(
+          (_manifest, _arch, options) =>
+            new Promise((resolve) => {
+              options?.signal?.addEventListener(
+                "abort",
+                () => {
+                  downloadAborted = true;
+                  resolve({
+                    ok: false,
+                    error: {
+                      code: "DOWNLOAD_ABORTED",
+                      message: "aborted",
+                    },
+                  } as Awaited<
+                    ReturnType<typeof releasesModule.downloadBinary>
+                  >);
+                },
+                { once: true }
+              );
+            })
+        );
+
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          timeoutMs: 20,
+          reexec: () => {},
+        });
+
+        expect(downloadAborted).toBe(true);
+        expect(outcome).toBe("failed");
+        expect(spawnSpy).toHaveBeenCalledTimes(1);
+        expect(spawnSpy.mock.calls[0]?.[1]).toEqual([
+          "self",
+          "update",
+          "--auto",
+        ]);
+        // The lock must not be left behind for the detached updater to trip on.
+        expect(existsSync(join(tempHome, "update.lock"))).toBe(false);
       });
 
       test("end to end: downloads, installs, flips the symlink, re-execs the release binary", async () => {
@@ -1190,6 +1321,29 @@ describe("updater", () => {
 
           expect(exits).toEqual([7]);
           // The forwarding handlers must not outlive the child.
+          expect(process.listenerCount("SIGTERM")).toBe(0);
+        });
+
+        // A child killed BY a signal must make this process die the same way,
+        // so a supervisor sees the signal and not just a number. process.kill
+        // is spied because the real re-raise would kill the test runner.
+        test("re-raises the child's death signal, with a 128+n fallback", async () => {
+          const killed: Array<[number, string | number | undefined]> = [];
+          spyOn(process, "kill").mockImplementation(((
+            pid: number,
+            signal?: string | number
+          ) => {
+            killed.push([pid, signal]);
+            return true;
+          }) as never);
+          const script = writeScript("suicidal-squirrel", "kill -9 $$");
+
+          void reexecIntoUpdatedBinary(script, []);
+          await waitFor(() => exits.length > 0, "the signal fallback to fire");
+
+          expect(killed).toEqual([[process.pid, "SIGKILL"]]);
+          // 128 + SIGKILL(9): what a shell reports for the same death.
+          expect(exits).toEqual([137]);
           expect(process.listenerCount("SIGTERM")).toBe(0);
         });
 
