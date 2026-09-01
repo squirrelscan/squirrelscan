@@ -22,6 +22,13 @@ type FastPattern = {
    * false positive that erodes trust in the security category.
    */
   publicByDesign?: boolean;
+  /**
+   * The pattern anchors on a credential word that can appear part-way through
+   * a longer key (`cache-api-key`, `checksum_secret`). Such a match reads the
+   * rest of its own key and drops out if that key says "digest" — see
+   * startsInsideDigestKey.
+   */
+  keyAnchored?: boolean;
 };
 
 // Type for context patterns (generic patterns, only run if keyword present)
@@ -47,7 +54,12 @@ type ContextPattern = {
 // `AKIA`, `pk_live_`), a suffix (`NRAL`, `-us1`), a URL host, a PEM header, or a
 // required keyword in the pattern itself (AWS secret key, the generic
 // assignments, `Bearer`). None of them match a bare digest, so none of them
-// needs the key-context gate the CONTEXT_PATTERNS tier uses.
+// needs the whole key-context gate the CONTEXT_PATTERNS tier uses.
+//
+// The entries whose marker is a keyword the key can merely CONTAIN — the AWS
+// secret key and the three generic assignments — carry `keyAnchored` instead,
+// a much narrower check: the key they matched part-way through must not be a
+// digest key. `cache-api-key` is a cache key however it ends.
 const FAST_PATTERNS: FastPattern[] = [
   // AI/ML Services
   {
@@ -184,6 +196,7 @@ const FAST_PATTERNS: FastPattern[] = [
     pattern:
       /(?:aws[_-]?(?:secret)?[_-]?(?:access)?[_-]?key|secret[_-]?access[_-]?key)['"]?\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}['"]?/gi,
     confidence: "medium",
+    keyAnchored: true,
   },
   {
     // AIza… keys in frontend code are Maps/Firebase browser keys — meant to
@@ -421,46 +434,57 @@ const FAST_PATTERNS: FastPattern[] = [
 
   // Generic patterns (lower confidence, check context)
   //
-  // Three things separate the key from its value here, and all three are
-  // optional because all three are ordinary:
+  // Four things can sit between the key and its value here, and all four are
+  // optional because all four are ordinary:
   //
-  // - a closing quote, because JSON quotes its keys: `{"apiKey":"…"}` and
-  //   `{"x-api-key":"…"}` are how an embedded config blob or a
-  //   `<script type="application/json">` payload writes an assignment.
+  // - a closing quote and a `]`, because JSON quotes its keys and code reaches
+  //   for them: `{"apiKey":"…"}`, `{"x-api-key":"…"}` and
+  //   `process.env["SECRET_KEY"] || "…"` are how an embedded config blob, a
+  //   `<script type="application/json">` payload and a build-time env read
+  //   write an assignment.
   // - a `key`/`token` tail, so `SECRET_KEY` reads as one key and not as
   //   `secret` followed by something that broke the match.
-  // - `||` / `??` as well as `:` / `=`, because a hardcoded fallback behind an
-  //   env var (`process.env.SECRET_KEY || "…"`) is one of the likeliest ways a
-  //   real credential reaches a bundle: it looks safe in source and the
-  //   bundler inlines it at build.
+  // - `||` / `??` (and their `||=` / `??=` forms) as well as `:` / `=`,
+  //   because a hardcoded fallback behind an env var
+  //   (`process.env.SECRET_KEY || "…"`) is one of the likeliest ways a real
+  //   credential reaches a bundle: it looks safe in source and the bundler
+  //   inlines it at build.
   //
-  // The key still has to END where the separator begins, so `secret_hash`,
-  // `apiKeyHash` and `secretHash` match nothing — a digest key never becomes a
-  // credential key by widening this.
+  // The key has to END where the separator begins, so `secret_hash`,
+  // `apiKeyHash` and `secretHash` match nothing; and because each of these
+  // anchors on a credential word rather than on the start of the key, they are
+  // `keyAnchored` and read their own left edge too, so `cache-api-key` and
+  // `checksum_secret` stay digests.
   {
     name: "Generic API Key Assignment",
     pattern:
-      /(?:api[_-]?key|apikey)['"]?\s*(?:[:=]|\|\||\?\?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:api[_-]?key|apikey)['"]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
+    keyAnchored: true,
   },
   {
     name: "Generic Secret Assignment",
     pattern:
-      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?['"]?\s*(?:[:=]|\|\||\?\?)\s*['"][^'"]{8,}['"]/gi,
+      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?['"]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][^'"]{8,}['"]/gi,
     confidence: "medium",
+    keyAnchored: true,
   },
   {
     name: "Generic Token Assignment",
     pattern:
-      /(?:access[_-]?token|auth[_-]?token)['"]?\s*(?:[:=]|\|\||\?\?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:access[_-]?token|auth[_-]?token)['"]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
+    keyAnchored: true,
   },
   {
     // Standard base64, not just base64url: a token with `+` or `/` in its first
     // 20 characters used to stop the match short of the length threshold and
     // report nothing at all, and `=` padding was dropped from the value.
+    //
+    // Padding is trailing and at most two characters, which is what keeps
+    // `Bearer ====================` from being a token.
     name: "Bearer Token",
-    pattern: /Bearer\s+[a-zA-Z0-9_+/=-]{20,}/g,
+    pattern: /Bearer\s+[a-zA-Z0-9_+/-]{20,}={0,2}/g,
     confidence: "medium",
   },
   {
@@ -668,7 +692,7 @@ function isInValuePosition(
   // A fallback behind an env var — `process.env.SECRET_KEY || "value"`,
   // `?? "value"` — is a value position too. classifyKeyContext still reads the
   // key in front of the `||`, so a `cacheKey || "…"` fallback stays a digest.
-  if (/(?:\|\||\?\?)\s*['"`]?$/.test(before)) {
+  if (/(?:\|\||\?\?)=?\s*['"`]?$/.test(before)) {
     return true;
   }
 
@@ -798,14 +822,14 @@ export function lookBehind(text: string, index: number): string {
 // The key an assignment puts immediately in front of a value:
 // `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`, `SECRET_KEY || "`
 const PRECEDING_KEY_RE =
-  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*(?:[:=]|\|\||\?\?)\s*["'`]?\s*$/;
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*\]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
 
 // The same, written as a bracket access: `cfg["apiKey"] = "`, `cfg['sha256'] =`
 const BRACKET_KEY_RE =
-  /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*(?:[:=]|\|\||\?\?)\s*["'`]?\s*$/;
+  /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
 
 // Anything at all in value position, whatever the key turned out to be
-const ASSIGNMENT_RE = /(?:[:=]|\|\||\?\?)\s*["'`]?\s*$/;
+const ASSIGNMENT_RE = /(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
 
 // SRI and prefixed-digest values: integrity="sha384-…", `sha256-…`, `md5:…`
 const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
@@ -844,6 +868,29 @@ export function enclosingTag(text: string, index: number): string | undefined {
   if (text.slice(open, index).includes(">")) return undefined;
   const close = text.indexOf(">", index);
   return close === -1 ? undefined : text.slice(open, close + 1);
+}
+
+/**
+ * Does the key this match started in the middle of say "digest"?
+ *
+ * The generic assignments anchor on a credential word, not on the start of the
+ * key, so `cache-api-key:"…"` starts an `api-key` match at character 6 and
+ * `checksum_secret = "…"` starts a `secret` match at character 9. Nothing
+ * behind them catches it: the FAST tier has no classifyKeyContext gate, by
+ * design — every other pattern in it carries a literal marker that a digest
+ * cannot wear. These three do not, so they read their own left edge.
+ *
+ * Bounded by the same budget as lookBehind. Running out mid-key can only
+ * truncate the prefix, and a truncated prefix suppresses at worst.
+ */
+function startsInsideDigestKey(text: string, index: number): boolean {
+  const floor = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE * 2);
+  let start = index;
+  while (start > floor && KEY_CHAR_RE.test(text[start - 1] ?? "")) start--;
+  if (start === index) return false;
+  return keyWords(text.slice(start, index)).some((word) =>
+    DIGEST_KEY_WORDS.has(word)
+  );
 }
 
 /** Every key a tag names, whichever attribute order it wrote them in. */
@@ -1001,7 +1048,8 @@ export function scanContent(
     name: string,
     pattern: RegExp,
     confidence: "high" | "medium",
-    publicByDesign: boolean
+    publicByDesign: boolean,
+    keyAnchored = false
   ) => {
     // Reset pattern state for global regex
     pattern.lastIndex = 0;
@@ -1009,6 +1057,12 @@ export function scanContent(
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
       const value = match[0];
+
+      // A generic assignment can start part-way through a longer key, so the
+      // words to its left decide too: `cache-api-key` is a cache key.
+      if (keyAnchored && startsInsideDigestKey(text, match.index)) {
+        continue;
+      }
 
       // Skip duplicates, overlapping rematches, and false positives
       if (
@@ -1032,8 +1086,21 @@ export function scanContent(
   };
 
   // Pass 1: Run all fast patterns (distinctive prefixes, O(n) safe)
-  for (const { name, pattern, confidence, publicByDesign } of FAST_PATTERNS) {
-    processMatches(content, name, pattern, confidence, publicByDesign ?? false);
+  for (const {
+    name,
+    pattern,
+    confidence,
+    publicByDesign,
+    keyAnchored,
+  } of FAST_PATTERNS) {
+    processMatches(
+      content,
+      name,
+      pattern,
+      confidence,
+      publicByDesign ?? false,
+      keyAnchored ?? false
+    );
   }
 
   // Pass 2: Run context patterns only on windows around keyword occurrences

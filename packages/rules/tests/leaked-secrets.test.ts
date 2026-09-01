@@ -38,11 +38,11 @@ const DIGEST_2 = "7b2c40e91af38d605c7e1b94a2f6d083e5c19b7a4d0f38e6215ca9b70d4f8e
 const TOGETHER_KEY = "9f3c1d7ba24e08f65c1b93d0e47af215c806b3e9d24f71a5c0938e6b1df42a70"; // pragma: allowlist secret
 const COMMIT = "3f9a1c5d7e2b48061a9c3d5f7e8b2a4c6d0e1f93"; // pragma: allowlist secret
 
-// #150 fixtures. A standard-base64 token, `+` and `/` inside its first 20
-// characters and `=` padding on the end — the shape the base64url Bearer class
-// used to stop matching at.
-const B64_TOKEN = "ab+cd/efGH12+34/jkLMnopQRstuvWXyz0123456789ABCDefgh=="; // pragma: allowlist secret
-const B64_TOKEN_2 = "Qr7/tU2+vW9xYz0AbCdEfGhIjKlMnOpQrStUvWxYz12345678+/=="; // pragma: allowlist secret
+// #150 fixtures. Real standard base64 — 47 bytes each, so 64 characters and
+// one `=` of padding, and both carry a `+` and a `/` inside their first 20
+// characters, which is where the base64url class used to give up.
+const B64_TOKEN = "2MBqfKhL/eXCwg0Zt+RZ2klzNCF0inWnUM3Jb0UiyC1WDP53Cxm5f6UUyrjnQH8="; // pragma: allowlist secret
+const B64_TOKEN_2 = "yS9+/xwatK/BZkejOF5vKuKCuzfMdMV55oZv26BLG8DoO6+VamfQB1mP0TbXYOc="; // pragma: allowlist secret
 // A real sha384 SRI hash is standard base64 too, `+` and `/` and all.
 const SRI_B64 = "oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"; // pragma: allowlist secret
 const OAUTH_TOKEN = "Zk8pR3vN6mQ1tX4wL7cH2sB5dF9gJ0aY"; // pragma: allowlist secret
@@ -228,7 +228,10 @@ describe("security/leaked-secrets: real credentials still report", () => {
       `cfg["together"] = "${TOGETHER_KEY}"`, // pragma: allowlist secret
     ]) {
       const found = scanContent(assignment, "inline-script");
-      expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
+      // The generic FAST tier claims the `cfg["apiKey"] = ` form now that it
+      // reads across `"]` (#150), so the key rides inside the reported value
+      // rather than being the whole of it.
+      expect(found.some((f) => f.value.includes(TOGETHER_KEY))).toBe(true);
     }
   });
 
@@ -475,6 +478,31 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     }
   });
 
+  test("a compound key whose left half says digest is not a credential", () => {
+    // These start the match part-way through the key — `cache-api-key` begins
+    // an `api-key` match at character 6 — and the FAST tier has no
+    // classifyKeyContext behind it, so the pattern reads its own left edge.
+    for (const key of [
+      "cache-api-key",
+      "cache_api_key",
+      "cacheApiKey",
+      "checksum-secret",
+      "checksumSecret",
+      "integrity-auth-token",
+      "sha256_secret",
+      "etag-api-key",
+    ]) {
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
+      expect(scanContent(`{${key}:"${COMMIT}"}`, "html")).toEqual([]);
+      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).toEqual([]);
+    }
+    // The word to the left has to actually say digest: `x-api-key` and
+    // `stripe_secret` are the same shape and both still report.
+    for (const key of ["x-api-key", "myApiKey", "stripe_secret", "next_auth_token"]) {
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
+    }
+  });
+
   test("a hardcoded fallback behind an env var is reported", () => {
     const cases = [
       `const k = process.env.SECRET_KEY || "${TOGETHER_KEY}";`, // pragma: allowlist secret
@@ -482,6 +510,10 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
       `const k = process.env.API_KEY || "${TOGETHER_KEY}";`, // pragma: allowlist secret
       `const k = process.env.AUTH_TOKEN || "${TOGETHER_KEY}";`, // pragma: allowlist secret
       `const k = process.env.PASSWORD||"${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `process.env.SECRET_KEY ||= "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `process.env.SECRET_KEY ??= "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env["SECRET_KEY"] || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env['API_KEY'] ?? "${TOGETHER_KEY}";`, // pragma: allowlist secret
     ];
     for (const content of cases) {
       const found = scanContent(content, "inline-script");
@@ -509,9 +541,23 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
   });
 
   test("a standard-base64 Bearer token is reported with its padding intact", () => {
+    // The fixture is genuine base64: it survives a decode/encode round trip, so
+    // this pins support for the real encoding, not just for the characters.
+    expect(Buffer.from(B64_TOKEN, "base64").toString("base64")).toBe(B64_TOKEN);
+
     const found = scanContent(`authorization: "Bearer ${B64_TOKEN}"`, "html"); // pragma: allowlist secret
     expect(found.map((f) => f.type)).toEqual(["Bearer Token"]);
     expect(found[0]?.value).toBe(`Bearer ${B64_TOKEN}`);
+  });
+
+  test("padding alone is not a Bearer token", () => {
+    // `=` is trailing and capped at two, so a run of padding characters cannot
+    // reach the length threshold on its own.
+    expect(scanContent(`Bearer ${"=".repeat(40)}`, "html")).toEqual([]);
+    expect(scanContent(`Bearer ${"=".repeat(19)}abc`, "html")).toEqual([]);
+    // …and a token never carries more than two.
+    const found = scanContent(`Bearer ${B64_TOKEN}====`, "html"); // pragma: allowlist secret
+    expect(found[0]?.value).toBe(`Bearer ${B64_TOKEN}=`);
   });
 
   test("a base64url Bearer token still matches after the class widened", () => {
