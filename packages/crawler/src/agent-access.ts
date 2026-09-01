@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
-import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
+
+import { safeFetchWithDeadline } from "./deadline";
 
 import type {
   AgentAccessData,
@@ -46,24 +47,16 @@ export function detectPayment(status: number, headers: Headers, body: string): s
   return null;
 }
 
-function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  // #1395: manual redirects — per-hop scheme allowlist + strip secret
-  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
-  // The probe identity's User-Agent is on the allowlist, so it survives the hop.
-  return safeRedirectFetch(url, { ...options, signal: controller.signal })
-    .then((result) => result.response)
-    .finally(() => clearTimeout(timeout));
-}
-
 async function probeOne(
   homeUrl: string,
   identity: ProbeIdentity,
   customHeaders?: Record<string, string>,
 ): Promise<AgentAccessProbe> {
   try {
-    const response = await fetchWithTimeout(
+    // #1395: manual redirects — per-hop scheme allowlist + strip secret
+    // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
+    // The probe identity's User-Agent is on the allowlist, so it survives the hop.
+    return await safeFetchWithDeadline(
       homeUrl,
       {
         // A configured custom User-Agent (any casing) must not replace the probe
@@ -78,22 +71,24 @@ async function probeOne(
         redirect: "follow",
       },
       PROBE_TIMEOUT_MS,
+      async (response) => {
+        const raw = await readBodyCapped(response, AGENT_ACCESS_MAX_BYTES);
+        const body = truncateToBytes(raw, AGENT_ACCESS_MAX_BYTES);
+        const challengeSignal = detectChallenge(response.headers, body);
+        const paymentSignal = detectPayment(response.status, response.headers, body);
+        return {
+          userAgent: identity.label,
+          userAgentString: identity.ua,
+          status: response.status,
+          bodySize: byteLength(body),
+          challenged: challengeSignal !== null,
+          challengeSignal,
+          paymentRequired: paymentSignal !== null,
+          paymentSignal,
+          error: null,
+        };
+      },
     );
-    const raw = await readBodyCapped(response, AGENT_ACCESS_MAX_BYTES);
-    const body = truncateToBytes(raw, AGENT_ACCESS_MAX_BYTES);
-    const challengeSignal = detectChallenge(response.headers, body);
-    const paymentSignal = detectPayment(response.status, response.headers, body);
-    return {
-      userAgent: identity.label,
-      userAgentString: identity.ua,
-      status: response.status,
-      bodySize: byteLength(body),
-      challenged: challengeSignal !== null,
-      challengeSignal,
-      paymentRequired: paymentSignal !== null,
-      paymentSignal,
-      error: null,
-    };
   } catch (e) {
     return {
       userAgent: identity.label,
