@@ -73,6 +73,16 @@ export interface ResourceCheckerOptions {
    * skipped. Absent (CLI) → every resource is fetched as today.
    */
   budget?: FetchBudget;
+  /**
+   * #9: prove whether this pool's assets are really uncompressed. Neither cheap
+   * probe is conclusive on its own — a bodiless HEAD and a ranged 206 can BOTH
+   * omit Content-Encoding on a server that compresses ordinary GETs — so
+   * settling it costs one extra request per compressible asset that still looks
+   * uncompressed. Only the pools perf/asset-compression reads (CSS, images)
+   * enable this; sitemap and PDF checks never report on compression and keep
+   * the cheap HEAD path. Default off.
+   */
+  verifyCompression?: boolean;
 }
 
 const DEFAULT_OPTIONS: ResourceCheckerOptions = {
@@ -107,8 +117,12 @@ function validateContentType(
 
 /**
  * Normalize content-encoding to a stored value (null for identity/none). Shared
- * with the script fetcher (#9) so assets and scripts store the SAME shape and a
- * rule can rely on `null` meaning "observed, and not compressed".
+ * with the script fetcher (#9) so assets and scripts store the SAME shape.
+ *
+ * `null` on its own does NOT mean "observed, and not compressed": this module
+ * also initializes it to null for timeouts, budget skips, and cache reuse of a
+ * record written before #107 added the column. A caller judging compression must
+ * check status/error/cacheReason too — see perf/asset-compression.
  */
 export function normalizeEncoding(value: string | null): string | null {
   if (!value) return null;
@@ -302,13 +316,13 @@ async function checkSingleResourceAsync(
       // body filter (nginx's gzip module is the common one) answers it with NO
       // Content-Encoding and the UNCOMPRESSED Content-Length — indistinguishable
       // from a genuinely uncompressed asset. Absence of the header on a bodiless
-      // response is not evidence of absence, so for compressible text that looks
-      // uncompressed we decline the HEAD shortcut and fall through to the GET
-      // below, which is authoritative. A HEAD that DOES name a coding is
-      // positive evidence and still takes the shortcut, as does any asset whose
-      // type gains nothing from compression, so the extra request is confined to
-      // exactly the assets a compression rule would otherwise misreport.
+      // response is not evidence of absence, so when this pool's findings depend
+      // on the answer we decline the HEAD shortcut for compressible text that
+      // looks uncompressed and fall through to the GET below. A HEAD that DOES
+      // name a coding is positive evidence and still takes the shortcut, as does
+      // any asset whose type gains nothing from compression.
       const headEncodingIsTrustworthy =
+        !options.verifyCompression ||
         meta.contentEncoding !== null ||
         !isCompressibleContentType(meta.contentType);
 
@@ -395,6 +409,41 @@ async function checkSingleResourceAsync(
     const sizeFromLength = parseHeaderInt(
       getResponse.headers.get("content-length")
     );
+
+    // #9: a ranged 206 is no more conclusive than the HEAD was — many origins
+    // and CDNs skip compression for range requests specifically, so `Range:
+    // bytes=0-0` can answer identity for an asset whose ordinary GET is gzipped.
+    // One plain GET settles it; we only want its headers, so the body is
+    // cancelled immediately and the size stays whatever the cheap probes found.
+    // If that request fails we keep what we have rather than lose the record —
+    // the surrounding try/catch would otherwise discard a usable size.
+    if (
+      options.verifyCompression &&
+      getResponse.status === 206 &&
+      meta.contentEncoding === null &&
+      isCompressibleContentType(meta.contentType)
+    ) {
+      try {
+        const { response: confirmResponse } = await safeRedirectFetch(url, {
+          method: "GET",
+          headers: {
+            "User-Agent": options.userAgent,
+            Accept: "*/*",
+            ...options.customHeaders,
+          },
+          signal: controller.signal,
+        });
+        confirmResponse.body?.cancel();
+        if (confirmResponse.status < 400) {
+          meta.contentEncoding = normalizeEncoding(
+            confirmResponse.headers.get("content-encoding")
+          );
+        }
+      } catch {
+        // Keep the ranged response's view; a failed confirmation must not
+        // discard an otherwise good record.
+      }
+    }
 
     if (
       options.validateContentType &&

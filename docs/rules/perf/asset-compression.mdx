@@ -41,9 +41,16 @@ reference it, and the estimated saving.
 <Note>
 The rule stays silent about any asset whose encoding it could not observe
 first-hand on this run, rather than guessing. That covers sub-resources reused
-from a previous crawl's cache (their headers belong to that older run) and
-scripts served from the CLI's local content store. A re-audit with
-`--refresh` re-fetches everything and judges the full set.
+from a previous crawl's cache, whose headers belong to that older run: a
+re-audit with `--refresh` re-fetches everything and judges the full set.
+
+Proving an asset is genuinely uncompressed also costs an extra request.
+Stylesheets and images are normally sized with a `HEAD`, but a `HEAD` has no
+body, and a server whose compression runs as a body filter (nginx's `gzip`
+module, and many CDNs on range requests) answers it with no `Content-Encoding`
+at all. Reporting that as uncompressed would be wrong, so when an asset still
+looks uncompressed the crawler confirms with an ordinary `GET` before the rule
+will name it.
 </Note>
 
 ## Solution

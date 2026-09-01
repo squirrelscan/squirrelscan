@@ -659,13 +659,16 @@ export function fetchResourceAssets(
 
     const allResourceChecks = Effect.all(
       {
-        css: checkResourceSizes(
-          Array.from(resourceOccurrences.css.keys()),
-          resourceCheckOptions
-        ),
+        // verifyCompression only on the two pools perf/asset-compression reads
+        // (#9) — the pdf and sitemap checks below never report on compression,
+        // so they keep the cheap HEAD path and pay nothing for it.
+        css: checkResourceSizes(Array.from(resourceOccurrences.css.keys()), {
+          ...resourceCheckOptions,
+          verifyCompression: true,
+        }),
         images: checkResourceSizes(
           Array.from(resourceOccurrences.images.keys()),
-          resourceCheckOptions
+          { ...resourceCheckOptions, verifyCompression: true }
         ),
         scripts: fetchScriptContents(
           Array.from(resourceOccurrences.scripts.keys()),
