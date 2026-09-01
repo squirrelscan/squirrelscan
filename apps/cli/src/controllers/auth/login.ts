@@ -8,6 +8,7 @@ import {
 } from "node:http";
 import { hostname } from "node:os";
 
+import { AGENT_SETUP_PROMPT, AGENT_SETUP_URL } from "@/constants";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { cliApi } from "@/lib/api-client";
 import { openBrowser } from "@/lib/browser";
@@ -45,6 +46,149 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/**
+ * The callback success page (#180). Beyond confirming the sign-in it hands the
+ * user the agent setup prompt, which is the next thing they want anyway.
+ *
+ * Nothing here is interpolated except the escaped email: the prompt and the
+ * docs link are compile-time constants, and the inline script reads the prompt
+ * out of the DOM rather than from a JS string literal, so there is no
+ * script-context injection surface at all. The prompt is rendered as plain
+ * selectable text, so it is copyable by hand when the clipboard API is not.
+ */
+export function renderAuthSuccessPage(email: string): string {
+  return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Authentication Successful</title>
+              <style>
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  min-height: 100vh;
+                  margin: 0;
+                  padding: 24px;
+                  box-sizing: border-box;
+                  background: #f5f5f4;
+                }
+                .container {
+                  text-align: center;
+                  padding: 40px;
+                  background: white;
+                  border-radius: 8px;
+                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                  box-sizing: border-box;
+                  width: 100%;
+                  max-width: 560px;
+                }
+                h1 { color: #22c55e; margin-bottom: 10px; }
+                p { color: #666; }
+                .agent {
+                  margin: 28px 0 0;
+                  padding-top: 24px;
+                  border-top: 1px solid #e7e5e4;
+                  text-align: left;
+                }
+                .agent h2 {
+                  font-size: 16px;
+                  color: #1c1917;
+                  margin: 0 0 6px;
+                }
+                .agent p { margin: 0 0 12px; font-size: 14px; }
+                .agent code {
+                  display: block;
+                  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                  font-size: 13px;
+                  line-height: 1.5;
+                  color: #292524;
+                  background: #fafaf9;
+                  border: 1px solid #e7e5e4;
+                  border-radius: 6px;
+                  padding: 12px;
+                  overflow-wrap: anywhere;
+                  user-select: all;
+                }
+                .actions {
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 12px;
+                  margin-top: 12px;
+                }
+                .actions button {
+                  font: inherit;
+                  font-size: 14px;
+                  color: white;
+                  background: #22c55e;
+                  border: 0;
+                  border-radius: 6px;
+                  padding: 8px 14px;
+                  cursor: pointer;
+                }
+                .actions a { color: #16a34a; font-size: 14px; }
+                .status { font-size: 13px; color: #78716c; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>Authentication Successful!</h1>
+                <p>Signed in as ${escapeHtml(email)}</p>
+                <p>You can close this window and return to the terminal.</p>
+                <div class="agent">
+                  <h2>Use squirrelscan with your AI agent</h2>
+                  <p>Paste this into your coding agent. It reads the setup docs, wires up the CLI and MCP, and audits this project.</p>
+                  <code id="agent-prompt">${escapeHtml(AGENT_SETUP_PROMPT)}</code>
+                  <div class="actions">
+                    <button id="copy-prompt" type="button">Copy prompt</button>
+                    <a href="${escapeHtml(AGENT_SETUP_URL)}">view the agent setup</a>
+                    <span class="status" id="copy-status" role="status" aria-live="polite"></span>
+                  </div>
+                </div>
+              </div>
+              <script>
+                (function () {
+                  var prompt = document.getElementById("agent-prompt");
+                  var button = document.getElementById("copy-prompt");
+                  var status = document.getElementById("copy-status");
+                  function say(text) { status.textContent = text; }
+                  function selectPrompt() {
+                    var selection = window.getSelection && window.getSelection();
+                    if (!selection || !document.createRange) return false;
+                    var range = document.createRange();
+                    range.selectNodeContents(prompt);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    return true;
+                  }
+                  function fallback() {
+                    if (!selectPrompt()) {
+                      say("Select the prompt above and copy it.");
+                      return;
+                    }
+                    var copied = false;
+                    try { copied = document.execCommand("copy"); } catch (e) {}
+                    say(copied ? "Copied." : "Selected. Press ctrl+c, or cmd+c on a mac.");
+                  }
+                  button.addEventListener("click", function () {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      navigator.clipboard.writeText(prompt.textContent).then(
+                        function () { say("Copied."); },
+                        fallback
+                      );
+                      return;
+                    }
+                    fallback();
+                  });
+                })();
+              </script>
+            </body>
+            </html>
+          `;
 }
 
 interface LoginOptions {
@@ -156,41 +300,7 @@ function startCallbackServer(
 
           if (status.status === "completed" && status.token && status.user) {
             res.writeHead(200, { "Content-Type": "text/html" });
-            res.end(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Authentication Successful</title>
-              <style>
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                  height: 100vh;
-                  margin: 0;
-                  background: #f5f5f4;
-                }
-                .container {
-                  text-align: center;
-                  padding: 40px;
-                  background: white;
-                  border-radius: 8px;
-                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-                h1 { color: #22c55e; margin-bottom: 10px; }
-                p { color: #666; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <h1>Authentication Successful!</h1>
-                <p>Signed in as ${escapeHtml(status.user.email)}</p>
-                <p>You can close this window and return to the terminal.</p>
-              </div>
-            </body>
-            </html>
-          `);
+            res.end(renderAuthSuccessPage(status.user.email));
             onComplete(status);
           } else if (status.status === "expired") {
             res.writeHead(410, { "Content-Type": "text/html" });
