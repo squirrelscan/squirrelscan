@@ -50,7 +50,9 @@ body, and a server whose compression runs as a body filter (nginx's `gzip`
 module, and many CDNs on range requests) answers it with no `Content-Encoding`
 at all. Reporting that as uncompressed would be wrong, so when an asset still
 looks uncompressed the crawler confirms with an ordinary `GET` before the rule
-will name it.
+will name it. If that confirming request cannot be made, because the origin
+rate-limited it or the check ran out of time, the asset's encoding stays
+unknown and the rule leaves it alone rather than assuming the worst.
 </Note>
 
 ## Solution

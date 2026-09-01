@@ -25,8 +25,15 @@ export interface ResourceCheckResult {
   contentType: string | null;
   sizeBytes: number | null;
   redirectTarget: string | null;
-  /** content-encoding (gzip/br/deflate/zstd) or null for identity. (#107) */
-  contentEncoding: string | null;
+  /**
+   * content-encoding (gzip/br/deflate/zstd), or null for identity/none. (#107)
+   *
+   * `undefined` is a third state, not a missing field: the response was seen but
+   * its encoding could NOT be established (#9 — a ranged 206 whose confirming
+   * GET failed). Consumers judging compression must treat it as unknown rather
+   * than as "no coding"; see perf/asset-compression.
+   */
+  contentEncoding: string | null | undefined;
   /**
    * Encoded body size (Content-Length) — the bytes a full GET transfers over the
    * wire for a MISS; 0 for a cache HIT (no body fetched this run). On a HEAD
@@ -415,14 +422,24 @@ async function checkSingleResourceAsync(
     // bytes=0-0` can answer identity for an asset whose ordinary GET is gzipped.
     // One plain GET settles it; we only want its headers, so the body is
     // cancelled immediately and the size stays whatever the cheap probes found.
-    // If that request fails we keep what we have rather than lose the record —
-    // the surrounding try/catch would otherwise discard a usable size.
+    let resolvedEncoding: string | null | undefined = meta.contentEncoding;
     if (
       options.verifyCompression &&
       getResponse.status === 206 &&
       meta.contentEncoding === null &&
       isCompressibleContentType(meta.contentType)
     ) {
+      // The 206's own `null` is not evidence, so it cannot be the fallback: if
+      // the confirmation never answers, the encoding is UNKNOWN, not absent.
+      // Keeping the ranged null here would hand perf/asset-compression exactly
+      // the false positive this block exists to prevent — a gzipped asset
+      // reported as uncompressed — and the failure modes are ordinary: the
+      // confirmation shares this check's AbortController (so a slow HEAD +
+      // ranged GET can leave it no deadline), and a second immediate request
+      // for the same asset is what rate-limiters answer with 429/503. `size`
+      // and every other field survive; only the encoding degrades to unknown,
+      // which the rule reads as "stay silent".
+      resolvedEncoding = undefined;
       try {
         const { response: confirmResponse } = await safeRedirectFetch(url, {
           method: "GET",
@@ -435,13 +452,13 @@ async function checkSingleResourceAsync(
         });
         confirmResponse.body?.cancel();
         if (confirmResponse.status < 400) {
-          meta.contentEncoding = normalizeEncoding(
+          resolvedEncoding = normalizeEncoding(
             confirmResponse.headers.get("content-encoding")
           );
         }
       } catch {
-        // Keep the ranged response's view; a failed confirmation must not
-        // discard an otherwise good record.
+        // Leave it unknown; a failed confirmation must not invent a finding,
+        // and must not discard the otherwise usable size either.
       }
     }
 
@@ -454,7 +471,7 @@ async function checkSingleResourceAsync(
         ...defaultResult,
         status: getResponse.status,
         contentType: meta.contentType,
-        contentEncoding: meta.contentEncoding,
+        contentEncoding: resolvedEncoding,
         cacheControl: meta.cacheControl,
         etag: meta.etag,
         lastModified: meta.lastModified,
@@ -483,7 +500,7 @@ async function checkSingleResourceAsync(
       contentType: meta.contentType,
       sizeBytes,
       transferBytes,
-      contentEncoding: meta.contentEncoding,
+      contentEncoding: resolvedEncoding,
       cacheControl: meta.cacheControl,
       etag: meta.etag,
       lastModified: meta.lastModified,

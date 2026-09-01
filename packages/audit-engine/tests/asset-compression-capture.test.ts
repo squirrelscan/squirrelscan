@@ -26,6 +26,8 @@ const GZIPPED = Bun.gzipSync(new TextEncoder().encode(BODY));
  *                          requests specifically, so both the HEAD and the
  *                          ranged 206 look identity and only a plain GET is
  *                          gzipped
+ *   /confirm-503.css       the same CDN shape, except the confirming GET is
+ *                          rate-limited away — the encoding is unknowable
  */
 const server = Bun.serve({
   port: 0,
@@ -78,6 +80,14 @@ const server = Bun.serve({
     if (path === "/range-really-plain.css") {
       if (isHead) return identity();
       return isRanged ? partialIdentity() : identity();
+    }
+
+    // The asset IS gzipped, but the confirming GET never gets to say so.
+    if (path === "/confirm-503.css") {
+      if (isHead) return identity();
+      return isRanged
+        ? partialIdentity()
+        : new Response("slow down", { status: 503 });
     }
 
     return identity();
@@ -177,6 +187,29 @@ describe("resource checker captures content-encoding (#9)", () => {
     );
     expect(result?.contentEncoding).toBe(null);
     expect(result?.sizeBytes).toBe(BODY.length);
+  });
+
+  test("an unconfirmable 206 records unknown, NOT a false null", async () => {
+    // The whole point of the confirming GET is that a ranged 206's missing
+    // Content-Encoding proves nothing. So when that GET cannot answer — 429/503
+    // from a rate-limiter, or a timeout on the AbortController it shares with
+    // the two probes before it — falling back to the 206's own null would
+    // report this gzipped asset as 300KB of uncompressed CSS: precisely the
+    // false positive the verification exists to prevent.
+    const [result] = await Effect.runPromise(
+      checkResourceSizes([`${base}/confirm-503.css`], VERIFY)
+    );
+    expect(result?.contentEncoding).toBeUndefined();
+  });
+
+  test("an unconfirmable 206 still keeps its size for the other rules", async () => {
+    // Only the encoding degrades to unknown. perf/css-file-size and
+    // perf/total-byte-weight still need the size, so the record must survive.
+    const [result] = await Effect.runPromise(
+      checkResourceSizes([`${base}/confirm-503.css`], VERIFY)
+    );
+    expect(result?.sizeBytes).toBe(BODY.length);
+    expect(result?.error).toBe(null);
   });
 
   test("verification costs at most one extra plain GET", async () => {
