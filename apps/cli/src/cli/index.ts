@@ -2,12 +2,16 @@
 
 import { defineCommand, runMain } from "citty";
 
+import type { UserSettings } from "@/self/types";
+
 import { setGlobalConfigPath } from "@/config";
 import { registerInstall } from "@/self/register-install";
 import { loadSettings } from "@/self/settings";
 import { showTelemetryNotice } from "@/self/telemetry";
 import {
+  applyPendingUpdateInForeground,
   finishInlineAutoUpdate,
+  foregroundUpdateTarget,
   runBackgroundUpdateCheck,
 } from "@/self/updater";
 import { rotateLogsIfNeeded } from "@/utils/log-rotation";
@@ -90,12 +94,39 @@ export function run(): void {
   // --offline promises zero network: skip update check + install registration
   const isOffline = args.includes("--offline");
 
-  if (!isSimpleCommand && !isOffline) {
+  const effectiveSettings = settings.ok ? settings.data : undefined;
+  const withBackgroundTasks = !isSimpleCommand && !isOffline;
+
+  // An update a previous run already discovered is applied BEFORE the command,
+  // and the original argv re-executed on the new binary, so a fresh run always
+  // gets the newest version the CLI knows about (#170). The decision is
+  // synchronous and settings-only: with nothing pending — the overwhelmingly
+  // common case — this is a null check and startup is byte-for-byte the old
+  // path, no await and no network.
+  if (
+    withBackgroundTasks &&
+    effectiveSettings &&
+    foregroundUpdateTarget(effectiveSettings)
+  ) {
+    void applyPendingUpdateInForeground(effectiveSettings)
+      // Failure-safe: a broken update must never break the user's command.
+      .catch(() => {})
+      .then(() => startCommand(effectiveSettings, withBackgroundTasks));
+    return;
+  }
+
+  startCommand(effectiveSettings, withBackgroundTasks);
+}
+
+function startCommand(
+  settings: UserSettings | undefined,
+  withBackgroundTasks: boolean
+): void {
+  if (withBackgroundTasks) {
     // Non-blocking background tasks
-    const effectiveSettings = settings.ok ? settings.data : undefined;
-    if (effectiveSettings) showTelemetryNotice(effectiveSettings);
-    runBackgroundUpdateCheck(effectiveSettings);
-    registerInstall(effectiveSettings);
+    if (settings) showTelemetryNotice(settings);
+    runBackgroundUpdateCheck(settings);
+    registerInstall(settings);
     rotateLogsIfNeeded().catch(() => {}); // Best effort, silent fail
   }
 

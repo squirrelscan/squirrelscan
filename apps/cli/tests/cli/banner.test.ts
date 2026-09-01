@@ -10,16 +10,26 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { UserSettings } from "@/self/types";
 
 import {
+  printAutoUpdateAppliedNotice,
   printEndOfRunUpdateReminder,
   printUpdateNotification,
 } from "@/cli/banner";
 import * as pathsModule from "@/self/paths";
-import { DEFAULT_SETTINGS } from "@/self/settings";
+import {
+  DEFAULT_SETTINGS,
+  loadUserSettings,
+  updateSettings,
+} from "@/self/settings";
 import * as telemetryModule from "@/self/telemetry";
+
+import { version } from "../../package.json";
 
 function settingsWith(overrides: Partial<UserSettings>): UserSettings {
   return { ...DEFAULT_SETTINGS, ...overrides } as UserSettings;
@@ -155,6 +165,69 @@ describe("printEndOfRunUpdateReminder (#1085)", () => {
         auto_update: true,
         pending_update_notification: pendingV2,
         auto_update_attempts: { version: "0.0.2", count: 5 },
+      })
+    );
+    out.spy.mockRestore();
+    expect(out.text()).toBe("");
+  });
+});
+
+// #170: after a foreground update the re-executed run is the one on the new
+// binary, and it is the only place the confirmation may appear.
+describe("printAutoUpdateAppliedNotice (#170)", () => {
+  let tempHome: string;
+
+  beforeEach(() => {
+    tempHome = mkdtempSync(join(tmpdir(), "squirrelscan-banner-"));
+    // The notice CLEARS the marker, so the write must not reach the real
+    // ~/.squirrel/settings.json (homedir() ignores $HOME).
+    spyOn(pathsModule, "getSettingsPath").mockReturnValue(
+      join(tempHome, "settings.json")
+    );
+  });
+
+  afterEach(() => {
+    mock.restore();
+    rmSync(tempHome, { recursive: true, force: true });
+  });
+
+  test("prints once for the running version, then clears the marker", async () => {
+    const applied = {
+      from_version: "0.0.1",
+      to_version: version,
+      at: new Date().toISOString(),
+    };
+    updateSettings({ auto_update_applied: applied });
+
+    const first = captureStderr();
+    await printAutoUpdateAppliedNotice(
+      settingsWith({ auto_update_applied: applied })
+    );
+    first.spy.mockRestore();
+    expect(first.text()).toContain(`auto-updated v0.0.1 → v${version}`);
+
+    const saved = loadUserSettings();
+    expect(saved.ok).toBe(true);
+    if (saved.ok) expect(saved.data.auto_update_applied ?? null).toBeNull();
+
+    // A later run reads the cleared settings and says nothing.
+    const second = captureStderr();
+    await printAutoUpdateAppliedNotice(
+      saved.ok ? saved.data : settingsWith({})
+    );
+    second.spy.mockRestore();
+    expect(second.text()).toBe("");
+  });
+
+  test("silent in the process that applied the update (still the old version)", async () => {
+    const out = captureStderr();
+    await printAutoUpdateAppliedNotice(
+      settingsWith({
+        auto_update_applied: {
+          from_version: version,
+          to_version: "99.99.99",
+          at: new Date().toISOString(),
+        },
       })
     );
     out.spy.mockRestore();

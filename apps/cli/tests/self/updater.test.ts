@@ -8,7 +8,15 @@ import {
   test,
 } from "bun:test";
 import * as childProcess from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import * as os from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,9 +32,13 @@ import {
   updateSettings,
 } from "@/self/settings";
 import {
+  applyPendingUpdateInForeground,
   finishInlineAutoUpdate,
+  FOREGROUND_UPDATE_ENV,
+  foregroundUpdateTarget,
   isAutoUpdateFallbackActive,
   maybeSpawnAutoUpdate,
+  reexecIntoUpdatedBinary,
   resetUpdaterStateForTests,
   runAutoUpdate,
   safeExit,
@@ -47,6 +59,7 @@ const CI_VARS = [
   "TEAMCITY_VERSION",
   "TF_BUILD",
   "SQUIRREL_NO_UPDATE",
+  FOREGROUND_UPDATE_ENV,
 ];
 
 let tempHome: string;
@@ -605,5 +618,405 @@ describe("updater", () => {
 
       expect(Date.now() - start).toBeLessThan(1000);
     });
+  });
+
+  // #170: a pending update recorded by an earlier background check is applied
+  // BEFORE the command runs, and the original argv re-executed on the new
+  // binary — so a fresh run never executes on a version the CLI already knows
+  // is stale.
+  describe("foreground update before the command (#170)", () => {
+    const PENDING = {
+      from_version: "0.0.1",
+      to_version: "9.9.9",
+      release_url: null,
+    } as const;
+
+    function eligible(overrides: Partial<UserSettings> = {}): UserSettings {
+      return settingsWith({
+        auto_update: true,
+        pending_update_notification: { ...PENDING },
+        ...overrides,
+      });
+    }
+
+    /** Managed, non-Windows install — the only shape that takes this path. */
+    function managedPosix(): void {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+    }
+
+    describe("foregroundUpdateTarget gates", () => {
+      test("returns the pending version for an eligible managed install", () => {
+        managedPosix();
+        expect(foregroundUpdateTarget(eligible())).toBe("9.9.9");
+      });
+
+      test("no pending notification → null (the untouched fast path)", () => {
+        managedPosix();
+        expect(
+          foregroundUpdateTarget(
+            settingsWith({ pending_update_notification: undefined })
+          )
+        ).toBeNull();
+      });
+
+      test("re-executed process never updates again (loop guard)", () => {
+        managedPosix();
+        process.env[FOREGROUND_UPDATE_ENV] = "1";
+        expect(foregroundUpdateTarget(eligible())).toBeNull();
+      });
+
+      test("CI skips the foreground path", () => {
+        managedPosix();
+        process.env.CI = "true";
+        expect(foregroundUpdateTarget(eligible())).toBeNull();
+      });
+
+      test("SQUIRREL_NO_UPDATE skips the foreground path", () => {
+        managedPosix();
+        process.env.SQUIRREL_NO_UPDATE = "1";
+        expect(foregroundUpdateTarget(eligible())).toBeNull();
+      });
+
+      test("auto_update=false skips the foreground path", () => {
+        managedPosix();
+        expect(
+          foregroundUpdateTarget(eligible({ auto_update: false }))
+        ).toBeNull();
+      });
+
+      test("unmanaged install skips the foreground path", () => {
+        spyOn(pathsModule, "isManagedInstall").mockReturnValue(false);
+        spyOn(os, "platform").mockReturnValue("linux");
+        expect(foregroundUpdateTarget(eligible())).toBeNull();
+      });
+
+      test("a dismissed version skips the foreground path", () => {
+        managedPosix();
+        expect(
+          foregroundUpdateTarget(
+            eligible({ dismissed_update_version: "9.9.9" })
+          )
+        ).toBeNull();
+      });
+
+      test("an attempt inside the hourly throttle skips", () => {
+        managedPosix();
+        expect(
+          foregroundUpdateTarget(
+            eligible({
+              last_auto_update_attempt: new Date(
+                Date.now() - 10 * 60 * 1000
+              ).toISOString(),
+            })
+          )
+        ).toBeNull();
+      });
+
+      test("an attempt older than the throttle window is allowed", () => {
+        managedPosix();
+        expect(
+          foregroundUpdateTarget(
+            eligible({
+              last_auto_update_attempt: new Date(
+                Date.now() - 3 * 60 * 60 * 1000
+              ).toISOString(),
+            })
+          )
+        ).toBe("9.9.9");
+      });
+
+      test("win32 keeps the existing background/inline updater", () => {
+        spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+        spyOn(os, "platform").mockReturnValue("win32");
+        expect(foregroundUpdateTarget(eligible())).toBeNull();
+      });
+    });
+
+    describe("applyPendingUpdateInForeground", () => {
+      let stderr: string[];
+
+      beforeEach(() => {
+        stderr = [];
+        spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+          stderr.push(args.map(String).join(" "));
+        });
+      });
+
+      test("announces the update rather than stalling silently", async () => {
+        managedPosix();
+        captureTelemetry();
+
+        await applyPendingUpdateInForeground(eligible(), {
+          update: async () => null,
+          reexec: () => {},
+        });
+
+        expect(stderr.join("\n")).toContain("→ v9.9.9");
+      });
+
+      test("notifications=false stays silent", async () => {
+        managedPosix();
+        captureTelemetry();
+
+        await applyPendingUpdateInForeground(
+          eligible({ notifications: false }),
+          {
+            update: async () => null,
+            reexec: () => {},
+          }
+        );
+
+        expect(stderr).toHaveLength(0);
+      });
+
+      test("no pending update: no network, no settings write, no update call", async () => {
+        managedPosix();
+        let fetched = false;
+        globalThis.fetch = (async () => {
+          fetched = true;
+          return new Response("{}", { status: 200 });
+        }) as unknown as typeof fetch;
+        const update = mock(async () => null);
+        const reexec = mock(() => {});
+
+        const outcome = await applyPendingUpdateInForeground(
+          settingsWith({ pending_update_notification: undefined }),
+          { update, reexec }
+        );
+
+        expect(outcome).toBe("skipped");
+        expect(update).not.toHaveBeenCalled();
+        expect(reexec).not.toHaveBeenCalled();
+        expect(fetched).toBe(false);
+        // Nothing was attempted, so nothing throttles the next run either.
+        expect(existsSync(join(tempHome, "settings.json"))).toBe(false);
+      });
+
+      test("installs first, then re-execs into the new binary", async () => {
+        managedPosix();
+        captureTelemetry();
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v, "squirrel")
+        );
+        // The installed binary must exist before the re-exec is attempted.
+        const order: string[] = [];
+        const update = mock(async () => {
+          order.push("update");
+          mkdirSync(join(tempHome, "releases", "9.9.9"), { recursive: true });
+          writeFileSync(join(tempHome, "releases", "9.9.9", "squirrel"), "bin");
+          return "9.9.9";
+        });
+        const reexec = mock((path: string) => {
+          order.push(`reexec:${path}`);
+        });
+
+        await applyPendingUpdateInForeground(eligible(), { update, reexec });
+
+        expect(order).toEqual([
+          "update",
+          `reexec:${join(tempHome, "releases", "9.9.9", "squirrel")}`,
+        ]);
+      });
+
+      test("a failed update falls back to the current binary, never re-execs", async () => {
+        managedPosix();
+        captureTelemetry();
+        const reexec = mock(() => {});
+
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          update: async () => null,
+          reexec,
+        });
+
+        expect(outcome).toBe("failed");
+        expect(reexec).not.toHaveBeenCalled();
+      });
+
+      test("an installed-but-missing binary falls back instead of re-execing", async () => {
+        managedPosix();
+        captureTelemetry();
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v, "squirrel")
+        );
+        const reexec = mock(() => {});
+
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          update: async () => "9.9.9",
+          reexec,
+        });
+
+        expect(outcome).toBe("failed");
+        expect(reexec).not.toHaveBeenCalled();
+      });
+
+      test("a re-exec that fails to take over still runs the command here", async () => {
+        managedPosix();
+        captureTelemetry();
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v, "squirrel")
+        );
+        mkdirSync(join(tempHome, "releases", "9.9.9"), { recursive: true });
+        writeFileSync(join(tempHome, "releases", "9.9.9", "squirrel"), "bin");
+
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          update: async () => "9.9.9",
+          // Returning models spawnSync failing to start the child; the real
+          // implementation exits the process instead of returning.
+          reexec: () => {},
+        });
+
+        expect(outcome).toBe("failed");
+      });
+
+      test("records the attempt before downloading so a failing update can't retry every run", async () => {
+        managedPosix();
+        captureTelemetry();
+
+        await applyPendingUpdateInForeground(eligible(), {
+          update: async () => null,
+          reexec: () => {},
+        });
+
+        const saved = loadUserSettings();
+        expect(saved.ok).toBe(true);
+        if (saved.ok) {
+          expect(saved.data.last_auto_update_attempt).toBeTruthy();
+          expect(saved.data.auto_update_attempts).toEqual({
+            version: "9.9.9",
+            count: 1,
+          });
+          // And the recorded attempt now throttles this run's own background
+          // dispatch, so the two paths can't both download.
+          expect(foregroundUpdateTarget(saved.data)).toBeNull();
+        }
+      });
+
+      test("end to end: downloads, installs, flips the symlink, re-execs the release binary", async () => {
+        managedPosix();
+        captureTelemetry();
+        spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v)
+        );
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v, "squirrel")
+        );
+        spyOn(pathsModule, "getSymlinkPath").mockReturnValue(
+          join(tempHome, "bin", "squirrel")
+        );
+        spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+          ok: true,
+          data: {
+            available: true,
+            current_version: "0.0.1",
+            latest_version: "9.9.9",
+            release_url: null,
+            manifest: {
+              version: "9.9.9",
+              binaries: {
+                "darwin-arm64": {
+                  filename: "squirrel",
+                  sha256: "0".repeat(64),
+                  size: 3,
+                },
+                "darwin-x64": {
+                  filename: "squirrel",
+                  sha256: "0".repeat(64),
+                  size: 3,
+                },
+                "linux-x64": {
+                  filename: "squirrel",
+                  sha256: "0".repeat(64),
+                  size: 3,
+                },
+                "linux-arm64": {
+                  filename: "squirrel",
+                  sha256: "0".repeat(64),
+                  size: 3,
+                },
+                "windows-x64": {
+                  filename: "squirrel",
+                  sha256: "0".repeat(64),
+                  size: 3,
+                },
+              },
+            } as ReleaseManifest,
+          },
+        } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+        spyOn(releasesModule, "downloadBinary").mockResolvedValue({
+          ok: true,
+          data: new TextEncoder().encode("bin").buffer as ArrayBuffer,
+        });
+
+        // The settings runAutoUpdate reloads from disk must be eligible too.
+        updateSettings({
+          auto_update: true,
+          pending_update_notification: { ...PENDING },
+        });
+
+        const reexeced: string[] = [];
+        await applyPendingUpdateInForeground(eligible(), {
+          reexec: (path) => reexeced.push(path),
+        });
+
+        expect(reexeced).toEqual([
+          join(tempHome, "releases", "9.9.9", "squirrel"),
+        ]);
+        expect(existsSync(join(tempHome, "bin", "squirrel"))).toBe(true);
+
+        const saved = loadUserSettings();
+        expect(saved.ok).toBe(true);
+        if (saved.ok) {
+          // The pending notification is consumed, and the marker that makes the
+          // re-executed run print "✓ auto-updated" exactly once is set.
+          expect(saved.data.pending_update_notification).toBeUndefined();
+          expect(saved.data.auto_update_applied?.to_version).toBe("9.9.9");
+          expect(saved.data.auto_update_attempts ?? null).toBeNull();
+        }
+      });
+    });
+
+    // The re-exec is the part that has to behave like execve: same arguments,
+    // same exit status, and the loop marker set for the process that takes over.
+    // Exercised against a real child process, not a stub.
+    describe.skipIf(process.platform === "win32")(
+      "reexecIntoUpdatedBinary",
+      () => {
+        test("passes argv through, sets the loop marker, propagates the exit code", () => {
+          const script = join(tempHome, "fake-squirrel");
+          const out = join(tempHome, "argv.txt");
+          writeFileSync(
+            script,
+            `#!/bin/sh\nprintf '%s|' "$@" > ${out}\nprintf 'marker=%s' "$${FOREGROUND_UPDATE_ENV}" >> ${out}\nexit 42\n`
+          );
+          chmodSync(script, 0o755);
+
+          spyOn(process, "exit").mockImplementation(((code?: number) => {
+            throw new Error(`__exit__:${code}`);
+          }) as never);
+
+          expect(() =>
+            reexecIntoUpdatedBinary(script, ["audit", "https://example.com"])
+          ).toThrow("__exit__:42");
+          expect(readFileSync(out, "utf-8")).toBe(
+            "audit|https://example.com|marker=1"
+          );
+        });
+
+        test("a child that cannot start returns (so the caller falls back) and restores signals", () => {
+          const before = process.listenerCount("SIGINT");
+          const exitSpy = spyOn(process, "exit").mockImplementation(((
+            code?: number
+          ) => {
+            throw new Error(`__exit__:${code}`);
+          }) as never);
+
+          reexecIntoUpdatedBinary(join(tempHome, "does-not-exist"), []);
+
+          expect(exitSpy).not.toHaveBeenCalled();
+          expect(process.listenerCount("SIGINT")).toBe(before);
+        });
+      }
+    );
   });
 });
