@@ -102,7 +102,6 @@ import {
   printAutoUpdateDisabledReminder,
   promptForUpdate,
   printFooter,
-  printAutoUpdateAppliedNotice,
   lockedRulesFooterLine,
 } from "../banner";
 import {
@@ -876,7 +875,9 @@ export const audit = defineCommand({
       }
       printHeader(settings.ok ? settings.data.channel : "stable");
       if (settings.ok && !args.offline) {
-        await printAutoUpdateAppliedNotice(settings.data);
+        // The "✓ auto-updated" notice is printed once per RUN by cli/index.ts,
+        // not per command — every command has to announce an update applied
+        // before it, not just this one (#170).
         printUpdateNotification(settings.data);
         if (shouldShowAutoUpdateDisabledReminder(settings.data)) {
           updateSettings({

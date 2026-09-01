@@ -15,6 +15,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import * as os from "node:os";
@@ -668,6 +669,51 @@ describe("updater", () => {
         expect(foregroundUpdateTarget(eligible())).toBeNull();
       });
 
+      // The marker must not outlive the gate: a squirrel the command goes on to
+      // spawn is a separate run entitled to its own foreground update.
+      test("the loop marker is consumed, not inherited by nested runs", () => {
+        managedPosix();
+        process.env[FOREGROUND_UPDATE_ENV] = "1";
+
+        expect(foregroundUpdateTarget(eligible())).toBeNull();
+
+        expect(process.env[FOREGROUND_UPDATE_ENV]).toBeUndefined();
+      });
+
+      // Deliberate semantic (#170): update_check_interval_hours governs how
+      // often we CHECK, not whether an already-recorded update gets applied.
+      // Applying it on the next run is the entire feature.
+      test("a long update_check_interval_hours does not veto applying a stored update", () => {
+        managedPosix();
+        expect(
+          foregroundUpdateTarget(
+            eligible({
+              update_check_interval_hours: 744,
+              last_update_check: new Date().toISOString(),
+            })
+          )
+        ).toBe("9.9.9");
+      });
+
+      test("a live update lock skips the foreground path entirely", () => {
+        managedPosix();
+        writeFileSync(
+          join(tempHome, "update.lock"),
+          JSON.stringify({ pid: process.pid + 1, at: new Date().toISOString() })
+        );
+        expect(foregroundUpdateTarget(eligible())).toBeNull();
+      });
+
+      test("a STALE update lock does not skip (the acquire decides)", () => {
+        managedPosix();
+        const lock = join(tempHome, "update.lock");
+        writeFileSync(lock, JSON.stringify({ pid: process.pid + 1 }));
+        // Older than the 30-minute staleness bound.
+        const old = new Date(Date.now() - 60 * 60 * 1000);
+        utimesSync(lock, old, old);
+        expect(foregroundUpdateTarget(eligible())).toBe("9.9.9");
+      });
+
       test("CI skips the foreground path", () => {
         managedPosix();
         process.env.CI = "true";
@@ -1070,9 +1116,9 @@ describe("updater", () => {
       });
 
       // Real contention, not a stubbed updater: another process owns the lock
-      // file, so runAutoUpdate bails before any network work and onStart never
-      // fires — the #1085 counter must stay untouched.
-      test("real update-lock contention: no download, no failure counted", async () => {
+      // file, so the foreground path skips BEFORE announcing anything or
+      // burning the hourly throttle on work someone else is doing.
+      test("real update-lock contention: silent skip, nothing recorded", async () => {
         managedPosix();
         captureTelemetry();
         // Record HOSTS, not URLs: an exact hostname comparison is the only
@@ -1094,13 +1140,17 @@ describe("updater", () => {
           reexec,
         });
 
-        expect(outcome).toBe("failed");
+        expect(outcome).toBe("skipped");
         expect(reexec).not.toHaveBeenCalled();
-        // Only telemetry may have gone out; no release metadata was fetched.
+        // Nothing announced, nothing fetched.
+        expect(stderr).toHaveLength(0);
         expect(fetchedHosts).not.toContain("install.squirrelscan.com");
         const saved = loadUserSettings();
         if (saved.ok) {
           expect(saved.data.auto_update_attempts ?? null).toBeNull();
+          // The hourly throttle is NOT burnt: the next run, once the other
+          // updater is done, is free to try.
+          expect(saved.data.last_auto_update_attempt ?? null).toBeNull();
         }
         // The other process's lock is left alone.
         expect(existsSync(join(tempHome, "update.lock"))).toBe(true);
@@ -1163,6 +1213,53 @@ describe("updater", () => {
         ]);
         // The lock must not be left behind for the detached updater to trip on.
         expect(existsSync(join(tempHome, "update.lock"))).toBe(false);
+      });
+
+      // A download takes long enough for `self update --dismiss` to land in the
+      // middle of one; the swap must not happen after that.
+      test("a dismissal DURING the download aborts before the binary swap", async () => {
+        managedPosix();
+        captureTelemetry();
+        spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v)
+        );
+        spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+          join(tempHome, "releases", v, "squirrel")
+        );
+        spyOn(pathsModule, "getSymlinkPath").mockReturnValue(
+          join(tempHome, "bin", "squirrel")
+        );
+        spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+          ok: true,
+          data: {
+            available: true,
+            current_version: "0.0.1",
+            latest_version: "9.9.9",
+            release_url: null,
+            manifest: { version: "9.9.9", binaries: {} } as ReleaseManifest,
+          },
+        } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+        spyOn(releasesModule, "downloadBinary").mockImplementation(async () => {
+          // The user dismisses while the bytes are in flight.
+          updateSettings({ dismissed_update_version: "9.9.9" });
+          return {
+            ok: true,
+            data: new TextEncoder().encode("bin").buffer as ArrayBuffer,
+          };
+        });
+
+        const reexec = mock(() => {});
+        const outcome = await applyPendingUpdateInForeground(eligible(), {
+          reexec,
+        });
+
+        expect(outcome).toBe("failed");
+        expect(reexec).not.toHaveBeenCalled();
+        // Nothing was written into the releases dir, and no symlink was flipped.
+        expect(
+          existsSync(join(tempHome, "releases", "9.9.9", "squirrel"))
+        ).toBe(false);
+        expect(existsSync(join(tempHome, "bin", "squirrel"))).toBe(false);
       });
 
       test("end to end: downloads, installs, flips the symlink, re-execs the release binary", async () => {

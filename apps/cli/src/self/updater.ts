@@ -70,6 +70,8 @@ const REEXEC_FORWARDED_SIGNALS = [
   "SIGTERM",
   "SIGHUP",
   "SIGQUIT",
+  "SIGUSR1",
+  "SIGUSR2",
 ] as const;
 // How long to wait for a re-raised signal to actually kill this process before
 // falling back to exiting with the shell's encoding for it.
@@ -453,7 +455,15 @@ function bumpAutoUpdateAttempts(
  */
 export function foregroundUpdateTarget(settings: UserSettings): string | null {
   // Loop guard first: cheapest check, and the one that must never be bypassed.
-  if (process.env[FOREGROUND_UPDATE_ENV]) return null;
+  if (process.env[FOREGROUND_UPDATE_ENV]) {
+    // CONSUME it. The marker's job is to stop THIS process from updating a
+    // second time; leaving it set would also mute every squirrel the command
+    // goes on to spawn, and a nested invocation is a separate run entitled to
+    // its own update. Children spawned before this point are vanishingly
+    // unlikely (nothing runs before the startup gate).
+    delete process.env[FOREGROUND_UPDATE_ENV];
+    return null;
+  }
 
   const notification = settings.pending_update_notification;
   // Fast path — nothing recorded, so nothing to do and nothing to fetch.
@@ -474,8 +484,28 @@ export function foregroundUpdateTarget(settings: UserSettings): string | null {
   if (settings.dismissed_update_version === notification.to_version)
     return null;
   if (isAutoUpdateAttemptThrottled(settings)) return null;
+  // Another updater already owns the install. Gate on it HERE, not by letting
+  // runAutoUpdate fail on the lock: reaching that point would already have
+  // announced an update to the user and burnt the hourly throttle for work
+  // someone else is doing.
+  if (isUpdateLockHeld()) return null;
 
   return notification.to_version;
+}
+
+/**
+ * Whether a live update lock exists, WITHOUT taking it — a read-only preview of
+ * acquireUpdateLock's verdict for gating. A lock past the staleness bound is
+ * treated as abandoned, exactly as the acquire does. Unreadable/absent reads as
+ * free: the real acquire still runs and is the authority.
+ */
+function isUpdateLockHeld(): boolean {
+  try {
+    const stat = statSync(getUpdateLockPath());
+    return Date.now() - stat.mtimeMs <= UPDATE_LOCK_STALE_MS;
+  } catch {
+    return false;
+  }
 }
 
 /** What a foreground update attempt did. Success never returns — see below. */
@@ -912,7 +942,10 @@ export async function runAutoUpdate(options?: {
     const manifest = updateResult.data.manifest;
     if (settings.dismissed_update_version === manifest.version) return null;
 
-    const applyResult = await performUpdate(manifest, settings, options);
+    const applyResult = await performUpdate(manifest, settings, {
+      ...options,
+      abortIfDismissed: true,
+    });
     if (!applyResult.ok) {
       if (options?.signal?.aborted) {
         // Expected when the command finished before the download — not an
@@ -962,13 +995,30 @@ export async function runAutoUpdate(options?: {
 async function performUpdate(
   manifest: ReleaseManifest,
   settings: UserSettings,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; abortIfDismissed?: boolean }
 ): Promise<Result<void>> {
   const platformArch = detectPlatformArch();
   const downloadResult = await downloadBinary(manifest, platformArch, {
     signal: options?.signal,
   });
   if (!downloadResult.ok) return downloadResult;
+
+  // A download takes long enough for `self update --dismiss` to land in the
+  // middle of one. Re-read immediately before the swap so an unattended update
+  // never installs a version the user has just refused. Explicit
+  // `squirrel self update` deliberately does NOT pass this: asking for an
+  // update outranks an earlier dismissal.
+  if (options?.abortIfDismissed) {
+    const fresh = loadSettings();
+    if (fresh.ok && fresh.data.dismissed_update_version === manifest.version) {
+      return err(
+        commandError(
+          "UPDATE_DISMISSED",
+          `v${manifest.version} was dismissed while it was downloading`
+        )
+      );
+    }
+  }
 
   const installResult = await installVersion(
     manifest.version,

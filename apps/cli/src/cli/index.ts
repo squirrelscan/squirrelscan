@@ -4,6 +4,7 @@ import { defineCommand, runMain } from "citty";
 
 import type { UserSettings } from "@/self/types";
 
+import { printAutoUpdateAppliedNotice } from "@/cli/banner";
 import { setGlobalConfigPath } from "@/config";
 import { registerInstall } from "@/self/register-install";
 import { loadSettings } from "@/self/settings";
@@ -72,30 +73,8 @@ export function run(): void {
     setLogLevel(settings.data.log_level);
   }
 
-  // Skip background tasks for simple commands and self install/update/uninstall
-  // (self install resets settings, causing race condition with registerInstall;
-  // self update is itself the updater — including the detached --auto child —
-  // and must not spawn further checks or installs)
-  const args = process.argv.slice(2);
-  const isSelfInstallCommand =
-    args[0] === "self" &&
-    (args[1] === "install" || args[1] === "update" || args[1] === "uninstall");
-  // mcp speaks JSON-RPC on stdout — skip background tasks so nothing pollutes the stream.
-  const isMcpCommand = args[0] === "mcp";
-  const isSimpleCommand =
-    args.length === 0 ||
-    args.includes("--version") ||
-    args.includes("-v") ||
-    args.includes("--help") ||
-    args.includes("-h") ||
-    isSelfInstallCommand ||
-    isMcpCommand;
-
-  // --offline promises zero network: skip update check + install registration
-  const isOffline = args.includes("--offline");
-
   const effectiveSettings = settings.ok ? settings.data : undefined;
-  const withBackgroundTasks = !isSimpleCommand && !isOffline;
+  const withBackgroundTasks = shouldRunBackgroundTasks(process.argv.slice(2));
 
   // An update a previous run already discovered is applied BEFORE the command,
   // and the original argv re-executed on the new binary, so a fresh run always
@@ -118,6 +97,35 @@ export function run(): void {
   startCommand(effectiveSettings, withBackgroundTasks);
 }
 
+/**
+ * Whether this invocation gets the startup extras: the telemetry notice, the
+ * update check/apply, install registration and log rotation.
+ *
+ * Skipped for simple commands and self install/update/uninstall (self install
+ * resets settings, racing registerInstall; self update IS the updater —
+ * including the detached --auto child — and must not spawn further checks or
+ * installs), for `mcp` (JSON-RPC on stdout, nothing may pollute the stream),
+ * and for --offline, which promises zero network.
+ *
+ * Exported for tests: it decides, among other things, which commands can print
+ * the auto-updated notice.
+ */
+export function shouldRunBackgroundTasks(args: string[]): boolean {
+  const isSelfInstallCommand =
+    args[0] === "self" &&
+    (args[1] === "install" || args[1] === "update" || args[1] === "uninstall");
+  const isSimpleCommand =
+    args.length === 0 ||
+    args.includes("--version") ||
+    args.includes("-v") ||
+    args.includes("--help") ||
+    args.includes("-h") ||
+    isSelfInstallCommand ||
+    args[0] === "mcp";
+
+  return !isSimpleCommand && !args.includes("--offline");
+}
+
 function startCommand(
   settings: UserSettings | undefined,
   withBackgroundTasks: boolean
@@ -130,6 +138,21 @@ function startCommand(
     rotateLogsIfNeeded().catch(() => {}); // Best effort, silent fail
   }
 
+  // The one-time "✓ auto-updated" confirmation belongs to the RUN, not to any
+  // one command: an update applied before `squirrel config` must be announced
+  // by `squirrel config` (#170). Gated synchronously on the marker so the
+  // ordinary run stays free of the await. printAutoUpdateAppliedNotice itself
+  // only prints when this process IS the new version, and clears the marker.
+  if (withBackgroundTasks && settings?.auto_update_applied) {
+    void printAutoUpdateAppliedNotice(settings)
+      .catch(() => {})
+      .then(runCommand);
+    return;
+  }
+  runCommand();
+}
+
+function runCommand(): void {
   // After the command settles, bound any in-process (Windows) auto-update so
   // a still-downloading binary can't hold the CLI open indefinitely (#1074).
   void runMain(main).finally(() => void finishInlineAutoUpdate());
