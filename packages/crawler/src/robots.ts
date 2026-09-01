@@ -92,10 +92,12 @@ export function fetchRobotsEvaluator(
         30_000,
         async (response) => {
           if (response.status === 404) {
+            await response.body?.cancel().catch(() => {});
             return createRobotsEvaluator(robotsUrl, null, userAgent);
           }
 
           if (!response.ok) {
+            await response.body?.cancel().catch(() => {});
             const data = emptyRobotsData(robotsUrl, `HTTP ${response.status}`);
             return {
               data,

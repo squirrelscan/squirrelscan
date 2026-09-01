@@ -7,11 +7,13 @@
 // `started` event ever reached the caller — which is exactly the condition the
 // cloud runner reports as "Crawl phase wedged before any pages were collected".
 //
-// Every test here fails by TIMING OUT against the pre-fix crawler, not by
-// asserting a wrong value.
+// The two stalled-body tests fail against the pre-fix crawler by TIMING OUT,
+// not by asserting a wrong value. The slow-on-every-response test is a guard
+// rather than a reproduction: plain latency never wedged the crawl, only an
+// unbounded body read did, and that distinction is the root cause.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { Effect, Stream } from "effect";
+import { Effect, Fiber, Stream } from "effect";
 
 import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
@@ -79,7 +81,9 @@ async function crawl(origin: string, config = CONFIG): Promise<CrawlOutcome> {
   const crawler = await Effect.runPromise(createCrawler({ config }));
 
   let startedAfterMs: number | undefined;
-  Effect.runFork(
+  // `Stream.fromPubSub` never completes on its own, so this fiber has to be
+  // interrupted or it outlives the test.
+  const events = Effect.runFork(
     Stream.runForEach(crawler.events, (event: CrawlerEvent) =>
       Effect.sync(() => {
         if (event.type === "started") startedAfterMs = Date.now() - startedAt;
@@ -87,9 +91,13 @@ async function crawl(origin: string, config = CONFIG): Promise<CrawlOutcome> {
     ),
   );
 
-  const crawlId = await Effect.runPromise(crawler.start(origin, origin));
-  const pages = await Effect.runPromise(crawler.storage.getPages(crawlId));
-  return { startedAfterMs, pages: pages.length, totalMs: Date.now() - startedAt };
+  try {
+    const crawlId = await Effect.runPromise(crawler.start(origin, origin));
+    const pages = await Effect.runPromise(crawler.storage.getPages(crawlId));
+    return { startedAfterMs, pages: pages.length, totalMs: Date.now() - startedAt };
+  } finally {
+    await Effect.runPromise(Fiber.interrupt(events));
+  }
 }
 
 describe("slow origin does not wedge the crawl (#1699)", () => {
@@ -161,5 +169,27 @@ describe("slow origin does not wedge the crawl (#1699)", () => {
 
     expect(out.startedAfterMs).toBeDefined();
     expect(out.pages).toBeGreaterThan(0);
+  });
+
+  test("a hop that serves headers and then stalls still counts as resolved", async () => {
+    // The seed meta-refreshes to /second, whose headers arrive before its body
+    // stalls. /second demonstrably serves, so it — not the seed — is what the
+    // probe resolves to. Banking the URL only after the body read would throw
+    // that away and hand the crawl back the pre-redirect seed.
+    const origin = serve((req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/") {
+        return htmlResponse(
+          `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/second"></head><body>x</body></html>`,
+        );
+      }
+      if (path === "/second") return stalledBodyResponse();
+      return htmlResponse();
+    });
+
+    const crawler = await Effect.runPromise(createCrawler({ config: CONFIG }));
+    const resolved = await Effect.runPromise(crawler.detectRedirects(origin));
+
+    expect(resolved).toBe(`${origin}second`);
   });
 });

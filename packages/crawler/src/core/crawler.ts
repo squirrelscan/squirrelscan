@@ -1495,7 +1495,7 @@ export function createCrawler(
             visited.add(currentUrl);
 
             const hopUrl = currentUrl;
-            const next = await withRequestDeadline(
+            const redirectTo = await withRequestDeadline(
               Math.min(hopTimeoutMs, remainingMs),
               (signal) => fetch(hopUrl, { method: "GET", signal, redirect: "follow" }),
               // The deadline stays armed for the whole callback, so the body
@@ -1503,9 +1503,12 @@ export function createCrawler(
               // as soon as the headers landed and a stalled body hung here
               // forever, with no `started` event ever reaching the caller.
               async (response) => {
-                // response.url is post-redirect and definitionally served; the
-                // fallback covers runtimes/mocks that leave it empty.
+                // Headers are in, so this URL demonstrably serves — bank it
+                // BEFORE the body read, which is the step that can still time
+                // out. response.url is post-redirect; the fallback covers
+                // runtimes and mocks that leave it empty.
                 const served = response.url || hopUrl;
+                settledUrl = served;
 
                 // Check if HTTP redirect occurred
                 if (served !== hopUrl) {
@@ -1513,14 +1516,14 @@ export function createCrawler(
                   // Nothing here reads the body, so release the connection
                   // rather than leaving a response half-consumed per hop.
                   await response.body?.cancel().catch(() => {});
-                  return { served, redirectTo: served };
+                  return served;
                 }
 
                 // Check for client-side redirects (meta refresh, JS)
                 const contentType = response.headers.get("content-type") || "";
                 if (!contentType.includes("text/html")) {
                   await response.body?.cancel().catch(() => {});
-                  return { served, redirectTo: undefined };
+                  return undefined;
                 }
 
                 // Runs during seed redirect resolution, before the crawl has any
@@ -1530,17 +1533,16 @@ export function createCrawler(
 
                 if (clientRedirect && clientRedirect !== hopUrl) {
                   logger.debug("client-side redirect", hopUrl, "→", clientRedirect);
-                  return { served, redirectTo: clientRedirect };
+                  return clientRedirect;
                 }
 
                 // No more redirects
-                return { served, redirectTo: undefined };
+                return undefined;
               },
             );
 
-            settledUrl = next.served;
-            if (next.redirectTo === undefined) break;
-            currentUrl = next.redirectTo;
+            if (redirectTo === undefined) break;
+            currentUrl = redirectTo;
           }
 
           return settledUrl;

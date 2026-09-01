@@ -60,14 +60,16 @@ describe("withRequestDeadline (#1699)", () => {
     }
   });
 
-  test("the deadline covers work `use` does after the headers, not just the fetch", async () => {
+  test("the signal is still armed while `use` runs, so a consumer can observe the expiry", async () => {
     const server = Bun.serve({
       port: 0,
       idleTimeout: 0,
       fetch: () => new Response("body", { headers: { "content-type": "text/plain" } }),
     });
     try {
-      // `use` observes an already-armed signal, so a slow consumer is bounded too.
+      // The deadline aborts the REQUEST, which is what unblocks a stalled body
+      // read; it does not preempt unrelated work `use` chooses to do. What this
+      // asserts is that the signal has not been disarmed by the time `use` runs.
       const aborted = await withRequestDeadline(
         200,
         (signal) => fetch(`http://localhost:${server.port}/`, { signal }).then((r) => {
