@@ -24,6 +24,7 @@ import {
 
 import {
   classifyKeyContext,
+  createSeenValues,
   leakedSecretsRule,
   lookBehind,
   readKeyLookBack,
@@ -867,5 +868,128 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
       scanContent(line, "external-script");
       expect(performance.now() - start).toBeLessThan(5000);
     }
+  });
+});
+
+// #176: overlap suppression was O(findings^2) — every candidate compared
+// against every value already kept. An 880 KB page producing 16k findings spent
+// 2.1s of a 2.2s scan inside that one loop. The window index replaced the loop,
+// and the only thing that matters about it is that it answers identically.
+describe("security/leaked-secrets: overlap suppression", () => {
+  // The predicate the index replaced, verbatim. Every assertion below is the
+  // index against this, because "faster" is only worth having if it agrees.
+  const pairwise = (kept: string[], value: string) =>
+    kept.some((seen) => value.includes(seen) || seen.includes(value));
+
+  const rng = (seed: number) => () =>
+    ((seed = Math.imul(seed ^ (seed >>> 15), 2246822519) + 1) >>> 0) / 4294967296;
+  const CHARS = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const runOf = (r: () => number, n: number) =>
+    Array.from({ length: n }, () => CHARS[Math.floor(r() * CHARS.length)]!).join("");
+
+  test("the index answers exactly what the pairwise scan answered", () => {
+    // The shapes that break a window index if it is wrong: values shorter than
+    // one window and longer than the index will take, values sharing a long
+    // head (every JWT does) or a long tail, values nested inside each other,
+    // and repeats.
+    for (let seed = 1; seed <= 400; seed++) {
+      const r = rng(seed);
+      const head = runOf(r, 20);
+      const tail = runOf(r, 20);
+      const index = createSeenValues(4096);
+      const kept: string[] = [];
+
+      for (let i = 0; i < 60; i++) {
+        const pickShape = Math.floor(r() * 9);
+        let value =
+          pickShape === 0 ? runOf(r, 1 + Math.floor(r() * 11)) // below one window
+          : pickShape === 1 ? `${head}${runOf(r, 1 + Math.floor(r() * 20))}`
+          : pickShape === 2 ? `${runOf(r, 1 + Math.floor(r() * 20))}${tail}`
+          : pickShape === 3 ? `${head}${runOf(r, 10)}${tail}`
+          : pickShape === 4 && kept.length > 0 ? kept[Math.floor(r() * kept.length)]!
+          : pickShape === 5 && kept.length > 0
+            ? (() => {
+                const base = kept[Math.floor(r() * kept.length)]!;
+                return base.slice(Math.floor(r() * base.length)) || base;
+              })()
+          : pickShape === 6 && kept.length > 0
+            ? `${runOf(r, 3)}${kept[Math.floor(r() * kept.length)]!}${runOf(r, 3)}`
+          // Past the length the index will take: a runaway connection-string
+          // match is megabytes, and those are held aside rather than indexed.
+          : pickShape === 7 ? `${head}${runOf(r, 1000 + Math.floor(r() * 60))}`
+            : runOf(r, 12 + Math.floor(r() * 40));
+        if (value === "") value = "x";
+
+        expect(index.overlaps(value)).toBe(pairwise(kept, value));
+        expect(index.has(value)).toBe(kept.includes(value));
+
+        // Mirror scanContent: a value is only kept when nothing suppressed it.
+        if (!index.has(value) && !index.overlaps(value)) {
+          index.add(value);
+          kept.push(value);
+        }
+      }
+    }
+  });
+
+  test("a value equal to, inside, or around a kept value all suppress", () => {
+    const index = createSeenValues(4096);
+    const key = `AIza${"b".repeat(35)}`; // pragma: allowlist secret
+    index.add(key);
+
+    expect(index.overlaps(key)).toBe(true); // the same value
+    expect(index.overlaps(`apiKey:"${key}"`)).toBe(true); // wrapped around it
+    expect(index.overlaps(key.slice(4))).toBe(true); // sitting inside it
+    expect(index.overlaps(`AIza${"c".repeat(35)}`)).toBe(false); // unrelated
+  });
+
+  test("a value shorter than one window is still matched both ways", () => {
+    const index = createSeenValues(4096);
+    index.add("ya29.ab"); // 7 characters, below the window size
+    expect(index.overlaps("ya29.ab")).toBe(true);
+    expect(index.overlaps("token=ya29.ab;")).toBe(true);
+    expect(index.overlaps("ya29.a")).toBe(true); // inside the kept value
+    expect(index.overlaps("ya29.zz")).toBe(false);
+  });
+
+  test("suppression stays linear enough to survive a 16k-finding page", () => {
+    // The page from #176's report: a bundle of distinct browser keys, every one
+    // of them a finding. Pairwise, this took 2.1s; the shape of the check is
+    // what this pins, so the assertion is on how the cost SCALES — an absolute
+    // budget only measures the CI runner, but going quadratic again shows up as
+    // 64x for an 8x page whatever the machine.
+    const r = rng(7);
+    const page = (n: number) =>
+      Array.from({ length: n }, () => `cfg.push({k:"AIza${runOf(r, 35)}"});`).join("");
+    const small = page(2000);
+    const large = page(16000);
+
+    scanContent(small, "inline-script"); // warm the JIT before either reading
+    scanContent(large, "inline-script");
+
+    // Fastest of three: a scheduling pause can only ever make a run look
+    // slower, so the minimum is the reading least likely to flake.
+    const timeOf = (content: string) => {
+      let ms = Infinity;
+      let findings = 0;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const started = performance.now();
+        findings = scanContent(content, "inline-script").length;
+        ms = Math.min(ms, performance.now() - started);
+      }
+      return { ms, findings };
+    };
+    const smallRun = timeOf(small);
+    const largeRun = timeOf(large);
+
+    // Near enough to one finding per key: a couple of the generated keys
+    // genuinely overlap, and suppressing those is the point of the function.
+    expect(smallRun.findings).toBeGreaterThan(1990);
+    expect(largeRun.findings).toBeGreaterThan(15900);
+    // 8x the page. Linear would be 8x the time; the pairwise scan was 64x.
+    expect(largeRun.ms / Math.max(smallRun.ms, 0.5)).toBeLessThan(24);
+    // A backstop for the absolute cliff the issue reported, loose enough for a
+    // loaded CI runner and still an order of magnitude under 2.1s.
+    expect(largeRun.ms).toBeLessThan(1000);
   });
 });
