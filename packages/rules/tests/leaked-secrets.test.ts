@@ -38,6 +38,15 @@ const DIGEST_2 = "7b2c40e91af38d605c7e1b94a2f6d083e5c19b7a4d0f38e6215ca9b70d4f8e
 const TOGETHER_KEY = "9f3c1d7ba24e08f65c1b93d0e47af215c806b3e9d24f71a5c0938e6b1df42a70"; // pragma: allowlist secret
 const COMMIT = "3f9a1c5d7e2b48061a9c3d5f7e8b2a4c6d0e1f93"; // pragma: allowlist secret
 
+// #150 fixtures. Real standard base64 — 47 bytes each, so 64 characters and
+// one `=` of padding, and both carry a `+` and a `/` inside their first 20
+// characters, which is where the base64url class used to give up.
+const B64_TOKEN = "2MBqfKhL/eXCwg0Zt+RZ2klzNCF0inWnUM3Jb0UiyC1WDP53Cxm5f6UUyrjnQH8="; // pragma: allowlist secret
+const B64_TOKEN_2 = "yS9+/xwatK/BZkejOF5vKuKCuzfMdMV55oZv26BLG8DoO6+VamfQB1mP0TbXYOc="; // pragma: allowlist secret
+// A real sha384 SRI hash is standard base64 too, `+` and `/` and all.
+const SRI_B64 = "oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"; // pragma: allowlist secret
+const OAUTH_TOKEN = "Zk8pR3vN6mQ1tX4wL7cH2sB5dF9gJ0aY"; // pragma: allowlist secret
+
 function html(body: string): string {
   return `<!DOCTYPE html><html><head><title>Releases</title></head><body>${body}</body></html>`;
 }
@@ -166,14 +175,19 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
 
 describe("security/leaked-secrets: real credentials still report", () => {
   test("a Together key under a credential key is still reported as one", () => {
-    for (const assignment of [
-      `const togetherKey = "${TOGETHER_KEY}"`, // pragma: allowlist secret
-      `{"together_secret":"${TOGETHER_KEY}"}`, // pragma: allowlist secret
-      `window.TOGETHER_TOKEN = "${TOGETHER_KEY}"`, // pragma: allowlist secret
-    ]) {
+    // One finding each, and the value is always the key itself. The quoted JSON
+    // form is claimed by the generic FAST tier now that it accepts a closing
+    // quote (#150), so it reports under the broader name and carries the key
+    // inside its match rather than as the whole match.
+    const cases: Array<[string, string]> = [
+      [`const togetherKey = "${TOGETHER_KEY}"`, "Together AI Key"], // pragma: allowlist secret
+      [`{"together_secret":"${TOGETHER_KEY}"}`, "Generic Secret Assignment"], // pragma: allowlist secret
+      [`window.TOGETHER_TOKEN = "${TOGETHER_KEY}"`, "Together AI Key"], // pragma: allowlist secret
+    ];
+    for (const [assignment, type] of cases) {
       const found = scanContent(assignment, "inline-script");
-      expect(found.map((f) => f.type)).toEqual(["Together AI Key"]);
-      expect(found[0]?.value).toBe(TOGETHER_KEY);
+      expect(found.map((f) => f.type)).toEqual([type]);
+      expect(found[0]?.value).toContain(TOGETHER_KEY);
     }
   });
 
@@ -214,7 +228,10 @@ describe("security/leaked-secrets: real credentials still report", () => {
       `cfg["together"] = "${TOGETHER_KEY}"`, // pragma: allowlist secret
     ]) {
       const found = scanContent(assignment, "inline-script");
-      expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
+      // The generic FAST tier claims the `cfg["apiKey"] = ` form now that it
+      // reads across `"]` (#150), so the key rides inside the reported value
+      // rather than being the whole of it.
+      expect(found.some((f) => f.value.includes(TOGETHER_KEY))).toBe(true);
     }
   });
 
@@ -316,6 +333,20 @@ describe("classifyKeyContext", () => {
     expect(classifyKeyContext(`cfg["filename"] = "`, "together")).toBe("none");
   });
 
+  test("an unquoted bracket names nothing", () => {
+    // `labels[secret]` is a lookup keyed by a variable that happens to be
+    // called secret. Only a quoted key inside the brackets names the value.
+    expect(classifyKeyContext(`labels[secret] || "`, "together")).toBe("none");
+    // A `:` or `=` still lands in the plain assignment fallback, which reports
+    // on purpose — an unreadable key is how minified bundles look. Only the
+    // fallback operators, where the left side is an expression, mean "none".
+    expect(classifyKeyContext(`labels[apiKey]: "`, "together")).toBe("assigned");
+    expect(classifyKeyContext(`cfg["apiKey"] || "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`process.env["SECRET_KEY"] || "`, "together")).toBe(
+      "credential"
+    );
+  });
+
   test("a minifier's member access is treated as no key at all", () => {
     expect(classifyKeyContext(`t.a = "`, "together")).toBe("assigned");
     expect(classifyKeyContext(`e.x2="`, "together")).toBe("assigned");
@@ -394,5 +425,319 @@ describe("classifyKeyContext", () => {
         tag(`name="algolia-api-key" lang="en" dir="ltr" data-testid="release-row" content="x"`)
       )
     ).toBe("credential");
+  });
+
+  test("reads the key across an env-var fallback", () => {
+    expect(classifyKeyContext(`process.env.SECRET_KEY || "`, "together")).toBe(
+      "credential"
+    );
+    expect(classifyKeyContext(`process.env.TOKEN ?? "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`togetherKey||"`, "together")).toBe("credential");
+    // The fallback does not launder a digest key into a credential.
+    expect(classifyKeyContext(`cacheKey || "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`sha256 ?? "`, "together")).toBe("digest");
+    expect(classifyKeyContext(`commitHash || "`, "together")).toBe("digest");
+    // Nor a key that means nothing into one that does.
+    expect(classifyKeyContext(`filename || "`, "together")).toBe("none");
+    expect(classifyKeyContext(`t.a || "`, "together")).toBe("assigned");
+  });
+});
+
+// #150: three shapes that carry a real credential and used to report nothing.
+// Each block pairs the shape with the false positive it sits next to, because
+// widening a pattern is only correct if the silence it was protecting survives.
+describe("security/leaked-secrets: #150 missed shapes", () => {
+  test("a quoted JSON key is reported", () => {
+    for (const key of ["apiKey", "api_key", "x-api-key", "APIKEY"]) {
+      const found = scanContent(`{"${key}":"${COMMIT}"}`, "html"); // pragma: allowlist secret
+      expect(found.map((f) => f.type)).toEqual(["Generic API Key Assignment"]);
+      expect(found[0]?.value).toContain(COMMIT);
+    }
+  });
+
+  test("a quoted JSON key inside a script[type=application/json] block is reported", () => {
+    const page = html(
+      `<script type="application/json">{"x-api-key":"${COMMIT}"}</script>` // pragma: allowlist secret
+    );
+    const items = findings(leakedSecretsRule.run(ctx(page)).checks);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toContain("Generic API Key Assignment");
+  });
+
+  test("the same 40 hex characters stay silent under a git-object key", () => {
+    // Nothing in the value tells a git object id apart from an API key — only
+    // the key in front of it does. The FAST tier carries its credential
+    // keyword in the pattern, so `commit` can never reach it, and the
+    // bare-shape CONTEXT tier needs a brand keyword a release page has no
+    // reason to carry.
+    for (const key of ["commit", "gitCommit", "sha", "revision", "etag", "cacheKey"]) {
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
+    }
+  });
+
+  test("a key that only ends in a credential word is not one", () => {
+    // The key has to END where the separator begins, which is what stops the
+    // widened patterns from claiming a digest whose name happens to start with
+    // a credential word.
+    for (const key of [
+      "secret_hash",
+      "secretHash",
+      "apiKeyHash",
+      "api_key_digest",
+      "passwordDigest",
+      "access_token_sha256",
+    ]) {
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
+      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).toEqual([]);
+    }
+  });
+
+  test("a compound key whose left half says digest is not a credential", () => {
+    // These start the match part-way through the key — `cache-api-key` begins
+    // an `api-key` match at character 6 — and the FAST tier has no
+    // classifyKeyContext behind it, so the pattern reads its own left edge.
+    // `_` and camelCase join a name wherever they appear; `-` needs syntax to
+    // say so, which is the next test.
+    for (const key of ["cache_api_key", "cacheApiKey", "checksumSecret", "sha256_secret"]) {
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
+      expect(scanContent(`{${key}:"${COMMIT}"}`, "html")).toEqual([]);
+      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).toEqual([]);
+    }
+    // The word to the left has to actually say digest: `x-api-key` and
+    // `stripe_secret` are the same shape and both still report.
+    for (const key of ["x-api-key", "myApiKey", "stripe_secret", "next_auth_token"]) {
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
+    }
+  });
+
+  test("a hyphen joins a key only where the syntax says it does", () => {
+    const hyphenated = [
+      "cache-api-key",
+      "checksum-secret",
+      "integrity-auth-token",
+      "etag-api-key",
+    ];
+    for (const key of hyphenated) {
+      // Quoted: a JSON or YAML key, one name, a digest.
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
+      expect(scanContent(`{'${key}':"${COMMIT}"}`, "html")).toEqual([]);
+      // An HTML attribute name: also one name.
+      expect(scanContent(`<img alt="" ${key}="${COMMIT}">`, "html")).toEqual([]);
+      expect(scanContent(`<img alt="" data-${key}="${COMMIT}">`, "html")).toEqual([]);
+      // Bare, in identifier position, `-` is the subtraction operator. Reading
+      // it as one key is what let a minified expression swallow a credential.
+      expect(scanContent(`const x=${key}||"${COMMIT}"`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+    }
+    // The shape the fix exists for: a real credential behind a minified
+    // subtraction. `cache-apiKey` is `cache` minus `apiKey`, not a cache key.
+    expect(
+      scanContent(`const x=cache-apiKey||"${TOGETHER_KEY}"`, "inline-script") // pragma: allowlist secret
+        .some((f) => f.value.includes(TOGETHER_KEY))
+    ).toBe(true);
+  });
+
+  test("an unquoted computed lookup is not a credential name", () => {
+    // `translations[apiKey]` names a translation, not a key. The `]` only
+    // counts when it closes a QUOTED key.
+    for (const expr of [
+      `translations[apiKey] ||= "This is a harmless display label"`,
+      `labels[secret] || "Password must have eight characters"`,
+      `messages[apiKey] || "${COMMIT}"`,
+      `t[access_token] ||= "${COMMIT}"`,
+      // The context tier reads the same bracket, so it needs the same rule.
+      `labels[secret] || "${DIGEST}"; // together.ai`,
+      `strings[apiKey] || "${DIGEST}"; // together.ai`,
+    ]) {
+      expect(scanContent(expr, "inline-script")).toEqual([]);
+    }
+    // The quoted bracket form is still read.
+    for (const expr of [
+      `cfg["apiKey"] || "${COMMIT}"`, // pragma: allowlist secret
+      `cfg['x-api-key'] = "${COMMIT}"`, // pragma: allowlist secret
+      `const k = process.env["SECRET_KEY"] || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+    ]) {
+      expect(scanContent(expr, "inline-script")).not.toEqual([]);
+    }
+  });
+
+  test("a digest word in a member path is not part of the key", () => {
+    // `cache.apiKey` is the apiKey OF a cache, not a key called
+    // `cache.apiKey` — the walk stops at the dot.
+    for (const path of ["cache.apiKey", "config.cache.apiKey", "sha256.apiKey"]) {
+      expect(scanContent(`${path} = "${COMMIT}";`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+    }
+  });
+
+  test("a key too long to read whole does not suppress", () => {
+    // Spending the whole look-back budget means the prefix was cut, not read.
+    const budget = SECRET_KEY_LOOKBEHIND_SIZE * 2;
+
+    // A cut can lose a digest word off the front…
+    const lost = `cache-${"y".repeat(budget)}-api-key`;
+    expect(scanContent(`{"${lost}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
+
+    // …and it can invent one out of the middle. `cache-` here is the tail of
+    // `xcache-`, not a word, and the cut lands on exactly its first character.
+    // Without the guard the key reads as a digest and the credential goes
+    // silent — the one direction that must never happen by accident.
+    const invented = `xcache-${"y".repeat(budget - 7)}-api-key`;
+    expect(invented.indexOf("api-key")).toBe(budget + 1);
+    expect(scanContent(`{"${invented}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
+
+    // The guard is about the budget, not about giving up: a digest word the
+    // walk reaches within it still suppresses.
+    const read = `cache-${"y".repeat(100)}-api-key`;
+    expect(read.indexOf("api-key")).toBeLessThan(budget);
+    expect(scanContent(`{"${read}":"${COMMIT}"}`, "html")).toEqual([]);
+  });
+
+  test("a fallback with no key in front of it is not an assignment", () => {
+    // `||` only makes a value position when something nameable precedes it.
+    // A call expression names nothing, and a checksum falling back to a
+    // literal is exactly the shape that would be misread.
+    for (const expr of ["getChecksum()", "hashes.get(name)", "digestOf(x)"]) {
+      const content = `const v = ${expr} || "${DIGEST}"; // together.ai`;
+      expect(scanContent(content, "inline-script")).toEqual([]);
+    }
+    // A name in front of the fallback still reports, minified ones included.
+    for (const content of [
+      `const v = cfg.token || "${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
+      `t.a||"${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
+    ]) {
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
+        TOGETHER_KEY,
+      ]);
+    }
+  });
+
+  test("a hardcoded fallback behind an env var is reported", () => {
+    const cases = [
+      `const k = process.env.SECRET_KEY || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env.SECRET_KEY ?? "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env.API_KEY || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env.AUTH_TOKEN || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env.PASSWORD||"${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `process.env.SECRET_KEY ||= "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `process.env.SECRET_KEY ??= "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env["SECRET_KEY"] || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const k = process.env['API_KEY'] ?? "${TOGETHER_KEY}";`, // pragma: allowlist secret
+    ];
+    for (const content of cases) {
+      const found = scanContent(content, "inline-script");
+      expect(found).toHaveLength(1);
+      expect(found[0]?.value).toContain(TOGETHER_KEY);
+    }
+  });
+
+  test("a fallback reaches the context tier too, without laundering a digest", () => {
+    // No FAST pattern matches `togetherKey`, so this only reports if
+    // isInValuePosition and classifyKeyContext both read across the `||`.
+    for (const content of [
+      `const v = togetherKey || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+      `const v = credential ?? "${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
+    ]) {
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
+        TOGETHER_KEY,
+      ]);
+    }
+    // Same shape, digest key: the published checksum stays silent.
+    for (const key of ["cacheKey", "sha256", "etag", "commitHash", "integrityHash"]) {
+      const content = `const v = ${key} || "${DIGEST}"; // together.ai`;
+      expect(scanContent(content, "inline-script")).toEqual([]);
+    }
+  });
+
+  test("a standard-base64 Bearer token is reported with its padding intact", () => {
+    // The fixture is genuine base64: it survives a decode/encode round trip, so
+    // this pins support for the real encoding, not just for the characters.
+    expect(Buffer.from(B64_TOKEN, "base64").toString("base64")).toBe(B64_TOKEN);
+
+    const found = scanContent(`authorization: "Bearer ${B64_TOKEN}"`, "html"); // pragma: allowlist secret
+    expect(found.map((f) => f.type)).toEqual(["Bearer Token"]);
+    expect(found[0]?.value).toBe(`Bearer ${B64_TOKEN}`);
+  });
+
+  test("padding alone is not a Bearer token", () => {
+    // `=` is trailing and capped at two, so a run of padding characters cannot
+    // reach the length threshold on its own.
+    expect(scanContent(`Bearer ${"=".repeat(40)}`, "html")).toEqual([]);
+    expect(scanContent(`Bearer ${"=".repeat(19)}abc`, "html")).toEqual([]);
+    // …and a token never carries more than two.
+    const found = scanContent(`Bearer ${B64_TOKEN}====`, "html"); // pragma: allowlist secret
+    expect(found[0]?.value).toBe(`Bearer ${B64_TOKEN}=`);
+  });
+
+  test("a base64url Bearer token still matches after the class widened", () => {
+    // `-` sits last in `[a-zA-Z0-9_+/=-]` so it stays a literal, not a range.
+    const urlSafe = "ab-cd_efGH12-34_jkLMnopQRstuvWXyz0123456789ABCDefgh"; // pragma: allowlist secret
+    const found = scanContent(`authorization: "Bearer ${urlSafe}"`, "html"); // pragma: allowlist secret
+    expect(found.map((f) => f.value)).toEqual([`Bearer ${urlSafe}`]);
+  });
+
+  test("npm lockfile integrity entries report nothing", () => {
+    // The highest-volume standard-base64 blob on the real web, `+` `/` `=` and
+    // all. It has to survive the widened Bearer class untouched.
+    const entry = (i: number) =>
+      `"node_modules/pkg-${i}": { "version": "1.2.${i}", "integrity": "sha512-${SRI_B64}${i}Xy+9/Qz==" }`;
+    const lock = `{ "packages": { ${[0, 1, 2, 3, 4].map(entry).join(", ")} } }`;
+    expect(scanContent(lock, "html")).toEqual([]);
+  });
+
+  test("an SRI hash in standard base64 is not a Bearer token", () => {
+    const tag = `<script src="https://cdn.example.net/lib.js" integrity="sha384-${SRI_B64}" crossorigin="anonymous"></script>`;
+    expect(scanContent(tag, "html")).toEqual([]);
+    // Still silent with the word Bearer on the same page: the class stops at
+    // the space, so `Bearer token.` never reaches the length threshold.
+    expect(scanContent(`<p>Send a Bearer token.</p>${tag}`, "html")).toEqual([]);
+  });
+
+  test("a base64 image data URI reports nothing", () => {
+    const page = html(
+      `<img alt="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg==">`
+    );
+    expect(findings(leakedSecretsRule.run(ctx(page)).checks)).toEqual([]);
+  });
+
+  test("two secrets on one line are both reported", () => {
+    // A widened pattern that ran to end of line would swallow the second one.
+    const line = `{"apiKey":"${COMMIT}","access_token":"${OAUTH_TOKEN}"}`; // pragma: allowlist secret
+    const found = scanContent(line, "html");
+    expect(found.map((f) => f.type)).toEqual([
+      "Generic API Key Assignment",
+      "Generic Token Assignment",
+    ]);
+    expect(found[0]?.value).toContain(COMMIT);
+    expect(found[1]?.value).toContain(OAUTH_TOKEN);
+
+    const headers = `{"authorization":"Bearer ${B64_TOKEN}","x-proxy":"Bearer ${B64_TOKEN_2}"}`; // pragma: allowlist secret
+    expect(scanContent(headers, "html").map((f) => f.value)).toEqual([
+      `Bearer ${B64_TOKEN}`,
+      `Bearer ${B64_TOKEN_2}`,
+    ]);
+  });
+
+  test("a long minified line stays linear", () => {
+    // These patterns run over whole crawled bundles. Every one of them is a
+    // literal keyword plus one greedy character class, so the work is linear —
+    // this pins that it stays that way after the widening.
+    const chunk = `var a${"b".repeat(40)}=function(t){return t.apiKey||t.secret||"Bearer "+t.token};`;
+    for (const line of [
+      chunk.repeat(4000),
+      // A credential word followed by a long whitespace run and no separator.
+      // Two adjacent unbounded `\s*` quantifiers here would partition the run
+      // every possible way before giving up: 12s at 64 KB, and `\s` matches
+      // newlines, so pretty-printed HTML gets there on its own.
+      `apiKey${" ".repeat(200_000)}x`,
+      `{"apiKey"${"\n".repeat(200_000)}:"x"}`,
+      // Unterminated quoted values: the generic secret pattern's `[^'"]{8,}`
+      // has to give up on each of these without exploring the whole tail.
+      `x={${`secret:"${"y".repeat(200)},`.repeat(2000)}}`,
+      `Bearer ${"A+b/c=".repeat(20000)}`,
+    ]) {
+      const start = performance.now();
+      scanContent(line, "external-script");
+      expect(performance.now() - start).toBeLessThan(5000);
+    }
   });
 });
