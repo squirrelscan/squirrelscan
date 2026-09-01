@@ -21,7 +21,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 ## Features
 
-- **278 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
+- **279 Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
 - **Fast crawler** - Highly optimized memory efficient crawler
 - **Agent Experience** - Audit agent experience to assist agents in using your site
 - **Security Audit** - Detect phishing kits, leaked credentials, and more
@@ -44,7 +44,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Security | 16 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, unprotected and downgraded forms |
 | Links | 15 | Internal and external link health: broken and dead links, redirect chains, anchor-text quality, orphan and dead-end pages, pages linked only from sitewide chrome, HTTPS downgrades |
 | Content | 18 | Text quality and honesty: duplicate titles and descriptions, title-template consistency, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, encoding damage |
-| Performance | 29 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
+| Performance | 30 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
 | Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
 | Structured Data | 12 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search, plus rating markup that is not about the page it sits on |
 | Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
@@ -59,7 +59,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Analytics | 2 | Google Tag Manager presence and consent-mode wiring |
 | Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
 
-**Total: 278 rules across 21 categories**
+**Total: 279 rules across 21 categories**
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 
