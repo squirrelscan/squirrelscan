@@ -1177,26 +1177,213 @@ function extractKeywordWindows(
   return windows;
 }
 
+// One window's worth of characters. Every pattern in this file matches more
+// than a dozen, so a value with no window of its own is rare enough to compare
+// against directly.
+const OVERLAP_WINDOW = 12;
+
+// The longest value worth indexing. Several patterns are unbounded on the right
+// — a connection string runs to the first quote — so one runaway match can be
+// megabytes, and hashing every window of it costs more than the comparisons it
+// saves. Far above any real credential: a Supabase JWT, the longest thing this
+// file matches on purpose, is a few hundred characters.
+const OVERLAP_MAX_INDEXED = 1024;
+
+// Rabin-Karp over one window, mod 2^32. A collision costs one extra comparison
+// and nothing else: no part of the decision rests on the hash.
+const OVERLAP_BASE = 131;
+const OVERLAP_LEAD = (() => {
+  let lead = 1;
+  for (let i = 1; i < OVERLAP_WINDOW; i++) lead = Math.imul(lead, OVERLAP_BASE);
+  return lead >>> 0;
+})();
+
+function windowHash(text: string, start: number): number {
+  let hash = 0;
+  for (let i = 0; i < OVERLAP_WINDOW; i++) {
+    hash = (Math.imul(hash, OVERLAP_BASE) + text.charCodeAt(start + i)) >>> 0;
+  }
+  return hash;
+}
+
+/** The window one character along, without re-reading the eleven it shares. */
+function rollWindow(text: string, hash: number, nextStart: number): number {
+  const dropped = Math.imul(text.charCodeAt(nextStart - 1), OVERLAP_LEAD);
+  const shifted = Math.imul((hash - dropped) >>> 0, OVERLAP_BASE);
+  return (shifted + text.charCodeAt(nextStart + OVERLAP_WINDOW - 1)) >>> 0;
+}
+
+// Bits for the window filter: a page that finds nothing never fills it, and one
+// that finds thousands still stops at a quarter of a megabyte.
+function filterWordCount(contentLength: number): number {
+  const wanted = Math.min(Math.max(contentLength >> 3, 64), 1 << 16);
+  let words = 64;
+  while (words < wanted) words *= 2;
+  return words;
+}
+
+export interface SeenValues {
+  has: (value: string) => boolean;
+  add: (value: string) => void;
+  overlaps: (value: string) => boolean;
+}
+
+/** A seen value with the hash of its first window, for the second reject. */
+interface IndexedValue {
+  value: string;
+  firstHash: number;
+}
+
+/**
+ * The values already kept, and the question asked of them for every candidate:
+ * does either one contain the other?
+ *
+ * Asked pairwise that is quadratic, and it bites — an 880 KB page producing
+ * 16k findings spent 2.1s of a 2.2s scan inside this one loop (#176). But both
+ * halves are really window questions. `value.includes(seen)` is "some window of
+ * `value` equals `seen`", and `seen.includes(value)` is "some window of `seen`
+ * equals `value`", so hashing windows narrows each half to a handful of pairs:
+ *
+ * - a seen value INSIDE the candidate ends on one of the candidate's own
+ *   windows and begins on another, so seen values are indexed by the hash of
+ *   their LAST window and rejected on the hash of their first;
+ * - a seen value CONTAINING the candidate has to be longer than it and has to
+ *   contain its first window, so a filter over every window of every seen value
+ *   rules out nearly every candidate before a comparison happens.
+ *
+ * Indexed by the last window rather than the first because a secret is a family
+ * with a constant head: every JWT this file matches opens with the same 37
+ * characters, `AIza` and `ghp_` and `sk-` open thousands more, and keying on
+ * the head would file a page of them into one bucket and walk it for every
+ * candidate. The random tail is the end that tells them apart.
+ *
+ * Neither structure decides anything. Both only narrow the field, the string
+ * comparison still makes every call, and no pair reaches it that the pairwise
+ * loop did not also compare — so the suppression is the one the loop made.
+ */
+export function createSeenValues(contentLength: number): SeenValues {
+  const values = new Set<string>();
+  const byLastWindow = new Map<number, IndexedValue[]>();
+  const byLength = new Map<number, string[]>();
+  // Values with no window of their own, and values too long to be worth one.
+  // Neither is indexed; both are compared directly, and there are never many.
+  const windowless: string[] = [];
+  const oversized: string[] = [];
+  const windowBits = new Uint32Array(filterWordCount(contentLength));
+  const bitMask = windowBits.length * 32 - 1;
+  // The candidate's own window hashes, reused across candidates so that reading
+  // a value's last window costs a lookup rather than a second pass.
+  const windowHashes = new Uint32Array(OVERLAP_MAX_INDEXED);
+  let longest = 0;
+
+  const setBit = (hash: number) => {
+    const bit = hash & bitMask;
+    windowBits[bit >>> 5]! |= 1 << (bit & 31);
+  };
+
+  const hasBit = (hash: number) => {
+    const bit = hash & bitMask;
+    return (windowBits[bit >>> 5]! & (1 << (bit & 31))) !== 0;
+  };
+
+  const add = (value: string) => {
+    values.add(value);
+    if (value.length > longest) longest = value.length;
+
+    if (value.length < OVERLAP_WINDOW) {
+      windowless.push(value);
+      return;
+    }
+    if (value.length > OVERLAP_MAX_INDEXED) {
+      oversized.push(value);
+      return;
+    }
+
+    const sameLength = byLength.get(value.length);
+    if (sameLength) sameLength.push(value);
+    else byLength.set(value.length, [value]);
+
+    const first = windowHash(value, 0);
+    let hash = first;
+    for (let start = 0; start + OVERLAP_WINDOW <= value.length; start++) {
+      if (start > 0) hash = rollWindow(value, hash, start);
+      setBit(hash);
+    }
+
+    // `hash` has rolled to the last window by now, which is the key.
+    const indexed: IndexedValue = { value, firstHash: first };
+    const bucket = byLastWindow.get(hash);
+    if (bucket) bucket.push(indexed);
+    else byLastWindow.set(hash, [indexed]);
+  };
+
+  const overlaps = (value: string): boolean => {
+    // A candidate the index cannot describe is compared the way it always was.
+    if (value.length < OVERLAP_WINDOW || value.length > OVERLAP_MAX_INDEXED) {
+      for (const seen of values) {
+        if (value.includes(seen) || seen.includes(value)) return true;
+      }
+      return false;
+    }
+
+    // Values outside the index are shorter than every candidate that reaches
+    // here, or longer than all of them, so each can only sit on one side.
+    for (const seen of windowless) {
+      if (value.includes(seen)) return true;
+    }
+    for (const seen of oversized) {
+      if (seen.includes(value)) return true;
+    }
+
+    const lastStart = value.length - OVERLAP_WINDOW;
+    let hash = windowHash(value, 0);
+    windowHashes[0] = hash;
+    for (let start = 1; start <= lastStart; start++) {
+      hash = rollWindow(value, hash, start);
+      windowHashes[start] = hash;
+    }
+
+    // A seen value this one contains ends on one of these windows and begins on
+    // another, so both have to line up before the strings are compared at all.
+    // Where it ends fixes where it begins, which is why the comparison below is
+    // anchored rather than searched for. An equal value is caught here too, on
+    // the windows it shares with itself.
+    for (let end = 0; end <= lastStart; end++) {
+      for (const seen of byLastWindow.get(windowHashes[end]!) ?? []) {
+        const start = end - (seen.value.length - OVERLAP_WINDOW);
+        if (start < 0 || windowHashes[start] !== seen.firstHash) continue;
+        if (value.startsWith(seen.value, start)) return true;
+      }
+    }
+
+    // A seen value containing this one is strictly longer and holds its first
+    // window, so a clear bit ends the question for the whole set.
+    if (value.length < longest && hasBit(windowHashes[0]!)) {
+      for (const [length, sameLength] of byLength) {
+        if (length <= value.length) continue;
+        for (const seen of sameLength) {
+          if (seen.includes(value)) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  return { has: (value) => values.has(value), add, overlaps };
+}
+
 export function scanContent(
   content: string,
   location: "html" | "inline-script" | "external-script",
   sourceUrl?: string
 ): LeakedSecret[] {
   const found: LeakedSecret[] = [];
-  const seenValues = new Set<string>();
 
   // A later (more generic) pattern re-matching a value an earlier (more
   // specific) pattern already classified — e.g. apiKey:"AIza…" catching the
   // AIza key the public-by-design tier reported — is a duplicate, not a new
   // finding. Specific patterns run first, so first classification wins.
-  const overlapsSeenValue = (value: string): boolean => {
-    for (const seen of seenValues) {
-      if (value.includes(seen) || seen.includes(value)) {
-        return true;
-      }
-    }
-    return false;
-  };
+  const seenValues = createSeenValues(content.length);
 
   // Helper to process regex matches on given text
   const processMatches = (
@@ -1223,7 +1410,7 @@ export function scanContent(
       // Skip duplicates, overlapping rematches, and false positives
       if (
         seenValues.has(value) ||
-        overlapsSeenValue(value) ||
+        seenValues.overlaps(value) ||
         isLikelyFalsePositive(value)
       ) {
         continue;
@@ -1287,7 +1474,7 @@ export function scanContent(
         // Skip duplicates, overlapping rematches, and false positives
         if (
           seenValues.has(value) ||
-          overlapsSeenValue(value) ||
+          seenValues.overlaps(value) ||
           isLikelyFalsePositive(value)
         ) {
           continue;
