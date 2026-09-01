@@ -4,7 +4,8 @@ import robotsParser from "robots-parser";
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
-import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+
+import { safeFetchWithDeadline } from "./deadline";
 
 // Matches the limit Google documents for robots.txt; anything past it is
 // ignored by real crawlers, so there is nothing to gain by reading further.
@@ -63,21 +64,6 @@ export function createRobotsEvaluator(
   };
 }
 
-function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  // #1395: follow redirects manually so per-hop the scheme allowlist applies and
-  // the caller's secret customHeaders are stripped when a redirect changes origin
-  // (native redirect:"follow" would replay them cross-origin).
-  return safeRedirectFetch(url, {
-    ...options,
-    signal: controller.signal,
-  })
-    .then((result) => result.response)
-    .finally(() => clearTimeout(timeout));
-}
-
 export function fetchRobotsEvaluator(
   baseUrl: string,
   userAgent: string,
@@ -91,8 +77,8 @@ export function fetchRobotsEvaluator(
   }
 
   return Effect.tryPromise({
-    try: async () => {
-      const response = await fetchWithTimeout(
+    try: () =>
+      safeFetchWithDeadline(
         robotsUrl,
         {
           headers: {
@@ -104,27 +90,29 @@ export function fetchRobotsEvaluator(
           },
         },
         30_000,
-      );
+        async (response) => {
+          if (response.status === 404) {
+            await response.body?.cancel().catch(() => {});
+            return createRobotsEvaluator(robotsUrl, null, userAgent);
+          }
 
-      if (response.status === 404) {
-        return createRobotsEvaluator(robotsUrl, null, userAgent);
-      }
+          if (!response.ok) {
+            await response.body?.cancel().catch(() => {});
+            const data = emptyRobotsData(robotsUrl, `HTTP ${response.status}`);
+            return {
+              data,
+              isAllowed: () => true,
+              crawlDelayMs: null,
+            };
+          }
 
-      if (!response.ok) {
-        const data = emptyRobotsData(robotsUrl, `HTTP ${response.status}`);
-        return {
-          data,
-          isAllowed: () => true,
-          crawlDelayMs: null,
-        };
-      }
-
-      // Bounded: robots.txt is fetched before anything else is known about the
-      // host, so an unbounded read here is reachable on the very first request
-      // of an audit.
-      const content = await readBodyCapped(response, ROBOTS_MAX_BYTES);
-      return createRobotsEvaluator(robotsUrl, content, userAgent);
-    },
+          // Bounded: robots.txt is fetched before anything else is known about the
+          // host, so an unbounded read here is reachable on the very first request
+          // of an audit.
+          const content = await readBodyCapped(response, ROBOTS_MAX_BYTES);
+          return createRobotsEvaluator(robotsUrl, content, userAgent);
+        },
+      ),
     catch: (error) => {
       const data = emptyRobotsData(robotsUrl, (error as Error).message);
       return {

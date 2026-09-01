@@ -17,6 +17,7 @@ import {
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
+import { withRequestDeadline } from "../deadline";
 import { computeSitemapUrlCap, discoverSitemaps, selectSitemapUrls } from "../sitemaps";
 
 import type { RobotsEvaluator } from "../robots";
@@ -1455,13 +1456,39 @@ export function createCrawler(
      */
     const detectRedirects = (targetUrl: string): Effect.Effect<string, never, never> =>
       Effect.promise(async () => {
+        // `settledUrl` is the last URL that actually served a response, so every
+        // exit below can fall back to it. `currentUrl` cannot: after a
+        // client-side redirect it holds a page-supplied target we have not
+        // fetched yet, and handing that back as the crawl's seed would let a
+        // meta-refresh reroute the audit on the strength of a later timeout.
+        let settledUrl = targetUrl;
         try {
           const MAX_REDIRECTS = 10;
           const REDIRECT_TIMEOUT_MS = 10_000;
+          const REDIRECT_TOTAL_BUDGET_MS = 30_000;
+          // The whole chain is worth this many full request timeouts and no
+          // more. Deliberately well under MAX_REDIRECTS: ten individually
+          // bounded hops still add up to 100s on a slow origin, and this runs
+          // BEFORE the crawl emits `started`, so an overrun doesn't read as "the
+          // crawl was slow" — it reads as a crawl that never began (#1699).
+          const REDIRECT_BUDGET_HOPS = 3;
+          // Seed resolution is a crawl request like any other, so it honors the
+          // crawl's own per-request timeout when that is tighter (the 30s
+          // default leaves the 10s ceiling, and so the 30s chain budget, in
+          // place).
+          const hopTimeoutMs = Math.max(1, Math.min(REDIRECT_TIMEOUT_MS, config.timeoutMs));
+          const deadline =
+            Date.now() + Math.min(REDIRECT_TOTAL_BUDGET_MS, hopTimeoutMs * REDIRECT_BUDGET_HOPS);
           let currentUrl = targetUrl;
           const visited = new Set<string>();
 
           for (let i = 0; i < MAX_REDIRECTS; i++) {
+            const remainingMs = deadline - Date.now();
+            if (remainingMs <= 0) {
+              logger.debug("redirect budget exhausted, stopping", currentUrl);
+              break;
+            }
+
             // Prevent loops
             if (visited.has(currentUrl)) {
               logger.debug("redirect loop detected, stopping", currentUrl);
@@ -1469,45 +1496,62 @@ export function createCrawler(
             }
             visited.add(currentUrl);
 
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), REDIRECT_TIMEOUT_MS);
-            const response = await fetch(currentUrl, {
-              method: "GET",
-              signal: controller.signal,
-              redirect: "follow",
-            }).finally(() => clearTimeout(timeout));
+            const hopUrl = currentUrl;
+            const redirectTo = await withRequestDeadline(
+              Math.min(hopTimeoutMs, remainingMs),
+              (signal) => fetch(hopUrl, { method: "GET", signal, redirect: "follow" }),
+              // The deadline stays armed for the whole callback, so the body
+              // read below is bounded too — before #1699 the timer was cleared
+              // as soon as the headers landed and a stalled body hung here
+              // forever, with no `started` event ever reaching the caller.
+              async (response) => {
+                // Headers are in, so this URL demonstrably serves — bank it
+                // BEFORE the body read, which is the step that can still time
+                // out. response.url is post-redirect; the fallback covers
+                // runtimes and mocks that leave it empty.
+                const served = response.url || hopUrl;
+                settledUrl = served;
 
-            // Check if HTTP redirect occurred
-            if (response.url !== currentUrl) {
-              logger.debug("HTTP redirect", currentUrl, "→", response.url);
-              currentUrl = response.url;
-              continue;
-            }
+                // Check if HTTP redirect occurred
+                if (served !== hopUrl) {
+                  logger.debug("HTTP redirect", hopUrl, "→", served);
+                  // Nothing here reads the body, so release the connection
+                  // rather than leaving a response half-consumed per hop.
+                  await response.body?.cancel().catch(() => {});
+                  return served;
+                }
 
-            // Check for client-side redirects (meta refresh, JS)
-            const contentType = response.headers.get("content-type") || "";
-            if (contentType.includes("text/html")) {
-              // Runs during seed redirect resolution, before the crawl has any
-              // size limits of its own, so this read needs its own bound.
-              const html = await readBodyCapped(response, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
-              const clientRedirect = findClientRedirects(html, currentUrl);
+                // Check for client-side redirects (meta refresh, JS)
+                const contentType = response.headers.get("content-type") || "";
+                if (!contentType.includes("text/html")) {
+                  await response.body?.cancel().catch(() => {});
+                  return undefined;
+                }
 
-              if (clientRedirect && clientRedirect !== currentUrl) {
-                logger.debug("client-side redirect", currentUrl, "→", clientRedirect);
-                currentUrl = clientRedirect;
-                continue;
-              }
-            }
+                // Runs during seed redirect resolution, before the crawl has any
+                // size limits of its own, so this read needs its own bound.
+                const html = await readBodyCapped(response, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
+                const clientRedirect = findClientRedirects(html, hopUrl);
 
-            // No more redirects
-            break;
+                if (clientRedirect && clientRedirect !== hopUrl) {
+                  logger.debug("client-side redirect", hopUrl, "→", clientRedirect);
+                  return clientRedirect;
+                }
+
+                // No more redirects
+                return undefined;
+              },
+            );
+
+            if (redirectTo === undefined) break;
+            currentUrl = redirectTo;
           }
 
-          return currentUrl;
+          return settledUrl;
         } catch (error) {
           // Log error before falling back
           logger.debug("redirect detection failed", targetUrl, error);
-          return targetUrl;
+          return settledUrl;
         }
       });
 

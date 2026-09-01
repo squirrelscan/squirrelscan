@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
-import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
+
+import { safeFetchWithDeadline } from "./deadline";
 
 import type { WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
 
@@ -93,16 +94,6 @@ export function looksLikeMarkdown(body: string): boolean {
   return /\[[^\]]+\]\([^)]+\)/.test(trimmed.slice(0, 4_096));
 }
 
-function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  // #1395: manual redirects — per-hop scheme allowlist + strip secret
-  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
-  return safeRedirectFetch(url, { ...options, signal: controller.signal })
-    .then((result) => result.response)
-    .finally(() => clearTimeout(timeout));
-}
-
 async function probeOne(
   baseUrl: string,
   path: string,
@@ -111,7 +102,7 @@ async function probeOne(
 ): Promise<WellKnownProbe> {
   const url = new URL(path, baseUrl).toString();
   try {
-    const response = await fetchWithTimeout(
+    return await safeFetchWithDeadline(
       url,
       {
         headers: {
@@ -121,54 +112,56 @@ async function probeOne(
         },
       },
       PROBE_TIMEOUT_MS,
+      async (response) => {
+        const contentType = response.headers.get("content-type");
+        const isOAuth = isOAuthMetadataPath(path);
+        // Skip reading a pathologically large body (18 probes run concurrently).
+        const declared = Number(response.headers.get("content-length") ?? "0");
+        if (Number.isFinite(declared) && declared > WELL_KNOWN_MAX_BYTES) {
+          await response.body?.cancel().catch(() => {});
+          return {
+            path,
+            url,
+            status: response.status,
+            contentType,
+            bodySize: declared,
+            looksHtml: false,
+            jsonValid: false,
+            jsonKeys: [],
+            markdownLike: false,
+            excerpt: "",
+            oauthRegistrationEndpoint: null,
+            oauthClientIdMetadataDocumentSupported: null,
+            error: "body exceeds cap",
+          };
+        }
+        const raw = await readBodyCapped(response, WELL_KNOWN_MAX_BYTES);
+        const body = truncateToBytes(raw, WELL_KNOWN_MAX_BYTES);
+        const looksHtml = looksLikeHtml(body);
+        // A SPA-fallback HTML page must never count as valid JSON/markdown.
+        const json = looksHtml ? { valid: false, keys: [] } : sniffJson(body);
+        // Extract OAuth AS/PRM fields rules need; only for real JSON on the two paths.
+        const oauth =
+          isOAuth && json.valid && !looksHtml
+            ? extractOAuthFields(body)
+            : { registrationEndpoint: null, clientIdMetadataDocumentSupported: null };
+        return {
+          path,
+          url,
+          status: response.status,
+          contentType,
+          bodySize: byteLength(body),
+          looksHtml,
+          jsonValid: json.valid,
+          jsonKeys: json.keys,
+          markdownLike: !looksHtml && looksLikeMarkdown(body),
+          excerpt: truncateToBytes(body, isOAuth ? OAUTH_EXCERPT_MAX_BYTES : EXCERPT_MAX_BYTES),
+          oauthRegistrationEndpoint: oauth.registrationEndpoint,
+          oauthClientIdMetadataDocumentSupported: oauth.clientIdMetadataDocumentSupported,
+          error: null,
+        };
+      },
     );
-    const contentType = response.headers.get("content-type");
-    const isOAuth = isOAuthMetadataPath(path);
-    // Skip reading a pathologically large body (18 probes run concurrently).
-    const declared = Number(response.headers.get("content-length") ?? "0");
-    if (Number.isFinite(declared) && declared > WELL_KNOWN_MAX_BYTES) {
-      await response.body?.cancel().catch(() => {});
-      return {
-        path,
-        url,
-        status: response.status,
-        contentType,
-        bodySize: declared,
-        looksHtml: false,
-        jsonValid: false,
-        jsonKeys: [],
-        markdownLike: false,
-        excerpt: "",
-        oauthRegistrationEndpoint: null,
-        oauthClientIdMetadataDocumentSupported: null,
-        error: "body exceeds cap",
-      };
-    }
-    const raw = await readBodyCapped(response, WELL_KNOWN_MAX_BYTES);
-    const body = truncateToBytes(raw, WELL_KNOWN_MAX_BYTES);
-    const looksHtml = looksLikeHtml(body);
-    // A SPA-fallback HTML page must never count as valid JSON/markdown.
-    const json = looksHtml ? { valid: false, keys: [] } : sniffJson(body);
-    // Extract OAuth AS/PRM fields rules need; only for real JSON on the two paths.
-    const oauth =
-      isOAuth && json.valid && !looksHtml
-        ? extractOAuthFields(body)
-        : { registrationEndpoint: null, clientIdMetadataDocumentSupported: null };
-    return {
-      path,
-      url,
-      status: response.status,
-      contentType,
-      bodySize: byteLength(body),
-      looksHtml,
-      jsonValid: json.valid,
-      jsonKeys: json.keys,
-      markdownLike: !looksHtml && looksLikeMarkdown(body),
-      excerpt: truncateToBytes(body, isOAuth ? OAUTH_EXCERPT_MAX_BYTES : EXCERPT_MAX_BYTES),
-      oauthRegistrationEndpoint: oauth.registrationEndpoint,
-      oauthClientIdMetadataDocumentSupported: oauth.clientIdMetadataDocumentSupported,
-      error: null,
-    };
   } catch (e) {
     return {
       path,

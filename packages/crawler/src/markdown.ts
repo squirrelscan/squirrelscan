@@ -1,21 +1,12 @@
 import { Effect } from "effect";
-import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+
+import { safeFetchWithDeadline } from "./deadline";
 
 import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
 
 const PROBE_TIMEOUT_MS = 30_000;
 
 const isMarkdown = (ct: string | null): boolean => ct != null && /markdown/i.test(ct);
-
-function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  // #1395: manual redirects — per-hop scheme allowlist + strip secret
-  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
-  return safeRedirectFetch(url, { ...options, signal: controller.signal })
-    .then((result) => result.response)
-    .finally(() => clearTimeout(timeout));
-}
 
 // Parse a `Link:` response header for a `rel="alternate"; type="text/markdown"`
 // entry and resolve it to an absolute URL. Returns null if none matches.
@@ -54,22 +45,24 @@ async function probeOne(
   customHeaders?: Record<string, string>,
 ): Promise<ProbeResult> {
   try {
-    const res = await fetchWithTimeout(
+    return await safeFetchWithDeadline(
       url,
       { headers: { "User-Agent": userAgent, Accept: accept, ...customHeaders } },
       PROBE_TIMEOUT_MS,
+      async (res) => {
+        const contentType = res.headers.get("content-type");
+        const result: ProbeResult = {
+          ok: res.ok,
+          contentType,
+          vary: res.headers.get("vary"),
+          markdownTokens: res.headers.get("x-markdown-tokens"),
+          originalTokens: res.headers.get("x-original-tokens"),
+          alternateMarkdownUrl: parseAlternateMarkdownLink(res.headers.get("link"), url),
+        };
+        await res.body?.cancel().catch(() => {});
+        return result;
+      },
     );
-    const contentType = res.headers.get("content-type");
-    const result: ProbeResult = {
-      ok: res.ok,
-      contentType,
-      vary: res.headers.get("vary"),
-      markdownTokens: res.headers.get("x-markdown-tokens"),
-      originalTokens: res.headers.get("x-original-tokens"),
-      alternateMarkdownUrl: parseAlternateMarkdownLink(res.headers.get("link"), url),
-    };
-    await res.body?.cancel().catch(() => {});
-    return result;
   } catch {
     return {
       ok: false,

@@ -1,4 +1,4 @@
-import { Effect, pipe } from "effect";
+import { Effect } from "effect";
 import { XMLParser } from "fast-xml-parser";
 
 import type {
@@ -7,7 +7,9 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
-import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+
+import { safeFetchWithDeadline } from "./deadline";
 
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
@@ -150,20 +152,6 @@ export type SitemapFetchResult =
   | { success: true; data: SitemapData }
   | { success: false; url: string; error: string };
 
-function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  // #1395: manual redirects — per-hop scheme allowlist + strip secret
-  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
-  return safeRedirectFetch(url, {
-    ...options,
-    signal: controller.signal,
-  })
-    .then((result) => result.response)
-    .finally(() => clearTimeout(timeout));
-}
-
 export function fetchSitemap(
   url: string,
   userAgent: string,
@@ -176,71 +164,51 @@ export function fetchSitemap(
   // When baseHost is unset (direct callers/tests), preserve prior behavior.
   const originScopedHeaders =
     baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
-  return pipe(
-    Effect.tryPromise({
-      try: () =>
-        fetchWithTimeout(
-          url,
-          {
-            headers: {
-              "User-Agent": userAgent,
-              Accept: "application/xml, text/xml, */*",
-              "Accept-Language": "en-US,en;q=0.9",
-              ...originScopedHeaders,
-            },
-            redirect: "follow",
+  return Effect.promise(async (): Promise<SitemapFetchResult> => {
+    try {
+      // #1395: manual redirects — per-hop scheme allowlist + strip secret
+      // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
+      // The deadline covers the body read too: a sitemap index that answers 200
+      // and then stalls its body would otherwise park the crawl forever (#1699).
+      return await safeFetchWithDeadline(
+        url,
+        {
+          headers: {
+            "User-Agent": userAgent,
+            Accept: "application/xml, text/xml, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            ...originScopedHeaders,
           },
-          30_000,
-        ),
-      catch: (error) => ({
-        status: 0,
-        ok: false,
-        error: error instanceof Error ? error.message : "Network error",
-      }),
-    }),
-    Effect.flatMap((response) => {
-      if (!response.ok) {
-        const errorMsg =
-          "status" in response && response.status
-            ? `HTTP ${response.status}`
-            : "error" in response
-              ? String(response.error)
-              : "Network error";
-        return Effect.succeed<SitemapFetchResult>({
-          success: false,
-          url,
-          error: errorMsg,
-        });
-      }
-
-      return Effect.tryPromise({
-        try: () => response.text(),
-        catch: () => null,
-      }).pipe(
-        Effect.map((content): SitemapFetchResult => {
-          if (!content) {
-            return {
-              success: false,
-              url,
-              error: "Empty response",
-            };
+          redirect: "follow",
+        },
+        30_000,
+        async (response): Promise<SitemapFetchResult> => {
+          if (!response.ok) {
+            await response.body?.cancel().catch(() => {});
+            return { success: false, url, error: `HTTP ${response.status}` };
           }
-
-          return {
-            success: true,
-            data: parseSitemap(content, url),
-          };
-        }),
+          // A body that never arrives (including a deadline abort) classifies
+          // as "Empty response", the same as one that arrives empty. This text
+          // reaches persisted sitemap-failure records, so it stays what it was
+          // before the read moved inside the deadline.
+          let content: string;
+          try {
+            content = await response.text();
+          } catch {
+            return { success: false, url, error: "Empty response" };
+          }
+          if (!content) return { success: false, url, error: "Empty response" };
+          return { success: true, data: parseSitemap(content, url) };
+        },
       );
-    }),
-    Effect.catchAll(() =>
-      Effect.succeed({
+    } catch (error) {
+      return {
         success: false,
         url,
-        error: "Unexpected error",
-      } as SitemapFetchResult),
-    ),
-  );
+        error: error instanceof Error ? error.message : "Network error",
+      };
+    }
+  });
 }
 
 const SITEMAP_FETCH_CONCURRENCY = 5;
