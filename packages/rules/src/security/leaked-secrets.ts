@@ -828,8 +828,15 @@ function isSpaceAt(text: string, index: number): boolean {
 // the walk across the whole window.
 const LOOKBEHIND_SCAN_LIMIT = SECRET_KEY_LOOKBEHIND_SIZE * 8;
 
+export interface KeyLookBack {
+  /** The text immediately before the match, for reading the key off. */
+  before: string;
+  /** `before` opens part-way through a key, so it opens on a fragment. */
+  cut: boolean;
+}
+
 /**
- * The text immediately before a match, for reading the key off.
+ * Read back from a match to the key in front of it.
  *
  * SECRET_KEY_LOOKBEHIND_SIZE is a budget over the characters that carry
  * meaning: whitespace is skipped for free. Charging for it is what lost the
@@ -848,11 +855,6 @@ const LOOKBEHIND_SCAN_LIMIT = SECRET_KEY_LOOKBEHIND_SIZE * 8;
  * position 0 settles nothing either: the window carries a lead-in precisely
  * because its left edge can land mid-key.
  */
-export interface KeyLookBack {
-  before: string;
-  cut: boolean;
-}
-
 export function readKeyLookBack(text: string, index: number): KeyLookBack {
   const scanFloor = Math.max(0, index - LOOKBEHIND_SCAN_LIMIT);
 
