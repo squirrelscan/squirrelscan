@@ -1,9 +1,8 @@
 // Script content fetcher for security scanning
 // Fetches actual JS content for secrets detection
 
-import { Effect } from "effect";
-
 import { normalizeEncoding } from "@squirrelscan/audit-engine";
+import { Effect } from "effect";
 
 import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@/constants";
 import {

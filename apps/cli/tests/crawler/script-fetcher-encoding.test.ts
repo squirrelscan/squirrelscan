@@ -5,8 +5,8 @@
 // has a content-store cache the engine fork lacks — a cache hit never touches
 // the network, so it must report the encoding as unknown rather than as absent.
 
-import { Effect } from "effect";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { fetchScriptContents } from "@/crawler/script-fetcher";
 
