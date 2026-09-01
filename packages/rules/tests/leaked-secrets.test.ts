@@ -333,6 +333,20 @@ describe("classifyKeyContext", () => {
     expect(classifyKeyContext(`cfg["filename"] = "`, "together")).toBe("none");
   });
 
+  test("an unquoted bracket names nothing", () => {
+    // `labels[secret]` is a lookup keyed by a variable that happens to be
+    // called secret. Only a quoted key inside the brackets names the value.
+    expect(classifyKeyContext(`labels[secret] || "`, "together")).toBe("none");
+    // A `:` or `=` still lands in the plain assignment fallback, which reports
+    // on purpose — an unreadable key is how minified bundles look. Only the
+    // fallback operators, where the left side is an expression, mean "none".
+    expect(classifyKeyContext(`labels[apiKey]: "`, "together")).toBe("assigned");
+    expect(classifyKeyContext(`cfg["apiKey"] || "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`process.env["SECRET_KEY"] || "`, "together")).toBe(
+      "credential"
+    );
+  });
+
   test("a minifier's member access is treated as no key at all", () => {
     expect(classifyKeyContext(`t.a = "`, "together")).toBe("assigned");
     expect(classifyKeyContext(`e.x2="`, "together")).toBe("assigned");
@@ -482,16 +496,9 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // These start the match part-way through the key — `cache-api-key` begins
     // an `api-key` match at character 6 — and the FAST tier has no
     // classifyKeyContext behind it, so the pattern reads its own left edge.
-    for (const key of [
-      "cache-api-key",
-      "cache_api_key",
-      "cacheApiKey",
-      "checksum-secret",
-      "checksumSecret",
-      "integrity-auth-token",
-      "sha256_secret",
-      "etag-api-key",
-    ]) {
+    // `_` and camelCase join a name wherever they appear; `-` needs syntax to
+    // say so, which is the next test.
+    for (const key of ["cache_api_key", "cacheApiKey", "checksumSecret", "sha256_secret"]) {
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
       expect(scanContent(`{${key}:"${COMMIT}"}`, "html")).toEqual([]);
       expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).toEqual([]);
@@ -500,6 +507,57 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // `stripe_secret` are the same shape and both still report.
     for (const key of ["x-api-key", "myApiKey", "stripe_secret", "next_auth_token"]) {
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
+    }
+  });
+
+  test("a hyphen joins a key only where the syntax says it does", () => {
+    const hyphenated = [
+      "cache-api-key",
+      "checksum-secret",
+      "integrity-auth-token",
+      "etag-api-key",
+    ];
+    for (const key of hyphenated) {
+      // Quoted: a JSON or YAML key, one name, a digest.
+      expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
+      expect(scanContent(`{'${key}':"${COMMIT}"}`, "html")).toEqual([]);
+      // An HTML attribute name: also one name.
+      expect(scanContent(`<img alt="" ${key}="${COMMIT}">`, "html")).toEqual([]);
+      expect(scanContent(`<img alt="" data-${key}="${COMMIT}">`, "html")).toEqual([]);
+      // Bare, in identifier position, `-` is the subtraction operator. Reading
+      // it as one key is what let a minified expression swallow a credential.
+      expect(scanContent(`const x=${key}||"${COMMIT}"`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+    }
+    // The shape the fix exists for: a real credential behind a minified
+    // subtraction. `cache-apiKey` is `cache` minus `apiKey`, not a cache key.
+    expect(
+      scanContent(`const x=cache-apiKey||"${TOGETHER_KEY}"`, "inline-script") // pragma: allowlist secret
+        .some((f) => f.value.includes(TOGETHER_KEY))
+    ).toBe(true);
+  });
+
+  test("an unquoted computed lookup is not a credential name", () => {
+    // `translations[apiKey]` names a translation, not a key. The `]` only
+    // counts when it closes a QUOTED key.
+    for (const expr of [
+      `translations[apiKey] ||= "This is a harmless display label"`,
+      `labels[secret] || "Password must have eight characters"`,
+      `messages[apiKey] || "${COMMIT}"`,
+      `t[access_token] ||= "${COMMIT}"`,
+      // The context tier reads the same bracket, so it needs the same rule.
+      `labels[secret] || "${DIGEST}"; // together.ai`,
+      `strings[apiKey] || "${DIGEST}"; // together.ai`,
+    ]) {
+      expect(scanContent(expr, "inline-script")).toEqual([]);
+    }
+    // The quoted bracket form is still read.
+    for (const expr of [
+      `cfg["apiKey"] || "${COMMIT}"`, // pragma: allowlist secret
+      `cfg['x-api-key'] = "${COMMIT}"`, // pragma: allowlist secret
+      `const k = process.env["SECRET_KEY"] || "${TOGETHER_KEY}";`, // pragma: allowlist secret
+    ]) {
+      expect(scanContent(expr, "inline-script")).not.toEqual([]);
     }
   });
 

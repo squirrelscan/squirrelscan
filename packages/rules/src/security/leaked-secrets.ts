@@ -437,11 +437,14 @@ const FAST_PATTERNS: FastPattern[] = [
   // Four things can sit between the key and its value here, and all four are
   // optional because all four are ordinary:
   //
-  // - a closing quote and a `]`, because JSON quotes its keys and code reaches
-  //   for them: `{"apiKey":"…"}`, `{"x-api-key":"…"}` and
+  // - a closing quote, optionally followed by the `]` that closes a bracket
+  //   access, because JSON quotes its keys and code reaches for them:
+  //   `{"apiKey":"…"}`, `{"x-api-key":"…"}` and
   //   `process.env["SECRET_KEY"] || "…"` are how an embedded config blob, a
   //   `<script type="application/json">` payload and a build-time env read
-  //   write an assignment.
+  //   write an assignment. The `]` only counts WITH that quote — a bare
+  //   `translations[apiKey] ||= "…"` is a lookup keyed by a variable, and the
+  //   variable's name does not name the value.
   // - a `key`/`token` tail, so `SECRET_KEY` reads as one key and not as
   //   `secret` followed by something that broke the match.
   // - `||` / `??` (and their `||=` / `??=` forms) as well as `:` / `=`,
@@ -453,26 +456,26 @@ const FAST_PATTERNS: FastPattern[] = [
   // The key has to END where the separator begins, so `secret_hash`,
   // `apiKeyHash` and `secretHash` match nothing; and because each of these
   // anchors on a credential word rather than on the start of the key, they are
-  // `keyAnchored` and read their own left edge too, so `cache-api-key` and
+  // `keyAnchored` and read their own left edge too, so `"cache-api-key"` and
   // `checksum_secret` stay digests.
   {
     name: "Generic API Key Assignment",
     pattern:
-      /(?:api[_-]?key|apikey)['"]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:api[_-]?key|apikey)(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
   },
   {
     name: "Generic Secret Assignment",
     pattern:
-      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?['"]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*['"][^'"]{8,}['"]/gi,
+      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][^'"]{8,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
   },
   {
     name: "Generic Token Assignment",
     pattern:
-      /(?:access[_-]?token|auth[_-]?token)['"]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:access[_-]?token|auth[_-]?token)(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
   },
@@ -822,7 +825,7 @@ export function lookBehind(text: string, index: number): string {
 // The key an assignment puts immediately in front of a value:
 // `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`, `SECRET_KEY || "`
 const PRECEDING_KEY_RE =
-  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*(?:\]\s*)?(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
 
 // The same, written as a bracket access: `cfg["apiKey"] = "`, `cfg['sha256'] =`
 const BRACKET_KEY_RE =
@@ -870,10 +873,33 @@ export function enclosingTag(text: string, index: number): string | undefined {
   return close === -1 ? undefined : text.slice(open, close + 1);
 }
 
-// The characters one key NAME is made of. `.` is absent on purpose: it starts a
-// new name rather than continuing this one, so `cache.apiKey` is the `apiKey`
-// of a cache and not a key called `cache.apiKey`.
+// The characters a bare identifier is made of. `.` is absent on purpose: it
+// starts a new name rather than continuing this one, so `cache.apiKey` is the
+// `apiKey` of a cache and not a key called `cache.apiKey`. `-` is absent for a
+// sharper reason: between two identifiers it is the subtraction operator.
+const IDENT_CHAR_RE = /[A-Za-z0-9_$]/;
+
+// The same, plus the `-` that a quoted key or an HTML attribute name spells one
+// name with: `"x-api-key"`, `<img data-cache-api-key="…">`.
 const KEY_SEGMENT_CHAR_RE = /[A-Za-z0-9_$-]/;
+
+const QUOTE_CHAR_RE = /["'`]/;
+
+/**
+ * Is this the position an HTML attribute name occupies — whitespace behind it,
+ * inside an unclosed tag? Bounded to the lookBehind budget, so a value far
+ * enough into a long tag simply reads as "not an attribute".
+ */
+function isAttributeNamePosition(text: string, start: number): boolean {
+  if (!/\s/.test(text[start - 1] ?? "")) return false;
+  const floor = Math.max(0, start - SECRET_KEY_LOOKBEHIND_SIZE * 2);
+  for (let i = start - 1; i >= floor; i--) {
+    const char = text[i];
+    if (char === ">") return false;
+    if (char === "<") return true;
+  }
+  return false;
+}
 
 /**
  * Does the key this match started in the middle of say "digest"?
@@ -885,6 +911,12 @@ const KEY_SEGMENT_CHAR_RE = /[A-Za-z0-9_$-]/;
  * design — every other pattern in it carries a literal marker that a digest
  * cannot wear. These three do not, so they read their own left edge.
  *
+ * Only syntax makes a `-` part of a name. Inside quotes it is a JSON or YAML
+ * key and inside a tag it is an attribute name, so `"cache-api-key"` and
+ * `data-cache-api-key=` are single digest keys. Everywhere else it is the
+ * subtraction operator, and reading `cache-apiKey||"…"` as one key would let a
+ * minified expression swallow a real credential.
+ *
  * Spending the whole lookBehind budget without reaching the start of the key
  * means the prefix was never read, only cut, and a cut prefix is not evidence
  * in either direction: it can drop the `cache` off `cache-…-api-key` and it can
@@ -894,14 +926,23 @@ const KEY_SEGMENT_CHAR_RE = /[A-Za-z0-9_$-]/;
  */
 function startsInsideDigestKey(text: string, index: number): boolean {
   const floor = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE * 2);
+
+  // Walk the hyphenated run first, only to see what encloses it.
+  let runStart = index;
+  while (runStart > floor && KEY_SEGMENT_CHAR_RE.test(text[runStart - 1] ?? "")) {
+    runStart--;
+  }
+  const hyphenJoins =
+    QUOTE_CHAR_RE.test(text[runStart - 1] ?? "") ||
+    isAttributeNamePosition(text, runStart);
+  const keyChar = hyphenJoins ? KEY_SEGMENT_CHAR_RE : IDENT_CHAR_RE;
+
   let start = index;
-  while (start > floor && KEY_SEGMENT_CHAR_RE.test(text[start - 1] ?? "")) {
+  while (start > floor && keyChar.test(text[start - 1] ?? "")) {
     start--;
   }
   if (start === index) return false;
-  if (start === floor && KEY_SEGMENT_CHAR_RE.test(text[start - 1] ?? "")) {
-    return false;
-  }
+  if (start === floor && keyChar.test(text[start - 1] ?? "")) return false;
   return keyWords(text.slice(start, index)).some((word) =>
     DIGEST_KEY_WORDS.has(word)
   );
