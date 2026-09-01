@@ -11,6 +11,7 @@ import {
   planAtLeast,
   planHasUnlimitedCredits,
   planMaxScheduledWebsites,
+  planScheduleSummary,
   SCHEDULE_FREQUENCIES,
   scheduledWebsiteCapReached,
   SELF_SERVE_PLAN_IDS,
@@ -159,6 +160,16 @@ describe("scheduled audit entitlements", () => {
   test("an unknown plan id gets the free limits", () => {
     expect(planMaxScheduledWebsites("platinum")).toBe(1);
     expect(clampScheduleFrequency("platinum", "daily")).toBe("weekly");
+  });
+
+  // The one derivation two pricing tables in two apps render, so a plan-data
+  // change cannot leave either of them describing a tier it no longer sells.
+  test("planScheduleSummary states the cadence and the site count", () => {
+    expect(planScheduleSummary("free")).toBe("Weekly, 1 site");
+    expect(planScheduleSummary("starter")).toBe("Daily, all sites");
+    expect(planScheduleSummary("team")).toBe("Daily, all sites");
+    expect(planScheduleSummary("enterprise")).toBe("Daily, all sites");
+    expect(planScheduleSummary("platinum")).toBe("Weekly, 1 site"); // unknown → free
   });
 
   test("the cap is reached at the limit, and never for an uncapped plan", () => {

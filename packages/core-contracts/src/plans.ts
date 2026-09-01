@@ -231,6 +231,24 @@ export function scheduledWebsiteCapReached(planId: string, count: number): boole
   return cap >= 0 && count >= cap;
 }
 
+/**
+ * What this plan schedules, in one line: "Weekly, 1 site" / "Daily, all sites".
+ *
+ * Lives HERE, not next to the tables that render it, because there are two of
+ * them in two different apps (the marketing pricing grid and the in-dashboard
+ * plan comparison). Both derive the cell from the plan's own limits so a change
+ * in `PLANS` cannot leave them lying — which only holds while the derivation is
+ * one function rather than two copies free to drift from each other.
+ */
+export function planScheduleSummary(planId: string): string {
+  const plan = getPlan(planId);
+  if (!plan.scheduledCrawls) return "—";
+  const cadence = plan.scheduleFrequencies.includes("daily") ? "Daily" : "Weekly";
+  const cap = plan.maxScheduledWebsites;
+  const sites = cap < 0 ? "all sites" : `${cap} site${cap === 1 ? "" : "s"}`;
+  return `${cadence}, ${sites}`;
+}
+
 export function planAllowsScheduleFrequency(
   planId: string,
   frequency: ScheduledAuditFrequency,
