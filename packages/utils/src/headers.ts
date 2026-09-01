@@ -82,3 +82,29 @@ export function recordToHeaders(record: Record<string, string>): Headers {
   }
   return headers;
 }
+
+/**
+ * Whether a media type gets a real win from a transfer coding (#9). Shared by
+ * the sub-resource checker (which decides whether a bodiless HEAD is trustworthy
+ * evidence) and perf/asset-compression (which decides what to judge), so the two
+ * can never disagree about what "text" means.
+ *
+ * Deliberately classifies by media type rather than by file extension or by
+ * which crawl pool a URL came from: an SVG discovered as an <img> is the XML it
+ * says it is, while a PNG/WebP/AVIF/font/PDF in that same pool is already
+ * entropy-coded and gains nothing.
+ */
+export function isCompressibleContentType(
+  contentType: string | null | undefined
+): boolean {
+  if (!contentType) return false;
+  const t = contentType.toLowerCase();
+  return (
+    t.includes("text/") ||
+    t.includes("application/json") ||
+    t.includes("application/javascript") ||
+    t.includes("application/xml") ||
+    t.includes("+xml") ||
+    t.includes("+json")
+  );
+}

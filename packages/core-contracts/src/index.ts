@@ -1154,6 +1154,14 @@ export interface ScriptContentData {
   redirected?: boolean;
   finalUrl?: string;
   sourceMapHeader?: string;
+  /**
+   * content-encoding observed on THIS fetch, normalized like the sub-resource
+   * checker's: a transfer coding (gzip/br/…) or `null` for identity/absent.
+   * `undefined` means the encoding was never observed (e.g. the CLI's
+   * content-store cache hit, which skips the network) — callers must treat
+   * that as unknown, NOT as uncompressed. (#9)
+   */
+  contentEncoding?: string | null;
 }
 
 export interface SitemapUrl {

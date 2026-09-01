@@ -7,6 +7,7 @@ import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/util
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
+import { normalizeEncoding } from "./resource-checker";
 
 export interface ScriptFetchResult {
   url: string;
@@ -19,6 +20,11 @@ export interface ScriptFetchResult {
   finalUrl?: string;
   fromCache?: boolean;
   sourceMapHeader?: string;
+  /**
+   * content-encoding observed on this fetch: a transfer coding or `null` for
+   * identity/absent. Absent (`undefined`) when no response was seen. (#9)
+   */
+  contentEncoding?: string | null;
 }
 
 export interface ScriptFetcherOptions {
@@ -115,6 +121,13 @@ async function fetchSingleScriptAsync(
       response.headers.get("x-sourcemap") ||
       undefined;
 
+    // #9: a transfer coding (gzip/br/…) or null for identity/absent. `fetch`
+    // decodes the body but leaves this header intact, so it stays observable
+    // even though `sizeBytes` below measures the DECODED text.
+    const contentEncoding = normalizeEncoding(
+      response.headers.get("content-encoding")
+    );
+
     const wasRedirected = redirected;
     const finalUrl = wasRedirected ? resolvedFinalUrl : undefined;
 
@@ -131,6 +144,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: "script too large",
       };
     }
@@ -143,6 +157,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: `HTTP ${response.status}`,
       };
     }
@@ -155,6 +170,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: "not javascript",
       };
     }
@@ -178,6 +194,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: "script too large",
       };
     }
@@ -191,6 +208,7 @@ async function fetchSingleScriptAsync(
       redirected: wasRedirected,
       finalUrl,
       sourceMapHeader,
+      contentEncoding,
     };
   } catch (error) {
     clearTimeout(timeoutId);
