@@ -1075,9 +1075,12 @@ describe("updater", () => {
       test("real update-lock contention: no download, no failure counted", async () => {
         managedPosix();
         captureTelemetry();
-        const fetches: string[] = [];
+        // Record HOSTS, not URLs: an exact hostname comparison is the only
+        // sound way to ask "did we hit the release endpoint".
+        const fetchedHosts: string[] = [];
         globalThis.fetch = (async (url: string | URL | Request) => {
-          fetches.push(String(url));
+          const href = url instanceof Request ? url.url : String(url);
+          fetchedHosts.push(new URL(href).hostname);
           return new Response("{}", { status: 200 });
         }) as unknown as typeof fetch;
         // A fresh lock held by some other pid.
@@ -1094,9 +1097,7 @@ describe("updater", () => {
         expect(outcome).toBe("failed");
         expect(reexec).not.toHaveBeenCalled();
         // Only telemetry may have gone out; no release metadata was fetched.
-        expect(
-          fetches.filter((u) => u.includes("install.squirrelscan.com"))
-        ).toEqual([]);
+        expect(fetchedHosts).not.toContain("install.squirrelscan.com");
         const saved = loadUserSettings();
         if (saved.ok) {
           expect(saved.data.auto_update_attempts ?? null).toBeNull();
