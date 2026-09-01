@@ -823,6 +823,7 @@ export function fetchResourceAssets(
         redirected: fetch.redirected,
         finalUrl: fetch.finalUrl,
         sourceMapHeader: fetch.sourceMapHeader,
+        contentEncoding: fetch.contentEncoding,
       })),
       pdfSizes: resourceResults.pdfs.map((check) => ({
         url: check.url,

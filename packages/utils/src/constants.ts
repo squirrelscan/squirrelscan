@@ -15,6 +15,15 @@ export const RESOURCE_SIZE_LIMITS = {
   MAX_RETRIES: 2,
 } as const;
 
+// Sub-resource compression thresholds (#9). Compression helps from ~1KB up, but
+// a low bar turns every small uncompressed asset into a finding. 100KB matches
+// the size at which the reporter of #9 noticed the problem and sits just under
+// CSS_WARN_BYTES, so an asset big enough to trip perf/css-file-size is always
+// big enough to be judged on compression too. Tunable per-rule via `min_bytes`.
+export const ASSET_COMPRESSION_LIMITS = {
+  MIN_BYTES: 100 * 1024, // 100KB
+} as const;
+
 // Script content fetch limits (for security scanning)
 export const SCRIPT_FETCH_LIMITS = {
   MAX_SCRIPTS_TO_FETCH: 50,

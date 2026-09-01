@@ -3,6 +3,7 @@
 import type { Rule } from "../types";
 
 import { animatedContentRule } from "./animated-content";
+import { assetCompressionRule } from "./asset-compression";
 import { badCachingRule } from "./bad-caching";
 import { browserRequiredRule } from "./browser-required";
 import { cacheHeadersRule } from "./cache-headers";
@@ -46,6 +47,7 @@ export const rules: Rule[] = [
   carouselHiddenEagerRule,
   cssFileSizeRule,
   jsFileSizeRule,
+  assetCompressionRule,
   domSizeRule,
   ttfbRule,
   jsRedirectsRule,
@@ -67,6 +69,7 @@ export const rules: Rule[] = [
 
 export {
   animatedContentRule,
+  assetCompressionRule,
   badCachingRule,
   browserRequiredRule,
   cacheHeadersRule,

@@ -104,8 +104,12 @@ function validateContentType(
   return contentType.toLowerCase().startsWith(expectedPrefix.toLowerCase());
 }
 
-/** Normalize content-encoding to a stored value (null for identity/none). */
-function normalizeEncoding(value: string | null): string | null {
+/**
+ * Normalize content-encoding to a stored value (null for identity/none). Shared
+ * with the script fetcher (#9) so assets and scripts store the SAME shape and a
+ * rule can rely on `null` meaning "observed, and not compressed".
+ */
+export function normalizeEncoding(value: string | null): string | null {
   if (!value) return null;
   const enc = value.trim().toLowerCase();
   return enc && enc !== "identity" ? enc : null;

@@ -163,7 +163,7 @@ export type { DetectedTechnology, TechCategory } from "@squirrelscan/tech-detect
 export { computeLockedRules, deriveHomepageSummary } from "./publish-meta";
 
 // Re-export checker types + impl for consumers (CLI re-exports checkResourceSizes)
-export { checkResourceSizes, varyForbidsReuse } from "./resource-checker";
+export { checkResourceSizes, normalizeEncoding, varyForbidsReuse } from "./resource-checker";
 export type { ResourceCheckResult, ResourceCheckerOptions } from "./resource-checker";
 export type { ScriptFetchResult } from "./script-fetcher";
 export type { ExternalCheckResult, LinkCache, LinkCacheEntry } from "./external-checker";

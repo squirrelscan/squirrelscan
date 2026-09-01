@@ -309,6 +309,12 @@ export interface ScriptContentData {
   finalUrl?: string;
   /** SourceMap or X-SourceMap response header value, if present */
   sourceMapHeader?: string;
+  /**
+   * content-encoding observed on THIS fetch: a transfer coding (gzip/br/…) or
+   * `null` for identity/absent. `undefined` means never observed (content-store
+   * cache hit) — treat as unknown, NOT as uncompressed. (#9)
+   */
+  contentEncoding?: string | null;
 }
 
 export interface SitemapUrlStatusData {
