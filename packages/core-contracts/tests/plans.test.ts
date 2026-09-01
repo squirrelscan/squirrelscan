@@ -3,11 +3,16 @@ import { describe, expect, test } from "bun:test";
 import type { PlanId } from "../src/index";
 
 import {
+  clampScheduleFrequency,
   getPlan,
   isSelfServePlan,
   PLANS,
+  planAllowsScheduleFrequency,
   planAtLeast,
   planHasUnlimitedCredits,
+  planMaxScheduledWebsites,
+  SCHEDULE_FREQUENCIES,
+  scheduledWebsiteCapReached,
   SELF_SERVE_PLAN_IDS,
 } from "../src/plans";
 
@@ -111,5 +116,56 @@ describe("planHasUnlimitedCredits", () => {
   test("an unknown id is metered", () => {
     expect(planHasUnlimitedCredits("")).toBe(false);
     expect(planHasUnlimitedCredits("enterprize")).toBe(false);
+  });
+});
+
+// #1704: scheduling is no longer the free/paid line — cadence and breadth are.
+describe("scheduled audit entitlements", () => {
+  test("every plan can schedule; free is the capped one", () => {
+    for (const id of ALL_PLAN_IDS) {
+      expect(PLANS[id].scheduledCrawls).toBe(true);
+    }
+    expect(planMaxScheduledWebsites("free")).toBe(1);
+    expect(planMaxScheduledWebsites("starter")).toBe(-1);
+    expect(planMaxScheduledWebsites("team")).toBe(-1);
+    expect(planMaxScheduledWebsites("enterprise")).toBe(-1);
+  });
+
+  test("free omits daily; every paid plan allows all three cadences", () => {
+    expect([...PLANS.free.scheduleFrequencies]).toEqual(["weekly", "monthly"]);
+    for (const id of ["starter", "team", "enterprise"] as const) {
+      expect([...PLANS[id].scheduleFrequencies]).toEqual([...SCHEDULE_FREQUENCIES]);
+    }
+    expect(planAllowsScheduleFrequency("free", "daily")).toBe(false);
+    expect(planAllowsScheduleFrequency("free", "weekly")).toBe(true);
+    expect(planAllowsScheduleFrequency("starter", "daily")).toBe(true);
+  });
+
+  // The order is what makes the clamp land on the nearest allowed cadence.
+  test("SCHEDULE_FREQUENCIES runs most to least frequent", () => {
+    expect([...SCHEDULE_FREQUENCIES]).toEqual(["daily", "weekly", "monthly"]);
+  });
+
+  test("a cadence the plan does not fund clamps DOWN, never up", () => {
+    expect(clampScheduleFrequency("free", "daily")).toBe("weekly");
+    expect(clampScheduleFrequency("free", "weekly")).toBe("weekly");
+    expect(clampScheduleFrequency("free", "monthly")).toBe("monthly");
+    for (const f of SCHEDULE_FREQUENCIES) {
+      expect(clampScheduleFrequency("starter", f)).toBe(f);
+    }
+  });
+
+  // An id we cannot identify must not buy more recurring spend than free.
+  test("an unknown plan id gets the free limits", () => {
+    expect(planMaxScheduledWebsites("platinum")).toBe(1);
+    expect(clampScheduleFrequency("platinum", "daily")).toBe("weekly");
+  });
+
+  test("the cap is reached at the limit, and never for an uncapped plan", () => {
+    expect(scheduledWebsiteCapReached("free", 0)).toBe(false);
+    expect(scheduledWebsiteCapReached("free", 1)).toBe(true);
+    expect(scheduledWebsiteCapReached("free", 2)).toBe(true);
+    expect(scheduledWebsiteCapReached("starter", 500)).toBe(false);
+    expect(scheduledWebsiteCapReached("enterprise", 500)).toBe(false);
   });
 });

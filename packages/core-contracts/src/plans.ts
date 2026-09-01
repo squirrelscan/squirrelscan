@@ -1,4 +1,16 @@
-import type { PlanDefinition, PlanId } from "./index";
+import type { PlanDefinition, PlanId, ScheduledAuditFrequency } from "./index";
+
+/**
+ * Every recurring-audit cadence, ordered MOST → LEAST frequent. The order is
+ * load-bearing: `clampScheduleFrequency` walks it to find the nearest cadence a
+ * plan allows, so a new cadence must be inserted at its true position, not
+ * appended.
+ */
+export const SCHEDULE_FREQUENCIES: readonly ScheduledAuditFrequency[] = [
+  "daily",
+  "weekly",
+  "monthly",
+];
 
 /**
  * #1274 (follow-up to #1020): explicit gate for Team's 5,000-page ladder
@@ -37,7 +49,15 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxWebsites: 100,
     maxMembers: 1,
     renderConcurrency: 1,
-    scheduledCrawls: false,
+    // #1704: scheduling is no longer the paid line. A weekly audit of one site
+    // burns roughly 250-300 of the 500 monthly credits above, so the free grant
+    // finally binds while the tier delivers recurring value; Pro's
+    // differentiator is daily cadence and more than one scheduled site.
+    scheduledCrawls: true,
+    maxScheduledWebsites: 1,
+    // No `daily`: 4x weekly's spend does not fit the 500-credit grant. A daily
+    // request is clamped to weekly, not refused.
+    scheduleFrequencies: ["weekly", "monthly"],
     // Free on purpose: custom headers are how you audit a staging site behind
     // auth, which is evaluation, not a paid job.
     customHeaders: true,
@@ -68,6 +88,10 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxMembers: 1,
     renderConcurrency: 5,
     scheduledCrawls: true,
+    // Uncapped scheduling is the paid line since #1704: as many scheduled sites
+    // as the org has, at any cadence.
+    maxScheduledWebsites: -1,
+    scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
     // #1020 ladder: today's cloud REPORT_LIMITS.maxPages ceiling.
     maxPagesPerAudit: 2000,
@@ -95,6 +119,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxMembers: -1,
     renderConcurrency: 10,
     scheduledCrawls: true,
+    maxScheduledWebsites: -1,
+    scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
     // #1020 ladder: exceeds today's REPORT_LIMITS.maxPages (2,000) on purpose —
     // Hosted plan enforcement clamps to that cap, so this only takes effect
@@ -140,6 +166,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxMembers: -1,
     renderConcurrency: 10,
     scheduledCrawls: true,
+    maxScheduledWebsites: -1,
+    scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
     // NOT subject to TEAM_MAX_PAGES_UNLOCKED — that flag gates Team's ladder
     // step specifically (#1274). Enterprise carries its own allowance, still
@@ -185,6 +213,60 @@ const PLAN_RANK: Record<PlanId, number> = {
  */
 export function planAtLeast(planId: string, floor: PlanId): boolean {
   return (PLAN_RANK[planId as PlanId] ?? 0) >= PLAN_RANK[floor];
+}
+
+/**
+ * How many websites in one org may have an enabled recurring audit schedule.
+ * `-1` = uncapped. Accepts a raw string (DB columns are plain text); an unknown
+ * id resolves to free, i.e. the TIGHTEST cap — a plan we cannot identify must
+ * never buy more recurring spend than the free tier.
+ */
+export function planMaxScheduledWebsites(planId: string): number {
+  return getPlan(planId).maxScheduledWebsites;
+}
+
+/** True when `count` scheduled websites is at or over the plan's cap. Uncapped (-1) is never full. */
+export function scheduledWebsiteCapReached(planId: string, count: number): boolean {
+  const cap = planMaxScheduledWebsites(planId);
+  return cap >= 0 && count >= cap;
+}
+
+export function planAllowsScheduleFrequency(
+  planId: string,
+  frequency: ScheduledAuditFrequency,
+): boolean {
+  return getPlan(planId).scheduleFrequencies.includes(frequency);
+}
+
+/**
+ * The cadence this plan will actually run, given what was asked for.
+ *
+ * Clamp, never reject (the rule `pageLimitClampNotice` already follows for the
+ * page ceiling): a free org asking for `daily` gets `weekly` plus a notice, not
+ * a 4xx — the request is not malformed, the plan just does not fund it. Walks
+ * DOWN the frequency order first so the clamp always lands on the closest
+ * cadence the plan allows and can only ever REDUCE spend; the backward walk is
+ * an unreachable-today safety net for a plan whose allowed set is not a
+ * suffix of {@link SCHEDULE_FREQUENCIES}.
+ */
+export function clampScheduleFrequency(
+  planId: string,
+  requested: ScheduledAuditFrequency,
+): ScheduledAuditFrequency {
+  const allowed = getPlan(planId).scheduleFrequencies;
+  if (allowed.includes(requested)) return requested;
+  const at = SCHEDULE_FREQUENCIES.indexOf(requested);
+  for (let i = at + 1; i < SCHEDULE_FREQUENCIES.length; i++) {
+    const candidate = SCHEDULE_FREQUENCIES[i];
+    if (candidate && allowed.includes(candidate)) return candidate;
+  }
+  for (let i = at - 1; i >= 0; i--) {
+    const candidate = SCHEDULE_FREQUENCIES[i];
+    if (candidate && allowed.includes(candidate)) return candidate;
+  }
+  // A plan with an empty frequency list schedules nothing; weekly is the
+  // product default and the only value that keeps callers total.
+  return "weekly";
 }
 
 /**
