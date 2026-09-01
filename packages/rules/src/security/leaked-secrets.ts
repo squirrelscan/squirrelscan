@@ -420,25 +420,47 @@ const FAST_PATTERNS: FastPattern[] = [
   },
 
   // Generic patterns (lower confidence, check context)
+  //
+  // Three things separate the key from its value here, and all three are
+  // optional because all three are ordinary:
+  //
+  // - a closing quote, because JSON quotes its keys: `{"apiKey":"…"}` and
+  //   `{"x-api-key":"…"}` are how an embedded config blob or a
+  //   `<script type="application/json">` payload writes an assignment.
+  // - a `key`/`token` tail, so `SECRET_KEY` reads as one key and not as
+  //   `secret` followed by something that broke the match.
+  // - `||` / `??` as well as `:` / `=`, because a hardcoded fallback behind an
+  //   env var (`process.env.SECRET_KEY || "…"`) is one of the likeliest ways a
+  //   real credential reaches a bundle: it looks safe in source and the
+  //   bundler inlines it at build.
+  //
+  // The key still has to END where the separator begins, so `secret_hash`,
+  // `apiKeyHash` and `secretHash` match nothing — a digest key never becomes a
+  // credential key by widening this.
   {
     name: "Generic API Key Assignment",
-    pattern: /(?:api[_-]?key|apikey)\s*[:=]\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+    pattern:
+      /(?:api[_-]?key|apikey)['"]?\s*(?:[:=]|\|\||\?\?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
   },
   {
     name: "Generic Secret Assignment",
-    pattern: /(?:secret|password|passwd|pwd)\s*[:=]\s*['"][^'"]{8,}['"]/gi,
+    pattern:
+      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?['"]?\s*(?:[:=]|\|\||\?\?)\s*['"][^'"]{8,}['"]/gi,
     confidence: "medium",
   },
   {
     name: "Generic Token Assignment",
     pattern:
-      /(?:access[_-]?token|auth[_-]?token)\s*[:=]\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:access[_-]?token|auth[_-]?token)['"]?\s*(?:[:=]|\|\||\?\?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
   },
   {
+    // Standard base64, not just base64url: a token with `+` or `/` in its first
+    // 20 characters used to stop the match short of the length threshold and
+    // report nothing at all, and `=` padding was dropped from the value.
     name: "Bearer Token",
-    pattern: /Bearer\s+[a-zA-Z0-9_-]{20,}/g,
+    pattern: /Bearer\s+[a-zA-Z0-9_+/=-]{20,}/g,
     confidence: "medium",
   },
   {
@@ -643,6 +665,13 @@ function isInValuePosition(
     return true;
   }
 
+  // A fallback behind an env var — `process.env.SECRET_KEY || "value"`,
+  // `?? "value"` — is a value position too. classifyKeyContext still reads the
+  // key in front of the `||`, so a `cacheKey || "…"` fallback stays a digest.
+  if (/(?:\|\||\?\?)\s*['"`]?$/.test(before)) {
+    return true;
+  }
+
   // Check if it's in a quoted string that's an object value
   // e.g., { key: "value" } or "key": "value"
   if (/:\s*['"`]$/.test(before) && /^['"`]/.test(after)) {
@@ -760,16 +789,23 @@ export function lookBehind(text: string, index: number): string {
   return text.slice(start, index);
 }
 
+// The three regexes below all separate a key from its value with
+// `(?:[:=]|\|\||\?\?)`. `||` and `??` are there for the same reason
+// isInValuePosition accepts them: `process.env.SECRET_KEY || "…"` is an
+// assignment. Reading the key across the fallback is what keeps it honest —
+// `cacheKey || "<hex>"` still classifies as a digest.
+
 // The key an assignment puts immediately in front of a value:
-// `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`
+// `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`, `SECRET_KEY || "`
 const PRECEDING_KEY_RE =
-  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*[:=]\s*["'`]?\s*$/;
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)["'`]?\s*(?:[:=]|\|\||\?\?)\s*["'`]?\s*$/;
 
 // The same, written as a bracket access: `cfg["apiKey"] = "`, `cfg['sha256'] =`
-const BRACKET_KEY_RE = /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*[:=]\s*["'`]?\s*$/;
+const BRACKET_KEY_RE =
+  /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*(?:[:=]|\|\||\?\?)\s*["'`]?\s*$/;
 
 // Anything at all in value position, whatever the key turned out to be
-const ASSIGNMENT_RE = /[:=]\s*["'`]?\s*$/;
+const ASSIGNMENT_RE = /(?:[:=]|\|\||\?\?)\s*["'`]?\s*$/;
 
 // SRI and prefixed-digest values: integrity="sha384-…", `sha256-…`, `md5:…`
 const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
