@@ -162,6 +162,30 @@ describe("perf/asset-compression — stays silent", () => {
   });
 
 
+  test("an all-identity coding list is still reported as uncompressed", () => {
+    // Content-Encoding is a LIST. The fetchers normalize a lone `identity` to
+    // null, but they match one token, so `identity, identity` arrives verbatim
+    // and must not be mistaken for a real coding.
+    const check = only(run(ctx({ css: [css({ contentEncoding: "identity, identity" })] })));
+    expect(check.status).toBe("warn");
+    expect(itemIds(check)).toEqual(["https://example.com/app.css"]);
+  });
+
+  test("a list is compressed when any token is a real coding", () => {
+    const check = only(run(ctx({ css: [css({ contentEncoding: "identity, gzip" })] })));
+    expect(check.status).toBe("pass");
+  });
+
+  test("a 206 whose confirming GET failed is not reported", () => {
+    // The end of the chain the resource checker's capture tests start: an
+    // unconfirmable ranged 206 records `undefined`, and the rule must stay
+    // silent rather than report a possibly-gzipped asset as uncompressed.
+    const check = only(
+      run(ctx({ css: [css({ status: 206, contentEncoding: undefined })] }))
+    );
+    expect(check.status).toBe("skipped");
+  });
+
   test("an asset under the threshold is not reported", () => {
     const check = only(run(ctx({ css: [css({ sizeBytes: SMALL })] })));
     expect(check.status).toBe("pass");

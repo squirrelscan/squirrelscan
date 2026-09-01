@@ -50,8 +50,18 @@ function isKnownUncompressed(encoding: string | null | undefined): boolean {
   // "uncompressed" — exactly the false positive this rule must not produce.
   // `identity` is the one value that explicitly means no coding, and
   // perf/compression already treats it as compression deliberately disabled.
-  const enc = encoding.trim().toLowerCase();
-  return enc === "" || enc === "identity";
+  //
+  // Content-Encoding is a comma-separated LIST, so this reads every token
+  // rather than the whole header: `identity, identity` is still no coding, and
+  // `identity, gzip` is still compressed. The fetchers normalize a lone
+  // `identity` to null, but they match one token, so a list reaches this
+  // function verbatim.
+  return encoding
+    .split(",")
+    .every((token) => {
+      const coding = token.trim().toLowerCase();
+      return coding === "" || coding === "identity";
+    });
 }
 
 interface Candidate {
