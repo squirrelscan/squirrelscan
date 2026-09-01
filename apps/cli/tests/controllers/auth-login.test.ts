@@ -159,12 +159,12 @@ async function loadPageScript(
   script: string
 ): Promise<{ boot: (w: unknown, d: unknown, n: unknown) => void }> {
   const dir = await mkdtemp(join(tmpdir(), "squirrel-auth-page-"));
-  const file = join(dir, "page.mjs");
-  await Bun.write(
-    file,
-    `export function boot(window, document, navigator) {${script}}`
-  );
   try {
+    const file = join(dir, "page.mjs");
+    await Bun.write(
+      file,
+      `export function boot(window, document, navigator) {${script}}`
+    );
     return (await import(file)) as {
       boot: (w: unknown, d: unknown, n: unknown) => void;
     };
