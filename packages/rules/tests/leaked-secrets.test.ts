@@ -26,6 +26,7 @@ import {
   classifyKeyContext,
   leakedSecretsRule,
   lookBehind,
+  readKeyLookBack,
   scanContent,
 } from "../src/security/leaked-secrets";
 import type { RuleContext } from "../src/types";
@@ -156,6 +157,32 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
   test("a naming attribute after the value still suppresses a digest", () => {
     const content = `<p>together</p><meta content="${DIGEST}" name="release-sha256">`;
     expect(scanContent(content, "html")).toEqual([]);
+  });
+
+  test("a pretty-printed manifest keeps its digest a digest across the whitespace", () => {
+    // #177: the key and the value are one assignment however far apart an
+    // aligned manifest writes them. The look-back used to spend its budget on
+    // the spaces and lose `sha256` entirely, reporting the checksum as a key.
+    for (const gap of [1, SECRET_KEY_LOOKBEHIND_SIZE, SECRET_KEY_LOOKBEHIND_SIZE * 4]) {
+      const content = `{"vendor":"together","sha256"${" ".repeat(gap)}:"${DIGEST}"}`;
+      expect(scanContent(content, "inline-script")).toEqual([]);
+    }
+    // The same distance under a credential key still reports.
+    const leak = `{"vendor":"together","token"${" ".repeat(SECRET_KEY_LOOKBEHIND_SIZE * 4)}:"${TOGETHER_KEY}"}`;
+    expect(scanContent(leak, "inline-script").map((f) => f.type)).toEqual([
+      "Together AI Key",
+    ]);
+
+    // The invariant under all of it: the distance between a key and its value
+    // is not evidence. A key that names something which is not a credential
+    // reads the same at 200 spaces as it does at none — before this, the same
+    // page said "checksum" up close and "unnamed assignment" further away.
+    for (const key of ["filename", "description", "sha256"]) {
+      for (const gap of [0, 1, SECRET_KEY_LOOKBEHIND_SIZE * 3]) {
+        const content = `{"vendor":"together","${key}"${" ".repeat(gap)}:"${DIGEST}"}`;
+        expect(scanContent(content, "inline-script")).toEqual([]);
+      }
+    }
   });
 
   test("a short key that names something is not a minified member access", () => {
@@ -297,6 +324,27 @@ describe("security/leaked-secrets: real credentials still report", () => {
     expect(found.map((f) => f.value)).toEqual([TOGETHER_KEY]);
   });
 
+  test("a key too long for the look-back cannot invent a digest word", () => {
+    // The walk runs out of room part-way through this key, and the fragment it
+    // is left holding says `sha256` — a word the whole key never had. Reading
+    // the fragment as a key suppresses a real credential, so a cut read is not
+    // read at all: #175's direction, applied to the look-back itself.
+    // Each separator puts the cut at a different offset inside the key, and a
+    // `-`, a `.` or a digit is one the key patterns cannot start a match on.
+    for (const separator of ["_", "-", ".", "7"]) {
+      const key = `api_key_${"q".repeat(100)}${separator}${"z".repeat(84)}_xsha256`;
+      const content = `"${key}"${" ".repeat(100)}:"${TOGETHER_KEY}"; // together.ai`; // pragma: allowlist secret
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
+        TOGETHER_KEY,
+      ]);
+    }
+
+    // A digest key the walk does reach the start of still suppresses, so the
+    // guard buys the silence back only where the evidence was never read.
+    const short = `"cache_${"z".repeat(20)}_sha256"${" ".repeat(100)}:"${DIGEST}"; // together.ai`;
+    expect(scanContent(short, "inline-script")).toEqual([]);
+  });
+
   test("public-by-design client keys stay informational, not leaks", () => {
     const page = html(
       `<script>const cfg={apiKey:"AIzaSyD3mQ8xR2vT7pLnK4hW9cB1sE6yU0zJfXa"};</script>`, // pragma: allowlist secret
@@ -395,6 +443,84 @@ describe("classifyKeyContext", () => {
   test("etag is recognised in lower-camel form", () => {
     expect(classifyKeyContext(`eTag: "`, "together")).toBe("digest");
     expect(classifyKeyContext(`eTagKey: "`, "together")).toBe("digest");
+  });
+
+  test("whitespace between the key and its value does not spend the budget", () => {
+    // #177: a formatter, an aligned manifest or a minified line break can put
+    // any amount of space between `"sha256"` and its value. Charging the budget
+    // for it pushed the key out of the window, the look-back read back a bare
+    // `:`, and an unnamed assignment reports — the digest became a leak.
+    const classify = (text: string) =>
+      classifyKeyContext(lookBehind(text, text.length), "together");
+
+    for (const gap of [1, SECRET_KEY_LOOKBEHIND_SIZE, SECRET_KEY_LOOKBEHIND_SIZE * 4]) {
+      const space = " ".repeat(gap);
+      expect(classify(`{"sha256"${space}:"`)).toBe("digest");
+      // The same shape under a credential key still reads as one, so the
+      // silence is bought by reading the key rather than by giving up on it.
+      expect(classify(`{"api_key"${space}:"`)).toBe("credential");
+    }
+    // Newlines and indentation are the same separator, however they are spelt.
+    expect(classify(`{\n  "checksum"\n${" ".repeat(80)}:\n    "`)).toBe("digest");
+    // A non-breaking space is whitespace to the `\s*` in the key patterns, so
+    // the walk has to agree with them about it.
+    expect(classify(`{"sha256"${"\u00a0".repeat(100)}:"`)).toBe("digest");
+    // Free is not unbounded: past the scan limit the key is out of reach and
+    // the look-back is a cut read again, which reports rather than suppresses.
+    expect(classify(`{"sha256"${" ".repeat(SECRET_CONTEXT_WINDOW_SIZE * 4)}:"`)).toBe(
+      "assigned"
+    );
+  });
+
+  test("a look-back that opens on a fragment reports the cut", () => {
+    // The window's left edge can land mid-key, and the fragment left over can
+    // read as a whole key: `sha256"   :"` is what `"api_key_xsha256"` looks
+    // like once cut. `cut` is how classifyKeyContext knows not to trust it.
+    const fragment = readKeyLookBack(`sha256"${" ".repeat(200)}:"`, 209);
+    expect(fragment.cut).toBe(true);
+    expect(classifyKeyContext(fragment.before, "together", undefined, true)).toBe(
+      "assigned"
+    );
+    // Read as if it were whole, the same text says "digest" — which is exactly
+    // the suppression the flag exists to withhold.
+    expect(classifyKeyContext(fragment.before, "together")).toBe("digest");
+
+    // A key with its left edge in view is not a fragment.
+    const whole = readKeyLookBack(`{"sha256"${" ".repeat(200)}:"`, 211);
+    expect(whole.cut).toBe(false);
+    expect(classifyKeyContext(whole.before, "together", undefined, whole.cut)).toBe(
+      "digest"
+    );
+
+    // Cutting must not cost the assignment itself: a minified member access at
+    // the edge still means the value was assigned, and assigned values report.
+    const minified = readKeyLookBack(`t.a||"`, 6);
+    expect(minified.cut).toBe(true);
+    expect(classifyKeyContext(minified.before, "together", undefined, true)).toBe(
+      "assigned"
+    );
+  });
+
+  test("a cut is where the key stops being readable, not where it starts", () => {
+    const cut = (text: string) => classifyKeyContext(text, "together", undefined, true);
+
+    // The key patterns cannot open on a digit, a `-` or a `.`, so the match can
+    // start one character into the fragment and still be built out of it.
+    expect(cut(`9sha256":"`)).toBe("assigned");
+    expect(cut(`xsha256":"`)).toBe("assigned");
+    expect(cut(`sha256":"`)).toBe("assigned");
+    // A separator inside the fragment is a left edge the walk did see, so the
+    // word after it is a word the key really has, whatever preceded the cut.
+    expect(cut(`x.sha256":"`)).toBe("digest");
+    expect(cut(`x-sha256":"`)).toBe("digest");
+    expect(cut(`.sha256":"`)).toBe("digest");
+    // Reading whole words off a cut key still leaves the key itself truncated,
+    // and "this key says nothing" is not a verdict a truncated key can carry.
+    expect(cut(`-zzzz_xsha256":"`)).toBe("assigned");
+    expect(cut(`zzzz.filename":"`)).toBe("assigned");
+    // Trusted, the same two texts are exactly the suppressions being withheld.
+    expect(classifyKeyContext(`sha256":"`, "together")).toBe("digest");
+    expect(classifyKeyContext(`zzzz.filename":"`, "together")).toBe("none");
   });
 
   test("reads the naming attribute of the same tag in either order", () => {
