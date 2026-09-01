@@ -49,6 +49,49 @@ function escapeHtml(s: string): string {
 }
 
 /**
+ * The success page's inline script (#180), exported so the tests drive the
+ * exact source the page ships instead of re-deriving it from the rendered
+ * HTML. It reads the prompt out of the DOM via textContent, so no value is
+ * ever interpolated into script context; keep it that way.
+ */
+export const AUTH_SUCCESS_PAGE_SCRIPT = `
+                (function () {
+                  var prompt = document.getElementById("agent-prompt");
+                  var button = document.getElementById("copy-prompt");
+                  var status = document.getElementById("copy-status");
+                  function say(text) { status.textContent = text; }
+                  function selectPrompt() {
+                    var selection = window.getSelection && window.getSelection();
+                    if (!selection || !document.createRange) return false;
+                    var range = document.createRange();
+                    range.selectNodeContents(prompt);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    return true;
+                  }
+                  function fallback() {
+                    if (!selectPrompt()) {
+                      say("Select the prompt above and copy it.");
+                      return;
+                    }
+                    var copied = false;
+                    try { copied = document.execCommand("copy"); } catch (e) {}
+                    say(copied ? "Copied." : "Selected. Press ctrl+c, or cmd+c on a mac.");
+                  }
+                  button.addEventListener("click", function () {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      navigator.clipboard.writeText(prompt.textContent).then(
+                        function () { say("Copied."); },
+                        fallback
+                      );
+                      return;
+                    }
+                    fallback();
+                  });
+                })();
+              `;
+
+/**
  * The callback success page (#180). Beyond confirming the sign-in it hands the
  * user the agent setup prompt, which is the next thing they want anyway.
  *
@@ -150,42 +193,7 @@ export function renderAuthSuccessPage(email: string): string {
                   </div>
                 </div>
               </div>
-              <script>
-                (function () {
-                  var prompt = document.getElementById("agent-prompt");
-                  var button = document.getElementById("copy-prompt");
-                  var status = document.getElementById("copy-status");
-                  function say(text) { status.textContent = text; }
-                  function selectPrompt() {
-                    var selection = window.getSelection && window.getSelection();
-                    if (!selection || !document.createRange) return false;
-                    var range = document.createRange();
-                    range.selectNodeContents(prompt);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                    return true;
-                  }
-                  function fallback() {
-                    if (!selectPrompt()) {
-                      say("Select the prompt above and copy it.");
-                      return;
-                    }
-                    var copied = false;
-                    try { copied = document.execCommand("copy"); } catch (e) {}
-                    say(copied ? "Copied." : "Selected. Press ctrl+c, or cmd+c on a mac.");
-                  }
-                  button.addEventListener("click", function () {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                      navigator.clipboard.writeText(prompt.textContent).then(
-                        function () { say("Copied."); },
-                        fallback
-                      );
-                      return;
-                    }
-                    fallback();
-                  });
-                })();
-              </script>
+              <script>${AUTH_SUCCESS_PAGE_SCRIPT}</script>
             </body>
             </html>
           `;

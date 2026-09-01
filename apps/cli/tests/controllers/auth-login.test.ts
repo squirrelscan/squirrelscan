@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { agentSetupLines } from "@/cli/agent-setup";
 import { AGENT_SETUP_PROMPT, AGENT_SETUP_URL } from "@/constants";
 import {
+  AUTH_SUCCESS_PAGE_SCRIPT,
   localApiHint,
   normalizeBrowserUrl,
   renderAuthSuccessPage,
@@ -74,14 +75,18 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
     );
   });
 
-  test("falls back to selecting that text when the clipboard API is missing", () => {
-    // Guarded call, then a selection of the prompt node: neither a bare
-    // navigator.clipboard.writeText() nor a silent no-op on refusal.
-    expect(page).toContain(
-      "navigator.clipboard && navigator.clipboard.writeText"
-    );
-    expect(page).toContain("range.selectNodeContents(prompt)");
-    expect(page).toContain("Press ctrl+c");
+  test("ships the exact script the tests drive, not a copy of it", () => {
+    // Byte-identity between the page and AUTH_SUCCESS_PAGE_SCRIPT is what
+    // makes the behavioural tests below evidence about the shipped page.
+    expect(page).toContain(AUTH_SUCCESS_PAGE_SCRIPT);
+    expect(page).toContain(`<script>${AUTH_SUCCESS_PAGE_SCRIPT}</script>`);
+  });
+
+  test("renders exactly the ids its script asks for", () => {
+    for (const id of [PROMPT_ID, BUTTON_ID, STATUS_ID]) {
+      expect(page).toContain(`id="${id}"`);
+      expect(AUTH_SUCCESS_PAGE_SCRIPT).toContain(`getElementById("${id}")`);
+    }
   });
 
   test("carries the prompt exactly once, never as a script string literal", () => {
@@ -89,7 +94,8 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
     // never parsed in JS context. Interpolating it into the script would
     // reintroduce the injection surface this asserts away.
     expect(page.split(AGENT_SETUP_PROMPT)).toHaveLength(2);
-    expect(page).toContain("prompt.textContent");
+    expect(AUTH_SUCCESS_PAGE_SCRIPT).toContain("prompt.textContent");
+    expect(AUTH_SUCCESS_PAGE_SCRIPT).not.toContain(AGENT_SETUP_PROMPT);
   });
 
   test("escapes the email rather than trusting the API response", () => {
@@ -146,10 +152,21 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
 });
 
 /**
+ * The ids the page's script reaches for. Kept here so the stub DOM below can
+ * refuse anything else; `renders exactly the ids its script asks for` ties
+ * them back to the markup, so renaming one in the page fails loudly instead
+ * of handing the script an undefined node.
+ */
+const PROMPT_ID = "agent-prompt";
+const BUTTON_ID = "copy-prompt";
+const STATUS_ID = "copy-status";
+
+/**
  * Load the page's own inline script as a real module, wrapped so its three
- * globals arrive as parameters. Nothing is interpolated into `script`: it is
- * sliced straight out of the rendered page. (A data: URL would be tidier, but
- * Bun's resolver rejects one this long with NameTooLong.)
+ * globals arrive as parameters. The source is AUTH_SUCCESS_PAGE_SCRIPT itself,
+ * imported from the controller: no slicing or re-parsing of rendered HTML, so
+ * what runs here is byte-identical to what the page serves. (A data: URL would
+ * be tidier, but Bun's resolver rejects one this long with NameTooLong.)
  *
  * Its own directory per call, so a parallel run cannot delete the file out
  * from under another import, and each call gets a fresh module rather than a
@@ -188,12 +205,6 @@ async function clickCopyPrompt(opts: {
   status: string;
   selected: string | null;
 }> {
-  const page = renderAuthSuccessPage("dev@example.com");
-  const script = page.slice(
-    page.indexOf("<script>") + "<script>".length,
-    page.indexOf("</script>")
-  );
-
   let copied: string | null = null;
   let clicked: (() => void) | undefined;
   const node = (text: string) => ({
@@ -216,13 +227,19 @@ async function clickCopyPrompt(opts: {
     },
   };
   const win = { getSelection: () => selection };
+  const elements: Record<string, typeof prompt> = {
+    [PROMPT_ID]: prompt,
+    [BUTTON_ID]: button,
+    [STATUS_ID]: status,
+  };
   const doc = {
-    getElementById: (id: string) =>
-      ({
-        "agent-prompt": prompt,
-        "copy-prompt": button,
-        "copy-status": status,
-      })[id],
+    getElementById: (id: string) => {
+      // Loud, not undefined: an id the page renamed would otherwise surface as
+      // a confusing "cannot read textContent of undefined" three frames later.
+      const element = elements[id];
+      if (!element) throw new Error(`script asked for unstubbed id: ${id}`);
+      return element;
+    },
     createRange: () => {
       const range: {
         node: typeof prompt | null;
@@ -257,7 +274,7 @@ async function clickCopyPrompt(opts: {
           },
         };
 
-  const { boot } = await loadPageScript(script);
+  const { boot } = await loadPageScript(AUTH_SUCCESS_PAGE_SCRIPT);
   boot(win, doc, nav);
   clicked?.();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -286,6 +303,9 @@ describe("auth/login — the copy prompt button (#180)", () => {
     });
     expect(result.copied).toBe(AGENT_SETUP_PROMPT);
     expect(result.selected).toBe(AGENT_SETUP_PROMPT);
+    // The live region reports the same success as the clipboard path: a copy
+    // that worked must never look like one that only selected the text.
+    expect(result.status).toBe("Copied.");
   });
 
   test("selects the prompt and says so when nothing can copy for you", async () => {
