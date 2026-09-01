@@ -32,6 +32,7 @@ import {
   coverageLine,
   fullScanHint,
   scanScopeLine,
+  seedRedirectLine,
   checkCarriedLabel,
   checkUnrenderedLabel,
   ruleCarriedRollupLine,
@@ -638,16 +639,23 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                 {report.totalPages} page{report.totalPages === 1 ? "" : "s"} • Generated{" "}
                 {formatHumanDateTime(report.timestamp)}
               </div>
-              {/* Scan scope disclosure (#1180): the score always reads with its basis. */}
+              {/* Scan scope disclosure (#1180): the score always reads with its basis.
+                  A refused off-site seed redirect (#1418) sits with them: it is the
+                  same class of fact, that the score is not about the URL you might
+                  assume. React escapes the site-controlled finalUrl as a text child,
+                  and it is deliberately NOT a link: the point is that we did not go
+                  there. */}
               {(() => {
                 const scope = scanScopeLine(report);
                 const cov = coverageLine(report);
                 const hint = fullScanHint(report);
+                const seedRedirect = seedRedirectLine(report);
                 return (
                   <>
                     {(scope || cov) && (
                       <div className="scan-scope">{[scope, cov].filter(Boolean).join(" ")}</div>
                     )}
+                    {seedRedirect && <div className="scan-hint">{seedRedirect}</div>}
                     {hint && <div className="scan-hint">{hint}</div>}
                   </>
                 );

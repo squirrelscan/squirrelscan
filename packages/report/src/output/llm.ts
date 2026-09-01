@@ -9,6 +9,7 @@ import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
 import { editorSummaryView } from "../editor-summary";
+import { seedRedirect } from "../coverage";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
@@ -91,6 +92,19 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   lines.push(
     `<site url="${escapeXml(report.baseUrl)}" crawled="${report.totalPages}" date="${escapeXml(report.timestamp)}"/>`,
   );
+
+  // Refused off-site seed redirect (#1418). Without this an agent reads the
+  // scores as being about the URL it was handed, when the seed redirected to a
+  // different site that the crawler declined to follow. `final-url` is a URL
+  // the AUDITED SITE chose: it is reported, never a destination to go fetch.
+  const refusedSeedRedirect = seedRedirect(report);
+  if (refusedSeedRedirect) {
+    lines.push(
+      `<seed-redirect final-url="${escapeXml(refusedSeedRedirect.finalUrl)}" followed="false">`,
+    );
+    lines.push(`${indent(1)}${escapeXml(refusedSeedRedirect.note)}`);
+    lines.push("</seed-redirect>");
+  }
 
   // Failed/blocked audit (#792): nothing was audited. Without this an agent
   // reads <score overall="N/A"> + empty <issues/> as a clean pass. State it

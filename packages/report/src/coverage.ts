@@ -92,6 +92,113 @@ export function fetchFallbacksLine(report: AuditReport): string | null {
   return `${recovered} page${recovered === 1 ? "" : "s"} recovered via direct fetch after a render block.`;
 }
 
+export interface SeedRedirect {
+  /** Where the refused redirect pointed. Site-controlled: display only, and
+   *  every caller must escape it for its own output format. */
+  finalUrl: string;
+  /** The URL this audit actually graded (the report's `baseUrl`). */
+  baseUrl: string;
+  /** The disclosure as one sentence, ready to render. */
+  note: string;
+}
+
+/**
+ * A refused off-site seed redirect (#1418), or null when there is nothing to
+ * disclose: no `finalUrl` (older reports, and every seed that did not redirect
+ * off-site), or a `finalUrl` that does not differ from `baseUrl`.
+ *
+ * The crawler pins the crawl to the seed when a seed redirect leaves the seed's
+ * registrable domain, so `baseUrl` stays the site the user asked for and
+ * `finalUrl` records where the redirect pointed. Unreported, the report reads
+ * as a clean audit of a URL nobody requested.
+ *
+ * The returned `finalUrl` is the canonical one `note` quotes, so a consumer
+ * reading the field and a human reading the sentence can never see two
+ * different URLs. Only `finalUrl` is canonicalized: `baseUrl` is the crawl's
+ * own base and is shown the way the rest of the report shows it. Escaping for
+ * markdown/HTML/XML stays each renderer's job.
+ */
+export function seedRedirect(report: AuditReport): SeedRedirect | null {
+  const finalUrl = canonicalizeReportUrl(report.finalUrl);
+  if (!finalUrl) return null;
+  const baseUrl = dropNonUrlChars(report.baseUrl);
+  if (!baseUrl) return null;
+  // Compared canonically so an equivalent pair ("https://example.com" vs
+  // ".../") never prints a line saying the seed redirected to itself.
+  if (finalUrl === baseUrl || finalUrl === canonicalizeReportUrl(baseUrl)) return null;
+  return {
+    finalUrl,
+    baseUrl,
+    note: `Seed redirected off-site to ${finalUrl}, not followed. This audit graded ${baseUrl}.`,
+  };
+}
+
+/**
+ * {@link seedRedirect}'s sentence alone, e.g.
+ *   "Seed redirected off-site to https://other.example/, not followed. This audit graded https://example.com."
+ * Returns null on the same terms.
+ */
+export function seedRedirectLine(report: AuditReport): string | null {
+  return seedRedirect(report)?.note ?? null;
+}
+
+/**
+ * Canonicalize a site-controlled URL for display.
+ *
+ * A redirect target is whatever `Location` the audited site sent, and it
+ * reaches a report as a stored string, so it keeps whatever bytes it was sent
+ * with. Re-serializing through the WHATWG parser is what makes it safe to
+ * print: the parser drops tab/CR/LF, IDNA-encodes a Unicode hostname (so a
+ * homograph host shows as `xn--…`), and percent-encodes every non-ASCII code
+ * point and every C0 control in the path/query/fragment, which is what turns
+ * an invisible bidi override or zero-width joiner into visible `%E2%80%AE`.
+ * Left raw, a newline would break out of the line that renders the URL and a
+ * bidi override would rewrite how the rest of it reads.
+ *
+ * Falls back to {@link dropNonUrlChars} for a value that does not parse as an
+ * http(s) URL at all: still safe to print, and better than dropping the
+ * disclosure that a redirect happened.
+ */
+function canonicalizeReportUrl(value: string | undefined): string {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    if (url.protocol === "http:" || url.protocol === "https:") return url.href;
+  } catch {}
+  return dropNonUrlChars(value);
+}
+
+/**
+ * Drop whitespace and control characters from a URL that is not being
+ * canonicalized: the crawl's own `baseUrl` (shown the way the rest of the
+ * report shows it, no added trailing slash) and anything `canonicalizeReportUrl`
+ * could not parse.
+ *
+ * Checked per code point rather than as one character class: a class spanning
+ * the C0 range trips oxlint's no-control-regex.
+ */
+function dropNonUrlChars(value: string | undefined): string {
+  if (!value) return "";
+  let out = "";
+  // for..of iterates whole code points, so an astral character cannot be split.
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    // C0 controls and space (<= 0x20), DEL (0x7f), then the rest of Unicode
+    // whitespace (NBSP, ideographic space and friends).
+    if (code <= 0x20 || code === 0x7f || UNICODE_WHITESPACE.test(char)) continue;
+    // Code points XML 1.0 forbids: unpaired surrogates (for..of yields a lone
+    // one as its own character) and the noncharacters. They would make the llm
+    // renderer's document unparseable.
+    if (code >= 0xd800 && code <= 0xdfff) continue;
+    if (code >= 0xfdd0 && code <= 0xfdef) continue;
+    if ((code & 0xfffe) === 0xfffe) continue;
+    out += char;
+  }
+  return out;
+}
+
+const UNICODE_WHITESPACE = /\s/;
+
 /** Approximate "N days/hours ago" from an epoch-ms timestamp. */
 export function timeAgo(epochMs: number, now: number = Date.now()): string {
   const deltaMs = Math.max(0, now - epochMs);

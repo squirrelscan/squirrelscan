@@ -113,12 +113,15 @@ export {
 } from "./site-metadata";
 
 // Smart audits coverage + carried-finding provenance helpers (#110)
-// + scan scope disclosure (#1180)
+// + scan scope disclosure (#1180) + refused off-site seed redirect (#1418)
 export {
   coverageLine,
   carriedTag,
   timeAgo,
   scanScopeLine,
+  seedRedirect,
+  seedRedirectLine,
+  type SeedRedirect,
   fullScanHint,
   checkCarriedLabel,
   checkUnrenderedLabel,

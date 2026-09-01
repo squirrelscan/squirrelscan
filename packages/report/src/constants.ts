@@ -5,7 +5,7 @@ export const KEY_SEPARATOR = "\x00";
 
 // Bump on any HTML renderer/CSS change (output/html.tsx) — the API folds this
 // into the cached-HTML R2 key, so a bump invalidates cached reports (re-render on next view).
-export const REPORT_HTML_VERSION = 12;
+export const REPORT_HTML_VERSION = 13;
 
 // Report output constants
 export const REPORT_COLLAPSE_THRESHOLD = 3;

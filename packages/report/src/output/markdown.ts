@@ -16,6 +16,7 @@ import {
   fetchFallbacksLine,
   fullScanHint,
   scanScopeLine,
+  seedRedirectLine,
   ruleCarriedRollupLine,
 } from "../coverage";
 import {
@@ -60,6 +61,30 @@ function escapeMarkdownDestination(value: string): string {
   return output.join("");
 }
 
+/**
+ * Neutralize inline markdown syntax so a site-controlled string renders as
+ * literal text instead of a link, image, code span, raw HTML tag or emphasis.
+ * Every character here is ASCII punctuation, so every one is a valid CommonMark
+ * backslash escape and renders as itself.
+ *
+ * `&` is escaped so a value containing `&#x202E;` cannot be decoded back into
+ * the bidi override the URL canonicalization just percent-encoded away.
+ *
+ * NOT escaped: the scheme colon. GFM autolinks a bare `https://…` and a
+ * backslash there does not stop it (verified against remark-gfm), so the cost
+ * would be an uglier raw document for no gain. An autolink is limited to
+ * http/https/www/mailto, so it cannot produce a `javascript:` link, and the URL
+ * is displayed in full either way.
+ */
+function escapeMarkdownInline(value: string): string {
+  const output: string[] = [];
+  for (const char of value) {
+    if ("\\`*_[]()<>|~&".includes(char)) output.push(`\\${char}`);
+    else output.push(char);
+  }
+  return output.join("");
+}
+
 function siteProfileMarkdownValue(value: string, rawUrl?: string): string {
   const label = escapeMarkdownTableCell(value, true);
   if (!rawUrl) return label;
@@ -89,6 +114,13 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push(`**URL:** ${report.baseUrl}  `);
   lines.push(`**Date:** ${formatReportDate(report.timestamp)}  `);
   lines.push(`**Pages:** ${report.totalPages}  `);
+  // #1418: the seed redirected off its own site and the crawler refused to
+  // follow it, so the URL above is not where the redirect pointed. Escaped:
+  // the redirect target is a string the audited site chose. Deliberately a
+  // plain line and not a `>` blockquote — CommonMark lazy continuation would
+  // pull every metadata line below it inside the quote.
+  const seedRedirect = seedRedirectLine(report);
+  if (seedRedirect) lines.push(`${escapeMarkdownInline(seedRedirect)}  `);
   const scope = scanScopeLine(report);
   if (scope) lines.push(`${scope}  `);
   const cov = coverageLine(report);
