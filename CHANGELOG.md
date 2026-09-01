@@ -20,6 +20,78 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## v0.0.89
+
+A release about not crying wolf. A rule that reports a problem that is not there
+costs more than a rule that stays quiet, because it teaches people to skim past
+the whole category, and a handful of checks had a shape that looked like a defect
+and was not: a redirect that no server ever sent, a checksum read as a leaked key,
+a decorative image read as a missing description. This pass fixes those, tightens
+how large sites and large reports are judged, and makes a few failures explain
+themselves instead of leaving a bare error.
+
+### Fixed
+
+- **A redirect chain is only reported when a redirect actually happened.** The
+  crawler normalizes a URL before it fetches it, so a link written one way and
+  fetched another looked like a hop even though no server sent a 3xx. Both the
+  redirect-chain and canonical-chain checks now build a chain only from responses
+  the crawl actually observed, so a tidy site that simply writes its links in a
+  different form than it serves them is no longer told it redirects to itself.
+
+- **Attribute names are matched the way a browser matches them.** HTML attribute
+  names are case-insensitive, but the parser was comparing them exactly, so
+  markup that spells an attribute in camelCase (`inputMode`, or `ALT` in caps)
+  slipped past the rules that read it. That was a quiet source of both missed
+  findings and false warnings on framework-rendered pages, and it is fixed
+  everywhere at once.
+
+- **An empty alt on a decorative image is correct, not missing.** A spacer or a
+  purely decorative image that carries `alt=""` and `aria-hidden` is doing the
+  right thing, and the alt-text check no longer counts it as a missing
+  description.
+
+- **Checksums are no longer mistaken for leaked secrets.** A SHA-256 hash printed
+  on a downloads or releases page is a 64-character hex string, which the
+  leaked-secret scan was flagging as a possible key. It is not one, and it is no
+  longer reported.
+
+- **Mojibake detection leaves code alone.** The garbled-text check now skips
+  `code`, `pre`, `samp` and `kbd`, where byte sequences that look like mojibake
+  are usually just the sample being shown on purpose.
+
+- **A large sitemap is held to the right limit.** A sitemap index is allowed
+  50,000 child sitemaps, and each of those up to 50,000 URLs, but the check was
+  applying the per-file URL limit to the index as a whole, so a healthy sharded
+  site with more than 50,000 URLs across its shards was told its index was too
+  big. The index and the shards are now each measured against their own limit.
+
+- **Sitemap freshness reads the page's own date.** The lastmod-drift check now
+  compares a sitemap entry against the page's own document-level date rather than
+  the first date found anywhere in its structured data, so a sitewide
+  organization or website node dated years ago no longer makes an up-to-date page
+  look stale.
+
+- **A first audit no longer implies a previous one.** Findings on pages the audit
+  has not rendered yet are now labelled "unrendered" instead of "carried", which
+  used to suggest a prior audit existed when it did not.
+
+- **A large report records what it left out.** When a report reaches the cap on
+  how much per-page detail it keeps for a single rule, it now records the true
+  affected-page and check totals it clipped, so the coverage on a big crawl is
+  never quietly understated.
+
+- **An install killed for memory explains itself.** A `curl | sh` install on a
+  small machine can be killed by the out-of-memory killer, which leaves no output
+  at all, so the installer reported nothing but a number. It now names the likely
+  cause and the ways out: add swap, move to a machine with more memory, or
+  download the binary and place it yourself.
+
+- **A malformed cloud response no longer ends the audit.** A success response
+  from the hosted editor-summary that was missing its prose used to crash the run
+  after the crawl had already finished. The CLI now takes what it can and
+  completes the audit.
+
 ## v0.0.88
 
 Two rules about the difference between a page that is linked and a page that is
