@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { parseHTML } from "linkedom";
+import { parseHTML } from "../src/dom";
 
 import { collectTextExcluding, tagExcluder } from "../src/extractors/dom-text";
 

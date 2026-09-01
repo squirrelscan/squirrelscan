@@ -231,6 +231,16 @@ describe("a11y/input-types — the right type", () => {
     expect(check(inputTypesRule.run(ctx(html)).checks, "input-types")?.status).toBe("pass");
   });
 
+  test("the escape hatch survives a camelCase inputMode (#1507)", () => {
+    // squirrelscan.com's own tools pages: React passes inputMode straight
+    // through, the exemption read "inputmode", missed it, and the rule warned
+    // on correct markup across five pages.
+    const html = page(
+      `<form action="/x"><label for="u">Site URL</label><input id="u" name="websiteUrl" type="text" inputMode="url"></form>`,
+    );
+    expect(check(inputTypesRule.run(ctx(html)).checks, "input-types")?.status).toBe("pass");
+  });
+
   test("skipped: no input on the page implies a particular type", () => {
     const html = page(
       `<form action="/x"><label for="m">Message</label><textarea id="m" name="message"></textarea><input id="n" name="fullName" type="text" autocomplete="name"></form>`,

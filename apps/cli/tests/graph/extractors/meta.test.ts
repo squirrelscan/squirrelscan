@@ -1,5 +1,6 @@
 // Tests for extractors/meta.ts - Meta tag extraction
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   extractMeta,
   extractOG,
@@ -7,7 +8,6 @@ import {
   extractH1,
 } from "@squirrelscan/parser/extractors";
 import { describe, it, expect } from "bun:test";
-import { parseHTML } from "linkedom";
 
 function parseDoc(html: string) {
   return parseHTML(html).document;

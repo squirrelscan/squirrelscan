@@ -1,6 +1,9 @@
 // Parse page processor - single DOM parse, concurrent extractors
 // This is the main entry point for parsing a page
 
+import type { Document } from "linkedom";
+
+import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   extractMeta,
   extractOG,
@@ -16,7 +19,6 @@ import {
   type ExtractedImage,
 } from "@squirrelscan/parser/extractors";
 import { Effect } from "effect";
-import { parseHTML, type Document } from "linkedom";
 
 import type {
   ContextRef,

@@ -4,7 +4,7 @@
 // clean-accents fixture matters more than any of the detection cases.
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { declaredCharset, findMojibake, mojibakeRule } from "../src/content/mojibake";
 import type { ParsedPage, RuleContext } from "../src/types";

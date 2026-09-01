@@ -5,7 +5,9 @@
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { coerceSchemelessUrl, getAttrCI, shouldSkipUrl } from "@squirrelscan/utils";
-import { parseHTML, type Document, type Element } from "linkedom";
+import type { Document, Element } from "linkedom";
+
+import { parseHTML } from "./dom";
 
 import type {
   ContactLinkData,

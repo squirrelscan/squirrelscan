@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { content } from "@squirrelscan/rules";
 import type { RuleContext } from "@squirrelscan/rules";
 

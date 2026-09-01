@@ -1,11 +1,11 @@
 // Tests for extractors/links.ts - Link extraction with position detection
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   extractLinks,
   extractCrawlableUrls,
 } from "@squirrelscan/parser/extractors";
 import { describe, it, expect } from "bun:test";
-import { parseHTML } from "linkedom";
 
 function parseDoc(html: string) {
   return parseHTML(html).document;

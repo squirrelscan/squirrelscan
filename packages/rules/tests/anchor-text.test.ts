@@ -3,7 +3,7 @@
 // not three findings.
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { anchorTextRule } from "../src/links/anchor-text";
 import type { ParsedPage, RuleContext } from "../src/types";

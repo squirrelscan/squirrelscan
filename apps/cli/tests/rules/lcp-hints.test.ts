@@ -2,9 +2,9 @@
 
 import type { RuleContext } from "@squirrelscan/rules";
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { perf } from "@squirrelscan/rules";
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
 
 const { lcpHintsRule } = perf;
 

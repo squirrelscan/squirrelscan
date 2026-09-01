@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./dom": "./src/dom.ts",
     "./extractors": "./src/extractors/index.ts"
   },
   "dependencies": {

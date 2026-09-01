@@ -1,5 +1,5 @@
 // content/broken-html - Malformed HTML detection
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 

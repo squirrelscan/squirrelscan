@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Debug script to diagnose alt-text detection issues
 
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { extractImages } from "../src/parse/extractors/images";
 

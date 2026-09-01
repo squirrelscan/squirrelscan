@@ -1,7 +1,7 @@
 // ax/noai-signals — noai / noimageai / snippet-limit reporting (page scope).
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
 

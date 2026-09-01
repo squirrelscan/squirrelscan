@@ -12,8 +12,8 @@ import {
   computeCost,
   estimateAuditCap,
 } from "@squirrelscan/core-contracts/credits";
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
 
 import {
   selectCloudRules as cliSelectCloudRules,

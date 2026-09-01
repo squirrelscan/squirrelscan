@@ -4,9 +4,9 @@ import {
   SchemaCollection,
   schemaCollectionFromJSON,
 } from "@squirrelscan/parser";
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { extractSchema } from "@squirrelscan/parser/extractors";
 import { describe, it, expect } from "bun:test";
-import { parseHTML } from "linkedom";
 
 function parseDoc(html: string) {
   return parseHTML(html).document;

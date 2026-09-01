@@ -8,7 +8,7 @@
 // that the helper output matches the old "remove then read textContent".
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { keywordStuffingRule } from "../src/content/keyword-stuffing";
 import { readingLevelRule } from "../src/content/reading-level";
