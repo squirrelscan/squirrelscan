@@ -65,6 +65,13 @@ export const DASHBOARD_URL = "https://app.squirrelscan.com";
 // Public pricing page — linked from Team-plan upsell messaging (#739)
 export const PRICING_URL = "https://squirrelscan.com/pricing";
 
+// Agent setup (#180) — the human-readable landing page, and the one-liner a
+// user pastes into their coding agent. The prompt is deliberately identical to
+// the one the docs page's own copy button produces: the long-form instructions
+// live at /agent-setup/prompt.md and are never forked into the CLI.
+export const AGENT_SETUP_URL = "https://docs.squirrelscan.com/agent-setup";
+export const AGENT_SETUP_PROMPT = `Fetch and follow the setup instructions for squirrelscan at ${AGENT_SETUP_URL}/prompt.md`;
+
 // Informational status requests (whoami, balance preflight) must never stall
 // a command — a wedged local dev API hangs an un-timed fetch indefinitely.
 export const STATUS_REQUEST_TIMEOUT_MS = 10_000;
