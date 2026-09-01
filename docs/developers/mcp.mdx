@@ -92,6 +92,22 @@ Three tools deserve a closer look:
 - **`delete_website` has the same confirm rail.** The first call previews what happens (the domain, how many audits and open issues stay attached to the old id) without deleting anything; the agent confirms with you and calls again with `confirm: true`. Deletion is soft: nothing is destroyed, and re-adding the domain later registers a fresh website with a new id.
 - **`create_api_key` is scope-gated.** It needs credentials carrying the reserved `keys:write` scope. OAuth login grants it (you consented on the approval screen); plain API keys never carry it, and keys minted by this tool can't mint further keys. No escalation loops.
 
+### Which number to compare
+
+Three tools report counts that look comparable and are not. The published report is the source of truth, and everything else is derived from it:
+
+| Where | Field | What it is |
+|-------|-------|------------|
+| `get_report` (summary) | `healthScore` | The audit's overall score, 0-100. Canonical. |
+| `list_audits`, `get_audit_status` | `health_score` | The same value, read from that run's published report. `null` for a blocked or unreachable site: no grade was earned. |
+| `get_report` (summary) | `failed` + `warnings` | Failing and warning checks in the report. |
+| `list_audits`, `get_audit_status` | `issues_found` | The same total, read from the same report. |
+| `list_issues` | the open count | A per-website issue tracker spanning audits, not a per-run count. |
+
+**Compare runs on `health_score`.** It is the one number rescored consistently across the whole site, so a move between two runs means the site moved.
+
+Do not compare `issues_found` with the open count from `list_issues`. The tracker folds a rule failing on 600 pages into one issue and keeps an issue open until an audit re-checks it, so its count is legitimately much smaller and moves on its own schedule.
+
 ## Credits
 
 Cloud audits are pay-as-you-go: credits are spent while the audit runs, and nothing is charged up front. From the agent's side a paid audit looks like this:
