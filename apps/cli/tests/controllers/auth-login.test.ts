@@ -1,7 +1,7 @@
 // auth login — actionable error hints (#1 of the auth/cloud guardrails).
 
 import { describe, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +11,8 @@ import {
   localApiHint,
   normalizeBrowserUrl,
   renderAuthSuccessPage,
+  renderCallbackPage,
+  type SessionStatusResponse,
 } from "@/controllers/auth/login";
 import { DEFAULT_API_URL } from "@/self/api";
 
@@ -99,21 +101,47 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
     expect(hostile).toContain("evil&quot;");
   });
 
-  test("leaves the pending, expired and consumed pages bare", async () => {
-    // Those three stay inline in startCallbackServer; only a completed
-    // sign-in earns the prompt. renderAuthSuccessPage sits above that
-    // function, so the slice is exactly the other three templates.
-    const source = await Bun.file(
-      new URL("../../src/controllers/auth/login.ts", import.meta.url)
-    ).text();
-    const others = source.slice(source.indexOf("function startCallbackServer"));
-    // Anchors: if these pages are renamed the negative assertions below stop
-    // proving anything, so fail loudly instead.
-    expect(others).toContain("Session Expired");
-    expect(others).toContain("Login Session Already Used");
-    expect(others).toContain("Waiting for authentication...");
-    expect(others).not.toContain("Use squirrelscan with your AI agent");
-    expect(others).not.toContain("AGENT_SETUP");
+  test("only a completed sign-in with a token gets the block", () => {
+    const bare: SessionStatusResponse[] = [
+      { status: "pending" },
+      { status: "expired" },
+      { status: "consumed" },
+      // "completed" with no token yet is still a wait, not a sign-in.
+      { status: "completed" },
+    ];
+    for (const status of bare) {
+      const { html } = renderCallbackPage(status);
+      expect(html).not.toContain("Use squirrelscan with your AI agent");
+      expect(html).not.toContain(AGENT_SETUP_PROMPT);
+    }
+
+    const done = renderCallbackPage({
+      status: "completed",
+      token: "tok",
+      user: { id: "u1", email: "dev@example.com", name: null },
+    });
+    expect(done.code).toBe(200);
+    expect(done.html).toContain(AGENT_SETUP_PROMPT);
+  });
+
+  test("serves the same status codes and pages as before for the rest", () => {
+    expect(renderCallbackPage({ status: "expired" })).toMatchObject({
+      code: 410,
+    });
+    expect(renderCallbackPage({ status: "expired" }).html).toContain(
+      "Session Expired"
+    );
+    expect(renderCallbackPage({ status: "consumed" })).toMatchObject({
+      code: 410,
+    });
+    expect(renderCallbackPage({ status: "consumed" }).html).toContain(
+      "Login Session Already Used"
+    );
+    const pending = renderCallbackPage({ status: "pending" });
+    expect(pending.code).toBe(202);
+    expect(pending.html).toContain("Waiting for authentication...");
+    // The pending page reloads itself; that is what makes polling work.
+    expect(pending.html).toContain('http-equiv="refresh"');
   });
 });
 
@@ -122,14 +150,16 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
  * globals arrive as parameters. Nothing is interpolated into `script`: it is
  * sliced straight out of the rendered page. (A data: URL would be tidier, but
  * Bun's resolver rejects one this long with NameTooLong.)
+ *
+ * Its own directory per call, so a parallel run cannot delete the file out
+ * from under another import, and each call gets a fresh module rather than a
+ * path-cached one.
  */
 async function loadPageScript(
   script: string
 ): Promise<{ boot: (w: unknown, d: unknown, n: unknown) => void }> {
-  const file = join(
-    tmpdir(),
-    `squirrel-auth-page-${Bun.hash(script).toString(16)}.mjs`
-  );
+  const dir = await mkdtemp(join(tmpdir(), "squirrel-auth-page-"));
+  const file = join(dir, "page.mjs");
   await Bun.write(
     file,
     `export function boot(window, document, navigator) {${script}}`
@@ -139,7 +169,7 @@ async function loadPageScript(
       boot: (w: unknown, d: unknown, n: unknown) => void;
     };
   } finally {
-    rmSync(file, { force: true });
+    await rm(dir, { recursive: true, force: true });
   }
 }
 

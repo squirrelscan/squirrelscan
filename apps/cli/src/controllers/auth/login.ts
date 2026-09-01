@@ -207,7 +207,7 @@ interface SessionResponse {
   expiresAt: string;
 }
 
-interface SessionStatusResponse {
+export interface SessionStatusResponse {
   status: "pending" | "completed" | "expired" | "consumed";
   token?: string;
   expiresAt?: string;
@@ -277,6 +277,73 @@ export function fetchSessionStatus(
   });
 }
 
+/**
+ * The page the callback server serves for a given session status. Pure, so
+ * each of the four is testable on its own: only a completed sign-in with a
+ * token gets the success page and the agent setup block (#180). A "completed"
+ * status without one is still a wait, exactly as before.
+ */
+export function renderCallbackPage(status: SessionStatusResponse): {
+  code: number;
+  html: string;
+} {
+  if (status.status === "completed" && status.token && status.user) {
+    return { code: 200, html: renderAuthSuccessPage(status.user.email) };
+  }
+
+  if (status.status === "expired") {
+    return {
+      code: 410,
+      html: `
+            <!DOCTYPE html>
+            <html>
+            <head><title>Session Expired</title></head>
+            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
+              <h1>Session Expired</h1>
+              <p>Please run 'squirrel auth login' again.</p>
+            </body>
+            </html>
+          `,
+    };
+  }
+
+  if (status.status === "consumed") {
+    // Token was already retrieved once (one-time read) — a bare retry would
+    // poll forever. Terminal: tell the user to re-login.
+    return {
+      code: 410,
+      html: `
+            <!DOCTYPE html>
+            <html>
+            <head><title>Session Already Used</title></head>
+            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
+              <h1>Login Session Already Used</h1>
+              <p>Please run 'squirrel auth login' again.</p>
+            </body>
+            </html>
+          `,
+    };
+  }
+
+  // Still pending - try again
+  return {
+    code: 202,
+    html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Waiting...</title>
+              <meta http-equiv="refresh" content="1">
+            </head>
+            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
+              <h1>Waiting for authentication...</h1>
+              <p>Please complete sign-in in your browser.</p>
+            </body>
+            </html>
+          `,
+  };
+}
+
 /** Start a local HTTP server to receive the callback. */
 function startCallbackServer(
   port: number,
@@ -298,58 +365,20 @@ function startCallbackServer(
           );
           const status = (await statusRes.json()) as SessionStatusResponse;
 
+          const page = renderCallbackPage(status);
+          res.writeHead(page.code, { "Content-Type": "text/html" });
+          res.end(page.html);
+
           if (status.status === "completed" && status.token && status.user) {
-            res.writeHead(200, { "Content-Type": "text/html" });
-            res.end(renderAuthSuccessPage(status.user.email));
             onComplete(status);
           } else if (status.status === "expired") {
-            res.writeHead(410, { "Content-Type": "text/html" });
-            res.end(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>Session Expired</title></head>
-            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
-              <h1>Session Expired</h1>
-              <p>Please run 'squirrel auth login' again.</p>
-            </body>
-            </html>
-          `);
             onError(new Error("Session expired"));
           } else if (status.status === "consumed") {
-            // Token was already retrieved once (one-time read) — a bare
-            // retry would poll forever. Terminal: tell the user to re-login.
-            res.writeHead(410, { "Content-Type": "text/html" });
-            res.end(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>Session Already Used</title></head>
-            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
-              <h1>Login Session Already Used</h1>
-              <p>Please run 'squirrel auth login' again.</p>
-            </body>
-            </html>
-          `);
             onError(
               new Error(
                 "Login session already used — run 'squirrel auth login' again"
               )
             );
-          } else {
-            // Still pending - try again
-            res.writeHead(202, { "Content-Type": "text/html" });
-            res.end(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Waiting...</title>
-              <meta http-equiv="refresh" content="1">
-            </head>
-            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
-              <h1>Waiting for authentication...</h1>
-              <p>Please complete sign-in in your browser.</p>
-            </body>
-            </html>
-          `);
           }
         } catch (error) {
           res.writeHead(500, { "Content-Type": "text/plain" });
