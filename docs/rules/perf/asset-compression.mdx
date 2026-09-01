@@ -1,0 +1,114 @@
+---
+title: "Uncompressed Assets"
+description: "Checks for large CSS, JavaScript, and other text assets served without gzip or Brotli"
+---
+
+Checks for large CSS, JavaScript, and other text assets served without gzip or Brotli.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/asset-compression` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## What it checks
+
+[`perf/compression`](/rules/perf/compression) judges the HTML document's own
+response. This rule judges everything the page pulls in afterwards.
+
+A server that compresses `text/html` but not `text/css` is a common
+misconfiguration, and it is invisible to the size rules:
+[`perf/css-file-size`](/rules/perf/css-file-size) and
+[`perf/js-file-size`](/rules/perf/js-file-size) measure bytes but never look at
+`Content-Encoding`. So a 300 KB stylesheet shipped uncompressed costs every
+visitor the full 300 KB while the audit reports only that the file is large.
+
+For each crawled sub-resource this rule reports the asset when all of the
+following hold:
+
+- the response is **2xx** and its `Content-Type` is compressible text: `text/*`,
+  `application/json`, `application/javascript`, `application/xml`, or any
+  `+json`/`+xml` type (this is what includes SVG and excludes PNG, WebP, fonts,
+  and PDFs, which are already compressed),
+- no `Content-Encoding` of `gzip`, `br`, `deflate`, or `zstd` was returned, and
+- the asset is larger than the size threshold (100 KB by default).
+
+Findings list each asset URL biggest-first with its size, the pages that
+reference it, and the estimated saving.
+
+<Note>
+The rule stays silent about any asset whose encoding it could not observe
+first-hand on this run, rather than guessing. That covers sub-resources reused
+from a previous crawl's cache, whose headers belong to that older run: a
+re-audit with `--refresh` re-fetches everything and judges the full set.
+
+Proving an asset is genuinely uncompressed also costs an extra request.
+Stylesheets and images are normally sized with a `HEAD`, but a `HEAD` has no
+body, and a server whose compression runs as a body filter (nginx's `gzip`
+module, and many CDNs on range requests) answers it with no `Content-Encoding`
+at all. Reporting that as uncompressed would be wrong, so when an asset still
+looks uncompressed the crawler confirms with an ordinary `GET` before the rule
+will name it. If that confirming request cannot be made, because the origin
+rate-limited it or the check ran out of time, the asset's encoding stays
+unknown and the rule leaves it alone rather than assuming the worst.
+</Note>
+
+## Solution
+
+Enable gzip or Brotli for static text assets, not just HTML. Server config often
+compresses `text/html` but omits `text/css` and `application/javascript`: add
+those MIME types to your compression list (nginx `gzip_types`, Apache
+`AddOutputFilterByType`). On a CDN, check that compression is on for static file
+extensions. Brotli beats gzip on text and every current browser accepts it.
+
+```nginx nginx.conf
+gzip on;
+gzip_types text/plain text/css application/json application/javascript
+           application/xml image/svg+xml;
+gzip_min_length 1024;
+```
+
+## Options
+
+This rule supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_bytes` | number | `102400` | Only report uncompressed assets larger than this many bytes |
+
+### Configuration example
+
+```toml squirrel.toml
+[rules."perf/asset-compression"]
+min_bytes = 102400
+```
+
+Lower `min_bytes` to catch smaller assets. Compression starts paying off at
+around 1 KB, so `min_bytes = 1024` is a reasonable strict setting; the 100 KB
+default keeps the report focused on assets whose size is already worth acting on.
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/asset-compression"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/asset-compression"]
+disable = ["*"]
+```

@@ -1,6 +1,7 @@
 // Script content fetcher for security scanning
 // Fetches actual JS content for secrets detection
 
+import { normalizeEncoding } from "@squirrelscan/audit-engine";
 import { Effect } from "effect";
 
 import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@/constants";
@@ -21,6 +22,12 @@ export interface ScriptFetchResult {
   fromCache?: boolean;
   /** SourceMap or X-SourceMap response header value, if present */
   sourceMapHeader?: string;
+  /**
+   * content-encoding observed on this fetch: a transfer coding or `null` for
+   * identity/absent. Absent (`undefined`) when no response was seen — notably
+   * on a content-store cache hit, which never touches the network. (#9)
+   */
+  contentEncoding?: string | null;
 }
 
 export interface ScriptFetcherOptions {
@@ -107,6 +114,13 @@ async function fetchSingleScriptAsync(
       response.headers.get("x-sourcemap") ||
       undefined;
 
+    // #9: a transfer coding (gzip/br/…) or null for identity/absent. `fetch`
+    // decodes the body but leaves this header intact, so it stays observable
+    // even though `sizeBytes` below measures the DECODED text.
+    const contentEncoding = normalizeEncoding(
+      response.headers.get("content-encoding")
+    );
+
     // Track redirect info from the response
     const wasRedirected = response.redirected;
     const finalUrl = wasRedirected ? response.url : undefined;
@@ -125,6 +139,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: "script too large",
       };
     }
@@ -138,6 +153,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: `HTTP ${response.status}`,
       };
     }
@@ -151,6 +167,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: "not javascript",
       };
     }
@@ -172,6 +189,7 @@ async function fetchSingleScriptAsync(
         redirected: wasRedirected,
         finalUrl,
         sourceMapHeader,
+        contentEncoding,
         error: "script too large",
       };
     }
@@ -185,6 +203,7 @@ async function fetchSingleScriptAsync(
       redirected: wasRedirected,
       finalUrl,
       sourceMapHeader,
+      contentEncoding,
     };
   } catch (error) {
     clearTimeout(timeoutId);
@@ -229,6 +248,10 @@ function fetchSingleScript(
         redirected: false,
         finalUrl: undefined,
         fromCache: true,
+        // contentEncoding is deliberately LEFT UNSET (undefined): this path
+        // never touched the network, so the response headers were never seen.
+        // Do not default it to null — null means "observed, not compressed",
+        // and perf/asset-compression would report every cached script. (#9)
       } satisfies ScriptFetchResult;
     }
 

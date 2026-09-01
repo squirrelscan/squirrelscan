@@ -488,6 +488,7 @@
               "rules/perf/total-byte-weight",
               "rules/perf/cache-headers",
               "rules/perf/compression",
+              "rules/perf/asset-compression",
               "rules/perf/bad-caching",
               "rules/perf/http2",
               "rules/perf/animated-content",

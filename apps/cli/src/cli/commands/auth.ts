@@ -12,6 +12,7 @@ import {
 import { safeExit } from "@/self/updater";
 
 import { version } from "../../../package.json";
+import { agentSetupLines } from "../agent-setup";
 import { fmt } from "../format";
 
 /**
@@ -61,6 +62,9 @@ const authLogin = defineCommand({
         )
       );
     }
+    // `auth login` has no --json/--quiet mode to suppress this under; add the
+    // guard here alongside the other output if one is ever introduced.
+    for (const line of agentSetupLines()) console.log(line);
   },
 });
 
