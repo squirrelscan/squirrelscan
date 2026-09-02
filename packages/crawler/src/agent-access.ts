@@ -2,8 +2,9 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
 
+import type { PhaseBudget } from "./deadline";
 import type {
   AgentAccessData,
   AgentAccessProbe,
@@ -47,11 +48,26 @@ export function detectPayment(status: number, headers: Headers, body: string): s
   return null;
 }
 
+const unreachableProbe = (identity: ProbeIdentity, error: string): AgentAccessProbe => ({
+  userAgent: identity.label,
+  userAgentString: identity.ua,
+  status: 0,
+  bodySize: 0,
+  challenged: false,
+  challengeSignal: null,
+  paymentRequired: false,
+  paymentSignal: null,
+  error,
+});
+
 async function probeOne(
   homeUrl: string,
   identity: ProbeIdentity,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Promise<AgentAccessProbe> {
+  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  if (timeoutMs === null) return unreachableProbe(identity, BUDGET_EXHAUSTED_ERROR);
   try {
     // #1395: manual redirects — per-hop scheme allowlist + strip secret
     // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
@@ -70,7 +86,7 @@ async function probeOne(
         },
         redirect: "follow",
       },
-      PROBE_TIMEOUT_MS,
+      timeoutMs,
       async (response) => {
         const raw = await readBodyCapped(response, AGENT_ACCESS_MAX_BYTES);
         const body = truncateToBytes(raw, AGENT_ACCESS_MAX_BYTES);
@@ -90,17 +106,7 @@ async function probeOne(
       },
     );
   } catch (e) {
-    return {
-      userAgent: identity.label,
-      userAgentString: identity.ua,
-      status: 0,
-      bodySize: 0,
-      challenged: false,
-      challengeSignal: null,
-      paymentRequired: false,
-      paymentSignal: null,
-      error: (e as Error).message,
-    };
+    return unreachableProbe(identity, (e as Error).message);
   }
 }
 
@@ -110,6 +116,7 @@ export function probeAgentAccess(
   baseUrl: string,
   browserUserAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Effect.Effect<AgentAccessData, never, never> {
   const homeUrl = new URL("/", baseUrl).toString();
   const identities: ProbeIdentity[] = [
@@ -118,7 +125,9 @@ export function probeAgentAccess(
     { label: "claude-user", ua: CLAUDE_USER_UA },
   ];
   return Effect.promise(async () => {
-    const probes = await Promise.all(identities.map((id) => probeOne(homeUrl, id, customHeaders)));
+    const probes = await Promise.all(
+      identities.map((id) => probeOne(homeUrl, id, customHeaders, budget)),
+    );
     return { probes };
   });
 }

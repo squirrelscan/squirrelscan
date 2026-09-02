@@ -1,0 +1,269 @@
+// squirrelscan/repo#1733 — the crawl preamble needs a budget as a WHOLE, not
+// just a deadline per request.
+//
+// #1699 gave every root probe a deadline that survives its body read, which
+// stopped a stalled body hanging the crawl forever. It left the sum untouched:
+// the preamble is seven sequential stages carrying 15-30s deadlines apiece, so
+// an origin that answers 200 on every root path and then stalls the body burned
+// 150.3s across 28 requests before page 1 — the entire 120s crawl phase a quick
+// cloud audit gets, on a site whose real pages serve perfectly well.
+//
+// The stalled-origin tests below fail against the pre-fix crawler by TIMING OUT
+// rather than by asserting a wrong value: their whole point is wall clock. The
+// healthy-origin test is the other half of the bargain — a budget that quietly
+// dropped probe data on normal sites would be a worse bug than the one fixed.
+
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect, Fiber, Stream } from "effect";
+
+import { createCrawler, preambleBudgetMs } from "../src/core/crawler";
+import { BUDGET_EXHAUSTED_ERROR } from "../src/deadline";
+import { WELL_KNOWN_PATHS } from "../src/well-known";
+import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+
+const PAGE = `<!doctype html><html><head><title>t</title></head><body>
+<a href="/one">one</a><a href="/two">two</a></body></html>`;
+
+// The budget is min(45s, timeoutMs × 3), so a 500ms per-request timeout buys a
+// 1500ms preamble — the same arithmetic production runs, three orders of
+// magnitude faster. Every probe's OWN deadline (15-30s, fixed) is far larger,
+// so nothing here can pass on per-request bounds alone.
+const TIMEOUT_MS = 500;
+const BUDGET_MS = preambleBudgetMs(TIMEOUT_MS);
+
+const CONFIG: Partial<CrawlerConfig> = {
+  maxPages: 3,
+  concurrency: 2,
+  perHostConcurrency: 2,
+  delayMs: 0,
+  perHostDelayMs: 0,
+  timeoutMs: TIMEOUT_MS,
+  userAgent: "squirrel-test",
+  respectRobots: false,
+  incremental: false,
+  useCacheControl: false,
+  breadthFirst: false,
+  coverageMode: "full",
+};
+
+const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
+afterEach(() => {
+  for (const s of servers.splice(0)) s.stop(true);
+});
+
+const REAL_PAGES = new Set(["/", "/one", "/two"]);
+
+function htmlResponse(body = PAGE) {
+  return new Response(body, { headers: { "content-type": "text/html" } });
+}
+
+// 200 headers, then a body stream that is never closed. This is the daigo.ru
+// shape: the probe cannot tell from the status line that it will never finish.
+function stalledBodyResponse() {
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("<!doctype html><html><body>"));
+      },
+    }),
+    { headers: { "content-type": "text/html" } },
+  );
+}
+
+interface Origin {
+  url: string;
+  hits: Map<string, number>;
+}
+
+// Real pages serve normally; every root-probe path stalls its body. `idleTimeout: 0`
+// so the server is never the thing that gives up — the client has to be.
+function serveStallingProbes(): Origin {
+  const hits = new Map<string, number>();
+  const server = Bun.serve({
+    port: 0,
+    idleTimeout: 0,
+    fetch(req) {
+      const path = new URL(req.url).pathname;
+      hits.set(path, (hits.get(path) ?? 0) + 1);
+      return REAL_PAGES.has(path) ? htmlResponse() : stalledBodyResponse();
+    },
+  });
+  servers.push(server);
+  // Trailing slash: seeded without it, `response.url` comes back normalized and
+  // the seed probe reads that as a redirect, skipping the body read entirely.
+  return { url: `http://localhost:${server.port}/`, hits };
+}
+
+interface CrawlOutcome {
+  crawlId: string;
+  crawler: Awaited<ReturnType<typeof Effect.runPromise<Awaited<ReturnType<typeof createCrawler>>>>>;
+  pages: number;
+  firstPageAfterMs: number | undefined;
+  totalMs: number;
+}
+
+async function crawl(origin: string, config = CONFIG): Promise<CrawlOutcome> {
+  const startedAt = Date.now();
+  const crawler = await Effect.runPromise(createCrawler({ config }));
+
+  let firstPageAfterMs: number | undefined;
+  // `Stream.fromPubSub` never completes on its own, so this fiber has to be
+  // interrupted or it outlives the test.
+  const events = Effect.runFork(
+    Stream.runForEach(crawler.events, (event: CrawlerEvent) =>
+      Effect.sync(() => {
+        if (event.type === "page:fetched" && firstPageAfterMs === undefined) {
+          firstPageAfterMs = Date.now() - startedAt;
+        }
+      }),
+    ),
+  );
+
+  try {
+    const crawlId = await Effect.runPromise(crawler.start(origin, origin));
+    const pages = await Effect.runPromise(crawler.storage.getPages(crawlId));
+    return {
+      crawlId,
+      crawler,
+      pages: pages.length,
+      firstPageAfterMs,
+      totalMs: Date.now() - startedAt,
+    };
+  } finally {
+    await Effect.runPromise(Fiber.interrupt(events));
+  }
+}
+
+describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
+  test("an origin whose root probes stall still reaches its pages inside the budget", async () => {
+    const origin = serveStallingProbes();
+
+    const out = await crawl(origin.url);
+
+    expect(out.pages).toBeGreaterThan(0);
+    expect(out.firstPageAfterMs).toBeDefined();
+    // The preamble is bounded by the budget, not by the sum of the probe
+    // deadlines. Generous slack over BUDGET_MS for scheduling, and still two
+    // orders of magnitude under the ~180s that sum would cost.
+    expect(out.firstPageAfterMs!).toBeLessThan(BUDGET_MS * 6);
+  }, 30_000);
+
+  test("stages after the budget is spent are skipped, not merely deadlined", async () => {
+    const origin = serveStallingProbes();
+
+    await crawl(origin.url);
+
+    // robots.txt is the first budgeted stage and it stalls, so it consumes the
+    // whole budget on its own. Everything downstream must then issue NO request
+    // at all — a request that was merely given a short deadline would still show
+    // up here, which is exactly how per-request bounds differ from a phase budget.
+    expect(origin.hits.get("/robots.txt") ?? 0).toBeGreaterThan(0);
+    expect(origin.hits.get("/llms.txt") ?? 0).toBe(0);
+    expect(origin.hits.get("/index.md") ?? 0).toBe(0);
+    expect(origin.hits.get("/.well-known/mcp.json") ?? 0).toBe(0);
+    expect(origin.hits.get("/sitemap.xml") ?? 0).toBe(0);
+  }, 30_000);
+
+  test("probes cut short by the budget still store their unreachable result", async () => {
+    const origin = serveStallingProbes();
+
+    const out = await crawl(origin.url);
+    const read = <T>(effect: Effect.Effect<T, unknown, never>) =>
+      Effect.runPromise(effect as Effect.Effect<T, never, never>);
+
+    // Every probe's row is still written. A budget that dropped rows instead of
+    // storing an "unreachable" shape would silently blank AX data in reports.
+    const [robots, llms, markdown, wellKnown, agentAccess, rsl] = await Promise.all([
+      read(out.crawler.storage.getRobotsTxt(out.crawlId)),
+      read(out.crawler.storage.getLlmsTxt(out.crawlId)),
+      read(out.crawler.storage.getMarkdownProbe(out.crawlId)),
+      read(out.crawler.storage.getWellKnownProbe(out.crawlId)),
+      read(out.crawler.storage.getAgentAccess(out.crawlId)),
+      read(out.crawler.storage.getRsl(out.crawlId)),
+    ]);
+
+    expect(robots).not.toBeNull();
+    expect(robots!.exists).toBe(false);
+    expect(llms).not.toBeNull();
+    expect(llms!.llmsTxt.exists).toBe(false);
+    expect(markdown).not.toBeNull();
+    expect(markdown!.servesMarkdown).toBe(false);
+    expect(rsl).not.toBeNull();
+    expect(rsl!.licenseUrls).toEqual([]);
+
+    // The skipped probes carry the full path/identity list with the budget
+    // reason recorded, the same shape an unreachable host produces.
+    expect(wellKnown!.probes).toHaveLength(WELL_KNOWN_PATHS.length);
+    for (const probe of wellKnown!.probes) {
+      expect(probe.status).toBe(0);
+      expect(probe.error).toBe(BUDGET_EXHAUSTED_ERROR);
+    }
+    expect(agentAccess!.probes).toHaveLength(3);
+    for (const probe of agentAccess!.probes) {
+      expect(probe.error).toBe(BUDGET_EXHAUSTED_ERROR);
+    }
+  }, 30_000);
+
+  test("a healthy origin loses no probe data to the budget", async () => {
+    // The guard on the tradeoff: the budget must only ever bite an origin that
+    // is actually burning wall clock.
+    const server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const path = new URL(req.url).pathname;
+        if (path === "/robots.txt") {
+          return new Response("User-agent: *\nSitemap: /sitemap.xml\n", {
+            headers: { "content-type": "text/plain" },
+          });
+        }
+        if (path === "/llms.txt") {
+          return new Response("# Site\n", { headers: { "content-type": "text/plain" } });
+        }
+        if (path === "/sitemap.xml") {
+          return new Response(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+              `<url><loc>http://localhost:${server.port}/one</loc></url></urlset>`,
+            { headers: { "content-type": "application/xml" } },
+          );
+        }
+        if (REAL_PAGES.has(path)) return htmlResponse();
+        return new Response("nope", { status: 404 });
+      },
+    });
+    servers.push(server);
+
+    const out = await crawl(`http://localhost:${server.port}/`);
+    const read = <T>(effect: Effect.Effect<T, unknown, never>) =>
+      Effect.runPromise(effect as Effect.Effect<T, never, never>);
+
+    expect(out.pages).toBeGreaterThan(0);
+
+    const robots = await read(out.crawler.storage.getRobotsTxt(out.crawlId));
+    const llms = await read(out.crawler.storage.getLlmsTxt(out.crawlId));
+    const wellKnown = await read(out.crawler.storage.getWellKnownProbe(out.crawlId));
+    const sitemaps = await read(out.crawler.storage.getSitemaps(out.crawlId));
+
+    expect(robots!.exists).toBe(true);
+    expect(llms!.llmsTxt.exists).toBe(true);
+    // Real 404s, not budget skips: the probes all ran.
+    for (const probe of wellKnown!.probes) {
+      expect(probe.error).not.toBe(BUDGET_EXHAUSTED_ERROR);
+    }
+    expect(sitemaps.length).toBeGreaterThan(0);
+  }, 30_000);
+});
+
+describe("preambleBudgetMs", () => {
+  test("caps at the ceiling and scales down with a tighter per-request timeout", () => {
+    // Default crawl (30s per request): the 45s ceiling binds, NOT 30 × 3.
+    expect(preambleBudgetMs(30_000)).toBe(45_000);
+    expect(preambleBudgetMs(60_000)).toBe(45_000);
+    // A config asking for snappy requests gets a proportionally snappy preamble.
+    expect(preambleBudgetMs(10_000)).toBe(30_000);
+    expect(preambleBudgetMs(500)).toBe(1_500);
+    // Degenerate timeouts must not produce a zero or negative budget, which
+    // would skip the preamble outright rather than bounding it.
+    expect(preambleBudgetMs(0)).toBe(3);
+    expect(preambleBudgetMs(-1)).toBe(3);
+  });
+});

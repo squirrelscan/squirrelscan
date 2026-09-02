@@ -93,6 +93,18 @@ jobs:
       - uses: ./.github/actions/setup-bun
       - run: bun run test:engine
 
+  # `bun test` above runs from apps/cli, so packages/crawler's suite — the
+  # crawl-preamble, deadline, and sitemap guards — was never executed by CI.
+  crawler-tests:
+    name: Crawler tests
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run test:crawler
+
   release-tooling:
     name: Release tooling tests
     needs: quality

@@ -17,7 +17,8 @@ import {
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
-import { withRequestDeadline } from "../deadline";
+import { createPhaseBudget, withRequestDeadline } from "../deadline";
+import type { PhaseBudget } from "../deadline";
 import { computeSitemapUrlCap, discoverSitemaps, selectSitemapUrls } from "../sitemaps";
 
 import type { RobotsEvaluator } from "../robots";
@@ -87,6 +88,33 @@ const MAX_ROBOTS_CRAWL_DELAY_MS = 2000;
 // the audit re-parses (~12.5ms/page) instead of holding every DOM in memory
 // for the remainder of the crawl.
 const PARSED_PAGE_CACHE_MAX_PAGES = COVERAGE_PAGE_LIMITS.quick;
+
+// ---- Crawl preamble budget (squirrelscan/repo#1733) ----
+//
+// Everything before the first page — seed redirect resolution, robots.txt, the
+// llms / markdown / well-known / agent-access / RSL probes, and sitemap
+// discovery — runs as sequential stages, each with its own 15-30s request
+// deadline. Individually bounded, their SUM is not: an origin that answers 200
+// on every root path and then stalls the body burned 150.3s across 28 requests
+// before page 1, which is the entire 120s crawl phase a quick cloud audit gets,
+// on a site that crawls perfectly well once the preamble is past.
+//
+// One budget spans the phase. Each request takes min(its own deadline, what the
+// budget has left); once it is spent the remaining probes are skipped and store
+// the same "unreachable" shape a network failure gives them, so no probe's row
+// goes missing — the trade is AX completeness on a pathologically slow origin
+// for a crawl that actually reaches its pages.
+const PREAMBLE_TOTAL_BUDGET_MS = 45_000;
+// ...and no more than this many full request timeouts, so a config asking for
+// snappy requests gets a proportionally snappy preamble. Mirrors
+// REDIRECT_BUDGET_HOPS in detectRedirects, which bounds a chain the same way.
+const PREAMBLE_BUDGET_REQUESTS = 3;
+
+/** The preamble's wall-clock allowance for a given per-request timeout. */
+export function preambleBudgetMs(timeoutMs: number): number {
+  return Math.min(PREAMBLE_TOTAL_BUDGET_MS, Math.max(1, timeoutMs) * PREAMBLE_BUDGET_REQUESTS);
+}
+
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
   warn: (_message: string, ..._args: unknown[]) => {},
@@ -1454,7 +1482,10 @@ export function createCrawler(
      * Detect and follow both HTTP and client-side redirects
      * Returns the final URL after following up to MAX_REDIRECTS hops
      */
-    const detectRedirects = (targetUrl: string): Effect.Effect<string, never, never> =>
+    const detectRedirects = (
+      targetUrl: string,
+      budget?: PhaseBudget,
+    ): Effect.Effect<string, never, never> =>
       Effect.promise(async () => {
         // `settledUrl` is the last URL that actually served a response, so every
         // exit below can fall back to it. `currentUrl` cannot: after a
@@ -1477,8 +1508,13 @@ export function createCrawler(
           // default leaves the 10s ceiling, and so the 30s chain budget, in
           // place).
           const hopTimeoutMs = Math.max(1, Math.min(REDIRECT_TIMEOUT_MS, config.timeoutMs));
-          const deadline =
-            Date.now() + Math.min(REDIRECT_TOTAL_BUDGET_MS, hopTimeoutMs * REDIRECT_BUDGET_HOPS);
+          // Seed resolution is the preamble's first stage, so the phase budget
+          // caps the chain too — and every millisecond spent here is one the
+          // root probes downstream no longer have (squirrelscan/repo#1733).
+          const deadline = Math.min(
+            Date.now() + Math.min(REDIRECT_TOTAL_BUDGET_MS, hopTimeoutMs * REDIRECT_BUDGET_HOPS),
+            budget?.deadlineAt ?? Number.POSITIVE_INFINITY,
+          );
           let currentUrl = targetUrl;
           const visited = new Set<string>();
 
@@ -1560,8 +1596,12 @@ export function createCrawler(
       originalUrl?: string,
     ): Effect.Effect<string, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
+        // One wall-clock budget for the whole preamble, armed before the first
+        // request of the crawl. See PREAMBLE_TOTAL_BUDGET_MS.
+        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs));
+
         // Follow redirects to get final URL (both HTTP and client-side)
-        const rawFinalTargetUrl = yield* detectRedirects(targetUrl);
+        const rawFinalTargetUrl = yield* detectRedirects(targetUrl, preamble);
         // SECURITY (#1396) defense-in-depth: detectRedirects follows client-side
         // redirects (meta refresh / JS) whose target is page-controlled.
         // findMetaRefresh / findJavaScriptRedirect already restrict to
@@ -1676,7 +1716,7 @@ export function createCrawler(
         // sitemap discovery and the crawl/robots-txt rule need it. Only
         // Disallow enforcement and Crawl-delay honoring are conditional.
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, config.headers),
+          fetchRobots(baseUrl, config.userAgent, true, config.headers, preamble),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;
@@ -1693,7 +1733,7 @@ export function createCrawler(
         }
 
         // Fetch llms.txt + llms-full.txt at the root once, independent of robots.
-        const llms = yield* fetchLlmsTxt(baseUrl, config.userAgent, config.headers);
+        const llms = yield* fetchLlmsTxt(baseUrl, config.userAgent, config.headers, preamble);
         yield* storage.setLlmsTxt(crawlId, {
           llmsTxt: {
             url: llms.llmsTxt.url,
@@ -1711,18 +1751,33 @@ export function createCrawler(
         });
 
         // Probe homepage markdown content-negotiation + .md variant once.
-        const markdown = yield* probeMarkdownResponse(baseUrl, config.userAgent, config.headers);
+        const markdown = yield* probeMarkdownResponse(
+          baseUrl,
+          config.userAgent,
+          config.headers,
+          preamble,
+        );
         yield* storage.setMarkdownProbe(crawlId, { ...markdown, fetchedAt: Date.now() });
 
         // AX prefetches: well-known/agent files, homepage access under AI-crawler
         // UAs, and RSL licensing — fetched unconditionally like llms/markdown.
-        const wellKnown = yield* probeWellKnown(baseUrl, config.userAgent, config.headers);
+        const wellKnown = yield* probeWellKnown(
+          baseUrl,
+          config.userAgent,
+          config.headers,
+          preamble,
+        );
         yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
 
-        const agentAccess = yield* probeAgentAccess(baseUrl, config.userAgent, config.headers);
+        const agentAccess = yield* probeAgentAccess(
+          baseUrl,
+          config.userAgent,
+          config.headers,
+          preamble,
+        );
         yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
 
-        const rsl = yield* fetchRslLicensing(baseUrl, config.userAgent, config.headers);
+        const rsl = yield* fetchRslLicensing(baseUrl, config.userAgent, config.headers, preamble);
         yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
 
         // Discover and fetch sitemaps (from robots.txt and common locations)
@@ -1748,7 +1803,7 @@ export function createCrawler(
               }
             : null,
           config.userAgent,
-          { maxUrls: sitemapUrlCap, customHeaders: config.headers },
+          { maxUrls: sitemapUrlCap, customHeaders: config.headers, budget: preamble },
         );
 
         const sitemapByUrl = new Map(sitemapResult.all.map((sitemap) => [sitemap.url, sitemap]));
@@ -1915,8 +1970,15 @@ export function createCrawler(
         Object.assign(config, crawl.config);
 
         // Fetch robots.txt again — always, regardless of respectRobots (#790).
+        // Budgeted like every other preamble fetch (squirrelscan/repo#1733).
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, config.headers),
+          fetchRobots(
+            baseUrl,
+            config.userAgent,
+            true,
+            config.headers,
+            createPhaseBudget(preambleBudgetMs(config.timeoutMs)),
+          ),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;
@@ -2054,9 +2116,12 @@ export function createCrawler(
           maxPages: config.maxPages,
         });
 
+        // One wall-clock budget for this restart's preamble, same as start().
+        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs));
+
         // Fetch robots.txt — always, regardless of respectRobots (#790).
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, config.headers),
+          fetchRobots(baseUrl, config.userAgent, true, config.headers, preamble),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;
@@ -2076,7 +2141,7 @@ export function createCrawler(
         }
 
         // Fetch llms.txt + llms-full.txt at the root once, independent of robots.
-        const llms = yield* fetchLlmsTxt(baseUrl, config.userAgent, config.headers);
+        const llms = yield* fetchLlmsTxt(baseUrl, config.userAgent, config.headers, preamble);
         yield* storage.setLlmsTxt(crawlId, {
           llmsTxt: {
             url: llms.llmsTxt.url,
@@ -2094,18 +2159,33 @@ export function createCrawler(
         });
 
         // Probe homepage markdown content-negotiation + .md variant once.
-        const markdown = yield* probeMarkdownResponse(baseUrl, config.userAgent, config.headers);
+        const markdown = yield* probeMarkdownResponse(
+          baseUrl,
+          config.userAgent,
+          config.headers,
+          preamble,
+        );
         yield* storage.setMarkdownProbe(crawlId, { ...markdown, fetchedAt: Date.now() });
 
         // AX prefetches: well-known/agent files, homepage access under AI-crawler
         // UAs, and RSL licensing — fetched unconditionally like llms/markdown.
-        const wellKnown = yield* probeWellKnown(baseUrl, config.userAgent, config.headers);
+        const wellKnown = yield* probeWellKnown(
+          baseUrl,
+          config.userAgent,
+          config.headers,
+          preamble,
+        );
         yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
 
-        const agentAccess = yield* probeAgentAccess(baseUrl, config.userAgent, config.headers);
+        const agentAccess = yield* probeAgentAccess(
+          baseUrl,
+          config.userAgent,
+          config.headers,
+          preamble,
+        );
         yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
 
-        const rsl = yield* fetchRslLicensing(baseUrl, config.userAgent, config.headers);
+        const rsl = yield* fetchRslLicensing(baseUrl, config.userAgent, config.headers, preamble);
         yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
 
         // Seed the crawl queue with root URL

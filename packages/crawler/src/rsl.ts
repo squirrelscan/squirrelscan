@@ -3,8 +3,9 @@ import { truncateToBytes } from "@squirrelscan/utils/bytes";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
 
+import type { PhaseBudget } from "./deadline";
 import type { RslData, RslLicenseDoc } from "@squirrelscan/core-contracts";
 
 const PROBE_TIMEOUT_MS = 15_000;
@@ -50,11 +51,24 @@ export function looksLikeXml(body: string): boolean {
   return head.startsWith("<?xml") || head.startsWith("<");
 }
 
+const unreachableDoc = (url: string, error: string): RslLicenseDoc => ({
+  url,
+  status: 0,
+  contentType: null,
+  xmlValid: false,
+  looksRsl: false,
+  excerpt: "",
+  error,
+});
+
 async function fetchLicenseDoc(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Promise<RslLicenseDoc> {
+  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  if (timeoutMs === null) return unreachableDoc(url, BUDGET_EXHAUSTED_ERROR);
   try {
     return await safeFetchWithDeadline(
       url,
@@ -65,7 +79,7 @@ async function fetchLicenseDoc(
           ...customHeaders,
         },
       },
-      PROBE_TIMEOUT_MS,
+      timeoutMs,
       async (response) => {
         const contentType = response.headers.get("content-type");
         const raw = await readBodyCapped(response, RSL_MAX_BYTES);
@@ -82,15 +96,7 @@ async function fetchLicenseDoc(
       },
     );
   } catch (e) {
-    return {
-      url,
-      status: 0,
-      contentType: null,
-      xmlValid: false,
-      looksRsl: false,
-      excerpt: "",
-      error: (e as Error).message,
-    };
+    return unreachableDoc(url, (e as Error).message);
   }
 }
 
@@ -101,26 +107,32 @@ export function fetchRslLicensing(
   baseUrl: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Effect.Effect<RslData, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
   return Effect.promise(async () => {
     let robotsBody = "";
     let linkHeader: string | null = null;
+    // A skipped robots read leaves robotsBody empty, which is the same "no
+    // licensing signal" state an unreachable robots.txt produces below.
+    const robotsTimeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
     try {
-      await safeFetchWithDeadline(
-        robotsUrl,
-        { headers: { "User-Agent": userAgent, Accept: "text/plain, */*", ...customHeaders } },
-        PROBE_TIMEOUT_MS,
-        async (response) => {
-          if (response.ok) {
-            const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
-            robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
-            linkHeader = response.headers.get("link");
-          } else {
-            await response.body?.cancel().catch(() => {});
-          }
-        },
-      );
+      if (robotsTimeoutMs !== null) {
+        await safeFetchWithDeadline(
+          robotsUrl,
+          { headers: { "User-Agent": userAgent, Accept: "text/plain, */*", ...customHeaders } },
+          robotsTimeoutMs,
+          async (response) => {
+            if (response.ok) {
+              const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
+              robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
+              linkHeader = response.headers.get("link");
+            } else {
+              await response.body?.cancel().catch(() => {});
+            }
+          },
+        );
+      }
     } catch {
       // robots unreachable → no licensing signal; return empty below.
     }
@@ -148,7 +160,7 @@ export function fetchRslLicensing(
     const documents = await Promise.all(
       licenseUrls.map((url) => {
         const sameOrigin = new URL(url).host === baseHost;
-        return fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined);
+        return fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined, budget);
       }),
     );
 

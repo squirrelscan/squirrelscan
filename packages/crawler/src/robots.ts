@@ -5,11 +5,14 @@ import type { RobotsTxtData } from "@squirrelscan/core-contracts";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
+
+import type { PhaseBudget } from "./deadline";
 
 // Matches the limit Google documents for robots.txt; anything past it is
 // ignored by real crawlers, so there is nothing to gain by reading further.
 const ROBOTS_MAX_BYTES = 512 * 1024;
+const ROBOTS_FETCH_TIMEOUT_MS = 30_000;
 
 export interface RobotsEvaluator {
   data: RobotsTxtData;
@@ -64,16 +67,26 @@ export function createRobotsEvaluator(
   };
 }
 
+function unreachableEvaluator(robotsUrl: string, error: string): RobotsEvaluator {
+  return { data: emptyRobotsData(robotsUrl, error), isAllowed: () => true, crawlDelayMs: null };
+}
+
 export function fetchRobotsEvaluator(
   baseUrl: string,
   userAgent: string,
   respectRobots: boolean,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Effect.Effect<RobotsEvaluator, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
 
   if (!respectRobots) {
     return Effect.succeed(createRobotsEvaluator(robotsUrl, null, userAgent));
+  }
+
+  const timeoutMs = budgetedTimeoutMs(budget, ROBOTS_FETCH_TIMEOUT_MS);
+  if (timeoutMs === null) {
+    return Effect.succeed(unreachableEvaluator(robotsUrl, BUDGET_EXHAUSTED_ERROR));
   }
 
   return Effect.tryPromise({
@@ -89,7 +102,7 @@ export function fetchRobotsEvaluator(
             ...customHeaders,
           },
         },
-        30_000,
+        timeoutMs,
         async (response) => {
           if (response.status === 404) {
             await response.body?.cancel().catch(() => {});
@@ -98,12 +111,7 @@ export function fetchRobotsEvaluator(
 
           if (!response.ok) {
             await response.body?.cancel().catch(() => {});
-            const data = emptyRobotsData(robotsUrl, `HTTP ${response.status}`);
-            return {
-              data,
-              isAllowed: () => true,
-              crawlDelayMs: null,
-            };
+            return unreachableEvaluator(robotsUrl, `HTTP ${response.status}`);
           }
 
           // Bounded: robots.txt is fetched before anything else is known about the
@@ -113,13 +121,6 @@ export function fetchRobotsEvaluator(
           return createRobotsEvaluator(robotsUrl, content, userAgent);
         },
       ),
-    catch: (error) => {
-      const data = emptyRobotsData(robotsUrl, (error as Error).message);
-      return {
-        data,
-        isAllowed: () => true,
-        crawlDelayMs: null,
-      };
-    },
+    catch: (error) => unreachableEvaluator(robotsUrl, (error as Error).message),
   }).pipe(Effect.catchAll((err) => Effect.succeed(err)));
 }

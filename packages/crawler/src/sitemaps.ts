@@ -9,7 +9,9 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
+
+import type { PhaseBudget } from "./deadline";
 
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
@@ -152,11 +154,14 @@ export type SitemapFetchResult =
   | { success: true; data: SitemapData }
   | { success: false; url: string; error: string };
 
+const SITEMAP_FETCH_TIMEOUT_MS = 30_000;
+
 export function fetchSitemap(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
   baseHost?: string,
+  budget?: PhaseBudget,
 ): Effect.Effect<SitemapFetchResult, never, never> {
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
@@ -165,6 +170,10 @@ export function fetchSitemap(
   const originScopedHeaders =
     baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
   return Effect.promise(async (): Promise<SitemapFetchResult> => {
+    // Budget spent: recorded as a fetch failure, the same shape an unreachable
+    // sitemap already produces, so discovery keeps its normal result contract.
+    const timeoutMs = budgetedTimeoutMs(budget, SITEMAP_FETCH_TIMEOUT_MS);
+    if (timeoutMs === null) return { success: false, url, error: BUDGET_EXHAUSTED_ERROR };
     try {
       // #1395: manual redirects — per-hop scheme allowlist + strip secret
       // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
@@ -181,7 +190,7 @@ export function fetchSitemap(
           },
           redirect: "follow",
         },
-        30_000,
+        timeoutMs,
         async (response): Promise<SitemapFetchResult> => {
           if (!response.ok) {
             await response.body?.cancel().catch(() => {});
@@ -244,11 +253,22 @@ export function fetchSitemapsRecursive(
   // #1393: host of the audited origin; customHeaders are only forwarded to
   // matching-host sitemap fetches. Threaded through the recursion.
   baseHost?: string,
+  // squirrelscan/repo#1733: the crawl preamble's shared wall-clock budget.
+  // Threaded through the recursion so a spent budget ends the whole descent,
+  // not just the request that noticed.
+  budget?: PhaseBudget,
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (currentDepth >= maxDepth || urls.length === 0) {
     return Effect.succeed([]);
   }
   if (urlBudget && urlBudget.remaining <= 0) {
+    return Effect.succeed([]);
+  }
+  // Wall-clock budget spent: abandon the descent rather than walking a
+  // sitemap index's thousands of children just to record a skip for each.
+  // The chunk loop below still relies on `fetchSitemap`'s own check for a
+  // budget that expires partway through a level.
+  if (budgetedTimeoutMs(budget, SITEMAP_FETCH_TIMEOUT_MS) === null) {
     return Effect.succeed([]);
   }
 
@@ -279,7 +299,7 @@ export function fetchSitemapsRecursive(
 
       const chunk = unseenUrls.slice(i, i + SITEMAP_FETCH_CONCURRENCY);
       const chunkResults = yield* Effect.all(
-        chunk.map((url) => fetchSitemap(url, userAgent, customHeaders, baseHost)),
+        chunk.map((url) => fetchSitemap(url, userAgent, customHeaders, baseHost, budget)),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
       fetchResults.push(...chunkResults);
@@ -322,6 +342,7 @@ export function fetchSitemapsRecursive(
       urlBudget,
       customHeaders,
       baseHost,
+      budget,
     );
 
     return [...fetchResults, ...childResults];
@@ -350,6 +371,12 @@ export interface DiscoverSitemapsOptions {
   maxUrls?: number;
   /** Custom HTTP headers attached to every sitemap fetch (e.g. Web Bot Auth signatures). */
   customHeaders?: Record<string, string>;
+  /**
+   * Wall-clock budget shared with the rest of the crawl preamble. Discovery is
+   * its last stage, so it usually inherits whatever the root probes left over
+   * (squirrelscan/repo#1733).
+   */
+  budget?: PhaseBudget;
 }
 
 export function discoverSitemaps(
@@ -400,6 +427,7 @@ export function discoverSitemaps(
       urlBudget,
       options.customHeaders,
       baseHost,
+      options.budget,
     );
 
     const allSitemaps = allResults.filter((result) => result.success).map((result) => result.data);
