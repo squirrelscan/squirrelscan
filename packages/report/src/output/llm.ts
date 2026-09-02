@@ -99,9 +99,13 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // the AUDITED SITE chose: it is reported, never a destination to go fetch.
   const refusedSeedRedirect = seedRedirect(report);
   if (refusedSeedRedirect) {
-    lines.push(
-      `<seed-redirect final-url="${escapeXml(refusedSeedRedirect.finalUrl)}" followed="false">`,
-    );
+    // `final-url` is omitted when the stored target did not survive
+    // canonicalization: an agent that reads only attributes then sees no URL
+    // rather than one nobody vetted, and the note below says why.
+    const finalUrlAttr = refusedSeedRedirect.finalUrl
+      ? ` final-url="${escapeXml(refusedSeedRedirect.finalUrl)}"`
+      : "";
+    lines.push(`<seed-redirect${finalUrlAttr} followed="false">`);
     lines.push(`${indent(1)}${escapeXml(refusedSeedRedirect.note)}`);
     lines.push("</seed-redirect>");
   }

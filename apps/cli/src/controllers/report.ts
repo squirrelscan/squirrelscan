@@ -21,6 +21,8 @@ export interface CrawlMetadataWithPublished extends CrawlMetadata {
   published?: PublishedReportRecord;
 }
 
+import { WITHHELD_SEED_REDIRECT_TARGET } from "@squirrelscan/report";
+
 import {
   OUTPUT_FORMATS,
   OUTPUT_FORMATS_HELP,
@@ -85,6 +87,16 @@ interface SlimJsonReport {
   meta: {
     version: string;
     baseUrl: string;
+    /**
+     * A refused off-site seed redirect (#1418): `baseUrl` is what was graded,
+     * this is where the seed pointed. `finalUrl` is null when the target was
+     * withheld rather than serialized. Absent in slim JSON written before #1418.
+     */
+    seedRedirect?: {
+      finalUrl: string | null;
+      followed: false;
+      note: string;
+    };
     timestamp: string;
     totalPages: number;
   };
@@ -188,6 +200,22 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
 
   return {
     baseUrl: report.meta.baseUrl,
+    // #1418: carry a refused off-site seed redirect back through the round
+    // trip. Dropping it here would mean exporting JSON and re-rendering it
+    // silently turns a report about a redirected seed back into what looks like
+    // a clean audit. The file is user-supplied, so the declared type is a claim
+    // and not a fact: anything that is not a string — a withheld target, or a
+    // forged one — comes back as the sentinel and lands on the withheld
+    // disclosure. A string is passed through and re-canonicalized at render
+    // time, never trusted as-is.
+    ...(report.meta.seedRedirect
+      ? {
+          finalUrl:
+            typeof report.meta.seedRedirect.finalUrl === "string"
+              ? report.meta.seedRedirect.finalUrl
+              : WITHHELD_SEED_REDIRECT_TARGET,
+        }
+      : {}),
     timestamp: report.meta.timestamp,
     totalPages: report.meta.totalPages,
     passed: report.summary.passed,

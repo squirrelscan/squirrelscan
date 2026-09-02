@@ -8,6 +8,7 @@ import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
+import { seedRedirect } from "../coverage";
 
 export interface XmlRenderOptions {
   version?: string;
@@ -42,6 +43,22 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   lines.push(`${indent(2)}<pages-crawled>${report.totalPages}</pages-crawled>`);
   lines.push(`${indent(2)}<audit-date>${escapeXml(report.timestamp)}</audit-date>`);
   lines.push(`${indent(1)}</site>`);
+
+  // Refused off-site seed redirect (#1418): the seed left its own registrable
+  // domain, the crawler declined to follow it, and `<site><url>` above is what
+  // was graded. Without this the document is a clean audit of a URL nobody
+  // asked for. `<final-url>` is a URL the AUDITED SITE chose — reported, never
+  // a destination to go fetch — and is omitted entirely when it did not survive
+  // canonicalization, in which case `<note>` says so.
+  const refusedSeedRedirect = seedRedirect(report);
+  if (refusedSeedRedirect) {
+    lines.push(`${indent(1)}<seed-redirect followed="false">`);
+    if (refusedSeedRedirect.finalUrl) {
+      lines.push(`${indent(2)}<final-url>${escapeXml(refusedSeedRedirect.finalUrl)}</final-url>`);
+    }
+    lines.push(`${indent(2)}<note>${escapeXml(refusedSeedRedirect.note)}</note>`);
+    lines.push(`${indent(1)}</seed-redirect>`);
+  }
 
   // null ⇒ N/A (failed/0-page audit) — never coerce to 0/"F" (#586).
   const overall = report.healthScore?.overall ?? null;

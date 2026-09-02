@@ -5,6 +5,7 @@
 // of a URL nobody requested.
 
 import { describe, expect, test } from "bun:test";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 import type { AuditReport } from "../src/types";
 import { seedRedirect, seedRedirectLine } from "../src/coverage";
@@ -12,6 +13,8 @@ import { renderText } from "../src/output/text";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderHtml } from "../src/output/html";
 import { renderLlm } from "../src/output/llm";
+import { renderJson } from "../src/output/json";
+import { renderXml } from "../src/output/xml";
 
 // Built rather than typed as literals so this file carries no raw control
 // characters of its own.
@@ -20,11 +23,18 @@ const CR = String.fromCharCode(13);
 const TAB = String.fromCharCode(9);
 const ESC = String.fromCharCode(27);
 const DEL = String.fromCharCode(127);
+/** 8-bit CSI: a terminal acts on it exactly as it does on ESC-[. */
+const CSI = String.fromCharCode(0x9b);
 const RTL_OVERRIDE = String.fromCharCode(0x202e);
 const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
+/** In JavaScript's whitespace set, but invisible formatting rather than space. */
+const BOM = String.fromCharCode(0xfeff);
+const NBSP = String.fromCharCode(0x00a0);
 
 const NOTE =
   "Seed redirected off-site to https://other.example/landing, not followed. This audit graded https://example.com.";
+const WITHHELD_NOTE =
+  "Seed redirected off-site and was not followed. The redirect target was not a valid URL and is withheld. This audit graded https://example.com.";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -40,6 +50,39 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 }
 
 const redirected = baseReport({ finalUrl: "https://other.example/landing" });
+
+/** Every renderer, so a disclosure can never be wired into only some of them. */
+const RENDERERS: ReadonlyArray<{ name: string; render: (r: AuditReport) => string }> = [
+  { name: "text", render: (r) => renderText(r) },
+  { name: "markdown", render: (r) => renderMarkdown(r) },
+  { name: "html", render: (r) => renderHtml(r, { reportId: "rep_1" }) },
+  { name: "llm", render: (r) => renderLlm(r) },
+  { name: "json", render: (r) => renderJson(r) },
+  { name: "xml", render: (r) => renderXml(r) },
+];
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@",
+  // Every value here is a URL or a sentence; coercing "false" to a boolean or a
+  // numeric-looking path segment to a number would hide what was actually written.
+  parseAttributeValue: false,
+  parseTagValue: false,
+  trimValues: true,
+});
+
+/**
+ * Validate, then parse. The parser alone is lenient about mismatched tags and
+ * stray roots, so a hostile value that broke out of an attribute could still
+ * come back as a plausible-looking object; the validator is what makes an
+ * assertion about the parsed tree an assertion about well-formed XML.
+ */
+const xml = {
+  parse(document: string): ReturnType<XMLParser["parse"]> {
+    expect(XMLValidator.validate(document)).toBe(true);
+    return parser.parse(document);
+  },
+};
 
 describe("seedRedirect", () => {
   test("names the refused target AND the URL that was actually graded", () => {
@@ -66,9 +109,60 @@ describe("seedRedirect", () => {
     expect(seedRedirect(baseReport({ finalUrl: "HTTPS://Example.com" }))).toBeNull();
   });
 
+  test("null when the only difference is a scheme's default port", () => {
+    // The parser drops :443 on https and :80 on http, so these are the same
+    // origin spelled two ways — not a redirect anywhere.
+    expect(seedRedirect(baseReport({ finalUrl: "https://example.com:443/" }))).toBeNull();
+    expect(seedRedirect(baseReport({ finalUrl: "https://example.com:443" }))).toBeNull();
+    expect(
+      seedRedirect(baseReport({ baseUrl: "http://example.com", finalUrl: "http://example.com:80/" })),
+    ).toBeNull();
+    // A NON-default port is a different place and still discloses.
+    expect(seedRedirect(baseReport({ finalUrl: "https://example.com:8443/" }))?.finalUrl).toBe(
+      "https://example.com:8443/",
+    );
+  });
+
+  test("null when a Unicode host and its punycode are the same host", () => {
+    // Both sides go through IDNA, so the two spellings compare equal instead of
+    // producing a line claiming the seed redirected off its own domain.
+    const unicodeHost = "https://例え.jp";
+    const punycodeHost = "https://xn--r8jz45g.jp/";
+    expect(
+      seedRedirect(baseReport({ baseUrl: unicodeHost, finalUrl: punycodeHost })),
+    ).toBeNull();
+    expect(
+      seedRedirect(baseReport({ baseUrl: punycodeHost, finalUrl: unicodeHost })),
+    ).toBeNull();
+  });
+
   test("null for a blank finalUrl, rather than an empty placeholder line", () => {
     expect(seedRedirect(baseReport({ finalUrl: "" }))).toBeNull();
     expect(seedRedirect(baseReport({ finalUrl: "   " }))).toBeNull();
+    expect(seedRedirect(baseReport({ finalUrl: `${TAB}${LF}${CR}` }))).toBeNull();
+    // A no-break space really is a space, so it reads as blank too.
+    expect(seedRedirect(baseReport({ finalUrl: NBSP }))).toBeNull();
+  });
+
+  test("a BOM-only finalUrl is a stored value, not a blank field", () => {
+    // U+FEFF is in JavaScript's whitespace set, so `trim()` would call this
+    // blank — which would let an invisible value buy the silence the whole
+    // disclosure exists to prevent.
+    const result = seedRedirect(baseReport({ finalUrl: BOM }));
+    expect(result?.finalUrl).toBeNull();
+    expect(result?.note).toBe(WITHHELD_NOTE);
+  });
+
+  test("a finalUrl that is not a string is treated as absent, not thrown on", () => {
+    // Out of contract rather than hostile: a renderer must not crash on it.
+    // The one place untrusted data enters (slim-JSON reconstruction) maps a
+    // malformed field to its own stand-in, so the disclosure survives there.
+    for (const malformed of [42, {}, [], true, null]) {
+      const report = baseReport();
+      (report as { finalUrl?: unknown }).finalUrl = malformed;
+      expect(seedRedirect(report)).toBeNull();
+      expect(() => renderText(report)).not.toThrow();
+    }
   });
 
   test("null without a baseUrl: with nothing to contrast against the line says nothing", () => {
@@ -100,15 +194,46 @@ describe("seedRedirect", () => {
       }),
     );
     expect(result?.finalUrl).toBe("https://xn--xample-2of.com/%E2%80%AEgnp.exe%E2%80%8B");
-    expect(result?.finalUrl.includes(RTL_OVERRIDE)).toBe(false);
-    expect(result?.finalUrl.includes(ZERO_WIDTH_SPACE)).toBe(false);
+    expect(result?.finalUrl?.includes(RTL_OVERRIDE)).toBe(false);
+    expect(result?.finalUrl?.includes(ZERO_WIDTH_SPACE)).toBe(false);
   });
 
-  test("a value that is not an http(s) URL still gets disclosed, with the same characters dropped", () => {
-    // Better than staying silent about a redirect that happened. The fallback
-    // is lossy on purpose: it only has to be safe to print.
-    const result = seedRedirect(baseReport({ finalUrl: `javascript:alert(1)${LF}x` }));
-    expect(result?.finalUrl).toBe("javascript:alert(1)x");
+  test("a value that is not an http(s) URL is withheld, and the redirect still disclosed", () => {
+    // Refusing beats sanitizing: the only producer of this field resolves a
+    // `Location` against an absolute http(s) seed, so a value that does not
+    // parse is already off the legitimate path and has no shape worth keeping.
+    // Sanitizing would mean maintaining a denylist of unsafe code points
+    // forever; withholding keeps the WHATWG parser's allowlist. The disclosure
+    // — the load-bearing half — still fires.
+    for (const hostile of [
+      `javascript:alert(1)${LF}x`,
+      "not-a-url",
+      `not-a-url${CSI}2J${RTL_OVERRIDE}txt`,
+      "//protocol-relative/only",
+      "data:text/html,<script>alert(1)</script>",
+      // Invisible characters only. Still a stored value, so still disclosed:
+      // being unprintable must not be a way to buy silence.
+      `${RTL_OVERRIDE}${CSI}`,
+    ]) {
+      const result = seedRedirect(baseReport({ finalUrl: hostile }));
+      expect(result?.finalUrl).toBeNull();
+      expect(result?.note).toBe(WITHHELD_NOTE);
+    }
+  });
+
+  test("baseUrl loses C1 and bidi controls too, not only C0 and whitespace", () => {
+    // baseUrl is not canonicalized (it is shown the way the rest of the report
+    // shows it), so it gets the same floor by subtraction.
+    const result = seedRedirect(
+      baseReport({
+        baseUrl: `https://exa${CSI}mple.com/${RTL_OVERRIDE}p${ZERO_WIDTH_SPACE}`,
+        finalUrl: "https://other.example/",
+      }),
+    );
+    expect(result?.baseUrl).toBe("https://example.com/p");
+    for (const char of [CSI, RTL_OVERRIDE, ZERO_WIDTH_SPACE]) {
+      expect(result?.note.includes(char)).toBe(false);
+    }
   });
 });
 
@@ -154,12 +279,86 @@ describe("renderers surface the refused redirect", () => {
   });
 
   test("llm emits a machine-readable element an agent cannot miss", () => {
-    const llm = renderLlm(redirected);
-    expect(llm).toContain(
-      '<seed-redirect final-url="https://other.example/landing" followed="false">',
-    );
-    expect(llm).toContain(NOTE);
-    expect(renderLlm(baseReport())).not.toContain("<seed-redirect");
+    const doc = xml.parse(renderLlm(redirected));
+    expect(doc.audit["seed-redirect"]).toEqual({
+      "@final-url": "https://other.example/landing",
+      "@followed": "false",
+      "#text": NOTE,
+    });
+    expect(xml.parse(renderLlm(baseReport())).audit["seed-redirect"]).toBeUndefined();
+  });
+
+  test("json carries the canonical URL as a structured field beside baseUrl", () => {
+    const meta = JSON.parse(renderJson(redirected)).meta;
+    expect(meta.seedRedirect).toEqual({
+      finalUrl: "https://other.example/landing",
+      followed: false,
+      note: NOTE,
+    });
+    // The graded URL and the refused target are both present and distinct.
+    expect(meta.baseUrl).toBe("https://example.com");
+    expect(JSON.parse(renderJson(baseReport())).meta.seedRedirect).toBeUndefined();
+  });
+
+  test("xml carries the canonical URL as a structured element", () => {
+    const doc = xml.parse(renderXml(redirected));
+    expect(doc["squirrelscan-audit"]["seed-redirect"]).toEqual({
+      "@followed": "false",
+      "final-url": "https://other.example/landing",
+      note: NOTE,
+    });
+    expect(xml.parse(renderXml(baseReport()))["squirrelscan-audit"]["seed-redirect"]).toBeUndefined();
+  });
+
+  test("every renderer discloses it — none can be added and left unwired", () => {
+    for (const { name, render } of RENDERERS) {
+      const output = render(redirected);
+      expect(`${name}: ${output.includes("https://other.example/landing")}`).toBe(`${name}: true`);
+      expect(`${name}: ${output.includes("not followed")}`).toBe(`${name}: true`);
+    }
+  });
+});
+
+describe("a target that could not be canonicalized is withheld, not sanitized", () => {
+  // The repro: unparseable, and carrying both an 8-bit CSI (which a terminal
+  // acts on) and a bidi override (which rewrites how the rest reads). Neither
+  // is in the C0/whitespace set the old fallback stripped.
+  const hostile = baseReport({ finalUrl: `not-a-url${CSI}2J${RTL_OVERRIDE}txt` });
+
+  test("no renderer emits any byte of the stored value", () => {
+    for (const { name, render } of RENDERERS) {
+      const output = render(hostile);
+      // The disclosure still happens, unescaped and identical in every format...
+      expect(`${name}: ${output.includes(WITHHELD_NOTE)}`).toBe(`${name}: true`);
+      // ...and nothing site-controlled rides along with it, in any spelling.
+      for (const [label, needle] of [
+        ["raw CSI", CSI],
+        ["raw override", RTL_OVERRIDE],
+        ["stripped value", "not-a-url"],
+        ["escaped override", "%E2%80%AE"],
+        ["escaped CSI", "%C2%9B"],
+      ] as const) {
+        expect(`${name}/${label}: ${output.includes(needle)}`).toBe(`${name}/${label}: false`);
+      }
+    }
+  });
+
+  test("the machine formats say the target is absent rather than inventing one", () => {
+    // A consumer reading only the URL field gets nothing, not a placeholder it
+    // would treat as a URL; the note carries the explanation.
+    expect(JSON.parse(renderJson(hostile)).meta.seedRedirect).toEqual({
+      finalUrl: null,
+      followed: false,
+      note: WITHHELD_NOTE,
+    });
+    expect(xml.parse(renderXml(hostile))["squirrelscan-audit"]["seed-redirect"]).toEqual({
+      "@followed": "false",
+      note: WITHHELD_NOTE,
+    });
+    expect(xml.parse(renderLlm(hostile)).audit["seed-redirect"]).toEqual({
+      "@followed": "false",
+      "#text": WITHHELD_NOTE,
+    });
   });
 });
 
@@ -202,29 +401,108 @@ describe("the site-controlled URL is escaped in every format", () => {
     expect(md).not.toContain("/a&#x202E;b");
   });
 
-  test("llm xml-escapes the attribute value and the sentence", () => {
-    const llm = renderLlm(hostile);
-    expect(llm).toContain(`final-url="${canonical.replaceAll("&", "&amp;")}"`);
-    expect(llm).not.toContain("<img/onerror=y>");
+  test("the XML formats stay well-formed and keep the URL out of the markup", () => {
+    // Parsed, not string-matched: a broken attribute quote or an unescaped `<`
+    // shows up as a parse failure or a stray element, and matching on
+    // substrings would miss both.
+    const fromLlm = xml.parse(renderLlm(hostile)).audit["seed-redirect"];
+    expect(fromLlm["@final-url"]).toBe(canonical);
+    expect(fromLlm["#text"]).toContain(canonical);
+    const fromXml = xml.parse(renderXml(hostile))["squirrelscan-audit"]["seed-redirect"];
+    expect(fromXml["final-url"]).toBe(canonical);
+    expect(fromXml.note).toContain(canonical);
+    // The `<img>` in the value stayed a text/attribute value in both.
+    for (const output of [renderLlm(hostile), renderXml(hostile)]) {
+      expect(output).not.toContain("<img/onerror=y>");
+    }
   });
 
-  test("llm escapes a quote that reached the fallback path, so the attribute cannot be closed", () => {
-    // Canonicalization percent-encodes a quote, but a value that does not parse
-    // as a URL keeps one, and it lands in an XML attribute.
-    const llm = renderLlm(baseReport({ finalUrl: 'not a url" onerror="alert(1)' }));
-    expect(llm).toContain('final-url="notaurl&quot;onerror=&quot;alert(1)" followed="false"');
+  test("json holds the URL as data, with no escaping of its own to get wrong", () => {
+    const meta = JSON.parse(renderJson(hostile)).meta;
+    expect(meta.seedRedirect.finalUrl).toBe(canonical);
+    expect(meta.seedRedirect.note).toContain(canonical);
   });
 
   test("no renderer lets a newline in finalUrl start a line of its own", () => {
     const withNewline = baseReport({ finalUrl: `https://evil.example/a${LF}# Everything is fine` });
-    for (const output of [
-      renderText(withNewline),
-      renderMarkdown(withNewline),
-      renderLlm(withNewline),
-      renderHtml(withNewline, { reportId: "rep_1" }),
-    ]) {
-      expect(output).toContain("https://evil.example/a#%20Everything%20is%20fine");
-      expect(output).not.toContain(`${LF}# Everything is fine`);
+    for (const { name, render } of RENDERERS) {
+      const output = render(withNewline);
+      expect(`${name}: ${output.includes("https://evil.example/a#%20Everything%20is%20fine")}`).toBe(
+        `${name}: true`,
+      );
+      expect(`${name}: ${output.includes(`${LF}# Everything is fine`)}`).toBe(`${name}: false`);
     }
   });
+});
+
+/**
+ * Return the single contiguous chunk `after` adds to `before`, failing if the
+ * two differ by anything else. Asserting on the reconstruction is what makes
+ * this a full-output equality check: everything outside the returned chunk is
+ * byte-identical, so a report with no redirect renders exactly as it did before
+ * the disclosure existed.
+ */
+function soleInsertion(before: string, after: string): string {
+  let prefix = 0;
+  while (prefix < before.length && before[prefix] === after[prefix]) prefix++;
+  let suffix = 0;
+  while (
+    suffix < before.length - prefix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+  expect(before).toBe(after.slice(0, prefix) + after.slice(after.length - suffix));
+  return after.slice(prefix, after.length - suffix);
+}
+
+describe("a report with no redirect renders byte-for-byte as it did before", () => {
+  const baseline = baseReport({
+    scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 1, capped: false },
+    coverage: { auditedPages: 1, knownPages: 1, carriedFindings: 0 },
+  });
+
+  // Every input on which `seedRedirect` returns null. Each must produce output
+  // identical to the field being absent entirely — not merely output that lacks
+  // the word "Seed", which a stray blank line or wrapper would still satisfy.
+  const suppressed: ReadonlyArray<[string, string]> = [
+    ["blank", ""],
+    ["whitespace only", "   "],
+    ["tab and newline only", `${TAB}${LF}${CR}`],
+    ["no-break space only", NBSP],
+    ["same as baseUrl", "https://example.com"],
+    ["trailing-slash spelling", "https://example.com/"],
+    ["default port", "https://example.com:443/"],
+    ["case-different scheme and host", "HTTPS://Example.com"],
+  ];
+
+  for (const { name, render } of RENDERERS) {
+    test(`${name}: identical to the no-field rendering in every suppressed case`, () => {
+      const withoutField = render(baseline);
+      expect(withoutField).not.toContain("Seed redirected");
+      for (const [label, finalUrl] of suppressed) {
+        // Compared as one labeled string so a failure names the case.
+        const rendered = render(baseReport({ ...baseline, finalUrl }));
+        expect(`${label}: ${rendered}`).toBe(`${label}: ${withoutField}`);
+      }
+    });
+
+    test(`${name}: a redirect adds the disclosure and changes nothing else`, () => {
+      const withoutField = render(baseline);
+      const withRedirect = render(
+        baseReport({ ...baseline, finalUrl: "https://other.example/landing" }),
+      );
+      // Asserts inside: the two outputs differ by exactly this one insertion.
+      const inserted = soleInsertion(withoutField, withRedirect);
+      // ...and that insertion is the disclosure. It comes back rotated: the
+      // diff boundary lands wherever the two outputs stop matching, which is
+      // mid-token when the next line happens to start with the same character.
+      // Doubling makes the block contiguous again.
+      expect(`${inserted}${inserted}`).toContain(NOTE);
+      // Exactly one disclosure in the whole output, so nothing rode along with
+      // it. The note survives every format verbatim (nothing in it is markdown,
+      // XML or JSON syntax), so this counts the same way in all six.
+      expect(withRedirect.split(NOTE).length - 1).toBe(1);
+    });
+  }
 });

@@ -7,6 +7,7 @@ import {
   carriedTag,
   coverageLine,
   scanScopeLine,
+  seedRedirectLine,
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
@@ -94,6 +95,10 @@ export function generateConsoleReport(
     log(
       `${fmt.dim(report.baseUrl)} • ${report.statusReason ?? "No auditable pages"}`
     );
+    // A seed that redirects off-site and is refused is a common way to end up
+    // here with nothing to audit, so this branch needs the disclosure too.
+    const redirect = seedRedirectLine(report);
+    if (redirect) log(fmt.yellow(redirect));
     log(divider());
     return;
   }
@@ -109,6 +114,11 @@ export function generateConsoleReport(
   log(
     `${fmt.dim(report.baseUrl)} • ${report.totalPages} page${report.totalPages === 1 ? "" : "s"} • ${colorFn(`${score}/100`)} ${fmt.dim(`(${grade})`)}`
   );
+  // Refused off-site seed redirect (#1418): the URL on the line above is what
+  // was graded, NOT where the seed pointed. Yellow rather than dim like the
+  // lines below it — it changes what the whole report is about.
+  const seedRedirect = seedRedirectLine(report);
+  if (seedRedirect) log(fmt.yellow(seedRedirect));
   // Scan scope (#1180) + smart-audits coverage (#110): the score reads with
   // its basis. The capped-crawl hint stays with pageLimitHint (commands layer).
   const scope = scanScopeLine(report);

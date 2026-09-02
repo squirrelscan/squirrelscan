@@ -1,3 +1,4 @@
+import { renderJson, seedRedirect } from "@squirrelscan/report";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -185,6 +186,89 @@ describe("loadReport - slim JSON reconstruction", () => {
         expect(result.data.statusReason).toBe(
           "Site blocked the crawler (bot protection / auth / rate limit)"
         );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** Render slim JSON, reload it, and hand back the reconstructed report. */
+  function roundTrip(source: AuditReport): AuditReport {
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-slim-"));
+    const path = join(dir, "report.json");
+    try {
+      writeFileSync(path, renderJson(source));
+      const result = loadReport(path);
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("loadReport failed");
+      return result.data;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  test("carries a refused off-site seed redirect through reconstruction (#1418)", () => {
+    // Without this, `--format json` then re-render is a silent way to turn a
+    // report about a redirected seed back into what reads as a clean audit.
+    const reloaded = roundTrip(
+      createMockReport({ finalUrl: "https://other.example/landing" })
+    );
+    expect(seedRedirect(reloaded)).toEqual({
+      finalUrl: "https://other.example/landing",
+      baseUrl: "https://example.com",
+      note: "Seed redirected off-site to https://other.example/landing, not followed. This audit graded https://example.com.",
+    });
+  });
+
+  test("a withheld redirect target survives the round trip as withheld (#1418)", () => {
+    // The target was never serialized, so there is nothing to restore — but the
+    // disclosure must not be lost either, least of all in the case where the
+    // stored value was hostile enough to be refused in the first place.
+    const csi = String.fromCharCode(0x9b);
+    const override = String.fromCharCode(0x202e);
+    const reloaded = roundTrip(
+      createMockReport({ finalUrl: `not-a-url${csi}2J${override}txt` })
+    );
+    const disclosure = seedRedirect(reloaded);
+    expect(disclosure?.finalUrl).toBeNull();
+    expect(disclosure?.note).toBe(
+      "Seed redirected off-site and was not followed. The redirect target was not a valid URL and is withheld. This audit graded https://example.com."
+    );
+    expect(reloaded.finalUrl).not.toContain("not-a-url");
+    expect(reloaded.finalUrl).not.toContain(csi);
+    expect(reloaded.finalUrl).not.toContain(override);
+  });
+
+  test("a report without a redirect gains no finalUrl from reconstruction", () => {
+    expect(roundTrip(createMockReport({})).finalUrl).toBeUndefined();
+  });
+
+  test("a forged seedRedirect field discloses rather than crashing a renderer", () => {
+    // The JSON is user-supplied, so its declared types are a claim. A
+    // finalUrl that is not a string must not reach a renderer as-is.
+    const slim = {
+      meta: {
+        version: "0.0.89",
+        baseUrl: "https://example.com",
+        seedRedirect: { finalUrl: 42, followed: false, note: "anything" },
+        timestamp: new Date().toISOString(),
+        totalPages: 1,
+      },
+      score: { overall: 90, grade: "A", categories: [] },
+      summary: { passed: 1, warnings: 0, failed: 0 },
+      issues: [],
+    };
+
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-slim-"));
+    const path = join(dir, "report.json");
+    try {
+      writeFileSync(path, JSON.stringify(slim));
+      const result = loadReport(path);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        // Disclosed, withheld, and the forged note is not echoed back.
+        expect(seedRedirect(result.data)?.finalUrl).toBeNull();
+        expect(seedRedirect(result.data)?.note).not.toContain("anything");
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });

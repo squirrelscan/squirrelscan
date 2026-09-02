@@ -93,14 +93,38 @@ export function fetchFallbacksLine(report: AuditReport): string | null {
 }
 
 export interface SeedRedirect {
-  /** Where the refused redirect pointed. Site-controlled: display only, and
-   *  every caller must escape it for its own output format. */
-  finalUrl: string;
+  /**
+   * Where the refused redirect pointed, canonicalized — or `null` when the
+   * stored value was not a parseable http(s) URL and was withheld instead of
+   * printed (see {@link seedRedirect}). Site-controlled: display only, and
+   * every caller must escape it for its own output format.
+   */
+  finalUrl: string | null;
   /** The URL this audit actually graded (the report's `baseUrl`). */
   baseUrl: string;
   /** The disclosure as one sentence, ready to render. */
   note: string;
 }
+
+/**
+ * What the disclosure says in place of a redirect target that could not be
+ * canonicalized. Fixed text: no byte of the stored value reaches any output.
+ * Worded without punctuation any renderer escapes, so it reads the same in the
+ * raw markdown source as it does everywhere else.
+ */
+const WITHHELD_TARGET = "The redirect target was not a valid URL and is withheld.";
+
+/**
+ * Stand-in `finalUrl` for rebuilding a report whose redirect target was
+ * withheld — a slim-JSON round trip, where the target was never serialized and
+ * so cannot be restored (#1418).
+ *
+ * Deliberately not a URL: {@link seedRedirect} re-refuses it and re-emits the
+ * withheld disclosure, so a reloaded report says exactly what the original one
+ * did instead of quietly losing the fact that a redirect happened. Self-naming
+ * so it explains itself if some other consumer ever prints `finalUrl` raw.
+ */
+export const WITHHELD_SEED_REDIRECT_TARGET = "withheld:unparseable-redirect-target";
 
 /**
  * A refused off-site seed redirect (#1418), or null when there is nothing to
@@ -114,15 +138,35 @@ export interface SeedRedirect {
  *
  * The returned `finalUrl` is the canonical one `note` quotes, so a consumer
  * reading the field and a human reading the sentence can never see two
- * different URLs. Only `finalUrl` is canonicalized: `baseUrl` is the crawl's
- * own base and is shown the way the rest of the report shows it. Escaping for
- * markdown/HTML/XML stays each renderer's job.
+ * different URLs. It is `null` when the stored value did not survive
+ * {@link canonicalizeReportUrl}: the redirect is still disclosed, with the
+ * target withheld, so a report can never carry a target nobody vetted. Only
+ * `finalUrl` is canonicalized: `baseUrl` is the crawl's own base and is shown
+ * the way the rest of the report shows it. Escaping for markdown/HTML/XML
+ * stays each renderer's job.
  */
 export function seedRedirect(report: AuditReport): SeedRedirect | null {
-  const finalUrl = canonicalizeReportUrl(report.finalUrl);
-  if (!finalUrl) return null;
+  // A non-string is out of contract rather than hostile content: treat it as
+  // absent instead of throwing on it. The one place untrusted data enters (slim
+  // JSON reconstruction) maps a malformed field to a stand-in of its own, so
+  // the disclosure still survives there.
+  const stored = typeof report.finalUrl === "string" ? report.finalUrl : "";
+  // Absent or whitespace-only ⇒ no value was stored, so there is no redirect to
+  // disclose. Deliberately NOT "nothing printable": a value made only of
+  // invisible characters is a stored value, and hostile input must not be able
+  // to buy silence by being unprintable. Everything past here either
+  // canonicalizes or is withheld, but it is always disclosed.
+  if (isBlankUrlField(stored)) return null;
   const baseUrl = dropNonUrlChars(report.baseUrl);
   if (!baseUrl) return null;
+  const finalUrl = canonicalizeReportUrl(stored);
+  if (finalUrl === null) {
+    return {
+      finalUrl: null,
+      baseUrl,
+      note: `Seed redirected off-site and was not followed. ${WITHHELD_TARGET} This audit graded ${baseUrl}.`,
+    };
+  }
   // Compared canonically so an equivalent pair ("https://example.com" vs
   // ".../") never prints a line saying the seed redirected to itself.
   if (finalUrl === baseUrl || finalUrl === canonicalizeReportUrl(baseUrl)) return null;
@@ -143,7 +187,8 @@ export function seedRedirectLine(report: AuditReport): string | null {
 }
 
 /**
- * Canonicalize a site-controlled URL for display.
+ * Canonicalize a site-controlled URL for display, or `null` for a value we are
+ * not willing to print at all.
  *
  * A redirect target is whatever `Location` the audited site sent, and it
  * reaches a report as a stored string, so it keeps whatever bytes it was sent
@@ -155,24 +200,29 @@ export function seedRedirectLine(report: AuditReport): string | null {
  * Left raw, a newline would break out of the line that renders the URL and a
  * bidi override would rewrite how the rest of it reads.
  *
- * Falls back to {@link dropNonUrlChars} for a value that does not parse as an
- * http(s) URL at all: still safe to print, and better than dropping the
- * disclosure that a redirect happened.
+ * Anything the parser does not hand back as http(s) is REFUSED rather than
+ * sanitized. The only producer of this field resolves a `Location` header
+ * against an absolute http(s) seed, so a value that does not parse is already
+ * off the legitimate path: there is no shape worth preserving, and the
+ * alternative — printing it minus a denylist of unsafe ranges — is a list that
+ * has to stay current with Unicode forever, and was already missing the C1
+ * controls (0x9b is an 8-bit CSI a terminal acts on) and the bidi overrides.
+ * Refusing keeps the allowlist the WHATWG parser already implements: callers
+ * disclose the redirect with a fixed placeholder instead.
  */
-function canonicalizeReportUrl(value: string | undefined): string {
-  if (!value) return "";
+function canonicalizeReportUrl(value: string | undefined): string | null {
+  if (!value) return null;
   try {
     const url = new URL(value);
     if (url.protocol === "http:" || url.protocol === "https:") return url.href;
   } catch {}
-  return dropNonUrlChars(value);
+  return null;
 }
 
 /**
- * Drop whitespace and control characters from a URL that is not being
- * canonicalized: the crawl's own `baseUrl` (shown the way the rest of the
- * report shows it, no added trailing slash) and anything `canonicalizeReportUrl`
- * could not parse.
+ * Drop whitespace, control characters and invisible formatting from a URL that
+ * is not being canonicalized: the crawl's own `baseUrl`, shown the way the rest
+ * of the report shows it (no added trailing slash).
  *
  * Checked per code point rather than as one character class: a class spanning
  * the C0 range trips oxlint's no-control-regex.
@@ -183,9 +233,17 @@ function dropNonUrlChars(value: string | undefined): string {
   // for..of iterates whole code points, so an astral character cannot be split.
   for (const char of value) {
     const code = char.codePointAt(0) ?? 0;
-    // C0 controls and space (<= 0x20), DEL (0x7f), then the rest of Unicode
-    // whitespace (NBSP, ideographic space and friends).
-    if (code <= 0x20 || code === 0x7f || UNICODE_WHITESPACE.test(char)) continue;
+    // C0 controls and space (<= 0x20), then DEL and the C1 controls
+    // (0x7f-0x9f). C1 matters on its own terms: 0x9b is an 8-bit CSI, which a
+    // terminal acts on exactly as it does ESC-[, and this string reaches text
+    // and console output live.
+    if (code <= 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
+    // The rest of Unicode whitespace (NBSP, ideographic space and friends).
+    if (UNICODE_WHITESPACE.test(char)) continue;
+    // Invisible formatting: bidi controls rewrite how everything after them
+    // reads, and the zero-width family hides a boundary inside a hostname.
+    // None of them carry meaning in a URL.
+    if (isInvisibleFormatChar(code)) continue;
     // Code points XML 1.0 forbids: unpaired surrogates (for..of yields a lone
     // one as its own character) and the noncharacters. They would make the llm
     // renderer's document unparseable.
@@ -195,6 +253,37 @@ function dropNonUrlChars(value: string | undefined): string {
     out += char;
   }
   return out;
+}
+
+/**
+ * True when the value holds nothing but ordinary whitespace, i.e. no value was
+ * really stored.
+ *
+ * Deliberately not `String.prototype.trim`, whose whitespace set includes
+ * U+FEFF for historical reasons: a BOM is invisible formatting, not an empty
+ * field, and reading it as blank would hand an unprintable value exactly the
+ * silence this disclosure exists to prevent. A no-break space, which really is
+ * a space, still counts as blank.
+ */
+function isBlankUrlField(value: string): boolean {
+  for (const char of value) {
+    if (char.codePointAt(0) === 0xfeff) return false;
+    if (!UNICODE_WHITESPACE.test(char)) return false;
+  }
+  return true;
+}
+
+/** Zero-width, joiner and bidi-control code points — invisible by design. */
+function isInvisibleFormatChar(code: number): boolean {
+  return (
+    code === 0x00ad || // soft hyphen
+    code === 0x061c || // Arabic letter mark
+    (code >= 0x200b && code <= 0x200f) || // zero-width space/joiners, LRM, RLM
+    (code >= 0x202a && code <= 0x202e) || // bidi embeddings and overrides
+    (code >= 0x2060 && code <= 0x206f) || // word joiner, invisible operators,
+    // bidi isolates, and the deprecated format controls above them
+    code === 0xfeff // BOM / zero-width no-break space
+  );
 }
 
 const UNICODE_WHITESPACE = /\s/;

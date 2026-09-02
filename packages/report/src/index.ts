@@ -121,6 +121,7 @@ export {
   scanScopeLine,
   seedRedirect,
   seedRedirectLine,
+  WITHHELD_SEED_REDIRECT_TARGET,
   type SeedRedirect,
   fullScanHint,
   checkCarriedLabel,
