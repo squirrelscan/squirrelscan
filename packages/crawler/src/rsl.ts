@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
-import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
+
+import { safeFetchWithDeadline } from "./deadline";
 
 import type { RslData, RslLicenseDoc } from "@squirrelscan/core-contracts";
 
@@ -48,23 +50,13 @@ export function looksLikeXml(body: string): boolean {
   return head.startsWith("<?xml") || head.startsWith("<");
 }
 
-function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  // #1395: manual redirects — per-hop scheme allowlist + strip secret
-  // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
-  return safeRedirectFetch(url, { ...options, signal: controller.signal })
-    .then((result) => result.response)
-    .finally(() => clearTimeout(timeout));
-}
-
 async function fetchLicenseDoc(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
 ): Promise<RslLicenseDoc> {
   try {
-    const response = await fetchWithTimeout(
+    return await safeFetchWithDeadline(
       url,
       {
         headers: {
@@ -74,19 +66,21 @@ async function fetchLicenseDoc(
         },
       },
       PROBE_TIMEOUT_MS,
+      async (response) => {
+        const contentType = response.headers.get("content-type");
+        const raw = await readBodyCapped(response, RSL_MAX_BYTES);
+        const body = truncateToBytes(raw, RSL_MAX_BYTES);
+        return {
+          url,
+          status: response.status,
+          contentType,
+          xmlValid: looksLikeXml(body),
+          looksRsl: looksLikeRsl(body),
+          excerpt: truncateToBytes(body, EXCERPT_MAX_BYTES),
+          error: null,
+        };
+      },
     );
-    const contentType = response.headers.get("content-type");
-    const raw = await readBodyCapped(response, RSL_MAX_BYTES);
-    const body = truncateToBytes(raw, RSL_MAX_BYTES);
-    return {
-      url,
-      status: response.status,
-      contentType,
-      xmlValid: looksLikeXml(body),
-      looksRsl: looksLikeRsl(body),
-      excerpt: truncateToBytes(body, EXCERPT_MAX_BYTES),
-      error: null,
-    };
   } catch (e) {
     return {
       url,
@@ -113,18 +107,20 @@ export function fetchRslLicensing(
     let robotsBody = "";
     let linkHeader: string | null = null;
     try {
-      const response = await fetchWithTimeout(
+      await safeFetchWithDeadline(
         robotsUrl,
         { headers: { "User-Agent": userAgent, Accept: "text/plain, */*", ...customHeaders } },
         PROBE_TIMEOUT_MS,
+        async (response) => {
+          if (response.ok) {
+            const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
+            robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
+            linkHeader = response.headers.get("link");
+          } else {
+            await response.body?.cancel().catch(() => {});
+          }
+        },
       );
-      if (response.ok) {
-        const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
-        robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
-        linkHeader = response.headers.get("link");
-      } else {
-        await response.body?.cancel().catch(() => {});
-      }
     } catch {
       // robots unreachable → no licensing signal; return empty below.
     }
