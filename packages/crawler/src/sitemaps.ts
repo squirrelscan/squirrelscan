@@ -266,8 +266,8 @@ export function fetchSitemapsRecursive(
   }
   // Wall-clock budget spent: abandon the descent rather than walking a
   // sitemap index's thousands of children just to record a skip for each.
-  // The chunk loop below still relies on `fetchSitemap`'s own check for a
-  // budget that expires partway through a level.
+  // The chunk loop below carries the same guard for a budget that expires
+  // partway through a level, which this one cannot see.
   if (budgetedTimeoutMs(budget, SITEMAP_FETCH_TIMEOUT_MS) === null) {
     return Effect.succeed([]);
   }
