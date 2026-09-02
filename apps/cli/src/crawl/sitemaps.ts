@@ -136,6 +136,9 @@ export type SitemapFetchResult =
   | { success: true; data: SitemapData }
   | { success: false; url: string; error: string };
 
+/** Deadline for one sitemap fetch, covering the body read (#1729). */
+export const SITEMAP_FETCH_TIMEOUT_MS = 30000;
+
 /**
  * Fetch a single sitemap
  * Uses standard fetch (not IMPIT) since sitemaps are meant to be crawled by bots
@@ -143,13 +146,18 @@ export type SitemapFetchResult =
  */
 export function fetchSitemap(
   url: string,
-  userAgent: string
+  userAgent: string,
+  timeoutMs: number = SITEMAP_FETCH_TIMEOUT_MS
 ): Effect.Effect<SitemapFetchResult, never, never> {
   return pipe(
     Effect.tryPromise({
+      // #1729: the deadline covers the BODY read, not just the headers. The
+      // text read used to sit outside the timer's scope, so a sitemap host that
+      // answered 200 and then trickled or stalled its body had no time bound at
+      // all and parked the crawl preamble.
       try: async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
           const response = await fetch(url, {
@@ -161,58 +169,50 @@ export function fetchSitemap(
             signal: controller.signal,
             redirect: "follow",
           });
-          return response;
+          if (!response.ok) {
+            // Nothing here reads a non-2xx body; drop it so the connection is
+            // released rather than left half-consumed. Caught, not `void`: an
+            // already-errored stream rejects, and an unhandled rejection is a
+            // worse outcome than an undrained socket.
+            await response.body?.cancel().catch(() => {});
+            return { ok: false as const, status: response.status };
+          }
+          return { ok: true as const, content: await response.text() };
         } finally {
           clearTimeout(timeoutId);
         }
       },
-      catch: (error) => ({
-        status: 0,
-        ok: false,
-        error: error instanceof Error ? error.message : "Network error",
-      }),
+      // Deliberately NOT shaped like the success branch above: this value goes
+      // to the ERROR channel, so it never reaches the mapper. Giving it an
+      // `ok`/`status` of its own invited the misreading that a failed fetch
+      // could surface as "HTTP 0".
+      catch: (error) => {
+        const err = error as Error;
+        // #1729: the deadline now covers the body read too, so name that case
+        // instead of letting a stalled sitemap read as a generic failure.
+        if (err?.name === "AbortError") {
+          return { reason: `Timed out after ${timeoutMs}ms` };
+        }
+        return { reason: err?.message || "Network error" };
+      },
     }),
-    Effect.flatMap((response) => {
-      // Network error or non-2xx status
-      if (!response.ok) {
-        const errorMsg =
-          "status" in response && response.status
-            ? `HTTP ${response.status}`
-            : "error" in response
-              ? String(response.error)
-              : "Network error";
-        return Effect.succeed<SitemapFetchResult>({
-          success: false,
-          url,
-          error: errorMsg,
-        });
+    Effect.map((result): SitemapFetchResult => {
+      if (!result.ok) {
+        return { success: false, url, error: `HTTP ${result.status}` };
       }
-
-      return Effect.tryPromise({
-        try: () => response.text(),
-        catch: () => null,
-      }).pipe(
-        Effect.map((content): SitemapFetchResult => {
-          if (!content) {
-            return {
-              success: false,
-              url,
-              error: "Empty response",
-            };
-          }
-          const parsed = parseSitemap(content, url);
-          return {
-            success: true,
-            data: parsed,
-          } as SitemapFetchResult;
-        })
-      );
+      if (!result.content) {
+        return { success: false, url, error: "Empty response" };
+      }
+      return { success: true, data: parseSitemap(result.content, url) };
     }),
-    Effect.catchAll(() =>
+    // Carry the reason through. It used to collapse to a bare "Unexpected
+    // error", which made a body-read timeout, a DNS failure and a connection
+    // reset indistinguishable in the failed-sitemap report.
+    Effect.catchAll((failure) =>
       Effect.succeed({
         success: false,
         url,
-        error: "Unexpected error",
+        error: failure.reason,
       } as SitemapFetchResult)
     )
   );

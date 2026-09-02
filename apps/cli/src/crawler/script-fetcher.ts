@@ -69,15 +69,8 @@ function isJavaScriptContentType(contentType: string | null): boolean {
   );
 }
 
-async function fetchSingleScriptAsync(
-  url: string,
-  options: ScriptFetcherOptions,
-  retryCount = 0
-): Promise<ScriptFetchResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
-
-  const defaultResult: ScriptFetchResult = {
+function emptyScriptResult(url: string): ScriptFetchResult {
+  return {
     url,
     status: null,
     error: null,
@@ -87,6 +80,24 @@ async function fetchSingleScriptAsync(
     redirected: false,
     finalUrl: undefined,
   };
+}
+
+/**
+ * One attempt, under a deadline that stays armed until the body has been read
+ * (#1729). Clearing the timer where the response resolves disarms the abort at
+ * the HEADERS, which leaves the `response.text()` below no time bound at all:
+ * a script origin that answers 200 and then trickles or stalls its body parks
+ * the audit forever. Scripts are fetched during rules enrichment, after the
+ * crawl, so that shows up as an audit that has its pages and never finishes.
+ */
+async function fetchScriptAttempt(
+  url: string,
+  options: ScriptFetcherOptions
+): Promise<ScriptFetchResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+
+  const defaultResult = emptyScriptResult(url);
 
   try {
     // Single GET request with redirect: follow (removed unnecessary HEAD request)
@@ -99,8 +110,6 @@ async function fetchSingleScriptAsync(
       signal: controller.signal,
       redirect: "follow",
     });
-
-    clearTimeout(timeoutId);
 
     const contentType = response.headers.get("content-type");
     const contentLength = response.headers.get("content-length");
@@ -205,10 +214,23 @@ async function fetchSingleScriptAsync(
       sourceMapHeader,
       contentEncoding,
     };
-  } catch (error) {
+  } finally {
     clearTimeout(timeoutId);
+  }
+}
 
-    // Retry on transient errors
+async function fetchSingleScriptAsync(
+  url: string,
+  options: ScriptFetcherOptions,
+  retryCount = 0
+): Promise<ScriptFetchResult> {
+  try {
+    return await fetchScriptAttempt(url, options);
+  } catch (error) {
+    // Retry on transient errors. Retries live outside the attempt so each one
+    // arms its own deadline; a retry started inside the attempt's `finally`
+    // would inherit an expired timer, or keep the spent one alive for the
+    // length of the retry.
     if (
       retryCount < SCRIPT_FETCH_LIMITS.MAX_RETRIES &&
       (error as Error).name !== "AbortError"
@@ -220,9 +242,12 @@ async function fetchSingleScriptAsync(
     }
 
     if ((error as Error).name === "AbortError") {
-      return { ...defaultResult, error: "timeout" };
+      return { ...emptyScriptResult(url), error: "timeout" };
     }
-    return { ...defaultResult, error: (error as Error).message || "error" };
+    return {
+      ...emptyScriptResult(url),
+      error: (error as Error).message || "error",
+    };
   }
 }
 

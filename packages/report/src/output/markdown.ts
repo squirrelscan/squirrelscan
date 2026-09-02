@@ -125,8 +125,14 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (scope) lines.push(`${scope}  `);
   const cov = coverageLine(report);
   if (cov) lines.push(`**${cov}**  `);
+  // #190: a plain line for the same reason the seed-redirect disclosure above
+  // is one. This used to be `> ${hint}`, and a blockquote CAN interrupt an open
+  // paragraph, so the quote opened mid-metadata and CommonMark lazy
+  // continuation swallowed every line under it — a partial scan rendered its
+  // recovery note and its generator version as part of the warning. Text and
+  // HTML both render this hint as a plain line; markdown was the odd one out.
   const hint = fullScanHint(report);
-  if (hint) lines.push(`> ${hint}  `);
+  if (hint) lines.push(`${hint}  `);
   const fallbacks = fetchFallbacksLine(report);
   if (fallbacks) lines.push(`${fallbacks}  `);
   if (version) lines.push(`**Version:** ${version}`);
