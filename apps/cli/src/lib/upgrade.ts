@@ -49,7 +49,7 @@ export function proPitchLines(
 ): string[] {
   return [
     `  ${fmt.bold(PRO_HEADLINE)}`,
-    `  ${fmt.dim(`Also unlocks scheduled audits, faster crawls, and up to ${n(PRO.maxPagesPerAudit)} pages per audit.`)}`,
+    `  ${fmt.dim(`Also unlocks daily audits on every site, faster crawls, and up to ${n(PRO.maxPagesPerAudit)} pages per audit.`)}`,
     `  Upgrade: ${fmt.cyan(upgradeUrl(src))}`,
   ];
 }
