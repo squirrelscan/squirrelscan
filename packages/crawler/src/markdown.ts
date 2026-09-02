@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
 
+import type { PhaseBudget } from "./deadline";
 import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
 
 const PROBE_TIMEOUT_MS = 30_000;
@@ -37,18 +38,30 @@ interface ProbeResult {
   alternateMarkdownUrl: string | null;
 }
 
+const unreachableProbe = (): ProbeResult => ({
+  ok: false,
+  contentType: null,
+  vary: null,
+  markdownTokens: null,
+  originalTokens: null,
+  alternateMarkdownUrl: null,
+});
+
 // Probe one URL for its status + headers only; never downloads the body.
 async function probeOne(
   url: string,
   userAgent: string,
   accept: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Promise<ProbeResult> {
+  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  if (timeoutMs === null) return unreachableProbe();
   try {
     return await safeFetchWithDeadline(
       url,
       { headers: { "User-Agent": userAgent, Accept: accept, ...customHeaders } },
-      PROBE_TIMEOUT_MS,
+      timeoutMs,
       async (res) => {
         const contentType = res.headers.get("content-type");
         const result: ProbeResult = {
@@ -64,14 +77,7 @@ async function probeOne(
       },
     );
   } catch {
-    return {
-      ok: false,
-      contentType: null,
-      vary: null,
-      markdownTokens: null,
-      originalTokens: null,
-      alternateMarkdownUrl: null,
-    };
+    return unreachableProbe();
   }
 }
 
@@ -80,13 +86,14 @@ export function probeMarkdownResponse(
   baseUrl: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Effect.Effect<MarkdownProbeData, never, never> {
   const homeUrl = new URL("/", baseUrl).toString();
   const mdUrl = new URL("/index.md", baseUrl).toString();
   return Effect.promise(async () => {
     const [neg, md] = await Promise.all([
-      probeOne(homeUrl, userAgent, "text/markdown, text/x-markdown, */*", customHeaders),
-      probeOne(mdUrl, userAgent, "text/markdown, text/plain, */*", customHeaders),
+      probeOne(homeUrl, userAgent, "text/markdown, text/x-markdown, */*", customHeaders, budget),
+      probeOne(mdUrl, userAgent, "text/markdown, text/plain, */*", customHeaders, budget),
     ]);
     return {
       negotiatedUrl: homeUrl,

@@ -93,6 +93,11 @@ export function buildRobotsData(robots: RobotsTxtRecord | null): RobotsTxtData |
     const parsed = parseRobotsTxt(robots.content, robots.url);
     rules = parsed.rules;
     errors = parsed.errors;
+  } else if (robots.error) {
+    // No content because the fetch never produced one. Surfacing the reason is
+    // what lets crawl/robots-txt tell an unanswered probe apart from a confirmed
+    // 404 instead of reporting both as "No robots.txt found" (#1733).
+    errors = [robots.error];
   }
 
   return {
@@ -525,6 +530,9 @@ export function buildV1Report(
         orphanPages: [],
         missingPages: [],
         failed: [], // Not persisted to storage, only available during live audit
+        // Persisted via crawl stats, because an empty `discovered` here must not
+        // be read as "no sitemap" when the walk simply stopped early (#1733).
+        truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
       },
       healthScore,
       ruleResults: toReportRuleResults(ruleResults.ruleResultsMap),
@@ -779,6 +787,9 @@ export function buildV2Report(
         orphanPages: [],
         missingPages: [],
         failed: [], // Not persisted to storage, only available during live audit
+        // Persisted via crawl stats, because an empty `discovered` here must not
+        // be read as "no sitemap" when the walk simply stopped early (#1733).
+        truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
       },
       healthScore,
       ruleResults: toReportRuleResults(input.ruleResultsMap),

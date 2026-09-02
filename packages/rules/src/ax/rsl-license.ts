@@ -1,5 +1,7 @@
 // ax/rsl-license - detect a robots.txt License: directive pointing to a valid RSL document
 
+import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const rslLicenseRule: Rule = {
@@ -53,7 +55,17 @@ export const rslLicenseRule: Rule = {
     });
 
     const validDocs = rsl.documents.filter((d) => d.status === 200 && d.xmlValid && d.looksRsl);
-    const brokenDocs = rsl.documents.filter((d) => !(d.status === 200 && d.xmlValid && d.looksRsl));
+    // A document the crawl never REQUESTED proves nothing about the reference.
+    // Note how narrow this is: a URL we actually tried and could not fetch stays
+    // a broken reference (that is the defect this rule exists to surface), and
+    // only the never-attempted case degrades to unknown. Both look like
+    // `status: 0`, so the recorded reason is the only discriminator.
+    const notAttempted = rsl.documents.filter(
+      (d) => d.status === 0 && d.error === PROBE_NOT_ATTEMPTED_ERROR,
+    );
+    const brokenDocs = rsl.documents.filter(
+      (d) => !notAttempted.includes(d) && !(d.status === 200 && d.xmlValid && d.looksRsl),
+    );
 
     if (validDocs.length > 0) {
       checks.push({
@@ -64,6 +76,22 @@ export const rslLicenseRule: Rule = {
         }`,
         value: "valid",
         details: { validUrls: validDocs.map((d) => d.url) },
+      });
+      return { checks };
+    }
+
+    // Nothing resolved AND nothing was actually checked: report what we don't
+    // know rather than a defect the audit never established.
+    if (brokenDocs.length === 0 && notAttempted.length > 0) {
+      checks.push({
+        name: "rsl-license-valid",
+        status: "info",
+        message: `License declared but the referenced document was not checked (${notAttempted.length} URL${
+          notAttempted.length === 1 ? "" : "s"
+        })`,
+        value: "unknown",
+        items: notAttempted.map((d) => ({ id: d.url, label: `${d.url} — not checked` })),
+        details: { notCheckedUrls: notAttempted.map((d) => d.url) },
       });
       return { checks };
     }

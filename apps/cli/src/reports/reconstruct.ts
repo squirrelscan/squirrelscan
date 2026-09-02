@@ -154,7 +154,10 @@ export function reconstructReport(
           sizeBytes: robotsRecord.sizeBytes,
           sitemaps: robotsRecord.sitemaps,
           rules: [],
-          errors: [],
+          // Why the fetch produced nothing, when it did. Without this the CLI
+          // report cannot tell a confirmed 404 from a probe that never got an
+          // answer, and reports the second as a missing file (#1733).
+          errors: robotsRecord.error ? [robotsRecord.error] : [],
         }
       : undefined;
 
@@ -183,8 +186,13 @@ export function reconstructReport(
         }))
       );
     }
+    // A truncated walk with zero results still needs a sitemap section: it is
+    // the only place the report can say the check did not complete, and
+    // `undefined` reads downstream as "no data" rather than "not finished".
+    const sitemapWalkTruncated =
+      crawl.stats?.sitemapDiscoveryTruncated ?? false;
     const sitemaps: SitemapDiscovery | undefined =
-      sitemapRecords.length > 0
+      sitemapRecords.length > 0 || sitemapWalkTruncated
         ? {
             discovered: sitemapRecords.map((s) => ({
               url: s.url,
@@ -202,6 +210,7 @@ export function reconstructReport(
             orphanPages: [],
             missingPages: [],
             failed: [], // Not persisted to storage
+            truncated: sitemapWalkTruncated,
           }
         : undefined;
 

@@ -2,8 +2,9 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
 
+import type { PhaseBudget } from "./deadline";
 import type { LlmsTxtData, LlmsTxtFile } from "@squirrelscan/core-contracts";
 
 const LLMS_FETCH_TIMEOUT_MS = 30_000;
@@ -19,12 +20,16 @@ async function fetchOne(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Promise<LlmsTxtFile> {
+  // Budget spent: same "absent" shape a 404 or a network failure produces.
+  const timeoutMs = budgetedTimeoutMs(budget, LLMS_FETCH_TIMEOUT_MS);
+  if (timeoutMs === null) return emptyFile(url);
   try {
     return await safeFetchWithDeadline(
       url,
       { headers: { "User-Agent": userAgent, Accept: "text/plain, text/markdown, */*", ...customHeaders } },
-      LLMS_FETCH_TIMEOUT_MS,
+      timeoutMs,
       async (response) => {
         if (response.status === 404 || !response.ok) {
           await response.body?.cancel().catch(() => {});
@@ -58,13 +63,14 @@ export function fetchLlmsTxt(
   baseUrl: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Effect.Effect<LlmsTxtData, never, never> {
   const llmsUrl = new URL("/llms.txt", baseUrl).toString();
   const fullUrl = new URL("/llms-full.txt", baseUrl).toString();
   return Effect.promise(async () => {
     const [llmsTxt, llmsFullTxt] = await Promise.all([
-      fetchOne(llmsUrl, userAgent, customHeaders),
-      fetchOne(fullUrl, userAgent, customHeaders),
+      fetchOne(llmsUrl, userAgent, customHeaders, budget),
+      fetchOne(fullUrl, userAgent, customHeaders, budget),
     ]);
     return { llmsTxt, llmsFullTxt };
   });

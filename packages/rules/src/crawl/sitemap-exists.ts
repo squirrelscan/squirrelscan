@@ -29,6 +29,20 @@ export const sitemapExistsRule: Rule = {
       return { checks };
     }
 
+    // Discovery stopped before visiting every candidate location, so nothing
+    // was established about whether a sitemap exists. Reporting a definite
+    // "No XML sitemap found" here would turn a check we never finished into a
+    // weight-10 defect on a site that may well have one (squirrelscan/repo#1733).
+    if (sitemaps.discovered.length === 0 && sitemaps.truncated) {
+      checks.push({
+        name: "sitemap-exists",
+        status: "info",
+        message: "Sitemap discovery did not complete, so no sitemap check was made",
+        value: "Not all candidate locations were reached",
+      });
+      return { checks };
+    }
+
     // Check if any sitemaps were discovered
     if (sitemaps.discovered.length === 0) {
       checks.push({

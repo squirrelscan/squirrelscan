@@ -342,6 +342,10 @@ async function writeCrawlBody(
       sizeBytes: Buffer.byteLength(robotsBody, "utf8"),
       sitemaps: [sitemapUrl],
       fetchedAt,
+      // The fixture's robots.txt was fetched successfully, so there is no
+      // reason to record. Explicit rather than omitted so the fixture keeps
+      // matching the shape a real crawl writes (squirrelscan/repo#1733).
+      error: null,
     }),
   );
   await run(

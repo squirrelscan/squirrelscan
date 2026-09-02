@@ -55,4 +55,27 @@ describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
     const missing = [...migrationCols].filter((c) => !reconciledCols.has(c));
     expect(missing).toEqual([]);
   });
+
+  // And `robots_txt`, whose `error` column (migration 23) carries WHY a fetch
+  // produced nothing — without it setRobotsTxt throws on a version-collided DB
+  // and the crawl fails at its first write (squirrelscan/repo#1733).
+  test("every 'ALTER TABLE robots_txt ADD COLUMN' in MIGRATIONS is in ROBOTS_TXT_ALTER_COLUMNS", () => {
+    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+
+    const migrationCols = new Set<string>();
+    for (const m of src.matchAll(/ALTER TABLE robots_txt ADD COLUMN\s+(\w+)/g)) {
+      migrationCols.add(m[1]!);
+    }
+
+    const listBlock = src.match(/ROBOTS_TXT_ALTER_COLUMNS[^[]*\[([\s\S]*?)\];/);
+    expect(listBlock).not.toBeNull();
+    const reconciledCols = new Set<string>();
+    for (const m of listBlock![1]!.matchAll(/name:\s*"(\w+)"/g)) {
+      reconciledCols.add(m[1]!);
+    }
+
+    expect(migrationCols.size).toBeGreaterThan(0);
+    const missing = [...migrationCols].filter((c) => !reconciledCols.has(c));
+    expect(missing).toEqual([]);
+  });
 });

@@ -2,8 +2,9 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
 
+import type { PhaseBudget } from "./deadline";
 import type { WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
 
 const PROBE_TIMEOUT_MS = 15_000;
@@ -94,13 +95,32 @@ export function looksLikeMarkdown(body: string): boolean {
   return /\[[^\]]+\]\([^)]+\)/.test(trimmed.slice(0, 4_096));
 }
 
+const unreachableProbe = (path: string, url: string, error: string): WellKnownProbe => ({
+  path,
+  url,
+  status: 0,
+  contentType: null,
+  bodySize: 0,
+  looksHtml: false,
+  jsonValid: false,
+  jsonKeys: [],
+  markdownLike: false,
+  excerpt: "",
+  oauthRegistrationEndpoint: null,
+  oauthClientIdMetadataDocumentSupported: null,
+  error,
+});
+
 async function probeOne(
   baseUrl: string,
   path: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Promise<WellKnownProbe> {
   const url = new URL(path, baseUrl).toString();
+  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  if (timeoutMs === null) return unreachableProbe(path, url, BUDGET_EXHAUSTED_ERROR);
   try {
     return await safeFetchWithDeadline(
       url,
@@ -111,7 +131,7 @@ async function probeOne(
           ...customHeaders,
         },
       },
-      PROBE_TIMEOUT_MS,
+      timeoutMs,
       async (response) => {
         const contentType = response.headers.get("content-type");
         const isOAuth = isOAuthMetadataPath(path);
@@ -163,21 +183,7 @@ async function probeOne(
       },
     );
   } catch (e) {
-    return {
-      path,
-      url,
-      status: 0,
-      contentType: null,
-      bodySize: 0,
-      looksHtml: false,
-      jsonValid: false,
-      jsonKeys: [],
-      markdownLike: false,
-      excerpt: "",
-      oauthRegistrationEndpoint: null,
-      oauthClientIdMetadataDocumentSupported: null,
-      error: (e as Error).message,
-    };
+    return unreachableProbe(path, url, (e as Error).message);
   }
 }
 
@@ -186,10 +192,11 @@ export function probeWellKnown(
   baseUrl: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
+  budget?: PhaseBudget,
 ): Effect.Effect<WellKnownProbeData, never, never> {
   return Effect.promise(async () => {
     const probes = await Promise.all(
-      WELL_KNOWN_PATHS.map((path) => probeOne(baseUrl, path, userAgent, customHeaders)),
+      WELL_KNOWN_PATHS.map((path) => probeOne(baseUrl, path, userAgent, customHeaders, budget)),
     );
     return { probes };
   });
