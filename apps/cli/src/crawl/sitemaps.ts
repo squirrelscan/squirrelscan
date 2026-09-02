@@ -171,8 +171,10 @@ export function fetchSitemap(
           });
           if (!response.ok) {
             // Nothing here reads a non-2xx body; drop it so the connection is
-            // released rather than left half-consumed.
-            void response.body?.cancel();
+            // released rather than left half-consumed. Caught, not `void`: an
+            // already-errored stream rejects, and an unhandled rejection is a
+            // worse outcome than an undrained socket.
+            await response.body?.cancel().catch(() => {});
             return { ok: false as const, status: response.status };
           }
           return { ok: true as const, content: await response.text() };
