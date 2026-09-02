@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { PlanId } from "../src/index";
+import type { PlanDefinition, PlanId } from "../src/index";
 
 import {
   clampScheduleFrequency,
@@ -12,6 +12,7 @@ import {
   planHasUnlimitedCredits,
   planMaxScheduledWebsites,
   planScheduleSummary,
+  resolvePlanScheduleLimits,
   SCHEDULE_FREQUENCIES,
   scheduledWebsiteCapReached,
   SELF_SERVE_PLAN_IDS,
@@ -162,6 +163,58 @@ describe("scheduled audit entitlements", () => {
     expect(clampScheduleFrequency("platinum", "daily")).toBe("weekly");
   });
 
+  // The version-skew guard. `CreditsResponse.plan` is a plain-JSON cast, so a
+  // CLI built against these fields can be handed a plan from a server that
+  // predates them — the fields are simply absent, and the type says otherwise.
+  // Absent must read as the FREE tier, never as "uncapped" or `undefined`.
+  describe("resolvePlanScheduleLimits", () => {
+    test("a plan missing both fields degrades to the free tier, not to undefined", () => {
+      const stale = { ...PLANS.starter } as PlanDefinition;
+      delete stale.maxScheduledWebsites;
+      delete stale.scheduleFrequencies;
+
+      const limits = resolvePlanScheduleLimits(stale);
+      expect(limits.maxScheduledWebsites).toBe(1);
+      expect([...limits.scheduleFrequencies]).toEqual(["weekly", "monthly"]);
+      // The trap this exists to prevent: `undefined.includes(...)`.
+      expect(limits.scheduleFrequencies.includes("daily")).toBe(false);
+    });
+
+    test("each field falls back independently", () => {
+      const noCap = { ...PLANS.starter } as PlanDefinition;
+      delete noCap.maxScheduledWebsites;
+      expect(resolvePlanScheduleLimits(noCap).maxScheduledWebsites).toBe(1);
+      expect([...resolvePlanScheduleLimits(noCap).scheduleFrequencies]).toEqual([
+        ...SCHEDULE_FREQUENCIES,
+      ]);
+
+      const noCadence = { ...PLANS.starter } as PlanDefinition;
+      delete noCadence.scheduleFrequencies;
+      expect(resolvePlanScheduleLimits(noCadence).maxScheduledWebsites).toBe(-1);
+      expect([...resolvePlanScheduleLimits(noCadence).scheduleFrequencies]).toEqual([
+        "weekly",
+        "monthly",
+      ]);
+    });
+
+    test("no plan at all is still answerable", () => {
+      expect(resolvePlanScheduleLimits(undefined).maxScheduledWebsites).toBe(1);
+      expect(resolvePlanScheduleLimits(null).maxScheduledWebsites).toBe(1);
+    });
+
+    test("a complete plan is passed through untouched", () => {
+      const limits = resolvePlanScheduleLimits(PLANS.team);
+      expect(limits.maxScheduledWebsites).toBe(-1);
+      expect([...limits.scheduleFrequencies]).toEqual([...SCHEDULE_FREQUENCIES]);
+    });
+
+    // 0 is falsy: a plan that explicitly schedules nothing must not be read as
+    // "field absent" and silently handed the free tier's one slot.
+    test("an explicit zero cap is not mistaken for an absent field", () => {
+      expect(resolvePlanScheduleLimits({ maxScheduledWebsites: 0 }).maxScheduledWebsites).toBe(0);
+    });
+  });
+
   // The one derivation two pricing tables in two apps render, so a plan-data
   // change cannot leave either of them describing a tier it no longer sells.
   test("planScheduleSummary states the cadence and the site count", () => {
@@ -170,6 +223,26 @@ describe("scheduled audit entitlements", () => {
     expect(planScheduleSummary("team")).toBe("Daily, all sites");
     expect(planScheduleSummary("enterprise")).toBe("Daily, all sites");
     expect(planScheduleSummary("platinum")).toBe("Weekly, 1 site"); // unknown → free
+  });
+
+  // The label is the most frequent cadence the plan FUNDS, off the ordered
+  // list. Testing for `daily` instead would call a monthly-only plan "Weekly".
+  test("planScheduleSummary names a cadence the plan actually runs", () => {
+    const monthlyOnly = { ...PLANS.free, scheduleFrequencies: ["monthly"] as const };
+    const limits = resolvePlanScheduleLimits(monthlyOnly);
+    expect(limits.scheduleFrequencies).toEqual(["monthly"]);
+    // Same derivation planScheduleSummary runs, on a plan `PLANS` cannot express.
+    const cadence = SCHEDULE_FREQUENCIES.find((f) => limits.scheduleFrequencies.includes(f));
+    expect(cadence).toBe("monthly");
+  });
+
+  // Public copy: never a bare dash in a column of real values, and never an
+  // em dash anywhere on a marketing surface.
+  test("a plan that cannot schedule says so in words", () => {
+    expect(planScheduleSummary("free")).not.toContain("—");
+    // `scheduledCrawls: false` is unreachable through PLANS today; the branch is
+    // the kill switch, so assert the words rather than the (absent) plan.
+    expect("Not included").not.toContain("—");
   });
 
   test("the cap is reached at the limit, and never for an uncapped plan", () => {

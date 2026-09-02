@@ -1389,8 +1389,17 @@ export interface PlanDefinition {
    * second site is the upgrade. The cap counts ENABLED schedules, not
    * websites — a free org may register as many sites as the hidden
    * `maxWebsites` abuse cap allows and choose which single one recurs.
+   *
+   * OPTIONAL on purpose, like `balance.unlimited` above and for the same
+   * reason: a `PlanDefinition` does not only come from `PLANS`, it also arrives
+   * over the wire as `CreditsResponse.plan`, which cloud-client hands back as a
+   * plain-JSON cast. That cast is additive-safe but NOT subtractive-safe, so a
+   * CLI built against this file and talking to an older (or rolled-back) server
+   * would hold a type promising a field that is simply absent at runtime.
+   * Never read it directly — go through `resolvePlanScheduleLimits`, which
+   * degrades an absent value to the free tier's limits rather than `undefined`.
    */
-  maxScheduledWebsites: number;
+  maxScheduledWebsites?: number;
   /**
    * Cadences this plan may schedule at, as a subset of `SCHEDULE_FREQUENCIES`.
    *
@@ -1399,8 +1408,13 @@ export interface PlanDefinition {
    * the per-audit page ceiling uses. Free omits `daily` (#1704): a daily audit
    * would exhaust the 500-credit monthly grant in a week, so weekly is the
    * cadence the grant actually funds and daily is the upgrade.
+   *
+   * OPTIONAL for the same version-skew reason as `maxScheduledWebsites` above,
+   * and with the same rule: read it through `resolvePlanScheduleLimits`, never
+   * directly. An absent list degrading to `undefined` would turn every
+   * `.includes(...)` on a stale server's response into a crash.
    */
-  scheduleFrequencies: readonly ScheduledAuditFrequency[];
+  scheduleFrequencies?: readonly ScheduledAuditFrequency[];
   /**
    * Raw per-plan cloud-audit page ceiling (#1020 ladder: Free 500 / Pro
    * 2,000 / Team 5,000). This is the plan's OWN allowance, not the effective
