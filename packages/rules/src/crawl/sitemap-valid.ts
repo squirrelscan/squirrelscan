@@ -52,6 +52,19 @@ export const sitemapValidRule: Rule = {
         return { checks };
       }
 
+      // "No sitemap to validate" reads as a finished check that found nothing.
+      // When the walk stopped early it is neither: candidates were left
+      // unvisited, so say the check did not complete (squirrelscan/repo#1733).
+      if (sitemaps?.truncated) {
+        checks.push({
+          name: "sitemap-valid",
+          status: "info",
+          message: "Sitemap discovery did not complete, so no sitemap was validated",
+          value: "Not all candidate locations were reached",
+        });
+        return { checks };
+      }
+
       checks.push({
         name: "sitemap-valid",
         status: "skipped",

@@ -29,6 +29,7 @@ import { BUDGET_EXHAUSTED_ERROR } from "../src/deadline";
 import {
   discoverSitemaps,
   SITEMAP_NOT_REACHED_ERROR,
+  SITEMAP_WALK_WINDOW_MS,
   sitemapWalkWindowMs,
 } from "../src/sitemaps";
 import { WELL_KNOWN_PATHS } from "../src/well-known";
@@ -338,12 +339,11 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
   }, 30_000);
 
   test("a STALLED walk stops after roughly one chunk and says so", async () => {
-    // The mirror case. Nothing completes, so no chunk earns a fresh window and
-    // the walk gives up almost immediately instead of running 68 entry points
-    // to their individual deadlines. The entry guard only runs on the way INTO
-    // a level, so the chunk loop needs its own guard for a window that expires
-    // partway through — otherwise every remaining URL is still chunked and
-    // awaited just to record a skip.
+    // The mirror case. Nothing comes back at all, so no chunk earns a fresh
+    // window and the walk gives up almost immediately instead of running 68
+    // entry points to their individual deadlines. The window is checked per
+    // CHUNK, which is what stops the rest of a level being chunked and awaited
+    // just to record a skip.
     let requests = 0;
     const server = Bun.serve({
       port: 0,
@@ -379,6 +379,41 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
       result.failed.some((failure) => failure.error === SITEMAP_NOT_REACHED_ERROR),
     ).toBe(true);
   }, 30_000);
+
+  test("a fast 404 counts as progress, so a mixed level is not cut short", async () => {
+    // Keying the re-arm off `success` punished a real shape: one quick 404
+    // alongside four stalled bodies is a RESPONSIVE origin the walk is getting
+    // through, but the chunk finds no sitemap, so the window died after one
+    // round and 5 of 68 candidates were ever visited. Only a chunk where
+    // nothing came back at all should burn the window.
+    let requests = 0;
+    const server = Bun.serve({
+      port: 0,
+      idleTimeout: 0,
+      fetch() {
+        // One in five answers immediately (404); the rest never finish.
+        if (requests++ % SITEMAP_FETCH_CONCURRENCY === 0) {
+          return new Response("nope", { status: 404 });
+        }
+        return stalledBodyResponse();
+      },
+    });
+    servers.push(server);
+    const origin = `http://localhost:${server.port}`;
+
+    const result = await Effect.runPromise(
+      discoverSitemaps(origin, robotsDeclaring(origin, 60), "squirrel-test", {
+        maxUrls: 10_000,
+        walkWindowMs: WALK_WINDOW_MS,
+        // Generous hard stop: the window, not the cap, is what is under test.
+        walkTotalMs: WALK_WINDOW_MS * 40,
+      }),
+    );
+
+    // It kept going well past the first chunk. Without the fix this stops at 5.
+    expect(requests).toBeGreaterThan(SITEMAP_FETCH_CONCURRENCY * 4);
+    expect(result.failed.length).toBeGreaterThan(SITEMAP_FETCH_CONCURRENCY);
+  }, 60_000);
 
   test("a slow-drip origin cannot re-arm the window forever", async () => {
     // The progress window on its own is gameable. An origin that answers ONE
@@ -417,6 +452,33 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     // And it says it did not finish, so no consumer reads this as "no sitemap".
     expect(result.truncated).toBe(true);
   }, 60_000);
+});
+
+describe("sitemapWalkWindowMs / walk hard stop", () => {
+  test("scales the progress window down with a tighter per-request timeout", () => {
+    expect(sitemapWalkWindowMs(30_000)).toBe(SITEMAP_WALK_WINDOW_MS);
+    expect(sitemapWalkWindowMs(500)).toBe(1_500);
+    expect(sitemapWalkWindowMs(0)).toBe(3);
+  });
+
+  test("a hard stop shorter than the window is honored, not widened to it", async () => {
+    // Silently raising a configured cap to the window length is how a bound
+    // stops being one. The nearer of the two wins.
+    const server = Bun.serve({ port: 0, idleTimeout: 0, fetch: () => stalledBodyResponse() });
+    servers.push(server);
+    const origin = `http://localhost:${server.port}`;
+
+    const startedAt = Date.now();
+    await Effect.runPromise(
+      discoverSitemaps(origin, robotsDeclaring(origin, 60), "squirrel-test", {
+        maxUrls: 10_000,
+        walkWindowMs: 2_000,
+        walkTotalMs: 200,
+      }),
+    );
+
+    expect(Date.now() - startedAt).toBeLessThan(1_500);
+  }, 30_000);
 });
 
 describe("preambleBudgetMs", () => {

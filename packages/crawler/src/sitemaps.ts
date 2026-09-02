@@ -160,7 +160,22 @@ export function parseSitemap(content: string, url: string): SitemapData {
 
 export type SitemapFetchResult =
   | { success: true; data: SitemapData }
-  | { success: false; url: string; error: string };
+  | {
+      success: false;
+      url: string;
+      error: string;
+      /**
+       * The origin answered and the request finished — a 404, a 500, an empty
+       * body. False when nothing came back: a stall aborted at the deadline, a
+       * connection error, or a fetch the walk never attempted.
+       *
+       * The walk's progress window keys off this rather than off `success`. A
+       * fast 404 is real progress: the origin is responsive and the walk is
+       * getting through its candidates, it just is not finding sitemaps
+       * (squirrelscan/repo#1733).
+       */
+      settled: boolean;
+    };
 
 const SITEMAP_FETCH_TIMEOUT_MS = 30_000;
 
@@ -227,7 +242,10 @@ function newWalkWindow(
   return {
     deadlineAt: now + windowMs,
     windowMs,
-    hardDeadlineAt: now + Math.max(windowMs, totalMs),
+    // NOT max(): a caller asking for a hard stop shorter than the window means
+    // it, and silently widening a configured bound is how a cap stops being one.
+    // `walkRemainingMs` takes whichever of the two is nearer.
+    hardDeadlineAt: now + totalMs,
     stoppedEarly: false,
   };
 }
@@ -253,7 +271,9 @@ export function fetchSitemap(
   const originScopedHeaders =
     baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
   return Effect.promise(async (): Promise<SitemapFetchResult> => {
-    if (timeoutMs <= 0) return { success: false, url, error: SITEMAP_NOT_REACHED_ERROR };
+    if (timeoutMs <= 0) {
+      return { success: false, url, error: SITEMAP_NOT_REACHED_ERROR, settled: false };
+    }
     try {
       // #1395: manual redirects — per-hop scheme allowlist + strip secret
       // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
@@ -274,7 +294,8 @@ export function fetchSitemap(
         async (response): Promise<SitemapFetchResult> => {
           if (!response.ok) {
             await response.body?.cancel().catch(() => {});
-            return { success: false, url, error: `HTTP ${response.status}` };
+            // The origin answered; the status IS the answer.
+            return { success: false, url, error: `HTTP ${response.status}`, settled: true };
           }
           // A body that never arrives (including a deadline abort) classifies
           // as "Empty response", the same as one that arrives empty. This text
@@ -284,9 +305,11 @@ export function fetchSitemap(
           try {
             content = await response.text();
           } catch {
-            return { success: false, url, error: "Empty response" };
+            // The read never finished — a stalled or aborted body.
+            return { success: false, url, error: "Empty response", settled: false };
           }
-          if (!content) return { success: false, url, error: "Empty response" };
+          // Arrived, just empty.
+          if (!content) return { success: false, url, error: "Empty response", settled: true };
           return { success: true, data: parseSitemap(content, url) };
         },
       );
@@ -295,6 +318,7 @@ export function fetchSitemap(
         success: false,
         url,
         error: error instanceof Error ? error.message : "Network error",
+        settled: false,
       };
     }
   });
@@ -370,10 +394,9 @@ export function fetchSitemapsRecursive(
         walkWindow.stoppedEarly = true;
         break;
       }
-      // The window can expire PARTWAY through a level, and the recursion only
-      // checks on the way in. Without this, an index listing thousands of
-      // children would still be chunked and awaited one skip-result at a time
-      // after the walk had already given up.
+      // Checked per chunk, not once per level: a level can hold thousands of an
+      // index's children, and without this every remaining one is still chunked
+      // and awaited just to record a skip after the walk has given up.
       const remainingMs = walkRemainingMs(walkWindow);
       if (remainingMs <= 0) {
         logger.debug(
@@ -391,11 +414,13 @@ export function fetchSitemapsRecursive(
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
       fetchResults.push(...chunkResults);
-      // A completed fetch earns a fresh window. Only successes count, and that
-      // is deliberate: an all-404 level answers in milliseconds and finishes
-      // inside the first window regardless, so the window only ever bites a walk
-      // that is BOTH slow and getting nothing — which is the stall.
-      if (chunkResults.some((result) => result.success)) {
+      // Any chunk where the origin ANSWERED earns a fresh window — a fast 404
+      // is progress, not a stall. Keying this off `success` instead punished a
+      // real shape: one quick 404 alongside four stalled bodies is a responsive
+      // origin the walk is getting through, yet the chunk found no sitemap and
+      // the window died after one round. Only a chunk where nothing came back
+      // at all burns it.
+      if (chunkResults.some((result) => result.success || result.settled)) {
         walkWindow.deadlineAt = Math.min(
           Date.now() + walkWindow.windowMs,
           walkWindow.hardDeadlineAt,
@@ -550,7 +575,7 @@ export function discoverSitemaps(
 
     const failed: SitemapFetchFailure[] = allResults
       .filter(
-        (result): result is { success: false; url: string; error: string } =>
+        (result): result is { success: false; url: string; error: string; settled: boolean } =>
           !result.success && entryPointSet.has(result.url),
       )
       .map((result) => ({ url: result.url, source: sourceOf(result.url), error: result.error }));
