@@ -214,12 +214,26 @@ export function applyBrowserHeaders(headers: Headers, userAgent: string): void {
   }
 }
 
+/**
+ * A response whose deadline is still armed. The timer that aborts the request
+ * survives past the headers, so it still covers the caller's body read (#1729);
+ * ownership passes to the caller, which must `disarm` it on every exit path.
+ */
+interface TimedResponse {
+  response: Response;
+  timing: RequestTiming;
+  /** Clear the deadline. Idempotent; safe after the response is fully read. */
+  disarm: () => void;
+  /** Abort the request — cancels an in-flight body read and frees the socket. */
+  abort: () => void;
+}
+
 function requestWithTiming(
   url: string,
   options: RequestInit,
   timeoutMs: number,
   userAgent: string,
-): Effect.Effect<{ response: Response; timing: RequestTiming }, CrawlError, never> {
+): Effect.Effect<TimedResponse, CrawlError, never> {
   return Effect.tryPromise({
     // Forward the fiber-interrupt signal so a wedged socket is aborted and the host-slot release runs (#405).
     try: async (signal) => {
@@ -230,6 +244,7 @@ function requestWithTiming(
       if (signal.aborted) controller.abort();
       else signal.addEventListener("abort", onInterrupt, { once: true });
 
+      let handedOff = false;
       try {
         const headers = new Headers(options.headers);
         applyBrowserHeaders(headers, userAgent);
@@ -241,10 +256,24 @@ function requestWithTiming(
         });
 
         const responseTime = Date.now();
-        return { response, timing: { fetchStart, responseTime } };
+        // #1729: the deadline is deliberately NOT cleared here. `fetch` settles
+        // when the HEADERS land, so clearing it here left the caller's body read
+        // with no time bound — an origin that answered 200 and then stalled its
+        // body burned the whole per-URL watchdog instead of `timeoutMs`. The
+        // caller disarms once it has read or abandoned the body.
+        handedOff = true;
+        return {
+          response,
+          timing: { fetchStart, responseTime },
+          disarm: () => clearTimeout(timeout),
+          abort: () => controller.abort(),
+        };
       } finally {
-        clearTimeout(timeout);
+        // The request-phase interrupt bridge always ends here — this signal
+        // belongs to THIS effect and means nothing once it settles. The body
+        // read installs its own bridge through `abort`.
         signal.removeEventListener("abort", onInterrupt);
+        if (!handedOff) clearTimeout(timeout);
       }
     },
     catch: (error) => {
@@ -579,6 +608,36 @@ function fetchPageStandard(
   url: string,
   options: FetchOptions,
 ): Effect.Effect<FetchResult, CrawlError, never> {
+  // Suspended so the armed-deadline state below is built per RUN, not per call:
+  // callers retry this same Effect value (see `withRetry` on the fallback path),
+  // and two runs must never share one `held` slot.
+  return Effect.suspend(() => fetchPageStandardOnce(url, options));
+}
+
+function fetchPageStandardOnce(
+  url: string,
+  options: FetchOptions,
+): Effect.Effect<FetchResult, CrawlError, never> {
+  // #1729: the response whose deadline is still armed. Held across the redirect
+  // loop and the body read, and released by the `Effect.ensuring` below on EVERY
+  // exit — success, failure, or interrupt. A `try/finally` inside `Effect.gen`
+  // would not run on failure, which is how a dangling timer would keep a
+  // process alive.
+  let held: TimedResponse | null = null;
+  const release = (): void => {
+    if (!held) return;
+    held.disarm();
+    // Aborting, not just disarming. `release` runs only as this effect leaves,
+    // so nothing reads the held body afterwards: on the success path the stream
+    // is already drained and this is a no-op, and on every failure path —
+    // a terminal 403/429/5xx that fails the status guard before any read, or a
+    // hop still held when the NEXT request fails — nobody ever consumes it.
+    // Disarming alone parked that socket and its buffered chunks for the life
+    // of the process, which is the leak class this whole change exists to kill.
+    held.abort();
+    held = null;
+  };
+
   return Effect.gen(function* () {
     let headers = new Headers({
       "User-Agent": options.userAgent,
@@ -606,7 +665,7 @@ function fetchPageStandard(
       }
       visited.add(currentUrl);
 
-      const { response, timing } = yield* requestWithTiming(
+      const timed = yield* requestWithTiming(
         currentUrl,
         {
           method: "GET",
@@ -616,6 +675,14 @@ function fetchPageStandard(
         options.timeoutMs,
         options.userAgent,
       );
+      const { response, timing } = timed;
+
+      // This hop supersedes the previous one: once a newer response exists the
+      // older can no longer become `lastResponse`, so drop its body (freeing the
+      // socket, which the redirect loop never did) and its deadline.
+      held?.abort();
+      held?.disarm();
+      held = timed;
 
       lastResponse = response;
       lastTiming = timing;
@@ -682,8 +749,16 @@ function fetchPageStandard(
           return await Promise.race([
             readBodyCapped(finalResponse, DEFAULT_MAX_DOCUMENT_BODY_BYTES),
             new Promise<never>((_, reject) => {
-              if (signal.aborted) return reject(new Error("aborted"));
-              onAbort = () => reject(new Error("aborted"));
+              // #1729: aborting the request as well as losing the race is what
+              // actually cancels the read. Rejecting alone only frees the FIBER
+              // — `readBodyCapped` would stay parked on `reader.read()` for the
+              // life of the process, holding the socket and its buffered chunks.
+              const giveUp = (): void => {
+                held?.abort();
+                reject(new Error("aborted"));
+              };
+              if (signal.aborted) return giveUp();
+              onAbort = giveUp;
               signal.addEventListener("abort", onAbort, { once: true });
             }),
           ]);
@@ -691,8 +766,13 @@ function fetchPageStandard(
           if (onAbort) signal.removeEventListener("abort", onAbort);
         }
       },
-      catch: (error) =>
-        CrawlError.parse(url, `Failed to read response: ${(error as Error).message}`),
+      catch: (error) => {
+        // #1729: the deadline firing mid-body is a timeout, not a malformed
+        // response — report it as the same class as a headers-phase timeout so
+        // it is not miscounted as a parse failure.
+        if ((error as Error).name === "AbortError") return CrawlError.timeout(url);
+        return CrawlError.parse(url, `Failed to read response: ${(error as Error).message}`);
+      },
     });
 
     // A 503 needs its body to tell a bot-challenge interstitial from a real
@@ -700,7 +780,18 @@ function fetchPageStandard(
     // here is safe; an unreadable body falls through to the generic server error.
     const challengeBody =
       finalResponse.status === 503
-        ? yield* Effect.orElseSucceed(readBody, () => undefined)
+        ? yield* readBody.pipe(
+            Effect.catchAll((error) =>
+              // #1729: a deadline firing on a stalled body is a TIMEOUT, and
+              // swallowing it here reclassified it as the generic "Server error:
+              // 503" — the origin blamed for what was actually our own deadline.
+              // Every other read failure still degrades to "no body" so the
+              // guard can classify the 503 from its headers alone.
+              error.type === "timeout"
+                ? Effect.fail(error)
+                : Effect.succeed(undefined),
+            ),
+          )
         : undefined;
 
     yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody);
@@ -755,7 +846,7 @@ function fetchPageStandard(
       // Plain-HTTP path — served directly by `fetch`, no cloud render (#512).
       fetcherId: "fetch",
     };
-  });
+  }).pipe(Effect.ensuring(Effect.sync(release)));
 }
 
 export function fetchPage(

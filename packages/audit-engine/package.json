@@ -8,7 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test:golden": "bun test tests/*golden*.test.ts tests/streaming*.test.ts tests/redirect-chains-*.test.ts"
+    "test:golden": "bun test tests/*golden*.test.ts tests/streaming*.test.ts tests/redirect-chains-*.test.ts tests/*deadline*.test.ts"
   },
   "dependencies": {
     "@squirrelscan/cloud-client": "workspace:*",

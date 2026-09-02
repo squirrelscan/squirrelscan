@@ -99,6 +99,11 @@ async function checkSingleUrlAsync(
   options: ExternalCheckerOptions
 ): Promise<CheckUrlResult> {
   const controller = new AbortController();
+  // #1729: the deadline stays armed until this function returns, so it also
+  // covers the WAF body read below. Clearing it where the GET resolved disarmed
+  // the abort at the HEADERS, leaving `getResponse.text()` no time bound at all
+  // — the 403 interstitials this branch exists to read are exactly the
+  // responses a hostile origin is happy to trickle forever.
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
 
   try {
@@ -111,7 +116,6 @@ async function checkSingleUrlAsync(
       });
 
       if (headResponse.status < 400) {
-        clearTimeout(timeoutId);
         return {
           status: headResponse.status,
           error: null,
@@ -129,34 +133,40 @@ async function checkSingleUrlAsync(
       redirect: "follow",
     });
 
-    clearTimeout(timeoutId);
     const redirectTarget = getResponse.url !== href ? getResponse.url : null;
 
     if (getResponse.status === 403) {
+      let body: string | undefined;
       try {
-        const body = await getResponse.text();
-        const wafResult = detectWaf(getResponse.headers, body);
-        if (wafResult.detected) {
-          return {
-            status: 403,
-            error: null,
-            redirectTarget,
-            wafBlocked: true,
-            wafProvider: wafResult.provider ?? "unknown",
-          };
-        }
+        body = await getResponse.text();
       } catch {
-        // Ignore body read errors
+        // The body never arrived: the deadline above fired mid-read, or the
+        // connection dropped. Do NOT give up on detection here — falling
+        // through reports a live, bot-guarded link as broken. Most WAFs are
+        // identifiable from their response headers alone (cf-ray, x-sucuri-id,
+        // a provider `server` value), so run detection on the headers we DO
+        // have. `detectWaf` treats an absent body as headers-only (#1729).
+      }
+      const wafResult = detectWaf(getResponse.headers, body);
+      if (wafResult.detected) {
+        return {
+          status: 403,
+          error: null,
+          redirectTarget,
+          wafBlocked: true,
+          wafProvider: wafResult.provider ?? "unknown",
+        };
       }
     }
 
     return { status: getResponse.status, error: null, redirectTarget };
   } catch (error) {
-    clearTimeout(timeoutId);
     if ((error as Error).name === "AbortError") {
       return { status: null, error: "timeout", redirectTarget: null };
     }
     return { status: null, error: (error as Error).message || "Unknown error", redirectTarget: null };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
