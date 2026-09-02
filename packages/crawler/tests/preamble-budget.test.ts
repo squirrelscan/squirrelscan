@@ -144,9 +144,10 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
     expect(out.pages).toBeGreaterThan(0);
     expect(out.firstPageAfterMs).toBeDefined();
     // The preamble is bounded by the budget, not by the sum of the probe
-    // deadlines. Generous slack over BUDGET_MS for scheduling, and still two
-    // orders of magnitude under the ~180s that sum would cost.
-    expect(out.firstPageAfterMs!).toBeLessThan(BUDGET_MS * 6);
+    // deadlines. robots.txt stalls and eats the budget on its own, so this
+    // lands at ~1.04x BUDGET_MS locally; 3x is scheduling headroom for a busy
+    // CI box, and still ~120x under the ~180s that sum of deadlines costs.
+    expect(out.firstPageAfterMs!).toBeLessThan(BUDGET_MS * 3);
   }, 30_000);
 
   test("stages after the budget is spent are skipped, not merely deadlined", async () => {
