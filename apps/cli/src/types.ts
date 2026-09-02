@@ -66,6 +66,12 @@ export interface SitemapDiscovery {
   orphanPages: string[]; // in sitemap but not crawled
   missingPages: string[]; // crawled but not in sitemap
   failed: SitemapFetchFailure[]; // sitemaps that failed to fetch
+  /**
+   * Discovery stopped before visiting every candidate location, so an empty
+   * `discovered` is unknown rather than absent (squirrelscan/repo#1733).
+   * Optional: absent reads as "the walk completed".
+   */
+  truncated?: boolean;
 }
 
 // ============================================

@@ -874,6 +874,13 @@ export interface AgentAccessRecord {
  */
 export const PROBE_NOT_ATTEMPTED_ERROR = "crawl phase budget exhausted";
 
+/**
+ * Recorded against a sitemap the walk stopped before reaching. Distinct from a
+ * fetch failure: nothing was requested, so it is not evidence the sitemap is
+ * broken or absent (squirrelscan/repo#1733).
+ */
+export const SITEMAP_NOT_CHECKED_ERROR = "sitemap walk stopped before reaching this location";
+
 export interface RslLicenseDoc {
   url: string;
   /** Final HTTP status; 0 = network error, or the probe was never attempted. */

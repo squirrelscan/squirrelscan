@@ -9,10 +9,17 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 
+import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
+
 import { safeFetchWithDeadline } from "./deadline";
 
-/** Recorded against a sitemap the walk gave up on before reaching it. */
-export const SITEMAP_NOT_REACHED_ERROR = "sitemap walk stopped before reaching this location";
+/**
+ * Recorded against a sitemap the walk gave up on before reaching it. Shared
+ * with the rules package via core-contracts, so `crawl/sitemap-valid` can tell
+ * it apart from a real fetch failure rather than reporting a defect for work
+ * that was never attempted.
+ */
+export const SITEMAP_NOT_REACHED_ERROR = SITEMAP_NOT_CHECKED_ERROR;
 
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
@@ -183,15 +190,51 @@ export function sitemapWalkWindowMs(timeoutMs: number): number {
   return Math.min(SITEMAP_WALK_WINDOW_MS, Math.max(1, timeoutMs) * WALK_WINDOW_REQUESTS);
 }
 
-/** Mutable progress window shared across the recursive walk. */
+/**
+ * Absolute ceiling on the whole walk, on top of the progress window.
+ *
+ * The window alone is gameable: an origin that answers ONE request per chunk
+ * instantly and stalls the other four spends a full window per chunk and
+ * re-arms it every time, so "makes progress" stays true forever and the walk
+ * runs for as long as the origin cares to keep it up. Progress tells a stall
+ * from honest slowness; it cannot tell honest slowness from a slow-drip attack,
+ * and only a hard stop can.
+ *
+ * Truncating here is safe in a way it would not have been before: the walk
+ * reports `truncated`, so consumers say "we did not finish looking" rather than
+ * "this site has no sitemap". The cost of the cap is an honest gap in coverage,
+ * not a false finding.
+ */
+export const SITEMAP_WALK_TOTAL_MS = 60_000;
+
+/** Mutable walk state shared across the recursion. */
 interface WalkWindow {
+  /** Progress window; re-armed after each chunk that completes work. */
   deadlineAt: number;
-  /** Length of a fresh window, re-armed after each chunk that completes work. */
+  /** Length of a fresh window. */
   windowMs: number;
+  /** Hard stop for the walk as a whole, never extended. */
+  hardDeadlineAt: number;
+  /** Set whenever the walk abandons candidates it had not visited. */
+  stoppedEarly: boolean;
 }
 
-function newWalkWindow(windowMs: number = SITEMAP_WALK_WINDOW_MS): WalkWindow {
-  return { deadlineAt: Date.now() + windowMs, windowMs };
+function newWalkWindow(
+  windowMs: number = SITEMAP_WALK_WINDOW_MS,
+  totalMs: number = SITEMAP_WALK_TOTAL_MS,
+): WalkWindow {
+  const now = Date.now();
+  return {
+    deadlineAt: now + windowMs,
+    windowMs,
+    hardDeadlineAt: now + Math.max(windowMs, totalMs),
+    stoppedEarly: false,
+  };
+}
+
+/** ms the walk may still spend: the progress window or the hard stop, whichever is nearer. */
+function walkRemainingMs(walkWindow: WalkWindow): number {
+  return Math.min(walkWindow.deadlineAt, walkWindow.hardDeadlineAt) - Date.now();
 }
 
 export function fetchSitemap(
@@ -295,10 +338,11 @@ export function fetchSitemapsRecursive(
   // healthy one keeps going. Created on the first call and threaded down.
   walkWindow: WalkWindow = newWalkWindow(),
 ): Effect.Effect<SitemapFetchResult[], never, never> {
-  if (currentDepth >= maxDepth || urls.length === 0) {
-    return Effect.succeed([]);
-  }
-  if (urlBudget && urlBudget.remaining <= 0) {
+  if (urls.length === 0) return Effect.succeed([]);
+  // Candidates exist but the walk will not visit them: that is a gap in
+  // coverage, and absence must not be inferred from it downstream.
+  if (currentDepth >= maxDepth || (urlBudget && urlBudget.remaining <= 0)) {
+    walkWindow.stoppedEarly = true;
     return Effect.succeed([]);
   }
   return Effect.gen(function* () {
@@ -323,18 +367,20 @@ export function fetchSitemapsRecursive(
           "sitemap URL budget exhausted, skipping remaining sitemaps",
           `${unseenUrls.length - i} skipped at depth ${currentDepth}`,
         );
+        walkWindow.stoppedEarly = true;
         break;
       }
-      // The window can expire PARTWAY through a level, and the entry guard
-      // above only runs on the way in. Without this, an index listing thousands
-      // of children would still be chunked and awaited one skip-result at a
-      // time after the walk had already given up.
-      const remainingMs = walkWindow.deadlineAt - Date.now();
+      // The window can expire PARTWAY through a level, and the recursion only
+      // checks on the way in. Without this, an index listing thousands of
+      // children would still be chunked and awaited one skip-result at a time
+      // after the walk had already given up.
+      const remainingMs = walkRemainingMs(walkWindow);
       if (remainingMs <= 0) {
         logger.debug(
-          "sitemap walk made no progress, skipping remaining sitemaps",
+          "sitemap walk stopped, skipping remaining sitemaps",
           `${unseenUrls.length - i} skipped at depth ${currentDepth}`,
         );
+        walkWindow.stoppedEarly = true;
         break;
       }
 
@@ -350,7 +396,10 @@ export function fetchSitemapsRecursive(
       // inside the first window regardless, so the window only ever bites a walk
       // that is BOTH slow and getting nothing — which is the stall.
       if (chunkResults.some((result) => result.success)) {
-        walkWindow.deadlineAt = Date.now() + walkWindow.windowMs;
+        walkWindow.deadlineAt = Math.min(
+          Date.now() + walkWindow.windowMs,
+          walkWindow.hardDeadlineAt,
+        );
       }
 
       for (const result of chunkResults) {
@@ -432,6 +481,8 @@ export interface DiscoverSitemapsOptions {
    * scale it with a crawl's per-request timeout (squirrelscan/repo#1733).
    */
   walkWindowMs?: number;
+  /** Hard stop for the whole walk. Defaults to SITEMAP_WALK_TOTAL_MS. */
+  walkTotalMs?: number;
 }
 
 export function discoverSitemaps(
@@ -473,6 +524,11 @@ export function discoverSitemaps(
     const entryPoints = Array.from(sitemapUrls);
     const urlBudget: SitemapUrlBudget | undefined =
       options.maxUrls !== undefined ? { remaining: options.maxUrls } : undefined;
+    // Shared with the recursion so a level abandoned DEEP in the walk still
+    // reports truncation. Counting only unvisited entry points would miss it:
+    // every common location can be visited while an index's children are
+    // dropped, which is a real gap in the URLs the crawl will see.
+    const walkWindow = newWalkWindow(options.walkWindowMs, options.walkTotalMs);
     const allResults = yield* fetchSitemapsRecursive(
       entryPoints,
       userAgent,
@@ -482,7 +538,7 @@ export function discoverSitemaps(
       urlBudget,
       options.customHeaders,
       baseHost,
-      newWalkWindow(options.walkWindowMs),
+      walkWindow,
     );
 
     const allSitemaps = allResults.filter((result) => result.success).map((result) => result.data);
@@ -510,7 +566,12 @@ export function discoverSitemaps(
       failed.push({ url, source: sourceOf(url), error: SITEMAP_NOT_REACHED_ERROR });
     }
 
-    return { discovered, all: allSitemaps, failed, truncated: unvisited.length > 0 };
+    return {
+      discovered,
+      all: allSitemaps,
+      failed,
+      truncated: walkWindow.stoppedEarly || unvisited.length > 0,
+    };
   });
 }
 

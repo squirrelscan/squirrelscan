@@ -76,8 +76,8 @@ describe("crawl/robots-txt does not report a missing file it never confirmed", (
 
       expect(check?.status).toBe("info");
       expect(check?.message).not.toContain("No robots.txt found");
-      // The reason travels with the finding so a reader can tell why.
-      expect(check?.value).toBe(reason);
+      // The internal skip marker must never reach user-facing copy.
+      expect(JSON.stringify(check)).not.toContain("budget exhausted");
     }
   });
 

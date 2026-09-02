@@ -601,6 +601,10 @@ export function fetchResourceAssets(
       orphanPages: [] as string[],
       missingPages: [] as string[],
       failed: [],
+      // Rules run against THIS object, not the report built later, so the
+      // truncation flag has to be here or crawl/sitemap-exists still reports
+      // "No XML sitemap found" for a walk that never looked (#1733).
+      truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
     };
 
     if (sitemapDiscovery.discovered.length > 0) {
@@ -1157,6 +1161,10 @@ export function runRulesOnStorage(
       orphanPages: [] as string[],
       missingPages: [] as string[],
       failed: [], // Not persisted to storage, only available during live audit
+      // Rules run against THIS object, not the report built later, so the
+      // truncation flag has to be here or crawl/sitemap-exists still reports
+      // "No XML sitemap found" for a walk that never looked (#1733).
+      truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
     };
 
     // Sitemap array limits must match the API schema caps (REPORT_LIMITS.maxPages).
@@ -1725,6 +1733,10 @@ function buildStreamingSiteData(
       orphanPages: [] as string[],
       missingPages: [] as string[],
       failed: [],
+      // Rules run against THIS object, not the report built later, so the
+      // truncation flag has to be here or crawl/sitemap-exists still reports
+      // "No XML sitemap found" for a walk that never looked (#1733).
+      truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
     };
 
     const SITEMAP_ARRAY_CAP = REPORT_LIMITS.maxPages;

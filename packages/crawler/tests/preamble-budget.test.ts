@@ -34,6 +34,9 @@ import {
 import { WELL_KNOWN_PATHS } from "../src/well-known";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
+// Mirrors SITEMAP_FETCH_CONCURRENCY in src/sitemaps.ts (not exported).
+const SITEMAP_FETCH_CONCURRENCY = 5;
+
 const PAGE = `<!doctype html><html><head><title>t</title></head><body>
 <a href="/one">one</a><a href="/two">two</a></body></html>`;
 
@@ -376,6 +379,44 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
       result.failed.some((failure) => failure.error === SITEMAP_NOT_REACHED_ERROR),
     ).toBe(true);
   }, 30_000);
+
+  test("a slow-drip origin cannot re-arm the window forever", async () => {
+    // The progress window on its own is gameable. An origin that answers ONE
+    // request per chunk instantly and stalls the other four spends a whole
+    // window per chunk and re-arms it every time, so "is making progress" stays
+    // true indefinitely. Progress separates a stall from honest slowness; only
+    // the hard stop separates honest slowness from a deliberate slow drip.
+    let served = 0;
+    const server = Bun.serve({
+      port: 0,
+      idleTimeout: 0,
+      fetch() {
+        // One in five completes; the rest never finish their body.
+        if (served++ % SITEMAP_FETCH_CONCURRENCY === 0) {
+          return new Response(EMPTY_SITEMAP, { headers: { "content-type": "application/xml" } });
+        }
+        return stalledBodyResponse();
+      },
+    });
+    servers.push(server);
+    const origin = `http://localhost:${server.port}`;
+
+    const startedAt = Date.now();
+    const result = await Effect.runPromise(
+      discoverSitemaps(origin, robotsDeclaring(origin, 400), "squirrel-test", {
+        maxUrls: 10_000,
+        walkWindowMs: WALK_WINDOW_MS,
+        walkTotalMs: WALK_WINDOW_MS * 3,
+      }),
+    );
+    const elapsed = Date.now() - startedAt;
+
+    // Bounded by the hard stop rather than by the origin's willingness to drip.
+    // Without it this runs for 408 entry points x one window each.
+    expect(elapsed).toBeLessThan(WALK_WINDOW_MS * 8);
+    // And it says it did not finish, so no consumer reads this as "no sitemap".
+    expect(result.truncated).toBe(true);
+  }, 60_000);
 });
 
 describe("preambleBudgetMs", () => {

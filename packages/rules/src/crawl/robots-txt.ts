@@ -37,7 +37,10 @@ export const robotsTxtRule: Rule = {
         name: "robots-txt-exists",
         status: "info",
         message: "robots.txt could not be checked",
-        value: robotsTxt.errors[0] ?? "the request did not complete",
+        // Deliberately not the raw reason: for a skipped probe that string is
+        // an internal marker ("crawl phase budget exhausted"), which is not
+        // something to show a reader. Report the consequence instead.
+        value: "The request did not complete, so this is unknown, not missing",
       });
       return { checks };
     }

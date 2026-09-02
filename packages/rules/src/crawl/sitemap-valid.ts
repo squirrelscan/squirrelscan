@@ -1,5 +1,7 @@
 // crawl/sitemap-valid - Sitemap validation
 
+import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const MAX_URLS_PER_SITEMAP = 50000;
@@ -23,9 +25,14 @@ export const sitemapValidRule: Rule = {
     const checks: CheckResult[] = [];
     const sitemaps = ctx.site?.sitemaps;
 
-    // Check for sitemaps from robots.txt that failed to fetch
+    // Check for sitemaps from robots.txt that failed to fetch. A sitemap the
+    // walk never REQUESTED is not a fetch failure — it is a gap in what was
+    // checked, and reporting it as "failed to fetch" would invent a defect out
+    // of work the audit skipped (squirrelscan/repo#1733).
     const failedFromRobots =
-      sitemaps?.failed?.filter((f) => f.source === "robots.txt") ?? [];
+      sitemaps?.failed?.filter(
+        (f) => f.source === "robots.txt" && f.error !== SITEMAP_NOT_CHECKED_ERROR,
+      ) ?? [];
 
     if (failedFromRobots.length > 0) {
       checks.push({
