@@ -625,7 +625,16 @@ function fetchPageStandardOnce(
   // process alive.
   let held: TimedResponse | null = null;
   const release = (): void => {
-    held?.disarm();
+    if (!held) return;
+    held.disarm();
+    // Aborting, not just disarming. `release` runs only as this effect leaves,
+    // so nothing reads the held body afterwards: on the success path the stream
+    // is already drained and this is a no-op, and on every failure path —
+    // a terminal 403/429/5xx that fails the status guard before any read, or a
+    // hop still held when the NEXT request fails — nobody ever consumes it.
+    // Disarming alone parked that socket and its buffered chunks for the life
+    // of the process, which is the leak class this whole change exists to kill.
+    held.abort();
     held = null;
   };
 
@@ -771,7 +780,18 @@ function fetchPageStandardOnce(
     // here is safe; an unreadable body falls through to the generic server error.
     const challengeBody =
       finalResponse.status === 503
-        ? yield* Effect.orElseSucceed(readBody, () => undefined)
+        ? yield* readBody.pipe(
+            Effect.catchAll((error) =>
+              // #1729: a deadline firing on a stalled body is a TIMEOUT, and
+              // swallowing it here reclassified it as the generic "Server error:
+              // 503" — the origin blamed for what was actually our own deadline.
+              // Every other read failure still degrades to "no body" so the
+              // guard can classify the 503 from its headers alone.
+              error.type === "timeout"
+                ? Effect.fail(error)
+                : Effect.succeed(undefined),
+            ),
+          )
         : undefined;
 
     yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody);
