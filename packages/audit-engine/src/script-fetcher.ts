@@ -70,15 +70,8 @@ function isJavaScriptContentType(contentType: string | null): boolean {
   );
 }
 
-async function fetchSingleScriptAsync(
-  url: string,
-  options: ScriptFetcherOptions,
-  retryCount = 0
-): Promise<ScriptFetchResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
-
-  const defaultResult: ScriptFetchResult = {
+function emptyScriptResult(url: string): ScriptFetchResult {
+  return {
     url,
     status: null,
     error: null,
@@ -88,6 +81,24 @@ async function fetchSingleScriptAsync(
     redirected: false,
     finalUrl: undefined,
   };
+}
+
+/**
+ * One attempt, under a deadline that stays armed until the body has been read
+ * (#1729). Clearing the timer where the response resolves disarms the abort at
+ * the HEADERS, and `readBodyCapped` below caps BYTES rather than seconds, so a
+ * script origin that answers 200 and then trickles or stalls its body would
+ * park the audit forever. Scripts are fetched during rules enrichment, after
+ * the crawl, so that shows up as an audit that has its pages and never finishes.
+ */
+async function fetchScriptAttempt(
+  url: string,
+  options: ScriptFetcherOptions
+): Promise<ScriptFetchResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+
+  const defaultResult = emptyScriptResult(url);
 
   try {
     // #1395: follow redirects manually so per hop the http/https scheme
@@ -107,8 +118,6 @@ async function fetchSingleScriptAsync(
       },
       signal: controller.signal,
     });
-
-    clearTimeout(timeoutId);
 
     const contentType = response.headers.get("content-type");
     const contentLength = response.headers.get("content-length");
@@ -180,8 +189,10 @@ async function fetchSingleScriptAsync(
     // rejects anything OVER the cap, so reading exactly `maxSizeBytes` would
     // truncate an oversized script to precisely the limit and the rejection
     // would never fire. At cap+1 an oversized body still trips it, while the
-    // read stays bounded — previously this was an unbounded `.text()` whose
-    // size was only measured once the whole body was already in memory.
+    // read stays bounded in BYTES — previously this was an unbounded `.text()`
+    // whose size was only measured once the whole body was already in memory.
+    // The bound in SECONDS is the still-armed deadline above, not this cap: a
+    // body can sit under the cap and never arrive.
     const text = await readBodyCapped(response, maxSizeBytes + 1);
     const sizeBytes = new TextEncoder().encode(text).length;
 
@@ -210,9 +221,22 @@ async function fetchSingleScriptAsync(
       sourceMapHeader,
       contentEncoding,
     };
-  } catch (error) {
+  } finally {
     clearTimeout(timeoutId);
+  }
+}
 
+async function fetchSingleScriptAsync(
+  url: string,
+  options: ScriptFetcherOptions,
+  retryCount = 0
+): Promise<ScriptFetchResult> {
+  try {
+    return await fetchScriptAttempt(url, options);
+  } catch (error) {
+    // Retries live outside the attempt so each one arms its own deadline; a
+    // retry started inside the attempt's `finally` would inherit an expired
+    // timer, or keep the spent one alive for the length of the retry.
     if (
       retryCount < SCRIPT_FETCH_LIMITS.MAX_RETRIES &&
       (error as Error).name !== "AbortError"
@@ -224,9 +248,12 @@ async function fetchSingleScriptAsync(
     }
 
     if ((error as Error).name === "AbortError") {
-      return { ...defaultResult, error: "timeout" };
+      return { ...emptyScriptResult(url), error: "timeout" };
     }
-    return { ...defaultResult, error: (error as Error).message || "error" };
+    return {
+      ...emptyScriptResult(url),
+      error: (error as Error).message || "error",
+    };
   }
 }
 
@@ -245,16 +272,7 @@ function fetchSingleScript(
   return Effect.promise(async () => {
     // #1252: skip before launching once the budget is spent or the host tarpits.
     if (options.budget?.shouldSkip(url)) {
-      return {
-        url,
-        status: null,
-        error: "skipped",
-        contentType: null,
-        sizeBytes: null,
-        content: null,
-        redirected: false,
-        finalUrl: undefined,
-      } satisfies ScriptFetchResult;
+      return { ...emptyScriptResult(url), error: "skipped" };
     }
     const startedAt = Date.now();
     const result = await fetchSingleScriptAsync(url, options);

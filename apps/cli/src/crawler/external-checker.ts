@@ -54,6 +54,11 @@ async function checkSingleUrlAsync(
   options: ExternalCheckerOptions
 ): Promise<CheckUrlResult> {
   const controller = new AbortController();
+  // #1729: the deadline stays armed until this function returns, so it also
+  // covers the WAF body read below. Clearing it where the GET resolved disarmed
+  // the abort at the HEADERS, leaving `getResponse.text()` no time bound at all
+  // — the 403 interstitials this branch exists to read are exactly the
+  // responses a hostile origin is happy to trickle forever.
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
 
   try {
@@ -72,7 +77,6 @@ async function checkSingleUrlAsync(
       // Only trust HEAD for success (2xx/3xx)
       // Many servers return 401/403/429 to HEAD but allow GET
       if (headResponse.status < 400) {
-        clearTimeout(timeoutId);
         const redirectTarget =
           headResponse.url !== href ? headResponse.url : null;
         return {
@@ -97,7 +101,6 @@ async function checkSingleUrlAsync(
       redirect: "follow",
     });
 
-    clearTimeout(timeoutId);
     const redirectTarget = getResponse.url !== href ? getResponse.url : null;
 
     // For 403 responses, check if it's WAF/bot protection
@@ -125,8 +128,6 @@ async function checkSingleUrlAsync(
       redirectTarget,
     };
   } catch (error) {
-    clearTimeout(timeoutId);
-
     if ((error as Error).name === "AbortError") {
       return {
         status: null,
@@ -140,6 +141,8 @@ async function checkSingleUrlAsync(
       error: (error as Error).message || "Unknown error",
       redirectTarget: null,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
