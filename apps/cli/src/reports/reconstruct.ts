@@ -189,7 +189,8 @@ export function reconstructReport(
     // A truncated walk with zero results still needs a sitemap section: it is
     // the only place the report can say the check did not complete, and
     // `undefined` reads downstream as "no data" rather than "not finished".
-    const sitemapWalkTruncated = crawl.stats?.sitemapDiscoveryTruncated ?? false;
+    const sitemapWalkTruncated =
+      crawl.stats?.sitemapDiscoveryTruncated ?? false;
     const sitemaps: SitemapDiscovery | undefined =
       sitemapRecords.length > 0 || sitemapWalkTruncated
         ? {
