@@ -17,6 +17,7 @@ import {
   fetchFallbacksLine,
   fullScanHint,
   scanScopeLine,
+  seedRedirectLine,
 } from "../coverage";
 import { wrapText } from "../utils";
 import { lockedRulesMessage } from "../locked-rules";
@@ -92,6 +93,13 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   write("=".repeat(60));
   write(`Auditing: ${report.baseUrl}`);
   write(`Crawled ${report.totalPages} pages`);
+  // #1418: the seed redirected off its own site and was not followed, so the
+  // line above is not where the redirect pointed. stripControlChars because the
+  // redirect target is a string the audited site chose and this output reaches
+  // a terminal (seedRedirectLine already drops whitespace/C0 from the URL; this
+  // is the same belt-and-braces every other page-derived line here gets).
+  const seedRedirect = seedRedirectLine(report);
+  if (seedRedirect) write(stripControlChars(seedRedirect));
   const scope = scanScopeLine(report);
   if (scope) write(scope);
   const cov = coverageLine(report);

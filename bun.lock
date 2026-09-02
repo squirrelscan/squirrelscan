@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.87",
+      "version": "0.0.89",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -178,6 +178,7 @@
       "devDependencies": {
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
+        "fast-xml-parser": "5.10.1",
       },
       "peerDependencies": {
         "react": "^19.2.7",

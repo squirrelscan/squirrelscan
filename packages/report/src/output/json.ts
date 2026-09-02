@@ -8,6 +8,7 @@ import { affectedPages } from "../affected-pages";
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
+import { seedRedirect } from "../coverage";
 
 export interface JsonRenderOptions {
   version?: string;
@@ -17,6 +18,19 @@ interface SlimJsonReport {
   meta: {
     version: string;
     baseUrl: string;
+    /**
+     * A refused off-site seed redirect (#1418). Present only when the seed
+     * redirected off its own registrable domain and the crawler declined to
+     * follow it: `baseUrl` above is what was graded, this is where the seed
+     * pointed. `finalUrl` is null when the stored target was not a parseable
+     * http(s) URL and was withheld rather than emitted; `note` reads correctly
+     * either way.
+     */
+    seedRedirect?: {
+      finalUrl: string | null;
+      followed: false;
+      note: string;
+    };
     timestamp: string;
     totalPages: number;
     /** Smart audits (#110): present only when `smart_audits` ran. */
@@ -141,10 +155,22 @@ interface SlimJsonReport {
 function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
   const categoryIssues = groupIssuesByCategory(report.ruleResults);
   const es = editorSummaryView(report.editorSummary);
+  const refusedSeedRedirect = seedRedirect(report);
   return {
     meta: {
       version,
       baseUrl: report.baseUrl,
+      // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
+      // graded URL sees, in the same object, that the seed pointed elsewhere.
+      ...(refusedSeedRedirect
+        ? {
+            seedRedirect: {
+              finalUrl: refusedSeedRedirect.finalUrl,
+              followed: false as const,
+              note: refusedSeedRedirect.note,
+            },
+          }
+        : {}),
       timestamp: report.timestamp,
       totalPages: report.totalPages,
       ...(report.coverage ? { coverage: report.coverage } : {}),
