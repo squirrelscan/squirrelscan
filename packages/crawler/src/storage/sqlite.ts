@@ -356,6 +356,16 @@ const SITEMAPS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "is_news_sitemap", type: "INTEGER" },
 ];
 
+// Same guard for `robots_txt`. Migration 23 added `error`; a DB stamped past 23
+// by a build that numbered its own migration 23 skips it forever, and then
+// setRobotsTxt throws "no column named error" on the crawl's first write. This
+// has now bitten `pages` and `sitemaps` in turn, so the column goes on the list
+// at the same time it goes in the migration. Any new ALTER-added `robots_txt`
+// column MUST be listed here.
+const ROBOTS_TXT_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "error", type: "TEXT" },
+];
+
 const SCHEMA = `
 -- Crawl sessions
 CREATE TABLE IF NOT EXISTS crawls (
@@ -938,9 +948,10 @@ export class SQLiteStorage implements CrawlStorage {
     // skipped. Runs unconditionally (PRAGMA table_info is the source of truth,
     // not the schema_version counter), so a DB stuck at the current version
     // with a missing column recovers instead of throwing on every write. See
-    // PAGES_ALTER_COLUMNS and SITEMAPS_ALTER_COLUMNS.
+    // PAGES_ALTER_COLUMNS, SITEMAPS_ALTER_COLUMNS and ROBOTS_TXT_ALTER_COLUMNS.
     this.reconcilePagesColumns();
     this.reconcileColumns("sitemaps", SITEMAPS_ALTER_COLUMNS);
+    this.reconcileColumns("robots_txt", ROBOTS_TXT_ALTER_COLUMNS);
   }
 
   /**
@@ -955,7 +966,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   private reconcileColumns(
-    table: "pages" | "sitemaps",
+    table: "pages" | "sitemaps" | "robots_txt",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
