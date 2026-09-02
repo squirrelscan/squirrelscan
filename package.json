@@ -12,7 +12,6 @@
     "typecheck": "bun run --sequential --filter '*' --if-present typecheck",
     "test": "cd apps/cli && bun test",
     "test:engine": "cd packages/audit-engine && bun run test:golden",
-    "test:crawler": "cd packages/crawler && bun test",
     "test:release": "bash scripts/test-changelog-extraction.sh && bun test scripts/release-version.test.ts",
     "docs:check": "cd docs && bun run check",
     "docs:build": "cd docs && bun run build",

@@ -9,9 +9,10 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
+import { safeFetchWithDeadline } from "./deadline";
 
-import type { PhaseBudget } from "./deadline";
+/** Recorded against a sitemap the walk gave up on before reaching it. */
+export const SITEMAP_NOT_REACHED_ERROR = "sitemap walk stopped before reaching this location";
 
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
@@ -156,12 +157,51 @@ export type SitemapFetchResult =
 
 const SITEMAP_FETCH_TIMEOUT_MS = 30_000;
 
+/**
+ * How long the sitemap walk may go without completing a single fetch
+ * (squirrelscan/repo#1733).
+ *
+ * The walk is the one preamble stage whose truncation costs PAGES, not just AX
+ * metadata: cutting it short on a healthy site silently drops URLs the crawl
+ * would have visited. So it is not governed by the root probes' shared ceiling,
+ * which a site with many legitimate sitemaps would blow through honestly (60
+ * one-URL sitemaps at ~4s a chunk is ~48s of perfectly good work).
+ *
+ * What separates that from the failure this issue is about is PROGRESS. A
+ * stalled origin completes nothing, so the window expires after one dead chunk
+ * and the walk stops; a slow-but-healthy origin keeps finishing chunks and
+ * keeps earning a fresh window. Worst case for a stalled origin is therefore
+ * roughly one chunk, not the whole walk.
+ */
+export const SITEMAP_WALK_WINDOW_MS = 20_000;
+/** …and no more than this many full request timeouts, so a config asking for
+ *  snappy requests gets a proportionally snappy walk. */
+const WALK_WINDOW_REQUESTS = 3;
+
+/** The walk's progress window for a given per-request timeout. */
+export function sitemapWalkWindowMs(timeoutMs: number): number {
+  return Math.min(SITEMAP_WALK_WINDOW_MS, Math.max(1, timeoutMs) * WALK_WINDOW_REQUESTS);
+}
+
+/** Mutable progress window shared across the recursive walk. */
+interface WalkWindow {
+  deadlineAt: number;
+  /** Length of a fresh window, re-armed after each chunk that completes work. */
+  windowMs: number;
+}
+
+function newWalkWindow(windowMs: number = SITEMAP_WALK_WINDOW_MS): WalkWindow {
+  return { deadlineAt: Date.now() + windowMs, windowMs };
+}
+
 export function fetchSitemap(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
   baseHost?: string,
-  budget?: PhaseBudget,
+  // squirrelscan/repo#1733: deadline for this one fetch, tightened by the
+  // caller when the walk's progress window has less than a full timeout left.
+  timeoutMs: number = SITEMAP_FETCH_TIMEOUT_MS,
 ): Effect.Effect<SitemapFetchResult, never, never> {
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
@@ -170,10 +210,7 @@ export function fetchSitemap(
   const originScopedHeaders =
     baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
   return Effect.promise(async (): Promise<SitemapFetchResult> => {
-    // Budget spent: recorded as a fetch failure, the same shape an unreachable
-    // sitemap already produces, so discovery keeps its normal result contract.
-    const timeoutMs = budgetedTimeoutMs(budget, SITEMAP_FETCH_TIMEOUT_MS);
-    if (timeoutMs === null) return { success: false, url, error: BUDGET_EXHAUSTED_ERROR };
+    if (timeoutMs <= 0) return { success: false, url, error: SITEMAP_NOT_REACHED_ERROR };
     try {
       // #1395: manual redirects — per-hop scheme allowlist + strip secret
       // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
@@ -253,10 +290,10 @@ export function fetchSitemapsRecursive(
   // #1393: host of the audited origin; customHeaders are only forwarded to
   // matching-host sitemap fetches. Threaded through the recursion.
   baseHost?: string,
-  // squirrelscan/repo#1733: the crawl preamble's shared wall-clock budget.
-  // Threaded through the recursion so a spent budget ends the whole descent,
-  // not just the request that noticed.
-  budget?: PhaseBudget,
+  // squirrelscan/repo#1733: progress window shared across the whole walk, so a
+  // stalled origin ends the descent after one dead chunk while a slow-but-
+  // healthy one keeps going. Created on the first call and threaded down.
+  walkWindow: WalkWindow = newWalkWindow(),
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (currentDepth >= maxDepth || urls.length === 0) {
     return Effect.succeed([]);
@@ -264,14 +301,6 @@ export function fetchSitemapsRecursive(
   if (urlBudget && urlBudget.remaining <= 0) {
     return Effect.succeed([]);
   }
-  // Wall-clock budget spent: abandon the descent rather than walking a
-  // sitemap index's thousands of children just to record a skip for each.
-  // The chunk loop below carries the same guard for a budget that expires
-  // partway through a level, which this one cannot see.
-  if (budgetedTimeoutMs(budget, SITEMAP_FETCH_TIMEOUT_MS) === null) {
-    return Effect.succeed([]);
-  }
-
   return Effect.gen(function* () {
     const unseenUrls = urls.filter((url) => {
       if (seen.has(url)) return false;
@@ -296,24 +325,33 @@ export function fetchSitemapsRecursive(
         );
         break;
       }
-      // The wall-clock budget can expire PARTWAY through a level, and the
-      // entry-guard above only runs on the way in. Without this, an index
-      // listing thousands of children would still be chunked and awaited
-      // one skip-result at a time after the deadline had already passed.
-      if (budgetedTimeoutMs(budget, SITEMAP_FETCH_TIMEOUT_MS) === null) {
+      // The window can expire PARTWAY through a level, and the entry guard
+      // above only runs on the way in. Without this, an index listing thousands
+      // of children would still be chunked and awaited one skip-result at a
+      // time after the walk had already given up.
+      const remainingMs = walkWindow.deadlineAt - Date.now();
+      if (remainingMs <= 0) {
         logger.debug(
-          "sitemap phase budget exhausted, skipping remaining sitemaps",
+          "sitemap walk made no progress, skipping remaining sitemaps",
           `${unseenUrls.length - i} skipped at depth ${currentDepth}`,
         );
         break;
       }
 
       const chunk = unseenUrls.slice(i, i + SITEMAP_FETCH_CONCURRENCY);
+      const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
       const chunkResults = yield* Effect.all(
-        chunk.map((url) => fetchSitemap(url, userAgent, customHeaders, baseHost, budget)),
+        chunk.map((url) => fetchSitemap(url, userAgent, customHeaders, baseHost, chunkTimeoutMs)),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
       fetchResults.push(...chunkResults);
+      // A completed fetch earns a fresh window. Only successes count, and that
+      // is deliberate: an all-404 level answers in milliseconds and finishes
+      // inside the first window regardless, so the window only ever bites a walk
+      // that is BOTH slow and getting nothing — which is the stall.
+      if (chunkResults.some((result) => result.success)) {
+        walkWindow.deadlineAt = Date.now() + walkWindow.windowMs;
+      }
 
       for (const result of chunkResults) {
         if (!result.success) continue;
@@ -353,7 +391,7 @@ export function fetchSitemapsRecursive(
       urlBudget,
       customHeaders,
       baseHost,
-      budget,
+      walkWindow,
     );
 
     return [...fetchResults, ...childResults];
@@ -375,6 +413,12 @@ export interface SitemapDiscoveryResult {
   discovered: SitemapData[];
   all: SitemapData[];
   failed: SitemapFetchFailure[];
+  /**
+   * The walk gave up before visiting every entry point, so `discovered` being
+   * empty is NOT evidence that the site has no sitemap (squirrelscan/repo#1733).
+   * Consumers must report unknown rather than missing when this is set.
+   */
+  truncated: boolean;
 }
 
 export interface DiscoverSitemapsOptions {
@@ -383,11 +427,11 @@ export interface DiscoverSitemapsOptions {
   /** Custom HTTP headers attached to every sitemap fetch (e.g. Web Bot Auth signatures). */
   customHeaders?: Record<string, string>;
   /**
-   * Wall-clock budget shared with the rest of the crawl preamble. Discovery is
-   * its last stage, so it usually inherits whatever the root probes left over
-   * (squirrelscan/repo#1733).
+   * How long the walk may go without completing a fetch before it gives up.
+   * Defaults to SITEMAP_WALK_WINDOW_MS; pass `sitemapWalkWindowMs(timeoutMs)` to
+   * scale it with a crawl's per-request timeout (squirrelscan/repo#1733).
    */
-  budget?: PhaseBudget;
+  walkWindowMs?: number;
 }
 
 export function discoverSitemaps(
@@ -438,25 +482,35 @@ export function discoverSitemaps(
       urlBudget,
       options.customHeaders,
       baseHost,
-      options.budget,
+      newWalkWindow(options.walkWindowMs),
     );
 
     const allSitemaps = allResults.filter((result) => result.success).map((result) => result.data);
     const entryPointSet = new Set(entryPoints);
     const discovered = allSitemaps.filter((sitemap) => entryPointSet.has(sitemap.url));
 
+    const sourceOf = (url: string) =>
+      robotsSitemaps.has(url) ? ("robots.txt" as const) : ("common" as const);
+
     const failed: SitemapFetchFailure[] = allResults
       .filter(
         (result): result is { success: false; url: string; error: string } =>
           !result.success && entryPointSet.has(result.url),
       )
-      .map((result) => ({
-        url: result.url,
-        source: robotsSitemaps.has(result.url) ? ("robots.txt" as const) : ("common" as const),
-        error: result.error,
-      }));
+      .map((result) => ({ url: result.url, source: sourceOf(result.url), error: result.error }));
 
-    return { discovered, all: allSitemaps, failed };
+    // An entry point with NO result at all was never visited — the walk stopped
+    // first. Record each one rather than letting it vanish, so "we did not look"
+    // is never silently indistinguishable from "there was nothing there".
+    const attempted = new Set(
+      allResults.map((result) => (result.success ? result.data.url : result.url)),
+    );
+    const unvisited = entryPoints.filter((url) => !attempted.has(url));
+    for (const url of unvisited) {
+      failed.push({ url, source: sourceOf(url), error: SITEMAP_NOT_REACHED_ERROR });
+    }
+
+    return { discovered, all: allSitemaps, failed, truncated: unvisited.length > 0 };
   });
 }
 

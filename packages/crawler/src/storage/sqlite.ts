@@ -59,7 +59,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 22;
+export const SCHEMA_VERSION = 23;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -315,6 +315,13 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE page_features ADD COLUMN theme_color TEXT`,
     `ALTER TABLE page_features ADD COLUMN og_image TEXT`,
   ],
+  // Version 23: why a robots.txt fetch produced nothing. `found = 0` conflated
+  // "the origin answered 404" with "we never got an answer" (timeout, 5xx, or a
+  // probe the crawl budget cut short), and the weight-8 crawl/robots-txt rule
+  // reported the second as a definite "No robots.txt found"
+  // (squirrelscan/repo#1733). ADDITIVE; ALTER is idempotent (the runner swallows
+  // "duplicate column name"). Local sqlite only — NOT a prod migration.
+  23: [`ALTER TABLE robots_txt ADD COLUMN error TEXT`],
 };
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
@@ -497,6 +504,9 @@ CREATE TABLE IF NOT EXISTS robots_txt (
   size_bytes INTEGER NOT NULL,
   sitemaps TEXT NOT NULL,
   fetched_at INTEGER NOT NULL,
+  -- Why the fetch produced nothing, when it did. Distinguishes a confirmed 404
+  -- from a probe that never got an answer; see migration 23.
+  error TEXT,
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
 
@@ -2114,8 +2124,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT OR REPLACE INTO robots_txt (crawl_id, url, found, content, size_bytes, sitemaps, fetched_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO robots_txt (crawl_id, url, found, content, size_bytes, sitemaps, fetched_at, error)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -2124,7 +2134,8 @@ export class SQLiteStorage implements CrawlStorage {
           robots.content,
           robots.sizeBytes,
           JSON.stringify(robots.sitemaps),
-          robots.fetchedAt
+          robots.fetchedAt,
+          robots.error ?? null
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2147,6 +2158,7 @@ export class SQLiteStorage implements CrawlStorage {
           sizeBytes: row.size_bytes as number,
           sitemaps: this.safeJsonParse<string[]>(row.sitemaps as string, []),
           fetchedAt: row.fetched_at as number,
+          error: (row.error as string | null) ?? null,
         };
       },
       catch: (e) => StorageError.read(e),

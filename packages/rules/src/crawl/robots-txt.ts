@@ -28,7 +28,20 @@ export const robotsTxtRule: Rule = {
       return { checks };
     }
 
-    // Check existence
+    // Check existence. `exists: false` with a recorded error means the probe
+    // never got an answer — a timeout, a 5xx, or a fetch the crawl budget cut
+    // short. Absence was not established, so this reports what is unknown
+    // instead of a definite missing-file finding (squirrelscan/repo#1733).
+    if (!robotsTxt.exists && robotsTxt.errors.length > 0) {
+      checks.push({
+        name: "robots-txt-exists",
+        status: "info",
+        message: "robots.txt could not be checked",
+        value: robotsTxt.errors[0] ?? "the request did not complete",
+      });
+      return { checks };
+    }
+
     if (!robotsTxt.exists) {
       checks.push({
         name: "robots-txt-exists",

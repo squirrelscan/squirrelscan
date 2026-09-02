@@ -19,7 +19,12 @@ import { urlHostKey } from "@squirrelscan/utils/url";
 
 import { createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget } from "../deadline";
-import { computeSitemapUrlCap, discoverSitemaps, selectSitemapUrls } from "../sitemaps";
+import {
+  computeSitemapUrlCap,
+  discoverSitemaps,
+  selectSitemapUrls,
+  sitemapWalkWindowMs,
+} from "../sitemaps";
 
 import type { RobotsEvaluator } from "../robots";
 import type {
@@ -91,19 +96,25 @@ const PARSED_PAGE_CACHE_MAX_PAGES = COVERAGE_PAGE_LIMITS.quick;
 
 // ---- Crawl preamble budget (squirrelscan/repo#1733) ----
 //
-// Everything before the first page — seed redirect resolution, robots.txt, the
-// llms / markdown / well-known / agent-access / RSL probes, and sitemap
-// discovery — runs as sequential stages, each with its own 15-30s request
-// deadline. Individually bounded, their SUM is not: an origin that answers 200
-// on every root path and then stalls the body burned 150.3s across 28 requests
-// before page 1, which is the entire 120s crawl phase a quick cloud audit gets,
-// on a site that crawls perfectly well once the preamble is past.
+// The root probes before the first page — seed redirect resolution, robots.txt,
+// and the llms / markdown / well-known / agent-access / RSL sweep — run as
+// sequential stages, each with its own 15-30s request deadline. Individually
+// bounded, their SUM is not: an origin that answers 200 on every root path and
+// then stalls the body burned 150.3s across 28 requests before page 1, which is
+// the entire 120s crawl phase a quick cloud audit gets, on a site that crawls
+// perfectly well once the preamble is past.
 //
-// One budget spans the phase. Each request takes min(its own deadline, what the
-// budget has left); once it is spent the remaining probes are skipped and store
-// the same "unreachable" shape a network failure gives them, so no probe's row
-// goes missing — the trade is AX completeness on a pathologically slow origin
-// for a crawl that actually reaches its pages.
+// One budget spans those stages. Each request takes min(its own deadline, what
+// the budget has left); once it is spent the rest are skipped and store the same
+// "unreachable" shape a network failure gives them, so no probe's row goes
+// missing and every consumer keeps a reason to report.
+//
+// What this budget deliberately does NOT cover is sitemap discovery, which runs
+// after it on a progress window of its own (see SITEMAP_WALK_WINDOW_MS). The
+// asymmetry is the whole design: cutting the AX probes short costs metadata,
+// and their rules already degrade to unknown, whereas cutting the sitemap walk
+// short costs PAGES — a site with many legitimate sitemaps is slow without being
+// stalled, and truncating it would silently shrink the crawl.
 const PREAMBLE_TOTAL_BUDGET_MS = 45_000;
 // ...and no more than this many full request timeouts, so a config asking for
 // snappy requests gets a proportionally snappy preamble. Mirrors
@@ -1737,6 +1748,10 @@ export function createCrawler(
             sizeBytes: robotsResult.right.data.sizeBytes,
             sitemaps: robotsResult.right.data.sitemaps,
             fetchedAt: Date.now(),
+            // Keeps "never got an answer" distinguishable from a confirmed 404
+            // so the robots-txt rule does not report a missing file it never
+            // established was missing (squirrelscan/repo#1733).
+            error: robotsResult.right.data.errors[0] ?? null,
           });
         }
 
@@ -1811,8 +1826,25 @@ export function createCrawler(
               }
             : null,
           config.userAgent,
-          { maxUrls: sitemapUrlCap, customHeaders: config.headers, budget: preamble },
+          {
+            maxUrls: sitemapUrlCap,
+            customHeaders: config.headers,
+            walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
+          },
         );
+
+        // The walk is bounded by its own progress window, NOT the preamble
+        // budget: truncating it costs pages rather than AX metadata, and a site
+        // with many legitimate sitemaps is slow without being stalled. When it
+        // did stop early, record that — an empty discovery must not be read as
+        // "this site has no sitemap" (squirrelscan/repo#1733).
+        if (sitemapResult.truncated) {
+          logger.warn(
+            "sitemap discovery truncated",
+            "the walk stopped before visiting every entry point; absence is unconfirmed",
+          );
+          yield* storage.updateStats(crawlId, { sitemapDiscoveryTruncated: true });
+        }
 
         const sitemapByUrl = new Map(sitemapResult.all.map((sitemap) => [sitemap.url, sitemap]));
 
@@ -2000,6 +2032,10 @@ export function createCrawler(
             sizeBytes: robotsResult.right.data.sizeBytes,
             sitemaps: robotsResult.right.data.sitemaps,
             fetchedAt: Date.now(),
+            // Keeps "never got an answer" distinguishable from a confirmed 404
+            // so the robots-txt rule does not report a missing file it never
+            // established was missing (squirrelscan/repo#1733).
+            error: robotsResult.right.data.errors[0] ?? null,
           });
         }
 
@@ -2141,6 +2177,10 @@ export function createCrawler(
             sizeBytes: robotsResult.right.data.sizeBytes,
             sitemaps: robotsResult.right.data.sitemaps,
             fetchedAt: Date.now(),
+            // Keeps "never got an answer" distinguishable from a confirmed 404
+            // so the robots-txt rule does not report a missing file it never
+            // established was missing (squirrelscan/repo#1733).
+            error: robotsResult.right.data.errors[0] ?? null,
           });
 
           for (const sitemapUrl of robots.data.sitemaps) {

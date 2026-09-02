@@ -1202,6 +1202,12 @@ export interface SitemapDiscovery {
   orphanPages: string[];
   missingPages: string[];
   failed: SitemapFetchFailure[];
+  /**
+   * Discovery stopped before visiting every candidate location, so an empty
+   * `discovered` is unknown rather than absent (squirrelscan/repo#1733).
+   * Optional: absent reads as "the walk completed".
+   */
+  truncated?: boolean;
 }
 
 export interface SitemapUrlStatusData {

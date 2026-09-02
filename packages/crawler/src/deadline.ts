@@ -1,6 +1,7 @@
 // Request deadlines that survive into the body read (#1699), and the phase
 // budget that bounds a whole sequence of them (squirrelscan/repo#1733).
 
+import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
 /**
@@ -69,8 +70,13 @@ export interface PhaseBudget {
   readonly deadlineAt: number;
 }
 
-/** Error text recorded by a probe that was skipped because the budget ran out. */
-export const BUDGET_EXHAUSTED_ERROR = "crawl phase budget exhausted";
+/**
+ * Error text recorded by a probe that was skipped because the budget ran out.
+ * Shared with the rules package via core-contracts: consumers key off this
+ * exact string to tell "never attempted" apart from "attempted and failed",
+ * which look identical otherwise (both are `status: 0`).
+ */
+export const BUDGET_EXHAUSTED_ERROR = PROBE_NOT_ATTEMPTED_ERROR;
 
 export function createPhaseBudget(totalMs: number, startedAt: number = Date.now()): PhaseBudget {
   return { deadlineAt: startedAt + Math.max(0, totalMs) };

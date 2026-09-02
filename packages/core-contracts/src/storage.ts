@@ -164,6 +164,13 @@ export interface CrawlStats {
   /** Approximate bytes saved by skipping fresh requests entirely. (#106) */
   bytesCacheSaved?: number;
   /**
+   * Sitemap discovery stopped before visiting every entry point, so an empty
+   * sitemap set is UNCONFIRMED rather than evidence the site has none
+   * (squirrelscan/repo#1733). Optional for backward compatibility with older
+   * persisted stats blobs; absent reads as "the walk completed".
+   */
+  sitemapDiscoveryTruncated?: boolean;
+  /**
    * Per-reason cache-hit counts across pages AND sub-resources (#107/#108).
    * Drives the hits-by-reason breakdown. Optional for backward compatibility.
    */
@@ -743,6 +750,16 @@ export interface RobotsTxtRecord {
   sizeBytes: number;
   sitemaps: string[];
   fetchedAt: number;
+  /**
+   * Why the fetch did not produce a robots.txt, when it did not. `exists:false`
+   * alone conflates "the origin answered 404" with "we never got an answer" —
+   * a timeout, a 5xx, or a probe the crawl budget cut short. Only the first is
+   * evidence of absence, so consumers MUST treat a non-null error here as
+   * unknown rather than reporting a missing robots.txt. Optional: older
+   * persisted rows and storage backends that predate it leave it undefined,
+   * which reads as the confirmed case.
+   */
+  error?: string | null;
 }
 
 // Persisted llms.txt + llms-full.txt root fetch; mirrors RobotsTxtRecord.
@@ -846,9 +863,20 @@ export interface AgentAccessRecord {
 }
 
 // One fetched RSL (rslstandard.org) license document referenced from robots.txt.
+/**
+ * Recorded as a probe's `error` when the crawl never attempted it, because the
+ * preamble's wall-clock budget was already spent (squirrelscan/repo#1733).
+ *
+ * The distinction matters to rules: a probe that was ATTEMPTED and failed is
+ * evidence (a dead URL is a real broken reference worth reporting), while one
+ * that was never attempted is evidence of nothing and must degrade to unknown.
+ * Both land as `status: 0`, so this exact string is the discriminator.
+ */
+export const PROBE_NOT_ATTEMPTED_ERROR = "crawl phase budget exhausted";
+
 export interface RslLicenseDoc {
   url: string;
-  /** Final HTTP status; 0 = network error. */
+  /** Final HTTP status; 0 = network error, or the probe was never attempted. */
   status: number;
   contentType: string | null;
   /** Parsed as XML (and not HTML). */
