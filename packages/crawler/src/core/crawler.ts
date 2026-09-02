@@ -1598,6 +1598,14 @@ export function createCrawler(
       Effect.gen(function* () {
         // One wall-clock budget for the whole preamble, armed before the first
         // request of the crawl. See PREAMBLE_TOTAL_BUDGET_MS.
+        //
+        // Scoped to this call deliberately. Callers that pre-resolve the seed
+        // (the CLI controllers, the cloud runtime) spend a separate redirect
+        // allowance before they ever reach here — that duplicate resolution is
+        // #1727's to remove, and handing it THIS budget would be worse: the
+        // caller's own work between the two sits inside the window, so a slow
+        // local storage lookup could arrive here with the budget already spent
+        // and silently skip every probe on a perfectly healthy origin.
         const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs));
 
         // Follow redirects to get final URL (both HTTP and client-side)

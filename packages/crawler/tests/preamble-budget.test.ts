@@ -17,7 +17,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
 import { createCrawler, preambleBudgetMs } from "../src/core/crawler";
-import { BUDGET_EXHAUSTED_ERROR } from "../src/deadline";
+import { BUDGET_EXHAUSTED_ERROR, createPhaseBudget } from "../src/deadline";
+import { discoverSitemaps } from "../src/sitemaps";
 import { WELL_KNOWN_PATHS } from "../src/well-known";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
@@ -250,6 +251,63 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
       expect(probe.error).not.toBe(BUDGET_EXHAUSTED_ERROR);
     }
     expect(sitemaps.length).toBeGreaterThan(0);
+  }, 30_000);
+});
+
+describe("sitemap discovery under the budget", () => {
+  test("a budget that expires mid-level stops the level, it does not skip URL by URL", async () => {
+    // The entry guard only runs on the way INTO a recursion level. A sitemap
+    // index is attacker-sized — one can list thousands of children — so a
+    // budget that expires partway through must break the chunk loop rather
+    // than chunking and awaiting a skip result for every remaining child.
+    const STALL_MS = 400;
+    let requests = 0;
+    const server = Bun.serve({
+      port: 0,
+      idleTimeout: 0,
+      async fetch() {
+        requests++;
+        await Bun.sleep(STALL_MS);
+        return new Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
+          headers: { "content-type": "application/xml" },
+        });
+      },
+    });
+    servers.push(server);
+
+    const origin = `http://localhost:${server.port}`;
+    // robots.txt declares far more sitemaps than one chunk holds, so the level
+    // needs several chunks and the budget runs out during it.
+    const declared = Array.from({ length: 60 }, (_, i) => `${origin}/s${i}.xml`);
+
+    const result = await Effect.runPromise(
+      discoverSitemaps(
+        origin,
+        {
+          exists: true,
+          url: `${origin}/robots.txt`,
+          content: null,
+          sizeBytes: 0,
+          sitemaps: declared,
+          rules: [],
+          errors: [],
+        },
+        "squirrel-test",
+        { maxUrls: 10_000, budget: createPhaseBudget(STALL_MS * 2) },
+      ),
+    );
+
+    // Chunks are 5 wide and each takes STALL_MS, so a 2×STALL_MS budget buys
+    // roughly two chunks' worth of real fetches out of ~68 entry points.
+    expect(requests).toBeGreaterThan(0);
+    expect(result.all.length).toBeGreaterThan(0);
+
+    // The load-bearing assertion. `fetchSitemap` short-circuits a spent budget
+    // in ~0ms, so request COUNT stays low either way — what tells the two
+    // implementations apart is whether the loop kept going. Without the chunk
+    // guard every remaining entry point is chunked, awaited, and comes back a
+    // budget-exhausted failure, so `failed` fills up with ~58 of them.
+    expect(result.failed.length).toBeLessThan(10);
   }, 30_000);
 });
 

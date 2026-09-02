@@ -296,6 +296,17 @@ export function fetchSitemapsRecursive(
         );
         break;
       }
+      // The wall-clock budget can expire PARTWAY through a level, and the
+      // entry-guard above only runs on the way in. Without this, an index
+      // listing thousands of children would still be chunked and awaited
+      // one skip-result at a time after the deadline had already passed.
+      if (budgetedTimeoutMs(budget, SITEMAP_FETCH_TIMEOUT_MS) === null) {
+        logger.debug(
+          "sitemap phase budget exhausted, skipping remaining sitemaps",
+          `${unseenUrls.length - i} skipped at depth ${currentDepth}`,
+        );
+        break;
+      }
 
       const chunk = unseenUrls.slice(i, i + SITEMAP_FETCH_CONCURRENCY);
       const chunkResults = yield* Effect.all(
