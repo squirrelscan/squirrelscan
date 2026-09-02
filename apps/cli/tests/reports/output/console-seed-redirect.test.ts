@@ -52,10 +52,13 @@ describe("console report discloses a refused off-site seed redirect", () => {
   test("names the refused target and the URL that was actually graded", () => {
     const out = capture(redirected());
     expect(out).toContain(NOTE);
-    // The graded URL is still the header's subject; the disclosure sits under it.
+    // The graded URL is still the header's subject; the disclosure sits under
+    // it. Located by the score, not by the URL: a URL literal handed to
+    // `includes` trips CodeQL's incomplete-url-substring-sanitization rule.
     const lines = out.split("\n");
-    const header = lines.findIndex((l) => l.includes("https://example.com •"));
+    const header = lines.findIndex((l) => l.includes("/100"));
     expect(header).toBeGreaterThan(-1);
+    expect(lines[header]).toContain("https://example.com");
     expect(lines[header + 1]).toContain("Seed redirected off-site");
   });
 
