@@ -182,11 +182,19 @@ export function fetchSitemap(
           clearTimeout(timeoutId);
         }
       },
-      catch: (error) => ({
-        status: 0,
-        ok: false,
-        error: error instanceof Error ? error.message : "Network error",
-      }),
+      // Deliberately NOT shaped like the success branch above: this value goes
+      // to the ERROR channel, so it never reaches the mapper. Giving it an
+      // `ok`/`status` of its own invited the misreading that a failed fetch
+      // could surface as "HTTP 0".
+      catch: (error) => {
+        const err = error as Error;
+        // #1729: the deadline now covers the body read too, so name that case
+        // instead of letting a stalled sitemap read as a generic failure.
+        if (err?.name === "AbortError") {
+          return { reason: `Timed out after ${timeoutMs}ms` };
+        }
+        return { reason: err?.message || "Network error" };
+      },
     }),
     Effect.map((result): SitemapFetchResult => {
       if (!result.ok) {
@@ -197,11 +205,14 @@ export function fetchSitemap(
       }
       return { success: true, data: parseSitemap(result.content, url) };
     }),
-    Effect.catchAll(() =>
+    // Carry the reason through. It used to collapse to a bare "Unexpected
+    // error", which made a body-read timeout, a DNS failure and a connection
+    // reset indistinguishable in the failed-sitemap report.
+    Effect.catchAll((failure) =>
       Effect.succeed({
         success: false,
         url,
-        error: "Unexpected error",
+        error: failure.reason,
       } as SitemapFetchResult)
     )
   );
