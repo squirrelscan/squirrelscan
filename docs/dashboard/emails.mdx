@@ -1,0 +1,105 @@
+---
+title: "Emails we send"
+description: "Every automatic email a squirrelscan account can receive, what triggers it, and how to turn it off"
+icon: "mail"
+---
+
+squirrelscan sends a small number of automatic emails. This page lists every one of them, what makes it arrive, and where the off switch is.
+
+Most of them are per website and ride a single toggle. A few are account level and arrive whatever that toggle says, because they report something that affects your credits or a service switching itself off.
+
+<Note>
+  The per-website switch is **Website → Settings → Alerts → Audit completion notifications** in the dashboard.
+</Note>
+
+## Per-website emails
+
+These follow the website's **Email notifications** toggle. Turn it off and none of them arrive for that site.
+
+### Audit complete
+
+Arrives when an audit of the website finishes and its report reaches the cloud. That covers dashboard runs, scheduled runs, and CLI, API and GitHub audits that publish their report. It carries the health score and the error, warning and passing counts. The button opens the dashboard rather than that specific report, so you pick the run from the website's audit history.
+
+A scheduled run normally sends the [digest](#scheduled-audit-digest) instead, so you get one email about a run, not two.
+
+**How to stop it:** turn off **Settings → Alerts** for that website.
+
+### Audit failed
+
+Arrives when an audit run for the website ends in failure, with the reason and whether the run was scheduled. Failed audits are refunded automatically, so a failure never costs credits.
+
+**How to stop it:** the same **Settings → Alerts** toggle.
+
+### Scheduled-audit digest
+
+Arrives after a [scheduled audit](/cloud/scheduled-audits) completes, including the runs where nothing changed. It has three variants, and the subject line tells you which one you have before you open it.
+
+| Variant | Sent when | What is in it |
+| --- | --- | --- |
+| What changed | The comparison found movement | New, fixed and worse counts, the leading new and worsened findings, and the score change |
+| Nothing changed | The comparison ran and found nothing | The health score and the same three counts, all at zero |
+| First audit | There is no earlier audit to compare against | That run's own error and warning counts and pages crawled, with no claim about change |
+
+Every variant carries the health score, a link to the full report, and a link that pauses the schedule without a login.
+
+Two cases send the ordinary audit email instead. A scheduled run that fails sends the failure email, and a run whose comparison cannot be built falls back to the completion email rather than guessing at what changed.
+
+**How to stop it:** the pause link in the email, the **Settings → Alerts** toggle, or setting the website's schedule to **Disabled**.
+
+## Account-level emails
+
+These are not gated on any per-website toggle.
+
+### Recurring audits paused
+
+Sent when a website's schedule stops on its own. There are two reasons, and the email says which:
+
+- Three scheduled runs in a row failed. The usual causes are an unreachable site, a firewall or WAF blocking our crawler, or a URL that has moved. Those failed runs were refunded, so the pause costs you nothing.
+- The account balance fell below the 50-credit audit base. The run was skipped without a charge, and the schedule paused rather than skipping again every cycle.
+
+It goes to your account address, because a recurring service that spends credits switching itself off is account news. The email is throttled to roughly one per organization in any rolling 24 hours: if several sites pause around the same time, the rest still pause and still appear in the dashboard bell without each sending mail.
+
+**How to stop it:** it only arrives when a schedule pauses itself, so turning the website's schedule off means it never fires. The **Settings → Alerts** toggle does not suppress it.
+
+### Low credits
+
+Sent when a charge takes the organization's balance down across the low-balance threshold, with the remaining balance, roughly how many more audits it buys, and a link to billing. It fires on the crossing, not on the level, so it does not repeat while the balance stays low. The next one is earned only once credits are added again, whether by a top-up, a monthly grant, a refund or an adjustment. Refunds carry one extra guard: a balance that crosses the line again within an hour of a refund records the warning in the dashboard bell but sends no email, so a failed charge that is refunded and retried cannot mail you twice about the same money.
+
+It goes to one billing contact: the owner where there is one, otherwise another member who can bill, and failing both the person who created the organization.
+
+**How to stop it:** there is no toggle. Handing off the billing role is the practical way out, unless you created the organization, in which case you stay the fallback recipient. The [suppression list](#unsubscribing-and-the-suppression-list) stops it outright.
+
+### Welcome
+
+One email from Nik about an hour after you sign up. Replies go to a real inbox and open a support thread, so answering it reaches a person.
+
+**How to stop it:** an address already on the [suppression list](#unsubscribing-and-the-suppression-list) when the send comes due is skipped. Replying reaches a person but does not unsubscribe you on its own.
+
+### Support ticket confirmation and replies
+
+Opening a ticket from [support](/dashboard/support) sends a confirmation with your ticket reference. Every reply from us arrives by email too, and you can answer by replying rather than returning to the dashboard.
+
+**How to stop it:** these are answers to something you asked, so they have no toggle. They stop when the conversation does.
+
+## How often emails can arrive
+
+Notification emails that also write a dashboard bell entry, which is audit complete, audit failed and the digest, are rate limited per account and per email type: at most one an hour, and at most five in any rolling 24 hours. Over the limit the email is dropped, but the notification still appears in the dashboard bell, in `list_notifications` over [MCP](/developers/mcp), and on any [webhooks](/cloud/webhooks) that carry it. Nothing is lost, it just does not land in your inbox.
+
+The low-credit warning and the pause notice are not on that counter. Each has its own limit instead: once per low-balance crossing, and roughly once per organization in any rolling 24 hours.
+
+Several notification types never email at all and are in-app only, including issue comments, agent fix runs, and the scheduler's skip notices.
+
+## Unsubscribing and the suppression list
+
+Marketing and announcement emails carry an unsubscribe link. Clicking it adds your address to a global suppression list. A hard bounce or a spam complaint puts an address on the same list.
+
+Suppression stops marketing sends, the scheduled-audit digest, the low-credit warning and a queued welcome email, all of which check the list before sending. It does not currently stop the audit completion email, the audit failure email, the recurring-audits-paused notice or support replies, which go out on their own paths. Use the per-website **Settings → Alerts** toggle to turn audit mail off, and turn a website's schedule off to stop the pause notice.
+
+If you have stopped receiving expected email and cannot see why, the suppression list is the first thing to check with [support](/dashboard/support).
+
+## Related
+
+- [Audit settings](/dashboard/audit-settings) - what runs for a website's cloud audits
+- [Scheduled audits](/cloud/scheduled-audits) - cadences, the digest, and the pause link
+- [Credits & pricing](/cloud/credits) - what triggers the low-balance warning
+- [Webhooks](/cloud/webhooks) - notification events delivered to your own endpoint

@@ -653,6 +653,7 @@
             "pages": [
               "dashboard/index",
               "dashboard/audit-settings",
+              "dashboard/emails",
               "dashboard/support"
             ]
           }

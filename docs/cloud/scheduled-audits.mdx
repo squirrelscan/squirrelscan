@@ -38,6 +38,43 @@ A newly added website starts on a **weekly** schedule when your plan still has a
 - If an audit for the website is already running when the schedule fires, the scheduled run is skipped for that cycle.
 - Results, score deltas, new issues, and notifications appear in the dashboard automatically.
 
+## The digest email
+
+A completed scheduled run sends a digest to the website's alert address, so a recurring audit does not run silently. It arrives whatever the run found, including the runs where nothing moved: an email that only shows up on bad news would teach you that no email means nothing ran.
+
+There are four cases where a completed run sends no digest. Email notifications are off for the website, the account has no usable address, that address is on the [suppression list](/dashboard/emails#unsubscribing-and-the-suppression-list), or the comparison against the previous audit could not be completed.
+
+There are three variants, and the subject line tells you which one you have:
+
+| Variant | Subject | Sent when | What is in it |
+| --- | --- | --- | --- |
+| Changes | "What changed on your-site.com" | The comparison against the previous audit found movement | New, fixed and worse counts, up to five leading new and worsened findings with the page each was found on, and the score change where both audits scored |
+| All clear | "Nothing changed on your-site.com" | The comparison ran and found nothing | The health score and the same three counts, all at zero |
+| First audit | "First audit of your-site.com" | There is no earlier audit to compare against | That run's own error and warning counts and pages crawled, with no claim about change |
+
+Every variant carries the health score, how often the audit runs, a link to the full report, and the pause link below.
+
+The digest replaces the audit completion email for that run, so a scheduled audit never sends you two emails about the same thing. Where a digest is withheld the ordinary audit email covers the run instead: a run that fails sends the failure email, and a run whose comparison could not be built sends the completion email rather than guessing at what changed.
+
+The digest follows the website's **Settings → Alerts** toggle. Turn email notifications off for the site and the schedule keeps running without mailing you.
+
+## Pausing from the email
+
+Each digest has a **pause these audits** link that needs no login. Following it opens a confirmation page, and the button on that page stops recurring audits for that one website. The link only ever pauses a schedule, it cannot read your reports or change anything else, and it stops working 90 days after the email was sent.
+
+The confirmation step is deliberate. Mail security scanners and link prefetchers open every link in an email, so following the link alone never pauses anything.
+
+To start the audits again, open the website in the dashboard and pick a cadence under **Settings → Schedule**. Nothing else about the website changes while it is paused.
+
+## When a schedule pauses itself
+
+Two conditions stop a schedule without you asking, so a recurring audit cannot keep spending credits on something that is not working:
+
+- **Three failed runs in a row.** Usually an unreachable site, a firewall or WAF blocking our crawler, or a URL that has moved. Failed audits are refunded, so the failures themselves cost nothing.
+- **Not enough credits.** A run the balance cannot cover is skipped without a charge, and the schedule pauses instead of skipping again every cycle.
+
+Either way an email says which it was, and it arrives whatever the website's **Settings → Alerts** toggle says, because a credit-spending service switching itself off is account news. It is throttled to roughly one per account in any rolling 24 hours, so several sites pausing around the same time do not each send mail; the rest appear in the dashboard bell. Turn the schedule back on from **Settings → Schedule** once the cause is fixed.
+
 ## Audit source
 
 Every audit records where it was triggered from. In the dashboard, audits and reports are tagged with a **source** badge:
@@ -54,3 +91,4 @@ This makes it easy to tell an automated weekly run apart from one you kicked off
 - [Cloud overview](/cloud) - what cloud features add
 - [Credits & Pricing](/cloud/credits) - how scheduled runs are billed
 - [Dashboard](/dashboard) - where scheduled results live
+- [Emails we send](/dashboard/emails) - every automatic email and how to stop it
