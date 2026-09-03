@@ -1,5 +1,7 @@
 // crawl/sitemap-4xx - Detect 4XX URLs listed in sitemap
 
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 function toStatusLabel(status: number | null): string {
@@ -43,9 +45,20 @@ export const sitemap4xxRule: Rule = {
       return { checks };
     }
 
+    // #1829: 429/430 (and a Retry-After 503, flagged by the checker) are inside
+    // the 4xx band but mean the host throttled US. Reported as info below
+    // instead of as sitemap rot.
+    const rateLimitedUrls = statuses.filter(
+      (entry) => entry.rateLimited === true || isRateLimitStatus(entry.status),
+    );
+    const rateLimitedSet = new Set(rateLimitedUrls.map((entry) => entry.url));
+
     const badUrls = statuses.filter(
       (entry) =>
-        entry.status !== null && entry.status >= 400 && entry.status < 500
+        entry.status !== null &&
+        entry.status >= 400 &&
+        entry.status < 500 &&
+        !rateLimitedSet.has(entry.url),
     );
 
     if (badUrls.length > 0) {
@@ -69,6 +82,24 @@ export const sitemap4xxRule: Rule = {
         name: "sitemap-4xx",
         status: "pass",
         message: "No 4XX pages found in sitemap URLs checked",
+      });
+    }
+
+    if (rateLimitedUrls.length > 0) {
+      checks.push({
+        name: "sitemap-rate-limited",
+        status: "info",
+        message: `${rateLimitedUrls.length} sitemap URL(s) rate-limited - status unverifiable`,
+        items: rateLimitedUrls.map((entry) => ({
+          id: entry.url,
+          meta: {
+            status: toStatusLabel(entry.status),
+            rateLimited: true,
+          },
+        })),
+        details: {
+          total: rateLimitedUrls.length,
+        },
       });
     }
 

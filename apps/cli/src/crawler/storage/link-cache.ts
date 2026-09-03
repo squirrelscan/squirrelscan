@@ -18,6 +18,12 @@ export interface LinkCacheEntry {
   wafBlocked?: boolean;
   /** Detected WAF provider if wafBlocked is true */
   wafProvider?: string;
+  /**
+   * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
+   * so its status is unverified rather than broken (#1829). Cached alongside
+   * the status because the 503 case cannot be recovered from the code alone.
+   */
+  rateLimited?: boolean;
 }
 
 const SCHEMA = `
@@ -28,16 +34,22 @@ CREATE TABLE IF NOT EXISTS link_cache (
   redirect_target TEXT,
   checked_at INTEGER NOT NULL,
   waf_blocked INTEGER,
-  waf_provider TEXT
+  waf_provider TEXT,
+  rate_limited INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_link_cache_checked_at ON link_cache(checked_at);
 `;
 
-// Migration to add WAF columns to existing databases
+// Additive column migrations for existing caches. Every ALTER here is
+// idempotent (the runner swallows "duplicate column name"), so the list is the
+// full history rather than a version-gated step.
 const WAF_MIGRATION = [
   "ALTER TABLE link_cache ADD COLUMN waf_blocked INTEGER",
   "ALTER TABLE link_cache ADD COLUMN waf_provider TEXT",
+  // #1829: a cached 429 is re-served for the whole 7-day TTL, so without this
+  // column one throttled check keeps reporting a live link as broken for a week.
+  "ALTER TABLE link_cache ADD COLUMN rate_limited INTEGER",
 ];
 
 const SQLITE_BUSY_TIMEOUT_MS = 15000;
@@ -89,7 +101,7 @@ export class LinkCacheStorage {
 
     const row = db
       .prepare(
-        `SELECT href, status, error, redirect_target, checked_at, waf_blocked, waf_provider
+        `SELECT href, status, error, redirect_target, checked_at, waf_blocked, waf_provider, rate_limited
          FROM link_cache
          WHERE href = ? AND checked_at > ?`
       )
@@ -102,6 +114,7 @@ export class LinkCacheStorage {
           checked_at: number;
           waf_blocked: number | null;
           waf_provider: string | null;
+          rate_limited: number | null;
         }
       | undefined;
 
@@ -115,6 +128,7 @@ export class LinkCacheStorage {
       checkedAt: row.checked_at,
       wafBlocked: row.waf_blocked === 1 ? true : undefined,
       wafProvider: row.waf_provider ?? undefined,
+      rateLimited: row.rate_limited === 1 ? true : undefined,
     };
   }
 
@@ -124,8 +138,8 @@ export class LinkCacheStorage {
   setCached(entry: LinkCacheEntry): void {
     const db = this.getDb();
     db.prepare(
-      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider, rate_limited)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       entry.href,
       entry.status,
@@ -133,7 +147,8 @@ export class LinkCacheStorage {
       entry.redirectTarget,
       entry.checkedAt,
       entry.wafBlocked ? 1 : null,
-      entry.wafProvider ?? null
+      entry.wafProvider ?? null,
+      entry.rateLimited ? 1 : null
     );
   }
 
@@ -161,7 +176,7 @@ export class LinkCacheStorage {
 
       const rows = db
         .prepare(
-          `SELECT href, status, error, redirect_target, checked_at, waf_blocked, waf_provider
+          `SELECT href, status, error, redirect_target, checked_at, waf_blocked, waf_provider, rate_limited
            FROM link_cache
            WHERE href IN (${placeholders}) AND checked_at > ?`
         )
@@ -173,6 +188,7 @@ export class LinkCacheStorage {
         checked_at: number;
         waf_blocked: number | null;
         waf_provider: string | null;
+        rate_limited: number | null;
       }>;
 
       for (const row of rows) {
@@ -184,6 +200,7 @@ export class LinkCacheStorage {
           checkedAt: row.checked_at,
           wafBlocked: row.waf_blocked === 1 ? true : undefined,
           wafProvider: row.waf_provider ?? undefined,
+          rateLimited: row.rate_limited === 1 ? true : undefined,
         });
       }
     }
@@ -199,8 +216,8 @@ export class LinkCacheStorage {
 
     const db = this.getDb();
     const stmt = db.prepare(
-      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider, rate_limited)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     db.transaction(() => {
@@ -212,7 +229,8 @@ export class LinkCacheStorage {
           entry.redirectTarget,
           entry.checkedAt,
           entry.wafBlocked ? 1 : null,
-          entry.wafProvider ?? null
+          entry.wafProvider ?? null,
+          entry.rateLimited ? 1 : null
         );
       }
     })();

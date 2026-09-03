@@ -31,10 +31,36 @@ export interface AuditFailureNotice {
 export function getAuditFailureNotice(
   status: AuditStatus | null | undefined,
   target: string,
+  /**
+   * Set when the crawl was throttled (#1829). A rate-limited block and a
+   * bot-wall block look identical in `status`, but their remedies are
+   * opposites — allowlisting a crawler does nothing about a throttle, and
+   * slowing down does nothing about a WAF — so the notice has to say which.
+   */
+  rateLimited?: { pages: number; hosts: string[] },
 ): AuditFailureNotice | null {
   if (status !== "blocked" && status !== "failed") return null;
 
   const cliCommand = `squirrel audit ${target}`;
+
+  if (status === "blocked" && rateLimited && rateLimited.pages > 0) {
+    const hosts = rateLimited.hosts.length > 0 ? rateLimited.hosts.join(", ") : "the host";
+    return {
+      tone: "blocked",
+      heading: "Your site rate limited the audit",
+      body: [
+        `${hosts} answered our crawler with rate limiting (429 or 430) before we could read any pages, so there was nothing to audit. This is throttling, not bot protection: allowlisting our crawler will not change it.`,
+      ],
+      stepsIntro: "To get a full audit, try one of these:",
+      steps: [
+        "Crawl the site more slowly: set `per_host_concurrency = 1` and `per_host_delay_ms = 500` under `[crawler]` in squirrel.toml.",
+        "Raise `max_backoff_ms` so the crawl waits longer for the host to recover.",
+        "Run the audit when the site is under less load.",
+      ],
+      cliIntro: "Or run it locally with those settings:",
+      cliCommand,
+    };
+  }
 
   if (status === "blocked") {
     return {

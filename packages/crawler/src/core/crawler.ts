@@ -44,11 +44,13 @@ import type {
   CrawlerConfig,
   CrawlerEvent,
   CrawlerPageUnchangedEvent,
+  HostConcurrencyLimit,
   HostScheduler,
   HostState,
 } from "./types";
 
-import { fetchPageWithRetry, type CrawlFetcher } from "../fetcher";
+import { createHostBackoff, type HostBackoffRegistry } from "../host-backoff";
+import { fetchPageWithRetry, type CrawlFetcher, type RateLimitControl } from "../fetcher";
 import { normalizeUrl, isInScope, isOffSiteFinalUrl, resolveSeedRedirect } from "../frontier";
 import {
   buildConditionalHeaders,
@@ -126,6 +128,22 @@ export function preambleBudgetMs(timeoutMs: number): number {
   return Math.min(PREAMBLE_TOTAL_BUDGET_MS, Math.max(1, timeoutMs) * PREAMBLE_BUDGET_REQUESTS);
 }
 
+/**
+ * Per-URL watchdog ceiling. Hoisted out of the crawl loop (#1829) because
+ * rate-limit backoff has to size its waits against the same number: a wait that
+ * outlives the watchdog is reported as a wedged fetch instead of as throttling,
+ * which is both wrong and unactionable.
+ */
+export function urlWatchdogMs(timeoutMs: number): number {
+  return Math.max(120_000, timeoutMs * 6);
+}
+
+/**
+ * Granularity of the crawl-wide backoff wait. Sleeping the whole window in one
+ * go would keep a worker parked past a stop(); slicing it lets the loop notice.
+ */
+const HOST_BACKOFF_POLL_MS = 1_000;
+
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
   warn: (_message: string, ..._args: unknown[]) => {},
@@ -135,8 +153,11 @@ const logger = {
 // HOST SCHEDULER
 // ============================================
 
-function createHostScheduler(maxConcurrent: number): HostScheduler {
+function createHostScheduler(limitFor: HostConcurrencyLimit): HostScheduler {
   const hosts = new Map<string, HostState>();
+  // Floor of 1 so a misconfigured (or fully throttled) limit still admits one
+  // request instead of deadlocking every worker on this host.
+  const limit = (host: string): number => Math.max(1, limitFor(host));
   const waiters = new Map<string, Array<Deferred.Deferred<void, never>>>();
 
   const getState = (host: string): HostState => hosts.get(host) ?? { inFlight: 0, nextFetchAt: 0 };
@@ -157,7 +178,11 @@ function createHostScheduler(maxConcurrent: number): HostScheduler {
   const release = (host: string): Effect.Effect<void, never, never> =>
     Effect.gen(function* () {
       const hostWaiters = getWaiters(host);
-      if (hostWaiters.length > 0) {
+      // Hand the slot on only while the host is still allowed that many in
+      // flight. The ceiling shrinks under rate limiting (#1829), so a straight
+      // transfer would keep `inFlight` pinned at the OLD limit for the life of
+      // the crawl and the throttle would never actually take effect.
+      if (hostWaiters.length > 0 && getState(host).inFlight <= limit(host)) {
         // Wake up next waiter (they get the slot)
         const nextWaiter = hostWaiters.shift()!;
         yield* Deferred.succeed(nextWaiter, undefined);
@@ -175,7 +200,7 @@ function createHostScheduler(maxConcurrent: number): HostScheduler {
   const acquire = (host: string): Effect.Effect<void, never, never> =>
     Effect.gen(function* () {
       const state = getState(host);
-      if (state.inFlight < maxConcurrent) {
+      if (state.inFlight < limit(host)) {
         // Slot available - acquire immediately
         setState(host, { ...state, inFlight: state.inFlight + 1 });
         return;
@@ -314,8 +339,41 @@ export function createCrawler(
     // Emit event helper
     const emit = (event: CrawlerEvent) => PubSub.publish(eventHub, event);
 
+    // Crawl-wide per-host rate-limit state (#1829). Owns the backoff window,
+    // the reduced concurrency and the gradual recovery; the scheduler below
+    // asks it for the current ceiling on every acquire.
+    const hostBackoff: HostBackoffRegistry = createHostBackoff({
+      perHostConcurrency: config.perHostConcurrency,
+      maxBackoffMs: config.maxBackoffMs,
+    });
+
+    const hostConcurrencyLimit: HostConcurrencyLimit = (host) => hostBackoff.concurrencyFor(host);
+
     // Host scheduler
-    const hostScheduler = createHostScheduler(config.perHostConcurrency);
+    const hostScheduler = createHostScheduler(hostConcurrencyLimit);
+
+    /**
+     * Wait out a host's backoff window before dispatching to it.
+     *
+     * Deliberately called from the worker loop, OUTSIDE the per-URL watchdog:
+     * a legitimate multi-minute wait must not be mistaken for a wedged fetch.
+     * Re-reads the window each pass because another worker may extend it while
+     * this one sleeps, and slices the sleep so stop() is still responsive.
+     */
+    const awaitHostBackoff = (url: string): Effect.Effect<void, never, never> =>
+      Effect.gen(function* () {
+        const host = urlHostKey(url);
+        let announced = false;
+        while (isRunning) {
+          const waitMs = hostBackoff.waitMs(host);
+          if (waitMs <= 0) return;
+          if (!announced) {
+            announced = true;
+            logger.debug("host backoff", host, `waiting ${Math.round(waitMs / 1000)}s`);
+          }
+          yield* Effect.sleep(Duration.millis(Math.min(waitMs, HOST_BACKOFF_POLL_MS)));
+        }
+      });
 
     // Shared cache seam (#147): same lookup logic runs local + cloud.
     const cacheStore = new StorageCacheStore(storage);
@@ -649,6 +707,90 @@ export function createCrawler(
       });
 
     // ----------------------------------------
+    // Rate limiting (#1829)
+    // ----------------------------------------
+
+    /**
+     * Record a URL the crawl could not verify because its host was throttling.
+     *
+     * Kept out of `pagesBlocked` on purpose: "blocked" means a bot wall refused
+     * us and the site is unauditable, whereas "rate limited" means the numbers
+     * we DO have are fine and some pages are simply missing. Conflating them
+     * gave a multi-site operator a false bot-protection verdict for what was
+     * ordinary throttling.
+     */
+    const recordRateLimited = (
+      crawlId: string,
+      entry: FrontierRecord,
+      host: string,
+      message = `Rate limited by ${host}`,
+    ): Effect.Effect<void, StorageError, never> =>
+      Effect.gen(function* () {
+        yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "failed", message);
+        yield* emit({
+          type: "page:failed",
+          url: entry.normalizedUrl,
+          // Retryable: nothing is wrong with the page, the host just would not
+          // serve it right now. Consumers use this to keep it out of "broken".
+          error: message,
+          retryable: true,
+          depth: entry.depth,
+          timestamp: Date.now(),
+        });
+        yield* updateStats(crawlId, { pagesFailed: 1, pagesRateLimited: 1 });
+        markPrefixFailed(entry.normalizedUrl, entry.depth);
+      });
+
+    /**
+     * Per-fetch bridge between the fetcher's retry loop and the crawl-wide
+     * per-host registry.
+     */
+    const rateLimitControlFor = (
+      host: string,
+      entry: FrontierRecord,
+      startedAt: number,
+    ): RateLimitControl => ({
+      maxBackoffMs: config.maxBackoffMs,
+      onRateLimited: ({ retryAfterMs }) => {
+        const outcome = hostBackoff.noteRateLimited(host, retryAfterMs);
+        return { waitMs: outcome.waitMs, exhausted: outcome.exhausted };
+      },
+      onSuccess: () => hostBackoff.noteSuccess(host),
+      remainingMs: () => {
+        // Room left inside the per-URL watchdog, minus one request's worth of
+        // headroom so the attempt AFTER the wait can still finish. Waiting past
+        // this would surface as "watchdog timeout" and hide the real cause.
+        const elapsed = Date.now() - startedAt;
+        return Math.max(0, urlWatchdogMs(config.timeoutMs) - elapsed - config.timeoutMs);
+      },
+      onBackoff: ({ waitMs, attempt, retryAfterMs }) => {
+        config.onRateLimitEvent?.({
+          host,
+          url: entry.normalizedUrl,
+          backoffMs: waitMs,
+          retryAfterMs,
+          attempt,
+        });
+        // Forked because the fetcher's hook is synchronous (it fires between
+        // the response and the sleep, which is the only moment the message is
+        // useful). Publishing to an unbounded PubSub never blocks, so the fiber
+        // settles immediately and nothing accumulates.
+        Effect.runFork(
+          emit({
+            type: "rate-limited",
+            host,
+            url: entry.normalizedUrl,
+            backoffMs: waitMs,
+            retryAfterMs,
+            attempt,
+            exhausted: false,
+            timestamp: Date.now(),
+          }),
+        );
+      },
+    });
+
+    // ----------------------------------------
     // Process Single URL
     // ----------------------------------------
 
@@ -658,12 +800,23 @@ export function createCrawler(
     ): Effect.Effect<void, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
         const host = urlHostKey(entry.normalizedUrl);
+        const startedAt = Date.now();
         // Crawl-delay only overrides per_host_delay_ms when respectRobots is
         // true (#790), and is capped — some sites ship absurd values (10s+).
-        const delayMs =
+        const configuredDelayMs =
           config.respectRobots && robots?.crawlDelayMs != null
             ? Math.min(robots.crawlDelayMs, MAX_ROBOTS_CRAWL_DELAY_MS)
             : config.perHostDelayMs;
+
+        // This host already spent its whole backoff budget and is still
+        // refusing (#1829). Record the URL as rate-limited without touching the
+        // network — an honest "we could not verify this" that keeps the crawl
+        // moving on to other hosts instead of grinding out a full retry
+        // schedule per remaining URL.
+        if (hostBackoff.isExhausted(host)) {
+          yield* recordRateLimited(crawlId, entry, host);
+          return;
+        }
 
         // Acquire host slot
         yield* hostScheduler.acquire(host);
@@ -753,8 +906,10 @@ export function createCrawler(
           }
 
           // Network path only: pay the per-host stagger, then announce and fetch.
-          // Cache hits above already returned without waiting (#824).
-          yield* hostScheduler.waitForDelay(host, delayMs);
+          // Cache hits above already returned without waiting (#824). A host
+          // that has rate-limited us pays a multiplied delay until it earns the
+          // configured one back (#1829).
+          yield* hostScheduler.waitForDelay(host, hostBackoff.delayFor(host, configuredDelayMs));
 
           yield* emit({
             type: "page:fetching",
@@ -782,16 +937,26 @@ export function createCrawler(
               // events aren't double-logged. (page:failed events also carry the
               // TLS-prefixed message for failed pages.)
               onTlsEvent: config.onTlsEvent,
+              // Crawl-wide backoff (#1829): a rate-limit response here pauses
+              // every other worker aimed at this host, not just this fetch.
+              rateLimit: rateLimitControlFor(host, entry, startedAt),
             }),
           );
 
           if (fetchResult._tag === "Left") {
             const error = fetchResult.left;
-            // 403/429 refusals fail the fetch before any page record exists, so
-            // a walled root page leaves 0 stored pages. Count them separately
+            if (error.type === "rate_limit") {
+              // Throttling is not a broken page. Kept out of pagesBlocked so
+              // the report can say "rate limited" rather than "bot-walled",
+              // and out of the link/page rules entirely (#1829).
+              yield* recordRateLimited(crawlId, entry, host, error.message);
+              return;
+            }
+            // A 403 refusal fails the fetch before any page record exists, so a
+            // walled root page leaves 0 stored pages. Count them separately
             // (subset of pagesFailed) so status derivation can say `blocked`
             // instead of a generic empty crawl (#792).
-            const blockedFetch = error.type === "blocked" || error.type === "rate_limit";
+            const blockedFetch = error.type === "blocked";
             yield* storage.updateFrontierStatus(
               crawlId,
               entry.normalizedUrl,
@@ -1146,6 +1311,7 @@ export function createCrawler(
           pagesFetched: current.pagesFetched + (updates.pagesFetched ?? 0),
           pagesFailed: current.pagesFailed + (updates.pagesFailed ?? 0),
           pagesBlocked: (current.pagesBlocked ?? 0) + (updates.pagesBlocked ?? 0),
+          pagesRateLimited: (current.pagesRateLimited ?? 0) + (updates.pagesRateLimited ?? 0),
           pagesSkipped: current.pagesSkipped + (updates.pagesSkipped ?? 0),
           pagesUnchanged: current.pagesUnchanged + (updates.pagesUnchanged ?? 0),
           pagesCacheFresh: (current.pagesCacheFresh ?? 0) + (updates.pagesCacheFresh ?? 0),
@@ -1213,7 +1379,7 @@ export function createCrawler(
         // plus host delays — far below this ceiling. If it still doesn't
         // return, something is wedged (scheduler, DNS, blackholed socket) and
         // we'd otherwise hang the whole audit forever.
-        const urlTimeoutMs = Math.max(120_000, config.timeoutMs * 6);
+        const urlTimeoutMs = urlWatchdogMs(config.timeoutMs);
 
         // Shared pool state. Fibers in this loop run on a single JS thread,
         // so plain mutation between yields is safe; the dispatch lock below
@@ -1386,6 +1552,11 @@ export function createCrawler(
               yield* Effect.sleep(Duration.millis(50));
               continue;
             }
+
+            // Crawl-wide rate-limit pause (#1829), observed BEFORE the per-URL
+            // watchdog arms below. One 429 from this host parks every worker
+            // aimed at it for the backoff window; other hosts are untouched.
+            yield* awaitHostBackoff(dispatch.entry.normalizedUrl);
 
             yield* processEntry(dispatch.entry).pipe(
               Effect.ensuring(

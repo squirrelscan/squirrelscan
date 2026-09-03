@@ -78,6 +78,17 @@ function formatHealthScoreText(score: AuditReport["healthScore"]): string {
   return lines.join("\n");
 }
 
+
+/**
+ * Host list for a rate-limit line: names up to two, then counts the rest.
+ * Mirrors the phrasing used in the audit status reason.
+ */
+function formatRateLimitedHosts(hosts: string[]): string {
+  if (hosts.length === 0) return "the host";
+  if (hosts.length <= 2) return hosts.join(" and ");
+  return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
+}
+
 export function renderText(report: AuditReport, options?: TextRenderOptions): string {
   const lines: string[] = [];
   const version = options?.version ?? "";
@@ -93,6 +104,14 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   write("=".repeat(60));
   write(`Auditing: ${report.baseUrl}`);
   write(`Crawled ${report.totalPages} pages`);
+  // #1829: coverage the crawl lost to throttling. Printed next to the page
+  // count because it is the caveat on that number — a multi-site operator has
+  // to be able to see at a glance whether the total is the whole site.
+  if (report.rateLimited && report.rateLimited.pages > 0) {
+    write(
+      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})`,
+    );
+  }
   // #1418: the seed redirected off its own site and was not followed, so the
   // line above is not where the redirect pointed. stripControlChars because the
   // redirect target is a string the audited site chose and this output reaches
@@ -138,8 +157,20 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   // give actionable next steps.
   if (report.status === "failed" || report.status === "blocked") {
     const blocked = report.status === "blocked";
+    const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     write(blocked ? "AUDIT BLOCKED" : "AUDIT FAILED");
-    if (blocked) {
+    if (blocked && throttled) {
+      // #1829: rate limiting and a bot wall both end up here with nothing
+      // audited, but they point at OPPOSITE fixes — allowlisting a crawler does
+      // nothing for a throttle, and slowing down does nothing for a WAF. The
+      // copy has to match the cause or it sends the reader to the wrong place.
+      write(
+        `${formatRateLimitedHosts(report.rateLimited!.hosts)} rate limited the crawler (429/430) before any pages could be read, so nothing was audited.`,
+      );
+      write(
+        "To get a full audit: crawl the site more slowly with `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in squirrel.toml, raise `max_backoff_ms` to wait longer, or retry when the host is less busy.",
+      );
+    } else if (blocked) {
       write(
         "Your site refused the crawler before any pages could be read (403/429 from bot protection, a firewall, an auth wall, or rate limiting). This is a block on your side, not a squirrelscan outage.",
       );
@@ -154,6 +185,12 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     }
     write("");
   } else if (report.healthScore) {
+    // #1829: a partial run scored what it fetched, so the grade still prints —
+    // but say plainly that the coverage is short of what was asked for.
+    if (report.status === "partial" && report.statusReason) {
+      write(`PARTIAL AUDIT: ${report.statusReason}`);
+      write("");
+    }
     write(formatHealthScoreText(report.healthScore));
     write("");
   }

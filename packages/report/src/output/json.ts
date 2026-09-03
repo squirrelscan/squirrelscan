@@ -51,6 +51,12 @@ interface SlimJsonReport {
   status: AuditStatus;
   /** Short human reason, present when `status` is failed/blocked. */
   statusReason?: string;
+  /**
+   * Coverage lost to rate limiting (#1829). Present only when a host throttled
+   * the crawl, so an integration can answer "is this page count the whole
+   * site?" without parsing `statusReason` prose.
+   */
+  rateLimited?: { pages: number; hosts: string[] };
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -177,6 +183,9 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
     },
     status: report.status ?? "completed",
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
+    ...(report.rateLimited && report.rateLimited.pages > 0
+      ? { rateLimited: report.rateLimited }
+      : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,

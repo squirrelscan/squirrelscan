@@ -19,6 +19,10 @@ export type CoverageMode = (typeof COVERAGE_MODES)[number];
 export const DEFAULT_CRAWLER_CONCURRENCY = 5;
 export const DEFAULT_CRAWLER_PER_HOST_CONCURRENCY = 5;
 export const DEFAULT_CRAWLER_PER_HOST_DELAY_MS = 50;
+// Cap on how long a crawl will wait out a rate-limiting host (#1829). Five
+// minutes: long enough to ride out a Shopify storefront's throttle window,
+// short enough that a host which never relents cannot hold an audit open.
+export const DEFAULT_CRAWLER_MAX_BACKOFF_MS = 300_000;
 
 export const CrawlerConfigSchema = z.object({
   max_pages: z.number().default(100),
@@ -54,6 +58,16 @@ export const CrawlerConfigSchema = z.object({
   // overrides this only when respect_robots is true (#790), capped at 2s.
   per_host_concurrency: z.number().default(DEFAULT_CRAWLER_PER_HOST_CONCURRENCY),
   per_host_delay_ms: z.number().default(DEFAULT_CRAWLER_PER_HOST_DELAY_MS),
+  // Rate-limit backoff ceiling (#1829). Bounds BOTH a single wait and the
+  // cumulative wait for one URL/host, so an origin that answers 429 forever
+  // costs at most this much before the crawl records its remaining URLs as
+  // rate-limited and moves on. Positive integer: 0 would disable backoff
+  // entirely and re-create the cascade this setting exists to stop.
+  max_backoff_ms: z
+    .number()
+    .int({ message: "max_backoff_ms must be a whole number of milliseconds" })
+    .positive({ message: "max_backoff_ms must be greater than 0" })
+    .default(DEFAULT_CRAWLER_MAX_BACKOFF_MS),
   include: z.array(z.string()).default([]),
   exclude: z.array(z.string()).default([]),
   allow_query_params: z.array(z.string()).default([]),

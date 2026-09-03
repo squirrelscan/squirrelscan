@@ -3,7 +3,7 @@
 import { Effect, Stream } from "effect";
 
 import type { Config } from "@/config";
-import type { CrawlerEvent } from "@/crawler/core/types";
+import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
 import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
 
@@ -66,6 +66,11 @@ export interface CrawlProgress {
   phase: "crawling" | "complete";
   current?: number;
   total?: number;
+  /**
+   * Free-form note for the progress line — currently only the rate-limit
+   * backoff message (#1829), so a crawl that goes quiet for minutes says why.
+   */
+  detail?: string;
 }
 
 export type CrawlProgressCallback = (progress: CrawlProgress) => void;
@@ -235,6 +240,7 @@ export async function runCrawl(
             perHostConcurrency: crawlConcurrency.perHostConcurrency,
             delayMs: config.crawler.delay_ms,
             perHostDelayMs: crawlConcurrency.perHostDelayMs,
+            maxBackoffMs: config.crawler.max_backoff_ms,
             timeoutMs: config.crawler.timeout_ms,
             userAgent,
             followRedirects: config.crawler.follow_redirects,
@@ -285,6 +291,7 @@ export async function runCrawl(
         perHostConcurrency: crawlConcurrency.perHostConcurrency,
         delayMs: config.crawler.delay_ms,
         perHostDelayMs: crawlConcurrency.perHostDelayMs,
+        maxBackoffMs: config.crawler.max_backoff_ms,
         timeoutMs: config.crawler.timeout_ms,
         userAgent,
         followRedirects: config.crawler.follow_redirects,
@@ -306,6 +313,18 @@ export async function runCrawl(
           } else {
             logger.debug("tls fetch event", event);
           }
+        },
+        // #1829: a backoff can park the crawl for minutes; without this the
+        // progress line just stops and reads as a hang.
+        onRateLimitEvent: (event: RateLimitEvent) => {
+          logger.warn(
+            "rate limited",
+            `${event.host} — backing off ${Math.max(1, Math.round(event.backoffMs / 1000))}s`
+          );
+          onProgress({
+            phase: "crawling",
+            detail: `rate limited by ${event.host}, backing off ${Math.max(1, Math.round(event.backoffMs / 1000))}s`,
+          });
         },
       };
 
