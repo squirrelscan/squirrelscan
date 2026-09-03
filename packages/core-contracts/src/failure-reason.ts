@@ -343,7 +343,10 @@ export function classifyAuditFailureReasonText(
   }
 
   if (
-    r.includes("no response from") ||
+    // Both halves of the engine's own timeout sentence. A bare "no response
+    // from" would swallow an unrelated upstream failure ("got no response from
+    // the billing service") that some other caller hands this classifier.
+    (r.includes("no response from") && r.includes("within the request timeout")) ||
     r.includes("crawl request timed out") ||
     r.includes("navigation timeout") ||
     r.includes("err_timed_out") ||

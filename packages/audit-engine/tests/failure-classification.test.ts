@@ -187,6 +187,22 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
     expect(result.reasonCode).toBe("http_4xx");
   });
 
+  test("an unrelated upstream 'no response' is not read as a crawl timeout", () => {
+    // The timeout matcher needs BOTH halves of the engine's sentence, so a
+    // reason handed in from somewhere else does not borrow the class.
+    expect(
+      deriveAuditStatus({
+        pagesCrawled: 0,
+        contentPages: 0,
+        blockedPages: 0,
+        rootFailure: {
+          code: "unknown",
+          detail: "got no response from the billing service",
+        },
+      }).reasonCode,
+    ).toBe("unknown");
+  });
+
   test("a healthy crawl is untouched: no status, no reason, no code", () => {
     const result = deriveAuditStatus({
       pagesCrawled: 10,
