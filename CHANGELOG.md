@@ -20,20 +20,105 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
-## [Unreleased]
+## v0.0.90
+
+A release about sites that do not answer the way you expect. A store that
+throttles, an origin that sends headers and then goes quiet, a seed URL that
+bounces somewhere else: each of these used to produce a report that was either
+wrong or silent about what it did not see. This pass teaches the crawler to
+wait when it is told to wait, to give up when nothing is coming, and to say in
+the report which of those happened. It also adds a compression check for
+assets, closes three gaps in the leaked-secrets scan, and lets the CLI apply an
+update it already knows about before it runs.
+
+### Added
+
+- **Rate limiting is handled as rate limiting.** A 429, a Shopify 430, or a 503
+  that carries `Retry-After` now pauses every worker aimed at that host, drops
+  it to one request in flight, and waits out the backoff (honouring
+  `Retry-After` when the server sends one) instead of retrying three times in a
+  second while the other workers keep firing. A new `[crawler] max_backoff_ms`
+  setting (default five minutes) caps how long one host can hold the crawl.
+  Throttled URLs are no longer reported as broken links or 4xx sitemap
+  entries: they move to an "unverifiable" bucket, the report carries a
+  `rateLimited` count and host list, and a crawl that lost pages this way is
+  marked `partial` with a reason that names the host. The progress line says
+  which host is throttling and how long it is waiting.
+
+- **Uncompressed text assets are reported.** New `perf/asset-compression` rule
+  flags stylesheets, scripts and other compressible text resources over 100 KB
+  that were served with no content encoding, biggest first, with the pages that
+  load them and the estimated saving. A server that gzips its HTML but not its
+  CSS is a common misconfiguration and was invisible before.
+
+- **The CLI applies a pending update before it runs.** When auto-update is on
+  and an earlier background check already found a newer version, the next
+  command installs it first and re-runs itself on the new binary, so a run
+  right after a release no longer reports results from the version before it.
+  The wait is capped at two minutes and any failure falls back to running the
+  command on the current binary.
+
+- **An agent setup prompt after login.** `squirrel auth login` now ends, in the
+  terminal and on the browser success page, with the one-line prompt that
+  points a coding agent at the setup docs, with a copy button.
+
+- **Free plan schedules one website.** Scheduled audits are no longer the paid
+  line. The free plan can schedule one website weekly or monthly; daily
+  schedules and more websites remain on paid plans.
+
+### Fixed
+
+- **A stalled body no longer hangs the crawl.** Every fetch deadline was
+  cleared the moment response headers arrived, so an origin that answered 200
+  and then trickled or stopped its body could park the crawl forever before it
+  had even started. The deadline now stays armed through the body read, in the
+  crawler, the engine's script and external-link fetchers, and the CLI's own
+  copies of them.
+
+- **The crawl preamble has one budget.** The root probes that run before page
+  one (redirect resolution, robots, llms.txt, well-known files and friends)
+  share a single wall-clock budget instead of seven sequential timeouts, so a
+  slow origin can no longer spend the whole crawl phase before fetching a page.
+  A probe that ran out of budget is recorded as unknown, never as a confirmed
+  absence. The sitemap walk runs on a progress window instead, so a site with
+  many legitimate sitemaps is slow but complete.
+
+- **A refused off-site redirect is disclosed.** When the seed URL redirects
+  off its own domain the crawler refuses to follow it and audits the seed. The
+  report now says so in every format, and says where the redirect pointed, so
+  the scores cannot be read as being about a URL nobody visited.
+
+- **Leaked-secrets finds three more shapes.** A quoted JSON key
+  (`{"apiKey":"…"}`), an environment fallback (`process.env.KEY || "…"`), and a
+  standard-base64 bearer token were each slipping past the scan. All three are
+  detected now.
+
+- **Leaked-secrets no longer reports a spaced-out checksum.** A `sha256` key
+  with a run of whitespace before its value was read as an unnamed assignment
+  and reported as a key. The look-back now spends its budget on characters
+  that carry meaning, and refuses to read a word out of a fragment it cut in
+  half, so a checksum stays a checksum and a real credential cut mid-name still
+  reports.
+
+- **Leaked-secrets is fast on pages with thousands of matches.** Overlap
+  suppression compared every finding against every other, which was quadratic:
+  an 875 KB page of 16,000 keys spent two seconds in that one loop. It now
+  indexes by window and produces byte-identical results in a fraction of the
+  time.
+
+- **Markdown reports keep their metadata out of the warning.** The partial-scan
+  hint was emitted as a blockquote in the middle of the metadata lines, and
+  CommonMark's lazy continuation pulled the recovery note and the version into
+  the quote. It is a plain line now.
 
 ### Changed
 
-- **Domain stats is paused.** The domain-level SEO summary (backlinks, referring
-  domains, organic keywords and traffic, domain rank) no longer runs as part of an
-  audit, and reports no longer carry a domain stats section. It was the one part of
-  the audit that described a site's market position rather than anything you could
-  fix in the code, and it sat awkwardly next to everything else squirrelscan tells
-  you. Nothing else about an audit changes, and the price is unchanged: the flat
-  50-credit base already covered it, so there is nothing to refund and nothing new
-  to pay for. Audits that already captured domain stats keep the section in their
-  published reports. `cloud.domain_stats` stays in the config and now defaults to
-  false; if the feature comes back, turning it on is all it will take.
+- **Domain stats are paused.** The domain-level summary (backlinks, referring
+  domains, organic keywords and traffic, domain rank) described a site's market
+  position rather than anything you could fix in the code, and it sat
+  awkwardly next to everything else a report tells you. `cloud.domain_stats`
+  now defaults to `false` and the section is no longer rendered or charged
+  for. Reports that already captured it keep their section. It may come back.
 
 ## v0.0.89
 
