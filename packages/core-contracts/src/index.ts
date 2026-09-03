@@ -260,6 +260,23 @@ export interface AuditReport {
   status?: AuditStatus;
   /** Short human reason shown when `status` is failed/blocked (e.g. "No pages were crawled"). */
   statusReason?: string;
+  /**
+   * Coverage the crawl lost to rate limiting (#1829). Present only when a host
+   * throttled the run; absent means nothing was rate limited.
+   *
+   * A machine-readable companion to `statusReason` rather than a duplicate of
+   * it: a multi-site operator's first question about a report is "are these
+   * numbers trustworthy?", and answering it by string-matching a prose reason
+   * would break the moment the wording changed. Renderers print the count, and
+   * `blocked` reports carry it to choose rate-limit copy over bot-wall copy —
+   * which point at opposite remedies.
+   */
+  rateLimited?: {
+    /** Pages the crawl could not verify because the host was throttling. */
+    pages: number;
+    /** Host(s) that throttled the crawl. */
+    hosts: string[];
+  };
   healthScore?: HealthScore;
   ruleResults: Record<string, ReportRuleResult>;
   /**
@@ -692,6 +709,20 @@ export type CrawlerEvent =
     }
   | { type: "paused"; reason: string; timestamp: number }
   | { type: "resumed"; timestamp: number }
+  | {
+      /**
+       * A host is throttling the crawl and it is waiting the host out (#1829).
+       * Distinct from `paused`, which means the user paused it.
+       */
+      type: "rate-limited";
+      host: string;
+      url: string;
+      backoffMs: number;
+      retryAfterMs?: number;
+      attempt: number;
+      exhausted: boolean;
+      timestamp: number;
+    }
   | {
       type: "completed";
       stats: {
@@ -1214,6 +1245,12 @@ export interface SitemapUrlStatusData {
   url: string;
   status: number | null;
   error: string | null;
+  /**
+   * The URL answered with rate limiting (429/430, or 503 + `Retry-After`), so
+   * its real status is unverified (#1829). Kept out of the sitemap-4xx finding:
+   * a throttled sitemap entry is not a dead one.
+   */
+  rateLimited?: boolean;
 }
 
 // SecurityHeaders is now in ./storage.ts (re-exported above)

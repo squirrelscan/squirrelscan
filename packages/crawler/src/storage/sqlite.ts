@@ -59,7 +59,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 23;
+export const SCHEMA_VERSION = 24;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -322,6 +322,18 @@ const MIGRATIONS: Record<number, string[]> = {
   // (squirrelscan/repo#1733). ADDITIVE; ALTER is idempotent (the runner swallows
   // "duplicate column name"). Local sqlite only — NOT a prod migration.
   23: [`ALTER TABLE robots_txt ADD COLUMN error TEXT`],
+  // Version 24: rate-limited link + sitemap-URL targets (squirrelscan/repo#1829).
+  // A 429/430 (or a 503 carrying Retry-After) means the target's real status is
+  // UNKNOWN, not that it is dead — but the rules only ever see the stored row,
+  // and the 503 case cannot be recovered from the status code alone. Persisting
+  // the verdict is what stops `links/broken-external-links` and
+  // `crawl/sitemap-4xx` reporting a throttled URL as broken. ADDITIVE; ALTER is
+  // idempotent (the runner swallows "duplicate column name"). Local sqlite
+  // only — NOT a prod migration.
+  24: [
+    `ALTER TABLE links ADD COLUMN rate_limited INTEGER`,
+    `ALTER TABLE sitemap_url_statuses ADD COLUMN rate_limited INTEGER`,
+  ],
 };
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
@@ -364,6 +376,22 @@ const SITEMAPS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
 // column MUST be listed here.
 const ROBOTS_TXT_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "error", type: "TEXT" },
+];
+
+// Same guard for `links` and `sitemap_url_statuses`. Migration 24 added
+// `rate_limited` to both; a DB stamped past 24 by a build that numbered its own
+// migration 24 would skip it forever and then every upsertLink INSERT throws
+// "no column named rate_limited" — which fails the whole external-link phase,
+// not just the new field. The guard goes on the list at the same time as the
+// migration, per the three tables this has already bitten.
+const LINKS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "waf_blocked", type: "INTEGER" },
+  { name: "waf_provider", type: "TEXT" },
+  { name: "rate_limited", type: "INTEGER" },
+];
+
+const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "rate_limited", type: "INTEGER" },
 ];
 
 const SCHEMA = `
@@ -447,6 +475,7 @@ CREATE TABLE IF NOT EXISTS links (
   checked_at INTEGER,
   waf_blocked INTEGER,
   waf_provider TEXT,
+  rate_limited INTEGER,
   PRIMARY KEY (crawl_id, href),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -663,6 +692,7 @@ CREATE TABLE IF NOT EXISTS sitemap_url_statuses (
   url TEXT NOT NULL,
   status INTEGER,
   error TEXT,
+  rate_limited INTEGER,
   PRIMARY KEY (crawl_id, url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -952,6 +982,8 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcilePagesColumns();
     this.reconcileColumns("sitemaps", SITEMAPS_ALTER_COLUMNS);
     this.reconcileColumns("robots_txt", ROBOTS_TXT_ALTER_COLUMNS);
+    this.reconcileColumns("links", LINKS_ALTER_COLUMNS);
+    this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
   }
 
   /**
@@ -966,7 +998,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   private reconcileColumns(
-    table: "pages" | "sitemaps" | "robots_txt",
+    table: "pages" | "sitemaps" | "robots_txt" | "links" | "sitemap_url_statuses",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -1739,8 +1771,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider, rate_limited)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -1750,7 +1782,8 @@ export class SQLiteStorage implements CrawlStorage {
           link.error ?? null,
           link.checkedAt ?? null,
           link.wafBlocked ? 1 : null,
-          link.wafProvider ?? null
+          link.wafProvider ?? null,
+          link.rateLimited ? 1 : null
         );
       },
       catch: (e) => StorageError.write(e),
@@ -1954,6 +1987,7 @@ export class SQLiteStorage implements CrawlStorage {
       error: (row.error as string | null) ?? undefined,
       checkedAt: (row.checked_at as number | null) ?? undefined,
       wafBlocked: (row.waf_blocked as number | null) === 1 ? true : undefined,
+      rateLimited: (row.rate_limited as number | null) === 1 ? true : undefined,
       wafProvider: (row.waf_provider as string | null) ?? undefined,
     };
   }
@@ -2636,12 +2670,18 @@ export class SQLiteStorage implements CrawlStorage {
         const db = this.getDb();
         const stmt = db.prepare(`
           INSERT OR REPLACE INTO sitemap_url_statuses (
-            crawl_id, url, status, error
-          ) VALUES (?, ?, ?, ?)
+            crawl_id, url, status, error, rate_limited
+          ) VALUES (?, ?, ?, ?, ?)
         `);
         const transaction = db.transaction(() => {
           for (const status of statuses) {
-            stmt.run(crawlId, status.url, status.status, status.error);
+            stmt.run(
+              crawlId,
+              status.url,
+              status.status,
+              status.error,
+              status.rateLimited ? 1 : null
+            );
           }
         });
         transaction();
@@ -2664,6 +2704,8 @@ export class SQLiteStorage implements CrawlStorage {
           url: row.url as string,
           status: (row.status as number | null) ?? null,
           error: (row.error as string | null) ?? null,
+          rateLimited:
+            (row.rate_limited as number | null) === 1 ? true : undefined,
         }));
       },
       catch: (e) => StorageError.read(e),

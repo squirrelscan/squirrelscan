@@ -5,6 +5,7 @@ import type { ResponseHeaders as StoredResponseHeaders } from "@squirrelscan/cor
 
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { Effect } from "effect";
 
 import type { SQLiteStorage } from "@/crawler/storage/sqlite";
@@ -30,6 +31,22 @@ import { normalizeUrl } from "@/utils/url";
  * Smart-audits (#110) merge override. When present, `reconstructReport` scores
  * + reports over the UNION of known pages instead of just this crawl's subset.
  */
+
+/**
+ * Hosts named in a rate-limit reason (#1829). Crawl-level throttling is by
+ * definition the audited site's own host, and the stats carry a count rather
+ * than a host list, so the base URL is the honest answer. Empty when nothing was
+ * rate limited, which makes the reason fall back to "the host".
+ */
+function rateLimitedHosts(baseUrl: string, rateLimitedCount: number): string[] {
+  if (rateLimitedCount <= 0) return [];
+  try {
+    return [new URL(baseUrl).hostname];
+  } catch {
+    return [];
+  }
+}
+
 export interface SmartMergeOverride {
   unionRuleResults: Map<string, RuleRunResult>;
   coverage: {
@@ -519,25 +536,48 @@ export function reconstructReport(
     // both paths detect a failed/blocked audit identically. #792: the crawl's
     // blocked-fetch count classifies a walled root page (0 stored pages) as
     // `blocked` rather than a generic empty crawl.
+    // #1829: a rate-limited fetch stores no page, so crawl stats carry the
+    // count; a stored 429/430 page adds to it.
+    const rateLimitedCount =
+      (crawl.stats?.pagesRateLimited ?? 0) +
+      pageRecords.filter((p) => isRateLimitStatus(p.status)).length;
     const runStatus = deriveAuditStatusFromPages(
       pageRecords,
-      crawl.stats?.pagesBlocked ?? 0
+      crawl.stats?.pagesBlocked ?? 0,
+      {
+        // #1829: a rate-limited fetch stores no page, so the count comes from
+        // crawl stats. A crawl that gathered content but lost pages to
+        // throttling reports `partial`, not `completed`.
+        errors: crawl.stats?.pagesRateLimited ?? 0,
+        hosts: rateLimitedHosts(
+          crawl.baseUrl,
+          crawl.stats?.pagesRateLimited ?? 0
+        ),
+      }
     );
 
     // Smart re-audits reflect carried prior state, so keep "completed" when
     // some known pages were not re-crawled this run — knownPages > auditedPages
     // ⇒ carried pages exist (any carried findings live on them). A first run
     // with nothing carried falls back to this run's outcomes (#510).
+    // #1829: a rate-limit partial is NOT the carried-page case this override
+    // exists for. Carried pages mean "we already know about these"; rate-limited
+    // pages mean "we could not check these THIS run", which is exactly what the
+    // reader needs to see. Letting the smart-audit override swallow it would
+    // hide the coverage loss on every re-audit.
     const auditStatus =
       smartMerge &&
-      smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages
+      smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages &&
+      rateLimitedCount === 0
         ? { status: "completed" as const, reason: undefined }
         : runStatus;
 
     // No real audit ⇒ null score (N/A), not 0. Parity with the cloud/live
     // builder (generateReportFromStorage) + the API's failed-report persist (#586).
+    // `partial` keeps its score (#1829): the pages that WERE audited were graded
+    // normally, and only the coverage is incomplete.
     const reportHealthScore =
-      auditStatus.status !== "completed"
+      auditStatus.status === "failed" || auditStatus.status === "blocked"
         ? { ...healthScore, overall: null }
         : healthScore;
 
@@ -567,6 +607,16 @@ export function reconstructReport(
       // Only stamp when not a normal completed run; absent ⇒ completed (#489).
       ...(auditStatus.status !== "completed"
         ? { status: auditStatus.status, statusReason: auditStatus.reason }
+        : {}),
+      // #1829: coverage lost to throttling, in a form renderers can count
+      // rather than parse out of the reason prose.
+      ...(rateLimitedCount > 0
+        ? {
+            rateLimited: {
+              pages: rateLimitedCount,
+              hosts: rateLimitedHosts(crawl.baseUrl, rateLimitedCount),
+            },
+          }
         : {}),
       ...(smartMerge ? { coverage: smartMerge.coverage } : {}),
       ...(cacheStats ? { cacheStats } : {}),

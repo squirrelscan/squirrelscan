@@ -20,6 +20,7 @@ import {
   stampChecksTruncated,
 } from "@squirrelscan/rules";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 
 import { logger } from "./adapter-logger";
@@ -38,6 +39,7 @@ import type {
 } from "@squirrelscan/core-contracts/storage";
 import type {
   AuditReport,
+  AuditStatus,
   CheckResult,
   HealthScore,
   MetaData,
@@ -56,6 +58,32 @@ import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
 // ============================================
 // SITE-RECORD BUILDERS
 // ============================================
+
+/**
+ * Statuses that mean no real audit happened, so the score must read N/A.
+ *
+ * `partial` is NOT one of them (#1829): a crawl that lost some pages to rate
+ * limiting still graded everything it did fetch, and blanking that score would
+ * hide a usable report behind a coverage gap.
+ */
+function isScorelessStatus(status: AuditStatus): boolean {
+  return status === "failed" || status === "blocked";
+}
+
+/**
+ * Hosts named in a rate-limit reason. Crawl-level throttling is by definition
+ * the audited site's own host(s), and the stats carry a count rather than a host
+ * list, so the base URL is the honest answer here. Empty when nothing was rate
+ * limited, which makes the reason fall back to "the host".
+ */
+function rateLimitedHostsFor(baseUrl: string, rateLimitedCount: number): string[] {
+  if (rateLimitedCount <= 0) return [];
+  try {
+    return [new URL(baseUrl).hostname];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * The seed's resolved URL, but only when it names a DIFFERENT origin than the
@@ -550,13 +578,31 @@ export function buildV1Report(
     // #792: a walled root page (403/429) fails the fetch before any page is
     // stored, so pass the crawl's blocked-fetch count so 0-page blocks classify
     // as `blocked`, not a generic empty crawl.
-    const runStatus = deriveAuditStatusFromPages(pages, crawl?.stats?.pagesBlocked ?? 0);
+    // #1829: rate-limited fetches store no page, so the count has to come from
+    // crawl stats; a stored 429/430 page (an older crawl, a cloud render) counts
+    // too. The reason names the host that throttled us.
+    const rateLimitedCount =
+      (crawl?.stats?.pagesRateLimited ?? 0) +
+      pages.filter((page) => isRateLimitStatus(page.status)).length;
+    const rateLimitedHosts = rateLimitedHostsFor(result.baseUrl, rateLimitedCount);
+    if (rateLimitedCount > 0) {
+      result.rateLimited = { pages: rateLimitedCount, hosts: rateLimitedHosts };
+    }
+    const runStatus = deriveAuditStatusFromPages(pages, crawl?.stats?.pagesBlocked ?? 0, {
+      errors: crawl?.stats?.pagesRateLimited ?? 0,
+      hosts: rateLimitedHosts,
+    });
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
       result.statusReason = runStatus.reason;
       // No real audit ⇒ no score (N/A), not 0/A. Renderers show the failed/
       // blocked banner and the API persists health_score = NULL (#586).
-      if (result.healthScore) result.healthScore.overall = null;
+      // `partial` is deliberately excluded (#1829): a crawl that audited most
+      // of a site and lost a few pages to throttling has a real score, and
+      // nulling it would hide the whole report over a coverage gap.
+      if (isScorelessStatus(runStatus.status) && result.healthScore) {
+        result.healthScore.overall = null;
+      }
     }
 
     // Sanitize page-level fields that can exceed API schema limits
@@ -665,6 +711,7 @@ export function buildV2Report(
     let pagesCrawled = 0;
     let contentPages = 0;
     let blockedPages = 0;
+    let rateLimitedPages = 0;
     for (let offset = 0; ; offset += batchSize) {
       const batch = yield* storage
         .getPages(crawlId, { limit: batchSize, offset })
@@ -674,7 +721,10 @@ export function buildV2Report(
       for (const page of batch) {
         pagesCrawled++;
         if (page.status >= 200 && page.status < 300) contentPages++;
-        if (page.status === 401 || page.status === 403 || page.status === 429) blockedPages++;
+        if (page.status === 401 || page.status === 403) blockedPages++;
+        // #1829: a stored 429/430 is throttling, not a bot wall — counted apart
+        // so the reason text points at the right remedy.
+        if (isRateLimitStatus(page.status)) rateLimitedPages++;
 
         const parsed = input.parsedPages.get(page.normalizedUrl);
         if (!parsed) continue;
@@ -802,16 +852,26 @@ export function buildV2Report(
 
     // Audit validity (#489) — same signals as v1's deriveAuditStatusFromPages,
     // fed from the streamed counts so no pages[] is needed.
+    const rateLimitedCount = (crawl?.stats?.pagesRateLimited ?? 0) + rateLimitedPages;
+    const rateLimitedHosts = rateLimitedHostsFor(result.baseUrl, rateLimitedCount);
+    if (rateLimitedCount > 0) {
+      result.rateLimited = { pages: rateLimitedCount, hosts: rateLimitedHosts };
+    }
     const runStatus = deriveAuditStatus({
       pagesCrawled,
       contentPages,
       blockedPages,
       blockedErrors: crawl?.stats?.pagesBlocked ?? 0,
+      rateLimitedErrors: crawl?.stats?.pagesRateLimited ?? 0,
+      rateLimitedPages,
+      rateLimitedHosts,
     });
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
       result.statusReason = runStatus.reason;
-      if (result.healthScore) result.healthScore.overall = null;
+      if (isScorelessStatus(runStatus.status) && result.healthScore) {
+        result.healthScore.overall = null;
+      }
     }
 
     // Same backstop as v1. The page-schema.raw loop is a no-op here (pages: []).

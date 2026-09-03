@@ -4,6 +4,7 @@
 import type { CheckResult, RedirectChain, RedirectHop } from "@squirrelscan/core-contracts";
 
 import { HTTP_PROBE_LIMITS } from "@squirrelscan/utils/constants";
+import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { requestAsync } from "../tools";
 
@@ -13,6 +14,7 @@ export async function followRedirects(url: string): Promise<RedirectChain> {
   const visitedUrls = new Set<string>();
   let isLoop = false;
   let endsInError = false;
+  let endsRateLimited = false;
 
   for (let i = 0; i < HTTP_PROBE_LIMITS.MAX_REDIRECT_HOPS; i++) {
     // Check for loop
@@ -91,6 +93,14 @@ export async function followRedirects(url: string): Promise<RedirectChain> {
         type: "http",
       });
 
+      // #1829: a throttled endpoint is unverified, not broken. Checked before
+      // the >= 400 test, which 429/430 would otherwise satisfy and turn into a
+      // hard "redirect chain ends in error" failure.
+      if (isRateLimitedResponse(statusCode, response.headers.get("retry-after"))) {
+        endsRateLimited = true;
+        break;
+      }
+
       // Check if final destination is an error
       if (statusCode >= 400) {
         endsInError = true;
@@ -137,6 +147,7 @@ export async function followRedirects(url: string): Promise<RedirectChain> {
     chainLength,
     isLoop,
     endsInError,
+    endsRateLimited,
     httpsToHttp,
     httpToHttps,
   };
@@ -187,6 +198,17 @@ export function validateRedirectChain(chain: RedirectChain): CheckResult[] {
       name: "redirect-to-error",
       status: "fail",
       message: `Redirect chain ends in error (${finalStatus})`,
+      value: chain.finalUrl,
+    });
+  } else if (chain.endsRateLimited) {
+    // #1829: info, not fail. The destination throttled us, so we never learned
+    // whether the chain resolves — reporting that as a broken redirect sent
+    // operators chasing a redirect that works fine for real visitors.
+    const finalStatus = chain.hops[chain.hops.length - 1]?.statusCode || 0;
+    checks.push({
+      name: "redirect-rate-limited",
+      status: "info",
+      message: `Redirect chain ends in a rate-limited response (${finalStatus}); destination status unverifiable`,
       value: chain.finalUrl,
     });
   }

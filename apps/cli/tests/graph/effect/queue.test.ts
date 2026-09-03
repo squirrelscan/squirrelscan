@@ -42,6 +42,7 @@ const mockConfig: Config = {
     concurrency: 3,
     per_host_concurrency: 2,
     per_host_delay_ms: 200,
+    max_backoff_ms: 300000,
     include: [],
     exclude: [],
     allow_query_params: [],

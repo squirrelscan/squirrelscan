@@ -116,6 +116,7 @@ import {
 import { checkExternalLinks, type ExternalCheckResult, type LinkCache } from "./external-checker";
 import { checkResourceSizes, type ResourceCheckResult } from "./resource-checker";
 import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 
@@ -847,6 +848,9 @@ export function fetchResourceAssets(
         url: check.url,
         status: check.status,
         error: check.error,
+        // #1829: a throttled sitemap URL is unverified, not 4xx. Carried through
+        // to crawl/sitemap-4xx, which would otherwise report it as dead.
+        rateLimited: check.rateLimited,
       })),
     };
 
@@ -964,6 +968,8 @@ export function runRulesOnStorage(
       provider: string | null;
     }> = [];
     const wafBlockedPageSet = new Set<string>();
+    const rateLimitedPages: Array<{ url: string; status: number }> = [];
+    const rateLimitedPageSet = new Set<string>();
 
     // Build page data structures needed for site context
     const pageDataMap = new Map<
@@ -977,6 +983,15 @@ export function runRulesOnStorage(
 
     for (const { page, parsed } of siteContext) {
       if (!parsed) continue; // Skip non-HTML or failed parses
+      // Throttled pages describe our request rate, not the page (#1829).
+      // Excluded from page-level scoring exactly as a WAF challenge page is:
+      // grading a 429 body would file a soft-404 / noindex / slow-page finding
+      // against a page nobody has actually seen.
+      if (isRateLimitStatus(page.status)) {
+        rateLimitedPages.push({ url: page.normalizedUrl, status: page.status });
+        rateLimitedPageSet.add(page.normalizedUrl);
+        continue;
+      }
       const wafChallenge = detectWafChallengePage({
         status: page.status,
         headers: {
@@ -1018,7 +1033,10 @@ export function runRulesOnStorage(
       if (
         page.status >= 400 &&
         !pageDataMap.has(page.normalizedUrl) &&
-        !wafBlockedPageSet.has(page.normalizedUrl)
+        !wafBlockedPageSet.has(page.normalizedUrl) &&
+        // #1829: keep throttled pages out of the broken-link corpus too — this
+        // loop is precisely what fed links/broken-links its false 4xx.
+        !rateLimitedPageSet.has(page.normalizedUrl)
       ) {
         parsedPages.push({
           url: page.normalizedUrl,
@@ -1084,6 +1102,8 @@ export function runRulesOnStorage(
       sourcePages: string[];
       wafBlocked?: boolean;
       wafProvider?: string;
+      /** Throttled: status unverified rather than broken (#1829). */
+      rateLimited?: boolean;
     }> = [];
 
     let linkQueryCount = 0;
@@ -1106,6 +1126,7 @@ export function runRulesOnStorage(
           // at 100, so raw per-occurrence lists reject the whole report.
           sourcePages: [...new Set(appearances.map((a) => a.pageUrl))],
           wafBlocked: link.wafBlocked,
+          rateLimited: link.rateLimited,
           wafProvider: link.wafProvider,
         });
       }
@@ -1390,6 +1411,53 @@ export function runRulesOnStorage(
       );
     }
 
+    // #1829: same treatment for pages the host throttled. Deliberately status
+    // "info", severity "info", weight 0 — unlike the WAF notice this must NOT
+    // move the score. Being rate limited says nothing about the site's quality;
+    // it says our crawl was too eager, and the operator's action is to slow the
+    // crawl down, not to change the site.
+    if (rateLimitedPages.length > 0) {
+      const sampledPages = rateLimitedPages.slice(0, 5).map((page) => page.url);
+      const statuses = Array.from(new Set(rateLimitedPages.map((page) => page.status))).sort(
+        (a, b) => a - b,
+      );
+
+      const rateLimitCheck: CheckResult = {
+        name: "Rate-limited pages",
+        status: "info",
+        message: `${rateLimitedPages.length} page(s) were rate limited (${statuses.join(", ")}); their status is unverified and they were excluded from page-level rule scoring.`,
+        pages: sampledPages,
+        details: {
+          totalRateLimitedPages: rateLimitedPages.length,
+          statuses,
+          sampledPages,
+        },
+      };
+
+      const rateLimitRuleResult: RuleRunResult = {
+        meta: {
+          id: "crawl/rate-limited-pages",
+          name: "Rate-Limited Pages",
+          description:
+            "Pages the origin answered with rate limiting (429/430), so their real status could not be verified.",
+          solution:
+            "Slow the crawl down for this host: set `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in squirrel.toml, and raise `max_backoff_ms` if the host needs longer recovery windows.",
+          category: "crawl",
+          scope: "site",
+          severity: "info",
+          weight: 0,
+        },
+        checks: [rateLimitCheck],
+      };
+
+      siteResult.checks.push(rateLimitCheck);
+      siteRuleResults.set(rateLimitRuleResult.meta.id, [rateLimitCheck]);
+      ruleResultsMap.set(rateLimitRuleResult.meta.id, rateLimitRuleResult);
+      logger.warn(
+        `Excluded ${rateLimitedPages.length} rate-limited page(s) from page-level scoring`,
+      );
+    }
+
     // #1252: surface an asset-fetch degradation note (budget spent / tarpitting
     // host) as an ADVISORY site check, mirroring the WAF notice above. Only when
     // the fetch step actually skipped work (healthy runs carry no `degradation`,
@@ -1500,6 +1568,9 @@ interface ParsedUniverse {
   parsedPages: StreamParsedPage[];
   wafBlockedPages: Array<{ url: string; provider: string | null }>;
   wafBlockedPageSet: Set<string>;
+  /** Pages excluded from scoring because the host was throttling (#1829). */
+  rateLimitedPages: Array<{ url: string; status: number }>;
+  rateLimitedPageSet: Set<string>;
   pageDataMap: Map<
     string,
     { page: PageRecord; parsed: ParsedPage; headers: Record<string, string> }
@@ -1519,10 +1590,18 @@ function assembleParsedUniverse(siteContext: SiteContextPage[]): ParsedUniverse 
   const parsedPages: StreamParsedPage[] = [];
   const wafBlockedPages: Array<{ url: string; provider: string | null }> = [];
   const wafBlockedPageSet = new Set<string>();
+  const rateLimitedPages: Array<{ url: string; status: number }> = [];
+  const rateLimitedPageSet = new Set<string>();
   const pageDataMap: ParsedUniverse["pageDataMap"] = new Map();
 
   for (const { page, parsed } of siteContext) {
     if (!parsed) continue; // non-HTML / failed parse — v1 skips these too
+    // Mirrors v1's rate-limit exclusion (#1829); the golden diff gates drift.
+    if (isRateLimitStatus(page.status)) {
+      rateLimitedPages.push({ url: page.normalizedUrl, status: page.status });
+      rateLimitedPageSet.add(page.normalizedUrl);
+      continue;
+    }
     const wafChallenge = detectWafChallengePage({
       status: page.status,
       headers: {
@@ -1556,7 +1635,8 @@ function assembleParsedUniverse(siteContext: SiteContextPage[]): ParsedUniverse 
     if (
       page.status >= 400 &&
       !pageDataMap.has(page.normalizedUrl) &&
-      !wafBlockedPageSet.has(page.normalizedUrl)
+      !wafBlockedPageSet.has(page.normalizedUrl) &&
+      !rateLimitedPageSet.has(page.normalizedUrl)
     ) {
       parsedPages.push({
         url: page.normalizedUrl,
@@ -1569,7 +1649,14 @@ function assembleParsedUniverse(siteContext: SiteContextPage[]): ParsedUniverse 
     }
   }
 
-  return { parsedPages, wafBlockedPages, wafBlockedPageSet, pageDataMap };
+  return {
+    parsedPages,
+    wafBlockedPages,
+    wafBlockedPageSet,
+    rateLimitedPages,
+    rateLimitedPageSet,
+    pageDataMap,
+  };
 }
 
 /**
@@ -1673,6 +1760,8 @@ function buildStreamingSiteData(
       sourcePages: string[];
       wafBlocked?: boolean;
       wafProvider?: string;
+      /** Throttled: status unverified rather than broken (#1829). */
+      rateLimited?: boolean;
     }> = [];
 
     for (const link of allLinks) {
@@ -1687,6 +1776,7 @@ function buildStreamingSiteData(
           // lists (nav + footer + body) would reject the whole report.
           sourcePages: [...new Set(appearances.map((a) => a.pageUrl))],
           wafBlocked: link.wafBlocked,
+          rateLimited: link.rateLimited,
           wafProvider: link.wafProvider,
         });
       }
@@ -2231,6 +2321,9 @@ export function checkExternalLinksOnStorage(
           checkedAt: Date.now(),
           wafBlocked: result.wafBlocked,
           wafProvider: result.wafProvider,
+          // #1829: persisted, not re-derived — the 503 + Retry-After case
+          // cannot be recovered from the status code the rules read.
+          rateLimited: result.rateLimited,
         })
         .pipe(Effect.catchAll(() => Effect.void));
 

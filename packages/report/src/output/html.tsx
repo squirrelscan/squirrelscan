@@ -438,7 +438,7 @@ function ScoreFailed({ status }: { status: "failed" | "blocked" }) {
 // only the trailing clause is local — so it can't drift from the shared
 // builder the way a fully hardcoded duplicate would.
 function FailureNotice({ report }: { report: AuditReport }) {
-  const notice = getAuditFailureNotice(report.status, report.baseUrl);
+  const notice = getAuditFailureNotice(report.status, report.baseUrl, report.rateLimited);
   if (!notice) return null;
   return (
     <div className="failure-notice">
