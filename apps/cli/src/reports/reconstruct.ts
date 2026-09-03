@@ -560,9 +560,15 @@ export function reconstructReport(
     // some known pages were not re-crawled this run — knownPages > auditedPages
     // ⇒ carried pages exist (any carried findings live on them). A first run
     // with nothing carried falls back to this run's outcomes (#510).
+    // #1829: a rate-limit partial is NOT the carried-page case this override
+    // exists for. Carried pages mean "we already know about these"; rate-limited
+    // pages mean "we could not check these THIS run", which is exactly what the
+    // reader needs to see. Letting the smart-audit override swallow it would
+    // hide the coverage loss on every re-audit.
     const auditStatus =
       smartMerge &&
-      smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages
+      smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages &&
+      rateLimitedCount === 0
         ? { status: "completed" as const, reason: undefined }
         : runStatus;
 

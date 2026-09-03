@@ -37,6 +37,7 @@ import {
   type RuleCloudSpec,
 } from "@squirrelscan/rules";
 import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import type { ExternalBulkChecker, SiteContextPage } from "@/audit/adapter";
 import type { Config } from "@/config";
@@ -454,6 +455,10 @@ function buildDeadLinksBulkChecker(
           error: r.error ?? null,
           redirectTarget: r.redirectUrl ?? null,
           fromCache: r.fromCache,
+          // #1829: honour the service's verdict when it sends one, and fall back
+          // to the status for 429/430 so a service that predates the field still
+          // stops reporting throttled links as dead.
+          rateLimited: r.rateLimited === true || isRateLimitStatus(r.status),
         },
       ])
     );

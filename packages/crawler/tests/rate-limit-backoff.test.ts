@@ -121,6 +121,94 @@ describe("host backoff registry — crawl-wide pause (#1829)", () => {
   });
 });
 
+describe("host backoff registry — concurrent refusals (#1829 review)", () => {
+  test("every worker is told the host's FULL remaining window, not just its own increment", () => {
+    // Two workers refused at the same instant each extend `nextAttemptAt`.
+    // Returning only the increment let the first retry while the second was
+    // still waiting, which breaks the "one refusal pauses every worker" promise.
+    const { registry } = registryAt(0);
+
+    const first = registry.noteRateLimited(HOST_A);
+    const second = registry.noteRateLimited(HOST_A);
+
+    expect(first.waitMs).toBe(5_000);
+    // The second refusal is the second strike, so its own wait is 10s from now —
+    // past the first worker's 5s window. Both workers are told 10s, which is the
+    // whole point: neither may touch the host before the window closes.
+    expect(second.waitMs).toBe(10_000);
+    expect(registry.waitMs(HOST_A)).toBe(10_000);
+  });
+
+  test("a later refusal never shortens an existing window", () => {
+    const { registry } = registryAt(0);
+    registry.noteRateLimited(HOST_A, 60_000);
+    const shorter = registry.noteRateLimited(HOST_A, 1_000);
+    expect(shorter.waitMs).toBe(60_000);
+  });
+});
+
+describe("host backoff registry — degenerate Retry-After (#1829 review)", () => {
+  test("Retry-After: 0 is floored, so retries cannot burst", () => {
+    // A server answering 429 while saying "come back now" is broken. Honouring
+    // it literally produced a hot loop that slept for nothing.
+    const { registry } = registryAt(0);
+    const outcome = registry.noteRateLimited(HOST_A, 0);
+    expect(outcome.waitMs).toBeGreaterThanOrEqual(1_000);
+  });
+
+  test("a zero Retry-After still accumulates toward exhaustion", () => {
+    // With a zero wait, `cumulativeWaitMs` never grew, so the host could never
+    // be given up on and every frontier URL repeated the burst.
+    const { registry, advance } = registryAt(0, { maxBackoffMs: 5_000 });
+
+    let outcome = registry.noteRateLimited(HOST_A, 0);
+    let guard = 0;
+    while (!outcome.exhausted && guard++ < 50) {
+      advance(outcome.waitMs);
+      outcome = registry.noteRateLimited(HOST_A, 0);
+    }
+
+    expect(outcome.exhausted).toBe(true);
+    expect(guard).toBeLessThan(50);
+  });
+});
+
+describe("host backoff registry — reset (#1829 review)", () => {
+  test("reset clears an exhausted host so the next crawl starts clean", () => {
+    // Exhaustion is terminal WITHIN a run — an exhausted host is skipped before
+    // any request, so it can never earn the successes that recover it. Carrying
+    // that verdict into the next crawl would record every URL untried.
+    const { registry } = registryAt(0, { maxBackoffMs: 1_000 });
+    registry.noteRateLimited(HOST_A);
+    registry.noteRateLimited(HOST_A);
+    expect(registry.isExhausted(HOST_A)).toBe(true);
+
+    registry.reset();
+
+    expect(registry.isExhausted(HOST_A)).toBe(false);
+    expect(registry.isThrottled(HOST_A)).toBe(false);
+    expect(registry.concurrencyFor(HOST_A)).toBe(5);
+    expect(registry.waitMs(HOST_A)).toBe(0);
+  });
+});
+
+describe("host backoff registry — malformed options (#1829 review)", () => {
+  test("NaN inputs cannot poison the scheduler", () => {
+    // Math.max does not sanitize NaN, and a NaN concurrency makes every
+    // comparison against it false — the host would silently go unlimited.
+    const registry = createHostBackoff({
+      perHostConcurrency: Number.NaN,
+      maxBackoffMs: Number.NaN,
+      baseBackoffMs: Number.NaN,
+      recoverySuccesses: Number.NaN,
+    });
+    expect(Number.isFinite(registry.concurrencyFor(HOST_A))).toBe(true);
+    const outcome = registry.noteRateLimited(HOST_A);
+    expect(Number.isFinite(outcome.waitMs)).toBe(true);
+    expect(Number.isFinite(registry.delayFor(HOST_A, 50))).toBe(true);
+  });
+});
+
 describe("host backoff registry — recovery (#1829)", () => {
   test("concurrency and delay climb back over consecutive successes", () => {
     const { registry } = registryAt(0);
@@ -289,6 +377,38 @@ function throttlingFetcher(failures: number, retryAfterMs?: number) {
   return { options, calls: () => calls };
 }
 
+/** A fetch seam that always answers 404 — a successful fetch that is not 2xx. */
+function notFoundFetcher() {
+  const options = (control: RateLimitControl): FetchOptions => ({
+    userAgent: "test",
+    timeoutMs: 1_000,
+    followRedirects: false,
+    rateLimit: control,
+    fetcher: {
+      id: "test",
+      fetch: async () => ({
+        url: "https://shop.example.com/missing",
+        finalUrl: "https://shop.example.com/missing",
+        status: 404,
+        headers: { "content-type": "text/html" },
+        body: "<html><body>gone</body></html>",
+        timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
+        redirectChain: {
+          sourceUrl: "https://shop.example.com/missing",
+          finalUrl: "https://shop.example.com/missing",
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+      }),
+    } as unknown as FetchOptions["fetcher"],
+  });
+  return { options };
+}
+
 /**
  * Run a fetch under Effect's TestClock so backoff sleeps resolve instantly and
  * the waits it asked for can be asserted exactly.
@@ -436,6 +556,48 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     // 5s + 5s + the 2s that is left, then no budget remains.
     expect(waits).toEqual([5_000, 5_000, 2_000]);
     expect(waits.reduce((a, b) => a + b, 0)).toBe(12_000);
+  });
+
+  test("the FINAL refusal is still reported before the loop gives up", async () => {
+    // The attempt cap used to be checked first, so the host registry never saw
+    // the sixth refusal — its strike count and backoff budget under-counted on
+    // exactly the URLs proving the host was throttling hardest.
+    const { options } = throttlingFetcher(99);
+    const attempts: number[] = [];
+    const control: RateLimitControl = {
+      maxBackoffMs: 300_000,
+      onRateLimited: ({ attempt }) => {
+        attempts.push(attempt);
+        return { waitMs: 5_000, exhausted: false };
+      },
+    };
+
+    await runWithVirtualTime(fetchPageWithRetry("https://shop.example.com/", options(control)));
+
+    expect(attempts).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(attempts.length).toBe(RATE_LIMIT_MAX_ATTEMPTS);
+  });
+
+  test("only a 2xx counts toward recovery — a 404 does not", async () => {
+    // applyStatusGuards lets most 4xx through as successful fetches, so
+    // counting every `Right` handed a throttled host its concurrency back after
+    // twenty 404s.
+    const { options } = notFoundFetcher();
+    let successes = 0;
+    const control: RateLimitControl = {
+      maxBackoffMs: 300_000,
+      onSuccess: () => {
+        successes += 1;
+      },
+    };
+
+    const { failed, result } = await runWithVirtualTime(
+      fetchPageWithRetry("https://shop.example.com/missing", options(control)),
+    );
+
+    expect(failed).toBe(false);
+    expect((result as FetchResult).status).toBe(404);
+    expect(successes).toBe(0);
   });
 
   test("a success tells the control the host is recovering", async () => {

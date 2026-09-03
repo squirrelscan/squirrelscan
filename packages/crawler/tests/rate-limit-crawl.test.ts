@@ -243,6 +243,21 @@ describe("crawl-wide rate limiting (#1829)", () => {
     expect(out.pagesRateLimited).toBeGreaterThan(out.requests - 1);
   }, 30_000);
 
+  test("recorded rate-limited URLs count against max_pages, so the frontier is not drained", async () => {
+    // #1829 follow-up found in the Shopify e2e: a rate-limited record stores no
+    // page, so `pagesCommitted` never reached maxPages and the dispatch loop
+    // walked the ENTIRE frontier marking rows. A 100-page audit of a 1000-URL
+    // sitemap reported "907 pages rate limited" — wasted work, and a loss figure
+    // far larger than the crawl had ever intended to fetch.
+    const out = await runCrawl(THROTTLES_AFTER_SEED, { maxPages: 5 }, hubSite(60));
+
+    expect(out.finished).toBe(true);
+    // Attempts (fetched + recorded) are bounded by the budget, not by the
+    // 61-URL frontier.
+    expect(out.pagesFetched + out.pagesRateLimited).toBeLessThanOrEqual(5);
+    expect(out.pagesRateLimited).toBeGreaterThan(0);
+  }, 30_000);
+
   test("a backoff is announced on the event stream and the config hook while it waits", async () => {
     const out = await runCrawl(THROTTLES_AFTER_SEED);
 
@@ -297,6 +312,95 @@ describe("crawl-wide rate limiting (#1829)", () => {
     expect(outage.pagesRateLimited).toBe(0);
     expect(outage.rateLimitEvents.length).toBe(0);
   }, 30_000);
+
+  test("a second run on the SAME crawler is not poisoned by the first host's exhaustion", async () => {
+    // #1829 review: the registry lives on the crawler instance, and exhaustion is
+    // terminal WITHIN a run (an exhausted host is skipped before any request, so
+    // it can never earn the successes that recover it). Without a per-run reset,
+    // the next crawl of that host recorded every URL as rate-limited untried.
+    const site = hubSite(4);
+    let throttling = true;
+    const requests: string[] = [];
+    const fetcher = {
+      id: "toggling",
+      fetch: async ({ url }: { url: string }) => {
+        requests.push(url);
+        const status = throttling ? 429 : 200;
+        const body = status === 200 ? (site[url] ?? "") : "";
+        return {
+          url,
+          finalUrl: url,
+          status: status === 200 && !site[url] ? 404 : status,
+          headers: { "content-type": "text/html" },
+          body,
+          timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
+          redirectChain: {
+            sourceUrl: url,
+            finalUrl: url,
+            hops: [],
+            chainLength: 0,
+            isLoop: false,
+            endsInError: false,
+            httpsToHttp: false,
+            httpToHttps: false,
+          },
+        };
+      },
+    };
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+      Object.defineProperty(res, "url", { value: url, configurable: true });
+      return Promise.resolve(res);
+    }) as typeof globalThis.fetch;
+
+    const outcome = await Effect.runPromise(
+      Effect.gen(function* () {
+        const storage = yield* createTestStorage();
+        const crawler = yield* createCrawler({
+          storage,
+          config: {
+            ...BASE_CONFIG,
+            documentFetcher: fetcher as unknown as CrawlerConfig["documentFetcher"],
+          },
+        });
+
+        // Run 1: the host refuses everything, so it ends the run exhausted.
+        yield* crawler.start(ORIGIN).pipe(Effect.timeout(Duration.seconds(20)), Effect.either);
+        const firstId = crawler.currentCrawlId!;
+        const firstStats = yield* storage.getStats(firstId).pipe(Effect.orElseSucceed(() => null));
+
+        // Run 2 on the same crawler, with the host now healthy.
+        throttling = false;
+        yield* crawler
+          .restartCrawl(firstId, {})
+          .pipe(Effect.timeout(Duration.seconds(20)), Effect.either);
+        const secondStats = yield* storage.getStats(firstId).pipe(Effect.orElseSucceed(() => null));
+
+        return {
+          firstRateLimited: firstStats?.pagesRateLimited ?? 0,
+          secondFetched: secondStats?.pagesFetched ?? 0,
+        };
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            globalThis.fetch = originalFetch;
+          }),
+        ),
+      ),
+    );
+
+    expect(outcome.firstRateLimited).toBeGreaterThan(0);
+    // The healthy re-run really crawled, rather than inheriting the verdict.
+    expect(outcome.secondFetched).toBeGreaterThan(0);
+  }, 60_000);
 
   test("a 403 still counts as blocked, not rate limited", async () => {
     const out = await runCrawl({ script: [200], then: 403 });

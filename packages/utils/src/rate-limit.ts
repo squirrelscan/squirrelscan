@@ -80,6 +80,18 @@ export function parseRetryAfterMs(
 }
 
 /**
+ * Floor on any rate-limit wait.
+ *
+ * A `Retry-After: 0` (or an HTTP-date already in the past) is a broken origin
+ * telling us to come back immediately while still refusing us. Honouring it
+ * literally produces a hot retry loop that sleeps for nothing, never
+ * accumulates against the backoff cap, and therefore never gives up — the exact
+ * failure this whole mechanism exists to prevent. One second is short enough to
+ * respect a genuinely brief window and long enough to stop a burst.
+ */
+export const MIN_RATE_LIMIT_WAIT_MS = 1_000;
+
+/**
  * Exponential backoff for a rate-limited request, in milliseconds.
  *
  * `attempt` is 1-based (1 = the wait before the first retry). `Retry-After`
@@ -102,7 +114,9 @@ export function rateLimitBackoffMs(options: {
   const cap = Math.max(0, maxBackoffMs);
 
   if (retryAfterMs !== undefined) {
-    return Math.min(Math.max(0, retryAfterMs), cap);
+    // Floored, not just clamped: see MIN_RATE_LIMIT_WAIT_MS. The floor itself is
+    // capped, so a maxBackoffMs below it still wins.
+    return Math.min(Math.max(MIN_RATE_LIMIT_WAIT_MS, retryAfterMs), cap);
   }
 
   const exponent = Math.max(0, attempt - 1);
@@ -111,5 +125,5 @@ export function rateLimitBackoffMs(options: {
   const growth = 2 ** Math.min(exponent, 30);
   const base = Math.min(baseDelayMs * growth, cap);
   const jitter = base * 0.25 * (random ? random() : Math.random());
-  return Math.min(base + jitter, cap);
+  return Math.min(Math.max(MIN_RATE_LIMIT_WAIT_MS, base + jitter), cap);
 }

@@ -10,10 +10,7 @@ import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contract
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
-import {
-  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
-  readBodyCapped,
-} from "@squirrelscan/utils/response-body";
+import { DEFAULT_MAX_DOCUMENT_BODY_BYTES, readBodyCapped } from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
@@ -300,6 +297,14 @@ export function createCrawler(
     // runCrawlLoop start (resume-safe), bumped per upsertPage — avoids a
     // hot-path COUNT(*) per enqueue/dispatch (#268).
     let pagesCommitted = 0;
+    // URLs this run recorded as rate-limited instead of fetching (#1829). Counts
+    // against maxPages alongside `pagesCommitted`: the budget is a number of
+    // URLs the crawl will ATTEMPT, and once a host is exhausted every remaining
+    // URL on it is recorded without a request. Without this the budget never
+    // fills, so the whole frontier drains — a 100-page audit of a 1000-URL
+    // sitemap reported "907 pages rate limited", which is both wasted work and
+    // a wildly overstated loss.
+    let pagesRateLimitedThisRun = 0;
 
     // Breadth-first tracking
     const prefixStats = new Map<string, { crawled: number; queued: number }>();
@@ -360,13 +365,23 @@ export function createCrawler(
      * Re-reads the window each pass because another worker may extend it while
      * this one sleeps, and slices the sleep so stop() is still responsive.
      */
-    const awaitHostBackoff = (url: string): Effect.Effect<void, never, never> =>
+    const awaitHostBackoff = (
+      url: string,
+      options: { budgetMs?: number } = {},
+    ): Effect.Effect<void, never, never> =>
       Effect.gen(function* () {
         const host = urlHostKey(url);
+        const startedAt = Date.now();
         let announced = false;
         while (isRunning) {
           const waitMs = hostBackoff.waitMs(host);
           if (waitMs <= 0) return;
+          // Bounded when the caller is inside the per-URL watchdog: waiting past
+          // it turns honest throttling into a "watchdog timeout" that blames our
+          // own deadline. Unbounded (pre-dispatch) the whole window is observed.
+          if (options.budgetMs !== undefined && Date.now() - startedAt >= options.budgetMs) {
+            return;
+          }
           if (!announced) {
             announced = true;
             logger.debug("host backoff", host, `waiting ${Math.round(waitMs / 1000)}s`);
@@ -737,6 +752,7 @@ export function createCrawler(
           depth: entry.depth,
           timestamp: Date.now(),
         });
+        pagesRateLimitedThisRun += 1;
         yield* updateStats(crawlId, { pagesFailed: 1, pagesRateLimited: 1 });
         markPrefixFailed(entry.normalizedUrl, entry.depth);
       });
@@ -828,6 +844,19 @@ export function createCrawler(
         // slot and deadlock every later same-host fetch on acquire (#924/#923).
         // Effect.ensuring is the guaranteed-finalizer seam.
         yield* Effect.gen(function* () {
+          // The backoff window can open — or be extended by another worker —
+          // while this fiber is queued in acquire(), so the pre-dispatch wait in
+          // the worker loop is not enough on its own. Re-checked here, INSIDE the
+          // guaranteed-release block, and bounded by the per-URL watchdog so a
+          // long window is reported as throttling rather than as a wedged fetch.
+          yield* awaitHostBackoff(entry.normalizedUrl, {
+            budgetMs: Math.max(0, urlWatchdogMs(config.timeoutMs) - config.timeoutMs),
+          });
+          if (hostBackoff.isExhausted(host)) {
+            yield* recordRateLimited(crawlId, entry, host);
+            return;
+          }
+
           // Cache lookup + freshness short-circuit run BEFORE the per-host
           // stagger (#824): a fully-cached page does zero network, so it must not
           // pay the delay. Only the paths that actually hit the network below
@@ -1367,6 +1396,16 @@ export function createCrawler(
         const runStopSignal = stopSignal;
         // Seed the in-memory page count from storage: 0 on a fresh start, N on resume.
         pagesCommitted = yield* storage.getPageCount(crawlId);
+        // Seeded from persisted stats, not zeroed: on a resume the URLs a prior
+        // run recorded as rate-limited already spent their share of maxPages, and
+        // forgetting that lets the resumed run dispatch them all over again.
+        const priorStats = yield* storage.getStats(crawlId).pipe(Effect.orElseSucceed(() => null));
+        pagesRateLimitedThisRun = priorStats?.pagesRateLimited ?? 0;
+        // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
+        // a run (an exhausted host is skipped before any request, so it can never
+        // earn the successes that recover it), and carrying it forward would make
+        // the next crawl of that host record every URL as rate-limited untried.
+        hostBackoff.reset();
         // Streaming worker pool: a fixed pool of `concurrency` workers, each
         // pulling the next eligible URL from the frontier as soon as it frees
         // up. No batch barrier — one slow fetch (e.g. a 35s cloud render)
@@ -1433,15 +1472,16 @@ export function createCrawler(
               return { kind: "url", entry: buffered } as const;
             }
 
-            if (pagesCommitted >= config.maxPages) {
-              logger.debug("max pages reached", `${pagesCommitted}/${config.maxPages}`);
+            const attempted = pagesCommitted + pagesRateLimitedThisRun;
+            if (attempted >= config.maxPages) {
+              logger.debug("max pages reached", `${attempted}/${config.maxPages}`);
               stopRequested = true;
               return { kind: "done" } as const;
             }
             // Budget not yet reserved by committed pages or in-flight fetches.
             // Pop at most this many so a batch never overshoots the cap (a
             // failed fetch later frees its reservation).
-            const budget = config.maxPages - pagesCommitted - inFlight;
+            const budget = config.maxPages - attempted - inFlight;
             if (budget <= 0) {
               // Budget fully reserved by in-flight fetches — wait for one to
               // free its slot.
@@ -1557,6 +1597,14 @@ export function createCrawler(
             // watchdog arms below. One 429 from this host parks every worker
             // aimed at it for the backoff window; other hosts are untouched.
             yield* awaitHostBackoff(dispatch.entry.normalizedUrl);
+            // The wait above can span minutes, so stop() may have landed while
+            // this worker slept. Without this re-check it would start one more
+            // fetch after the crawl was asked to stop and only unwind on the
+            // grace timer.
+            if (!isRunning || stopRequested) {
+              inFlight--;
+              return;
+            }
 
             yield* processEntry(dispatch.entry).pipe(
               Effect.ensuring(
@@ -1855,6 +1903,7 @@ export function createCrawler(
             perHostConcurrency: config.perHostConcurrency,
             delayMs: config.delayMs,
             perHostDelayMs: config.perHostDelayMs,
+            maxBackoffMs: config.maxBackoffMs,
             timeoutMs: config.timeoutMs,
             userAgent: config.userAgent,
             followRedirects: config.followRedirects,

@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import {
+  MIN_RATE_LIMIT_WAIT_MS,
   isRateLimitedResponse,
   isRateLimitStatus,
   parseRetryAfterMs,
@@ -172,6 +173,30 @@ describe("rateLimitBackoffMs (#1829)", () => {
       random: noJitter,
     });
     expect(wait).toBe(300_000);
+  });
+
+  test("Retry-After: 0 is floored rather than honoured literally", () => {
+    // A server that answers 429 while saying "retry now" is broken; obeying it
+    // produced a hot loop that slept for nothing and never gave up.
+    const wait = rateLimitBackoffMs({
+      attempt: 1,
+      baseDelayMs: 5_000,
+      maxBackoffMs: 300_000,
+      retryAfterMs: 0,
+      random: noJitter,
+    });
+    expect(wait).toBe(MIN_RATE_LIMIT_WAIT_MS);
+  });
+
+  test("the floor still yields to a smaller max_backoff_ms", () => {
+    const wait = rateLimitBackoffMs({
+      attempt: 1,
+      baseDelayMs: 5_000,
+      maxBackoffMs: 200,
+      retryAfterMs: 0,
+      random: noJitter,
+    });
+    expect(wait).toBe(200);
   });
 
   test("a far-out attempt number cannot overflow into NaN", () => {

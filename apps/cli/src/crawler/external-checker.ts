@@ -222,7 +222,6 @@ export function checkExternalLinks(
           fromCache: true,
           wafBlocked: cached.wafBlocked,
           wafProvider: cached.wafProvider as WafProvider | undefined,
-          rateLimited: cached.rateLimited,
         });
       } else {
         urlsToCheck.push(url);
@@ -249,17 +248,22 @@ export function checkExternalLinks(
     });
 
     // Cache the new results
-    const cacheEntries: LinkCacheEntry[] = checkedResults.map((r) => ({
-      href: r.href,
-      status: r.status,
-      error: r.error,
-      redirectTarget: r.redirectTarget,
-      checkedAt: Date.now(),
-      wafBlocked: r.wafBlocked,
-      wafProvider: r.wafProvider,
-      rateLimited: r.rateLimited,
-    }));
-    cache.setCachedBulk(cacheEntries);
+    // #1829: a throttled result is a fact about the MOMENT, not the link. The
+    // cache TTL is 7 days by default, so caching one 429 would keep a live link
+    // reported as "unverifiable" for a week after the host recovered. Cache the
+    // verified results only; the throttled ones are re-checked next run.
+    const cacheEntries: LinkCacheEntry[] = checkedResults
+      .filter((r) => !isRateLimited(r))
+      .map((r) => ({
+        href: r.href,
+        status: r.status,
+        error: r.error,
+        redirectTarget: r.redirectTarget,
+        checkedAt: Date.now(),
+        wafBlocked: r.wafBlocked,
+        wafProvider: r.wafProvider,
+      }));
+    if (cacheEntries.length > 0) cache.setCachedBulk(cacheEntries);
 
     // Add checked results to final results
     for (const r of checkedResults) {

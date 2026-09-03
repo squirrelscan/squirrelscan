@@ -1056,9 +1056,19 @@ export function fetchPageWithRetry(
   //
   // Rate limiting is exempt from that invariant and counted separately below:
   // the inner fallback only ever retries TLS failures, so a throttled response
-  // cannot multiply through it. Capping THROTTLING at one attempt for the cloud
-  // fetcher would be the wrong trade anyway — that is the path that crawls the
-  // large storefronts which throttle in the first place.
+  // cannot multiply through the fallback's OWN retry budget. Capping THROTTLING
+  // at one attempt for the cloud fetcher would be the wrong trade anyway — that
+  // is the path that crawls the large storefronts which throttle in the first
+  // place.
+  //
+  // KNOWN COST, bounded and accepted: on a host that fails the custom fetcher
+  // with TLS *and* rate-limits the standard fallback, each outer rate-limit
+  // attempt replays impersonation → fallback, so six attempts cost twelve
+  // requests rather than six. They are still spaced by the full backoff
+  // schedule (>= 1s, growing from 5s), so this is at most a doubling spread over
+  // minutes, not a burst. Collapsing it would mean threading "which layer
+  // produced this error" through the fallback, which buys little for a
+  // combination that needs a TLS-broken AND throttling origin.
   const maxAttempts = options.fetcher ? 1 : 3;
   const attemptOnce = withRetry(fetchPage(url, options), {
     ...defaultRetryPolicy,
@@ -1078,7 +1088,13 @@ export function fetchPageWithRetry(
       const outcome = yield* Effect.either(attemptOnce);
 
       if (outcome._tag === "Right") {
-        control?.onSuccess?.(url);
+        // Only a 2xx counts toward a host's recovery. `applyStatusGuards` lets
+        // most 4xx through as successful fetches, so counting every `Right`
+        // meant twenty 404s handed a throttled host its concurrency back —
+        // against the registry's own "consecutive 2xx" contract.
+        if (outcome.right.status >= 200 && outcome.right.status < 300) {
+          control?.onSuccess?.(url);
+        }
         return outcome.right;
       }
 
@@ -1088,16 +1104,17 @@ export function fetchPageWithRetry(
       }
 
       encountered += 1;
-      if (encountered >= RATE_LIMIT_MAX_ATTEMPTS) {
-        return yield* Effect.fail(error);
-      }
-
       const encounter: RateLimitEncounter = {
         url,
         attempt: encountered,
         retryAfterMs: error.retryAfterMs,
       };
 
+      // Reported BEFORE the attempt cap is checked. The host registry has to see
+      // every refusal, including the last one — skipping it left a host that
+      // refused six times looking like it had refused five, so its strike count
+      // and backoff budget under-counted on the very URLs that proved it was
+      // throttling hardest.
       const decision: RateLimitDecision = control?.onRateLimited?.(encounter) ?? {
         waitMs: rateLimitBackoffMs({
           attempt: encountered,
@@ -1107,6 +1124,10 @@ export function fetchPageWithRetry(
         }),
         exhausted: false,
       };
+
+      if (encountered >= RATE_LIMIT_MAX_ATTEMPTS) {
+        return yield* Effect.fail(error);
+      }
 
       // The host gave up: stop asking. The caller records the URL as
       // rate-limited rather than fetched, and the crawl moves to other hosts.

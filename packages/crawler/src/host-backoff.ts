@@ -103,6 +103,14 @@ export interface HostBackoffRegistry {
   exhaustedHosts(): string[];
   /** Inspect one host's state (tests + diagnostics). */
   snapshot(host: string): HostThrottleSnapshot | null;
+  /**
+   * Forget every host. Called at the start of each crawl run: exhaustion is
+   * terminal WITHIN a run (an exhausted host is skipped before any request, so
+   * it can never earn the successes that would recover it), and carrying that
+   * verdict into the next crawl on the same crawler instance would record every
+   * URL as rate-limited without trying. Also bounds the map's lifetime.
+   */
+  reset(): void;
 }
 
 interface HostThrottleState {
@@ -115,11 +123,26 @@ interface HostThrottleState {
   nextAttemptAt: number;
 }
 
+/**
+ * `Math.max` does not sanitize NaN, and a NaN concurrency or delay poisons the
+ * scheduler silently (every comparison against it is false). The CLI's schema
+ * blocks bad values, but this package is consumed directly too.
+ */
+function finiteOr(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegistry {
-  const configuredConcurrency = Math.max(1, options.perHostConcurrency);
-  const maxBackoffMs = Math.max(0, options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS);
-  const baseBackoffMs = Math.max(1, options.baseBackoffMs ?? DEFAULT_RATE_LIMIT_BASE_BACKOFF_MS);
-  const recoverySuccesses = Math.max(1, options.recoverySuccesses ?? DEFAULT_RECOVERY_SUCCESSES);
+  const configuredConcurrency = Math.max(1, finiteOr(options.perHostConcurrency, 1));
+  const maxBackoffMs = Math.max(0, finiteOr(options.maxBackoffMs, DEFAULT_MAX_BACKOFF_MS));
+  const baseBackoffMs = Math.max(
+    1,
+    finiteOr(options.baseBackoffMs, DEFAULT_RATE_LIMIT_BASE_BACKOFF_MS),
+  );
+  const recoverySuccesses = Math.max(
+    1,
+    finiteOr(options.recoverySuccesses, DEFAULT_RECOVERY_SUCCESSES),
+  );
   const now = options.now ?? Date.now;
   const random = options.random;
 
@@ -169,10 +192,20 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
     const waitMs = Math.min(requested, remainingBudget);
 
     state.cumulativeWaitMs += waitMs;
-    state.nextAttemptAt = Math.max(state.nextAttemptAt, now() + waitMs);
+    const at = now();
+    state.nextAttemptAt = Math.max(state.nextAttemptAt, at + waitMs);
     hosts.set(host, state);
 
-    return { waitMs, exhausted: false, strikes: state.strikes };
+    // The caller must observe the host's FULL remaining window, not just the
+    // wait this response earned. Two workers refused at the same moment each
+    // extend `nextAttemptAt`, and returning only the increment let the first one
+    // retry while the second was still waiting — which breaks the "one refusal
+    // pauses every worker on this host" guarantee this registry exists for.
+    return {
+      waitMs: Math.max(0, state.nextAttemptAt - at),
+      exhausted: false,
+      strikes: state.strikes,
+    };
   };
 
   const noteSuccess = (host: string): void => {
@@ -228,6 +261,9 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
     snapshot: (host) => {
       const state = hosts.get(host);
       return state ? { ...state } : null;
+    },
+    reset: () => {
+      hosts.clear();
     },
   };
 }
