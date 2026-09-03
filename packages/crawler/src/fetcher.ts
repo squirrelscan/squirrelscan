@@ -1150,6 +1150,11 @@ export function fetchPageWithRetry(
 
       cumulativeWaitMs += waitMs;
       control?.onBackoff?.({ ...encounter, waitMs });
+      // A zero wait retries immediately, and that is correct rather than a spin:
+      // the host registry returns 0 only when the backoff window it set has
+      // already elapsed. Every wait it computes is floored at
+      // MIN_RATE_LIMIT_WAIT_MS, so this cannot become a burst, and the attempt
+      // cap bounds it regardless of what an injected control returns.
       if (waitMs > 0) {
         yield* Effect.sleep(Duration.millis(waitMs));
       }
