@@ -917,6 +917,11 @@ export interface RunCloudDomainStatsOptions {
     estimatedCredits: number,
     balance: PreflightBalance
   ) => Promise<boolean>;
+  /**
+   * Kept, but not emitted while the feature is paused (#1819) — a step that can
+   * only 404 must not narrate itself on every audit. Restore the announce/skip
+   * pair in the body if the hosted service comes back.
+   */
   onProgress?: (message: string) => void;
   /** Called once after a SUCCESSFUL charged call with the credits debited. */
   onSpend?: (credits: number) => void;
@@ -931,7 +936,10 @@ export interface CloudDomainStatsResult {
  * Run the credited cloud `domain-stats` service and return the report-ready
  * domain stats, or null when it's off / logged out / out of credits / no data.
  *
- * Auto-runs for logged-in users when `cloud.enabled` AND `cloud.domain_stats`.
+ * Runs when `cloud.enabled` AND `cloud.domain_stats`. The latter now defaults to
+ * false (the hosted service is paused), so this is normally skipped before any
+ * call; a config that opts back in gets a 404 from the paused route, which the
+ * catch below degrades to null exactly like a no-data domain.
  * Runs on any signed-in plan (#684); the server enforces the 30-day cache and the
  * credit charge (out of credits → 402) — the CLI is a thin wrapper. A 30-day cache
  * HIT is served at 0 credits (`cached: true`) — never reported as spend. A domain
@@ -954,7 +962,11 @@ export async function runCloudDomainStats(
       if (!proceed) return null;
     }
 
-    opts.onProgress?.("cloud: domain stats");
+    // No progress line while the feature is paused (#1819). The hosted route
+    // answers 404 for everyone, so an explicit `domain_stats = true` would
+    // otherwise narrate a step that cannot produce anything: "cloud: domain
+    // stats" followed by "cloud: domain stats skipped", on every audit. Restore
+    // the announce/skip pair here if the service comes back.
     const res = await client.domainStats({
       auditId,
       url: baseUrl,
@@ -972,9 +984,10 @@ export async function runCloudDomainStats(
       credits,
     };
   } catch (error) {
-    // Any failure (no_data 404 / 402 out of credits / auth / network / 5xx) →
-    // degrade silently (no domain-stats section). Never fails the audit.
-    opts.onProgress?.("cloud: domain stats skipped");
+    // Any failure (feature_disabled 404 while paused / no_data 404 / 402 out of
+    // credits / auth / network / 5xx) → degrade silently (no domain-stats
+    // section). Never fails the audit. Debug-only: the paused route is a 404 for
+    // everyone, and a line on every audit would read as something being broken.
     logger.debug("domain-stats skipped", (error as Error).message);
     return null;
   }

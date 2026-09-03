@@ -145,12 +145,16 @@ export const CloudConfigSchema = z.object({
    */
   editor_summary: z.boolean().default(true),
   /**
-   * Domain-level SEO stats (#111, report-only, flat `domain_stats` credit charge).
-   * Credit-only since #684: any signed-in plan can run it (402 when out of credits).
-   * Auto-runs for logged-in users; set false to skip. Cheap (5 credits) and
-   * 30-day cached per domain, so it normally runs silently below `confirm_threshold`.
+   * Domain-level SEO stats (#111, report-only, folded into the audit base).
+   * Credit-only since #684: any signed-in plan can run it. 30-day cached per
+   * domain.
+   *
+   * PAUSED, default false: the hosted service is switched off, so the step is
+   * skipped rather than run against a route that answers 404. Setting this true
+   * is harmless while the service is off - the CLI degrades silently and the
+   * report simply carries no domain stats section.
    */
-  domain_stats: z.boolean().default(true),
+  domain_stats: z.boolean().default(false),
   /**
    * Crawl fetch mode. Explicit 'browser' renders every page via the cloud
    * browser (credit-priced); explicit 'http' forces plain HTTP. Left UNSET

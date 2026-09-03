@@ -60,3 +60,26 @@ describe("getDefaultConfig", () => {
     expect(config.plugins?.enabled).toBe(false);
   });
 });
+
+// Domain stats is paused: the hosted service is off, so the audit step is skipped
+// by default rather than run against a route that answers 404. The default is the
+// whole switch on this side, and it is one character away from silently coming
+// back, so it is pinned here alongside the neighbouring cloud step that must NOT
+// change.
+describe("cloud.domain_stats default (paused)", () => {
+  test("defaults to false — the audit runs no domain stats step", () => {
+    expect(ConfigSchema.parse({}).cloud.domain_stats).toBe(false);
+    expect(getDefaultConfig().cloud.domain_stats).toBe(false);
+  });
+
+  test("an explicit true is still honoured — paused, not removed", () => {
+    expect(
+      ConfigSchema.parse({ cloud: { domain_stats: true } }).cloud.domain_stats
+    ).toBe(true);
+  });
+
+  test("the other included cloud steps are untouched by the pause", () => {
+    const cloud = ConfigSchema.parse({}).cloud;
+    expect(cloud.editor_summary).toBe(true);
+  });
+});

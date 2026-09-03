@@ -20,6 +20,21 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## [Unreleased]
+
+### Changed
+
+- **Domain stats is paused.** The domain-level SEO summary (backlinks, referring
+  domains, organic keywords and traffic, domain rank) no longer runs as part of an
+  audit, and reports no longer carry a domain stats section. It was the one part of
+  the audit that described a site's market position rather than anything you could
+  fix in the code, and it sat awkwardly next to everything else squirrelscan tells
+  you. Nothing else about an audit changes, and the price is unchanged: the flat
+  50-credit base already covered it, so there is nothing to refund and nothing new
+  to pay for. Audits that already captured domain stats keep the section in their
+  published reports. `cloud.domain_stats` stays in the config and now defaults to
+  false; if the feature comes back, turning it on is all it will take.
+
 ## v0.0.89
 
 A release about not crying wolf. A rule that reports a problem that is not there

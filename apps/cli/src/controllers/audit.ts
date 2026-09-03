@@ -1500,6 +1500,12 @@ export async function runAudit(
       // whois/overview lookup. The credit charge + 30-day cache are
       // enforced server-side; the CLI degrades silently (logged out / no
       // credits / no data → no section). Never fails the audit.
+      //
+      // PAUSED: `cloud.domain_stats` now defaults to false, so this step is
+      // normally skipped outright — no call, no progress line, no section. The
+      // hosted route also answers 404 while the service is off, which
+      // `runCloudDomainStats` degrades to null like any other failure, so an
+      // explicit `domain_stats: true` in a config is harmless rather than broken.
       if (
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&
