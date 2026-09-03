@@ -22,7 +22,7 @@ If your site actively refused the crawler with a 403 or 429, the audit is marked
 | `tls` | The TLS handshake failed: an expired certificate, a hostname mismatch, a self-signed certificate, or an incomplete chain. | Renew or repair the certificate so it is valid for this hostname and served with the full chain. |
 | `connection` | Nothing answered. The connection was refused, reset, or closed before any response arrived. | Check that the origin server is running and accepting connections from the public internet, and that no firewall is dropping the requests. |
 | `timeout` | The origin accepted the connection but sent no response in time. | Check server load, slow database queries, or a firewall holding connections open. |
-| `http_4xx` | The server refused every request with a 4xx status. | Allowlist the squirrelscan crawler, or check that the URL is publicly reachable without a login. A 403 or 429 is reported as blocked instead. |
+| `http_4xx` | The server answered every request with a 4xx status. | A 401, 403 or 429 is a refusal: allowlist the squirrelscan crawler, or check that the URL is reachable without a login. A 404 or 410 means the page is not there: check the address. A root 403 or 429 is reported as blocked instead. |
 | `http_5xx` | The server returned an error of its own for every request. | Check your error logs, then re-run the audit once the site is serving normally. |
 | `redirect` | The audited URL redirected somewhere the crawl could not follow, usually off its own site. | Audit the URL the site actually serves, or fix the redirect so it stays on the same site. |
 | `robots` | `robots.txt` disallows the crawler on this URL. | Allow the squirrelscan crawler in `robots.txt`, or point the audit at a path it permits. |

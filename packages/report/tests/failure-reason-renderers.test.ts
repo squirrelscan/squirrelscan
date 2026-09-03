@@ -173,3 +173,30 @@ describe("#1822 and #1829 do not fight over the notice (#1822)", () => {
     expect(notice?.body[0]).toContain("TLS handshake");
   });
 });
+
+describe("4xx guidance covers both shapes a 4xx entry URL takes (#1822)", () => {
+  // The nine-code vocabulary folds a refusal and a missing page into one class,
+  // and the wrong half of the advice is useless: a 403 is a wall to open, a 404
+  // is an address to correct. The copy has to name both, because the code alone
+  // cannot tell them apart.
+  const BLOCK = failedReport("example.com returned 403 Forbidden", "http_4xx");
+  const GONE = failedReport("example.com returned 404 Not Found", "http_4xx");
+
+  test("the reason still names the exact status on each", () => {
+    expect(renderText(BLOCK)).toContain("403 Forbidden");
+    expect(renderText(GONE)).toContain("404 Not Found");
+  });
+
+  test("the next step addresses a refusal AND a missing page", () => {
+    const out = renderText(GONE);
+    expect(out).toContain("allowlist the squirrelscan crawler");
+    expect(out).toContain("404 or 410");
+    expect(out).toContain("check that the address is right");
+  });
+
+  test("the agent-facing guidance does not assert bot protection outright", () => {
+    const out = renderLlm(GONE);
+    expect(out).toContain("404 or 410 means the URL does not exist");
+    expect(out).not.toContain("This is usually bot protection");
+  });
+});

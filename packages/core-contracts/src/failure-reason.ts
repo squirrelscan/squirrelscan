@@ -204,8 +204,12 @@ export const AUDIT_FAILURE_NEXT_STEP: Readonly<Record<AuditFailureReasonCode, st
     "Check that the origin server is running and accepting connections from the public internet, and that no firewall is dropping our requests.",
   timeout:
     "The origin accepted the connection but did not answer in time. Check server load, slow database queries, or a firewall holding the connection open, then re-run the audit.",
+  // Covers both shapes a 4xx entry URL takes, because the class alone cannot
+  // tell them apart and the wrong half of this advice is useless: a refusal
+  // (401/403/429) is a wall to open, a 404/410 is an address to correct. The
+  // reason line printed directly above names the exact status.
   http_4xx:
-    "The server refused the request. Allowlist the squirrelscan crawler in your WAF or bot protection, turn off bot fight mode for the audit, or check that the URL is publicly reachable without a login.",
+    "The server did not return the page. A 401, 403 or 429 is a refusal: allowlist the squirrelscan crawler in your WAF or bot protection, turn off bot fight mode for the audit, or check that the URL is reachable without a login. A 404 or 410 means the page is not there: check that the address is right and that it is published.",
   http_5xx:
     "The server hit an error of its own. Check your error logs and re-run the audit once the site is serving normally.",
   redirect:
@@ -232,7 +236,7 @@ export const AUDIT_FAILURE_CAUSE: Readonly<Record<AuditFailureReasonCode, string
   timeout:
     "Your site accepted our connection but never sent a response in time, so no page could be read and there was nothing to audit.",
   http_4xx:
-    "Your site refused every request we made, so no page could be read and there was nothing to audit.",
+    "Your site did not return a page for any request we made, so there was nothing to audit. Either it refused us, or the address we audited is not there.",
   http_5xx:
     "Your site returned a server error for every request we made, so there was nothing to audit.",
   redirect:
@@ -256,7 +260,7 @@ export const AUDIT_FAILURE_NEXT_STEP_THIRD: Readonly<Record<AuditFailureReasonCo
   timeout:
     "The origin accepted the connection but never answered. Check server load and any firewall holding connections open.",
   http_4xx:
-    "The server refused the request. This is usually bot protection, a WAF rule, or a login wall in front of the URL, not a squirrelscan outage.",
+    "The server did not return the page. A 401, 403 or 429 is a refusal, usually bot protection, a WAF rule or a login wall, and not a squirrelscan outage. A 404 or 410 means the URL does not exist, so the address being audited is probably wrong.",
   http_5xx:
     "The server returned an error of its own. Re-run the audit once the site is serving normally.",
   redirect:
