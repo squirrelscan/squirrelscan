@@ -849,8 +849,16 @@ export function createCrawler(
           // the worker loop is not enough on its own. Re-checked here, INSIDE the
           // guaranteed-release block, and bounded by the per-URL watchdog so a
           // long window is reported as throttling rather than as a wedged fetch.
+          //
+          // The budget is measured from processUrl's OWN start, not from this
+          // line: acquire() above can already have consumed part of the watchdog,
+          // and a budget that ignored that could still overrun it — which is the
+          // "watchdog timeout" mislabelling this bound exists to prevent.
           yield* awaitHostBackoff(entry.normalizedUrl, {
-            budgetMs: Math.max(0, urlWatchdogMs(config.timeoutMs) - config.timeoutMs),
+            budgetMs: Math.max(
+              0,
+              urlWatchdogMs(config.timeoutMs) - (Date.now() - startedAt) - config.timeoutMs,
+            ),
           });
           if (hostBackoff.isExhausted(host)) {
             yield* recordRateLimited(crawlId, entry, host);
