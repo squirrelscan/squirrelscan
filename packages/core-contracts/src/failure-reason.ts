@@ -69,13 +69,37 @@ const MAX_DETAIL_LENGTH = 120;
 const MAX_HOST_LENGTH = 80;
 
 /**
+ * Absolute URLs inside a runtime error message. Reduced to their host below:
+ * a reason sentence is quoted in an email, a markdown report and a log line,
+ * and the path and query of a site-chosen URL have no business in any of them.
+ * Bounded character classes only, and no adjacent quantifiers, so this cannot
+ * backtrack catastrophically on a hostile message.
+ */
+const ABSOLUTE_URL = /\bhttps?:\/\/([^\s/?#"'<>]{1,253})[^\s"'<>]*/gi;
+
+/**
+ * Characters that would give an origin-influenced fragment STRUCTURE once the
+ * reason is printed: markdown links and code spans, an HTML tag, a table cell
+ * break. Emphasis markers (`*`, `_`) are deliberately left alone: they are
+ * inert inside a one-line fragment, and stripping them mangles ordinary
+ * identifiers (squirrelscan/repo#1798).
+ */
+const STRUCTURAL_CHARS = /[`[\]<>|]/g;
+
+/**
  * Normalize an origin-influenced fragment before it is embedded in a reason
  * sentence: strip control characters (so a reason can't break a log line, a
- * markdown table or an email body), collapse whitespace, and cap the length.
+ * markdown table or an email body), reduce any absolute URL to its host, drop
+ * the characters that would turn text into markup, collapse whitespace, and cap
+ * the length.
  */
 function sanitizeFragment(value: string | undefined, max: number): string | undefined {
   if (!value) return undefined;
-  const cleaned = stripControlChars(value).replace(/\s+/g, " ").trim();
+  const cleaned = stripControlChars(value)
+    .replace(ABSOLUTE_URL, (_match, host: string) => host)
+    .replace(STRUCTURAL_CHARS, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (cleaned.length === 0) return undefined;
   // The ellipsis counts toward the cap: `max` is a hard ceiling because these
   // fragments are concatenated into a reason bounded by a 500-char DB column.

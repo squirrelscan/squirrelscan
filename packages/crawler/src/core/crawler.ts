@@ -353,6 +353,19 @@ export function createCrawler(
     // sitemap reported "907 pages rate limited", which is both wasted work and
     // a wildly overstated loss.
     let pagesRateLimitedThisRun = 0;
+    /**
+     * Authoritative root failure for the current crawl (#1822).
+     *
+     * `updateStats` below is a read-modify-write and the worker pool runs
+     * `concurrency` of them at once, so a worker holding a stale read would
+     * write its own `current.rootFailure` back over a failure another worker
+     * had just recorded (the storage layer's merge is a plain spread of the
+     * full stats object, so `undefined` really does erase it). Keeping the
+     * value here and writing THIS on every stats update means a stale read can
+     * never lose it, and the entry-over-sitemap precedence holds regardless of
+     * the order the workers interleave in. Seeded from storage on resume.
+     */
+    let rootFailure: AuditFailureDetail | undefined;
 
     // Breadth-first tracking
     const prefixStats = new Map<string, { crawled: number; queued: number }>();
@@ -1424,6 +1437,13 @@ export function createCrawler(
         const current = yield* storage.getStats(crawlId);
         if (!current) return;
 
+        // Fold before the write so every concurrent updateStats carries the
+        // newest failure, not the one its own (possibly stale) read saw.
+        rootFailure = preferRootFailure(
+          preferRootFailure(rootFailure, current.rootFailure),
+          updates.rootFailure,
+        );
+
         const newStats: CrawlStats = {
           ...current,
           pagesTotal:
@@ -1445,10 +1465,10 @@ export function createCrawler(
             updates.cacheHitsByReason,
           ),
           bytesTotal: current.bytesTotal + (updates.bytesTotal ?? 0),
-          // #1822: not a counter — the first explanatory failure wins, with the
-          // entry URL's failure outranking a sitemap URL's. Listed explicitly
-          // because this helper only carries fields it names.
-          rootFailure: preferRootFailure(current.rootFailure, updates.rootFailure),
+          // #1822: not a counter. The in-memory value is the authority (see its
+          // declaration); `current` only contributes on the first update after a
+          // resume, and `updates` can only displace a weaker source.
+          rootFailure,
         };
 
         // Update average load time
@@ -1500,6 +1520,9 @@ export function createCrawler(
         // forgetting that lets the resumed run dispatch them all over again.
         const priorStats = yield* storage.getStats(crawlId).pipe(Effect.orElseSucceed(() => null));
         pagesRateLimitedThisRun = priorStats?.pagesRateLimited ?? 0;
+        // Resume-safe for the same reason (#1822): a crawl continuing from
+        // persisted stats keeps whatever root failure the earlier pass recorded.
+        rootFailure = priorStats?.rootFailure;
         // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
         // a run (an exhausted host is skipped before any request, so it can never
         // earn the successes that recover it), and carrying it forward would make
@@ -1660,6 +1683,19 @@ export function createCrawler(
                   ),
                   Effect.catchAll(() => Effect.void),
                 );
+                // #1822: a wedged entry fetch dies HERE, not in processUrl's
+                // fetch-error path, so without this an audit whose root simply
+                // never answered fell back to the generic reason instead of
+                // saying it timed out. Stats only, and only the failure class:
+                // the counters stay with the paths that own them.
+                yield* updateStats(crawlId, {
+                  rootFailure: auditFailureDetail({
+                    code: "timeout",
+                    host: failureHostOf(entry.normalizedUrl),
+                    detail: `no response within ${urlTimeoutMs}ms`,
+                    source: failureSourceFor(entry.source),
+                  }),
+                }).pipe(Effect.catchAll(() => Effect.void));
               }),
             ),
             Effect.catchAll((error) => {

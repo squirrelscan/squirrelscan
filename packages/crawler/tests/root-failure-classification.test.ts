@@ -104,6 +104,26 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
     expect(detail.detail!.length).toBeLessThanOrEqual(120);
   });
 
+  test("an absolute URL in a runtime message is reduced to its host", () => {
+    // A reason is quoted in an email and a markdown report; the path and query
+    // of a site-chosen URL have no business in either.
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.network(URL_ROOT, "Failed to fetch https://evil.example/private?token=abc123"),
+    );
+    expect(detail.detail).toContain("evil.example");
+    expect(detail.detail).not.toContain("/private");
+    expect(detail.detail).not.toContain("token=abc123");
+  });
+
+  test("markdown and HTML structure characters are dropped from the detail", () => {
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.network(URL_ROOT, "bad [link](https://evil.example) <img> `code` a|b"),
+    );
+    for (const char of ["[", "]", "<", ">", "`", "|"]) {
+      expect(detail.detail).not.toContain(char);
+    }
+  });
+
   test("a sitemap URL's failure is marked as the weaker source", () => {
     expect(crawlErrorToFailureDetail(CrawlError.timeout(URL_ROOT), "sitemap").source).toBe(
       "sitemap",
@@ -193,11 +213,16 @@ function failingFetcher(error: CrawlError): CrawlFetcher {
   return () => Effect.fail(error);
 }
 
-/** A fetcher that answers every URL with one status and no body. */
-function statusFetcher(status: number): CrawlFetcher {
+/** A fetcher that answers every URL with 200 and the given HTML body. */
+function htmlFetcher(body: string): CrawlFetcher {
+  return (url) => statusFetcher(200, body)(url);
+}
+
+/** A fetcher that answers every URL with one status and an optional body. */
+function statusFetcher(status: number, body = ""): CrawlFetcher {
   return (url) =>
     Effect.gen(function* () {
-      yield* applyStatusGuards(url, status, new Headers(), "");
+      yield* applyStatusGuards(url, status, new Headers(), body);
       return {
         url,
         finalUrl: url,
@@ -208,8 +233,8 @@ function statusFetcher(status: number): CrawlFetcher {
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
         securityHeaders: EMPTY_SECURITY_HEADERS,
         contentType: "text/html",
-        body: "",
-        sizeBytes: 0,
+        body,
+        sizeBytes: body.length,
         redirectChain: {
           sourceUrl: url,
           finalUrl: url,
@@ -301,6 +326,30 @@ describe("the classification reaches CrawlStats (#1822)", () => {
     expect(stats?.pagesBlocked).toBe(1);
     expect(stats?.rootFailure?.code).toBe("http_4xx");
     expect(stats?.rootFailure?.status).toBe(403);
+  });
+
+  test("later successful page stores cannot erase a recorded failure", async () => {
+    // `updateStats` is a read-modify-write and the storage merge is a plain
+    // spread of the whole stats object, so before #1822's in-memory authority a
+    // worker holding a stale read wrote its own (empty) rootFailure back over a
+    // recorded one. Here one sub-page 500s and several more succeed AFTER it,
+    // each running its own read-modify-write at concurrency 4.
+    const links = ["/p0", "/p1", "/p2", "/p3", "/p4"];
+    const anchors = links.map((h) => `<a href="${ORIGIN}${h}">${h}</a>`).join("");
+    const fetcher: CrawlFetcher = (url) => {
+      if (url === `${ORIGIN}/p0`) {
+        return Effect.fail(CrawlError.network(url, "Server error: 500", 500));
+      }
+      const body = url === URL_ROOT ? `<!doctype html><html><body>${anchors}</body></html>` : "";
+      return htmlFetcher(body)(url);
+    };
+    const stats = await withStubbedRootProbes("", () =>
+      runCrawl(fetcher, { maxPages: 10, concurrency: 4, disableLinkDiscovery: false }),
+    );
+    // The successful stores ran, and the one failure is still on the row.
+    expect(stats?.pagesFetched).toBeGreaterThan(1);
+    expect(stats?.rootFailure?.code).toBe("http_5xx");
+    expect(stats?.rootFailure?.status).toBe(500);
   });
 
   test("a robots.txt that disallows the seed is recorded before any fetch", async () => {
