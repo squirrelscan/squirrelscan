@@ -33,6 +33,13 @@ export const THROTTLED_DELAY_MULTIPLIER = 10;
 /** Per-host concurrency while throttled, before any recovery. */
 const THROTTLED_CONCURRENCY = 1;
 
+/**
+ * Stand-in politeness delay for a throttled host whose config asked for none.
+ * The cloud render path passes 0, and multiplying 0 is still 0 — which would
+ * leave a host that just refused us being hit at full rate.
+ */
+const THROTTLED_MIN_DELAY_MS = 50;
+
 export interface HostBackoffOptions {
   /** Configured per-host concurrency; the ceiling recovery climbs back to. */
   perHostConcurrency: number;
@@ -204,11 +211,13 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
     concurrencyFor: (host) => hosts.get(host)?.concurrency ?? configuredConcurrency,
     delayFor: (host, configuredDelayMs) => {
       const state = hosts.get(host);
-      if (!state) return configuredDelayMs;
-      // A throttled host must slow down even when the config asked for no
-      // stagger at all (the cloud render path passes 0).
-      const floor = state.delayMultiplier > 1 ? baseBackoffMs / THROTTLED_DELAY_MULTIPLIER : 0;
-      return Math.max(configuredDelayMs * state.delayMultiplier, floor);
+      // No penalty left to apply: either the host never throttled, or it has
+      // already earned its configured delay back.
+      if (!state || state.delayMultiplier <= 1) return configuredDelayMs;
+      // Substitute the floor BEFORE multiplying, so recovery still steps the
+      // delay down proportionally instead of being pinned to a flat minimum.
+      const base = configuredDelayMs > 0 ? configuredDelayMs : THROTTLED_MIN_DELAY_MS;
+      return base * state.delayMultiplier;
     },
     isExhausted: (host) => hosts.get(host)?.exhausted === true,
     isThrottled: (host) => hosts.has(host),
