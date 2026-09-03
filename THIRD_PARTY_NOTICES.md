@@ -64,7 +64,7 @@ runtime dependency closure of `apps/cli`.
 | `express@5.2.1` | MIT | [source](https://github.com/expressjs/express) |
 | `fast-check@3.23.2` | MIT | [source](https://github.com/dubzzz/fast-check) |
 | `fast-deep-equal@3.1.3` | MIT | [source](https://github.com/epoberezkin/fast-deep-equal) |
-| `fast-uri@3.1.4` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
+| `fast-uri@3.1.7` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
 | `fast-xml-builder@1.3.0` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-builder) |
 | `fast-xml-parser@5.10.1` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-parser) |
 | `finalhandler@2.1.1` | MIT | [source](https://github.com/pillarjs/finalhandler) |
@@ -112,7 +112,7 @@ runtime dependency closure of `apps/cli`.
 | `pkce-challenge@5.0.1` | MIT | [source](https://github.com/crouchcd/pkce-challenge) |
 | `proxy-addr@2.0.7` | MIT | [source](https://github.com/jshttp/proxy-addr) |
 | `pure-rand@6.1.0` | MIT | [source](https://github.com/dubzzz/pure-rand) |
-| `qs@6.15.3` | BSD-3-Clause | [source](https://github.com/ljharb/qs) |
+| `qs@6.16.0` | BSD-3-Clause | [source](https://github.com/ljharb/qs) |
 | `range-parser@1.3.0` | MIT | [source](https://github.com/jshttp/range-parser) |
 | `raw-body@3.0.2` | MIT | [source](https://github.com/stream-utils/raw-body) |
 | `react-dom@19.2.8` | MIT | [source](https://github.com/react/react) |
@@ -371,7 +371,7 @@ Packages: `shebang-command@2.0.0`
 
 ### LICENSE.md (14d069c68fe7)
 
-Packages: `qs@6.15.3`
+Packages: `qs@6.16.0`
 
     BSD 3-Clause License
 
@@ -2272,7 +2272,7 @@ Packages: `ipaddr.js@1.9.1`
 
 ### LICENSE (b010b0dfdfdb)
 
-Packages: `fast-uri@3.1.4`
+Packages: `fast-uri@3.1.7`
 
     Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
     Copyright (c) 2021-present The Fastify team <https://github.com/fastify/fastify#team>
