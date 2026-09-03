@@ -3,6 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { normalizeUrl } from "@squirrelscan/utils";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 export const brokenLinksRule: Rule = {
   meta: {
@@ -55,14 +56,30 @@ export const brokenLinksRule: Rule = {
       sources: string[];
       statusCode: number;
     }[] = [];
+    const rateLimitedLinks: {
+      url: string;
+      sources: string[];
+      statusCode: number;
+    }[] = [];
 
     for (const [target, sources] of linkTargets) {
       // Normalize target URL to match crawler's normalization
       const normalizedTarget = normalizeUrl(target);
       const statusCode = crawledPages.get(normalizedTarget);
+      if (statusCode === undefined) continue;
+
+      // #1829: a 429/430 means the host throttled the crawl, not that the page
+      // is missing. The adapter already keeps rate-limited pages out of the
+      // corpus, so this is the second line of defence for a status that reached
+      // the rules another way (a stored page from an older crawl, a cloud
+      // render result). Must precede the >= 400 test.
+      if (isRateLimitStatus(statusCode)) {
+        rateLimitedLinks.push({ url: target, sources, statusCode });
+        continue;
+      }
 
       // Only broken if we crawled it AND got error status (4xx/5xx)
-      if (statusCode !== undefined && statusCode >= 400) {
+      if (statusCode >= 400) {
         brokenLinks.push({ url: target, sources, statusCode });
       }
     }
@@ -84,6 +101,20 @@ export const brokenLinksRule: Rule = {
         name: "broken-links",
         status: "pass",
         message: "No broken internal links detected",
+      });
+    }
+
+    if (rateLimitedLinks.length > 0) {
+      checks.push({
+        name: "rate-limited-links",
+        status: "info",
+        message: `${rateLimitedLinks.length} internal link(s) rate-limited - status unverifiable`,
+        items: rateLimitedLinks.map((b) => ({
+          id: b.url,
+          label: `${b.url} (${b.statusCode})`,
+          sourcePages: b.sources,
+          meta: { statusCode: b.statusCode, rateLimited: true },
+        })),
       });
     }
 

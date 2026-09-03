@@ -23,7 +23,8 @@
     "./concurrency": "./src/concurrency.ts",
     "./cache-control": "./src/cache-control.ts",
     "./rule-pattern": "./src/rule-pattern.ts",
-    "./bytes": "./src/bytes.ts"
+    "./bytes": "./src/bytes.ts",
+    "./rate-limit": "./src/rate-limit.ts"
   },
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",

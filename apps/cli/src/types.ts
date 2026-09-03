@@ -327,6 +327,12 @@ export interface SitemapUrlStatusData {
   url: string;
   status: number | null;
   error: string | null;
+  /**
+   * The URL answered with rate limiting (429/430, or 503 + `Retry-After`), so
+   * its real status is unverified (#1829). Kept out of the sitemap-4xx finding:
+   * a throttled sitemap entry is not a dead one.
+   */
+  rateLimited?: boolean;
 }
 
 export interface ImageData {
@@ -395,6 +401,17 @@ export interface AuditReport {
   status?: AuditStatus;
   /** Short human reason shown when `status` is failed/blocked. */
   statusReason?: string;
+  /**
+   * Coverage the crawl lost to rate limiting (#1829). Present only when a host
+   * throttled the run. Mirrors the field on the engine's AuditReport; the two
+   * types are structurally different, so it has to be declared in both.
+   */
+  rateLimited?: {
+    /** Pages the crawl could not verify because the host was throttling. */
+    pages: number;
+    /** Host(s) that throttled the crawl. */
+    hosts: string[];
+  };
   siteChecks: CheckResult[];
   pages: PageAudit[];
   summary: {

@@ -27,6 +27,14 @@ export interface CrawlerConfig {
   delayMs: number;
   /** Per-host delay between requests (ms) */
   perHostDelayMs: number;
+  /**
+   * Cap (ms) on how long the crawl will wait out a rate-limiting host (#1829).
+   * Bounds both a single backoff wait and the cumulative wait for one URL/host.
+   * Once a host has been throttled past this without recovering, its remaining
+   * URLs are recorded as rate-limited rather than fetched and the crawl moves
+   * on. Default 300000 (5 minutes).
+   */
+  maxBackoffMs: number;
   /** Request timeout (ms) */
   timeoutMs: number;
   /** User agent string */
@@ -118,6 +126,27 @@ export interface CrawlerConfig {
    * of them being swallowed into a generic network error. Defaults to unset.
    */
   onTlsEvent?: (event: TlsEvent) => void;
+  /**
+   * Called synchronously each time the crawl starts waiting out a rate-limiting
+   * host (#1829), so the CLI can say "rate limited by host, backing off Ns"
+   * while it happens rather than after. The crawler also publishes a
+   * `rate-limited` event on its stream; this hook exists because the fetcher's
+   * backoff point is synchronous and the message is only useful before the
+   * sleep, not after it. Defaults to unset.
+   */
+  onRateLimitEvent?: (event: RateLimitEvent) => void;
+}
+
+/** One backoff wait, as reported to {@link CrawlerConfig.onRateLimitEvent}. */
+export interface RateLimitEvent {
+  host: string;
+  url: string;
+  /** How long the crawl is about to wait before touching this host again. */
+  backoffMs: number;
+  /** Minimum wait the origin asked for, when it sent `Retry-After`. */
+  retryAfterMs?: number;
+  /** Rate-limit responses seen for this URL so far (1-based). */
+  attempt: number;
 }
 
 // Fallback merged in by createCrawler when a caller passes no/partial config.
@@ -134,6 +163,7 @@ export const DEFAULT_CRAWLER_CONFIG: CrawlerConfig = {
   perHostConcurrency: 5,
   delayMs: 0,
   perHostDelayMs: 50,
+  maxBackoffMs: 300_000,
   timeoutMs: 30000,
   userAgent: "", // empty = random browser UA per crawl
   headers: {},
@@ -172,6 +202,7 @@ export type CrawlerEvent =
   | CrawlerProgressEvent
   | CrawlerPausedEvent
   | CrawlerResumedEvent
+  | CrawlerRateLimitedEvent
   | CrawlerCompletedEvent
   | CrawlerErrorEvent;
 
@@ -276,6 +307,32 @@ export interface CrawlerPausedEvent {
 
 export interface CrawlerResumedEvent {
   type: "resumed";
+  timestamp: number;
+}
+
+/**
+ * A host is throttling us and the crawl is waiting it out (#1829).
+ *
+ * Distinct from `paused`, which means the USER paused the crawl. Emitted once
+ * per backoff wait so the CLI progress line and the cloud phase timeline can
+ * say why a crawl went quiet instead of looking wedged. `backoffMs` of 0 with
+ * `exhausted: true` means the host spent its whole budget and its remaining
+ * URLs are being recorded as rate-limited without further requests.
+ */
+export interface CrawlerRateLimitedEvent {
+  type: "rate-limited";
+  /** Host key being backed off from. */
+  host: string;
+  /** URL whose response triggered this backoff. */
+  url: string;
+  /** How long the crawl will wait before the next request to this host. */
+  backoffMs: number;
+  /** Minimum wait the origin asked for, when it sent `Retry-After`. */
+  retryAfterMs?: number;
+  /** Rate-limit responses seen for this URL so far (1-based). */
+  attempt: number;
+  /** The host gave up its backoff budget; remaining URLs are not fetched. */
+  exhausted: boolean;
   timestamp: number;
 }
 
@@ -431,6 +488,13 @@ export interface HostState {
   // Earliest permitted next fetch START (#265): reserved per-slot so requests stagger.
   nextFetchAt: number;
 }
+
+/**
+ * Per-host in-flight ceiling, resolved per acquire rather than fixed at
+ * construction (#1829). A throttled host drops to 1 and climbs back as it earns
+ * recovery, so the limit has to be a question asked each time, not a constant.
+ */
+export type HostConcurrencyLimit = (host: string) => number;
 
 export interface HostScheduler {
   acquire(host: string): Effect.Effect<void, never, never>;

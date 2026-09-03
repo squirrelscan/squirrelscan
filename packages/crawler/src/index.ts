@@ -20,3 +20,6 @@ export { applyBrowserHeaders } from "./fetcher";
 
 // Browser-like cache-store abstraction (local SQLite + cloud parity)
 export * from "./cache-store";
+
+// Crawl-wide per-host rate-limit backoff (#1829)
+export * from "./host-backoff";

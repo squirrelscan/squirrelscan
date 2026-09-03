@@ -1,0 +1,121 @@
+---
+title: "Crawling rate-limited hosts"
+icon: "gauge"
+description: "Audit Shopify storefronts and other throttling hosts without false broken-link reports"
+---
+
+Some hosts answer an eager crawler with a throttle rather than a page. Shopify
+storefronts are the common case: crawl one too quickly and it starts returning
+`429 Too Many Requests`, or Shopify's own `430 Shopify Security Rejection`.
+
+squirrelscan treats a throttled response as *unknown*, never as broken. This
+guide covers what it does on its own and the settings that make a throttling
+host crawl cleanly.
+
+## What squirrelscan does automatically
+
+A rate-limit response is a fact about the **host**, not about one URL, so the
+whole crawl reacts:
+
+- **429, 430 and a `503` carrying `Retry-After`** are classified as rate
+  limiting. A `503` without `Retry-After` is still treated as a server error,
+  because that is what it means.
+- **Every request to that host pauses** for a backoff window. Other hosts keep
+  crawling at full speed, so external link checks are unaffected.
+- **The host drops to one in-flight request** and its politeness delay is
+  multiplied while it recovers.
+- **`Retry-After` is honoured** as the minimum wait, in both its seconds and
+  HTTP-date forms.
+- **Without `Retry-After`**, the first wait is 5 seconds and doubles with jitter
+  on each further refusal, for up to six attempts.
+- **Recovery is earned back gradually.** After a sustained run of clean
+  responses the host climbs back toward the concurrency and delay you configured.
+
+The waiting is bounded by
+[`max_backoff_ms`](/configuration/crawler#max_backoff_ms), which defaults to five
+minutes. Once a host has been throttled past that without recovering, its
+remaining URLs are recorded as rate limited, and the crawl finishes rather than
+grinding on.
+
+## What the report says
+
+Rate-limited URLs are never counted as broken. Instead:
+
+- `links/broken-links`, `links/broken-external-links`, `links/dead-links`,
+  `links/redirects` and `crawl/sitemap-4xx` list them in an informational finding
+  as "status unverifiable".
+- Rate-limited pages are excluded from page-level scoring, the same way
+  bot-challenge pages are, so a throttle never produces a phantom soft 404 or a
+  false "noindex" finding.
+- A crawl that gathered content but lost pages to throttling reports
+  `status: partial`, naming the count and the host. A crawl whose entry URL was
+  only ever rate limited reports `blocked` with a rate-limit reason, not the
+  bot-protection one.
+- The CLI prints how many pages went unverified, and says which host to slow down.
+
+If a report says pages were rate limited, its scores are accurate for the pages
+it *did* fetch. The coverage is what is incomplete.
+
+## Recipe: Shopify storefronts
+
+Shopify has no header-based allowlist for ordinary storefront crawling, so the
+lever is politeness, not identification. Start here:
+
+```toml
+[crawler]
+# One request at a time to each host, half a second apart.
+per_host_concurrency = 1
+per_host_delay_ms = 500
+
+# A stable, honest user agent. A rotating or browser-mimicking UA looks more
+# like abuse, not less.
+user_agent = "squirrelscan/1.0 (+https://squirrelscan.com/bot)"
+
+# Give the storefront time to recover before giving up on it.
+max_backoff_ms = 600000
+```
+
+Then crawl a smaller slice at a time:
+
+```bash
+squirrel audit https://example-store.com --max-pages 40
+```
+
+If you are auditing many storefronts, run them one after another rather than in
+parallel. Several concurrent audits of *different* Shopify stores can still share
+upstream limits.
+
+<Note>
+If you have Shopify crawler access keys, prefer [Web Bot
+Auth](/guides/web-bot-auth) — a signed, authorized crawler is not subject to the
+same anonymous-traffic throttling in the first place.
+</Note>
+
+## Recipe: any throttling host
+
+The same three levers apply anywhere:
+
+1. **Lower `per_host_concurrency` to 1.** More parallelism is the fastest way to
+   trip a rate limiter.
+2. **Raise `per_host_delay_ms`.** Per-host throughput is bounded by the delay
+   between request starts, not by concurrency, so this is the setting that
+   actually slows the crawl down.
+3. **Set `max_backoff_ms` to match how long the host needs.** Longer for a host
+   with a slow recovery window, shorter in CI where a fast partial report beats a
+   long wait.
+
+If the host honours `robots.txt` `Crawl-delay`, you can defer to it instead:
+
+```toml
+[crawler]
+respect_robots = true
+```
+
+`Crawl-delay` then overrides `per_host_delay_ms`, capped at 2 seconds.
+
+## When it is not rate limiting
+
+A `403`, or a `503` carrying a Cloudflare challenge, is bot protection rather
+than throttling, and slowing down will not help. Those report as `blocked` with
+bot-protection wording and are covered by [Web Bot Auth](/guides/web-bot-auth)
+or a WAF allowlist.
