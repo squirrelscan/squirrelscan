@@ -98,6 +98,17 @@ function siteProfileMarkdownValue(value: string, rawUrl?: string): string {
   }
 }
 
+
+/**
+ * Host list for a rate-limit line: names up to two, then counts the rest.
+ * Mirrors the phrasing used in the audit status reason.
+ */
+function formatRateLimitedHosts(hosts: string[]): string {
+  if (hosts.length === 0) return "the host";
+  if (hosts.length <= 2) return hosts.join(" and ");
+  return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
+}
+
 export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOptions): string {
   const lines: string[] = [];
   const version = options?.version ?? "";
@@ -114,6 +125,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push(`**URL:** ${report.baseUrl}  `);
   lines.push(`**Date:** ${formatReportDate(report.timestamp)}  `);
   lines.push(`**Pages:** ${report.totalPages}  `);
+  // #1829: the caveat on the page count above — coverage lost to throttling.
+  if (report.rateLimited && report.rateLimited.pages > 0) {
+    lines.push(
+      `**Rate limited:** ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})  `,
+    );
+  }
   // #1418: the seed redirected off its own site and the crawler refused to
   // follow it, so the URL above is not where the redirect pointed. Escaped:
   // the redirect target is a string the audited site chose. Deliberately a
@@ -166,9 +183,22 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // give the owner actionable next steps instead of a bare reason line.
   if (report.status === "failed" || report.status === "blocked") {
     const blocked = report.status === "blocked";
+    const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     lines.push(`## ${blocked ? "Audit blocked" : "Audit failed"}`);
     lines.push("");
-    if (blocked) {
+    if (blocked && throttled) {
+      // #1829: throttling and a bot wall both land here with nothing audited,
+      // but the fixes are opposite — say which one this was.
+      lines.push(
+        `${formatRateLimitedHosts(report.rateLimited!.hosts)} rate limited the crawler (429/430) before any pages could be read, so nothing was audited.`,
+      );
+      lines.push("");
+      lines.push("To get a full audit:");
+      lines.push("");
+      lines.push("- Set `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in `squirrel.toml`.");
+      lines.push("- Raise `[crawler] max_backoff_ms` so the crawl waits longer for the host to recover.");
+      lines.push("- Retry when the host is less busy.");
+    } else if (blocked) {
       lines.push(
         "Your site refused the crawler before any pages could be read (a 403 or 429 from bot protection, a firewall, an auth wall, or rate limiting). This is a block on your side, not a squirrelscan outage.",
       );
@@ -186,6 +216,11 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     }
     lines.push("");
   } else if (report.healthScore) {
+    // #1829: a partial run keeps its grade; flag the coverage gap above it.
+    if (report.status === "partial" && report.statusReason) {
+      lines.push(`> **Partial audit:** ${report.statusReason}`);
+      lines.push("");
+    }
     lines.push("## Health Score");
     lines.push("");
     lines.push("| Category | Score |");

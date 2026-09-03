@@ -106,7 +106,7 @@ export const credits = defineCommand({
           `  audit                ${String(auditBase).padStart(3)} base + ${priced.render?.cost ?? 2} per rendered page`
         );
         console.log(
-          "                           (analysis, tech detection, domain stats, publishing included)"
+          "                           (analysis, tech detection, publishing included)"
         );
       }
       const entries = Object.entries(pricing)

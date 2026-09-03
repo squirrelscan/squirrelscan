@@ -26,6 +26,14 @@ export interface RedirectChain {
   chainLength: number;
   isLoop: boolean;
   endsInError: boolean;
+  /**
+   * The chain ended on a rate-limit response (429/430, or 503 + `Retry-After`),
+   * so the destination's real status is unknown (#1829). Mutually exclusive
+   * with `endsInError`: a throttled endpoint is unverified, not broken, and
+   * `links/redirects` reports it as info rather than a failing chain. Optional
+   * so chains persisted before #1829 read back unchanged.
+   */
+  endsRateLimited?: boolean;
   httpsToHttp: boolean;
   httpToHttps: boolean;
 }
@@ -153,6 +161,19 @@ export interface CrawlStats {
    * backward compatibility with older persisted stats blobs.
    */
   pagesBlocked?: number;
+  /**
+   * Fetches abandoned because the host was rate limiting (429/430, or a 503
+   * carrying `Retry-After`) — a subset of `pagesFailed`, disjoint from
+   * `pagesBlocked` (#1829).
+   *
+   * Kept separate because the two mean opposite things to a site owner:
+   * `pagesBlocked` says a bot wall refused the crawler and the audit cannot be
+   * trusted, while this says the numbers gathered are fine and some pages are
+   * simply missing. Folding 429 into `pagesBlocked` (as it was until #1829)
+   * reported ordinary Shopify throttling as bot protection. Optional for
+   * backward compatibility with older persisted stats blobs.
+   */
+  pagesRateLimited?: number;
   pagesSkipped: number;
   pagesUnchanged: number;
   /**
@@ -227,6 +248,11 @@ export interface CrawlerConfigSnapshot {
   perHostConcurrency: number;
   delayMs: number;
   perHostDelayMs: number;
+  /**
+   * Rate-limit backoff ceiling in force for this crawl (#1829). Optional so
+   * crawl rows recorded before the setting existed still read back.
+   */
+  maxBackoffMs?: number;
   timeoutMs: number;
   userAgent: string;
   followRedirects: boolean;
@@ -363,6 +389,13 @@ export interface LinkRecord {
   checkedAt?: number;
   wafBlocked?: boolean;
   wafProvider?: string;
+  /**
+   * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
+   * so its real status is unknown (#1829). Persisted rather than re-derived
+   * from `status` because the 503 case cannot be recognised from the code
+   * alone, and the rules only ever see the stored row.
+   */
+  rateLimited?: boolean;
 }
 
 export interface LinkAppearanceRecord {
@@ -437,6 +470,12 @@ export interface SitemapUrlStatusRecord {
   url: string;
   status: number | null;
   error: string | null;
+  /**
+   * The URL answered with rate limiting (429/430, or 503 + `Retry-After`), so
+   * its real status is unverified (#1829). Kept out of the sitemap-4xx finding:
+   * a throttled sitemap entry is not a dead one.
+   */
+  rateLimited?: boolean;
 }
 
 /**

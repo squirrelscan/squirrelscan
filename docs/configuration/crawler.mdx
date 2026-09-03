@@ -16,6 +16,7 @@ timeout_ms = 30000
 concurrency = 5
 per_host_concurrency = 5
 per_host_delay_ms = 50
+max_backoff_ms = 300000
 include = []
 exclude = []
 allow_query_params = []
@@ -191,6 +192,53 @@ With `per_host_concurrency = 5` and `per_host_delay_ms = 50`:
 - At most 5 concurrent requests to same host
 - New requests to the host start at least 50ms apart
 - Other hosts can be fetched simultaneously
+
+---
+
+### `max_backoff_ms`
+
+**Type:** `number` (positive integer)
+**Default:** `300000` (5 minutes)
+
+How long the crawl will wait out a host that is rate limiting it. The value caps
+both a single backoff wait and the total waiting spent on one URL or host.
+
+When a host answers `429 Too Many Requests` (or Shopify's `430`, or a `503` that
+carries a `Retry-After` header), squirrelscan does not simply fail the page:
+
+- **Every request to that host pauses** for the backoff window, not just the one
+  that was refused. Requests to other hosts are unaffected.
+- The host drops to **one in-flight request**, and its `per_host_delay_ms` is
+  multiplied while it recovers.
+- `Retry-After` is honoured as the minimum wait, in both its seconds and
+  HTTP-date forms, clamped to `max_backoff_ms`.
+- Without `Retry-After` the first wait is 5 seconds, doubling with jitter on each
+  further refusal, for up to six attempts.
+- After a sustained run of successful responses the host earns its configured
+  concurrency and delay back in steps.
+
+Once a host has been throttled for longer than `max_backoff_ms` without
+recovering, its remaining URLs are recorded as **rate limited** rather than
+fetched, and the crawl finishes with the other hosts. Rate-limited URLs are never
+reported as broken links or 4xx pages: their status is unknown, so they are
+listed in an informational finding and excluded from scoring.
+
+**Examples:**
+
+Give a slow host longer to recover:
+```toml
+[crawler]
+max_backoff_ms = 600000  # 10 minutes
+```
+
+Fail fast in CI, where a long wait is worse than a short report:
+```toml
+[crawler]
+max_backoff_ms = 30000  # 30 seconds
+```
+
+See [Crawling rate-limited hosts](/guides/rate-limited-hosts) for the full
+recipe, including Shopify storefronts.
 
 ---
 

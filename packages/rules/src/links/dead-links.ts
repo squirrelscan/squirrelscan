@@ -6,6 +6,8 @@
 // cache). The check itself is a summary — per-link findings are reported by
 // links/broken-external-links; this rule never re-scores them (info only).
 
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const deadLinksRule: Rule = {
@@ -51,21 +53,30 @@ export const deadLinksRule: Rule = {
     }
 
     const checked = externalLinks.filter((l) => l.status !== null || l.error !== null);
-    // Mirror links/broken-external-links: WAF-blocked 403s are not broken.
+    // Mirror links/broken-external-links: WAF-blocked 403s and rate-limited
+    // targets are not broken (#1829).
+    const rateLimited = checked.filter(
+      (l) => l.rateLimited === true || isRateLimitStatus(l.status),
+    );
+    const rateLimitedSet = new Set(rateLimited.map((l) => l.href));
     const broken = checked.filter((l) => {
       if (l.error) return true;
       if (l.status === 403 && l.wafBlocked) return false;
+      if (rateLimitedSet.has(l.href)) return false;
       if (l.status && l.status >= 400) return true;
       return false;
     });
+
+    const rateLimitedNote =
+      rateLimited.length === 0 ? "" : `; ${rateLimited.length} rate-limited (status unverifiable)`;
 
     checks.push({
       name: "dead-links",
       status: "info",
       message:
         broken.length === 0
-          ? `Checked ${checked.length} external link(s); none are dead`
-          : `Checked ${checked.length} external link(s); ${broken.length} dead`,
+          ? `Checked ${checked.length} external link(s); none are dead${rateLimitedNote}`
+          : `Checked ${checked.length} external link(s); ${broken.length} dead${rateLimitedNote}`,
       value: broken.length,
       expected: 0,
     });

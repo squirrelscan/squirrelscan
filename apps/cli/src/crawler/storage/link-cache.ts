@@ -18,6 +18,9 @@ export interface LinkCacheEntry {
   wafBlocked?: boolean;
   /** Detected WAF provider if wafBlocked is true */
   wafProvider?: string;
+  // No `rateLimited` here on purpose (#1829): a throttled check is a fact about
+  // the moment, not the link, and this cache has a 7-day default TTL. Those
+  // results are simply not cached, so there is nothing to store.
 }
 
 const SCHEMA = `
