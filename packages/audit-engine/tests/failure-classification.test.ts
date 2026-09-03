@@ -168,17 +168,34 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
     expect(result.reasonCode).toBe("http_4xx");
   });
 
-  test("a rate-limited root still classifies as blocked", () => {
+  test("a rate-limited root keeps its #1829 status AND its #1829 sentence", () => {
+    // #1829 gives throttling its own signal and its own reason: the remedy is
+    // to slow down, not to allowlist a crawler. #1822 adds only the code.
     const result = deriveAuditStatus({
       pagesCrawled: 0,
       contentPages: 0,
       blockedPages: 0,
-      blockedErrors: 1,
-      rootFailure: crawlErrorToFailureDetail(CrawlError.rateLimit("https://example.com/", 30)),
+      blockedErrors: 0,
+      rateLimitedErrors: 1,
+      rateLimitedHosts: ["example.com"],
+      rootFailure: crawlErrorToFailureDetail(CrawlError.rateLimit("https://example.com/", 30_000)),
     });
     expect(result.status).toBe("blocked");
-    expect(result.reason).toContain("blocked the crawler");
+    expect(result.reason).toContain("Rate limited by example.com");
+    // NOT the bot-wall sentence: those point at opposite fixes.
+    expect(result.reason).not.toContain("blocked the crawler");
     expect(result.reasonCode).toBe("http_4xx");
+  });
+
+  test("a throttle dressed as a 503 is still reported as a 429-shaped refusal", () => {
+    // #1829 accepts a 503 carrying Retry-After as rate limiting. The class must
+    // not follow that status into http_5xx, which would send the owner to their
+    // application logs for a throttle.
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.rateLimit("https://example.com/", 30_000, 503),
+    );
+    expect(detail.code).toBe("http_4xx");
+    expect(detail.status).toBe(429);
   });
 
   test("stored 401/403 pages with no content still classify as blocked", () => {
