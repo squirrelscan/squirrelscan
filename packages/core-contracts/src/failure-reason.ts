@@ -40,13 +40,20 @@ export function isAuditFailureReasonCode(value: unknown): value is AuditFailureR
   );
 }
 
-/** Which fetch the failure came from. `entry` is the audited URL itself. */
-export type AuditFailureSource = "entry" | "robots" | "sitemap";
+/**
+ * Which URL the failure came from. `entry` is the audited URL itself and always
+ * outranks `sitemap` when both are known: the seed is what the user asked for.
+ *
+ * Only these two are produced today. A robots.txt or llms.txt probe failure has
+ * no source of its own because it never ends a crawl on its own; add one here
+ * alongside the code that records it, not ahead of it.
+ */
+export type AuditFailureSource = "entry" | "sitemap";
 
 /**
  * Structured detail about the fetch failure that ended a crawl with no
- * auditable content. Recorded by the crawler on {@link CrawlStats}, read by
- * `deriveAuditStatus` to build the report's `statusReason` +
+ * auditable content. Recorded by the crawler on `CrawlStats.rootFailure`, read
+ * by `deriveAuditStatus` to build the report's `statusReason` +
  * `statusReasonCode`. Every field past `code` is optional so an older
  * persisted stats blob (or a fetcher that told us nothing) still classifies.
  */
