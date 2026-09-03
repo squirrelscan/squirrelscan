@@ -553,7 +553,11 @@ export function reconstructReport(
           crawl.baseUrl,
           crawl.stats?.pagesRateLimited ?? 0
         ),
-      }
+      },
+      // #1822: the CLI forks the engine's report path, so the crawler's root
+      // failure has to be threaded here too or `squirrel audit` keeps printing
+      // the generic reason the cloud no longer prints.
+      crawl.stats?.rootFailure
     );
 
     // Smart re-audits reflect carried prior state, so keep "completed" when
@@ -569,7 +573,11 @@ export function reconstructReport(
       smartMerge &&
       smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages &&
       rateLimitedCount === 0
-        ? { status: "completed" as const, reason: undefined }
+        ? {
+            status: "completed" as const,
+            reason: undefined,
+            reasonCode: undefined,
+          }
         : runStatus;
 
     // No real audit ⇒ null score (N/A), not 0. Parity with the cloud/live
@@ -606,7 +614,11 @@ export function reconstructReport(
       sitemapUrlStatuses: sitemapUrlStatusEntries,
       // Only stamp when not a normal completed run; absent ⇒ completed (#489).
       ...(auditStatus.status !== "completed"
-        ? { status: auditStatus.status, statusReason: auditStatus.reason }
+        ? {
+            status: auditStatus.status,
+            statusReason: auditStatus.reason,
+            statusReasonCode: auditStatus.reasonCode,
+          }
         : {}),
       // #1829: coverage lost to throttling, in a form renderers can count
       // rather than parse out of the reason prose.

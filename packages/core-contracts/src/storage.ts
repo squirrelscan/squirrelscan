@@ -3,6 +3,8 @@
 
 import type { Effect } from "effect";
 
+import type { AuditFailureDetail } from "./failure-reason";
+
 // ============================================
 // SHARED DOMAIN TYPES (used by storage + report)
 // ============================================
@@ -174,6 +176,19 @@ export interface CrawlStats {
    * backward compatibility with older persisted stats blobs.
    */
   pagesRateLimited?: number;
+  /**
+   * Why the crawl's ENTRY url could not be audited, when it could not (#1822).
+   * The crawler records the first failure it sees, preferring the seed over a
+   * sitemap/discovered URL, across all three shapes a root failure takes: a
+   * failed fetch (DNS/TLS/connection/timeout/5xx), a stored 4xx page, and a
+   * refusal before any request (robots disallow, off-site redirect).
+   *
+   * Read ONLY by the zero-content branches of `deriveAuditStatus`, so a healthy
+   * site whose seed happened to 404 still scores normally. Optional for
+   * backward compatibility with stats blobs persisted before #1822; absent
+   * falls back to the generic "No pages were crawled" reason.
+   */
+  rootFailure?: AuditFailureDetail;
   pagesSkipped: number;
   pagesUnchanged: number;
   /**

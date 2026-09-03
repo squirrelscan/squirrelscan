@@ -1,0 +1,67 @@
+---
+title: "Failed audits"
+icon: "triangle-alert"
+description: "Why an audit fetched nothing, and what to do about each cause"
+---
+
+An audit fails when the crawl finishes without a single auditable page. There is no score and no issue list, because nothing was read.
+
+Every failed audit names the cause. The reason appears in the report, in the failure email, in `squirrel audit` output, and on the `get_audit_status` MCP tool as a short sentence plus a machine-readable code.
+
+<Note>Failed audits are refunded automatically. A run that fetched nothing does not cost you credits.</Note>
+
+## Blocked is not failed
+
+If your site actively refused the crawler with a 403 or 429, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: allowlist the squirrelscan crawler in your WAF or bot protection, turn off bot fight mode for the audit, or run the CLI from a trusted network.
+
+## The failure reasons
+
+| Code | What it means | What to do |
+|---|---|---|
+| `dns` | The hostname did not resolve. | Check the domain's DNS records and that the name resolves from the public internet. If you moved hosts recently, wait for the change to propagate. |
+| `tls` | The TLS handshake failed: an expired certificate, a hostname mismatch, a self-signed certificate, or an incomplete chain. | Renew or repair the certificate so it is valid for this hostname and served with the full chain. |
+| `connection` | Nothing answered. The connection was refused, reset, or closed before any response arrived. | Check that the origin server is running and accepting connections from the public internet, and that no firewall is dropping the requests. |
+| `timeout` | The origin accepted the connection but sent no response in time. | Check server load, slow database queries, or a firewall holding connections open. |
+| `http_4xx` | The server refused every request with a 4xx status. | Allowlist the squirrelscan crawler, or check that the URL is publicly reachable without a login. A 403 or 429 is reported as blocked instead. |
+| `http_5xx` | The server returned an error of its own for every request. | Check your error logs, then re-run the audit once the site is serving normally. |
+| `redirect` | The audited URL redirected somewhere the crawl could not follow, usually off its own site. | Audit the URL the site actually serves, or fix the redirect so it stays on the same site. |
+| `robots` | `robots.txt` disallows the crawler on this URL. | Allow the squirrelscan crawler in `robots.txt`, or point the audit at a path it permits. |
+| `unknown` | The cause could not be attributed. The reason still carries whatever the fetch reported. | Check that the site is reachable and try again. If it keeps failing, send us the report link. |
+
+## Reading the reason
+
+In the CLI, a failed audit prints the reason and the next step:
+
+```text
+AUDIT FAILED
+https://example.com - DNS lookup failed for example.com (NXDOMAIN)
+Check the domain's DNS records and that the hostname resolves from the public internet.
+```
+
+The JSON report carries both the sentence and the code, so a CI job can branch on the cause:
+
+```json
+{
+  "status": "failed",
+  "statusReason": "DNS lookup failed for example.com (NXDOMAIN)",
+  "statusReasonCode": "dns"
+}
+```
+
+The `llm` output states the same thing for an agent:
+
+```xml
+<status state="failed" reason="DNS lookup failed for example.com (NXDOMAIN)">
+  The hostname did not resolve. Check the domain's DNS records, and whether the domain has expired or was recently moved.
+</status>
+```
+
+## Checking it yourself
+
+A failed cloud audit is worth reproducing locally before you change anything: the CLI runs from your network, so a result that differs points at how your origin treats our egress rather than at the site being down.
+
+```bash
+squirrel audit https://example.com --max-pages 1
+```
+
+If the local run succeeds and the cloud run fails with `connection` or `http_4xx`, your origin or its CDN is treating our requests differently from yours.

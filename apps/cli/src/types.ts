@@ -181,6 +181,7 @@ export interface ResponseHeaders {
 
 // Re-export from core-contracts (canonical source)
 import type {
+  AuditFailureReasonCode as _AFRC,
   AuditStatus as _AS,
   CacheStats as _CST,
   CategoryScore as _CS,
@@ -193,6 +194,7 @@ import type {
   SiteMetadata as _SM,
 } from "@squirrelscan/core-contracts";
 export type AuditStatus = _AS;
+export type AuditFailureReasonCode = _AFRC;
 export type CategoryScore = _CS;
 export type GroupScore = _GS;
 export type HealthScore = _HS;
@@ -412,6 +414,8 @@ export interface AuditReport {
     /** Host(s) that throttled the crawl. */
     hosts: string[];
   };
+  /** Machine-readable class behind `statusReason` (#1822). */
+  statusReasonCode?: AuditFailureReasonCode;
   siteChecks: CheckResult[];
   pages: PageAudit[];
   summary: {

@@ -588,13 +588,22 @@ export function buildV1Report(
     if (rateLimitedCount > 0) {
       result.rateLimited = { pages: rateLimitedCount, hosts: rateLimitedHosts };
     }
-    const runStatus = deriveAuditStatusFromPages(pages, crawl?.stats?.pagesBlocked ?? 0, {
-      errors: crawl?.stats?.pagesRateLimited ?? 0,
-      hosts: rateLimitedHosts,
-    });
+    const runStatus = deriveAuditStatusFromPages(
+      pages,
+      crawl?.stats?.pagesBlocked ?? 0,
+      {
+        errors: crawl?.stats?.pagesRateLimited ?? 0,
+        hosts: rateLimitedHosts,
+      },
+      // #1822: the crawler's record of WHY the entry URL failed, so a zero-page
+      // cloud audit names DNS/TLS/connection/timeout/4xx/5xx/redirect/robots
+      // instead of "No pages were crawled".
+      crawl?.stats?.rootFailure,
+    );
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
       result.statusReason = runStatus.reason;
+      result.statusReasonCode = runStatus.reasonCode;
       // No real audit ⇒ no score (N/A), not 0/A. Renderers show the failed/
       // blocked banner and the API persists health_score = NULL (#586).
       // `partial` is deliberately excluded (#1829): a crawl that audited most
@@ -865,10 +874,14 @@ export function buildV2Report(
       rateLimitedErrors: crawl?.stats?.pagesRateLimited ?? 0,
       rateLimitedPages,
       rateLimitedHosts,
+      // #1822: same signal as v1 above. The streamed path has no pages[] to
+      // fall back on, so the crawl stats are its only source for the class.
+      rootFailure: crawl?.stats?.rootFailure,
     });
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
       result.statusReason = runStatus.reason;
+      result.statusReasonCode = runStatus.reasonCode;
       if (isScorelessStatus(runStatus.status) && result.healthScore) {
         result.healthScore.overall = null;
       }

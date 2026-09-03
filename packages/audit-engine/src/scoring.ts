@@ -6,6 +6,8 @@
 // tsconfig (e.g. the API Worker). types.ts is the leaf type module. (#195)
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 import type {
+  AuditFailureDetail,
+  AuditFailureReasonCode,
   AuditStatus,
   CheckResult,
   HealthScore,
@@ -13,6 +15,10 @@ import type {
   GroupScore,
   RuleGroup,
 } from "@squirrelscan/core-contracts";
+import {
+  auditFailureDetail,
+  auditFailureReasonText,
+} from "@squirrelscan/core-contracts/failure-reason";
 import { getScoreGrade, getScoreColor } from "@squirrelscan/core-contracts/scoring";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
@@ -609,6 +615,15 @@ export interface AuditStatusSignals {
   rateLimitedPages?: number;
   /** Host(s) that throttled the crawl, for the reason text. */
   rateLimitedHosts?: readonly string[];
+  /**
+   * Why the entry URL could not be audited, recorded by the crawler on
+   * `CrawlStats.rootFailure` (#1822). Read ONLY in the no-content branches that
+   * are neither blocked nor rate limited, so it can never change the status of
+   * a run that produced content, and never displaces the #792 or #1829 reason.
+   * Absent ⇒ the pre-#1822 generic reasons, which is what every stats blob
+   * written before it has.
+   */
+  rootFailure?: AuditFailureDetail;
 }
 
 /**
@@ -620,6 +635,7 @@ export interface AuditStatusSignals {
 export function deriveAuditStatus(s: AuditStatusSignals): {
   status: AuditStatus;
   reason?: string;
+  reasonCode?: AuditFailureReasonCode;
 } {
   const BLOCKED_REASON =
     "Site blocked the crawler (bot protection / auth / rate limit)";
@@ -630,30 +646,58 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   const rateLimited = (s.rateLimitedErrors ?? 0) + (s.rateLimitedPages ?? 0);
   const hostText = formatRateLimitedHosts(s.rateLimitedHosts);
 
-  if (s.pagesCrawled === 0) {
-    // #1829: rate limiting gets its OWN blocked reason. It reads as "blocked"
-    // because nothing was auditable, but the remedy is to slow the crawl down,
-    // not to allowlist the crawler through a WAF.
-    if (rateLimited > 0 && blocked === 0) {
-      return {
-        status: "blocked",
-        reason: `Rate limited by ${hostText}; no pages could be fetched`,
-      };
+  // #1829: rate limiting gets its OWN blocked reason. It reads as "blocked"
+  // because nothing was auditable, but the remedy is to slow the crawl down,
+  // not to allowlist the crawler through a WAF. #1822 adds only the code: a 429
+  // is a 4xx refusal like the others, even though its fix differs.
+  const rateLimitedResult = (): {
+    status: AuditStatus;
+    reason: string;
+    reasonCode: "http_4xx";
+  } => ({
+    status: "blocked",
+    reason: `Rate limited by ${hostText}; no pages could be fetched`,
+    reasonCode: "http_4xx",
+  });
+
+  // #1822: a block keeps its #792 status AND its #792 sentence — the copy is
+  // load-bearing for the Sentry classifier and for the renderers' blocked
+  // branch. Only the machine-readable code is added, plus the crawler's own
+  // detail (which carries the status and the WAF provider when it detected one)
+  // appended to the end of the same sentence.
+  const blockedResult = (): { status: AuditStatus; reason: string; reasonCode: "http_4xx" } => {
+    const detail = s.rootFailure?.code === "http_4xx" ? s.rootFailure.detail : undefined;
+    return {
+      status: "blocked",
+      reason: detail ? `${BLOCKED_REASON}: ${detail}` : BLOCKED_REASON,
+      reasonCode: "http_4xx",
+    };
+  };
+
+  // The generic fallbacks are kept verbatim for a crawl that recorded nothing
+  // (an older stats blob, or a failure shape the crawler cannot attribute), and
+  // classified `unknown` — which the renderers still print as a failure.
+  const failedResult = (fallback: string) => {
+    const failure = s.rootFailure;
+    if (!failure) {
+      return { status: "failed" as const, reason: fallback, reasonCode: "unknown" as const };
     }
-    return blocked > 0
-      ? { status: "blocked", reason: BLOCKED_REASON }
-      : { status: "failed", reason: "No pages were crawled" };
+    return {
+      status: "failed" as const,
+      reason: auditFailureReasonText(failure),
+      reasonCode: failure.code,
+    };
+  };
+
+  if (s.pagesCrawled === 0) {
+    if (rateLimited > 0 && blocked === 0) return rateLimitedResult();
+    return blocked > 0 ? blockedResult() : failedResult("No pages were crawled");
   }
   if (s.contentPages === 0) {
-    if (rateLimited > 0 && blocked === 0) {
-      return {
-        status: "blocked",
-        reason: `Rate limited by ${hostText}; no pages could be fetched`,
-      };
-    }
+    if (rateLimited > 0 && blocked === 0) return rateLimitedResult();
     return blocked > 0
-      ? { status: "blocked", reason: BLOCKED_REASON }
-      : { status: "failed", reason: "Site unreachable, no pages could be fetched" };
+      ? blockedResult()
+      : failedResult("Site unreachable, no pages could be fetched");
   }
   // Content WAS gathered, but rate limiting shrank the audited set. The numbers
   // present are trustworthy; the coverage is not, and a multi-site operator has
@@ -691,10 +735,12 @@ export function deriveAuditStatusFromPages(
   rateLimit: {
     errors?: number;
     hosts?: readonly string[];
-  } = {}
+  } = {},
+  rootFailure?: AuditFailureDetail
 ): {
   status: AuditStatus;
   reason?: string;
+  reasonCode?: AuditFailureReasonCode;
 } {
   // #1829: a stored 429/430 page is rate limiting, not a bot wall. Counted into
   // its own bucket so the reason text sends the reader to the right fix.
@@ -707,6 +753,37 @@ export function deriveAuditStatusFromPages(
     rateLimitedErrors: rateLimit.errors ?? 0,
     rateLimitedPages,
     rateLimitedHosts: rateLimit.hosts,
+    // #1822: the crawl stats are the source of truth. When they carry nothing —
+    // a report reconstructed from pages alone, or a pre-#1822 crawl — fall back
+    // to the stored statuses, which still name the class for an all-4xx site.
+    rootFailure: rootFailure ?? rootFailureFromPages(pages),
+  });
+}
+
+/**
+ * Last-resort root failure built from stored page statuses (#1822), for reports
+ * whose crawl stats predate `rootFailure`. Only meaningful when NO page
+ * returned content, which is the only situation `deriveAuditStatus` consults
+ * it in; the dominant non-2xx status names the class.
+ */
+function rootFailureFromPages(
+  pages: readonly { status: number }[]
+): AuditFailureDetail | undefined {
+  const errors = pages.filter((p) => p.status >= 400);
+  if (errors.length === 0 || errors.length !== pages.length) return undefined;
+  const counts = new Map<number, number>();
+  for (const page of errors) counts.set(page.status, (counts.get(page.status) ?? 0) + 1);
+  let dominant = errors[0]!.status;
+  let best = 0;
+  for (const [status, count] of counts) {
+    if (count > best) {
+      best = count;
+      dominant = status;
+    }
+  }
+  return auditFailureDetail({
+    code: dominant >= 500 ? "http_5xx" : "http_4xx",
+    status: dominant,
   });
 }
 

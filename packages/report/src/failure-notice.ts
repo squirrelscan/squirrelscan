@@ -5,7 +5,12 @@
 // squirrelscan outage. Plain strings only (no JSX) so it renders in any
 // consumer; pure so it can be unit-tested without rendering a page.
 
-import type { AuditStatus } from "@squirrelscan/core-contracts";
+import type { AuditFailureReasonCode, AuditStatus } from "@squirrelscan/core-contracts";
+import {
+  AUDIT_FAILURE_CAUSE,
+  AUDIT_FAILURE_NEXT_STEP,
+  classifyAuditFailureReasonText,
+} from "@squirrelscan/core-contracts/failure-reason";
 
 export interface AuditFailureNotice {
   /** Which failure shape — drives the destructive-vs-muted framing. */
@@ -27,6 +32,12 @@ export interface AuditFailureNotice {
  * Build the failure notice for a report status, or `null` for a normal
  * (completed/partial) audit that needs no notice. `target` is the site the
  * local-run hint should reference (a bare domain or URL).
+ *
+ * `reasonCode` (#1822) swaps the failed-tone copy for the class the crawler
+ * actually hit, so a dead DNS record and an expired certificate no longer read
+ * the same. Omitted, or `unknown`, keeps the pre-#1822 wording verbatim: that
+ * is the copy every stored report and every unattributable failure ships with,
+ * and the HTML report's visible copy is pinned to it (#935).
  */
 export function getAuditFailureNotice(
   status: AuditStatus | null | undefined,
@@ -38,6 +49,7 @@ export function getAuditFailureNotice(
    * slowing down does nothing about a WAF — so the notice has to say which.
    */
   rateLimited?: { pages: number; hosts: string[] },
+  reasonCode?: AuditFailureReasonCode,
 ): AuditFailureNotice | null {
   if (status !== "blocked" && status !== "failed") return null;
 
@@ -79,6 +91,17 @@ export function getAuditFailureNotice(
     };
   }
 
+  if (reasonCode && reasonCode !== "unknown") {
+    return {
+      tone: "failed",
+      heading: "We couldn't audit your site",
+      body: [AUDIT_FAILURE_CAUSE[reasonCode], AUDIT_FAILURE_NEXT_STEP[reasonCode]],
+      steps: [],
+      cliIntro: "Or run it locally:",
+      cliCommand,
+    };
+  }
+
   return {
     tone: "failed",
     heading: "We couldn't audit your site",
@@ -90,4 +113,18 @@ export function getAuditFailureNotice(
     cliIntro: "Or run it locally:",
     cliCommand,
   };
+}
+
+/**
+ * The failure class to render a report with (#1822): the stored
+ * `statusReasonCode` when the report has one, otherwise recovered from the
+ * reason text so reports published before #1822 still get class-specific copy.
+ * Never returns undefined: an unattributable failure is `unknown`, which is
+ * still a failure and never an absence of one.
+ */
+export function reportFailureReasonCode(report: {
+  statusReason?: string;
+  statusReasonCode?: AuditFailureReasonCode;
+}): AuditFailureReasonCode {
+  return report.statusReasonCode ?? classifyAuditFailureReasonText(report.statusReason);
 }
