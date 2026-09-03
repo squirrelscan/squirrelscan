@@ -69,6 +69,7 @@
               "reports",
               "guides/badges",
               "guides/browser-rendering",
+              "guides/rate-limited-hosts",
               "guides/web-bot-auth"
             ]
           }

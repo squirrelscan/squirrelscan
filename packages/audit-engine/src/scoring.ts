@@ -14,6 +14,7 @@ import type {
   RuleGroup,
 } from "@squirrelscan/core-contracts";
 import { getScoreGrade, getScoreColor } from "@squirrelscan/core-contracts/scoring";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import {
   SCORING_CURVE_EXPONENT,
@@ -586,13 +587,28 @@ export interface AuditStatusSignals {
    */
   blockedPages: number;
   /**
-   * Blocked/rate-limited fetches (403/429) that failed BEFORE any page record
-   * was stored — the most common block shape is the ROOT page getting walled,
-   * which fails the fetch so no 403 page exists and `pagesCrawled` is 0. Sourced
-   * from crawl stats (`pagesBlocked`, #792). Optional/backward-compatible: absent
-   * ⇒ treated as 0, preserving the pre-#792 pages-only behavior.
+   * Blocked fetches (403) that failed BEFORE any page record was stored — the
+   * most common block shape is the ROOT page getting walled, which fails the
+   * fetch so no 403 page exists and `pagesCrawled` is 0. Sourced from crawl
+   * stats (`pagesBlocked`, #792). Optional/backward-compatible: absent ⇒
+   * treated as 0, preserving the pre-#792 pages-only behavior.
    */
   blockedErrors?: number;
+  /**
+   * Fetches abandoned because the host was rate limiting (crawl stats
+   * `pagesRateLimited`, #1829). Counted toward "the site refused us" for the
+   * purpose of choosing `blocked` over `failed`, but reported with its own
+   * reason: telling a Shopify operator their store has bot protection when it
+   * was throttling sends them to the wrong fix.
+   */
+  rateLimitedErrors?: number;
+  /**
+   * Pages a completed crawl could not verify because of rate limiting. Non-zero
+   * with content present ⇒ `partial`, not `completed` (#1829).
+   */
+  rateLimitedPages?: number;
+  /** Host(s) that throttled the crawl, for the reason text. */
+  rateLimitedHosts?: readonly string[];
 }
 
 /**
@@ -607,21 +623,55 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
 } {
   const BLOCKED_REASON =
     "Site blocked the crawler (bot protection / auth / rate limit)";
-  // A refusal shows up either as a stored 401/403/429 page OR as a 403/429 fetch
-  // that failed before any page was stored (walled root, #792). Either means the
+  // A refusal shows up either as a stored 401/403 page OR as a 403 fetch that
+  // failed before any page was stored (walled root, #792). Either means the
   // site actively blocked us, not that it was unreachable.
   const blocked = s.blockedPages + (s.blockedErrors ?? 0);
+  const rateLimited = (s.rateLimitedErrors ?? 0) + (s.rateLimitedPages ?? 0);
+  const hostText = formatRateLimitedHosts(s.rateLimitedHosts);
+
   if (s.pagesCrawled === 0) {
+    // #1829: rate limiting gets its OWN blocked reason. It reads as "blocked"
+    // because nothing was auditable, but the remedy is to slow the crawl down,
+    // not to allowlist the crawler through a WAF.
+    if (rateLimited > 0 && blocked === 0) {
+      return {
+        status: "blocked",
+        reason: `Rate limited by ${hostText}; no pages could be fetched`,
+      };
+    }
     return blocked > 0
       ? { status: "blocked", reason: BLOCKED_REASON }
       : { status: "failed", reason: "No pages were crawled" };
   }
   if (s.contentPages === 0) {
+    if (rateLimited > 0 && blocked === 0) {
+      return {
+        status: "blocked",
+        reason: `Rate limited by ${hostText}; no pages could be fetched`,
+      };
+    }
     return blocked > 0
       ? { status: "blocked", reason: BLOCKED_REASON }
       : { status: "failed", reason: "Site unreachable, no pages could be fetched" };
   }
+  // Content WAS gathered, but rate limiting shrank the audited set. The numbers
+  // present are trustworthy; the coverage is not, and a multi-site operator has
+  // to be able to tell those apart (#1829).
+  if (rateLimited > 0) {
+    return {
+      status: "partial",
+      reason: `${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}`,
+    };
+  }
   return { status: "completed" };
+}
+
+/** Host list for a rate-limit reason: names up to two, then counts the rest. */
+function formatRateLimitedHosts(hosts: readonly string[] | undefined): string {
+  if (!hosts || hosts.length === 0) return "the host";
+  if (hosts.length <= 2) return hosts.join(" and ");
+  return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
 }
 
 /**
@@ -637,18 +687,26 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
  */
 export function deriveAuditStatusFromPages(
   pages: readonly { status: number }[],
-  blockedErrors = 0
+  blockedErrors = 0,
+  rateLimit: {
+    errors?: number;
+    hosts?: readonly string[];
+  } = {}
 ): {
   status: AuditStatus;
   reason?: string;
 } {
+  // #1829: a stored 429/430 page is rate limiting, not a bot wall. Counted into
+  // its own bucket so the reason text sends the reader to the right fix.
+  const rateLimitedPages = pages.filter((p) => isRateLimitStatus(p.status)).length;
   return deriveAuditStatus({
     pagesCrawled: pages.length,
     contentPages: pages.filter((p) => p.status >= 200 && p.status < 300).length,
-    blockedPages: pages.filter(
-      (p) => p.status === 401 || p.status === 403 || p.status === 429
-    ).length,
+    blockedPages: pages.filter((p) => p.status === 401 || p.status === 403).length,
     blockedErrors,
+    rateLimitedErrors: rateLimit.errors ?? 0,
+    rateLimitedPages,
+    rateLimitedHosts: rateLimit.hosts,
   });
 }
 

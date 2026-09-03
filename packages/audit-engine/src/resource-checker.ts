@@ -15,6 +15,7 @@ import { isCacheHitReason } from "@squirrelscan/core-contracts";
 import { calculateFreshness } from "@squirrelscan/crawler";
 import { RESOURCE_SIZE_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { isCompressibleContentType } from "@squirrelscan/utils/headers";
+import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 
@@ -51,6 +52,13 @@ export interface ResourceCheckResult {
   vary: string | null;
   /** Cache-hit reason if reused from a prior crawl without a full transfer. (#107) */
   cacheReason: CacheHitReason | null;
+  /**
+   * The origin was throttling us (429/430, or 503 + `Retry-After`), so `status`
+   * describes OUR request rate rather than the resource (#1829). Consumers that
+   * grade a status — crawl/sitemap-4xx above all — must skip these rather than
+   * report a live URL as 4xx.
+   */
+  rateLimited?: boolean;
 }
 
 export interface ResourceCheckerOptions {
@@ -220,6 +228,10 @@ async function checkSingleResourceAsync(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
 
+  // Mutated in place as responses arrive, so every `...defaultResult` return
+  // below inherits the throttling verdict without repeating it eight times
+  // (#1829). Each assignment reflects the LAST response received, which is
+  // always the one whose status the result reports.
   const defaultResult: ResourceCheckResult = {
     url,
     status: null,
@@ -276,6 +288,10 @@ async function checkSingleResourceAsync(
         },
         signal: controller.signal,
       });
+
+      defaultResult.rateLimited =
+        isRateLimitedResponse(headResponse.status, headResponse.headers.get("retry-after")) ||
+        undefined;
 
       // 304 Not Modified → reuse prior body size (validator hit).
       if (headResponse.status === 304 && prior && prior.status != null) {
@@ -392,6 +408,10 @@ async function checkSingleResourceAsync(
     }
 
     // 304 Not Modified on the GET fallback → validator hit.
+    defaultResult.rateLimited =
+      isRateLimitedResponse(getResponse.status, getResponse.headers.get("retry-after")) ||
+      undefined;
+
     if (getResponse.status === 304 && prior && prior.status != null) {
       clearTimeout(timeoutId);
       const meta = extractMeta(getResponse);

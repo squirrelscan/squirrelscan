@@ -783,6 +783,9 @@ export function fetchResourceAssets(
         url: check.url,
         status: check.status,
         error: check.error,
+        // #1829: a throttled sitemap URL is unverified, not 4xx. Carried through
+        // to crawl/sitemap-4xx, which would otherwise report it as dead.
+        rateLimited: check.rateLimited,
       })),
     };
 
@@ -1040,6 +1043,9 @@ export function checkExternalLinksOnStorage(
           checkedAt: Date.now(),
           wafBlocked: result.wafBlocked,
           wafProvider: result.wafProvider,
+          // #1829: persisted, not re-derived — the 503 + Retry-After case
+          // cannot be recovered from the status code the rules read.
+          rateLimited: result.rateLimited,
         })
         .pipe(Effect.catchAll(() => Effect.void));
 
