@@ -29,7 +29,27 @@ Schedules are managed from the dashboard, per website:
 2. Use the **Scheduled Audits** card on the website overview (or go to **Settings → Schedule**).
 3. Pick a cadence - **Daily**, **Weekly**, **Monthly**, or **Disabled**.
 
-A newly added website starts on a **weekly** schedule when your plan still has a free slot for it, and you are notified in the dashboard when that happens. On the free plan that means your first website; the next one you add starts unscheduled until you free the slot or upgrade. Change the cadence or turn a schedule off at any time from this card.
+## When a schedule turns itself on
+
+A newly added website is **not** scheduled straight away. Recurring audits turn on by themselves once that website has **one successful audit**, and you are notified in the dashboard when that happens.
+
+Waiting for a real result means a site we cannot reach is never enrolled. A domain that does not resolve, an origin that refuses connections, or a host that blocks the crawler produces a failed first audit, and nothing recurring is started for it.
+
+Two things still apply at that moment:
+
+- Your plan needs a free scheduled-website slot. On the free plan that means your first website; the next one stays unscheduled until you free the slot or upgrade.
+- The first scheduled run is at least one full cadence period after that audit. A weekly schedule that turns on today next runs in a week, never the same night.
+
+You can also switch recurring audits on yourself at any time from the **Scheduled Audits** card, without waiting for an audit to complete. Turning them off is permanent until you turn them back on: a later audit will not switch them on again.
+
+## When a schedule pauses itself
+
+Recurring audits pause automatically, and you are emailed about it, when either of these happens:
+
+- **Three audits of the site fail in a row.** Any audit counts, whether it was scheduled, run from the dashboard, or run from the CLI. A completed or cancelled audit in between clears the streak.
+- **The balance is below the audit base cost.** The run is skipped without a charge and the schedule pauses rather than re-skipping every week.
+
+Fix what is wrong, then turn the schedule back on from the **Scheduled Audits** card.
 
 ## How runs behave
 
@@ -37,6 +57,7 @@ A newly added website starts on a **weekly** schedule when your plan still has a
 - Scheduled runs crawl up to your plan's [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit) ceiling, same as an on-demand dashboard audit.
 - If an audit for the website is already running when the schedule fires, the scheduled run is skipped for that cycle.
 - Results, score deltas, new issues, and notifications appear in the dashboard automatically.
+- A scheduled run's real outcome is what the schedule reports, so a failed run shows as failed rather than as a successful dispatch.
 
 ## Audit source
 
