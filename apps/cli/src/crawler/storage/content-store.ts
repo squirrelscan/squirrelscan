@@ -102,8 +102,26 @@ export class ContentStore {
    * Deduplication is automatic - if hash exists, just updates access time.
    */
   put(content: string | Buffer, contentType: ContentType): string {
+    return this.putAtHash(hashContent(content), content, contentType);
+  }
+
+  /**
+   * Store content under the SHA-256 hash of a caller-defined cache key.
+   */
+  putForKey(
+    key: string | Buffer,
+    content: string | Buffer,
+    contentType: ContentType
+  ): string {
+    return this.putAtHash(hashContent(key), content, contentType);
+  }
+
+  private putAtHash(
+    hash: string,
+    content: string | Buffer,
+    contentType: ContentType
+  ): string {
     const db = this.getDb();
-    const hash = hashContent(content);
     const now = Date.now();
 
     // Check if already exists

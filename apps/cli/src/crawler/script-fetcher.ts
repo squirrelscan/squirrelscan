@@ -287,7 +287,9 @@ function fetchSingleScript(
 
     // Cache successful fetches with content
     if (result.content !== null && result.error === null) {
-      store.put(result.content, "application/javascript");
+      // Script fetches are URL-keyed on both lookup and insertion. The store's
+      // ordinary put() remains content-addressed for its other callers.
+      store.putForKey(url, result.content, "application/javascript");
     }
 
     return result;
