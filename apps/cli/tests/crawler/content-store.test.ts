@@ -81,6 +81,16 @@ describe("Content Store", () => {
       expect(retrieved).toBe(js);
     });
 
+    test("should store content under an explicit cache key", () => {
+      const url = "https://cdn.example.com/script.js";
+      const js = 'console.log("cached by URL");';
+      const hash = store.putForKey(url, js, "application/javascript");
+
+      expect(hash).toBe(hashContent(url));
+      expect(store.getString(hash)).toBe(js);
+      expect(store.getString(hashContent(js))).toBeNull();
+    });
+
     test("should return null for non-existent hash", () => {
       const result = store.get("nonexistent-hash");
       expect(result).toBeNull();
