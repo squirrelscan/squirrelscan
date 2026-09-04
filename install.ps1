@@ -8,6 +8,11 @@
 
 $ErrorActionPreference = "Stop"
 
+# Windows PowerShell 5.1 can otherwise negotiate with its legacy protocol
+# defaults. Add TLS 1.2 without replacing newer protocols such as TLS 1.3.
+[Net.ServicePointManager]::SecurityProtocol = `
+    [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
 $Repo = "squirrelscan/squirrelscan"
 $Platform = "windows-x64"
 

@@ -22,6 +22,24 @@ describe("installer privacy and supply-chain contracts", () => {
   });
 });
 
+describe("PowerShell installer transport security", () => {
+  test("enables TLS 1.2 before network calls without replacing newer protocols", () => {
+    const tlsFloor = powershellInstaller.match(
+      /\[Net\.ServicePointManager\]::SecurityProtocol\s*=\s*`\s*\n\s*\[Net\.ServicePointManager\]::SecurityProtocol\s+-bor\s+\[Net\.SecurityProtocolType\]::Tls12/,
+    );
+    expect(tlsFloor).not.toBeNull();
+
+    const tlsFloorIndex = tlsFloor?.index ?? -1;
+    const firstNetworkCall = Math.min(
+      powershellInstaller.indexOf("Invoke-RestMethod"),
+      powershellInstaller.indexOf("Invoke-WebRequest"),
+    );
+
+    expect(tlsFloorIndex).toBeGreaterThan(-1);
+    expect(tlsFloorIndex).toBeLessThan(firstNetworkCall);
+  });
+});
+
 // A `self install` failure used to report an exit code and nothing else, which
 // made a real Windows break undiagnosable (#1538). Both installers now capture
 // the command's own output and carry a bounded, scrubbed tail of it.
