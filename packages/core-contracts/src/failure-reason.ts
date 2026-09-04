@@ -385,13 +385,14 @@ export function classifyAuditFailureReasonText(
   if (r.includes("robots.txt disallows")) return "robots";
 
   if (
-    r.includes("dns lookup failed") ||
     r.includes("err_name_not_resolved") ||
     r.includes("enotfound") ||
     r.includes("eai_again") ||
+    r.includes("eai_noname") ||
     r.includes("getaddrinfo") ||
     r.includes("nxdomain") ||
-    r.includes("could not resolve host")
+    r.includes("could not resolve host") ||
+    /dns (lookup|resolution) failed/.test(r)
   ) {
     return "dns";
   }
@@ -399,6 +400,7 @@ export function classifyAuditFailureReasonText(
   if (
     r.includes("tls handshake") ||
     r.includes("tls/connection error") ||
+    r.includes("ssl handshake") ||
     r.includes("err_cert_") ||
     r.includes("err_ssl_") ||
     r.includes("certificate has expired") ||
@@ -410,68 +412,88 @@ export function classifyAuditFailureReasonText(
     return "tls";
   }
 
-  // Checked before the status match so a message that names BOTH a status and a
-  // socket failure ("Server error: 502, socket hang up") reads as the transport
-  // failure it is rather than as an application error the owner should go
+  // Ahead of the status match so a message naming BOTH a status and a socket
+  // failure ("Server error: 502, socket hang up") reads as the transport
+  // failure it is, rather than as an application error the owner should go
   // hunting for in their logs.
   if (
-    r.includes("failed before any response") ||
+    /err_connection_(reset|refused|closed|timed_out|aborted)/.test(r) ||
+    /econn(reset|refused|aborted)/.test(r) ||
+    /connection (reset|refused|closed|timed out)/.test(r) ||
     r.includes("socket connection was closed") ||
+    r.includes("failed before any response") ||
     r.includes("socket hang up") ||
-    r.includes("connection refused") ||
-    r.includes("connection reset") ||
-    r.includes("connection closed") ||
-    r.includes("err_connection_") ||
-    r.includes("err_empty_response") ||
-    r.includes("econnrefused") ||
-    r.includes("econnreset") ||
-    r.includes("econnaborted") ||
-    r.includes("unable to connect")
+    r.includes("unable to connect") ||
+    r.includes("err_empty_response")
   ) {
     return "connection";
   }
 
+  // No bare "timed out": that would swallow an internal DB, R2 or upstream-API
+  // timeout. Only browser/crawler signatures and the engine's own sentence,
+  // whose BOTH halves are required.
   if (
-    // Both halves of the engine's own timeout sentence. A bare "no response
-    // from" would swallow an unrelated upstream failure ("got no response from
-    // the billing service") that some other caller hands this classifier.
-    (r.includes("no response from") && r.includes("within the request timeout")) ||
-    r.includes("crawl request timed out") ||
+    (r.includes("page.goto") && r.includes("timeout")) ||
+    /timeout\s+\d+\s?ms\s+exceeded/.test(r) ||
     r.includes("navigation timeout") ||
     r.includes("err_timed_out") ||
     r.includes("etimedout") ||
-    (r.includes("page.goto") && r.includes("timeout"))
+    r.includes("crawl request timed out") ||
+    (r.includes("no response from") && r.includes("within the request timeout"))
   ) {
     return "timeout";
   }
 
-  if (r.includes("redirect")) return "redirect";
-
-  // "<host> returned 503 Service Unavailable" and the crawler's own
-  // "Server error: 503". One bounded 3-digit match, no adjacent quantifiers.
-  //
-  // A bare "HTTP NNN" is deliberately NOT a lead-in: squirrelscan's own
-  // internal errors are worded that way, and reading one as the audited site's
-  // status blames the site for our outage.
-  const status = /\b(?:returned|server error:)\s(\d{3})\b/.exec(r)?.[1];
-  if (status) {
-    const code = Number.parseInt(status, 10);
-    if (code >= 500) return "http_5xx";
-    if (code >= 400) return "http_4xx";
+  if (
+    r.includes("err_too_many_redirects") ||
+    r.includes("redirect loop") ||
+    r.includes("off-site redirect") ||
+    r.includes("redirected off-site") ||
+    (r.includes("redirect") && r.includes("could not be followed"))
+  ) {
+    return "redirect";
   }
 
-  // The #792 blocked copy and the crawler's own refusal messages: a refusal is
-  // a 4xx whether or not the status survived into the sentence.
+  // The #792 blocked copy, the #1829 rate-limit copy and the crawler's own
+  // refusal messages: a refusal is a 4xx whether or not a status survived into
+  // the sentence. Ahead of the plain status match so a refusal is never read as
+  // an ordinary client error.
   if (
     r.includes("blocked the crawler") ||
     r.includes("bot protection") ||
     r.includes("request blocked by server") ||
     r.includes("too many requests") ||
-    r.includes("rate limit") ||
-    r.includes("captcha")
+    /rate[\s-]?limit/.test(r) ||
+    /\bwaf\b/.test(r) ||
+    r.includes("captcha") ||
+    /\b429\b/.test(r) ||
+    statusIn(r, 401, 401) ||
+    statusIn(r, 403, 403)
   ) {
     return "http_4xx";
   }
 
+  if (statusIn(r, 400, 499)) return "http_4xx";
+  if (statusIn(r, 500, 599)) return "http_5xx";
+
   return "unknown";
+}
+
+/**
+ * Does the reason name an HTTP status in the given range?
+ *
+ * One bounded 3-digit match behind a required lead-in, so a bare port, retry
+ * count or version number is not read as a status. No adjacent quantifiers, so
+ * it cannot backtrack catastrophically.
+ *
+ * Deliberately NOT matching a bare "HTTP NNN": squirrelscan's own callback
+ * failures are worded that way ("Callback 'mark-completed' failed after 3
+ * attempts (HTTP 500: ...)"), and reading that as a status blames the audited
+ * site for our outage.
+ */
+function statusIn(reason: string, min: number, max: number): boolean {
+  const match = /\b(?:returned|server error:)\s(\d{3})\b/.exec(reason);
+  if (!match) return false;
+  const status = Number.parseInt(match[1]!, 10);
+  return status >= min && status <= max;
 }
