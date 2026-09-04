@@ -20,6 +20,26 @@ How it works:
 Earlier releases (v0.0.56 and prior) are on the
 [GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
 
+## [Unreleased]
+
+### Changed
+
+- **The CLI is built on Bun 1.4.** The runtime the `squirrel` binary is
+  compiled with moved from 1.3.14 to 1.4.0, the release Bun rewrote in Rust.
+  The visible effect is size: the Linux binaries that the install script and
+  containers pull are 11 to 14 percent smaller (about 90 MB instead of 101 MB
+  for glibc, 83 MB instead of 97 MB for musl and Alpine), the Windows binary
+  is 8 percent smaller, and the CLI starts about 10 ms faster. Audit results
+  are byte-identical across the two runtimes: the same sites produce the same
+  scores, the same issue counts and the same reports. Every install target was
+  built and run on the new runtime, including the Alpine and musl path.
+
+- **A DNS failure is reported as a DNS failure.** Bun 1.4 is the first runtime
+  that distinguishes a host that does not resolve from one that refuses the
+  connection, and the CLI now passes that distinction through, so an audit of
+  a mistyped domain says the name did not resolve rather than that the server
+  was unreachable.
+
 ## v0.0.90
 
 A release about sites that do not answer the way you expect. A store that
