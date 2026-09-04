@@ -45,6 +45,7 @@ import {
 } from "@squirrelscan/config";
 
 import { safeExit } from "@/self/updater";
+import { cwdOr } from "@/utils/cwd";
 
 // ============================================
 // CLI-SPECIFIC CONFIG FUNCTIONS
@@ -115,10 +116,12 @@ function deepMerge<T extends Record<string, unknown>>(
 }
 
 // Find config file walking up directory tree, stopping at home dir
-export function findConfigFile(
-  startDir: string = process.cwd()
-): string | null {
-  let dir = startDir;
+export function findConfigFile(startDir?: string): string | null {
+  // Not a default parameter: on Bun 1.4 an unresolvable cwd throws, and this
+  // function's contract is "no config found", not "crash the command".
+  const dir0 = startDir ?? cwdOr("");
+  if (!dir0) return null;
+  let dir = dir0;
   const home = homedir();
 
   while (true) {

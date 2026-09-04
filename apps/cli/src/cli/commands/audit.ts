@@ -90,6 +90,7 @@ import {
 } from "@/self/settings";
 import { trackTelemetryEvent, trackError } from "@/self/telemetry";
 import { safeExit } from "@/self/updater";
+import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { configureLogger, logger, setLogInterceptor } from "@/utils/logger";
 import { getProjectNameContext, parseUserUrl } from "@/utils/url";
 
@@ -789,7 +790,7 @@ export const audit = defineCommand({
       verbose: args.verbose,
       debug: args.debug,
       trace: args.trace,
-      cwd: process.cwd(),
+      cwd: cwdOr(CWD_UNAVAILABLE),
       version: packageVersion,
       bunVersion: Bun.version,
       platform: platform(),
@@ -1473,8 +1474,13 @@ export const audit = defineCommand({
         });
       };
       removeSignalHandlers = (): void => {
-        process.off("SIGINT", onSignal);
-        process.off("SIGTERM", onSignal);
+        // Cast: bun-types >=1.4 declares off/removeListener("memoryPressure")
+        // directly on Process, which hides the inherited EventEmitter overloads
+        // (@types/node only spells out signal names for on/once). The cast
+        // restores them; drop it once bun-types keeps the base signatures.
+        const emitter = process as NodeJS.EventEmitter;
+        emitter.off("SIGINT", onSignal);
+        emitter.off("SIGTERM", onSignal);
       };
       process.once("SIGINT", onSignal);
       process.once("SIGTERM", onSignal);

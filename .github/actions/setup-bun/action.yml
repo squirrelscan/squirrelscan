@@ -6,7 +6,7 @@ inputs:
     description: Bun version to install
     # exact pin: "latest" makes setup-bun resolve the version via api.github.com,
     # which takes all CI down whenever GitHub's API degrades (2026-07-16 outage)
-    default: 1.3.14
+    default: 1.4.0
 
 runs:
   using: composite
