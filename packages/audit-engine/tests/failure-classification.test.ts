@@ -220,6 +220,34 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
     ).toBe("unknown");
   });
 
+  test("a failure on OUR side is not attributed to the audited site", () => {
+    // The cloud container words a failed call to squirrelscan's own API as
+    // "Callback '<label>' failed after N attempts (HTTP 500: ...)". Reading
+    // that "HTTP 500" as the site's status would tell its owner to go and read
+    // their error logs for an outage on ours.
+    const result = deriveAuditStatus({
+      pagesCrawled: 0,
+      contentPages: 0,
+      blockedPages: 0,
+      rootFailure: {
+        code: "unknown",
+        detail: "Callback 'mark-completed' failed after 3 attempts (HTTP 500: internal error)",
+      },
+    });
+    expect(result.reasonCode).toBe("unknown");
+  });
+
+  test("a bare 'HTTP NNN' anywhere in a message is not read as the site's status", () => {
+    expect(
+      deriveAuditStatus({
+        pagesCrawled: 0,
+        contentPages: 0,
+        blockedPages: 0,
+        rootFailure: { code: "unknown", detail: "upload failed, HTTP 503 from storage" },
+      }).reasonCode,
+    ).toBe("unknown");
+  });
+
   test("a healthy crawl is untouched: no status, no reason, no code", () => {
     const result = deriveAuditStatus({
       pagesCrawled: 10,

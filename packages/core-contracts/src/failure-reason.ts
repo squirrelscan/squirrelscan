@@ -304,6 +304,13 @@ export function classifyAuditFailureReasonText(
   const r = (reason ?? "").toLowerCase();
   if (r.length === 0) return "unknown";
 
+  // OUR failure, not the site's. The cloud container words a failed call to
+  // squirrelscan's own API as "Callback '<label>' failed after N attempts
+  // (HTTP 500: ...)", and that string can reach a surface that classifies it.
+  // Checked first, and answered `unknown`, so an outage on our side is never
+  // reported to a site owner as their server erroring.
+  if (r.includes("callback '") && r.includes("failed after")) return "unknown";
+
   if (r.includes("robots.txt disallows")) return "robots";
 
   if (
@@ -371,7 +378,11 @@ export function classifyAuditFailureReasonText(
 
   // "<host> returned 503 Service Unavailable" and the crawler's own
   // "Server error: 503". One bounded 3-digit match, no adjacent quantifiers.
-  const status = /\b(?:returned|server error:|http)\s(\d{3})\b/.exec(r)?.[1];
+  //
+  // A bare "HTTP NNN" is deliberately NOT a lead-in: squirrelscan's own
+  // internal errors are worded that way, and reading one as the audited site's
+  // status blames the site for our outage.
+  const status = /\b(?:returned|server error:)\s(\d{3})\b/.exec(r)?.[1];
   if (status) {
     const code = Number.parseInt(status, 10);
     if (code >= 500) return "http_5xx";
