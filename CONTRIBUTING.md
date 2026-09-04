@@ -4,7 +4,7 @@ Thanks for contributing to squirrelscan. Bug fixes, rules, tests, documentation,
 
 ## Development
 
-Use Bun 1.3.14 or the version in `package.json`.
+Use Bun 1.4.0 or the version in `package.json`.
 
 ```bash
 bun install --frozen-lockfile

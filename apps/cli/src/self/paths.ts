@@ -106,7 +106,21 @@ export function getContentStorePath(): string {
 // EACCES (or any other stat error) now surfaces as err() so callers can warn
 // loudly instead of treating settings as missing (#1057).
 export function findLocalSettingsPath(): Result<string | null> {
-  let dir = process.cwd();
+  // Bun 1.4 surfaces the underlying getcwd(3) failure (EACCES when an ancestor
+  // dir lost +x under us); 1.3 returned a cached path instead. Uncaught, that
+  // turns the err() contract above back into the throw #1057 removed.
+  let dir: string;
+  try {
+    dir = process.cwd();
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return err(
+      commandError(
+        code ?? "FILE_READ_ERROR",
+        `Failed to resolve the current directory: ${(error as Error).message}`
+      )
+    );
+  }
   const root = parse(dir).root;
   const home = homedir();
 

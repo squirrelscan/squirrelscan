@@ -222,7 +222,7 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 
 The complete local CLI, crawler, audit engine, rules, report generators, CLI-facing cloud clients, and documentation site are open source in this repository. The hosted API, website, dashboard, and cloud worker implementations are separate private services.
 
-Prerequisites: [Bun 1.3.14](https://bun.sh/) and Git.
+Prerequisites: [Bun 1.4.0](https://bun.sh/) and Git.
 
 ```bash
 git clone https://github.com/squirrelscan/squirrelscan.git
