@@ -10,6 +10,10 @@ import { describe, expect, test } from "bun:test";
 import { Duration, Effect, Stream } from "effect";
 
 import type { CrawlStats } from "@squirrelscan/core-contracts";
+import {
+  classifyFetchErrorCode,
+  fetchErrorCode,
+} from "@squirrelscan/core-contracts/failure-reason";
 
 import { createCrawler } from "../src/core/crawler";
 import { createTestStorage } from "../src/storage";
@@ -122,6 +126,52 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
     for (const char of ["[", "]", "<", ">", "`", "|"]) {
       expect(detail.detail).not.toContain(char);
     }
+  });
+
+  test("the runtime error code wins over the message prose", () => {
+    // Bun 1.3 reported a DNS failure as ConnectionRefused with the message
+    // "Unable to connect", and Bun 1.4 reports the same failure as ENOTFOUND
+    // (squirrelscan/repo#1840). Reading the code means the classification
+    // follows the runtime instead of chasing its wording.
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.network(URL_ROOT, "Unable to connect. Is the computer able to access the url?", undefined, "ENOTFOUND"),
+    );
+    expect(detail.code).toBe("dns");
+  });
+
+  test("a code we do not recognize falls back to the message, not to unknown", () => {
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.network(URL_ROOT, "getaddrinfo ENOTFOUND example.com", undefined, "SomethingNew"),
+    );
+    expect(detail.code).toBe("dns");
+  });
+
+  test("Bun's PascalCase codes classify alongside the errno spellings", () => {
+    const bun = crawlErrorToFailureDetail(
+      CrawlError.network(URL_ROOT, "Unable to connect", undefined, "ConnectionRefused"),
+    );
+    const errno = crawlErrorToFailureDetail(
+      CrawlError.network(URL_ROOT, "connect failed", undefined, "ECONNREFUSED"),
+    );
+    expect(bun.code).toBe("connection");
+    expect(errno.code).toBe(bun.code);
+  });
+
+  test("the code is read off the cause chain, not just the outer error", () => {
+    // undici and Bun both wrap the real failure behind a generic "fetch failed".
+    const wrapped = Object.assign(new Error("fetch failed"), {
+      cause: Object.assign(new Error("getaddrinfo ENOTFOUND example.com"), {
+        code: "ENOTFOUND",
+      }),
+    });
+    expect(fetchErrorCode(wrapped)).toBe("ENOTFOUND");
+    expect(classifyFetchErrorCode(fetchErrorCode(wrapped))).toBe("dns");
+  });
+
+  test("a prototype member cannot be reached through a hostile code", () => {
+    expect(classifyFetchErrorCode("constructor")).toBeUndefined();
+    expect(classifyFetchErrorCode("toString")).toBeUndefined();
+    expect(classifyFetchErrorCode(undefined)).toBeUndefined();
   });
 
   test("a sitemap URL's failure is marked as the weaker source", () => {

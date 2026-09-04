@@ -13,6 +13,8 @@ import type {
 import {
   auditFailureDetail,
   classifyAuditFailureReasonText,
+  classifyFetchErrorCode,
+  fetchErrorCode,
 } from "@squirrelscan/core-contracts/failure-reason";
 import { CHROME_SEC_CH_UA } from "@squirrelscan/utils/constants";
 import { headersForRedirect } from "@squirrelscan/utils/headers";
@@ -49,6 +51,14 @@ export class CrawlError extends Error {
      * the message. Absent for transport-level failures, which never got one.
      */
     readonly status?: number,
+    /**
+     * The runtime error code behind a transport failure (#1822), read off the
+     * error's `cause` chain. Preferred over the message when classifying: a
+     * code is a stable contract, the prose around it is not. Bun 1.3 called a
+     * DNS failure `ConnectionRefused` with "Unable to connect"; Bun 1.4 calls
+     * the same failure `ENOTFOUND` (squirrelscan/repo#1840).
+     */
+    readonly errorCode?: string,
   ) {
     super(message);
     this.name = "CrawlError";
@@ -58,8 +68,13 @@ export class CrawlError extends Error {
     return new CrawlError(url, "timeout", "Crawl request timed out");
   }
 
-  static network(url: string, message: string, status?: number): CrawlError {
-    return new CrawlError(url, "network", message, undefined, status);
+  static network(
+    url: string,
+    message: string,
+    status?: number,
+    errorCode?: string,
+  ): CrawlError {
+    return new CrawlError(url, "network", message, undefined, status, errorCode);
   }
 
   static parse(url: string, message: string): CrawlError {
@@ -151,7 +166,10 @@ export function crawlErrorToFailureDetail(
       }
       return auditFailureDetail({
         ...base,
-        code: classifyAuditFailureReasonText(message),
+        // The runtime code first, the message only when it names nothing we
+        // recognize: the code is a stable contract, the prose is not.
+        code:
+          classifyFetchErrorCode(error.errorCode) ?? classifyAuditFailureReasonText(message),
         detail: message,
       });
     }
@@ -391,7 +409,11 @@ function requestWithTiming(
       const isAbort = (error as Error).name === "AbortError" || message.includes("timed out");
       if (isAbort) return CrawlError.timeout(url);
       if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
-      return CrawlError.network(url, (error as Error).message);
+      // #1822: the runtime code is captured HERE because this is the last place
+      // the original error object exists; everything downstream sees only the
+      // CrawlError. Bun 1.4 reports a DNS failure as ENOTFOUND, which no amount
+      // of reading the message reliably recovers on older runtimes.
+      return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
     },
   });
 }

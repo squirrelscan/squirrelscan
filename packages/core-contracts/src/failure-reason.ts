@@ -286,6 +286,77 @@ export function auditFailureNextStep(
 }
 
 /**
+ * Runtime error codes, mapped to the class they mean.
+ *
+ * A code is a far better signal than the message it comes with: it is a stable
+ * contract, while the prose around it is reworded between runtime versions. Bun
+ * 1.3 reported a DNS failure as `ConnectionRefused` with the message "Unable to
+ * connect", and Bun 1.4 reports the same failure as `ENOTFOUND` with
+ * "getaddrinfo ENOTFOUND" (squirrelscan/repo#1840). Matching the code means the
+ * classification follows the runtime instead of chasing its wording.
+ *
+ * Keys are lowercased at lookup, so both errno style (`ENOTFOUND`) and Bun's
+ * own PascalCase (`ConnectionRefused`) resolve.
+ */
+const ERRNO_CLASS: Readonly<Record<string, AuditFailureReasonCode>> = {
+  enotfound: "dns",
+  eai_again: "dns",
+  eai_noname: "dns",
+  dnsnotfound: "dns",
+  econnrefused: "connection",
+  econnreset: "connection",
+  econnaborted: "connection",
+  epipe: "connection",
+  ehostunreach: "connection",
+  enetunreach: "connection",
+  connectionrefused: "connection",
+  connectionreset: "connection",
+  connectionclosed: "connection",
+  etimedout: "timeout",
+  timeout: "timeout",
+  eproto: "tls",
+  cert_has_expired: "tls",
+  depth_zero_self_signed_cert: "tls",
+  unable_to_verify_leaf_signature: "tls",
+  err_tls_cert_altname_invalid: "tls",
+};
+
+/** How many nested `error.cause` levels to walk. Runtimes wrap a few deep. */
+const MAX_CAUSE_DEPTH = 5;
+
+/**
+ * The first runtime error code on an error or its `cause` chain.
+ *
+ * Mirrors how `isTlsError` in the crawler walks the chain: undici and Bun both
+ * wrap the real failure behind a generic "fetch failed" a level or two up, so
+ * the code on the outermost error is usually absent.
+ */
+export function fetchErrorCode(error: unknown): string | undefined {
+  let current = error as { cause?: unknown; code?: unknown } | null | undefined;
+  for (let depth = 0; current && depth < MAX_CAUSE_DEPTH; depth++) {
+    if (typeof current.code === "string" && current.code.length > 0) return current.code;
+    current = current.cause as typeof current;
+  }
+  return undefined;
+}
+
+/**
+ * Classify a runtime error code, or `undefined` when it names nothing we know.
+ *
+ * Undefined rather than `unknown` on purpose: the caller falls back to reading
+ * the message, and a code we do not recognize must not stop it doing so.
+ */
+export function classifyFetchErrorCode(
+  code: string | null | undefined,
+): AuditFailureReasonCode | undefined {
+  if (!code) return undefined;
+  const key = code.toLowerCase();
+  // Object.hasOwn, not `in`: the code comes from a runtime error and must not
+  // be able to resolve to an inherited Object.prototype member.
+  return Object.hasOwn(ERRNO_CLASS, key) ? ERRNO_CLASS[key] : undefined;
+}
+
+/**
  * Recover the failure class from a reason STRING.
  *
  * Needed because two surfaces only ever see the text: `agent_runs.error` (no
