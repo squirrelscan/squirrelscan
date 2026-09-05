@@ -15,6 +15,11 @@ import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
+import {
+  isRateLimitedResponse,
+  parseRetryAfterMs,
+  rateLimitBackoffMs,
+} from "@squirrelscan/utils/rate-limit";
 import { detectWafChallengePage } from "@squirrelscan/utils/waf";
 
 export type CrawlErrorType = "timeout" | "network" | "parse" | "blocked" | "rate_limit" | "tls";
@@ -24,7 +29,13 @@ export class CrawlError extends Error {
     readonly url: string,
     readonly type: CrawlErrorType,
     message: string,
-    readonly retryAfter?: number,
+    /**
+     * Minimum wait the ORIGIN asked for, in milliseconds, parsed from
+     * `Retry-After` (#1829). Milliseconds rather than the header's seconds so
+     * every wait in the backoff path shares one unit. Only ever set on a
+     * `rate_limit` error, and only when the origin actually sent the header.
+     */
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = "CrawlError";
@@ -46,8 +57,11 @@ export class CrawlError extends Error {
     return new CrawlError(url, "blocked", message);
   }
 
-  static rateLimit(url: string, retryAfter?: number): CrawlError {
-    return new CrawlError(url, "rate_limit", "Rate limited", retryAfter);
+  static rateLimit(url: string, retryAfterMs?: number, status?: number): CrawlError {
+    const suffix = status ? ` (${status})` : "";
+    const wait =
+      retryAfterMs === undefined ? "" : `, retry after ${Math.round(retryAfterMs / 1000)}s`;
+    return new CrawlError(url, "rate_limit", `Rate limited${suffix}${wait}`, retryAfterMs);
   }
 
   static tls(url: string, message: string): CrawlError {
@@ -140,13 +154,18 @@ const defaultRetryPolicy: RetryPolicy = {
   jitter: true,
 };
 
+/**
+ * Errors the generic exponential retry handles.
+ *
+ * `rate_limit` is deliberately NOT here (#1829). It used to be, which is how a
+ * 429 got three retries at 500ms/1s and then gave up ~1.5s later with the page
+ * recorded as failed. Throttling now has its own schedule in
+ * {@link fetchPageWithRetry} — longer waits, `Retry-After` honoured, and the
+ * host-wide pause the crawler injects. Adding it back here would give it two
+ * competing retry budgets that multiply.
+ */
 function isRetryable(error: CrawlError): boolean {
-  return (
-    error.type === "timeout" ||
-    error.type === "rate_limit" ||
-    error.type === "network" ||
-    error.type === "tls"
-  );
+  return error.type === "timeout" || error.type === "network" || error.type === "tls";
 }
 
 function withRetry<A, R>(
@@ -353,6 +372,51 @@ export interface FetchOptions {
    * (#839). Only the render-all gate reads it; every other fetcher ignores it.
    */
   storedSourceHash?: string;
+  /**
+   * Crawl-wide rate-limit control (#1829). Left unset the fetcher still backs
+   * off properly for this one URL; the crawler injects a host-scoped
+   * implementation so a single 429 also pauses every other worker aimed at
+   * that host and drops its concurrency.
+   */
+  rateLimit?: RateLimitControl;
+}
+
+/** One rate-limit response, as reported to {@link RateLimitControl}. */
+export interface RateLimitEncounter {
+  url: string;
+  /** 1-based count of rate-limit responses seen for this URL. */
+  attempt: number;
+  /** Minimum wait the origin asked for, if it sent `Retry-After`. */
+  retryAfterMs?: number;
+}
+
+/** What the caller decided to do about one rate-limit response. */
+export interface RateLimitDecision {
+  /** Wait to observe before the next attempt. */
+  waitMs: number;
+  /** The host has spent its backoff budget: stop retrying this URL. */
+  exhausted: boolean;
+}
+
+export interface RateLimitControl {
+  /** Cap on a single wait and on the cumulative wait for one URL. */
+  maxBackoffMs: number;
+  /**
+   * Decide the wait for a rate-limit response. The crawler routes this through
+   * its per-host registry so the pause applies crawl-wide, not just here.
+   */
+  onRateLimited?: (encounter: RateLimitEncounter) => RateLimitDecision;
+  /** A successful response, so a throttled host can earn recovery back. */
+  onSuccess?: (url: string) => void;
+  /**
+   * Wall-clock left for this URL. A wait longer than what remains would be cut
+   * short by the crawl's per-URL watchdog and reported as a timeout — an
+   * unhelpful lie about a host we know is throttling — so the loop stops and
+   * fails honestly with the rate-limit error instead.
+   */
+  remainingMs?: () => number;
+  /** Called immediately before each backoff sleep, for progress output. */
+  onBackoff?: (encounter: RateLimitEncounter & { waitMs: number }) => void;
 }
 
 function extractResponseHeaders(headers: Headers): ResponseHeaders {
@@ -468,10 +532,13 @@ export function applyStatusGuards(
   headers: Headers,
   body?: string,
 ): Effect.Effect<void, CrawlError, never> {
-  if (status === 429) {
-    const retryAfter = headers.get("retry-after");
-    const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : undefined;
-    return Effect.fail(CrawlError.rateLimit(url, retryAfterSeconds));
+  // 429 and Shopify's 430 are unconditional throttling (#1829). A 503 is
+  // ambiguous — checked further down, AFTER the bot-challenge detection, since
+  // a challenge interstitial is a refusal we must not keep retrying.
+  if (isRateLimitedResponse(status)) {
+    return Effect.fail(
+      CrawlError.rateLimit(url, parseRetryAfterMs(headers.get("retry-after")), status),
+    );
   }
 
   if (status === 403) {
@@ -507,6 +574,16 @@ export function applyStatusGuards(
             ),
           );
         }
+      }
+
+      // A 503 that carries Retry-After is the origin asking us to come back
+      // later, which is the same contract as a 429 — back off instead of
+      // recording the page as a server error (#1829). A bare 503 is a real
+      // outage and stays one; the challenge checks above already claimed the
+      // bot-wall case, which must NOT be retried.
+      const retryAfterMs = parseRetryAfterMs(headers.get("retry-after"));
+      if (isRateLimitedResponse(status, headers.get("retry-after"))) {
+        return Effect.fail(CrawlError.rateLimit(url, retryAfterMs, status));
       }
     }
     return Effect.fail(CrawlError.network(url, `Server error: ${status}`));
@@ -951,6 +1028,21 @@ export type CrawlFetcher = (
   options: FetchOptions,
 ) => Effect.Effect<FetchResult, CrawlError, never>;
 
+/**
+ * Rate-limit responses tolerated for one URL before it is given up on.
+ *
+ * Six attempts = five waits. With the 5s base and ×2 growth that is
+ * 5+10+20+40+80 = 155s, comfortably inside the 5-minute default cap, so the
+ * "at least 5 retries" contract holds without the cumulative cap cutting in.
+ */
+export const RATE_LIMIT_MAX_ATTEMPTS = 6;
+
+/** First wait when the origin sent no `Retry-After` (#1829: was 500ms). */
+export const RATE_LIMIT_BASE_DELAY_MS = 5_000;
+
+/** Fallback cap when no {@link RateLimitControl} is supplied. */
+export const RATE_LIMIT_DEFAULT_MAX_BACKOFF_MS = 300_000;
+
 export function fetchPageWithRetry(
   url: string,
   options: FetchOptions,
@@ -961,10 +1053,112 @@ export function fetchPageWithRetry(
   // be re-driven through the whole impersonation+fallback dance again. Do not
   // raise this above 1 for the fetcher path without removing the inner fallback
   // retry first — otherwise retries multiply (outer × inner).
+  //
+  // Rate limiting is exempt from that invariant and counted separately below:
+  // the inner fallback only ever retries TLS failures, so a throttled response
+  // cannot multiply through the fallback's OWN retry budget. Capping THROTTLING
+  // at one attempt for the cloud fetcher would be the wrong trade anyway — that
+  // is the path that crawls the large storefronts which throttle in the first
+  // place.
+  //
+  // KNOWN COST, bounded and accepted: on a host that fails the custom fetcher
+  // with TLS *and* rate-limits the standard fallback, each outer rate-limit
+  // attempt replays impersonation → fallback, so six attempts cost twelve
+  // requests rather than six. They are still spaced by the full backoff
+  // schedule (>= 1s, growing from 5s), so this is at most a doubling spread over
+  // minutes, not a burst. Collapsing it would mean threading "which layer
+  // produced this error" through the fallback, which buys little for a
+  // combination that needs a TLS-broken AND throttling origin.
   const maxAttempts = options.fetcher ? 1 : 3;
-  return withRetry(fetchPage(url, options), {
+  const attemptOnce = withRetry(fetchPage(url, options), {
     ...defaultRetryPolicy,
     maxAttempts,
+  });
+
+  const control = options.rateLimit;
+  const maxBackoffMs = Math.max(0, control?.maxBackoffMs ?? RATE_LIMIT_DEFAULT_MAX_BACKOFF_MS);
+
+  return Effect.gen(function* () {
+    // Rate-limit responses seen for THIS url, and what they have cost so far.
+    // Both are per-URL; the host-wide equivalents live in the injected control.
+    let encountered = 0;
+    let cumulativeWaitMs = 0;
+
+    while (true) {
+      const outcome = yield* Effect.either(attemptOnce);
+
+      if (outcome._tag === "Right") {
+        // Only a 2xx counts toward a host's recovery. `applyStatusGuards` lets
+        // most 4xx through as successful fetches, so counting every `Right`
+        // meant twenty 404s handed a throttled host its concurrency back —
+        // against the registry's own "consecutive 2xx" contract.
+        if (outcome.right.status >= 200 && outcome.right.status < 300) {
+          control?.onSuccess?.(url);
+        }
+        return outcome.right;
+      }
+
+      const error = outcome.left;
+      if (error.type !== "rate_limit") {
+        return yield* Effect.fail(error);
+      }
+
+      encountered += 1;
+      const encounter: RateLimitEncounter = {
+        url,
+        attempt: encountered,
+        retryAfterMs: error.retryAfterMs,
+      };
+
+      // Reported BEFORE the attempt cap is checked. The host registry has to see
+      // every refusal, including the last one — skipping it left a host that
+      // refused six times looking like it had refused five, so its strike count
+      // and backoff budget under-counted on the very URLs that proved it was
+      // throttling hardest.
+      const decision: RateLimitDecision = control?.onRateLimited?.(encounter) ?? {
+        waitMs: rateLimitBackoffMs({
+          attempt: encountered,
+          baseDelayMs: RATE_LIMIT_BASE_DELAY_MS,
+          maxBackoffMs,
+          retryAfterMs: error.retryAfterMs,
+        }),
+        exhausted: false,
+      };
+
+      if (encountered >= RATE_LIMIT_MAX_ATTEMPTS) {
+        return yield* Effect.fail(error);
+      }
+
+      // The host gave up: stop asking. The caller records the URL as
+      // rate-limited rather than fetched, and the crawl moves to other hosts.
+      if (decision.exhausted) {
+        return yield* Effect.fail(error);
+      }
+
+      // Cumulative cap for this URL, independent of the host-wide one.
+      const remainingBudget = Math.max(0, maxBackoffMs - cumulativeWaitMs);
+      const waitMs = Math.min(Math.max(0, decision.waitMs), remainingBudget);
+      if (waitMs <= 0 && decision.waitMs > 0) {
+        return yield* Effect.fail(error);
+      }
+
+      // Deadline safety (#1829): never start a wait the run cannot afford.
+      const remaining = control?.remainingMs?.();
+      if (remaining !== undefined && waitMs >= remaining) {
+        return yield* Effect.fail(error);
+      }
+
+      cumulativeWaitMs += waitMs;
+      control?.onBackoff?.({ ...encounter, waitMs });
+      // A zero wait retries immediately, and that is correct rather than a spin:
+      // the host registry returns 0 only when the backoff window it set has
+      // already elapsed. Every wait it computes is floored at
+      // MIN_RATE_LIMIT_WAIT_MS, so this cannot become a burst, and the attempt
+      // cap bounds it regardless of what an injected control returns.
+      if (waitMs > 0) {
+        yield* Effect.sleep(Duration.millis(waitMs));
+      }
+    }
   });
 }
 

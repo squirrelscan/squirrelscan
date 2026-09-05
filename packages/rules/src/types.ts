@@ -188,6 +188,12 @@ export interface ExternalLinkCheckData {
   wafBlocked?: boolean;
   /** Detected WAF provider if wafBlocked is true */
   wafProvider?: string;
+  /**
+   * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
+   * so its status is unverified rather than broken (#1829). Link rules must
+   * report these as info, never as dead links.
+   */
+  rateLimited?: boolean;
 }
 
 // Site-level data for site-scope rules

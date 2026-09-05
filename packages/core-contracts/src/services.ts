@@ -94,6 +94,14 @@ export interface DeadLinkResult {
   error?: string | null;
   /** Served from the shared global cache (no fresh fetch this run). */
   fromCache: boolean;
+  /**
+   * The target answered with rate limiting rather than a real status
+   * (squirrelscan/repo#1829). 429 and 430 are recoverable from `status` alone,
+   * but a `503` carrying `Retry-After` is not: only the checker saw the header.
+   * Without this the cloud path reports a throttled link as a dead one.
+   * Optional so older service responses keep parsing.
+   */
+  rateLimited?: boolean;
 }
 
 export interface DeadLinksResponse {

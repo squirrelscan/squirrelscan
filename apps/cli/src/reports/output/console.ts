@@ -87,8 +87,16 @@ export function generateConsoleReport(
   // a (meaningless) grade. Skip the score line and category breakdown entirely.
   // (`partial`/`completed`/absent fall through to the normal score below.)
   if (report.status === "failed" || report.status === "blocked") {
+    const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     const label =
-      report.status === "blocked" ? "AUDIT BLOCKED" : "AUDIT FAILED";
+      report.status === "blocked"
+        ? // #1829: a throttled block is not a bot wall, and the two need
+          // opposite fixes. Naming it here is the difference between the reader
+          // editing WAF rules and the reader slowing the crawl down.
+          throttled
+          ? "AUDIT RATE LIMITED"
+          : "AUDIT BLOCKED"
+        : "AUDIT FAILED";
     log("");
     log(divider());
     log(fmt.bold(fmt.red(label)));
@@ -114,6 +122,19 @@ export function generateConsoleReport(
   log(
     `${fmt.dim(report.baseUrl)} • ${report.totalPages} page${report.totalPages === 1 ? "" : "s"} • ${colorFn(`${score}/100`)} ${fmt.dim(`(${grade})`)}`
   );
+  // #1829: the caveat on the page count above. Yellow, like the seed-redirect
+  // disclosure below it, because it changes how much of the report to trust.
+  if (report.rateLimited && report.rateLimited.pages > 0) {
+    const hosts =
+      report.rateLimited.hosts.length > 0
+        ? report.rateLimited.hosts.join(", ")
+        : "the host";
+    log(
+      fmt.yellow(
+        `Rate limited by ${hosts}: ${report.rateLimited.pages} page${report.rateLimited.pages === 1 ? "" : "s"} not verified. Set [crawler] per_host_concurrency = 1 and per_host_delay_ms = 500 to crawl it politely.`
+      )
+    );
+  }
   // Refused off-site seed redirect (#1418): the URL on the line above is what
   // was graded, NOT where the seed pointed. Yellow rather than dim like the
   // lines below it — it changes what the whole report is about.

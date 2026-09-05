@@ -2,6 +2,10 @@
 // Uses HEAD requests with GET fallback, caches results globally
 // Detects WAF-blocked 403s to avoid false positive broken links
 
+import {
+  isRateLimitedResponse,
+  isRateLimitStatus,
+} from "@squirrelscan/utils/rate-limit";
 import { Effect } from "effect";
 
 import { detectWaf, type WafProvider } from "@/utils/waf";
@@ -18,6 +22,11 @@ export interface ExternalCheckResult {
   wafBlocked?: boolean;
   /** Detected WAF provider if wafBlocked is true */
   wafProvider?: WafProvider;
+  /**
+   * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
+   * so its status is unverified rather than broken (#1829).
+   */
+  rateLimited?: boolean;
 }
 
 export interface ExternalCheckerOptions {
@@ -40,6 +49,8 @@ interface CheckUrlResult {
   redirectTarget: string | null;
   wafBlocked?: boolean;
   wafProvider?: WafProvider;
+  /** The target was throttling us, so its status is unverified (#1829). */
+  rateLimited?: boolean;
 }
 
 /**
@@ -126,6 +137,23 @@ async function checkSingleUrlAsync(
           wafProvider: wafResult.provider ?? "unknown",
         };
       }
+    }
+
+    // Throttling is not a broken link (#1829). Recorded rather than re-derived
+    // from the status later: the 503 + Retry-After case is invisible once the
+    // headers are gone, and the rules only ever see the stored row.
+    if (
+      isRateLimitedResponse(
+        getResponse.status,
+        getResponse.headers.get("retry-after")
+      )
+    ) {
+      return {
+        status: getResponse.status,
+        error: null,
+        redirectTarget,
+        rateLimited: true,
+      };
     }
 
     return {
@@ -220,16 +248,22 @@ export function checkExternalLinks(
     });
 
     // Cache the new results
-    const cacheEntries: LinkCacheEntry[] = checkedResults.map((r) => ({
-      href: r.href,
-      status: r.status,
-      error: r.error,
-      redirectTarget: r.redirectTarget,
-      checkedAt: Date.now(),
-      wafBlocked: r.wafBlocked,
-      wafProvider: r.wafProvider,
-    }));
-    cache.setCachedBulk(cacheEntries);
+    // #1829: a throttled result is a fact about the MOMENT, not the link. The
+    // cache TTL is 7 days by default, so caching one 429 would keep a live link
+    // reported as "unverifiable" for a week after the host recovered. Cache the
+    // verified results only; the throttled ones are re-checked next run.
+    const cacheEntries: LinkCacheEntry[] = checkedResults
+      .filter((r) => !isRateLimited(r))
+      .map((r) => ({
+        href: r.href,
+        status: r.status,
+        error: r.error,
+        redirectTarget: r.redirectTarget,
+        checkedAt: Date.now(),
+        wafBlocked: r.wafBlocked,
+        wafProvider: r.wafProvider,
+      }));
+    if (cacheEntries.length > 0) cache.setCachedBulk(cacheEntries);
 
     // Add checked results to final results
     for (const r of checkedResults) {
@@ -241,6 +275,7 @@ export function checkExternalLinks(
         fromCache: false,
         wafBlocked: r.wafBlocked,
         wafProvider: r.wafProvider,
+        rateLimited: r.rateLimited,
       });
     }
 
@@ -272,9 +307,27 @@ export function filterBrokenLinks(
     if (r.error) return true;
     // WAF-blocked 403s are not truly broken - they're just inaccessible to bots
     if (r.status === 403 && r.wafBlocked) return false;
+    // Rate limiting means the status is UNVERIFIED, not that the link is dead
+    // (#1829). Checked before the >= 400 test, which 429/430 would satisfy.
+    if (isRateLimited(r)) return false;
     if (r.status && r.status >= 400) return true;
     return false;
   });
+}
+
+/** True when this result reflects throttling rather than the target's real state. */
+export function isRateLimited(result: {
+  status: number | null;
+  rateLimited?: boolean;
+}): boolean {
+  return result.rateLimited === true || isRateLimitStatus(result.status);
+}
+
+/** Links whose status could not be verified because the host was throttling (#1829). */
+export function filterRateLimitedLinks(
+  results: ExternalCheckResult[]
+): ExternalCheckResult[] {
+  return results.filter((r) => isRateLimited(r));
 }
 
 /**

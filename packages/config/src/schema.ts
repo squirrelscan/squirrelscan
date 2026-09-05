@@ -19,6 +19,10 @@ export type CoverageMode = (typeof COVERAGE_MODES)[number];
 export const DEFAULT_CRAWLER_CONCURRENCY = 5;
 export const DEFAULT_CRAWLER_PER_HOST_CONCURRENCY = 5;
 export const DEFAULT_CRAWLER_PER_HOST_DELAY_MS = 50;
+// Cap on how long a crawl will wait out a rate-limiting host (#1829). Five
+// minutes: long enough to ride out a Shopify storefront's throttle window,
+// short enough that a host which never relents cannot hold an audit open.
+export const DEFAULT_CRAWLER_MAX_BACKOFF_MS = 300_000;
 
 export const CrawlerConfigSchema = z.object({
   max_pages: z.number().default(100),
@@ -54,6 +58,16 @@ export const CrawlerConfigSchema = z.object({
   // overrides this only when respect_robots is true (#790), capped at 2s.
   per_host_concurrency: z.number().default(DEFAULT_CRAWLER_PER_HOST_CONCURRENCY),
   per_host_delay_ms: z.number().default(DEFAULT_CRAWLER_PER_HOST_DELAY_MS),
+  // Rate-limit backoff ceiling (#1829). Bounds BOTH a single wait and the
+  // cumulative wait for one URL/host, so an origin that answers 429 forever
+  // costs at most this much before the crawl records its remaining URLs as
+  // rate-limited and moves on. Positive integer: 0 would disable backoff
+  // entirely and re-create the cascade this setting exists to stop.
+  max_backoff_ms: z
+    .number()
+    .int({ message: "max_backoff_ms must be a whole number of milliseconds" })
+    .positive({ message: "max_backoff_ms must be greater than 0" })
+    .default(DEFAULT_CRAWLER_MAX_BACKOFF_MS),
   include: z.array(z.string()).default([]),
   exclude: z.array(z.string()).default([]),
   allow_query_params: z.array(z.string()).default([]),
@@ -145,12 +159,16 @@ export const CloudConfigSchema = z.object({
    */
   editor_summary: z.boolean().default(true),
   /**
-   * Domain-level SEO stats (#111, report-only, flat `domain_stats` credit charge).
-   * Credit-only since #684: any signed-in plan can run it (402 when out of credits).
-   * Auto-runs for logged-in users; set false to skip. Cheap (5 credits) and
-   * 30-day cached per domain, so it normally runs silently below `confirm_threshold`.
+   * Domain-level SEO stats (#111, report-only, folded into the audit base).
+   * Credit-only since #684: any signed-in plan can run it. 30-day cached per
+   * domain.
+   *
+   * PAUSED, default false: the hosted service is switched off, so the step is
+   * skipped rather than run against a route that answers 404. Setting this true
+   * is harmless while the service is off - the CLI degrades silently and the
+   * report simply carries no domain stats section.
    */
-  domain_stats: z.boolean().default(true),
+  domain_stats: z.boolean().default(false),
   /**
    * Crawl fetch mode. Explicit 'browser' renders every page via the cloud
    * browser (credit-priced); explicit 'http' forces plain HTTP. Left UNSET

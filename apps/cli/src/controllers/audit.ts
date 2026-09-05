@@ -5,7 +5,7 @@ import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import { Duration, Effect, Fiber, Stream } from "effect";
 
 import type { Config } from "@/config";
-import type { CrawlerEvent } from "@/crawler/core/types";
+import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
 import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
 import type { AuditReport, AuditOptions } from "@/types";
@@ -470,6 +470,18 @@ export function resolveCrawlPhaseTimeoutMs(
   );
 }
 
+/**
+ * Backoff wait as a short human string for the progress line (#1829).
+ * Seconds under a minute, then whole minutes — the wait is approximate by
+ * design (it carries jitter), so more precision would be false.
+ */
+export function formatBackoff(ms: number): string {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  return `${minutes}m`;
+}
+
 export interface CrawlConcurrencySettings {
   concurrency: number;
   perHostConcurrency: number;
@@ -806,6 +818,13 @@ export async function runAudit(
         );
       }
 
+      // Shared with the rate-limit hook below, which is invoked from inside the
+      // crawl (before `pagesProcessed` exists in scope) and must report the
+      // count as of that moment.
+      const pagesProcessedRef = { count: 0 };
+      // Hosts that throttled this crawl, collected for the run summary.
+      const rateLimitedHostSet = new Set<string>();
+
       const incrementalEnabled = resolveIncremental(
         options.refresh,
         options.incremental,
@@ -819,6 +838,10 @@ export async function runAudit(
         perHostConcurrency: crawlConcurrency.perHostConcurrency,
         delayMs: mergedConfig.crawler.delay_ms,
         perHostDelayMs: crawlConcurrency.perHostDelayMs,
+        // Rate-limit backoff ceiling (#1829). Loopback/cloud-render profiles
+        // override the concurrency knobs above but never this one: throttling
+        // is the origin's decision, not a parallelism setting.
+        maxBackoffMs: mergedConfig.crawler.max_backoff_ms,
         timeoutMs: mergedConfig.crawler.timeout_ms,
         userAgent,
         headers: mergedConfig.crawler.headers,
@@ -848,6 +871,20 @@ export async function runAudit(
           } else {
             logger.debug("tls fetch event", event);
           }
+        },
+        // #1829: a rate-limit backoff can park the crawl for minutes. Say so on
+        // the progress line WHILE it waits — a silent counter that stops moving
+        // is indistinguishable from a hang, and this is the only hook that fires
+        // before the sleep rather than after it.
+        onRateLimitEvent: (event: RateLimitEvent) => {
+          rateLimitedHostSet.add(event.host);
+          logger.debug("rate limited", event.host, `${event.backoffMs}ms`);
+          onProgress({
+            phase: "crawling",
+            current: pagesProcessedRef.count,
+            total: crawlerConfig.maxPages,
+            detail: `rate limited by ${event.host}, backing off ${formatBackoff(event.backoffMs)}`,
+          });
         },
       };
 
@@ -912,6 +949,7 @@ export async function runAudit(
                   });
                 }
                 pagesProcessed++;
+                pagesProcessedRef.count = pagesProcessed;
                 onProgress({
                   phase: "crawling",
                   current: pagesProcessed,
@@ -921,6 +959,7 @@ export async function runAudit(
               case "page:failed":
               case "page:unchanged":
                 pagesProcessed++;
+                pagesProcessedRef.count = pagesProcessed;
                 onProgress({
                   phase: "crawling",
                   current: pagesProcessed,
@@ -933,6 +972,7 @@ export async function runAudit(
                   event.failed +
                   event.skipped +
                   (event.unchanged ?? 0);
+                pagesProcessedRef.count = pagesProcessed;
                 onProgress({
                   phase: "crawling",
                   current: pagesProcessed,
@@ -1092,6 +1132,15 @@ export async function runAudit(
         logger.warn(
           "partial crawl",
           `analyzing ${pages.length} page(s) collected before the crawl-phase timeout`
+        );
+      }
+      // #1829: name the throttling host(s) and the knobs that fix it. Without
+      // this the only symptom a multi-site operator sees is a page count lower
+      // than they asked for, with nothing saying why.
+      if (rateLimitedHostSet.size > 0) {
+        logger.warn(
+          "rate limited",
+          `${[...rateLimitedHostSet].join(", ")} throttled this crawl; set [crawler] per_host_concurrency = 1 and per_host_delay_ms = 500 in squirrel.toml to crawl it politely`
         );
       }
 
@@ -1500,6 +1549,12 @@ export async function runAudit(
       // whois/overview lookup. The credit charge + 30-day cache are
       // enforced server-side; the CLI degrades silently (logged out / no
       // credits / no data → no section). Never fails the audit.
+      //
+      // PAUSED: `cloud.domain_stats` now defaults to false, so this step is
+      // normally skipped outright — no call, no progress line, no section. The
+      // hosted route also answers 404 while the service is off, which
+      // `runCloudDomainStats` degrades to null like any other failure, so an
+      // explicit `domain_stats: true` in a config is harmless rather than broken.
       if (
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&

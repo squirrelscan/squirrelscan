@@ -69,6 +69,7 @@
               "reports",
               "guides/badges",
               "guides/browser-rendering",
+              "guides/rate-limited-hosts",
               "guides/web-bot-auth"
             ]
           }
@@ -653,6 +654,7 @@
             "pages": [
               "dashboard/index",
               "dashboard/audit-settings",
+              "dashboard/emails",
               "dashboard/support"
             ]
           }

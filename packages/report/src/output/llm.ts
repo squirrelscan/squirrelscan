@@ -114,10 +114,40 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // reads <score overall="N/A"> + empty <issues/> as a clean pass. State it
   // plainly and 3rd-person — a block is the site refusing the crawler, not a
   // squirrelscan outage — with next steps the agent can relay to the owner.
+  // #1829: coverage lost to throttling, as an attribute an agent can read
+  // without parsing prose. Emitted for EVERY status, because the question
+  // "are these numbers the whole site?" applies to a completed run too.
+  if (report.rateLimited && report.rateLimited.pages > 0) {
+    const hosts = report.rateLimited.hosts.join(", ");
+    lines.push(
+      `<rate-limited pages="${report.rateLimited.pages}" hosts="${escapeXml(hosts)}">`,
+    );
+    lines.push(
+      `${indent(1)}${report.rateLimited.pages} page(s) could not be verified because the host rate limited the crawler (429/430). Their status is UNKNOWN, not broken, and they were excluded from scoring. Do not report them as dead links.`,
+    );
+    lines.push("</rate-limited>");
+  }
+
+  if (report.status === "partial" && report.statusReason) {
+    lines.push(`<status state="partial" reason="${escapeXml(report.statusReason)}">`);
+    lines.push(
+      `${indent(1)}A real audit ran and the scores below are valid for the pages that were fetched, but the crawl did not cover the whole site. Treat missing pages as unaudited, not as passing.`,
+    );
+    lines.push("</status>");
+  }
+
   if (report.status === "failed" || report.status === "blocked") {
     const reasonAttr = report.statusReason ? ` reason="${escapeXml(report.statusReason)}"` : "";
+    const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     lines.push(`<status state="${report.status}"${reasonAttr}>`);
-    if (report.status === "blocked") {
+    if (report.status === "blocked" && throttled) {
+      lines.push(
+        `${indent(1)}The host rate limited the crawler (429/430) before any pages could be read, so nothing was audited. This is throttling, NOT bot protection: allowlisting a crawler will not help.`,
+      );
+      lines.push(
+        `${indent(1)}To get a full audit: crawl more slowly with \`[crawler] per_host_concurrency = 1\` and \`per_host_delay_ms = 500\` in squirrel.toml, raise \`max_backoff_ms\`, or retry later with \`squirrel audit ${escapeXml(report.baseUrl)}\`.`,
+      );
+    } else if (report.status === "blocked") {
       lines.push(
         `${indent(1)}The site refused the crawler before any pages could be read (a 403 or 429 from bot protection, a firewall, an auth wall, or rate limiting), so nothing was audited. This is a block on the site side, not a squirrelscan outage.`,
       );

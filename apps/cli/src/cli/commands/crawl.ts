@@ -13,6 +13,7 @@ import {
 import { runCrawl, type CrawlerEvent } from "@/controllers/crawl";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { loadUserSettings, updateSettings } from "@/self/settings";
+import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { logger, setLogInterceptor } from "@/utils/logger";
 import { getProjectNameContext, parseUserUrl } from "@/utils/url";
 
@@ -84,7 +85,7 @@ export const crawl = defineCommand({
       url: args.url,
       maxPages: args["max-pages"],
       refresh: args.refresh,
-      cwd: process.cwd(),
+      cwd: cwdOr(CWD_UNAVAILABLE),
       version: packageVersion,
       bunVersion: Bun.version,
       platform: platform(),

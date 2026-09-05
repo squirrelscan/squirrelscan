@@ -701,7 +701,12 @@ export function reexecIntoUpdatedBinary(
     // Always restore the previous disposition: a leaked handler would leave
     // the fallback command (or a test process) ignoring Ctrl-C.
     const release = () => {
-      for (const [signal, handler] of handlers) process.off(signal, handler);
+      // Cast: bun-types >=1.4 declares off/removeListener("memoryPressure")
+      // directly on Process, which hides the inherited EventEmitter overloads
+      // (@types/node only spells out signal names for on/once). The cast
+      // restores them; drop it once bun-types keeps the base signatures.
+      const emitter = process as NodeJS.EventEmitter;
+      for (const [signal, handler] of handlers) emitter.off(signal, handler);
     };
 
     let settled = false;
