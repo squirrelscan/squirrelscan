@@ -15,12 +15,18 @@
  * to support: "Connection timed out", a bare "ETIMEDOUT", "DNS resolution
  * failed", and a bare "WAF".
  *
+ *
+ * Blind spot worth naming: the corpus catches a rule that drifts on the side
+ * being edited. It cannot catch one introduced only on the side nobody
+ * touched, because neither repo's CI runs the other's classifier. That is the
+ * residual risk #1838 removes, and the reason to edit both copies together.
+ *
  * When you change a matcher or a reason sentence, change BOTH copies of this
  * list in the same pass.
  */
 export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> = [
   // The sentences the engine itself writes.
-  ["DNS lookup failed for ejconsultor.es (NXDOMAIN)", "dns"],
+  ["DNS lookup failed for ejconsultor.es: NXDOMAIN", "dns"],
   ["TLS handshake with example.com failed: certificate has expired", "tls"],
   ["Connection to example.com failed before any response", "connection"],
   ["No response from example.com within the request timeout", "timeout"],
@@ -39,6 +45,9 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
   ["getaddrinfo ENOTFOUND example.com", "dns"],
   ["net::ERR_NAME_NOT_RESOLVED", "dns"],
   ["DNS resolution failed for x.com", "dns"],
+  // The parenthesised DNS form, which is what reports published before the
+  // template switched to a colon still carry.
+  ["DNS lookup failed for ejconsultor.es (NXDOMAIN)", "dns"],
   ["net::ERR_CERT_DATE_INVALID", "tls"],
   ["unable to verify the first certificate", "tls"],
   ["The socket connection was closed unexpectedly", "connection"],
