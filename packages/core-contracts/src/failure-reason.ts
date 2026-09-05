@@ -180,7 +180,11 @@ export function auditFailureReasonText(detail: AuditFailureDetail): string {
   const extra = detail.detail ? `: ${detail.detail}` : "";
   switch (detail.code) {
     case "dns":
-      return `DNS lookup failed for ${site}${detail.detail ? ` (${detail.detail})` : ""}`;
+      // A colon, like every other class, NOT parentheses: these sentences are
+      // escaped before they reach a markdown report, and `\(NXDOMAIN\)` in
+      // the most-read line of a failed report reads worse than the risk it
+      // would carry unescaped.
+      return `DNS lookup failed for ${site}${extra}`;
     case "tls":
       return `TLS handshake with ${site} failed${extra}`;
     case "connection":

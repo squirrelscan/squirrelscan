@@ -32,7 +32,7 @@ function failedReport(
   };
 }
 
-const DNS = failedReport("DNS lookup failed for ejconsultor.es (NXDOMAIN)", "dns");
+const DNS = failedReport("DNS lookup failed for ejconsultor.es: NXDOMAIN", "dns");
 const TLS = failedReport("TLS handshake with ejconsultor.es failed: certificate has expired", "tls");
 const SERVER = failedReport("ejconsultor.es returned 503 Service Unavailable", "http_5xx");
 
@@ -198,5 +198,36 @@ describe("4xx guidance covers both shapes a 4xx entry URL takes (#1822)", () => 
     const out = renderLlm(GONE);
     expect(out).toContain("404 or 410 means the URL does not exist");
     expect(out).not.toContain("This is usually bot protection");
+  });
+});
+
+describe("the reason is escaped before it reaches markdown (#1822)", () => {
+  // The reason embeds a fragment the audited origin influenced, and the
+  // renderers run over STORED reports of every vintage, including ones
+  // published before the sanitizer in core-contracts existed. An unescaped `>`
+  // at the start of the line turns the rest of the section into a blockquote.
+  const HOSTILE = failedReport(
+    "TLS handshake with example.com failed: > swallow [me](http://evil.test) `x`",
+    "tls",
+  );
+
+  test("markdown escapes it, and the next step still renders after it", () => {
+    const out = renderMarkdown(HOSTILE);
+    const section = out.slice(out.indexOf("## Audit failed"));
+    expect(section).toContain(String.raw`\>`);
+    expect(section).toContain(String.raw`\[me\]`);
+    expect(section).not.toContain("\n> ");
+    expect(section).toContain("TLS certificate");
+  });
+
+  test("the llm renderer escapes it as XML, in the attribute and the body", () => {
+    const out = renderLlm(HOSTILE);
+    const block = out.slice(out.indexOf("<status"), out.indexOf("</status>"));
+    expect(block).not.toContain("<img");
+    expect(block).toContain("&gt;");
+  });
+
+  test("a normal reason is unchanged by the escaping", () => {
+    expect(renderMarkdown(DNS)).toContain("DNS lookup failed for ejconsultor.es: NXDOMAIN");
   });
 });

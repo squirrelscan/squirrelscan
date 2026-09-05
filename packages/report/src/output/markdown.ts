@@ -214,7 +214,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       // #1822: reason line, then the next step for that failure class.
       const code = reportFailureReasonCode(report);
       if (report.statusReason) {
-        lines.push(report.statusReason);
+        // ESCAPED, not trusted. The reason embeds a fragment the audited origin
+        // influenced (a certificate error, a redirect target), and this renders
+        // STORED reports of every vintage, including ones published before the
+        // sanitizer in core-contracts existed. A bare `>` here would turn the
+        // rest of the section into a blockquote.
+        lines.push(escapeMarkdownInline(report.statusReason));
         lines.push("");
       }
       lines.push(AUDIT_FAILURE_NEXT_STEP[code]);

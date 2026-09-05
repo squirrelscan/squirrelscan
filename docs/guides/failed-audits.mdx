@@ -34,7 +34,7 @@ In the CLI, a failed audit prints the reason and the next step:
 
 ```text
 AUDIT FAILED
-https://example.com - DNS lookup failed for example.com (NXDOMAIN)
+https://example.com - DNS lookup failed for example.com: NXDOMAIN
 Check the domain's DNS records and that the hostname resolves from the public internet.
 ```
 
@@ -43,7 +43,7 @@ The JSON report carries both the sentence and the code, so a CI job can branch o
 ```json
 {
   "status": "failed",
-  "statusReason": "DNS lookup failed for example.com (NXDOMAIN)",
+  "statusReason": "DNS lookup failed for example.com: NXDOMAIN",
   "statusReasonCode": "dns"
 }
 ```
@@ -51,7 +51,7 @@ The JSON report carries both the sentence and the code, so a CI job can branch o
 The `llm` output states the same thing for an agent:
 
 ```xml
-<status state="failed" reason="DNS lookup failed for example.com (NXDOMAIN)">
+<status state="failed" reason="DNS lookup failed for example.com: NXDOMAIN">
   The hostname did not resolve. Check the domain's DNS records, and whether the domain has expired or was recently moved.
 </status>
 ```
