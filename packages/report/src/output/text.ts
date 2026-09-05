@@ -2,7 +2,9 @@
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
+import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
+import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_TEXT_WRAP_WIDTH } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
@@ -178,10 +180,12 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
         "To get a full audit: allowlist the squirrelscan crawler, turn off bot fight mode for the audit, or run it from a trusted network.",
       );
     } else {
-      write(
-        report.statusReason ??
-          "No pages could be fetched from this site, so there was nothing to audit. Check that the site is reachable and try again.",
-      );
+      // #1822: the reason names the class (DNS, TLS, connection, timeout, a
+      // status, a redirect, robots) and the line under it says what to do about
+      // that class. `unknown` keeps the pre-#1822 paragraph.
+      const code = reportFailureReasonCode(report);
+      if (report.statusReason) write(report.statusReason);
+      write(AUDIT_FAILURE_NEXT_STEP[code]);
     }
     write("");
   } else if (report.healthScore) {

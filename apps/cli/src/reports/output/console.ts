@@ -3,6 +3,8 @@
 import type { EditorSummaryView } from "@squirrelscan/report";
 
 import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/control-chars";
+import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
+import { reportFailureReasonCode } from "@squirrelscan/report";
 import {
   carriedTag,
   coverageLine,
@@ -103,6 +105,11 @@ export function generateConsoleReport(
     log(
       `${fmt.dim(report.baseUrl)} • ${report.statusReason ?? "No auditable pages"}`
     );
+    // #1822: the reason above names the failure class; this says what to do
+    // about that class, so the terminal is not the one surface without it.
+    if (report.status === "failed") {
+      log(fmt.dim(AUDIT_FAILURE_NEXT_STEP[reportFailureReasonCode(report)]));
+    }
     // A seed that redirects off-site and is refused is a common way to end up
     // here with nothing to audit, so this branch needs the disclosure too.
     const redirect = seedRedirectLine(report);

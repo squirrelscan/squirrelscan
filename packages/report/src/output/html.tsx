@@ -52,7 +52,7 @@ import {
   isPageUrl,
   isRedundantPageItem,
 } from "../affected-pages";
-import { getAuditFailureNotice } from "../failure-notice";
+import { getAuditFailureNotice, reportFailureReasonCode } from "../failure-notice";
 import { lockedRulesMessage } from "../locked-rules";
 
 export interface HtmlRenderOptions {
@@ -438,7 +438,14 @@ function ScoreFailed({ status }: { status: "failed" | "blocked" }) {
 // only the trailing clause is local — so it can't drift from the shared
 // builder the way a fully hardcoded duplicate would.
 function FailureNotice({ report }: { report: AuditReport }) {
-  const notice = getAuditFailureNotice(report.status, report.baseUrl, report.rateLimited);
+  // #1822: the class the crawl actually failed in, so the notice names DNS,
+  // TLS, a refusal or a timeout instead of one catch-all paragraph.
+  const notice = getAuditFailureNotice(
+    report.status,
+    report.baseUrl,
+    report.rateLimited,
+    reportFailureReasonCode(report),
+  );
   if (!notice) return null;
   return (
     <div className="failure-notice">

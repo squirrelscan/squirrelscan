@@ -12,6 +12,8 @@ import { editorSummaryView } from "../editor-summary";
 import { seedRedirect } from "../coverage";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
+import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
+import { reportFailureReasonCode } from "../failure-notice";
 
 export interface LlmRenderOptions {
   version?: string;
@@ -155,8 +157,13 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         `${indent(1)}To get a full audit: allowlist the squirrelscan crawler, turn off bot fight mode for the audit, or run the CLI from a trusted network with \`squirrel audit ${escapeXml(report.baseUrl)}\`.`,
       );
     } else {
+      // #1822: `reason` on the tag is the one-line class; the body says what
+      // that class means and what to do, third person for the agent surface.
+      // `unknown` keeps the pre-#1822 sentence.
+      const code = reportFailureReasonCode(report);
+      lines.push(`${indent(1)}${escapeXml(AUDIT_FAILURE_NEXT_STEP_THIRD[code])}`);
       lines.push(
-        `${indent(1)}No pages could be fetched from the site, so nothing was audited. The site may have been down, unreachable, or timing out. Check that the site is reachable and try again, or run the CLI with \`squirrel audit ${escapeXml(report.baseUrl)}\`.`,
+        `${indent(1)}Run the CLI with \`squirrel audit ${escapeXml(report.baseUrl)}\` to retry locally.`,
       );
     }
     lines.push("</status>");

@@ -10,6 +10,7 @@ import type {
   PublishedReportRecord,
 } from "@/crawler/storage/types";
 import type {
+  AuditFailureReasonCode,
   AuditReport,
   AuditStatus,
   CheckResult,
@@ -103,6 +104,8 @@ interface SlimJsonReport {
   // Audit validity (#801): absent in slim JSON written before #801 ⇒ completed.
   status?: AuditStatus;
   statusReason?: string;
+  /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
+  statusReasonCode?: AuditFailureReasonCode;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -223,6 +226,9 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
     failed: report.summary.failed,
     ...(report.status ? { status: report.status } : {}),
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
+    ...(report.statusReasonCode
+      ? { statusReasonCode: report.statusReasonCode }
+      : {}),
     siteChecks: [],
     pages: [],
     summary: {

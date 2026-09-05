@@ -188,7 +188,11 @@ export type { AffectedPages, RuleAffectedRollup } from "./affected-pages";
 
 // Failed/blocked audit notice copy (#792, #935) — single source of truth for
 // the static HTML report's FailureNotice and the dashboard's report-detail notice.
-export { getAuditFailureNotice, type AuditFailureNotice } from "./failure-notice";
+export {
+  getAuditFailureNotice,
+  reportFailureReasonCode,
+  type AuditFailureNotice,
+} from "./failure-notice";
 
 // Locked cloud-rules audience messaging (#368, #747, #792, #780) — single
 // source of truth reused by every renderer (html/llm/markdown/text) and the

@@ -3,11 +3,19 @@ import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import { Effect, Duration, Schedule, pipe } from "effect";
 
 import type {
+  AuditFailureDetail,
+  AuditFailureSource,
   RedirectChain,
   RedirectHop,
   ResponseHeaders,
   SecurityHeaders,
 } from "@squirrelscan/core-contracts";
+import {
+  auditFailureDetail,
+  classifyAuditFailureReasonText,
+  classifyFetchErrorCode,
+  fetchErrorCode,
+} from "@squirrelscan/core-contracts/failure-reason";
 import { CHROME_SEC_CH_UA } from "@squirrelscan/utils/constants";
 import { headersForRedirect } from "@squirrelscan/utils/headers";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
@@ -36,6 +44,21 @@ export class CrawlError extends Error {
      * `rate_limit` error, and only when the origin actually sent the header.
      */
     readonly retryAfterMs?: number,
+    /**
+     * The HTTP status the origin answered with, when it answered at all
+     * (#1822). Set for the status guards below (403/429/5xx) so a caller can
+     * classify a root failure as `http_4xx` vs `http_5xx` without re-parsing
+     * the message. Absent for transport-level failures, which never got one.
+     */
+    readonly status?: number,
+    /**
+     * The runtime error code behind a transport failure (#1822), read off the
+     * error's `cause` chain. Preferred over the message when classifying: a
+     * code is a stable contract, the prose around it is not. Bun 1.3 called a
+     * DNS failure `ConnectionRefused` with "Unable to connect"; Bun 1.4 calls
+     * the same failure `ENOTFOUND` (squirrelscan/repo#1840).
+     */
+    readonly errorCode?: string,
   ) {
     super(message);
     this.name = "CrawlError";
@@ -45,27 +68,113 @@ export class CrawlError extends Error {
     return new CrawlError(url, "timeout", "Crawl request timed out");
   }
 
-  static network(url: string, message: string): CrawlError {
-    return new CrawlError(url, "network", message);
+  static network(
+    url: string,
+    message: string,
+    status?: number,
+    errorCode?: string,
+  ): CrawlError {
+    return new CrawlError(url, "network", message, undefined, status, errorCode);
   }
 
   static parse(url: string, message: string): CrawlError {
     return new CrawlError(url, "parse", message);
   }
 
-  static blocked(url: string, message = "Request blocked by server"): CrawlError {
-    return new CrawlError(url, "blocked", message);
+  static blocked(url: string, message = "Request blocked by server", status = 403): CrawlError {
+    return new CrawlError(url, "blocked", message, undefined, status);
   }
 
   static rateLimit(url: string, retryAfterMs?: number, status?: number): CrawlError {
     const suffix = status ? ` (${status})` : "";
     const wait =
       retryAfterMs === undefined ? "" : `, retry after ${Math.round(retryAfterMs / 1000)}s`;
-    return new CrawlError(url, "rate_limit", `Rate limited${suffix}${wait}`, retryAfterMs);
+    // #1822: a throttle without an explicit status is still a 429-shaped
+    // refusal, so it classifies with the other 4xx refusals.
+    return new CrawlError(
+      url,
+      "rate_limit",
+      `Rate limited${suffix}${wait}`,
+      retryAfterMs,
+      status ?? 429,
+    );
   }
 
   static tls(url: string, message: string): CrawlError {
     return new CrawlError(url, "tls", `TLS/connection error: ${message}`);
+  }
+}
+
+/** Hostname of a URL, for a failure reason. Never the path/query. */
+function failureHost(url: string): string | undefined {
+  try {
+    return new URL(url).hostname || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Turn a {@link CrawlError} into the structured failure the report's
+ * `statusReason` / `statusReasonCode` are built from (#1822).
+ *
+ * The `type` + `status` the fetcher already carries settle most classes
+ * outright; only a transport-level `network` failure has to be read off the
+ * runtime's message, which is what `classifyAuditFailureReasonText` is for
+ * (Bun, Node and undici all phrase DNS and socket failures differently). A
+ * message we cannot attribute stays `unknown` and keeps the raw text as its
+ * detail, so the reason is still more specific than "No pages were crawled" and
+ * never reads as though nothing failed.
+ */
+export function crawlErrorToFailureDetail(
+  error: CrawlError,
+  source: AuditFailureSource = "entry",
+): AuditFailureDetail {
+  const host = failureHost(error.url);
+  const message = error.message;
+  const base = { host, source, status: error.status };
+
+  switch (error.type) {
+    case "timeout":
+      return auditFailureDetail({ ...base, code: "timeout" });
+    case "tls":
+      // `CrawlError.tls` prefixes the runtime message; drop the prefix so the
+      // reason sentence does not say "TLS" twice.
+      return auditFailureDetail({
+        ...base,
+        code: "tls",
+        detail: message.replace(/^TLS\/connection error:\s?/, ""),
+      });
+    case "blocked":
+      return auditFailureDetail({
+        ...base,
+        code: "http_4xx",
+        status: error.status ?? 403,
+        detail: message,
+      });
+    case "rate_limit":
+      // Always reported as 429, the status a throttle MEANS, even when the
+      // origin dressed it as a 503 with a Retry-After (#1829). The status it
+      // actually sent is already in the message.
+      return auditFailureDetail({ ...base, code: "http_4xx", status: 429, detail: message });
+    case "network": {
+      if (error.status !== undefined && error.status >= 500) {
+        return auditFailureDetail({ ...base, code: "http_5xx" });
+      }
+      if (error.status !== undefined && error.status >= 400) {
+        return auditFailureDetail({ ...base, code: "http_4xx", detail: message });
+      }
+      return auditFailureDetail({
+        ...base,
+        // The runtime code first, the message only when it names nothing we
+        // recognize: the code is a stable contract, the prose is not.
+        code:
+          classifyFetchErrorCode(error.errorCode) ?? classifyAuditFailureReasonText(message),
+        detail: message,
+      });
+    }
+    case "parse":
+      return auditFailureDetail({ ...base, code: "unknown", detail: message });
   }
 }
 
@@ -300,7 +409,11 @@ function requestWithTiming(
       const isAbort = (error as Error).name === "AbortError" || message.includes("timed out");
       if (isAbort) return CrawlError.timeout(url);
       if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
-      return CrawlError.network(url, (error as Error).message);
+      // #1822: the runtime code is captured HERE because this is the last place
+      // the original error object exists; everything downstream sees only the
+      // CrawlError. Bun 1.4 reports a DNS failure as ENOTFOUND, which no amount
+      // of reading the message reliably recovers on older runtimes.
+      return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
     },
   });
 }
@@ -542,7 +655,7 @@ export function applyStatusGuards(
   }
 
   if (status === 403) {
-    return Effect.fail(CrawlError.blocked(url));
+    return Effect.fail(CrawlError.blocked(url, undefined, 403));
   }
 
   if (status >= 500) {
@@ -554,7 +667,7 @@ export function applyStatusGuards(
       // Cloudflare stamps challenge responses explicitly — a body-independent
       // signal (a 503 passed through from a down origin never carries it).
       if (headers.get("cf-mitigated") === "challenge") {
-        return Effect.fail(CrawlError.blocked(url, "Blocked by Cloudflare challenge (503)"));
+        return Effect.fail(CrawlError.blocked(url, "Blocked by Cloudflare challenge (503)", 503));
       }
       if (body) {
         const challenge = detectWafChallengePage({
@@ -571,6 +684,7 @@ export function applyStatusGuards(
             CrawlError.blocked(
               url,
               `Blocked by ${challenge.provider ?? "bot protection"} challenge (503)`,
+              503,
             ),
           );
         }
@@ -586,7 +700,7 @@ export function applyStatusGuards(
         return Effect.fail(CrawlError.rateLimit(url, retryAfterMs, status));
       }
     }
-    return Effect.fail(CrawlError.network(url, `Server error: ${status}`));
+    return Effect.fail(CrawlError.network(url, `Server error: ${status}`, status));
   }
 
   return Effect.void;

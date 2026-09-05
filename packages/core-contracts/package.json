@@ -10,6 +10,7 @@
     "./limits": "./src/limits.ts",
     "./clamp": "./src/clamp.ts",
     "./control-chars": "./src/control-chars.ts",
+    "./failure-reason": "./src/failure-reason.ts",
     "./untrusted-keys": "./src/untrusted-keys.ts",
     "./credits": "./src/credits.ts",
     "./services": "./src/services.ts",

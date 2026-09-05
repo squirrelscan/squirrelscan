@@ -28,6 +28,10 @@ export * from "./threat-intel";
 // #1185: unsampled publish resolution signal (type + hash).
 export * from "./resolution";
 
+// #1822: failure classification for a zero-page audit (codes, reason text,
+// next steps) — shared by the crawler, the engine, the renderers and the cloud.
+export * from "./failure-reason";
+
 // Import storage types needed locally by interfaces in this file
 import type {
   AgentAccessProbe,
@@ -40,6 +44,7 @@ import type {
 } from "./storage";
 import type { SiteMetadata } from "./site-metadata";
 import type { ResolutionSignal } from "./resolution";
+import type { AuditFailureReasonCode } from "./failure-reason";
 
 export interface CheckItem {
   id: string;
@@ -277,6 +282,14 @@ export interface AuditReport {
     /** Host(s) that throttled the crawl. */
     hosts: string[];
   };
+  /**
+   * Machine-readable class of the failure behind `statusReason` (#1822), so the
+   * email template, the dashboard, the MCP tools and Sentry can branch on the
+   * cause instead of substring-matching prose. Set alongside `statusReason`;
+   * absent on reports stored before #1822, where
+   * `classifyAuditFailureReasonText` recovers the class from the text.
+   */
+  statusReasonCode?: AuditFailureReasonCode;
   healthScore?: HealthScore;
   ruleResults: Record<string, ReportRuleResult>;
   /**

@@ -1,6 +1,8 @@
 // JSON report output
 
+import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
 import type { AuditReport, AuditStatus, CheckItem } from "../types";
+import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
@@ -57,6 +59,8 @@ interface SlimJsonReport {
    * site?" without parsing `statusReason` prose.
    */
   rateLimited?: { pages: number; hosts: string[] };
+  /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
+  statusReasonCode?: AuditFailureReasonCode;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -183,6 +187,12 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
     },
     status: report.status ?? "completed",
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
+    // #1822: a programmatic consumer branches on the class, not on the prose.
+    // Derived when the stored report predates the field, so a CI gate reading
+    // it does not have to special-case older reports.
+    ...(report.status === "failed" || report.status === "blocked"
+      ? { statusReasonCode: reportFailureReasonCode(report) }
+      : {}),
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),

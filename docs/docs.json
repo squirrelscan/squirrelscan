@@ -67,6 +67,7 @@
               "projects",
               "crawl",
               "reports",
+              "guides/failed-audits",
               "guides/badges",
               "guides/browser-rendering",
               "guides/rate-limited-hosts",

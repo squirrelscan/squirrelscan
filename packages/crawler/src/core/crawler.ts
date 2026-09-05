@@ -3,8 +3,15 @@
 
 import { Effect, Stream, PubSub, Duration, Deferred } from "effect";
 
-import type { LinkData, SitemapData } from "@squirrelscan/core-contracts";
+import type {
+  AuditFailureDetail,
+  AuditFailureSource,
+  FrontierSource,
+  LinkData,
+  SitemapData,
+} from "@squirrelscan/core-contracts";
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
+import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
@@ -47,7 +54,12 @@ import type {
 } from "./types";
 
 import { createHostBackoff, type HostBackoffRegistry } from "../host-backoff";
-import { fetchPageWithRetry, type CrawlFetcher, type RateLimitControl } from "../fetcher";
+import {
+  crawlErrorToFailureDetail,
+  fetchPageWithRetry,
+  type CrawlFetcher,
+  type RateLimitControl,
+} from "../fetcher";
 import { normalizeUrl, isInScope, isOffSiteFinalUrl, resolveSeedRedirect } from "../frontier";
 import {
   buildConditionalHeaders,
@@ -83,6 +95,42 @@ import { createTestStorage } from "../storage";
 import { DEFAULT_CRAWLER_CONFIG, CrawlerError } from "./types";
 
 const PATTERN_SAMPLE_LIMIT = 1;
+/**
+ * Which fetch a root failure came from (#1822). The frontier's own `seed`
+ * source is the audited entry URL; everything else reaching a zero-page crawl
+ * came from sitemap discovery, so it is reported as the weaker `sitemap`
+ * source and only used when the seed itself recorded nothing.
+ */
+function failureSourceFor(source: FrontierSource): AuditFailureSource {
+  return source === "seed" ? "entry" : "sitemap";
+}
+
+/**
+ * Host for a failure reason. `urlHostKey` answers the literal string "unknown"
+ * for an unparseable URL, which would render as a hostname in the sentence
+ * ("unknown returned 404"); drop it so the reason falls back to "the site".
+ */
+function failureHostOf(url: string): string | undefined {
+  const host = urlHostKey(url);
+  return host === "unknown" ? undefined : host;
+}
+
+/**
+ * Keep the most explanatory root failure (#1822): the first one recorded wins,
+ * except that a failure on the audited entry URL always displaces one picked up
+ * from a sitemap URL. Order matters because sitemap URLs and the seed are both
+ * enqueued at depth 0 and can be processed in either order.
+ */
+function preferRootFailure(
+  current: AuditFailureDetail | undefined,
+  incoming: AuditFailureDetail | undefined,
+): AuditFailureDetail | undefined {
+  if (!incoming) return current;
+  if (!current) return incoming;
+  if (current.source !== "entry" && incoming.source === "entry") return incoming;
+  return current;
+}
+
 // Hard cap on robots.txt Crawl-delay when respectRobots is true (#790).
 // WP Engine/Yoast sites commonly ship "Crawl-delay: 10", which stretched a
 // 25-page quick audit past 4 minutes of pure sleep.
@@ -305,6 +353,19 @@ export function createCrawler(
     // sitemap reported "907 pages rate limited", which is both wasted work and
     // a wildly overstated loss.
     let pagesRateLimitedThisRun = 0;
+    /**
+     * Authoritative root failure for the current crawl (#1822).
+     *
+     * `updateStats` below is a read-modify-write and the worker pool runs
+     * `concurrency` of them at once, so a worker holding a stale read would
+     * write its own `current.rootFailure` back over a failure another worker
+     * had just recorded (the storage layer's merge is a plain spread of the
+     * full stats object, so `undefined` really does erase it). Keeping the
+     * value here and writing THIS on every stats update means a stale read can
+     * never lose it, and the entry-over-sitemap precedence holds regardless of
+     * the order the workers interleave in. Seeded from storage on resume.
+     */
+    let rootFailure: AuditFailureDetail | undefined;
 
     // Breadth-first tracking
     const prefixStats = new Map<string, { crawled: number; queued: number }>();
@@ -493,6 +554,18 @@ export function createCrawler(
         // Check robots
         if (config.respectRobots && robots && !robots.isAllowed(normalized)) {
           logger.debug("url skipped (robots)", normalized);
+          // #1822: a disallowed SEED is the whole audit, not one skipped URL —
+          // the crawl then ends with zero pages and no fetch ever failed, so
+          // this is the only place the cause is knowable.
+          if (source === "seed") {
+            yield* updateStats(crawlId, {
+              rootFailure: auditFailureDetail({
+                code: "robots",
+                host: failureHostOf(normalized),
+                source: "entry",
+              }),
+            });
+          }
           yield* storage.upsertFrontier(crawlId, {
             normalizedUrl: normalized,
             rawUrl,
@@ -1011,6 +1084,10 @@ export function createCrawler(
             yield* updateStats(crawlId, {
               pagesFailed: 1,
               ...(blockedFetch ? { pagesBlocked: 1 } : {}),
+              // #1822: the fetcher knows WHY (DNS, TLS, socket, timeout, 5xx).
+              // Without this the reason is discarded here and a zero-page audit
+              // can only say "No pages were crawled".
+              rootFailure: crawlErrorToFailureDetail(error, failureSourceFor(entry.source)),
             });
             markPrefixFailed(entry.normalizedUrl, entry.depth);
             return;
@@ -1043,7 +1120,18 @@ export function createCrawler(
               depth: entry.depth,
               timestamp: Date.now(),
             });
-            yield* updateStats(crawlId, { pagesFailed: 1 });
+            yield* updateStats(crawlId, {
+              pagesFailed: 1,
+              // #1822: only the redirect TARGET'S HOST goes in the reason. The
+              // full URL is site-chosen and ends up quoted in an email and a
+              // markdown report; a hostname cannot smuggle a path or query.
+              rootFailure: auditFailureDetail({
+                code: "redirect",
+                host: failureHostOf(entry.normalizedUrl),
+                detail: `redirected off-site to ${urlHostKey(result.finalUrl)}`,
+                source: failureSourceFor(entry.source),
+              }),
+            });
             markPrefixFailed(entry.normalizedUrl, entry.depth);
             return;
           }
@@ -1146,7 +1234,19 @@ export function createCrawler(
               depth: entry.depth,
               timestamp: Date.now(),
             });
-            yield* updateStats(crawlId, { pagesFailed: 1 });
+            yield* updateStats(crawlId, {
+              pagesFailed: 1,
+              // #1822: a 4xx (and, from a custom fetcher, a 5xx) comes back as a
+              // RESULT and is stored as a page, so it never reaches the fetch
+              // error path above. Recorded here so a site whose entry URL only
+              // ever 404s says so instead of "no pages could be fetched".
+              rootFailure: auditFailureDetail({
+                code: result.status >= 500 ? "http_5xx" : "http_4xx",
+                status: result.status,
+                host: failureHostOf(entry.normalizedUrl),
+                source: failureSourceFor(entry.source),
+              }),
+            });
             markPrefixFailed(entry.normalizedUrl, entry.depth);
             return;
           }
@@ -1337,6 +1437,13 @@ export function createCrawler(
         const current = yield* storage.getStats(crawlId);
         if (!current) return;
 
+        // Fold before the write so every concurrent updateStats carries the
+        // newest failure, not the one its own (possibly stale) read saw.
+        rootFailure = preferRootFailure(
+          preferRootFailure(rootFailure, current.rootFailure),
+          updates.rootFailure,
+        );
+
         const newStats: CrawlStats = {
           ...current,
           pagesTotal:
@@ -1358,6 +1465,10 @@ export function createCrawler(
             updates.cacheHitsByReason,
           ),
           bytesTotal: current.bytesTotal + (updates.bytesTotal ?? 0),
+          // #1822: not a counter. The in-memory value is the authority (see its
+          // declaration); `current` only contributes on the first update after a
+          // resume, and `updates` can only displace a weaker source.
+          rootFailure,
         };
 
         // Update average load time
@@ -1409,6 +1520,9 @@ export function createCrawler(
         // forgetting that lets the resumed run dispatch them all over again.
         const priorStats = yield* storage.getStats(crawlId).pipe(Effect.orElseSucceed(() => null));
         pagesRateLimitedThisRun = priorStats?.pagesRateLimited ?? 0;
+        // Resume-safe for the same reason (#1822): a crawl continuing from
+        // persisted stats keeps whatever root failure the earlier pass recorded.
+        rootFailure = priorStats?.rootFailure;
         // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
         // a run (an exhausted host is skipped before any request, so it can never
         // earn the successes that recover it), and carrying it forward would make
@@ -1569,6 +1683,19 @@ export function createCrawler(
                   ),
                   Effect.catchAll(() => Effect.void),
                 );
+                // #1822: a wedged entry fetch dies HERE, not in processUrl's
+                // fetch-error path, so without this an audit whose root simply
+                // never answered fell back to the generic reason instead of
+                // saying it timed out. Stats only, and only the failure class:
+                // the counters stay with the paths that own them.
+                yield* updateStats(crawlId, {
+                  rootFailure: auditFailureDetail({
+                    code: "timeout",
+                    host: failureHostOf(entry.normalizedUrl),
+                    detail: `no response within ${urlTimeoutMs}ms`,
+                    source: failureSourceFor(entry.source),
+                  }),
+                }).pipe(Effect.catchAll(() => Effect.void));
               }),
             ),
             Effect.catchAll((error) => {

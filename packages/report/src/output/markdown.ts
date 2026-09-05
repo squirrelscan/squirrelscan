@@ -2,7 +2,9 @@
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
+import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
+import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
@@ -209,10 +211,18 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push("- Turn off bot fight mode (or the blocking rule) for the audit.");
       lines.push("- Run the audit from a trusted network.");
     } else {
-      lines.push(
-        report.statusReason ??
-          "No pages could be fetched from this site, so there was nothing to audit. Check that the site is reachable and try again.",
-      );
+      // #1822: reason line, then the next step for that failure class.
+      const code = reportFailureReasonCode(report);
+      if (report.statusReason) {
+        // ESCAPED, not trusted. The reason embeds a fragment the audited origin
+        // influenced (a certificate error, a redirect target), and this renders
+        // STORED reports of every vintage, including ones published before the
+        // sanitizer in core-contracts existed. A bare `>` here would turn the
+        // rest of the section into a blockquote.
+        lines.push(escapeMarkdownInline(report.statusReason));
+        lines.push("");
+      }
+      lines.push(AUDIT_FAILURE_NEXT_STEP[code]);
     }
     lines.push("");
   } else if (report.healthScore) {
