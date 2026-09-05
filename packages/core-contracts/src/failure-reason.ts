@@ -438,7 +438,11 @@ export function classifyAuditFailureReasonText(
   // whose BOTH halves are required.
   if (
     (r.includes("page.goto") && r.includes("timeout")) ||
-    /timeout\s+\d+\s?ms\s+exceeded/.test(r) ||
+    // `\s*`, not `\s?`: Playwright writes "Timeout 20000ms exceeded" and
+    // "Timeout 20000 ms exceeded", and a double space should not miss. Not a
+    // backtracking risk despite the adjacent quantifiers, because `\d` and
+    // `\s` are disjoint, so there is no input the engine can split two ways.
+    /timeout\s+\d+\s*ms\s+exceeded/.test(r) ||
     r.includes("navigation timeout") ||
     r.includes("err_timed_out") ||
     r.includes("etimedout") ||
@@ -494,6 +498,14 @@ export function classifyAuditFailureReasonText(
  * failures are worded that way ("Callback 'mark-completed' failed after 3
  * attempts (HTTP 500: ...)"), and reading that as a status blames the audited
  * site for our outage.
+ *
+ * The lead-in is a heuristic, not a parse: "job returned 503 retries remaining"
+ * would read as a 5xx. Bounded on purpose, and the residual risk is a FUTURE
+ * internal message worded "<thing> returned NNN" reaching a surface that
+ * classifies it. The guard against that is not a cleverer regex, it is the
+ * internal-failure branch at the top of `classifyAuditFailureReasonText`: when
+ * a new internal message shape starts arriving, give it an entry there rather
+ * than trying to make this smarter.
  */
 function statusIn(reason: string, min: number, max: number): boolean {
   const match = /\b(?:returned|server error:)\s(\d{3})\b/.exec(reason);

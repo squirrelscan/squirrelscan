@@ -32,6 +32,18 @@ describe("classifier parity corpus (#1822)", () => {
     }
   });
 
+  test("Playwright's timeout wording matches with or without a space before ms", () => {
+    // `\s*` not `\s?`: Playwright writes both spacings, and a double space
+    // should not fall through to `unknown`.
+    for (const reason of [
+      "page.goto: Timeout 20000ms exceeded",
+      "Timeout 20000 ms exceeded",
+      "Timeout 20000  ms exceeded",
+    ]) {
+      expect(classifyAuditFailureReasonText(reason)).toBe("timeout");
+    }
+  });
+
   test("our own internal failures never read as the audited site's", () => {
     // The half of the corpus that matters most: every one of these would
     // otherwise tell a site owner to fix something that was never theirs.
