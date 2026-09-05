@@ -42,15 +42,6 @@ Two things still apply at that moment:
 
 You can also switch recurring audits on yourself at any time from the **Scheduled Audits** card, without waiting for an audit to complete. Turning them off is permanent until you turn them back on: a later audit will not switch them on again.
 
-## When a schedule pauses itself
-
-Recurring audits pause automatically, and you are emailed about it, when either of these happens:
-
-- **Three audits of the site fail in a row.** Any audit counts, whether it was scheduled, run from the dashboard, or run from the CLI. A completed or cancelled audit in between clears the streak.
-- **The balance is below the audit base cost.** The run is skipped without a charge and the schedule pauses rather than re-skipping every week.
-
-Fix what is wrong, then turn the schedule back on from the **Scheduled Audits** card.
-
 ## How runs behave
 
 - Each scheduled run is a normal cloud audit and **spends [credits](/cloud/credits)** like any other cloud audit. Stay within budget with the same per-audit spend controls.
@@ -91,7 +82,7 @@ To start the audits again, open the website in the dashboard and pick a cadence 
 
 Two conditions stop a schedule without you asking, so a recurring audit cannot keep spending credits on something that is not working:
 
-- **Three failed runs in a row.** Usually an unreachable site, a firewall or WAF blocking our crawler, or a URL that has moved. Failed audits are refunded, so the failures themselves cost nothing.
+- **Three failed audits in a row.** Any audit of the site counts, whether it was scheduled, started from the dashboard, or run from the CLI, so retrying a broken site by hand counts towards the same three. A completed or cancelled audit in between clears the streak. Usually an unreachable site, a firewall or WAF blocking our crawler, or a URL that has moved. Failed audits are refunded, so the failures themselves cost nothing.
 - **Not enough credits.** A run the balance cannot cover is skipped without a charge, and the schedule pauses instead of skipping again every cycle.
 
 Either way an email says which it was, and it arrives whatever the website's **Settings → Alerts** toggle says, because a credit-spending service switching itself off is account news. It is throttled to roughly one per account in any rolling 24 hours, so several sites pausing around the same time do not each send mail; the rest appear in the dashboard bell. Turn the schedule back on from **Settings → Schedule** once the cause is fixed.
