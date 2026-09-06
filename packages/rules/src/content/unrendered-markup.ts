@@ -85,10 +85,10 @@ export function isBlockElement(el: Element): boolean {
 /**
  * True for any element whose subtree is source-on-display rather than prose.
  *
- * One pass over `attributes`, not five: this runs on every element of every
- * crawled page, and `getAttrCI` walks the whole list per call. getAttribute
- * itself is case-SENSITIVE on this parser, which is why the names are folded
- * here rather than looked up directly.
+ * Attribute names are folded here rather than looked up by name because
+ * getAttribute is case-SENSITIVE on this parser. Reading them in ONE pass
+ * matters: the by-name helper walks the whole attribute list per call, so the
+ * five lookups this needs cost five walks of every element of every page.
  */
 export function isCodeLikeElement(el: Element): boolean {
   const tag = el.tagName?.toLowerCase();
@@ -341,7 +341,11 @@ export type UnrenderedMarkupKind =
 
 export interface UnrenderedMarkupFinding {
   kind: UnrenderedMarkupKind;
-  /** A short, single-line excerpt of the first occurrence. */
+  /**
+   * A short, single-line excerpt of the occurrence worth showing: the first
+   * one, except for `escaped-html-tag`, where it is the tag that made the
+   * family reportable rather than whichever bare mention came first.
+   */
   sample: string;
   count: number;
 }
@@ -495,7 +499,7 @@ export const unrenderedMarkupRule: Rule = {
     name: "Unrendered Markup",
     description: "Detects literal markdown or escaped HTML leaking into rendered copy",
     solution:
-      'Something rendered a value as plain text that was authored as markup. Find the field, not the page: a CMS that stores markdown and a template that prints it without a markdown-to-HTML pass produces literal `**bold**` and `[text](url)` everywhere that field appears, and fixing one page leaves the rest broken. Visible `<p>` or `<a href` means the opposite mistake — HTML was escaped twice, usually by escaping a value that a templating engine (Jinja, Twig, Blade, JSX) had already escaped, so remove the manual escape rather than marking the value safe. Visible `&nbsp;` or `&amp;` means the entity itself was encoded a second time on the way in, which is normally an import or a rich-text editor round-trip, so re-import the affected content. If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.',
+      'Something rendered a value as plain text that was authored as markup. Find the field, not the page: a CMS that stores markdown and a template that prints it without a markdown-to-HTML pass produces literal `**bold**` and `[text](url)` everywhere that field appears, and fixing one page leaves the rest broken. Visible `<p>` or `<a href` means the opposite mistake: HTML was escaped twice, usually by escaping a value that a templating engine (Jinja, Twig, Blade, JSX) had already escaped, so remove the manual escape rather than marking the value safe. Visible `&nbsp;` or `&amp;` means the entity itself was encoded a second time on the way in, which is normally an import or a rich-text editor round-trip, so re-import the affected content. If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.',
     category: "content",
     scope: "page",
     severity: "warning",
