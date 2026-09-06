@@ -427,6 +427,10 @@ describe("placeholderTextRule — what a reader never sees", () => {
   });
 });
 
+// The block boundary wraps each matching element on BOTH sides (#1352 found that
+// opening it alone leaves a block glued to the inline content after it), so the
+// expected strings below carry a closing separator too. What each test asserts
+// is unchanged: subtrees become a break, inline elements do not.
 describe("getRenderedProseText", () => {
   const prose = (body: string) => {
     const { document } = parseHTML(page(body));
@@ -434,11 +438,13 @@ describe("getRenderedProseText", () => {
   };
 
   test("script-like and code-like subtrees become a boundary", () => {
-    expect(prose("<p>a<script>x</script>b<code>y</code>c</p>")).toBe("\na\nb\nc");
+    expect(prose("<p>a<script>x</script>b<code>y</code>c</p>")).toBe("\na\nb\nc\n");
   });
 
   test("<template> content is inert markup, not text", () => {
-    expect(prose('<p>a</p><template id="t"><li>{{ x }}</li></template><p>b</p>')).toBe("\na\n\nb");
+    expect(prose('<p>a</p><template id="t"><li>{{ x }}</li></template><p>b</p>')).toBe(
+      "\na\n\n\nb\n",
+    );
   });
 
   test("every code-container class is excluded", () => {
@@ -470,9 +476,9 @@ describe("getRenderedProseText", () => {
   });
 
   test("block elements are separated, inline elements are not", () => {
-    expect(prose("<p>your <b>company</b> name</p>")).toBe("\nyour company name");
+    expect(prose("<p>your <b>company</b> name</p>")).toBe("\nyour company name\n");
     expect(prose("<tr><td>Author</td><td>undefined</td></tr>")).toBe(
-      "\n\nAuthor\nundefined",
+      "\n\nAuthor\n\nundefined\n\n",
     );
   });
 });
