@@ -102,7 +102,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // harness supplies empty resourceSizes/scripts pools, so the rule has no
       // sub-resource to judge — which is why the pass/warn/fail tallies and
       // healthScore.overall (48) are all UNMOVED and only the raw count shifts.
-      expect(v1.findings.length).toBe(98221);
+      // 98221 -> 98721: content/placeholder-text is page-scoped and always
+      // speaks, so like content/hidden-text it emits one check across the 500
+      // fixture pages that have a document (#1350). All 500 PASS, which is why
+      // healthScore.overall is still 48: the synthetic site writes real copy.
+      expect(v1.findings.length).toBe(98721);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -111,10 +115,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 272 -> 273 schema/rating-scope, 273 -> 274 crawl/sitemap-lastmod-churn,
       // 274 -> 275 crawl/sitemap-lastmod-drift, 275 -> 276
       // content/date-agreement, 276 -> 277 links/no-contextual-inbound,
-      // 277 -> 278 social/asset-divergence, 278 -> 279 perf/asset-compression;
-      // anything else means a rule id leaked in, so fix that rather than this
-      // number.
-      expect(v1.perRuleTally.length).toBe(279);
+      // 277 -> 278 social/asset-divergence, 278 -> 279 perf/asset-compression,
+      // 279 -> 280 content/placeholder-text; anything else means a rule id
+      // leaked in, so fix that rather than this number.
+      expect(v1.perRuleTally.length).toBe(280);
     },
     180_000,
   );

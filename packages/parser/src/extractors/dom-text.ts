@@ -22,11 +22,20 @@ const TEXT_NODE = 3;
  * removing an element GLUES its neighbours together, so `Ã<code>x</code>©` reads
  * back as `Ã©`. Callers that scan the result for character sequences must pass a
  * separator, or they will see sequences that exist in neither fragment.
+ *
+ * `isBoundary` (optional) additionally emits `separator` on ENTERING a matching
+ * element. `.textContent` joins adjacent blocks with nothing at all, so
+ * `<td>Author</td><td>undefined</td>` reads back as `Authorundefined` and no
+ * word-boundary pattern can see either cell. Entering is enough to separate
+ * siblings: the next block's own entry closes the previous one. Callers that
+ * judge WORDS rather than characters want this; callers reproducing
+ * `.textContent` must leave it off.
  */
 export function collectTextExcluding(
   root: Node,
   isExcluded: (el: Element) => boolean,
-  separator = ""
+  separator = "",
+  isBoundary?: (el: Element) => boolean
 ): string {
   const out: string[] = [];
   // Explicit stack of remaining child lists; index tracks position in each.
@@ -45,6 +54,7 @@ export function collectTextExcluding(
         if (separator) out.push(separator);
         continue;
       }
+      if (separator && isBoundary?.(node as Element)) out.push(separator);
       const children = node.childNodes;
       for (let i = children.length - 1; i >= 0; i--) {
         stack.push(children[i] as Node);

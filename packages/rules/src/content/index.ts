@@ -15,6 +15,7 @@ import { keywordStuffingRule } from "./keyword-stuffing";
 import { metaInBodyRule } from "./meta-in-body";
 import { mojibakeRule } from "./mojibake";
 import { mimeTypeRule } from "./mime-type";
+import { placeholderTextRule } from "./placeholder-text";
 import { contentQualityRule } from "./quality";
 import { readingLevelRule } from "./reading-level";
 import { staleCopyrightRule } from "./stale-copyright";
@@ -42,6 +43,7 @@ export const rules: Rule[] = [
   thinVsSiteNormRule,
   titlePatternOutlierRule,
   dateAgreementRule,
+  placeholderTextRule,
 ];
 
 export {
@@ -59,6 +61,7 @@ export {
   metaInBodyRule,
   mimeTypeRule,
   mojibakeRule,
+  placeholderTextRule,
   readingLevelRule,
   staleCopyrightRule,
   thinVsSiteNormRule,

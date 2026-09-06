@@ -49,3 +49,31 @@ describe("collectTextExcluding separator", () => {
     expect(el.querySelectorAll("code").length).toBe(1);
   });
 });
+
+describe("collectTextExcluding — block boundaries", () => {
+  const isTd = tagExcluder(new Set(["td"]));
+
+  test("without isBoundary, adjacent cells fuse into one word", () => {
+    // `.textContent` semantics, and the reason the option exists.
+    expect(collectTextExcluding(body("<tr><td>Author</td><td>undefined</td></tr>"), isCode)).toBe(
+      "Authorundefined",
+    );
+  });
+
+  test("isBoundary emits the separator on ENTERING a matching element", () => {
+    expect(
+      collectTextExcluding(body("<tr><td>Author</td><td>undefined</td></tr>"), isCode, "\n", isTd),
+    ).toBe("\nAuthor\nundefined");
+  });
+
+  test("a boundary separates, it never joins", () => {
+    // Text already flowing through one element must not gain a break inside it.
+    expect(collectTextExcluding(body("<td>two words</td>"), isCode, "\n", isTd)).toBe(
+      "\ntwo words",
+    );
+  });
+
+  test("an empty separator disables boundaries as well as skip markers", () => {
+    expect(collectTextExcluding(body("<tr><td>a</td><td>b</td></tr>"), isCode, "", isTd)).toBe("ab");
+  });
+});
