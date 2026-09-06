@@ -24,6 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
+      # First: it takes ~20ms and it is the check that explains itself. Fails if
+      # a test file lands outside every suite, if two suites would run the same
+      # file, if a named suite points at a package that no longer exists, or if
+      # the CLI tests job stops matching scripts/test-suites.ts.
+      - name: Check every test suite is wired into CI
+        run: bun run scripts/test-suites.ts --check
       - name: Check formatting
         run: bun run format:check
       - name: Lint
@@ -38,6 +44,43 @@ jobs:
       - name: Check plugin manifests are in sync
         run: bun run scripts/sync-plugin-manifests.ts --check
 
+  # ---------------------------------------------------------------------------
+  # Which test suites run where (#1670):
+  #
+  #   CLI tests (this job)  every test file in the repo, one step per suite.
+  #                         This job was a single bare `bun test`, which walks the
+  #                         WHOLE tree — packages/* already gated every PR, just
+  #                         invisibly, under a job named for apps/cli. The steps
+  #                         below run exactly that set; a red step now names the
+  #                         package. `rest` is the complement of the named suites,
+  #                         so a new package is covered the day it lands.
+  #   Audit engine golden   packages/audit-engine golden/streaming/redirect/deadline
+  #                         files, again, on their own — a corpus regression is
+  #                         unreadable inside a 400-file log.
+  #   Release tooling       scripts/release-version.test.ts, again, next to the
+  #                         changelog shell test.
+  #   release.yml           still one bare whole-tree `bun test` before a release.
+  #
+  # The last three deliberately re-run files the steps below already cover.
+  #
+  # "Every test file" means what bun discovers: *.test.* / *.spec.* / *_test.* /
+  # *_spec.* with a js/ts extension, any case, outside dot-directories.
+  # scripts/test-suites.ts owns that definition and the split; the quality job's
+  # --check step fails if the two ever disagree.
+  #
+  # Do NOT swap these for `bun run test`: that script is `cd apps/cli && bun test`
+  # and would drop every package. The job name is fixed by the "CLI tests"
+  # required status check in the repo ruleset; renaming it means updating the
+  # ruleset in the same change or every PR blocks on a check that never reports.
+  #
+  # Wall time, measured on run 33955204147 (400 files, 251.6s total):
+  #   audit-engine 143.0s · crawler 60.9s · cli 24.5s · rest 20.4s
+  #   rules 2.5s · report 0.2s
+  # Sequential steps keep that total unchanged. Cheapest first, so a fast suite
+  # still reports if the slow one exhausts timeout-minutes. A parallel matrix
+  # would cut the job to ~160s but renames the check per suite, hence a ruleset
+  # edit; not worth it for one job on the critical path.
+  # ---------------------------------------------------------------------------
   cli-tests:
     name: CLI tests
     needs: quality
@@ -45,8 +88,29 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup-bun
-      - run: bun test
+      - id: setup
+        uses: ./.github/actions/setup-bun
+      # Every suite runs even when an earlier one is red, the way the single bare
+      # `bun test` reported every failure at once; each still fails the job. The
+      # setup guard keeps a broken toolchain to one red step instead of six.
+      - name: Report tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run report
+      - name: Rules tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rules
+      - name: Remaining package and script tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rest
+      - name: apps/cli tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run cli
+      - name: Crawler tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run crawler
+      - name: Audit engine tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run audit-engine
 
   installer-scripts:
     name: Installer script syntax
