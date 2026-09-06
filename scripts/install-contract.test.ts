@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,6 +8,195 @@ const powershellInstaller = await Bun.file(new URL("../install.ps1", import.meta
 const npmPostinstall = await Bun.file(
   new URL("../npm/scripts/postinstall.js", import.meta.url),
 ).text();
+
+// --- curl test double -----------------------------------------------------
+// install.sh pins every curl to HTTPS (#165), so a plaintext loopback server
+// can no longer stand in for an endpoint, and a TLS one would need a CA the
+// child curl trusts — macOS ships a SecureTransport curl that does not read
+// CURL_CA_BUNDLE, so that would pass in CI and fail on half the dev machines.
+// Shim curl on PATH instead. Recording argv is also what proves the hardening
+// flags reach a real invocation rather than merely appearing in the source.
+const CURL_SHIM = `#!/bin/bash
+for a in "$@"; do printf '%s\\0' "$a"; done >> "$SHIM_LOG"
+printf '\\036' >> "$SHIM_LOG"
+
+if [ -n "\${SHIM_FAIL_MATCH:-}" ]; then
+  for a in "$@"; do
+    case "$a" in *"$SHIM_FAIL_MATCH"*) exit 22 ;; esac
+  done
+fi
+
+out=""
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-o" ]; then out="$a"; fi
+  prev="$a"
+done
+
+if [ -n "$out" ]; then
+  printf '%s' "\${SHIM_BODY:-}" > "$out"
+else
+  printf '%s' "\${SHIM_BODY:-}"
+fi
+exit 0
+`;
+
+// Two sourceable cuts of the installer: everything above the EXIT trap (the
+// reporting preamble), and everything above the final `main "$@"` (the whole
+// script as a function library, which is what the download helpers need).
+const INSTALLER_PREAMBLE = shellInstaller.slice(
+  0,
+  shellInstaller.indexOf("trap report_on_exit EXIT"),
+);
+const INSTALLER_BODY = shellInstaller.slice(0, shellInstaller.lastIndexOf('\nmain "$@"'));
+
+type CurlShimRun = {
+  /** argv of each curl invocation, in the order the script made them. */
+  calls: string[][];
+  stdout: string;
+  stderr: string;
+  code: number;
+};
+
+const parseCurlLog = (raw: string): string[][] =>
+  raw
+    .split("\u001e")
+    .filter((record) => record.length > 0)
+    // Every record is `arg\0arg\0…arg\0`, so the split leaves a trailing "".
+    .map((record) => record.split("\u0000").slice(0, -1));
+
+const runWithCurlShim = async (
+  script: string,
+  {
+    cut = "body",
+    body = "",
+    failMatch = "",
+    env = {},
+    settleMs = 0,
+  }: {
+    cut?: "body" | "preamble";
+    /** What the shim answers with: written to `-o <file>` when given, else stdout. */
+    body?: string;
+    /** The shim exits 22 (curl's HTTP-error code) when any argv contains this. */
+    failMatch?: string;
+    env?: Record<string, string | undefined>;
+    /** How long to wait for a detached (backgrounded) curl to log its argv. */
+    settleMs?: number;
+  } = {},
+): Promise<CurlShimRun> => {
+  const dir = mkdtempSync(join(tmpdir(), "install-curl-shim-"));
+  const log = join(dir, "curl-calls");
+  const shim = join(dir, "curl");
+  const sourced = join(dir, "installer.sh");
+  await Bun.write(shim, CURL_SHIM);
+  chmodSync(shim, 0o755);
+  await Bun.write(sourced, cut === "body" ? INSTALLER_BODY : INSTALLER_PREAMBLE);
+  await Bun.write(log, "");
+
+  try {
+    const proc = Bun.spawn(["bash", "-c", `source "$1"; ${script}`, "--", sourced], {
+      env: {
+        ...process.env,
+        NO_TELEMETRY: "1",
+        PATH: `${dir}:${process.env.PATH ?? ""}`,
+        SHIM_LOG: log,
+        SHIM_BODY: body,
+        SHIM_FAIL_MATCH: failMatch,
+        ...env,
+      } as Record<string, string>,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const code = await proc.exited;
+    for (let waited = 0; waited < settleMs; waited += 50) {
+      if ((await Bun.file(log).text()) !== "") break;
+      await Bun.sleep(50);
+    }
+    return { calls: parseCurlLog(await Bun.file(log).text()), stdout, stderr, code };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+// --- curl transport hardening (#165) --------------------------------------
+// curl's defaults follow a redirect from https straight to plain http and
+// negotiate whatever TLS version the local build still allows.
+const CURL_HARDENING = [
+  ["--proto", "=https"],
+  ["--proto-redir", "=https"],
+  ["--tlsv1.2"],
+  ["--max-redirs", "3"],
+];
+
+/** Which hardening options are absent from a recorded argv, as adjacent pairs. */
+const missingFromArgv = (argv: string[]): string[] => {
+  const joined = `\u0000${argv.join("\u0000")}\u0000`;
+  return CURL_HARDENING.filter(
+    (option) => !joined.includes(`\u0000${option.join("\u0000")}\u0000`),
+  ).map((option) => option.join(" "));
+};
+
+/** The `--data` payload of a recorded argv. */
+const curlDataArg = (argv: string[]): string => argv[argv.indexOf("--data") + 1] ?? "";
+
+/**
+ * Every curl the script actually executes, as (1-based line, folded logical
+ * line). Skips comments, the `command -v curl` presence checks, and the copy
+ * of the one-liner inside user-facing hint text — a curl preceded by an odd
+ * number of double quotes on its line is inside a string, not in command
+ * position. `curl_args=(…)` is not matched: the name is not the bare word.
+ */
+const curlInvocations = (script: string): { line: number; text: string }[] => {
+  const lines = script.split("\n");
+  const found: { line: number; text: string }[] = [];
+  for (const [index, line] of lines.entries()) {
+    if (/^\s*#/.test(line)) continue;
+    const match = /(?<![\w./-])curl(?=\s)/.exec(line);
+    if (!match) continue;
+    if (/command\s+-v\s+curl/.test(line)) continue;
+    if ((line.slice(0, match.index).match(/"/g) ?? []).length % 2 === 1) continue;
+    // Fold bash line continuations so the whole argument list is in view.
+    let text = line;
+    for (let next = index; /\\$/.test(lines[next]) && next + 1 < lines.length; next += 1) {
+      text += `\n${lines[next + 1]}`;
+    }
+    found.push({ line: index + 1, text });
+  }
+  return found;
+};
+
+/** Quoting differs between the array literal and the sh re-exec; ignore it. */
+const unquote = (text: string) => text.replace(/["']/g, "").replace(/\s+/g, " ");
+
+const arrayRefs = (text: string): string[] =>
+  [...text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\[@\]\}/g)].map((match) => match[1]);
+
+/** Whether an argv array is seeded from CURL_TLS_ARGS, or spells the flags out. */
+const arrayIsHardened = (script: string, name: string, seen: Set<string>): boolean => {
+  if (name === "CURL_TLS_ARGS") return true;
+  if (seen.has(name)) return false;
+  seen.add(name);
+  const definition = new RegExp(`(?:^|\\s)(?:local\\s+)?${name}=\\(([^)]*)\\)`, "m").exec(script);
+  if (!definition) return false;
+  const flat = unquote(definition[1]);
+  return (
+    arrayRefs(flat).some((ref) => arrayIsHardened(script, ref, seen)) ||
+    CURL_HARDENING.every((option) => flat.includes(option.join(" ")))
+  );
+};
+
+/** Which hardening options a call site neither spells out nor inherits. */
+const missingHardening = (script: string, invocation: string): string[] => {
+  const flat = unquote(invocation);
+  if (arrayRefs(flat).some((ref) => arrayIsHardened(script, ref, new Set()))) return [];
+  return CURL_HARDENING.filter((option) => !flat.includes(option.join(" "))).map((option) =>
+    option.join(" "),
+  );
+};
 
 describe("installer privacy and supply-chain contracts", () => {
   test("NO_TELEMETRY uses presence semantics in both standalone installers", () => {
@@ -107,48 +296,17 @@ describe("self install killed by a signal", () => {
   });
 
   test("the killed step is what report_error actually POSTs", async () => {
-    const preambleEnd = shellInstaller.indexOf("trap report_on_exit EXIT");
-    const preamble = join(tmpdir(), `install-kill-report-${process.pid}.sh`);
-    await Bun.write(preamble, shellInstaller.slice(0, preambleEnd));
+    const { calls } = await runWithCurlShim(
+      'report_error "$(self_install_step_for_code 137)" 137 "killed" ""; sleep 1',
+      { cut: "preamble", env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
+    );
 
-    const received: Record<string, unknown>[] = [];
-    const server = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        received.push((await request.json()) as Record<string, unknown>);
-        return new Response(null, { status: 204 });
-      },
-    });
-
-    try {
-      const proc = Bun.spawn(
-        [
-          "bash",
-          "-c",
-          'source "$1"; report_error "$(self_install_step_for_code 137)" 137 "killed" ""; sleep 1',
-          "--",
-          preamble,
-        ],
-        {
-          env: {
-            ...process.env,
-            NO_TELEMETRY: undefined,
-            SQUIRREL_ERROR_ENDPOINT: `http://127.0.0.1:${server.port}/error`,
-          } as Record<string, string>,
-        },
-      );
-      await proc.exited;
-      for (let i = 0; i < 100 && received.length === 0; i++) await Bun.sleep(50);
-
-      expect(received).toHaveLength(1);
-      // Distinct from "self_install", which is what makes Sentry fingerprint
-      // OOM kills apart from real self-install failures.
-      expect(received[0].step).toBe("self_install_killed");
-      expect(received[0].exit_code).toBe(137);
-    } finally {
-      server.stop(true);
-      rmSync(preamble, { force: true });
-    }
+    expect(calls).toHaveLength(1);
+    const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+    // Distinct from "self_install", which is what makes Sentry fingerprint
+    // OOM kills apart from real self-install failures.
+    expect(report.step).toBe("self_install_killed");
+    expect(report.exit_code).toBe(137);
   }, 15_000);
 
   test("only SIGKILL claims memory; SIGTERM stays non-committal", async () => {
@@ -437,56 +595,106 @@ describe("self install killed by a signal", () => {
 // watch what report_error actually POSTs.
 describe("install.sh report_error payload", () => {
   test("carries a scrubbed, tail-truncated error_output as valid JSON", async () => {
-    const preambleEnd = shellInstaller.indexOf("trap report_on_exit EXIT");
-    expect(preambleEnd).toBeGreaterThan(0);
-    const preamble = join(tmpdir(), `install-preamble-${process.pid}.sh`);
-    await Bun.write(preamble, shellInstaller.slice(0, preambleEnd));
+    expect(INSTALLER_PREAMBLE.length).toBeGreaterThan(0);
+    const home = process.env.HOME ?? "";
+    const output = `${"noise ".repeat(400)}EPERM: operation not permitted, symlink -> ${home}/.local/bin/squirrel`;
 
-    const received: Record<string, unknown>[] = [];
-    const server = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        received.push((await request.json()) as Record<string, unknown>);
-        return new Response(null, { status: 204 });
+    // The reporter POSTs from a detached subshell, so give it a beat to land.
+    const { calls } = await runWithCurlShim(
+      'report_error self_install 1 "Self install failed with exit code 1" "$REPORT_OUTPUT"; sleep 1',
+      {
+        cut: "preamble",
+        env: { NO_TELEMETRY: undefined, REPORT_OUTPUT: output },
+        settleMs: 5000,
       },
-    });
+    );
 
-    try {
-      const home = process.env.HOME ?? "";
-      const output = `${"noise ".repeat(400)}EPERM: operation not permitted, symlink -> ${home}/.local/bin/squirrel`;
-      // The reporter POSTs from a detached subshell, so give it a beat to land.
-      const proc = Bun.spawn(
-        [
-          "bash",
-          "-c",
-          'source "$1"; report_error self_install 1 "Self install failed with exit code 1" "$2"; sleep 1',
-          "--",
-          preamble,
-          output,
-        ],
-        {
-          env: {
-            ...process.env,
-            NO_TELEMETRY: undefined,
-            SQUIRREL_ERROR_ENDPOINT: `http://127.0.0.1:${server.port}/error`,
-          } as Record<string, string>,
-        },
-      );
-      await proc.exited;
-      for (let i = 0; i < 100 && received.length === 0; i++) await Bun.sleep(50);
-
-      expect(received).toHaveLength(1);
-      const report = received[0];
-      expect(report.step).toBe("self_install");
-      expect(report.script_version).toBe("2");
-      const errorOutput = report.error_output as string;
-      expect(errorOutput.length).toBe(1000); // bounded
-      // Tail kept: the failure is at the END of a command's output.
-      expect(errorOutput).toEndWith("~/.local/bin/squirrel");
-      if (home) expect(errorOutput).not.toContain(home);
-    } finally {
-      server.stop(true);
-      rmSync(preamble, { force: true });
-    }
+    expect(calls).toHaveLength(1);
+    const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+    expect(report.step).toBe("self_install");
+    expect(report.script_version).toBe("2");
+    const errorOutput = report.error_output as string;
+    expect(errorOutput.length).toBe(1000); // bounded
+    // Tail kept: the failure is at the END of a command's output.
+    expect(errorOutput).toEndWith("~/.local/bin/squirrel");
+    if (home) expect(errorOutput).not.toContain(home);
   }, 15_000);
+});
+
+// curl follows a redirect from https to plain http by default and negotiates
+// whatever TLS the local build still allows. The binary is checksum-verified
+// against the manifest, but the metadata fetches and the bash re-exec have
+// nothing but the transport behind them (#165).
+describe("install.sh curl transport hardening", () => {
+  test("the flag set is defined once, with all four options", () => {
+    expect(shellInstaller).toContain(
+      "CURL_TLS_ARGS=(--proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 3)",
+    );
+  });
+
+  test("the POSIX-sh re-exec hardens its curl inline, above the array", () => {
+    // This one runs under /bin/sh before the bash-only preamble that defines
+    // CURL_TLS_ARGS, so it cannot use it and has to repeat the flags.
+    expect(shellInstaller).toContain(
+      `exec bash -c 'curl -fsSL --proto "=https" --proto-redir "=https" --tlsv1.2 --max-redirs 3 https://install.squirrelscan.com/install.sh | bash'`,
+    );
+  });
+
+  test("every curl the script executes is hardened, and none escapes the scan", () => {
+    const invocations = curlInvocations(shellInstaller);
+    // Pinned so a refactor that hides a call site from the scan fails loudly
+    // instead of passing vacuously: the fetcher, both release-metadata
+    // fetches, the failure-report POST, and the POSIX-sh re-exec.
+    expect(invocations.map((found) => found.line)).toHaveLength(5);
+    for (const { line, text } of invocations) {
+      expect([line, missingHardening(shellInstaller, text)]).toEqual([line, []]);
+    }
+  });
+
+  test("fetch_with_retry passes the flags to the real command", async () => {
+    const { calls, code } = await runWithCurlShim(
+      'out=$(mktemp); fetch_with_retry "https://example.test/manifest.json" "$out"; rm -f "$out"',
+      { body: "{}" },
+    );
+    expect(code).toBe(0);
+    expect(calls).toHaveLength(1);
+    expect(missingFromArgv(calls[0])).toEqual([]);
+    expect(calls[0]).toContain("https://example.test/manifest.json");
+  });
+
+  test("get_latest_version passes the flags on the release-metadata fetch", async () => {
+    const { calls, stdout } = await runWithCurlShim("USE_JQ=false; get_latest_version stable", {
+      body: '{"version": "1.2.3"}',
+    });
+    expect(stdout.trim()).toBe("v1.2.3");
+    expect(calls).toHaveLength(1);
+    expect(missingFromArgv(calls[0])).toEqual([]);
+    expect(calls[0]).toContain("https://install.squirrelscan.com/releases/stable");
+  });
+
+  test("get_latest_version passes the flags on the GitHub API fallback too", async () => {
+    // The fallback is the branch a corporate NAT hitting the R2 endpoint takes,
+    // so it is the one least likely to be exercised by hand.
+    const { calls, stdout } = await runWithCurlShim("USE_JQ=false; get_latest_version stable", {
+      body: '[{"tag_name": "v1.2.3", "prerelease": false}]',
+      failMatch: "/releases/stable",
+    });
+    expect(stdout.trim()).toBe("v1.2.3");
+    expect(calls).toHaveLength(2);
+    expect(calls.map(missingFromArgv)).toEqual([[], []]);
+    expect(calls[1]).toContain(
+      "https://api.github.com/repos/squirrelscan/squirrelscan/releases",
+    );
+  });
+
+  test("the failure-report POST passes the flags from its detached subshell", async () => {
+    const { calls } = await runWithCurlShim('report_error fetch_releases 1 "boom" ""; sleep 1', {
+      cut: "preamble",
+      env: { NO_TELEMETRY: undefined },
+      settleMs: 5000,
+    });
+    expect(calls).toHaveLength(1);
+    expect(missingFromArgv(calls[0])).toEqual([]);
+    expect(calls[0]).toContain("https://install.squirrelscan.com/error");
+  });
 });

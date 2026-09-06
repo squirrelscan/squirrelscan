@@ -14,7 +14,9 @@ if [ -z "${BASH_VERSION:-}" ]; then
     case "$0" in
       */install.sh | install.sh) exec bash "$0" "$@" ;;
     esac
-    exec bash -c 'curl -fsSL https://install.squirrelscan.com/install.sh | bash'
+    # Hardened by hand rather than via CURL_TLS_ARGS: this runs under /bin/sh
+    # before the bash-only preamble that defines the array (see #165).
+    exec bash -c 'curl -fsSL --proto "=https" --proto-redir "=https" --tlsv1.2 --max-redirs 3 https://install.squirrelscan.com/install.sh | bash'
   fi
   echo "Error: the squirrelscan installer requires bash, and none was found." >&2
   echo "  Install bash, or grab a binary from https://github.com/squirrelscan/squirrelscan/releases" >&2
@@ -34,6 +36,17 @@ set -euo pipefail
 #   GITHUB_TOKEN       - GitHub token to avoid API rate limits (optional)
 
 REPO="squirrelscan/squirrelscan"
+
+# Transport hardening for every curl this script runs. curl's own defaults will
+# happily follow a redirect from https to plain http and will negotiate whatever
+# TLS version the local build still allows, so pin both: --proto bounds the
+# scheme of the initial request, --proto-redir bounds it again on every hop
+# (the two are separate settings — one does not imply the other), --tlsv1.2 sets
+# the floor, and --max-redirs bounds the chain. The binary is checksum-verified
+# against the manifest, but the metadata fetches and the bash re-exec have no
+# integrity protection beyond the transport itself (#165).
+# All four options predate curl 7.34 (2013), below every platform we support.
+CURL_TLS_ARGS=(--proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 3)
 
 # Detect if stdout is a terminal for colors
 if [ -t 1 ]; then
@@ -151,7 +164,7 @@ report_error() {
   # immediately (non-blocking); curl is reparented to init so it still gets to
   # finish after the script exits. Tight timeouts are the backstop; stdio
   # discarded so a closed pipe can't SIGPIPE it.
-  ( curl -fsS -m 3 --connect-timeout 2 -X POST \
+  ( curl "${CURL_TLS_ARGS[@]}" -fsS -m 3 --connect-timeout 2 -X POST \
       -H 'Content-Type: application/json' \
       --data "$payload" "$ERROR_ENDPOINT" >/dev/null 2>&1 & ) 2>/dev/null || true
 }
@@ -519,7 +532,7 @@ fetch_with_retry() {
   local timeout_max=120
 
   for i in $(seq 1 $attempts); do
-    if curl -fsSL --connect-timeout "$timeout_connect" --max-time "$timeout_max" "$url" -o "$output" 2>/dev/null; then
+    if curl "${CURL_TLS_ARGS[@]}" -fsSL --connect-timeout "$timeout_connect" --max-time "$timeout_max" "$url" -o "$output" 2>/dev/null; then
       return 0
     fi
     if [ "$i" -lt "$attempts" ]; then
@@ -702,7 +715,7 @@ get_latest_version() {
 
   info "Fetching releases (channel: $channel)..."
 
-  if response=$(curl -fsSL -H "User-Agent: squirrelscan-installer" \
+  if response=$(curl "${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" \
       --connect-timeout 5 --max-time 15 \
       "${RELEASES_ENDPOINT}/${channel}" 2>/dev/null); then
     if [ "$USE_JQ" = true ]; then
@@ -719,7 +732,7 @@ get_latest_version() {
   warn "Release metadata endpoint unavailable, falling back to GitHub API..."
 
   # Build curl args - add auth header if GITHUB_TOKEN is set (avoids rate limits)
-  local curl_args=(-fsSL -H "User-Agent: squirrelscan-installer" --connect-timeout 10 --max-time 30)
+  local curl_args=("${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" --connect-timeout 10 --max-time 30)
   if [ -n "${GITHUB_TOKEN:-}" ]; then
     curl_args+=(-H "Authorization: token $GITHUB_TOKEN")
   fi
