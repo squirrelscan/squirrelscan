@@ -1,7 +1,5 @@
 // content/unrendered-markup - Markup that failed to render and leaked into visible copy
 
-import { getAttrCI } from "@squirrelscan/utils";
-
 import { collectTextExcluding } from "@squirrelscan/parser/extractors";
 
 import type { Element } from "linkedom";
@@ -49,27 +47,58 @@ const HIGHLIGHT_CLASS_TOKENS = new Set([
   // enough to be a promise about the content, not one site's class name:
   // commonmark.org's syntax table marks every cell of markdown source this way.
   "preformatted",
-  "pre",
 ]);
 
 /** `class="language-ts"` / `class="lang-ts"`: the same marker, spelled per-language. */
 const HIGHLIGHT_CLASS_PREFIXES = ["language-", "lang-"] as const;
 
 /** Attributes a highlighter or MDX renderer writes on the block it owns. */
-const HIGHLIGHT_ATTRIBUTES = ["data-language", "data-lang", "data-highlighted", "data-code"];
+const HIGHLIGHT_ATTRIBUTES = new Set([
+  "data-language",
+  "data-lang",
+  "data-highlighted",
+  "data-code",
+]);
 
 const SCRIPT_OR_CODE_TAGS = new Set<string>([...SCRIPT_LIKE_TAGS, ...CODE_LIKE_TAGS]);
 
-/** True for any element whose subtree is source-on-display rather than prose. */
+/**
+ * Elements a browser lays out on their own line. Their text has to be kept
+ * apart, or `<p>a</p><p>b</p>` reads back as `ab` and every line-anchored
+ * pattern here (a leading `## `, a fence) can only ever match at offset 0 —
+ * which on a real page means after the header and nav, never.
+ */
+const BLOCK_TAGS = new Set([
+  "address", "article", "aside", "blockquote", "br", "dd", "details", "dialog",
+  "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
+  "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr", "li", "main",
+  "nav", "ol", "p", "section", "summary", "table", "tbody", "td", "tfoot",
+  "th", "thead", "tr", "ul",
+]);
+
+/** True for any element a browser starts on a new line. */
+export function isBlockElement(el: Element): boolean {
+  const tag = el.tagName?.toLowerCase();
+  return !!tag && BLOCK_TAGS.has(tag);
+}
+
+/**
+ * True for any element whose subtree is source-on-display rather than prose.
+ *
+ * One pass over `attributes`, not five: this runs on every element of every
+ * crawled page, and `getAttrCI` walks the whole list per call. getAttribute
+ * itself is case-SENSITIVE on this parser, which is why the names are folded
+ * here rather than looked up directly.
+ */
 export function isCodeLikeElement(el: Element): boolean {
   const tag = el.tagName?.toLowerCase();
   if (tag && SCRIPT_OR_CODE_TAGS.has(tag)) return true;
 
-  // getAttribute is case-SENSITIVE on this parser, so read both class spellings
-  // the same way every other rule does.
-  const className = getAttrCI(el, "class");
-  if (className) {
-    for (const token of className.split(/\s+/)) {
+  for (const attr of el.attributes) {
+    const name = attr.name.toLowerCase();
+    if (HIGHLIGHT_ATTRIBUTES.has(name)) return true;
+    if (name !== "class") continue;
+    for (const token of attr.value.split(/\s+/)) {
       if (!token) continue;
       const lower = token.toLowerCase();
       if (HIGHLIGHT_CLASS_TOKENS.has(lower)) return true;
@@ -77,10 +106,6 @@ export function isCodeLikeElement(el: Element): boolean {
         if (lower.startsWith(prefix) && lower.length > prefix.length) return true;
       }
     }
-  }
-
-  for (const attr of HIGHLIGHT_ATTRIBUTES) {
-    if (getAttrCI(el, attr) !== null) return true;
   }
   return false;
 }
@@ -148,7 +173,7 @@ const INNER_HAS_SPACE = (m: RegExpExecArray): boolean => /[ \t]/.test(m[2] ?? ""
  * `[top](#top)` do not.
  */
 const MD_LINK_RE =
-  /!?\[[^\]\n]{0,200}\]\((?:https?:\/\/|mailto:|\/|#|www\.|[\w.-]{1,60}\.[a-z]{2,10}[/?#])[^)\s]{0,300}\)/g;
+  /!?\[[^\]\n]{0,80}\]\((?:https?:\/\/|mailto:|\/|#|www\.|[\w.-]{1,60}\.[a-z]{2,10}[/?#])[^)\s]{0,300}\)/g;
 
 /**
  * A leading `#` run at the start of a line. `[ \t]` never `\s`, so the class
@@ -162,7 +187,17 @@ const MD_LINK_RE =
  * which is both slow and a silent miss on exactly the long headings a broken
  * template produces.
  */
-const MD_HEADING_RE = /^[ \t]{0,3}#{1,6}[ \t]+(?=[^\s#\d])[^\n]{1,100}/gm;
+const MD_HEADING_RE = /^[ \t]{0,3}#{1,6}[ \t]+(?=[^\s#\d])([^\n]{1,100})/gm;
+
+/**
+ * A heading is prose; a URL fragment is a slug. MDN's specification table
+ * renders `HTML<br /># the-pre-element` — a real line, really starting with a
+ * hash, that is the fragment of the link above it rather than a heading nobody
+ * rendered. One lowercase hyphenated or underscored token with no spaces is
+ * that shape, and is never a heading a CMS lost.
+ */
+const NOT_A_SLUG = (m: RegExpExecArray): boolean =>
+  !/^[a-z0-9]+(?:[-_][a-z0-9]+)+$/.test((m[1] ?? "").trim());
 
 /** A fence line: three or more backticks or tildes, optionally with an info string. */
 const MD_FENCE_RE = /^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]{0,60}/gm;
@@ -172,23 +207,6 @@ const MD_FENCE_RE = /^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]{0,60}/gm;
  * plus a non-space interior is enough; the run is bounded to keep it linear.
  */
 const MD_INLINE_CODE_RE = /(?:^|[\s([{'"])`(?=[^\s`])([^`\n]{1,200})`(?=$|[\s.,;:!?)\]}'"])/gm;
-
-/**
- * HTML tags a reader can SEE. The page source said `&lt;p&gt;`; `.textContent`
- * decodes that, so by the time the text reaches here it is a literal `<p>`.
- * Scanning the raw HTML for `&lt;` instead would be the same rule written
- * backwards, and would fire on every escaped example inside a code block.
- *
- * One bounded character class, not two adjacent quantifiers: `[^<>]{0,200}`
- * cannot match the closing `>`, so it stops at the first one and never
- * re-partitions a long run the way `\s*[^>]*` would.
- *
- * LOWERCASE tag names only. Escaped markup that leaked out of a template came
- * from HTML a server actually emitted, which is lowercase. A capitalised
- * `<Article>` or `<Video>` is a JSX, Astro or Vue COMPONENT name that a page is
- * displaying on purpose — astro.build puts a whole row of them in its hero.
- */
-const ESCAPED_TAG_RE = /<(\/?)([a-z][a-z0-9]{0,9})([^<>]{0,200})>/g;
 
 /**
  * Tags whose bare form is unambiguous evidence. `b`, `i`, `u`, `s` and `q` are
@@ -209,6 +227,74 @@ const VISIBLE_HTML_TAGS = new Set([
 
 /** These need an attribute or a closing slash before they count. */
 const AMBIGUOUS_HTML_TAGS = new Set(["a", "b", "i", "u", "s", "q"]);
+
+/**
+ * The name bound is DERIVED, never a literal. `blockquote` and `figcaption` are
+ * ten characters, so a hand-written `{0,9}` tail sits exactly on the limit and
+ * the next longer name added to the set above would compile, review clean, and
+ * silently never match.
+ */
+export const MAX_TAG_NAME_LENGTH = Math.max(
+  ...[...VISIBLE_HTML_TAGS, ...AMBIGUOUS_HTML_TAGS].map((t) => t.length),
+);
+
+/**
+ * HTML tags a reader can SEE. The page source said `&lt;p&gt;`; `.textContent`
+ * decodes that, so by the time the text reaches here it is a literal `<p>`.
+ * Scanning the raw HTML for `&lt;` instead would be the same rule written
+ * backwards, and would fire on every escaped example inside a code block.
+ *
+ * One bounded character class, not two adjacent quantifiers: `[^<>]{0,200}`
+ * cannot match the closing `>`, so it stops at the first one and never
+ * re-partitions a long run the way `\s*[^>]*` would.
+ *
+ * LOWERCASE tag names only. Escaped markup that leaked out of a template came
+ * from HTML a server actually emitted, which is lowercase. A capitalised
+ * `<Article>` or `<Video>` is a JSX, Astro or Vue COMPONENT name that a page is
+ * displaying on purpose — astro.build puts a whole row of them in its hero.
+ */
+const ESCAPED_TAG_RE = new RegExp(
+  `<(/?)([a-z][a-z0-9]{0,${MAX_TAG_NAME_LENGTH - 1}})([^<>]{0,200})>`,
+  "g",
+);
+
+/**
+ * Attribute names a browser would recognise. A curated list for the same reason
+ * the entity list is curated: the generic shape reads any `word=value` as an
+ * attribute, so `if a<b then c=1>0 holds` parses as `<b>` with an attribute
+ * `c="1"` and the rule calls an inequality plus an equation a rendering bug —
+ * at `fail`, the hardest status it has.
+ */
+const KNOWN_ATTRIBUTES = new Set([
+  "class", "id", "style", "title", "lang", "dir", "role", "hidden", "tabindex",
+  "href", "src", "srcset", "sizes", "alt", "rel", "target", "type", "name",
+  "value", "content", "charset", "media", "loading", "decoding", "width",
+  "height", "colspan", "rowspan", "for", "action", "method", "placeholder",
+  "datetime", "label", "cite", "download", "referrerpolicy", "integrity",
+  "crossorigin", "http-equiv", "property", "itemprop", "viewbox", "xmlns",
+]);
+
+/**
+ * Each `name=` in an attribute list. Bounded and over disjoint classes, so the
+ * scan stays linear over the 200 characters `ESCAPED_TAG_RE` can hand it.
+ */
+const ATTRIBUTE_NAME_RE = /[\s/]([a-z][a-z0-9:_.-]{0,40})[ \t]{0,4}=/gi;
+
+/** True when `rest` assigns a value to an attribute a browser would recognise. */
+function hasRecognisedAttribute(rest: string): boolean {
+  ATTRIBUTE_NAME_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let found = false;
+  while ((m = ATTRIBUTE_NAME_RE.exec(rest)) !== null) {
+    const name = (m[1] ?? "").toLowerCase();
+    if (KNOWN_ATTRIBUTES.has(name) || name.startsWith("data-") || name.startsWith("aria-")) {
+      found = true;
+      break;
+    }
+  }
+  ATTRIBUTE_NAME_RE.lastIndex = 0;
+  return found;
+}
 
 /**
  * Named entities that survived one decode too few. A curated list, not
@@ -314,7 +400,7 @@ function push(
  * `pre` element says `<pre>` in its breadcrumb and `<meta name>` and
  * `<meta http-equiv>` in its see-also list, none of them inside a code span.
  * Markup that actually leaked out of a template looks different — it brings the
- * closing tag with it (`<p>…</p>`) or an attribute with a VALUE
+ * closing tag with it (`<p>…</p>`) or assigns a value to a RECOGNISED attribute
  * (`<div class="row">`, `<a href="/x">`), because that is what a server emits
  * and what nobody types into a sentence.
  *
@@ -322,11 +408,11 @@ function push(
  * counted in full while a page of bare element names is silent.
  */
 function findEscapedTags(text: string): string[] {
-  const candidates: { text: string; closing: boolean; valued: boolean }[] = [];
+  const candidates: string[] = [];
+  let vouched = false;
   ESCAPED_TAG_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = ESCAPED_TAG_RE.exec(text)) !== null) {
-    const closing = match[1] === "/";
     const name = match[2] ?? "";
     const rest = match[3] ?? "";
     // An attribute list has to start at a boundary, so `<pathological>` cannot
@@ -337,28 +423,40 @@ function findEscapedTags(text: string): string[] {
     if (!VISIBLE_HTML_TAGS.has(name) && !ambiguous) continue;
     // `x<b>y` is a comparison chain in mathematical prose. An ambiguous opening
     // tag needs an attribute before it outweighs that reading.
-    if (ambiguous && !closing && !attrs) continue;
-    candidates.push({ text: match[0], closing, valued: attrs && rest.includes("=") });
-    if (candidates.length >= MAX_MATCHES_PER_KIND) break;
+    if (ambiguous && !closing(match) && !attrs) continue;
+    // A path in angle brackets — `</path/to/file>` — parses as a closing tag
+    // whose "attributes" are the rest of the path. A real closing tag has
+    // nothing after the name.
+    const closesCleanly = closing(match) && rest.trim().length === 0;
+    if (closesCleanly || hasRecognisedAttribute(rest)) vouched = true;
+    candidates.push(match[0]);
+    // Stop once the list is full AND something has vouched: breaking earlier
+    // could drop the one tag that would have made the family reportable.
+    if (candidates.length >= MAX_MATCHES_PER_KIND && vouched) break;
+    if (candidates.length >= MAX_MATCHES_PER_KIND * 4) break;
   }
   ESCAPED_TAG_RE.lastIndex = 0;
 
-  if (!candidates.some((c) => c.closing || c.valued)) return [];
-  return candidates.map((c) => c.text);
+  if (!vouched) return [];
+  return candidates.slice(0, MAX_MATCHES_PER_KIND);
 }
+
+const closing = (m: RegExpExecArray): boolean => m[1] === "/";
 
 /** Every family of unrendered markup present in `text`, with a sample and a count. */
 export function findUnrenderedMarkup(text: string): UnrenderedMarkupFinding[] {
   const scanned = text.length > MAX_SCANNED_CHARS ? text.slice(0, MAX_SCANNED_CHARS) : text;
   const out: UnrenderedMarkupFinding[] = [];
 
+  // Two patterns, ONE family budget: capping each `collect` separately would let
+  // the emphasis family reach twice MAX_MATCHES_PER_KIND.
   const emphasis = [
     ...collect(MD_EMPHASIS_ASTERISK_RE, scanned),
     ...collect(MD_EMPHASIS_UNDERSCORE_RE, scanned, INNER_HAS_SPACE),
-  ];
+  ].slice(0, MAX_MATCHES_PER_KIND);
   push(out, "markdown-emphasis", emphasis);
   push(out, "markdown-link", collect(MD_LINK_RE, scanned));
-  push(out, "markdown-heading", collect(MD_HEADING_RE, scanned));
+  push(out, "markdown-heading", collect(MD_HEADING_RE, scanned, NOT_A_SLUG));
   push(out, "markdown-code-fence", collect(MD_FENCE_RE, scanned));
   push(out, "markdown-inline-code", collect(MD_INLINE_CODE_RE, scanned));
 
@@ -412,7 +510,12 @@ export const unrenderedMarkupRule: Rule = {
     // come out first because a documentation page showing `**bold**` on purpose
     // is the single largest false-positive class this rule has — without the
     // exclusion it fires on its own documentation.
-    const text = collectTextExcluding(body, isCodeLikeElement, SKIPPED_SUBTREE_BOUNDARY);
+    const text = collectTextExcluding(
+      body,
+      isCodeLikeElement,
+      SKIPPED_SUBTREE_BOUNDARY,
+      isBlockElement,
+    );
     const found = findUnrenderedMarkup(text);
 
     const hasRawMarkup = found.some((f) => RAW_MARKUP_KINDS.has(f.kind));
@@ -432,8 +535,14 @@ export const unrenderedMarkupRule: Rule = {
       return { checks };
     }
 
-    const total = found.reduce((sum, f) => sum + f.count, 0);
-    const kinds = found.map((f) => f.kind).join(", ");
+    // Headline the evidence that DECIDED the status. Counting the corroborating
+    // family here would report "6 occurrences" at `warn` on a page whose only
+    // real finding is one bold phrase, and would put a backtick span in the
+    // example line — the exact thing the family is promised never to do.
+    const accusing = found.filter((f) => !CORROBORATING_KINDS.has(f.kind));
+    const total = accusing.reduce((sum, f) => sum + f.count, 0);
+    const kinds = accusing.map((f) => f.kind).join(", ");
+    const example = accusing[0]!.sample;
 
     // Visible tags and entities are not a judgement call: nothing renders them
     // on purpose outside a code block, and those are already excluded. Literal
@@ -444,7 +553,7 @@ export const unrenderedMarkupRule: Rule = {
     checks.push({
       name: "unrendered-markup",
       status,
-      message: `${total} unrendered markup occurrence(s) in visible text (${kinds}): example ${found[0]?.sample}`,
+      message: `${total} unrendered markup occurrence(s) in visible text (${kinds}): example ${example}`,
       value: total,
       details: {
         kinds: found.map((f) => ({ kind: f.kind, sample: f.sample, count: f.count })),

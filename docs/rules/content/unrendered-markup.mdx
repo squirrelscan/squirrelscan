@@ -19,7 +19,7 @@ Something rendered a value as plain text that was authored as markup. Find the f
 
 ## What it checks
 
-Three families, in visible text only:
+Seven kinds, in three families, in visible text only:
 
 | Kind | Example on screen | Meaning |
 |---|---|---|
@@ -48,7 +48,7 @@ Four more limits keep the rule quiet on pages that talk about markup rather than
 - **Underscore emphasis must contain a space.** `__init__` and `__main__` are flanked exactly like bold and appear in ordinary prose, so `__bold__` on its own is not reported. `**bold**` still is.
 - **A markdown link needs a URL-shaped target.** `array[i](arg)` and `[see note] (below)` are not links.
 - **Escaped tags must be lowercase.** `<Article>` and `<Header>` are component names a page is showing on purpose. Markup that leaked from a template came from HTML a server emitted, which is lowercase.
-- **At least one escaped tag must carry a closing form or an attribute with a value.** A page that writes `<pre>` or `<meta name>` in a sentence is documenting an element. A leak brings `</p>` or `class="row"` with it.
+- **At least one escaped tag must carry a true closing form or a recognised attribute with a value.** A page that writes `<pre>` or `<meta name>` in a sentence is documenting an element. A leak brings `</p>` or `class="row"` with it. A self-closing `<br/>` is not a closing form, `</path/to/file>` is a path rather than a closing tag, and `c=1` is not an attribute, so `if a<b then c=1>0` stays clean.
 
 ## False positives
 
@@ -62,7 +62,9 @@ The residual case is a page whose subject is HTML source, displayed in a contain
 
 ## Related rules
 
-[content/mojibake](/rules/content/mojibake) covers the neighbouring problem: bytes decoded with the wrong encoding. The two overlap by one level on entities. Mojibake reports a visible `&amp;nbsp;`, which means the source was encoded three times; this rule reports a visible `&nbsp;`, which means twice.
+[content/mojibake](/rules/content/mojibake) covers the neighbouring problem: bytes decoded with the wrong encoding. The two sit one encoding level apart on entities. Mojibake reports a visible `&amp;nbsp;`, meaning the source was encoded three times; this rule reports a visible `&nbsp;`, meaning twice.
+
+They do overlap on triple-encoded text, and deliberately so. A page showing `&amp;nbsp;` trips mojibake on the whole sequence and this rule on the `&amp;` inside it, and both findings are true: the entity was encoded once too many, and a reader is looking at raw markup. Expect one finding from each rule on such a page.
 
 ## Enable / disable
 

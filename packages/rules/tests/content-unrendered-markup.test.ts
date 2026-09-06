@@ -11,6 +11,7 @@ import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   findUnrenderedMarkup,
   isCodeLikeElement,
+  MAX_TAG_NAME_LENGTH,
   unrenderedMarkupRule,
 } from "../src/content/unrendered-markup";
 import type { ParsedPage, RuleContext } from "../src/types";
@@ -28,6 +29,10 @@ function run(html: string) {
 const page = (body: string) => `<html><head><title>t</title></head><body>${body}</body></html>`;
 
 const kinds = (text: string) => findUnrenderedMarkup(text).map((f) => f.kind);
+
+// Every real page opens with chrome. Fixtures that start at the body's first
+// byte hide the boundary bug below, so the page-level tests wear this.
+const NAV = '<header><nav><a href="/">Home</a><a href="/pricing">Pricing</a></nav></header>';
 
 describe("findUnrenderedMarkup: literal markdown", () => {
   test("asterisk emphasis, bold and italic", () => {
@@ -114,6 +119,33 @@ describe("findUnrenderedMarkup: escaped HTML and entities", () => {
     expect(found.find((f) => f.kind === "escaped-html-tag")?.count).toBe(4);
   });
 
+  test("a stray equals sign in prose is not an attribute", () => {
+    // `<b then c=1>` parses as a tag with an attribute under any rule that just
+    // looks for "=", and `b` is a tag. An inequality plus an equation would then
+    // be reported at fail, the rule's hardest status.
+    expect(kinds("if a<b then c=1>0 holds")).not.toContain("escaped-html-tag");
+    expect(kinds("set x<i where i=3>2 to continue")).not.toContain("escaped-html-tag");
+    // A recognised attribute with a value still counts.
+    expect(kinds('<div class="row">hi</div>')).toContain("escaped-html-tag");
+    expect(kinds('<input type="text" required>')).toContain("escaped-html-tag");
+  });
+
+  test("a path in angle brackets is not a closing tag", () => {
+    expect(kinds("The config lives at </path/to/file> on disk")).not.toContain(
+      "escaped-html-tag",
+    );
+  });
+
+  test("the tag-name bound is derived from the tag sets, never a literal", () => {
+    // A hand-written {0,9} tail sits exactly on `blockquote` and `figcaption`,
+    // so the next longer name added would silently never match.
+    expect(MAX_TAG_NAME_LENGTH).toBeGreaterThanOrEqual("blockquote".length);
+    expect(kinds("<blockquote>quoted</blockquote>")).toContain("escaped-html-tag");
+    expect(kinds('<figcaption class="c">a photo</figcaption>')).toContain("escaped-html-tag");
+    // And the boundary filter still refuses to read `<pathological>` as `<path>`.
+    expect(kinds("<pathological>x</pathological>")).not.toContain("escaped-html-tag");
+  });
+
   test("a company name with an ampersand is not an entity", () => {
     // The generic `&[a-z]+;` shape reads this as a named entity. A curated list
     // does not, which is the point of having one.
@@ -152,6 +184,16 @@ describe("findUnrenderedMarkup: identifiers and arithmetic stay clean", () => {
   test("hash-prefixed prose is not a heading", () => {
     expect(findUnrenderedMarkup("#1 in customer satisfaction")).toEqual([]);
     expect(findUnrenderedMarkup("Order #4821 has shipped")).toEqual([]);
+  });
+
+  test("a URL fragment on its own line is not a heading", () => {
+    // MDN's specification table renders `HTML<br /># the-pre-element`: a real
+    // line that really starts with a hash, showing the link's fragment.
+    expect(findUnrenderedMarkup("HTML\n# the-pre-element")).toEqual([]);
+    expect(findUnrenderedMarkup("# some_anchor_name")).toEqual([]);
+    // A one-word heading is still a heading.
+    expect(kinds("## Pricing")).toContain("markdown-heading");
+    expect(kinds("# Getting started")).toContain("markdown-heading");
   });
 
   test("ordinary marketing copy is clean", () => {
@@ -232,7 +274,7 @@ describe("unrenderedMarkupRule", () => {
   });
 
   test("backticks corroborate once something real fires", () => {
-    const checks = run(page("<p>## Setup</p><p>Run `vercel deploy` to ship</p>"));
+    const checks = run(page(`${NAV}<main><p>## Setup</p><p>Run \`vercel deploy\` to ship</p></main>`));
     expect(checks[0]?.status).not.toBe("pass");
     const kindList = (checks[0]?.details as { kinds: { kind: string }[] }).kinds.map((k) => k.kind);
     expect(kindList).toContain("markdown-inline-code");
@@ -304,7 +346,7 @@ Some **bold** copy the author is still editing.</textarea>
     expect(checks[0]?.status).toBe("pass");
   });
 
-  test("the same page fails once one line escapes its code block", () => {
+  test("the same page warns once one line escapes its code block", () => {
     // Same document, one paragraph moved out of <code>: the exclusion is doing
     // the work, not the patterns.
     const leaked = docsPage.replace(
@@ -363,7 +405,12 @@ Some **bold** copy the author is still editing.</textarea>
 });
 
 describe("unrenderedMarkupRule: adversarial input stays linear", () => {
-  const budgetMs = 2000;
+  // Every fixture is DENSE in its trigger character. A single trigger in 64 KB
+  // exercises one start position and cannot detect catastrophic backtracking:
+  // a deliberately bad link pattern measured 0.1 ms on `"[" + "a".repeat(64_000)`
+  // and 5.2 seconds on `"[ ".repeat(32_000)`. The budget is tight for the same
+  // reason — a 2 second ceiling passes patterns that are already a live DoS.
+  const budgetMs = 400;
 
   const timed = (text: string) => {
     const started = performance.now();
@@ -371,36 +418,94 @@ describe("unrenderedMarkupRule: adversarial input stays linear", () => {
     return performance.now() - started;
   };
 
-  test("a long run of underscores and spaces", () => {
-    // The shape that would re-partition itself if the space test lived in the
-    // pattern instead of in JS.
-    expect(timed(`_${"a b ".repeat(16_000)}`)).toBeLessThan(budgetMs);
+  const dense: [string, string][] = [
+    ["emphasis openers", `*${"a ".repeat(32_000)}`],
+    ["dense asterisks", "* ".repeat(32_000)],
+    ["asterisk run", "*".repeat(64_000)],
+    ["underscore phrases", `_${"a b ".repeat(16_000)}`],
+    ["dense underscores", "_ ".repeat(32_000)],
+    ["dense brackets", "[ ".repeat(32_000)],
+    ["dense near-links", `${"[x](".repeat(16_000)}`],
+    ["dense url-ish targets", `${"[x](a.".repeat(10_000)}`],
+    ["dense tag openers", "<a ".repeat(21_000)],
+    ["dense long tag names", `${`<${"a".repeat(210)}`.repeat(300)}`],
+    ["dense attribute runs", `${'<div class="'.repeat(5_000)}`],
+    ["dense backticks", "` ".repeat(32_000)],
+    ["dense hashes", `${"## word\n".repeat(8_000)}`],
+    ["dense hash-only lines", `${"###\n".repeat(16_000)}`],
+    ["dense ampersands", "&nbs".repeat(16_000)],
+    ["ampersand run", `&${"a".repeat(64_000)}`],
+    ["dense fences", `${"``\n".repeat(21_000)}`],
+    ["mixed triggers", `${"*[<&`_# ".repeat(8_000)}`],
+  ];
+
+  test.each(dense)("%s", (_, text) => {
+    expect(timed(text)).toBeLessThan(budgetMs);
   });
 
-  test("a long run of asterisks", () => {
-    expect(timed("*".repeat(64_000))).toBeLessThan(budgetMs);
-    expect(timed(`*${"a ".repeat(32_000)}`)).toBeLessThan(budgetMs);
+  test("the whole scan of a hostile page stays under budget", () => {
+    // 500 KB of the worst shape measured, at the scan cap.
+    expect(timed(`${"[".repeat(199)}](www.${"a".repeat(300)}`.repeat(700))).toBeLessThan(budgetMs);
   });
 
-  test("a long unterminated tag and bracket run", () => {
-    expect(timed(`<div ${"x".repeat(64_000)}`)).toBeLessThan(budgetMs);
-    expect(timed(`[${"a".repeat(64_000)}`)).toBeLessThan(budgetMs);
-    expect(timed(`[x](${"a".repeat(64_000)}`)).toBeLessThan(budgetMs);
-  });
-
-  test("a long backtick and hash run", () => {
-    expect(timed(`\`${"a ".repeat(32_000)}`)).toBeLessThan(budgetMs);
-    expect(timed(`## ${"word ".repeat(13_000)}`)).toBeLessThan(budgetMs);
-    expect(timed(`&${"a".repeat(64_000)}`)).toBeLessThan(budgetMs);
-  });
-
-  test("a page far past the scan cap still returns", () => {
-    const huge = `${"clean prose. ".repeat(50_000)}**bold**`;
-    expect(timed(huge)).toBeLessThan(budgetMs);
+  test("the scan cap truncates rather than merely finishing quickly", () => {
+    // Asserting only elapsed time would pass with the cap deleted.
+    expect(findUnrenderedMarkup(`${"x".repeat(499_000)} **bold** `)).not.toEqual([]);
+    expect(findUnrenderedMarkup(`${"x".repeat(500_100)} **bold** `)).toEqual([]);
   });
 
   test("counts are capped rather than unbounded", () => {
     const found = findUnrenderedMarkup("**a** ".repeat(2_000));
     expect(found.find((f) => f.kind === "markdown-emphasis")?.count).toBe(500);
+  });
+
+  test("the emphasis family honours ONE budget, not one per pattern", () => {
+    // Two patterns feed this family; capping each separately would allow 1000.
+    const found = findUnrenderedMarkup(`${"**a** ".repeat(600)}${"_a b_ ".repeat(600)}`);
+    expect(found.find((f) => f.kind === "markdown-emphasis")?.count).toBe(500);
+  });
+
+  test("a vouching tag past the cap still reports the family", () => {
+    // Breaking at MAX_MATCHES_PER_KIND before anything vouched would drop the
+    // whole family on a page whose first 500 tags are bare.
+    const found = findUnrenderedMarkup(`${"<br>".repeat(600)}<p>real leak</p>`);
+    expect(found.find((f) => f.kind === "escaped-html-tag")?.count).toBe(500);
+  });
+});
+
+// Sibling blocks are concatenated with nothing between them unless a boundary is
+// asked for, so `<p>a</p><p>b</p>` reads back as `ab`. Every line-anchored
+// pattern here would then match only at offset 0 — which, on a page with a
+// header, is never. These fixtures all put the markup AFTER chrome.
+describe("unrenderedMarkupRule: line-anchored patterns on a real page shape", () => {
+  test("a leaked heading is found after the site chrome", () => {
+    expect(run(page("<p>## Pricing</p>"))[0]?.status).toBe("warn");
+    expect(run(page(`${NAV}<main><p>## Pricing</p></main>`))[0]?.status).toBe("warn");
+  });
+
+  test("a leaked fence is found after the site chrome", () => {
+    expect(run(page(`${NAV}<main><p>\`\`\`js</p><p>const a = 1</p></main>`))[0]?.status).toBe(
+      "warn",
+    );
+  });
+
+  test("emphasis in adjacent list items is not lost at the seam", () => {
+    // Glued, `*a b*</li><li>*c d*` runs together and the flanking fails on both.
+    expect(
+      run(page(`${NAV}<main><ul><li>*a b*</li><li>*c d*</li></ul></main>`))[0]?.status,
+    ).toBe("warn");
+  });
+
+  test("a heading split across blocks does not invent a match", () => {
+    // The boundary must not glue `##` in one block to a word in the next.
+    expect(run(page(`${NAV}<main><p>Rated ##</p><p>Pricing details</p></main>`))[0]?.status).toBe(
+      "pass",
+    );
+  });
+
+  test("chrome itself is judged, not skipped", () => {
+    expect(run(page(`<header><p>## Menu</p></header><main><p>Copy.</p></main>`))[0]?.status).toBe(
+      "warn",
+    );
   });
 });

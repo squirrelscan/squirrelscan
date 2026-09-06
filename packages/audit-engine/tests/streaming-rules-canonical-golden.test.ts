@@ -124,6 +124,19 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // content/unrendered-markup; anything else means a rule id
       // leaked in, so fix that rather than this number.
       expect(v1.perRuleTally.length).toBe(281);
+      // Each +500 above is only "all passes" if nothing warned. healthScore
+      // staying at 48 does not prove that — a handful of weight-5 warnings in a
+      // 20-rule category would not move it — so pin the tally directly.
+      const unrendered = v1.perRuleTally.find((t) => t.ruleId === "content/unrendered-markup");
+      expect(unrendered).toEqual({
+        ruleId: "content/unrendered-markup",
+        pass: 500,
+        warn: 0,
+        fail: 0,
+        info: 0,
+        skipped: 0,
+        total: 500,
+      });
     },
     180_000,
   );
