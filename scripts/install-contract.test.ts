@@ -17,8 +17,12 @@ const npmPostinstall = await Bun.file(
 // Shim curl on PATH instead. Recording argv is also what proves the hardening
 // flags reach a real invocation rather than merely appearing in the source.
 const CURL_SHIM = `#!/bin/bash
-for a in "$@"; do printf '%s\\0' "$a"; done >> "$SHIM_LOG"
-printf '\\036' >> "$SHIM_LOG"
+# One redirect for the whole record: a reader that sees the trailing separator
+# knows the argv it is holding is complete.
+{
+  for a in "$@"; do printf '%s\\0' "$a"; done
+  printf '\\036'
+} >> "$SHIM_LOG"
 
 if [ -n "\${SHIM_FAIL_MATCH:-}" ]; then
   for a in "$@"; do
@@ -98,6 +102,14 @@ const runWithCurlShim = async (
       env: {
         ...process.env,
         NO_TELEMETRY: "1",
+        // Keep the ambient environment out of the recorded argv. A GITHUB_TOKEN
+        // reaches get_latest_version's auth header, and a failing expect() on
+        // that argv would print the token into a public CI log.
+        GITHUB_TOKEN: undefined,
+        SQUIRREL_CHANNEL: undefined,
+        SQUIRREL_VERSION: undefined,
+        SQUIRREL_ERROR_ENDPOINT: undefined,
+        SQUIRREL_RELEASES_ENDPOINT: undefined,
         PATH: `${dir}:${process.env.PATH ?? ""}`,
         SHIM_LOG: log,
         SHIM_BODY: body,
@@ -112,11 +124,14 @@ const runWithCurlShim = async (
       new Response(proc.stderr).text(),
     ]);
     const code = await proc.exited;
-    for (let waited = 0; waited < settleMs; waited += 50) {
-      if ((await Bun.file(log).text()) !== "") break;
+    // Wait for a COMPLETE record, not merely a non-empty file: a half-written
+    // one would parse into an argv with no --data and fail as a JSON error.
+    let raw = await Bun.file(log).text();
+    for (let waited = 0; waited < settleMs && !raw.endsWith("\u001e"); waited += 50) {
       await Bun.sleep(50);
+      raw = await Bun.file(log).text();
     }
-    return { calls: parseCurlLog(await Bun.file(log).text()), stdout, stderr, code };
+    return { calls: parseCurlLog(raw), stdout, stderr, code };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -144,27 +159,33 @@ const missingFromArgv = (argv: string[]): string[] => {
 const curlDataArg = (argv: string[]): string => argv[argv.indexOf("--data") + 1] ?? "";
 
 /**
- * Every curl the script actually executes, as (1-based line, folded logical
- * line). Skips comments, the `command -v curl` presence checks, and the copy
- * of the one-liner inside user-facing hint text — a curl preceded by an odd
- * number of double quotes on its line is inside a string, not in command
- * position. `curl_args=(…)` is not matched: the name is not the bare word.
+ * Every curl the script actually executes, as (1-based line, argument text).
+ * Each hit's text starts AT its own curl and runs to the end of the folded
+ * logical line, so a second curl on the line is judged on its own arguments
+ * rather than borrowing the first one's.
+ *
+ * Skipped: whole-line comments, the `command -v curl` presence probes, and the
+ * copy of the published one-liner inside user-facing hint text — a curl behind
+ * an odd number of unescaped double quotes is in a string, not command
+ * position. `curl_args=(…)` never matches: the bare word needs trailing space.
+ * A path-qualified `/usr/bin/curl` does match, deliberately.
  */
 const curlInvocations = (script: string): { line: number; text: string }[] => {
   const lines = script.split("\n");
   const found: { line: number; text: string }[] = [];
   for (const [index, line] of lines.entries()) {
     if (/^\s*#/.test(line)) continue;
-    const match = /(?<![\w./-])curl(?=\s)/.exec(line);
-    if (!match) continue;
-    if (/command\s+-v\s+curl/.test(line)) continue;
-    if ((line.slice(0, match.index).match(/"/g) ?? []).length % 2 === 1) continue;
     // Fold bash line continuations so the whole argument list is in view.
-    let text = line;
+    let folded = line;
     for (let next = index; /\\$/.test(lines[next]) && next + 1 < lines.length; next += 1) {
-      text += `\n${lines[next + 1]}`;
+      folded += `\n${lines[next + 1]}`;
     }
-    found.push({ line: index + 1, text });
+    for (const match of line.matchAll(/(?<![\w-])curl(?=\s)/g)) {
+      const before = line.slice(0, match.index);
+      if (/command\s+-v\s+$/.test(before)) continue;
+      if ((before.replace(/\\"/g, "").match(/"/g) ?? []).length % 2 === 1) continue;
+      found.push({ line: index + 1, text: folded.slice(match.index) });
+    }
   }
   return found;
 };
@@ -175,18 +196,28 @@ const unquote = (text: string) => text.replace(/["']/g, "").replace(/\s+/g, " ")
 const arrayRefs = (text: string): string[] =>
   [...text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\[@\]\}/g)].map((match) => match[1]);
 
-/** Whether an argv array is seeded from CURL_TLS_ARGS, or spells the flags out. */
+/**
+ * Whether an argv array is seeded from CURL_TLS_ARGS, or spells the flags out.
+ * EVERY assignment of the name has to qualify, since a later one that drops the
+ * flags is the one that wins at the call site. A literal `)` inside an array
+ * body (a `$(…)` substitution) truncates the match and reads as unhardened,
+ * which fails loudly rather than passing something through.
+ */
 const arrayIsHardened = (script: string, name: string, seen: Set<string>): boolean => {
   if (name === "CURL_TLS_ARGS") return true;
   if (seen.has(name)) return false;
   seen.add(name);
-  const definition = new RegExp(`(?:^|\\s)(?:local\\s+)?${name}=\\(([^)]*)\\)`, "m").exec(script);
-  if (!definition) return false;
-  const flat = unquote(definition[1]);
-  return (
-    arrayRefs(flat).some((ref) => arrayIsHardened(script, ref, seen)) ||
-    CURL_HARDENING.every((option) => flat.includes(option.join(" ")))
-  );
+  const definitions = [
+    ...script.matchAll(new RegExp(`(?:^|\\s)(?:local\\s+)?${name}=\\(([^)]*)\\)`, "gm")),
+  ];
+  if (definitions.length === 0) return false;
+  return definitions.every((definition) => {
+    const flat = unquote(definition[1]);
+    return (
+      arrayRefs(flat).some((ref) => arrayIsHardened(script, ref, seen)) ||
+      CURL_HARDENING.every((option) => flat.includes(option.join(" ")))
+    );
+  });
 };
 
 /** Which hardening options a call site neither spells out nor inherits. */
@@ -642,13 +673,42 @@ describe("install.sh curl transport hardening", () => {
 
   test("every curl the script executes is hardened, and none escapes the scan", () => {
     const invocations = curlInvocations(shellInstaller);
-    // Pinned so a refactor that hides a call site from the scan fails loudly
-    // instead of passing vacuously: the fetcher, both release-metadata
-    // fetches, the failure-report POST, and the POSIX-sh re-exec.
+    // The count is pinned only so a refactor that hides an EXISTING call site
+    // from the scan fails instead of passing vacuously. It cannot notice a new
+    // call site the scan is blind to; only the scan itself can. Five today:
+    // the fetcher, both release-metadata fetches, the failure-report POST, and
+    // the POSIX-sh re-exec.
     expect(invocations.map((found) => found.line)).toHaveLength(5);
     for (const { line, text } of invocations) {
       expect([line, missingHardening(shellInstaller, text)]).toEqual([line, []]);
     }
+  });
+
+  test.each([
+    ["a path-qualified call", '/usr/bin/curl -fsSL http://evil.test/x'],
+    ["a second call on the line", 'curl "${CURL_TLS_ARGS[@]}" "$u" || curl -fsSL http://evil.test'],
+    ["a call after a probe", 'command -v curl >/dev/null && curl -fsSL http://evil.test'],
+    ["a hardened array named elsewhere", 'echo "${CURL_TLS_ARGS[@]}"; curl -fsSL http://evil.test'],
+  ])("the scan still catches %s", (_label, line) => {
+    // Each of these slipped past an earlier draft of the scan. They are the
+    // shapes a future edit is most likely to reintroduce, so they are pinned
+    // here rather than left to the reviewer's eye.
+    const invocations = curlInvocations(line);
+    expect(invocations.length).toBeGreaterThan(0);
+    expect(
+      invocations.map((found) => missingHardening(shellInstaller, found.text)).flat(),
+    ).not.toEqual([]);
+  });
+
+  test("the scan refuses an array whose later assignment drops the flags", () => {
+    const script = [
+      "CURL_TLS_ARGS=(--proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 3)",
+      'local args=("${CURL_TLS_ARGS[@]}" -fsSL)',
+      'args=(-fsSL --proxy "$P")',
+      'curl "${args[@]}" "$url"',
+    ].join("\n");
+    const [invocation] = curlInvocations(script);
+    expect(missingHardening(script, invocation.text)).toHaveLength(4);
   });
 
   test("fetch_with_retry passes the flags to the real command", async () => {
@@ -696,5 +756,42 @@ describe("install.sh curl transport hardening", () => {
     expect(calls).toHaveLength(1);
     expect(missingFromArgv(calls[0])).toEqual([]);
     expect(calls[0]).toContain("https://install.squirrelscan.com/error");
-  });
+    // Same detached-POST shape as the two payload tests, so the same budget:
+    // the script sleeps 1s and the harness can wait 5s more on a loaded runner.
+  }, 15_000);
+
+  // Everything above this point shims curl, so it would pass just as happily
+  // with `--tlsv.1.2` in the array. Nothing else pre-merge would catch that:
+  // `bash -n` does not know curl's options, and the install-test workflow runs
+  // only on release and fetches install.sh from main, not from the tree under
+  // test. So hand the flag set to the real curl once. No network: port 1 is
+  // closed, exit 7 means the options parsed, exit 2 means one did not.
+  test("the real curl on this machine accepts the flag set", async () => {
+    const curl = Bun.which("curl");
+    expect(curl).not.toBeNull();
+    const dir = mkdtempSync(join(tmpdir(), "install-curl-flags-"));
+    const sourced = join(dir, "installer.sh");
+    await Bun.write(sourced, INSTALLER_BODY);
+    try {
+      const proc = Bun.spawn(
+        [
+          "bash",
+          "-c",
+          'source "$1"; curl "${CURL_TLS_ARGS[@]}" -sS -o /dev/null --max-time 5 https://127.0.0.1:1/x',
+          "--",
+          sourced,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const stderr = await new Response(proc.stderr).text();
+      const code = await proc.exited;
+      // The message names the offending option, so assert on it first: it is
+      // the readable half of the failure. The exit code is the backstop.
+      expect(stderr).not.toContain("is unknown");
+      // 2 is curl's "failed to initialize", which is what a bad option exits.
+      expect(code).not.toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });

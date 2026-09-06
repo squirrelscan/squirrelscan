@@ -45,7 +45,11 @@ REPO="squirrelscan/squirrelscan"
 # the floor, and --max-redirs bounds the chain. The binary is checksum-verified
 # against the manifest, but the metadata fetches and the bash re-exec have no
 # integrity protection beyond the transport itself (#165).
-# All four options predate curl 7.34 (2013), below every platform we support.
+# --tlsv1.2 is the youngest of the four and landed in curl 7.34 (2013), below
+# every platform we support: the oldest realistic holdout is RHEL 7 at curl
+# 7.29, whose glibc 2.17 is already under the bun standalone binary's floor.
+# An unsupported option exits 2 with "option ...: is unknown", which
+# fetch_with_retry discards, so it would read as three failed download retries.
 CURL_TLS_ARGS=(--proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 3)
 
 # Detect if stdout is a terminal for colors
@@ -182,7 +186,10 @@ SELF_INSTALL_KILL_CODES="137 143"
 SELF_INSTALL_KILLED_STEP="self_install_killed"
 
 # Indirected so the tests can point the probe at fixtures instead of the real
-# kernel interfaces; SQUIRREL_ERROR_ENDPOINT above is seamed the same way.
+# kernel interfaces. SQUIRREL_ERROR_ENDPOINT and SQUIRREL_RELEASES_ENDPOINT
+# above are seamed the same way, but since #165 both are HTTPS-only: curl
+# refuses a plain-http override with "Protocol http disabled", so a local
+# stand-in has to serve TLS that the running curl already trusts.
 CGROUP_ROOT="${SQUIRREL_CGROUP_ROOT:-/sys/fs/cgroup}"
 PROC_SELF_CGROUP="${SQUIRREL_PROC_SELF_CGROUP:-/proc/self/cgroup}"
 PROC_MEMINFO="${SQUIRREL_PROC_MEMINFO:-/proc/meminfo}"
