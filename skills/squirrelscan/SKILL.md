@@ -5,7 +5,7 @@ license: See LICENSE file in repository root
 compatibility: Requires squirrel CLI installed and accessible in PATH (or guides the user to install it)
 metadata:
   author: squirrelscan
-  version: "1.1"
+  version: "1.2"
 allowed-tools: Bash(squirrel:*) Read
 ---
 
@@ -68,7 +68,7 @@ squirrel audit https://example.com --format llm
 ```
 
 - Local audits are free and run entirely on your machine. No account needed.
-- ALWAYS prefer `--format llm` when an agent is reading the output: it is a compact, token-optimized format built for LLMs.
+- Use `--format llm` when an agent is reading the output: it is a compact, token-optimized format built for LLMs.
 - Audits are cached in a local project database; `squirrel report` re-renders without re-crawling.
 
 ### Coverage modes

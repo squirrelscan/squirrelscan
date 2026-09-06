@@ -5,7 +5,7 @@ license: See LICENSE file in repository root
 compatibility: Requires squirrel CLI installed and accessible in PATH
 metadata:
   author: squirrelscan
-  version: "2.0"
+  version: "2.1"
 allowed-tools: Bash(squirrel:*) Read Edit Grep Glob
 ---
 
@@ -27,9 +27,9 @@ https://docs.squirrelscan.com/rules/links/external-links
 squirrel audit https://example.com --format llm
 ```
 
-- ALWAYS use `--format llm`: it is compact, exhaustive, and made for agents.
+- Use `--format llm`: it is compact, exhaustive, and made for agents.
 - If the user doesn't provide a URL, ask which site to audit.
-- PREFER auditing the live site: only there do you see true rendering, performance, and redirect behavior. If both a local dev server and a live site exist, suggest the live one; apply the fixes to the local code either way.
+- Prefer auditing the live site: only there do you see true rendering, performance, and redirect behavior. If both a local dev server and a live site exist, suggest the live one; apply the fixes to the local code either way.
 - Audits are cached locally. Re-render later without recrawling: `squirrel report <audit-id> --format llm`.
 
 ### Scan progression
@@ -52,7 +52,7 @@ If the site blocks unknown crawlers (Shopify / Cloudflare), pass Web Bot Auth he
 1. **Present the report**: score, grade, top issues by severity.
 2. **Propose fixes**: list the issues you can fix and confirm with the user before changing anything.
 3. **Map issues to source**: find the template, component, or content file behind each finding.
-4. **Fix in batches**: apply the approved fixes; use subagents to parallelize independent files.
+4. **Fix in batches**: apply the approved fixes.
 5. **Re-audit** (use `--refresh` after deploys or content changes) and show before/after scores.
 6. **Repeat** until the target is met or only judgment calls remain (for example "should this link be removed?"). Flag those for user review instead of guessing.
 
@@ -67,27 +67,9 @@ After each batch, verify the project still builds and existing checks pass.
 | 70-85 (C) | 90+ (A) | Polish |
 | > 85 (B+) | 95+ | Fine-tuning |
 
-A site is only considered COMPLETE and FIXED when it scores 95+ (Grade A) with `--coverage full`.
+Sign off against a `-C full` crawl, since the quick pass samples only part of the site.
 
-### Issue categories and fix approach
-
-| Category | Fix approach | Parallelizable |
-|----------|--------------|----------------|
-| Meta tags / titles / descriptions | Edit page components or metadata config | No |
-| Structured data | Add JSON-LD to page templates | No |
-| Missing H1 / heading hierarchy | Edit page components + content files | Yes (content) |
-| Image alt text | Edit content files | Yes |
-| Short meta descriptions | Extend frontmatter descriptions | Yes |
-| HTTP to HTTPS links | Find and replace in content | Yes |
-| Broken links | Manual review, flag for user | No |
-
-Rules carry a level (error, warning, notice) and a rank (1-10): fix errors first, then high-rank warnings. Code changes and content changes are equally important; treat them the same.
-
-### Parallelizing with subagents
-
-- Ask the user first: always confirm which fixes to apply before spawning subagents.
-- Group 3-5 files per subagent for the same fix type; only parallelize independent files (no shared components or config).
-- Spawn the subagents in a single message so they run concurrently.
+Rules carry a level (error, warning, notice) and a rank (1-10): fix errors first, then high-rank warnings. Findings that need a content edit count the same as ones that need a code edit. Broken links usually need a human decision (remove, replace, or keep): flag them rather than guessing.
 
 ## Verifying regressions
 
