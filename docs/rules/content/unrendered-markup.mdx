@@ -43,10 +43,11 @@ Displaying markup is not the same as leaking it, and this rule is mostly a list 
 - `<code>`, `<pre>`, `<samp>`, `<kbd>` and `<textarea>`, because a visitor reads them as a quoted literal. A tutorial showing `**bold**` in a code span is doing its job, and an editor pre-filled with a post's markdown source is not a defect.
 - Any element a syntax highlighter marks as its own: the whole class tokens `highlight`, `hljs`, `shiki`, `chroma`, `codehilite`, `code-block`, `preformatted` and their siblings, any `language-*` or `lang-*` class, and the `data-language` family of attributes. Whole tokens, so a `highlight-box` callout is still judged as prose.
 
-Four more limits keep the rule quiet on pages that talk about markup rather than mangle it.
+Five more limits keep the rule quiet on pages that talk about markup rather than mangle it.
 
 - **Underscore emphasis must contain a space.** `__init__` and `__main__` are flanked exactly like bold and appear in ordinary prose, so `__bold__` on its own is not reported. `**bold**` still is.
 - **A markdown link needs a URL-shaped target.** `array[i](arg)` and `[see note] (below)` are not links.
+- **A single `#` needs a capitalised word after it.** `#` is also the number sign, so `# of seats` in a table header is not a heading, and neither is the URL fragment MDN prints under a specification link. `##` and deeper have no second reading and are taken as written, so `## my-package` still counts.
 - **Escaped tags must be lowercase.** `<Article>` and `<Header>` are component names a page is showing on purpose. Markup that leaked from a template came from HTML a server emitted, which is lowercase.
 - **At least one escaped tag must carry a true closing form or a recognised attribute with a value.** A page that writes `<pre>` or `<meta name>` in a sentence is documenting an element. A leak brings `</p>` or `class="row"` with it. A self-closing `<br/>` is not a closing form, `</path/to/file>` is a path rather than a closing tag, and `c=1` is not an attribute, so `if a<b then c=1>0` stays clean.
 
@@ -57,6 +58,8 @@ Two classes are known and deliberate.
 Prose full of identifiers stays clean: `CLOUDFLARE_API_TOKEN`, `some_file_name.ts`, `max_pages`, `width * height` and `2 * 3` are none of them emphasis, because both emphasis forms require CommonMark-style flanking.
 
 Backticks alone never trip the rule. They are the one markdown character people put on a page on purpose and often, in a prompt written to be copied into an agent, a chat transcript, or a changelog. Inline code spans are reported in the detail once another family has fired, and never before.
+
+Text is read block by block, so a match is never assembled out of two elements that each hold half of it. A heading ending in `*` followed by a link starting with `*` is two stray asterisks, not emphasis.
 
 The residual case is a page whose subject is HTML source, displayed in a container the rule cannot recognise. A tutorial that shows `<p>This is a paragraph.</p>` inside a plain `<div>` with a bespoke class is indistinguishable from a page that leaked it. Wrap such examples in `<pre>` or `<code>`, which is also what makes them selectable and copyable for readers.
 

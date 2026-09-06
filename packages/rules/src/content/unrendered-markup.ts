@@ -73,7 +73,7 @@ const BLOCK_TAGS = new Set([
   "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
   "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr", "li", "main",
   "nav", "ol", "p", "section", "summary", "table", "tbody", "td", "tfoot",
-  "th", "thead", "tr", "ul",
+  "th", "thead", "tr", "ul", "option", "optgroup", "caption", "legend", "menu",
 ]);
 
 /** True for any element a browser starts on a new line. */
@@ -187,17 +187,20 @@ const MD_LINK_RE =
  * which is both slow and a silent miss on exactly the long headings a broken
  * template produces.
  */
-const MD_HEADING_RE = /^[ \t]{0,3}#{1,6}[ \t]+(?=[^\s#\d])([^\n]{1,100})/gm;
+const MD_HEADING_RE = /^[ \t]{0,3}(#{1,6})[ \t]+(?=[^\s#\d])([^\n]{1,100})/gm;
 
 /**
- * A heading is prose; a URL fragment is a slug. MDN's specification table
- * renders `HTML<br /># the-pre-element` — a real line, really starting with a
- * hash, that is the fragment of the link above it rather than a heading nobody
- * rendered. One lowercase hyphenated or underscored token with no spaces is
- * that shape, and is never a heading a CMS lost.
+ * A SINGLE `#` is also the number sign, and now that every block starts a line
+ * the number sign starts plenty of them: `<th># of seats</th>` is a column
+ * header, and MDN's specification table renders `HTML<br /># the-pre-element`,
+ * a real line showing the link's fragment. Both are lowercase after the hash.
+ *
+ * `##` and deeper have no such second reading, so they are taken as written —
+ * which keeps `## my-package` and `## getting-started`, headings a changelog
+ * really can lose.
  */
-const NOT_A_SLUG = (m: RegExpExecArray): boolean =>
-  !/^[a-z0-9]+(?:[-_][a-z0-9]+)+$/.test((m[1] ?? "").trim());
+const HEADING_IS_PROSE = (m: RegExpExecArray): boolean =>
+  (m[1] ?? "").length > 1 || /^[A-Z]/.test((m[2] ?? "").trim());
 
 /** A fence line: three or more backticks or tildes, optionally with an info string. */
 const MD_FENCE_RE = /^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]{0,60}/gm;
@@ -244,9 +247,12 @@ export const MAX_TAG_NAME_LENGTH = Math.max(
  * Scanning the raw HTML for `&lt;` instead would be the same rule written
  * backwards, and would fire on every escaped example inside a code block.
  *
- * One bounded character class, not two adjacent quantifiers: `[^<>]{0,200}`
+ * One bounded character class, not two adjacent quantifiers: `[^<>\n]{0,200}`
  * cannot match the closing `>`, so it stops at the first one and never
- * re-partitions a long run the way `\s*[^>]*` would.
+ * re-partitions a long run the way `\s*[^>]*` would. It excludes the newline
+ * for a second reason: a block boundary is a newline, so allowing one here
+ * would let `<p>x&lt;p</p><span>&gt;y</span>` assemble a `<p>` out of two
+ * blocks that each hold half of it.
  *
  * LOWERCASE tag names only. Escaped markup that leaked out of a template came
  * from HTML a server actually emitted, which is lowercase. A capitalised
@@ -254,7 +260,7 @@ export const MAX_TAG_NAME_LENGTH = Math.max(
  * displaying on purpose — astro.build puts a whole row of them in its hero.
  */
 const ESCAPED_TAG_RE = new RegExp(
-  `<(/?)([a-z][a-z0-9]{0,${MAX_TAG_NAME_LENGTH - 1}})([^<>]{0,200})>`,
+  `<(/?)([a-z][a-z0-9]{0,${MAX_TAG_NAME_LENGTH - 1}})([^<>\n]{0,200})>`,
   "g",
 );
 
@@ -272,6 +278,13 @@ const KNOWN_ATTRIBUTES = new Set([
   "height", "colspan", "rowspan", "for", "action", "method", "placeholder",
   "datetime", "label", "cite", "download", "referrerpolicy", "integrity",
   "crossorigin", "http-equiv", "property", "itemprop", "viewbox", "xmlns",
+  // Legacy presentational attributes. A mangled rich-text or email import
+  // produces exactly this shape — no closing tags, nothing modern — and would
+  // otherwise have nothing to vouch for it. Single-letter SVG names (d, x, y)
+  // are deliberately absent: `if a<b then d=1>0` would read as an attribute
+  // again, which is the false positive this allowlist exists to prevent.
+  "align", "valign", "bgcolor", "cellpadding", "cellspacing", "nowrap",
+  "frameborder", "allowfullscreen", "scrolling", "poster", "srcdoc", "border",
 ]);
 
 /**
@@ -407,9 +420,16 @@ function push(
  * One such tag vouches for the rest, so a leak of `<p>text</p><br><br>` is
  * counted in full while a page of bare element names is silent.
  */
+const closing = (m: RegExpExecArray): boolean => m[1] === "/";
+
 function findEscapedTags(text: string): string[] {
   const candidates: string[] = [];
-  let vouched = false;
+  // Index of the tag that made the family reportable. It is moved to the front
+  // so the report's example line shows real evidence — `<div class="row">`, not
+  // the bare `<pre>` that happened to appear first. An INDEX, not the string:
+  // the same tag text usually repeats, and removing it by value would drop
+  // every copy and undercount the family.
+  let vouchingAt = -1;
   ESCAPED_TAG_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = ESCAPED_TAG_RE.exec(text)) !== null) {
@@ -428,20 +448,22 @@ function findEscapedTags(text: string): string[] {
     // whose "attributes" are the rest of the path. A real closing tag has
     // nothing after the name.
     const closesCleanly = closing(match) && rest.trim().length === 0;
-    if (closesCleanly || hasRecognisedAttribute(rest)) vouched = true;
+    if (vouchingAt < 0 && (closesCleanly || hasRecognisedAttribute(rest))) {
+      vouchingAt = candidates.length;
+    }
     candidates.push(match[0]);
     // Stop once the list is full AND something has vouched: breaking earlier
     // could drop the one tag that would have made the family reportable.
-    if (candidates.length >= MAX_MATCHES_PER_KIND && vouched) break;
+    if (candidates.length >= MAX_MATCHES_PER_KIND && vouchingAt >= 0) break;
     if (candidates.length >= MAX_MATCHES_PER_KIND * 4) break;
   }
   ESCAPED_TAG_RE.lastIndex = 0;
 
-  if (!vouched) return [];
-  return candidates.slice(0, MAX_MATCHES_PER_KIND);
+  if (vouchingAt < 0) return [];
+  const [vouching] = candidates.splice(vouchingAt, 1);
+  return [vouching as string, ...candidates].slice(0, MAX_MATCHES_PER_KIND);
 }
 
-const closing = (m: RegExpExecArray): boolean => m[1] === "/";
 
 /** Every family of unrendered markup present in `text`, with a sample and a count. */
 export function findUnrenderedMarkup(text: string): UnrenderedMarkupFinding[] {
@@ -456,7 +478,7 @@ export function findUnrenderedMarkup(text: string): UnrenderedMarkupFinding[] {
   ].slice(0, MAX_MATCHES_PER_KIND);
   push(out, "markdown-emphasis", emphasis);
   push(out, "markdown-link", collect(MD_LINK_RE, scanned));
-  push(out, "markdown-heading", collect(MD_HEADING_RE, scanned, NOT_A_SLUG));
+  push(out, "markdown-heading", collect(MD_HEADING_RE, scanned, HEADING_IS_PROSE));
   push(out, "markdown-code-fence", collect(MD_FENCE_RE, scanned));
   push(out, "markdown-inline-code", collect(MD_INLINE_CODE_RE, scanned));
 

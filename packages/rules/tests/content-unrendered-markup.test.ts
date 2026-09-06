@@ -130,6 +130,25 @@ describe("findUnrenderedMarkup: escaped HTML and entities", () => {
     expect(kinds('<input type="text" required>')).toContain("escaped-html-tag");
   });
 
+  test("legacy presentational attributes vouch too", () => {
+    // A mangled rich-text or email import: no closing tags, nothing modern. The
+    // allowlist has to reach these or the whole family goes unreported.
+    expect(kinds('<td align="center" bgcolor="#fff">Total<td valign="top">')).toContain(
+      "escaped-html-tag",
+    );
+    // But not at the cost of the inequality the allowlist exists to protect.
+    expect(kinds("if a<b then d=1>0 holds")).not.toContain("escaped-html-tag");
+  });
+
+  test("the vouching tag leads the list, without dropping its duplicates", () => {
+    // Moving it by value rather than index would delete every copy of `</p>`.
+    const found = findUnrenderedMarkup("<p>a</p><p>b</p>");
+    expect(found.find((f) => f.kind === "escaped-html-tag")?.count).toBe(4);
+    // A bare tag first, a real one after: the sample must be the real one.
+    const mixed = findUnrenderedMarkup('<pre><div class="row">x</div>');
+    expect(mixed.find((f) => f.kind === "escaped-html-tag")?.sample).toBe('<div class="row">');
+  });
+
   test("a path in angle brackets is not a closing tag", () => {
     expect(kinds("The config lives at </path/to/file> on disk")).not.toContain(
       "escaped-html-tag",
@@ -186,14 +205,22 @@ describe("findUnrenderedMarkup: identifiers and arithmetic stay clean", () => {
     expect(findUnrenderedMarkup("Order #4821 has shipped")).toEqual([]);
   });
 
-  test("a URL fragment on its own line is not a heading", () => {
-    // MDN's specification table renders `HTML<br /># the-pre-element`: a real
-    // line that really starts with a hash, showing the link's fragment.
+  test("a lone hash is the number sign, not a heading", () => {
+    // Every block now starts a line, so the number sign starts plenty of them.
+    expect(findUnrenderedMarkup("# of seats")).toEqual([]);
+    expect(findUnrenderedMarkup("# of licences")).toEqual([]);
+    expect(findUnrenderedMarkup("# and more")).toEqual([]);
+    // MDN renders `HTML<br /># the-pre-element`: a real line showing a fragment.
     expect(findUnrenderedMarkup("HTML\n# the-pre-element")).toEqual([]);
     expect(findUnrenderedMarkup("# some_anchor_name")).toEqual([]);
-    // A one-word heading is still a heading.
+  });
+
+  test("a capitalised or multi-hash heading survives that test", () => {
     expect(kinds("## Pricing")).toContain("markdown-heading");
     expect(kinds("# Getting started")).toContain("markdown-heading");
+    // `##` has no second reading as the number sign, so it is taken as written.
+    expect(kinds("## my-package")).toContain("markdown-heading");
+    expect(kinds("### getting-started")).toContain("markdown-heading");
   });
 
   test("ordinary marketing copy is clean", () => {
@@ -474,12 +501,13 @@ describe("unrenderedMarkupRule: adversarial input stays linear", () => {
 });
 
 // Sibling blocks are concatenated with nothing between them unless a boundary is
-// asked for, so `<p>a</p><p>b</p>` reads back as `ab`. Every line-anchored
-// pattern here would then match only at offset 0 — which, on a page with a
-// header, is never. These fixtures all put the markup AFTER chrome.
-describe("unrenderedMarkupRule: line-anchored patterns on a real page shape", () => {
+// asked for, so `<p>a</p><p>b</p>` reads back as `ab`. Two failure modes follow,
+// and each fixture here targets one: a line-anchored pattern that can only match
+// at offset 0, and a match GLUED together from two blocks that share neither
+// half. Every fixture puts the markup after chrome, so none of them passes by
+// sitting at the body's first byte.
+describe("unrenderedMarkupRule: block boundaries on a real page shape", () => {
   test("a leaked heading is found after the site chrome", () => {
-    expect(run(page("<p>## Pricing</p>"))[0]?.status).toBe("warn");
     expect(run(page(`${NAV}<main><p>## Pricing</p></main>`))[0]?.status).toBe("warn");
   });
 
@@ -496,16 +524,37 @@ describe("unrenderedMarkupRule: line-anchored patterns on a real page shape", ()
     ).toBe("warn");
   });
 
+  // The inverse failure: a boundary opened but never closed glues a block to
+  // whatever inline content follows it, inventing a match in neither half.
+  const glued: [string, string][] = [
+    ["heading then inline link", '<h3>Price *</h3><a href="/x">terms* apply</a>'],
+    ["block then bare text", "<p>Save on *big</p> sale* today"],
+    ["div then button", "<div>Save *</div><button>now* only</button>"],
+    ["split escaped tag", '<p>x&lt;p</p><span> class="a"&gt;y</span>'],
+    ["adjacent options", "<select><option>Sort by *</option><option>price* asc</option></select>"],
+  ];
+
+  test.each(glued)("%s cannot glue into a match", (_, body) => {
+    expect(run(page(`${NAV}<main>${body}</main>`))[0]?.status).toBe("pass");
+  });
+
+  test("a tag whole within one block is still reported", () => {
+    // The boundary must suppress assembled matches, not real ones sitting
+    // entirely inside a single block.
+    expect(
+      run(page(`${NAV}<main><p>x</p><span>&lt;p&gt;y&lt;/p&gt;</span></main>`))[0]?.status,
+    ).toBe("fail");
+  });
+
   test("a heading split across blocks does not invent a match", () => {
-    // The boundary must not glue `##` in one block to a word in the next.
     expect(run(page(`${NAV}<main><p>Rated ##</p><p>Pricing details</p></main>`))[0]?.status).toBe(
       "pass",
     );
   });
 
   test("chrome itself is judged, not skipped", () => {
-    expect(run(page(`<header><p>## Menu</p></header><main><p>Copy.</p></main>`))[0]?.status).toBe(
-      "warn",
-    );
+    expect(
+      run(page(`<header><nav><p>## Menu</p></nav></header><main><p>Copy.</p></main>`))[0]?.status,
+    ).toBe("warn");
   });
 });
