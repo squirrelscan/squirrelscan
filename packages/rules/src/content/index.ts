@@ -21,6 +21,7 @@ import { readingLevelRule } from "./reading-level";
 import { staleCopyrightRule } from "./stale-copyright";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
+import { unrenderedMarkupRule } from "./unrendered-markup";
 import { wordCountRule } from "./word-count";
 
 export const rules: Rule[] = [
@@ -44,6 +45,7 @@ export const rules: Rule[] = [
   titlePatternOutlierRule,
   dateAgreementRule,
   placeholderTextRule,
+  unrenderedMarkupRule,
 ];
 
 export {
@@ -66,5 +68,6 @@ export {
   staleCopyrightRule,
   thinVsSiteNormRule,
   titlePatternOutlierRule,
+  unrenderedMarkupRule,
   wordCountRule,
 };

@@ -106,7 +106,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // speaks, so like content/hidden-text it emits one check across the 500
       // fixture pages that have a document (#1350). All 500 PASS, which is why
       // healthScore.overall is still 48: the synthetic site writes real copy.
-      expect(v1.findings.length).toBe(98721);
+      // 98721 -> 99221: content/unrendered-markup (#1352) is the same shape and
+      // adds the same 500 — one check on each page with a document, the other
+      // 18 having none. All 500 pass too: the fixture's copy carries no literal
+      // markdown, so healthScore.overall is still 48.
+      expect(v1.findings.length).toBe(99221);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -116,9 +120,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 274 -> 275 crawl/sitemap-lastmod-drift, 275 -> 276
       // content/date-agreement, 276 -> 277 links/no-contextual-inbound,
       // 277 -> 278 social/asset-divergence, 278 -> 279 perf/asset-compression,
-      // 279 -> 280 content/placeholder-text; anything else means a rule id
+      // 279 -> 280 content/placeholder-text, 280 -> 281
+      // content/unrendered-markup; anything else means a rule id
       // leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(280);
+      expect(v1.perRuleTally.length).toBe(281);
     },
     180_000,
   );

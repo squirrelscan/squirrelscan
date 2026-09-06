@@ -250,7 +250,8 @@
                   "rules/content/mojibake",
                   "rules/content/thin-vs-site-norm",
                   "rules/content/title-pattern-outlier",
-                  "rules/content/date-agreement"
+                  "rules/content/date-agreement",
+                  "rules/content/unrendered-markup"
                 ]
               },
               {
