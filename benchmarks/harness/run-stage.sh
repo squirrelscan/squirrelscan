@@ -18,7 +18,7 @@ set -u
 
 HERE=${0:A:h}
 LANE=${BENCH_REPO:-$(git -C "$HERE" rev-parse --show-toplevel)/..}
-BASE_PAGE=$HERE/../drscholls/page.html
+BASE_PAGE=${BENCH_BASE_PAGE:?set BENCH_BASE_PAGE to a large script-heavy HTML file to serve as the product template}
 LABEL=$1; PAGES=$2; MAXPAGES=$3; shift 3
 OUT=$HERE/results/$LABEL
 KILL_MB=${BENCH_KILL_MB:-4096}
