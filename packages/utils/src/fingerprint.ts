@@ -137,11 +137,16 @@ function spliceRegions(
  * unchanged.
  */
 export function normalizeHtmlForFingerprint(html: string): string {
-  const edits: Array<{ start: number; end: number; text: string }> = [];
-  const appBlocks: SourceRegion[] = [];
-  const assetTags: SourceRegion[] = [];
-  let blockStart: number | null = null;
+  return sortShopifyRuns(neutralizeScripts(html));
+}
 
+/**
+ * Pass 1: rewrite script bodies. Strips the Cloudflare challenge block, blanks
+ * Shopify's `__st` request-identity bootstrap, and neutralizes epoch-ms tokens
+ * and named identity fields everywhere else.
+ */
+function neutralizeScripts(html: string): string {
+  const edits: Array<{ start: number; end: number; text: string }> = [];
   scanSource(html, {
     onScript: (region) => {
       const openTag = html.slice(region.start, region.openTagEnd);
@@ -159,10 +164,38 @@ export function normalizeHtmlForFingerprint(html: string): string {
       if (rewritten !== body) {
         edits.push({ start: region.openTagEnd, end: region.bodyEnd, text: rewritten });
       }
+    },
+  });
+  return spliceRegions(html, edits);
+}
+
+/**
+ * Pass 2: sort each contiguous run of Shopify app blocks and app-extension
+ * asset tags.
+ *
+ * Deliberately a SECOND pass over the already-rewritten string rather than more
+ * edits in the first. An app block can contain a script, so the two edit sets
+ * overlap, and one has to win: sorting raw text would carry an un-neutralized
+ * identity token back into the output for exactly the pages whose blocks needed
+ * reordering, and leave it neutralized for the ones that did not. Two fetches
+ * of the same page would then normalize differently — the failure this whole
+ * function exists to prevent. Sorting text that is already neutralized cannot
+ * do that.
+ */
+function sortShopifyRuns(html: string): string {
+  const appBlocks: SourceRegion[] = [];
+  const assetTags: SourceRegion[] = [];
+  let blockStart: number | null = null;
+
+  scanSource(html, {
+    onScript: (region) => {
+      const openTag = html.slice(region.start, region.openTagEnd);
       if (EXTENSION_ASSET.test(openTag)) assetTags.push({ start: region.start, end: region.end });
     },
     onComment: (region, text) => {
       if (APP_BLOCK_BEGIN.test(text)) {
+        // A nested BEGIN keeps the OUTERMOST start, so a block and the block it
+        // contains are never emitted as two overlapping regions.
         if (blockStart === null) blockStart = region.start;
         return;
       }
@@ -177,9 +210,7 @@ export function normalizeHtmlForFingerprint(html: string): string {
     },
   });
 
-  // Sort each adjacent run. The sort key is the region's raw text, so casing,
-  // attributes and internal whitespace all stay significant; only the ORDER of
-  // siblings is normalized.
+  const edits: Array<{ start: number; end: number; text: string }> = [];
   for (const regions of [appBlocks, assetTags]) {
     for (const run of groupAdjacent(html, regions)) {
       const texts = run.items.map((r) => html.slice(r.start, r.end));
@@ -190,6 +221,5 @@ export function normalizeHtmlForFingerprint(html: string): string {
       });
     }
   }
-
   return spliceRegions(html, edits);
 }
