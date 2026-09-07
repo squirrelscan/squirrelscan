@@ -51,7 +51,7 @@ _squirrel_completions() {
   local keys_commands="create list revoke"
 
   # Self subcommands
-  local self_commands="install update completion doctor version settings uninstall"
+  local self_commands="disk install update completion doctor version settings uninstall"
 
   # Config subcommands
   local config_commands="show set path validate"
@@ -301,6 +301,7 @@ _squirrel() {
   )
 
   self_commands=(
+    'disk:Report what ~/.squirrel is using'
     'install:Bootstrap local installation'
     'update:Check and apply updates'
     'completion:Generate shell completions'
@@ -569,13 +570,14 @@ complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subco
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from revoke" -l force -d "Skip confirmation prompt"
 
 # Self subcommands
-complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from install update completion doctor version settings auth uninstall" -a install -d "Bootstrap local installation"
-complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from install update completion doctor version settings auth uninstall" -a update -d "Check and apply updates"
-complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from install update completion doctor version settings auth uninstall" -a completion -d "Generate shell completions"
-complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from install update completion doctor version settings auth uninstall" -a doctor -d "Run health checks"
-complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from install update completion doctor version settings auth uninstall" -a version -d "Show version information"
-complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from install update completion doctor version settings auth uninstall" -a settings -d "Manage CLI settings"
-complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from install update completion doctor version settings uninstall" -a uninstall -d "Remove squirrel from the system"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings auth uninstall" -a disk -d "Report what ~/.squirrel is using"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings auth uninstall" -a install -d "Bootstrap local installation"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings auth uninstall" -a update -d "Check and apply updates"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings auth uninstall" -a completion -d "Generate shell completions"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings auth uninstall" -a doctor -d "Run health checks"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings auth uninstall" -a version -d "Show version information"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings auth uninstall" -a settings -d "Manage CLI settings"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_subcommand_from disk install update completion doctor version settings uninstall" -a uninstall -d "Remove squirrel from the system"
 
 # Shell completion options
 complete -c squirrel -n "__fish_seen_subcommand_from completion" -a "bash zsh fish" -d "Shell type"

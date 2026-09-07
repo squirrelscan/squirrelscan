@@ -12,6 +12,7 @@ The `self` command provides subcommands for managing the squirrel CLI itself: in
 - [update](#update) - Check and apply updates
 - [completion](#completion) - Generate shell completions
 - [doctor](#doctor) - Run health checks
+- [disk](#disk) - Report what `~/.squirrel` is using
 - [version](#version) - Show version information
 - [settings](#settings) - Manage CLI settings
 - [uninstall](#uninstall) - Remove squirrel from system
@@ -259,6 +260,54 @@ Passed: 5 | Warnings: 1 | Failed: 0
 |------|---------|
 | `0` | All checks passed (warnings are OK) |
 | `1` | One or more checks failed |
+
+---
+
+## disk
+
+Reports what the squirrel data directory is costing, per project and in total.
+
+```bash
+squirrel self disk
+```
+
+```text
+Projects
+     406 MB  sweetdeals-com-au  (7 audits)
+     194 MB  acme-docs  (13 audits)
+    86.8 MB  www-example-com  (2 audits)
+  ... and 65 more
+
+Totals
+     2.7 GB  projects
+     948 MB  content store (shared)
+     203 MB  releases
+     4.0 MB  logs
+     3.8 GB  total
+```
+
+Projects are listed largest first. The count in brackets is how many audits that
+project has recorded.
+
+**Every audit is kept.** Re-auditing a project writes a fresh set of rows and
+retires nothing, so a project grows by roughly one audit's worth each time. On a
+1,000-page site that is about 95 MB per audit, and most of it is the per-check
+results: around 204 rows per page, which with their indexes are about 70% of the
+file. A large site audited weekly will add most of a gigabyte a week.
+
+The content store is shared by every project rather than owned by one, so it is
+reported separately.
+
+### Options
+
+| Flag | Description |
+| --- | --- |
+| `--json` | Emit the usage as JSON, for scripting |
+| `--limit <n>` | Show at most this many projects (default 15) |
+
+<Note>
+This command only reports. Nothing here deletes an audit or reclaims space.
+</Note>
 
 ---
 

@@ -320,6 +320,81 @@ const selfDoctor = defineCommand({
   },
 });
 
+const selfDisk = defineCommand({
+  meta: {
+    name: "disk",
+    description: "Report what ~/.squirrel is using, per project and in total",
+  },
+  args: {
+    json: {
+      type: "boolean",
+      description: "Emit the usage as JSON",
+    },
+    limit: {
+      type: "string",
+      description: "Show at most this many projects (default 15)",
+    },
+  },
+  async run({ args }) {
+    const { collectDiskUsage, formatBytes } = await import("@/self/disk");
+
+    const result = collectDiskUsage();
+    if (!result.ok) {
+      console.error(`Error: ${result.error.message}`);
+      process.exit(1);
+    }
+    const usage = result.data;
+
+    if (args.json) {
+      console.log(JSON.stringify(usage, null, 2));
+      return;
+    }
+
+    const limit = Number.parseInt(String(args.limit ?? "15"), 10);
+    const shown = usage.projects.slice(
+      0,
+      Number.isFinite(limit) && limit > 0 ? limit : 15
+    );
+
+    console.log("Projects");
+    if (shown.length === 0) {
+      console.log("  (none)");
+    }
+    for (const project of shown) {
+      const detail = project.unreadable
+        ? "unreadable"
+        : `${project.crawls} audit${project.crawls === 1 ? "" : "s"}`;
+      console.log(
+        `  ${formatBytes(project.bytes).padStart(9)}  ${project.name}  (${detail})`
+      );
+    }
+    const hidden = usage.projects.length - shown.length;
+    if (hidden > 0) console.log(`  ... and ${hidden} more`);
+
+    console.log("\nTotals");
+    console.log(`  ${formatBytes(usage.projectsBytes).padStart(9)}  projects`);
+    console.log(
+      `  ${formatBytes(usage.contentStoreBytes).padStart(9)}  content store (shared)`
+    );
+    console.log(`  ${formatBytes(usage.releasesBytes).padStart(9)}  releases`);
+    console.log(`  ${formatBytes(usage.logsBytes).padStart(9)}  logs`);
+    console.log(`  ${formatBytes(usage.totalBytes).padStart(9)}  total`);
+
+    // The number people are surprised by, said once, with the reason. A project
+    // keeps every audit it has ever run: nothing retires the previous crawl's
+    // rows, and `rule_results` is about 204 rows per page per audit.
+    const repeated = usage.projects.filter((p) => p.crawls > 1);
+    if (repeated.length > 0) {
+      const worst = repeated[0]!;
+      console.log(
+        `\nEvery audit is kept: ${worst.name} holds ${worst.crawls} of them ` +
+          `(${worst.ruleResultRows.toLocaleString()} rule results). Re-auditing ` +
+          `a project grows it by about one audit each time.`
+      );
+    }
+  },
+});
+
 const selfVersion = defineCommand({
   meta: {
     name: "version",
@@ -625,6 +700,7 @@ export const self = defineCommand({
     description: "Self-management commands",
   },
   subCommands: {
+    disk: selfDisk,
     install: selfInstall,
     update: selfUpdate,
     completion: selfCompletion,
