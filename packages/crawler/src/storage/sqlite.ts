@@ -3172,6 +3172,109 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Both groupings of a crawl's rule results, from ONE read (#1920).
+   *
+   * `getRuleResultsByPage` and `getRuleResultsByRuleId` differ only in their
+   * `ORDER BY`; every other line, including the CheckResult they build per row,
+   * is the same. The report path calls both, so a crawl's checks were read
+   * twice and materialized twice: at 1,000 pages that is 203,687 rows, 204 per
+   * page, and about 500 bytes of object per 55 bytes of data.
+   *
+   * Here the rows are read once and each CheckResult is SHARED by both maps, so
+   * the second grouping is two Maps of references rather than a second copy.
+   *
+   * The orders are preserved exactly. Measured on a 1,000-page crawl, both
+   * `ORDER BY page_url` and `ORDER BY rule_id` return their ties in `id` order
+   * (0 rows out of order across 203,687), and each is identical to the fully
+   * specified `ORDER BY <column>, id` — so reading in `id` order and grouping
+   * gives each map the within-key order it had. The KEY order comes from SQLite
+   * rather than from sorting in JS, because SQLite's BINARY collation compares
+   * UTF-8 bytes while JavaScript compares UTF-16 code units, and the two
+   * disagree on some non-ASCII urls.
+   */
+  getRuleResultsGrouped(crawlId: string): Effect.Effect<
+    {
+      byPage: Map<string, CheckResult[]>;
+      byRuleId: Map<string, CheckResult[]>;
+    },
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const rows = db
+          .prepare(
+            "SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY id"
+          )
+          .all(crawlId) as Record<string, unknown>[];
+
+        // Grouped in row order first; the maps are then rebuilt in the key order
+        // each caller used to get.
+        const pageGroups = new Map<string, CheckResult[]>();
+        const ruleGroups = new Map<string, CheckResult[]>();
+        for (const row of rows) {
+          const pageUrl = row.page_url as string;
+          const ruleId = row.rule_id as string;
+          const check = this.rowToCheckResult(row);
+          const pageList = pageGroups.get(pageUrl);
+          if (pageList) pageList.push(check);
+          else pageGroups.set(pageUrl, [check]);
+          const ruleList = ruleGroups.get(ruleId);
+          if (ruleList) ruleList.push(check);
+          else ruleGroups.set(ruleId, [check]);
+        }
+
+        const orderedKeys = (column: "page_url" | "rule_id"): string[] =>
+          (
+            db
+              .prepare(
+                `SELECT DISTINCT ${column} AS k FROM rule_results WHERE crawl_id = ? ORDER BY ${column}`
+              )
+              .all(crawlId) as Array<{ k: string }>
+          ).map((r) => r.k);
+
+        const inKeyOrder = (
+          groups: Map<string, CheckResult[]>,
+          keys: string[]
+        ): Map<string, CheckResult[]> => {
+          const out = new Map<string, CheckResult[]>();
+          for (const key of keys) {
+            const list = groups.get(key);
+            if (list) out.set(key, list);
+          }
+          return out;
+        };
+
+        return {
+          byPage: inKeyOrder(pageGroups, orderedKeys("page_url")),
+          byRuleId: inKeyOrder(ruleGroups, orderedKeys("rule_id")),
+        };
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /** One `rule_results` row as a CheckResult. The single definition the three
+   * readers share, so a column added to one cannot be forgotten in the others. */
+  private rowToCheckResult(row: Record<string, unknown>): CheckResult {
+    const pageUrl = row.page_url as string;
+    return {
+      name: row.check_name as string,
+      status: row.status as CheckResult["status"],
+      message: row.message as string,
+      value: row.value !== null ? (row.value as string | number) : undefined,
+      expected:
+        row.expected !== null ? (row.expected as string | number) : undefined,
+      pageUrl: pageUrl || undefined,
+      items: row.items ? JSON.parse(row.items as string) : undefined,
+      details: row.details ? JSON.parse(row.details as string) : undefined,
+      pages: row.pages ? JSON.parse(row.pages as string) : undefined,
+      skipReason: row.skip_reason ? (row.skip_reason as string) : undefined,
+    };
+  }
+
   getCrawlByUrl(
     baseUrl: string
   ): Effect.Effect<CrawlMetadata | null, StorageError, never> {

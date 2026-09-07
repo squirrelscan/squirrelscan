@@ -267,9 +267,13 @@ export function reconstructReport(
     // 5. Get all links (for broken links lookup)
     const links = yield* storage.getLinks(crawlId);
 
-    // 6. Get rule results grouped by page and by rule_id
-    const ruleResultsByPage = yield* storage.getRuleResultsByPage(crawlId);
-    const ruleResultsByRuleId = yield* storage.getRuleResultsByRuleId(crawlId);
+    // 6. Rule results, both groupings, from ONE read (#1920). The two readers
+    // this replaces differed only in their ORDER BY and each built its own
+    // CheckResult per row, so a crawl's checks were materialized twice: 203,687
+    // rows at 1,000 pages, 204 per page. `getRuleResultsGrouped` shares one
+    // object between the two maps and preserves both orders exactly.
+    const { byPage: ruleResultsByPage, byRuleId: ruleResultsByRuleId } =
+      yield* storage.getRuleResultsGrouped(crawlId);
 
     // 7. Load rule registry to get metadata
     const ruleRegistry = loadAllRules();

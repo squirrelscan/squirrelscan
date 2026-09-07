@@ -125,10 +125,56 @@ the measured pair will be added here when it completes.
 - Bun 1.4 (v0.0.91): Linux binaries 11 to 14% smaller, ~10 ms faster start,
   byte-identical audit results.
 
+## Reading a crawl's checks once instead of twice
+
+The report path called `getRuleResultsByPage` and then `getRuleResultsByRuleId`.
+The two queries differ only in their `ORDER BY`, and each built its own
+`CheckResult` per row, so every check was read and materialized twice. At 1,000
+pages that is 203,687 rows, 204 per page, for 11.3 MB of stored text.
+
+Measured in isolation on that crawl, alternating the two arms twice, growth
+across the call with a forced collection at each end
+([#258](https://github.com/squirrelscan/squirrelscan/pull/258)):
+
+| arm | RSS | external | wall |
+|---|---|---|---|
+| two reads | +441 MB | +40 MB | 443-765 ms |
+| one grouped read | +249 MB | +20 MB | 256-258 ms |
+
+`heapUsed` moved by under 10 MB either way, which is the point worth recording:
+the cost of the duplicate is allocator residency and string backing store, not
+JS heap objects, so the metric most people reach for cannot see it. Same class
+as the `SELECT *` link scan above.
+
+End to end the change is real but below the noise floor of an exit measurement.
+Reports are byte-identical at 400 and 2,500 pages, and wall time and peak RSS
+are unchanged within run-to-run spread.
+
+### What exit `heapUsed` can and cannot resolve
+
+Four 2,500-page runs, two per side of the same change, on the machine described
+at the top:
+
+| run | exit heapUsed |
+|---|---|
+| before, run 1 | 599 MB |
+| before, run 2 | 965 MB |
+| after, run 1 | 1,144 MB |
+| after, run 2 | 998 MB |
+
+The spread within one side is larger than the difference between sides, so this
+metric cannot judge a change of this size at 2,500 pages. It stays trustworthy
+for the large gaps above (the streaming change was 3,902 MB against 996 MB, a
+factor of four), and those figures should be read as the shape rather than to
+three digits. For a change worth tens or low hundreds of megabytes, measure the
+call in isolation against a retain-nothing control instead.
+
 ## Still open
 
 - Site rules are quadratic in page count (4 s at 400 pages, 99 s at 2,500,
   687 s at 5,000): squirrelscan/repo#1910.
-- Report reconstruction materializes every check, ~0.35 MB per page:
-  squirrelscan/repo#1920.
+- Report reconstruction materializes every check, including the 83.7% that
+  pass and never reach the report: squirrelscan/repo#1920. Reading them once
+  rather than twice is done (above); dropping the passing rows needs a decision
+  about the publish payload first.
 - `--max-pages` above 5,000 is silently clamped: squirrelscan/repo#1909.
