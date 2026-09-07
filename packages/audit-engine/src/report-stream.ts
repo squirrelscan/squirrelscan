@@ -308,25 +308,40 @@ export interface FullAuditReport extends AuditReport {
   sitemapUrlStatuses?: SitemapUrlStatusData[];
 }
 
+/** Default page batch for v1's summary + pageAudits pass (#1860). */
+export const V1_REPORT_PAGE_BATCH = 100;
+
+export interface BuildV1ReportOptions {
+  batchSize?: number;
+  /** Fired after each page batch with the running count. The container wires its
+   * liveness heartbeat here so a large-crawl report tail keeps the run alive
+   * (aligns #1252) instead of going silent for the whole assembly. */
+  onBatch?: (info: { pagesDone: number }) => void;
+}
+
 /**
  * Build a FullAuditReport from crawler storage — the v1 (non-streaming) path.
  *
  * Moved verbatim from adapter.generateReportFromStorage (#1021, PR-F); adapter's
  * exported generateReportFromStorage is now a one-line delegate to this. Keeping
  * it byte-identical is the 518-page golden-diff gate.
+ *
+ * #1860: the one whole-crawl `getPages` this used to make is now a batched walk
+ * (see the pass below). Output is unchanged — the batching is a residency fix,
+ * not a report change — and the golden baseline gates that.
  */
 export function buildV1Report(
   storage: CrawlStorage,
   crawlId: string,
   ruleResults: RuleExecutionResult,
+  options?: BuildV1ReportOptions,
 ): Effect.Effect<FullAuditReport, never, never> {
   return Effect.gen(function* () {
     const reportSpan = logger.traceStart("generateReportFromStorage");
+    const batchSize = options?.batchSize ?? V1_REPORT_PAGE_BATCH;
     const crawl = yield* storage
       .getCrawl(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-    const pages = yield* storage.getPages(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
 
     const links = yield* storage.getLinks(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
 
@@ -362,22 +377,6 @@ export function buildV1Report(
       redirectChains: [],
       securityIssues: [],
     };
-
-    // Use cached parsed pages for summary (optimization: no redundant parsing)
-    const summaryParseSpan = logger.traceStart("summary:useCachedParsed");
-    for (const page of pages) {
-      const parsed = ruleResults.parsedPages.get(page.normalizedUrl);
-      if (!parsed) continue;
-
-      if (!parsed.meta.title) summary.missingTitles.push(page.normalizedUrl);
-      if (!parsed.meta.description) summary.missingDescriptions.push(page.normalizedUrl);
-      if (!parsed.og.title && !parsed.og.image) summary.missingOgTags.push(page.normalizedUrl);
-      if (!parsed.twitter.card) summary.missingTwitterCards.push(page.normalizedUrl);
-      if (!parsed.schema.types.length) summary.missingSchemas.push(page.normalizedUrl);
-      if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
-      if (parsed.content.isThinContent) summary.thinContentPages.push(page.normalizedUrl);
-    }
-    logger.traceEnd(summaryParseSpan, { pageCount: pages.length });
 
     // Check missing alt text (batch query when available)
     const imageAppearancesSpan = logger.traceStart("imageAppearances");
@@ -421,12 +420,42 @@ export function buildV1Report(
       results: ruleResults.ruleResultsMap,
     });
 
-    // Build page audits (optimization: use cached parsed pages)
+    // Build the summary + page audits in ONE batched pass over the crawl's pages
+    // (#1860). Batched rather than one `getPages(crawlId)` because a PageRecord
+    // carries the page's full html: on a 500-page crawl of ~1 MB pages the
+    // resident array alone was ~600 MB, landing on top of the rules phase's peak.
+    // `getPages` orders by normalized_url ASC with or without LIMIT/OFFSET, so
+    // walking it in batches visits exactly the sequence the resident array did —
+    // same summary entries, same pageAudits order, byte-identical report.
     const pageAuditsSpan = logger.traceStart("pageAudits:useCachedParsed");
     const pageAudits: PageAudit[] = [];
-    for (const page of pages) {
+    // Statuses only — all `deriveAuditStatusFromPages` and the rate-limit count
+    // read, and 8 bytes a page instead of a megabyte.
+    const pageStatuses: Array<{ status: number }> = [];
+    let pagesCrawled = 0;
+    for (let offset = 0; ; offset += batchSize) {
+      // Fail-loud: a mid-stream read failure must not masquerade as end-of-crawl
+      // and silently truncate the report's page set (matches streamPageRules).
+      const batch = yield* storage
+        .getPages(crawlId, { limit: batchSize, offset })
+        .pipe(Effect.orDie);
+      if (batch.length === 0) break;
+
+      for (const page of batch) {
+      pagesCrawled++;
+      pageStatuses.push({ status: page.status });
       const parsed = ruleResults.parsedPages.get(page.normalizedUrl) ?? null;
       const pageChecks = ruleResults.pageResults.get(page.normalizedUrl) ?? [];
+
+      if (parsed) {
+        if (!parsed.meta.title) summary.missingTitles.push(page.normalizedUrl);
+        if (!parsed.meta.description) summary.missingDescriptions.push(page.normalizedUrl);
+        if (!parsed.og.title && !parsed.og.image) summary.missingOgTags.push(page.normalizedUrl);
+        if (!parsed.twitter.card) summary.missingTwitterCards.push(page.normalizedUrl);
+        if (!parsed.schema.types.length) summary.missingSchemas.push(page.normalizedUrl);
+        if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
+        if (parsed.content.isThinContent) summary.thinContentPages.push(page.normalizedUrl);
+      }
 
       // Get links for this page using per-page index lookup
       const pageLinkAppearances = hasSqliteStorage
@@ -497,8 +526,12 @@ export function buildV1Report(
         fetcherId: page.fetcherId,
         fallbackReason: page.fallbackReason,
       });
+      }
+
+      options?.onBatch?.({ pagesDone: pagesCrawled });
+      if (batch.length < batchSize) break;
     }
-    logger.traceEnd(pageAuditsSpan, { pageCount: pages.length });
+    logger.traceEnd(pageAuditsSpan, { pageCount: pagesCrawled });
 
     // Calculate totals from the per-rule map so rule meta is in reach:
     // warn checks in severity-"info" rules are recommendations — surfaced in
@@ -531,7 +564,7 @@ export function buildV1Report(
       // Present only when the crawler refused an off-site seed redirect (#1418).
       ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
-      totalPages: pages.length,
+      totalPages: pagesCrawled,
       passed,
       warnings,
       failed,
@@ -583,13 +616,13 @@ export function buildV1Report(
     // too. The reason names the host that throttled us.
     const rateLimitedCount =
       (crawl?.stats?.pagesRateLimited ?? 0) +
-      pages.filter((page) => isRateLimitStatus(page.status)).length;
+      pageStatuses.filter((page) => isRateLimitStatus(page.status)).length;
     const rateLimitedHosts = rateLimitedHostsFor(result.baseUrl, rateLimitedCount);
     if (rateLimitedCount > 0) {
       result.rateLimited = { pages: rateLimitedCount, hosts: rateLimitedHosts };
     }
     const runStatus = deriveAuditStatusFromPages(
-      pages,
+      pageStatuses,
       crawl?.stats?.pagesBlocked ?? 0,
       {
         errors: crawl?.stats?.pagesRateLimited ?? 0,
@@ -623,7 +656,7 @@ export function buildV1Report(
 
     sanitizeReportRuleResults(result.ruleResults);
 
-    logger.traceEnd(reportSpan, { totalPages: pages.length });
+    logger.traceEnd(reportSpan, { totalPages: pagesCrawled });
     return result;
   });
 }

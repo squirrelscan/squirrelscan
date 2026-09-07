@@ -28,7 +28,12 @@ import {
   type CloudPrefetchResult,
   type CloudSitePayloads,
 } from "./cloud-prefetch";
-import { renderedPageUrlsFrom, releaseSiteContextDocuments, type SiteContextPage } from "./adapter";
+import {
+  ensureSiteContextDocuments,
+  renderedPageUrlsFrom,
+  releaseSiteContextDocuments,
+  type SiteContextPage,
+} from "./adapter";
 
 // The parsed page's linkedom Document, without adding a direct linkedom dep here.
 type Document = NonNullable<NonNullable<SiteContextPage["parsed"]>["document"]>;
@@ -209,35 +214,53 @@ function isHttpUrl(url: string): boolean {
 
 function collectBlocklistUrls(siteContext: SiteContextPage[]): string[] {
   const urls = new Set<string>();
+  absorbBlocklistUrls(urls, siteContext);
+  return [...urls];
+}
+
+/** {@link collectBlocklistUrls}' body, accumulating into `urls` so the streamed
+ * pre-rules pass can feed it batch by batch. The BL_MAX_URLS cap is a Set-size
+ * test, so stopping and resuming across batches sees exactly the sequence one
+ * whole-array pass would. */
+function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]): void {
   for (const { page, parsed } of siteContext) {
     if (!parsed || page.status < 200 || page.status >= 300) continue;
     const pageHost = getHostname(page.url);
     for (const link of parsed.links) {
-      if (urls.size >= BL_MAX_URLS) return [...urls];
+      if (urls.size >= BL_MAX_URLS) return;
       if (!link.isInternal && isHttpUrl(link.url)) urls.add(link.url);
     }
     for (const image of parsed.images) {
-      if (urls.size >= BL_MAX_URLS) return [...urls];
+      if (urls.size >= BL_MAX_URLS) return;
       if (isHttpUrl(image.src) && getHostname(image.src) !== pageHost) urls.add(image.src);
     }
     const doc = parsed.document;
     if (!doc) continue;
     for (const script of doc.querySelectorAll("script[src]")) {
-      if (urls.size >= BL_MAX_URLS) return [...urls];
+      if (urls.size >= BL_MAX_URLS) return;
       const src = (script as Element).getAttribute("src");
       if (src && isHttpUrl(src) && getHostname(src) !== pageHost) urls.add(src);
     }
   }
-  return [...urls];
 }
 
 function collectBlocklistSelectors(siteContext: SiteContextPage[]): string[] {
-  const selectors = new Set<string>();
-  let pagesScanned = 0;
+  const state = { selectors: new Set<string>(), pagesScanned: 0 };
+  absorbBlocklistSelectors(state, siteContext);
+  return [...state.selectors];
+}
+
+/** {@link collectBlocklistSelectors}' body over carried state, so the page-scan
+ * budget (BL_MAX_SELECTOR_PAGES) spans batches instead of resetting per batch. */
+function absorbBlocklistSelectors(
+  state: { selectors: Set<string>; pagesScanned: number },
+  siteContext: SiteContextPage[],
+): void {
+  const { selectors } = state;
   for (const { page, parsed } of siteContext) {
-    if (selectors.size >= BL_MAX_SELECTORS || pagesScanned >= BL_MAX_SELECTOR_PAGES) break;
+    if (selectors.size >= BL_MAX_SELECTORS || state.pagesScanned >= BL_MAX_SELECTOR_PAGES) return;
     if (!parsed?.document || page.status < 200 || page.status >= 300) continue;
-    pagesScanned++;
+    state.pagesScanned++;
     let elements: Iterable<Element>;
     try {
       elements = parsed.document.querySelectorAll("[class], [id]");
@@ -256,7 +279,6 @@ function collectBlocklistSelectors(siteContext: SiteContextPage[]): string[] {
       }
     }
   }
-  return [...selectors];
 }
 
 export function buildBlocklistPayload(
@@ -339,8 +361,19 @@ function cleanSeed(text: string): string | null {
 }
 
 function collectSeeds(siteContext: SiteContextPage[]): string[] {
-  const seeds: string[] = [];
-  const seen = new Set<string>();
+  const state = { seeds: [] as string[], seen: new Set<string>() };
+  absorbSeeds(state, siteContext);
+  return state.seeds;
+}
+
+/** {@link collectSeeds}' body over carried state, so the seed cap and the
+ * dedupe set span batches (#1860). */
+function absorbSeeds(
+  state: { seeds: string[]; seen: Set<string> },
+  siteContext: SiteContextPage[],
+): void {
+  const { seeds, seen } = state;
+  if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return;
   for (const { page, parsed } of siteContext) {
     if (!parsed || page.status < 200 || page.status >= 300) continue;
     const candidates = [parsed.meta.title ?? "", ...parsed.h1.texts];
@@ -351,10 +384,9 @@ function collectSeeds(siteContext: SiteContextPage[]): string[] {
       if (seen.has(key)) continue;
       seen.add(key);
       seeds.push(seed);
-      if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return seeds;
+      if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return;
     }
   }
-  return seeds;
 }
 
 export function buildGapsPayloads(
@@ -362,8 +394,17 @@ export function buildGapsPayloads(
   baseUrl: string,
   config: Config,
 ): GapsPayloads {
+  return buildGapsPayloadsFromSeeds(collectSeeds(siteContext), baseUrl, config);
+}
+
+/** {@link buildGapsPayloads} over seeds gathered elsewhere — the streamed
+ * pre-rules pass accumulates them batch by batch (#1860). */
+export function buildGapsPayloadsFromSeeds(
+  seeds: string[],
+  baseUrl: string,
+  config: Config,
+): GapsPayloads {
   const domain = apexDomain(baseUrl);
-  const seeds = collectSeeds(siteContext);
   if (!domain || seeds.length === 0) return {};
   const keywordOpts = gapsOptions(config, "gaps/keywords");
   const contentOpts = gapsOptions(config, "gaps/content");
@@ -405,6 +446,111 @@ export const gateStage1 = (meta: SiteMetadata, service: CloudServiceId): boolean
   }
 };
 
+/** Everything {@link runContainerCloudPrefetchFromPayloads} needs from the crawl's
+ * pages, all of it bounded by a cap rather than by page count. */
+export interface CloudPrefetchPayloadSet {
+  pages: CloudPagePayload[];
+  metadataPages: SiteMetadataPagePayload[];
+  blocklist: { urls: string[]; selectors: string[] } | null;
+  gapsSeeds: string[];
+  renderedPageUrls: Set<string>;
+}
+
+/**
+ * Batch-absorbing collector for the cloud-prefetch payloads (#1860). Every
+ * payload but the site-metadata sample accumulates straight out of each batch
+ * (with the DOMs live for blocklist srcs and selectors), so nothing page-scaled
+ * is retained.
+ *
+ * The metadata sample is the exception: {@link buildMetadataPayload} picks the
+ * homepage plus the first `metadataMaxPages` usable pages and shares one JSON-LD
+ * byte budget across them, so it has to run once over an ordered sample. This
+ * retains exactly that sample — the first `metadataMaxPages` usable entries plus
+ * the first entry matching each home predicate — and re-materializes their DOMs
+ * at `build` time. That reproduces `buildMetadataPayload`'s pick exactly: the
+ * home predicates are evaluated in crawl order, so an entry that matches one of
+ * them later than the retained prefix could only have matched had no earlier
+ * entry matched it, which is the same entry `findIndex` selects over the full
+ * list. Retention is `metadataMaxPages + 2` pages, not O(pages).
+ *
+ * `absorb` MUST be called with the batch's DOMs live. `build` may be called
+ * after the batches have been released; it re-parses the retained sample's HTML,
+ * which `ensureSiteContextDocuments` guarantees is deterministic.
+ */
+export function createCloudPrefetchCollector(siteUrl: string): {
+  absorb: (siteContext: SiteContextPage[]) => void;
+  build: () => CloudPrefetchPayloadSet;
+} {
+  const pages: CloudPagePayload[] = [];
+  const renderedPageUrls = new Set<string>();
+  const blocklistUrls = new Set<string>();
+  const selectorState = { selectors: new Set<string>(), pagesScanned: 0 };
+  const seedState = { seeds: [] as string[], seen: new Set<string>() };
+
+  // Retained metadata sample (see the doc above) — bounded, never page-scaled.
+  const metadataPrefix: SiteContextPage[] = [];
+  let primaryHome: SiteContextPage | undefined;
+  let rootHome: SiteContextPage | undefined;
+
+  const baseOrigin = getOrigin(siteUrl);
+  const isRoot = (u: string): boolean => {
+    const path = getPathname(u);
+    return getOrigin(u) === baseOrigin && (path === "" || path === "/");
+  };
+
+  return {
+    absorb(siteContext: SiteContextPage[]): void {
+      for (const payload of buildCloudPagePayloads(siteContext)) pages.push(payload);
+      for (const url of renderedPageUrlsFrom(siteContext)) renderedPageUrls.add(url);
+      absorbBlocklistUrls(blocklistUrls, siteContext);
+      absorbBlocklistSelectors(selectorState, siteContext);
+      absorbSeeds(seedState, siteContext);
+
+      for (const entry of siteContext) {
+        // Same "usable" test buildMetadataPayload applies.
+        if (entry.parsed?.document == null) continue;
+        if (entry.page.status < 200 || entry.page.status >= 300) continue;
+        if (metadataPrefix.length < SERVICE_LIMITS.metadataMaxPages) metadataPrefix.push(entry);
+        if (
+          !primaryHome &&
+          (entry.page.finalUrl === siteUrl || entry.page.url === siteUrl)
+        ) {
+          primaryHome = entry;
+        }
+        if (!rootHome && (isRoot(entry.page.finalUrl || entry.page.url) || isRoot(entry.page.url))) {
+          rootHome = entry;
+        }
+      }
+    },
+
+    build(): CloudPrefetchPayloadSet {
+      // Dedupe by identity, preserving encounter order: a home already inside the
+      // retained prefix must not appear twice, or buildMetadataPayload's
+      // `usable.filter(p => p !== home)` would leave a duplicate in `rest`.
+      const sample: SiteContextPage[] = [...metadataPrefix];
+      for (const home of [primaryHome, rootHome]) {
+        if (home && !sample.includes(home)) sample.push(home);
+      }
+      // The batches these entries came from were released long ago; re-parse.
+      ensureSiteContextDocuments(sample);
+      const metadataPages = buildMetadataPayload(sample, siteUrl);
+      // Release again — the sample is not read past this point, and the caller
+      // may still have a long network phase ahead of it.
+      releaseSiteContextDocuments(sample);
+
+      const urls = [...blocklistUrls];
+      const selectors = [...selectorState.selectors];
+      return {
+        pages,
+        metadataPages,
+        blocklist: urls.length === 0 && selectors.length === 0 ? null : { urls, selectors },
+        gapsSeeds: seedState.seeds,
+        renderedPageUrls,
+      };
+    },
+  };
+}
+
 export interface ContainerPrefetchInput {
   client: CloudServicesClient;
   /** Full config — drives rule selection (config.rules) + prefetch (config.cloud). */
@@ -434,15 +580,47 @@ export async function runContainerCloudPrefetch(
   input: ContainerPrefetchInput,
 ): Promise<CloudPrefetchResult | null> {
   if (input.remainingBudget <= 0) return null;
+  if (selectCloudRules(input.config).length === 0) return null;
+
+  const collector = createCloudPrefetchCollector(input.siteUrl);
+  collector.absorb(input.siteContext);
+  const payloads = collector.build();
+
+  // Payloads built — nothing reads the DOMs again until the rules phase
+  // (runRulesOnStorage re-materializes idempotently), so drop them for the
+  // network waits. Mirrors the CLI's onPayloadsBuilt release; matters more
+  // here since the container runs under a fixed memory ceiling (#858).
+  releaseSiteContextDocuments(input.siteContext);
+
+  return runContainerCloudPrefetchFromPayloads(
+    {
+      client: input.client,
+      config: input.config,
+      siteUrl: input.siteUrl,
+      auditId: input.auditId,
+      remainingBudget: input.remainingBudget,
+      crawlRendered: input.crawlRendered,
+    },
+    payloads,
+  );
+}
+
+/**
+ * {@link runContainerCloudPrefetch} over payloads collected elsewhere — the
+ * streamed pre-rules pass builds them batch by batch (#1860) rather than from a
+ * whole-crawl site context. Same request body either way.
+ */
+export async function runContainerCloudPrefetchFromPayloads(
+  input: Omit<ContainerPrefetchInput, "siteContext">,
+  payloads: CloudPrefetchPayloadSet,
+): Promise<CloudPrefetchResult | null> {
+  if (input.remainingBudget <= 0) return null;
   const rules = selectCloudRules(input.config);
   if (rules.length === 0) return null;
 
-  const pages = buildCloudPagePayloads(input.siteContext);
-  const metadataPages = buildMetadataPayload(input.siteContext, input.siteUrl);
-  const blocklist = buildBlocklistPayload(input.siteContext);
   const sitePayloads: CloudSitePayloads = {
-    ...(blocklist ? { "blocklist-check": blocklist } : {}),
-    ...buildGapsPayloads(input.siteContext, input.siteUrl, input.config),
+    ...(payloads.blocklist ? { "blocklist-check": payloads.blocklist } : {}),
+    ...buildGapsPayloadsFromSeeds(payloads.gapsSeeds, input.siteUrl, input.config),
     // Archive Indexing (#789) — payload is just the site URL.
     "archive-indexing": { url: input.siteUrl },
   };
@@ -452,22 +630,12 @@ export async function runContainerCloudPrefetch(
     ? Math.max(0, Math.floor(input.remainingBudget))
     : 0;
 
-  // Per-page render provenance (#673/#964): the render service skips pages the crawl already rendered, so an
-  // "auto" hybrid crawl doesn't pay to re-render its upgraded pages. Built before the document release below.
-  const renderedPageUrls = renderedPageUrlsFrom(input.siteContext);
-
-  // Payloads built — nothing reads the DOMs again until the rules phase
-  // (runRulesOnStorage re-materializes idempotently), so drop them for the
-  // network waits. Mirrors the CLI's onPayloadsBuilt release; matters more
-  // here since the container runs under a fixed memory ceiling (#858).
-  releaseSiteContextDocuments(input.siteContext);
-
   return prefetchCloudData({
     client: input.client,
     config: { ...input.config.cloud, max_credits_per_audit: cap },
     rules,
-    pages,
-    metadataPages,
+    pages: payloads.pages,
+    metadataPages: payloads.metadataPages,
     sitePayloads,
     gate: gateStage1,
     siteUrl: input.siteUrl,
@@ -476,8 +644,9 @@ export async function runContainerCloudPrefetch(
     // Sourced from the container's actual render decision (see ContainerPrefetchInput.crawlRendered) —
     // config.cloud.rendering is unset on this path, so reading it here would leave render charged+discarded.
     crawlRendered: input.crawlRendered,
-    // Per-page skip for the pages an "auto" crawl already rendered (charge-free, rule-discarded otherwise).
-    renderedPageUrls,
+    // Per-page render provenance (#673/#964): the render service skips pages the crawl already rendered, so an
+    // "auto" hybrid crawl doesn't pay to re-render its upgraded pages.
+    renderedPageUrls: payloads.renderedPageUrls,
     // No `confirm` — the dashboard spendAck already consented; the cap bounds spend.
   });
 }

@@ -24,6 +24,7 @@ import { mergeRuleRunResult } from "@squirrelscan/rules";
 
 import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./adapter";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
+import type { PageRuleLoopHooks } from "./page-rule-executor";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
 
 /** Default page batch — bounds DOM residency to ≤ this many live docs at once. */
@@ -45,6 +46,11 @@ export interface PageSignalCollector {
 export interface StreamPageRulesHooks {
   /** Emitted after each batch with cumulative page count + wall-time, for the flatness gate. */
   onBatch?: (info: { batchIndex: number; pagesDone: number; batchMs: number }) => void;
+}
+
+/** Yield to a macrotask so timers/heartbeats queued during sync work can fire. */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 export interface StreamPageRulesResult {
@@ -94,12 +100,45 @@ export function streamPageRules(
     hooks?: StreamPageRulesHooks;
     soft404Confirmations?: ReadonlyMap<string, ParsedPage["soft404Confirmation"]>;
     signal?: AbortSignal;
+    /**
+     * The page-rule universe as normalized URLs — v1's `pageDataMap` key set.
+     * When supplied, ONLY these pages run, which is what keeps the streamed pass
+     * on exactly v1's set instead of re-deriving it from a second predicate that
+     * can drift. It already had: `isAuditablePage` excludes non-HTML and WAF
+     * challenge pages but NOT rate-limited ones (#1829 landed after #1021), so
+     * without this a stored 429/430 page was scored here and skipped by v1, and
+     * its page_features row polluted the siteQuery rollups. `runStreamingRules`
+     * always passes it; the per-rule golden fixtures (all HTML 2xx) omit it and
+     * fall back to the `isAuditablePage` gate, for which the two agree.
+     */
+    pageUniverse?: ReadonlySet<string>;
+    /**
+     * #1252 cooperative-yield + heartbeat hooks, the same ones v1's
+     * {@link SerialPageRuleExecutor} takes. The cloud MUST pass them: page rules
+     * are sync CPU, and without a macrotask yield the single thread never returns
+     * to the timers phase, so the rules deadline, the post-crawl backstop AND the
+     * container's 30s liveness heartbeat all starve and the stale reaper kills a
+     * healthy-but-slow run (#1251). Omitted → byte-identical local behavior.
+     */
+    pageLoopHooks?: PageRuleLoopHooks;
+    /**
+     * Total pages the loop expects to run, for the heartbeat's `(done, total)`.
+     * v1 reports `tasks.length` (its page-rule universe size); pass the same
+     * number — the universe set's size — so a progress marker means the same
+     * thing on both paths. Unset → the running done count is reported as total.
+     */
+    totalPages?: number;
   }
 ): Effect.Effect<StreamPageRulesResult, never, never> {
   return Effect.gen(function* () {
     const batchSize = opts?.batchSize ?? STREAM_PAGE_BATCH;
     const collectors = opts?.collectors ?? [];
     const soft404 = opts?.soft404Confirmations;
+    const universe = opts?.pageUniverse;
+    const yieldEveryMs = opts?.pageLoopHooks?.yieldEveryMs;
+    const heartbeatEvery = Math.max(1, opts?.pageLoopHooks?.heartbeatEveryPages ?? 1);
+    const onLoopProgress = opts?.pageLoopHooks?.onProgress;
+    let lastYieldAt = Date.now();
 
     const pageResults = new Map<string, CheckResultLike[]>();
     const pageRuleResults = new Map<string, Map<string, CheckResultLike[]>>();
@@ -129,7 +168,11 @@ export function streamPageRules(
       for (const { page, parsed } of parsedBatch) {
         if (!parsed) continue; // non-HTML / failed parse — v1 skips these too
         // WAF-challenge pages are excluded from page-level scoring (v1 parity).
-        if (!isAuditablePage(page)) {
+        // With a `pageUniverse` that set is v1's own, so WAF *and* rate-limited
+        // pages are excluded together; without one this falls back to the
+        // WAF-only predicate (see the option's doc).
+        const inUniverse = universe ? universe.has(page.normalizedUrl) : isAuditablePage(page);
+        if (!inUniverse) {
           parsed.document = null;
           continue;
         }
@@ -186,6 +229,19 @@ export function streamPageRules(
         // Drop this page's DOM before moving on — the residency bound.
         parsed.document = null;
         pagesDone++;
+
+        // #1252 parity with SerialPageRuleExecutor: heartbeat every N pages, then
+        // a cooperative macrotask yield once enough sync time has elapsed, so the
+        // rules deadline and the container liveness heartbeat can actually fire.
+        // The DOM is already dropped above, so the yield never holds one open.
+        if (onLoopProgress && pagesDone % heartbeatEvery === 0) {
+          onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
+        }
+        if (yieldEveryMs != null && yieldEveryMs > 0 && Date.now() - lastYieldAt >= yieldEveryMs) {
+          yield* Effect.promise(() => yieldToEventLoop());
+          lastYieldAt = Date.now();
+          opts?.signal?.throwIfAborted();
+        }
       }
 
       // Defensive backstop: every path in the per-page loop above already nulls
@@ -202,6 +258,13 @@ export function streamPageRules(
       });
 
       if (batch.length < batchSize) break;
+    }
+
+    // Final marker when the last page didn't land on a heartbeat boundary —
+    // mirrors SerialPageRuleExecutor's tail so the last progress event a slow
+    // cloud run emits is the real total, not the last multiple of N.
+    if (onLoopProgress && (pagesDone === 0 || pagesDone % heartbeatEvery !== 0)) {
+      onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
     }
 
     return {

@@ -67,11 +67,24 @@ export async function buildFullIntelContext(
   config: Config,
   input: { siteContext: SiteContextPage[]; baseUrl?: string; kv?: KvStore },
 ): Promise<IntelContext> {
-  const intelConfig = mapIntelConfig(config);
-  if (!intelConfig) return buildIntelContext();
-  const resolved = await prefetchIntel(intelConfig, {
+  return buildFullIntelContextFromUrls(config, {
     urls: collectIntelUrls(input.siteContext, input.baseUrl),
     kv: input.kv,
   });
+}
+
+/**
+ * {@link buildFullIntelContext} over URLs gathered elsewhere — the streamed
+ * pre-rules pass accumulates them batch by batch rather than from a whole-crawl
+ * site context (#1860). Same seeding order: base URL first, then each page's
+ * `url` and `finalUrl` in crawl order.
+ */
+export async function buildFullIntelContextFromUrls(
+  config: Config,
+  input: { urls: string[]; kv?: KvStore },
+): Promise<IntelContext> {
+  const intelConfig = mapIntelConfig(config);
+  if (!intelConfig) return buildIntelContext();
+  const resolved = await prefetchIntel(intelConfig, { urls: input.urls, kv: input.kv });
   return buildIntelContext({ resolved });
 }

@@ -19,7 +19,12 @@ import type { Config } from "@squirrelscan/config";
 import type { PageRecord } from "@squirrelscan/core-contracts";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 
-import { buildSiteContext, runRulesOnStorage, type PreFetchedAssets } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+  type PreFetchedAssets,
+} from "../src/adapter";
 
 const BASE = "https://shop.example.com";
 
@@ -122,8 +127,12 @@ interface AuditResult {
   checksFor: (ruleId: string) => { name: string; status: string; items?: unknown[] }[];
 }
 
+/** Which engine path `auditPages` drives. Both must behave identically: #1829's
+ * exclusion is a property of the audit, not of one of the two rule runners. */
+type EnginePath = "v1" | "streaming";
+
 /** Store the given pages, then run the real rules over them via the real adapter. */
-async function auditPages(pages: SeedPage[]): Promise<AuditResult> {
+async function auditPages(pages: SeedPage[], engine: EnginePath = "v1"): Promise<AuditResult> {
   const storage = new SQLiteStorage(":memory:");
   return run(
     Effect.gen(function* () {
@@ -151,9 +160,17 @@ async function auditPages(pages: SeedPage[]): Promise<AuditResult> {
         yield* storage.upsertPage(crawlId, pageRecord(crawlId, page));
       }
 
-      const stored = yield* storage.getPages(crawlId);
-      const siteContext = yield* buildSiteContext(stored);
-      const result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+      let result;
+      if (engine === "streaming") {
+        // batchSize 1 so the exclusion is exercised at every batch boundary.
+        result = yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, {
+          batchSize: 1,
+        });
+      } else {
+        const stored = yield* storage.getPages(crawlId);
+        const siteContext = yield* buildSiteContext(stored);
+        result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+      }
 
       // `pageResults` is keyed by page URL, so its keys ARE the set of pages the
       // page rules were run over — the most direct statement of what was scored.
@@ -247,5 +264,82 @@ describe("#1829 — rate-limited pages are excluded from page-level scoring", ()
       (c) => c.name === "Rate-limited pages",
     );
     expect(notice?.status).toBe("info");
+  });
+});
+
+// #1860: the streaming engine shipped dark in July 2026 and #1829 landed after
+// it, so `runStreamingRules` was never updated for either half of this fix. Both
+// halves were genuinely broken on that path — `isAuditablePage` excludes WAF
+// pages but says nothing about 429/430, so the streamed page loop GRADED a
+// throttled page v1 skips, and `runSitePass` never emitted the advisory. The
+// #1021 golden gate could not catch it: its fixtures contain no rate-limited
+// pages, so both paths agreed on a case that never arose. Now that the cloud
+// runs on this path, these are the assertions that keep it honest.
+describe("#1829 on the streaming path — same exclusion, same advisory (#1860)", () => {
+  test("the control: at status 200 the streamed path grades and indicts", async () => {
+    const { gradedUrls, findingsFor } = await auditPages(
+      [
+        { path: "/", status: 200 },
+        { path: "/suspect", status: 200, body: INDICTABLE_BODY },
+      ],
+      "streaming",
+    );
+
+    expect(gradedUrls).toContain(`${BASE}/suspect`);
+    expect(findingsFor(`${BASE}/suspect`).length).toBeGreaterThan(0);
+  });
+
+  test("a 429 page is not graded by the streamed page loop either", async () => {
+    const { gradedUrls, findingsFor } = await auditPages(
+      [
+        { path: "/", status: 200 },
+        { path: "/suspect", status: 429, body: INDICTABLE_BODY },
+      ],
+      "streaming",
+    );
+
+    expect(gradedUrls).toContain(`${BASE}/`);
+    expect(gradedUrls).not.toContain(`${BASE}/suspect`);
+    expect(findingsFor(`${BASE}/suspect`)).toEqual([]);
+  });
+
+  test("a 430 page is excluded the same way on the streamed path", async () => {
+    const { gradedUrls } = await auditPages(
+      [
+        { path: "/", status: 200 },
+        { path: "/suspect", status: 430, body: INDICTABLE_BODY },
+      ],
+      "streaming",
+    );
+
+    expect(gradedUrls).not.toContain(`${BASE}/suspect`);
+  });
+
+  test("the streamed site pass emits the rate-limited advisory", async () => {
+    const { checksFor } = await auditPages(
+      [
+        { path: "/", status: 200 },
+        { path: "/throttled", status: 429, body: "Too Many Requests" },
+      ],
+      "streaming",
+    );
+
+    const notice = checksFor("crawl/rate-limited-pages").find(
+      (c) => c.name === "Rate-limited pages",
+    );
+    expect(notice?.status).toBe("info");
+  });
+
+  test("v1 and the streamed path agree on the graded set for a throttled crawl", async () => {
+    const seed: SeedPage[] = [
+      { path: "/", status: 200 },
+      { path: "/a", status: 200, body: INDICTABLE_BODY },
+      { path: "/throttled", status: 429, body: INDICTABLE_BODY },
+      { path: "/gone", status: 404, body: "Not Found" },
+    ];
+    const v1 = await auditPages(seed, "v1");
+    const streamed = await auditPages(seed, "streaming");
+
+    expect([...streamed.gradedUrls].sort()).toEqual([...v1.gradedUrls].sort());
   });
 });
