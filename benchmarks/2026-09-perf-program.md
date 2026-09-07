@@ -111,6 +111,43 @@ inside a 215 ms rule. An earlier run of this pair reported 501 ms against 201 ms
 that was a loaded machine, not the algorithm, and it is recorded here because a
 benchmark record that only keeps the flattering measurement is worth nothing.
 
+Three things had to be controlled before any of the numbers above meant
+anything, and each one produced a confident wrong answer first. They are worth
+knowing before re-running this or benchmarking any other rule.
+
+**Two rules reach the network and no obvious switch stops them.**
+`security/http-to-https` probes sample URLs over HTTP with staggered sleeps; at
+400 pages it was 508 ms of a 518 ms site phase, so the whole site phase was one
+rule waiting on sockets and the first version of this concluded from it that
+site rules were "dominated by a fixed cost". The soft-404 confirmation pass
+re-fetches candidates with a per-host sleep, and disabling it needs
+`config.integrity.soft404_confirm` — a root-level key of that name is silently
+ignored, and it defaults to enabled.
+
+**The rule profiler rounds every invocation to whole milliseconds.** Harmless
+for a site rule, which runs once per audit and takes tens of ms. Fatal when
+summed over page rules: 198 rules across 2,500 pages is 495,000 rounded samples,
+sub-millisecond work sums to zero, and a rule that crosses 1 ms on heavier pages
+jumps a whole unit. That artifact produced a published claim that v1's page
+rules were n^1.47 against streaming's n^1.01; unrounded timings of the same
+invocations put both near n^1.0. Page-rule cost here comes from phase spans,
+which are unrounded, and page-rule profiler lines are counted rather than summed.
+
+**A uniform fixture skips the branches that cost anything.** Three versions of
+this corpus did. The last one scored its off-theme pages at 0.258 against
+`template-discontinuity`'s 0.2 threshold, so the rule reported "all pages share
+the site's common template" and the quadratic scan never ran at all. One cause
+generalises past this rule: **the Jaccard of two empty sets is 1**, so a
+fingerprint term that neither the baseline nor the outlier declares pays full
+weight to SIMILARITY. The corpus now also carries pages nothing links to, hubs,
+4xx and noindex pages, off-page canonicals and schema on four templates, each
+gating a branch a uniform corpus skips.
+
+And a fourth, learned the hard way on the table above: **a loaded machine does
+not merely add noise to a cache-hostile scan, it systematically inflates it**, so
+minimum-of-N on a busy box is not a defence. Re-run the pair on a quiet machine
+before publishing a delta.
+
 ## Hosted runtime, in production
 
 Same 149-page rendered audit of the same site an hour apart, old image against
