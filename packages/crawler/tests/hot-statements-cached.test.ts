@@ -4,18 +4,21 @@
 // compiles a new one every call. The storage layer used `prepare` in all 116
 // places, so every operation re-parsed its SQL. #247 converted the per-link
 // frontier existence check; a census of a real crawl
-// (scripts/statement-compile-census.ts) then showed exactly four statements
-// left running once per page and every other one running once per crawl.
+// (scripts/statement-compile-census.ts) then showed which of the remaining 95
+// still ran per page: five on a cold crawl, and two more on a warm one that
+// reuses cached pages.
 //
-// This pins those five. It asserts on COMPILATION rather than on a clock: the
+// This pins the five on the cold path. It asserts on COMPILATION rather than on a clock: the
 // saving is tens of microseconds per page, far too small to assert on time and
 // far too easy to assert on by accident.
 //
 // TWO assertions are needed, and which one carries the weight depends on the
 // Bun in use. On 1.3.14, which this repo pins, `db.query` routes a cache MISS
 // through the public `prepare`, so the counters below really do see every
-// compilation and a disabled cache fails them (verified: forcing the cache to
-// zero entries fails six of these seven). On Bun 1.4.0 `query` compiles through
+// compilation from `prepare` and `query` — though not from `exec`/`run` — and a
+// disabled cache fails them (verified: forcing the cache to zero entries fails
+// all seven; reverting the conversions fails six, the seventh being the
+// mechanism check, which passes either way and is meant to). On Bun 1.4.0 `query` compiles through
 // an internal path the hook cannot see, and the counters alone would pass with
 // the cache off. The first test therefore checks the mechanism directly —
 // `db.query` must hand back the SAME object for the same text — so this file

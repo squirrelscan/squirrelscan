@@ -73,6 +73,8 @@ if (COST) {
     // The widest statement in the file. Compilation does not need bindings —
     // it reports its 25 parameters and compiles fine — so an earlier version of
     // this that excluded it for "needing the full binding set" was wrong.
+    ["getLinksByPage", "SELECT DISTINCT l.* FROM links l INNER JOIN link_appearances la ON l.crawl_id = la.crawl_id AND l.href = la.href WHERE la.page_url = ? ORDER BY l.crawl_id DESC"],
+    ["getImagesByPage", "SELECT DISTINCT i.* FROM images i INNER JOIN image_appearances ia ON i.crawl_id = ia.crawl_id AND i.src = ia.src WHERE ia.page_url = ? ORDER BY i.crawl_id DESC"],
     ["upsertPage", "INSERT OR REPLACE INTO pages (crawl_id, url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at, etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers, fetcher_id, fallback_reason, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
   ];
   const N = 5_000;
@@ -97,7 +99,7 @@ if (COST) {
       `  ${name.padEnd(22)} ${`${bestPrepare.toFixed(2)} us`.padStart(10)} ${`${bestQuery.toFixed(2)} us`.padStart(10)}`,
     );
   }
-  console.log(`  ${"sum of the five".padEnd(22)} ${`${totalPrepare.toFixed(2)} us`.padStart(10)}`);
+  console.log(`  ${"sum of the seven".padEnd(22)} ${`${totalPrepare.toFixed(2)} us`.padStart(10)}`);
   await run(costStore.close());
   process.exit(0);
 }
@@ -152,10 +154,22 @@ const origin = `http://127.0.0.1:${server.port}`;
 // internal path the hook cannot see, and a census there would need a different
 // mechanism — a hook on `prepare` alone would report zero and look like a pass.
 //
-// `query` calls are counted anyway, because their distribution is what says
-// whether the statement cache is being used and whether it is big enough.
+// `query` calls are counted anyway, and the compilations they cause are
+// attributed to them rather than to `prepare`, because their distribution is
+// what says whether the cache is being used and whether it is big enough.
+//
+// Neither hook sees `exec`/`run`, which the schema setup uses, so "every
+// compilation" here means every one from `prepare` and `query`.
 const prepareCalls = new Map<string, number>();
 const queryCalls = new Map<string, number>();
+// A `query` MISS reaches the hook below as a `prepare` call. Flagging while
+// inside `query` is what separates the two, and it is the only honest way to
+// say how many query calls actually compiled: deriving it as
+// (calls - distinct texts) assumes every repeat is a hit, which is false past
+// the cache's capacity — with the cache forced to zero entries that formula
+// still reported 6,034 free calls while everything compiled.
+let insideQuery = 0;
+let queryCompiles = 0;
 const realPrepare = Database.prototype.prepare;
 const realQuery = Database.prototype.query;
 (Database.prototype as unknown as Record<string, unknown>).prepare = function patched(
@@ -163,7 +177,8 @@ const realQuery = Database.prototype.query;
   sql: string,
   ...rest: unknown[]
 ) {
-  prepareCalls.set(sql, (prepareCalls.get(sql) ?? 0) + 1);
+  if (insideQuery > 0) queryCompiles++;
+  else prepareCalls.set(sql, (prepareCalls.get(sql) ?? 0) + 1);
   return (realPrepare as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
 };
 (Database.prototype as unknown as Record<string, unknown>).query = function patchedQuery(
@@ -172,7 +187,12 @@ const realQuery = Database.prototype.query;
   ...rest: unknown[]
 ) {
   queryCalls.set(sql, (queryCalls.get(sql) ?? 0) + 1);
-  return (realQuery as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
+  insideQuery++;
+  try {
+    return (realQuery as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
+  } finally {
+    insideQuery--;
+  }
 };
 
 const storage = new SQLiteStorage(":memory:");
@@ -268,26 +288,30 @@ server.stop(true);
 // Every compilation is a `prepare` call, cache misses included. See the note
 // above the hooks.
 const rows = [...prepareCalls].sort((a, b) => b[1] - a[1]);
-const total = rows.reduce((sum, [, n]) => sum + n, 0);
+const directPrepares = rows.reduce((sum, [, n]) => sum + n, 0);
+const total = directPrepares + queryCompiles;
 const queryTotal = [...queryCalls.values()].reduce((sum, n) => sum + n, 0);
 console.log(
   `crawled ${pageCount} pages in ${(elapsed / 1000).toFixed(1)}s, ${LINKS} links/page, ` +
-    `incremental=${INCREMENTAL}, bun ${Bun.version}\n` +
-    `${total} statement compilations (${(total / Math.max(1, pageCount)).toFixed(1)} per page) ` +
-    `across ${rows.length} distinct texts\n` +
-    `${queryTotal} query calls over ${queryCalls.size} distinct texts, of which ` +
-    `${Math.max(0, queryTotal - queryCalls.size)} were served without compiling\n`,
+    `incremental=${INCREMENTAL}, twice=${TWICE}, bun ${Bun.version}\n` +
+    `${total} statement compilations (${(total / Math.max(1, pageCount)).toFixed(1)} per page): ` +
+    `${directPrepares} from prepare across ${rows.length} texts, ` +
+    `${queryCompiles} from query misses\n` +
+    `${queryTotal} query calls over ${queryCalls.size} distinct texts, ` +
+    `${queryTotal - queryCompiles} of them served without compiling\n`,
 );
 // Bun 1.3.14 caches the first 20 texts PER DATABASE and never evicts: text 21
 // and beyond recompile on every call, forever, silently. Measured: 25 texts
 // then three passes over the same 25 gave 18 compilations rather than 0. So
-// this is a real ceiling on how many statements can be converted, not a
-// tuning knob.
+// this is a ceiling on how many statements are worth converting. It IS
+// adjustable — `Database.MAX_QUERY_CACHE_SIZE = 30` caches all 25 — but the
+// default is what ships.
 const CACHE_TEXTS = 20;
 if (queryCalls.size >= CACHE_TEXTS) {
   console.log(
     `  WARNING: ${queryCalls.size} distinct query texts against a ${CACHE_TEXTS}-entry cache. ` +
-      `Texts past the ${CACHE_TEXTS}th recompile on EVERY call on this Bun.\n`,
+      `A text that never gets IN recompiles on every call; the ones already ` +
+      `cached stay cached.\n`,
   );
 }
 console.log(`${"count".padStart(8)} ${"per page".padStart(9)}  sql`);

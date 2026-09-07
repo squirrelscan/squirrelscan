@@ -1138,12 +1138,17 @@ export class SQLiteStorage implements CrawlStorage {
           // texts however a caller mixes them.
           //
           // The hazard is not an unbounded cache. On Bun 1.3.14 the cache holds
-          // the first 20 texts PER DATABASE and never evicts: the 21st text and
-          // beyond recompile on every call, forever and silently. Measured — 25
-          // distinct texts, then three passes over the same 25, gave 18
-          // compilations rather than 0. So a caller that exercised many shapes
-          // here would not slow this statement down, it would push some OTHER
-          // converted statement out of the cache. The crawl loop writes only
+          // the first 20 texts PER DATABASE and NEVER EVICTS, so a statement
+          // that gets in stays in and one that arrives late never gets in at
+          // all: it recompiles on every call, forever and silently. Measured on
+          // a fresh database — 25 distinct texts, then three passes over the
+          // same 25, gave 15 compilations rather than 0, which is the five that
+          // never made it, three times each.
+          //
+          // So many shapes here would not evict anything already cached; they
+          // would fill the remaining slots and starve whatever is converted
+          // next. `Database.MAX_QUERY_CACHE_SIZE` raises the limit (30 caches
+          // all 25), but the default is what ships. The crawl loop writes only
           // `stats`, once per page (#1911).
           const stmt = db.query(
             `UPDATE crawls SET ${sets.join(", ")} WHERE id = ?`
@@ -2069,7 +2074,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         // Get links that appear on this page (most recent crawl that has them)
-        const stmt = db.prepare(`
+        // Cached: once per REUSED page on a warm incremental crawl (#1911).
+        const stmt = db.query(`
           SELECT DISTINCT l.* FROM links l
           INNER JOIN link_appearances la ON l.crawl_id = la.crawl_id AND l.href = la.href
           WHERE la.page_url = ?
@@ -2225,7 +2231,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         // Get images that appear on this page (most recent crawl that has them)
-        const stmt = db.prepare(`
+        // Cached: once per REUSED page on a warm incremental crawl (#1911).
+        const stmt = db.query(`
           SELECT DISTINCT i.* FROM images i
           INNER JOIN image_appearances ia ON i.crawl_id = ia.crawl_id AND i.src = ia.src
           WHERE ia.page_url = ?
