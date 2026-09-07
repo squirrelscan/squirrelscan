@@ -56,6 +56,7 @@ export {
   addTally,
   emptyTally,
   ruleScoreFromTally,
+  carriedFindingToCheck,
 } from "./scoring";
 export type { AuditStatusSignals } from "./scoring";
 export type {
@@ -92,8 +93,12 @@ export type {
   CloudSmartAuditsInput,
   CloudSmartAuditsResult,
 } from "./merge-promise";
-export { reconstructCompleteResults } from "./reconstruct";
+export { reconstructCompleteResults, reconstructPageRuleChecks } from "./reconstruct";
 export type { ReconstructCompleteInput } from "./reconstruct";
+// Bounded complete-store scoring fold (#1873) — the memory-safe twin of
+// reconstructCompleteResults + buildScoringResultsFromMerged.
+export { foldCompleteStoreTallies } from "./complete-store-fold";
+export type { CompleteStoreTallyInput, FindingPageSource } from "./complete-store-fold";
 // Chunked-publish producer: flatten a report to complete streamable findings (#1023).
 export { buildStreamFindings, buildSkippedPassCounts } from "./stream-findings";
 export type { StreamFindingLine, SkippedPassCounts } from "./stream-findings";

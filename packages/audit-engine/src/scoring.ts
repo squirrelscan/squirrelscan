@@ -118,6 +118,38 @@ export interface MergedScoringInput {
  * Site-scope rules are page-independent — their fresh checks pass through
  * unchanged (a site rule runs over whatever pages this run crawled).
  */
+/**
+ * Replay ONE carried finding as a union check. Extracted so the bounded
+ * complete-store fold (#1873) builds carried checks with byte-identical shape to
+ * the materialized union built here — the two must stay one construction, or the
+ * two scoring paths diverge on carried detail.
+ *
+ * The captured payload (items/details/pages) is replayed so a carried finding
+ * renders with the same per-item detail as a fresh one. (#1652) The
+ * never-rendered case is stamped HERE, at the one place a union check is
+ * created, so every consumer (report rendering, the hosted rescore, issue-sync)
+ * inherits it without a second lookup — and deliberately WITHOUT `lastSeenAt`:
+ * nothing has ever observed this finding, so there is no date to show.
+ */
+export function carriedFindingToCheck(
+  f: CarriedFinding,
+  normalizedUrl: string
+): CheckResult {
+  const payload = parseCarriedPayload(f.payload);
+  return {
+    name: f.checkName,
+    status: f.status === "fail" ? "fail" : "warn",
+    message: f.message,
+    pageUrl: normalizedUrl,
+    value: f.value ?? undefined,
+    expected: f.expected ?? undefined,
+    ...(payload.items ? { items: payload.items } : {}),
+    ...(payload.details ? { details: payload.details } : {}),
+    ...(payload.pages ? { pages: payload.pages } : {}),
+    ...(f.neverRendered ? { provenance: "unrendered" as const } : {}),
+  };
+}
+
 export function buildScoringResultsFromMerged(
   input: MergedScoringInput
 ): Map<string, RuleRunResult> {
@@ -186,26 +218,7 @@ export function buildScoringResultsFromMerged(
     if (carriedForRule) {
       for (const [url, findings] of carriedForRule) {
         for (const f of findings) {
-          // Replay the captured payload (items/details/pages) so carried
-          // findings render with the same per-item detail as fresh ones.
-          const payload = parseCarriedPayload(f.payload);
-          result.checks.push({
-            name: f.checkName,
-            status: f.status === "fail" ? "fail" : "warn",
-            message: f.message,
-            pageUrl: url,
-            value: f.value ?? undefined,
-            expected: f.expected ?? undefined,
-            ...(payload.items ? { items: payload.items } : {}),
-            ...(payload.details ? { details: payload.details } : {}),
-            ...(payload.pages ? { pages: payload.pages } : {}),
-            // (#1652) Stamp the never-rendered case HERE, at the one place the
-            // union check is created, so every consumer of the union (report
-            // rendering, the hosted rescore, issue-sync) inherits it without a
-            // second lookup — and deliberately WITHOUT `lastSeenAt`: nothing has
-            // ever observed this finding, so there is no date to show.
-            ...(f.neverRendered ? { provenance: "unrendered" as const } : {}),
-          });
+          result.checks.push(carriedFindingToCheck(f, url));
         }
       }
     }

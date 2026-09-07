@@ -157,6 +157,31 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
 }
 
 /**
+ * Reconstruct ONE page's checks, per rule, from that page's complete findings —
+ * the bounded (#1873) entry point into the same {@link reconstructRuleChecks}
+ * inverse {@link reconstructCompleteResults} uses for the whole audit.
+ *
+ * `findings` must be the findings of a SINGLE page. Feeding it a page at a time
+ * yields byte-identical checks to reconstructing the whole audit at once:
+ * reconstructRuleChecks groups by (normalizedUrl, checkName) first, so a page's
+ * groups never span pages, and the per-rule concatenation order is preserved when
+ * pages arrive in the loader's `normalizedUrl` order.
+ */
+export function reconstructPageRuleChecks(
+  findings: readonly PageFindingRecord[],
+): Map<string, CheckResult[]> {
+  const byRule = new Map<string, PageFindingRecord[]>();
+  for (const f of findings) {
+    const list = byRule.get(f.ruleId);
+    if (list) list.push(f);
+    else byRule.set(f.ruleId, [f]);
+  }
+  const out = new Map<string, CheckResult[]>();
+  for (const [ruleId, rows] of byRule) out.set(ruleId, reconstructRuleChecks(rows));
+  return out;
+}
+
+/**
  * Reconstruct the COMPLETE `freshResults` map for the complete-store finalize
  * path. Page-scope rules' checks come from `ingestedFindings` (every affected
  * page); site-scope rules keep their sampled checks. Each page-scope rule is

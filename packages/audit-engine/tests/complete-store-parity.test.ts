@@ -27,10 +27,19 @@ import {
 } from "@squirrelscan/rules/fold";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
+import type { FindingPageSource } from "../src/complete-store-fold";
 import { findingKey, flattenChecks } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type CloudSmartAuditsResult,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { reconstructCompleteResults } from "../src/reconstruct";
-import { calculateHealthScore } from "../src/scoring";
+import {
+  buildScoringResultsFromMerged,
+  calculateHealthScore,
+  calculateHealthScoreFromTallies,
+} from "../src/scoring";
 import { findingFingerprint } from "../src/fingerprint";
 import { buildSkippedPassCounts, buildStreamFindings } from "../src/stream-findings";
 
@@ -174,6 +183,80 @@ function sampledReport(native: CheckResult[]) {
   return { [pageMeta.id]: { meta: pageMeta, checks: sampled } };
 }
 
+/**
+ * (#1873) Page-at-a-time source, mirroring the API's keyset cursor: rows in
+ * page_findings PK order (normalizedUrl, ruleId, checkName, locator), yielded one
+ * whole page at a time. The page-boundary contract is what keeps the incremental
+ * fold byte-identical to folding the concatenated array.
+ */
+async function* pageSource(findings: PageFindingRecord[]): FindingPageSource {
+  const sorted = [...findings].sort((a, b) => {
+    const k1 = findingKey(a.normalizedUrl, a.ruleId, a.checkName, a.locator);
+    const k2 = findingKey(b.normalizedUrl, b.ruleId, b.checkName, b.locator);
+    return k1 < k2 ? -1 : k1 > k2 ? 1 : 0;
+  });
+  const byPage = new Map<string, PageFindingRecord[]>();
+  for (const f of sorted) {
+    const rows = byPage.get(f.normalizedUrl);
+    if (rows) rows.push(f);
+    else byPage.set(f.normalizedUrl, [f]);
+  }
+  for (const rows of byPage.values()) yield rows;
+}
+
+/** completeStore input from a materialized ingest array (the store the API reads). */
+function completeInput(
+  ingested: PageFindingRecord[],
+  crawled: string[],
+  skippedPassCounts?: Record<string, Record<string, number>>,
+) {
+  return {
+    findingPages: pageSource(ingested),
+    // These fixtures run against an empty store, so nothing predates this audit.
+    priorOpenFindings: [] as PageFindingRecord[],
+    crawledUrls: crawled,
+    ...(skippedPassCounts ? { skippedPassCounts } : {}),
+  };
+}
+
+/**
+ * The published score on the complete path (#1873): folded per-rule tallies, NOT
+ * the union map — which now carries only the shell's bounded display sample.
+ * `unionRuleResults` still supplies the robots/sitemap penalty rules verbatim.
+ */
+function completeHealthScore(result: CloudSmartAuditsResult) {
+  return calculateHealthScoreFromTallies(result.scoringTallies!, result.unionRuleResults);
+}
+
+/**
+ * The PRE-#1873 materialized complete path — reconstruct every page, build the
+ * union, score it — kept as the reference the bounded fold is measured against.
+ */
+function materializedCompleteScore(
+  ruleResults: Record<string, { meta: typeof pageMeta; checks: CheckResult[] }>,
+  ingested: PageFindingRecord[],
+  crawled: string[],
+  skippedPassCounts?: Record<string, Record<string, number>>,
+) {
+  const crawledUrls = new Set(crawled);
+  const freshResults = reconstructCompleteResults({
+    ruleResults,
+    ingestedFindings: ingested,
+    crawledUrls,
+    skippedPassCounts,
+  });
+  const ruleMetaIndex = new Map(
+    Object.entries(ruleResults).map(([ruleId, r]) => [ruleId, r.meta]),
+  );
+  const union = buildScoringResultsFromMerged({
+    freshResults,
+    carriedFindings: [],
+    carriedPageUrls: new Set<string>(),
+    ruleMetaIndex,
+  });
+  return calculateHealthScore({ results: union });
+}
+
 async function runSample(siteKey: string, native: CheckResult[], crawled: string[]) {
   const store = new MemStore();
   return runCloudSmartAudits({
@@ -199,7 +282,7 @@ async function runComplete(siteKey: string, native: CheckResult[], crawled: stri
     // The shell still carries the (sampled) ruleResults — the source of rule META.
     ruleResults: sampledReport(native),
     pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
-    completeStore: { ingestedFindings: ingested, crawledUrls: crawled, skippedPassCounts },
+    completeStore: completeInput(ingested, crawled, skippedPassCounts),
   });
 }
 
@@ -338,13 +421,14 @@ describe("multi-checkName rule: passing sibling on a partial-fail page (#1305)",
       crawlId: "audit_1",
       ruleResults,
       pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
-      completeStore: { ingestedFindings: ingested, crawledUrls: crawled, skippedPassCounts },
+      completeStore: completeInput(ingested, crawled, skippedPassCounts),
     });
 
-    // The passing sibling is counted (1), not lost.
-    expect(complete.unionRuleResults.get(faqMeta.id)!.syntheticPassCount).toBe(1);
+    // The passing sibling is counted (1), not lost: the rule's tally is the warn
+    // (0.5) plus one synthetic pass, exactly the sampled path's 1.5/2.
+    expect(complete.scoringTallies!.get(faqMeta.id)!.tally.passed).toBe(1);
     // Byte-identical to the sampled path (both 1.5/2 = 75%). Fails pre-#1305 (0.5/1).
-    expect(calculateHealthScore({ results: complete.unionRuleResults })).toEqual(
+    expect(completeHealthScore(complete)).toEqual(
       calculateHealthScore({ results: sample.unionRuleResults }),
     );
   });
@@ -396,7 +480,7 @@ describe("(a) sample==complete: byte-identical published score", () => {
       const sample = await runSample("web_s", native, crawled);
       const complete = await runComplete("web_c", native, crawled);
       const sScore = calculateHealthScore({ results: sample.unionRuleResults });
-      const cScore = calculateHealthScore({ results: complete.unionRuleResults });
+      const cScore = completeHealthScore(complete);
       expect(cScore).toEqual(sScore); // full HealthScore, not just .overall
       // coverage matches too (denominator + known-page count).
       expect(complete.coverage.auditedPages).toBe(sample.coverage.auditedPages);
@@ -417,25 +501,23 @@ describe("(b) sample<complete: complete scores LOWER (more failing pages counted
     const sample = await runSample("web_s", native, crawled);
     const complete = await runComplete("web_c", native, crawled);
     const sOverall = calculateHealthScore({ results: sample.unionRuleResults }).overall!;
-    const cOverall = calculateHealthScore({ results: complete.unionRuleResults }).overall!;
+    const cOverall = completeHealthScore(complete).overall!;
 
     // Direction: complete counts every failing page → strictly lower score.
     expect(cOverall).toBeLessThan(sOverall);
 
-    // The sample lost failing pages: its union has ≤100 fail checks; the complete
-    // union has all 600.
+    // The sample lost failing pages: its union has ≤100 fail checks. The complete
+    // path counts all 600 in its TALLY — (#1873) not as 600 materialized checks.
     const sFails = sample.unionRuleResults
       .get(pageMeta.id)!
       .checks.filter((c) => c.status === "fail").length;
-    const cFails = complete.unionRuleResults
-      .get(pageMeta.id)!
-      .checks.filter((c) => c.status === "fail").length;
     expect(sFails).toBeLessThanOrEqual(DEFAULT_PUBLISH_SAMPLE.maxPagesPerCheck);
-    expect(cFails).toBe(600);
+    const cTally = complete.scoringTallies!.get(pageMeta.id)!.tally;
+    expect(cTally.failed).toBe(600);
 
-    // The complete denominator is the true crawl, so its passRate = 100/700.
-    const cRule = complete.unionRuleResults.get(pageMeta.id)!;
-    expect(cRule.syntheticPassCount).toBe(100); // 700 crawled − 600 failing
+    // The complete denominator is the true crawl, so its passRate = 100/700: the
+    // 100 clean pages arrive as synthetic passes, never as pass CheckResults.
+    expect(cTally.passed).toBe(100); // 700 crawled − 600 failing
   });
 });
 
@@ -491,21 +573,26 @@ describe("skip-as-pass divergence (measured, bounded, expected direction)", () =
       crawlId: "a1",
       ruleResults,
       pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
-      completeStore: { ingestedFindings: ingested, crawledUrls: crawled },
+      completeStore: completeInput(ingested, crawled),
     });
     const s = calculateHealthScore({ results: sample.unionRuleResults });
-    const c = calculateHealthScore({ results: complete.unionRuleResults });
-    return { s, c, sampleRule: sample.unionRuleResults.get(skipMeta.id)!, completeRule: complete.unionRuleResults.get(skipMeta.id)! };
+    const c = completeHealthScore(complete);
+    return {
+      s,
+      c,
+      sampleRule: sample.unionRuleResults.get(skipMeta.id)!,
+      completeTally: complete.scoringTallies!.get(skipMeta.id)!.tally,
+    };
   }
 
   test("skip-heavy rule (20 fail, 100 pass, 80 skipped of 200) — complete inflates, bounded", async () => {
-    const { s, c, sampleRule, completeRule } = await scores(20, 100, 80);
+    const { s, c, sampleRule, completeTally } = await scores(20, 100, 80);
     // Per-rule pass-ratio: sample = 100/120 = 0.833; complete = 180/200 = 0.90.
     const sampleTotal = sampleRule.checks.length + (sampleRule.syntheticPassCount ?? 0);
-    const completeTotal = completeRule.checks.length + (completeRule.syntheticPassCount ?? 0);
+    const completeTotal = completeTally.passed + completeTally.warnings + completeTally.failed;
     expect(sampleTotal).toBe(120); // evaluated only
     expect(completeTotal).toBe(200); // + 80 skipped counted as passes
-    expect(completeRule.syntheticPassCount).toBe(180);
+    expect(completeTally.passed).toBe(180);
 
     // eslint-disable-next-line no-console
     console.log(
@@ -555,10 +642,10 @@ describe("container producer (buildStreamFindings) → server reconstruct", () =
       crawlId: "audit_1",
       ruleResults: sampledReport(native),
       pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
-      completeStore: { ingestedFindings: ingested, crawledUrls: crawled },
+      completeStore: completeInput(ingested, crawled),
     });
     const sample = await runSample("web_ps", native, crawled);
-    expect(calculateHealthScore({ results: complete.unionRuleResults })).toEqual(
+    expect(completeHealthScore(complete)).toEqual(
       calculateHealthScore({ results: sample.unionRuleResults }),
     );
     // Producer dedupes by PK so the streamed count equals the store row count
@@ -577,5 +664,188 @@ describe("(c) complete crawledUrls == the unsampled crawled set", () => {
     const complete = await runComplete("web_c", native, crawled);
     expect(complete.coverage.auditedPages).toBe(crawled.length); // == crawledUrls
     expect(complete.completeStore).toBe(true);
+  });
+});
+
+// ── (d) THE #1873 GATE: bounded fold == materialized reconstruction ──────────
+// #1023 R-D3 scored the complete store by materializing it (reconstruct every
+// page → union map → calculateHealthScore), which OOM'd the 128 MB API isolate at
+// 43k findings (#1873). The bounded fold replaced it. These assert the two produce
+// the SAME HealthScore — not merely the same overall number — on every fixture,
+// so the memory fix cannot silently move a customer's score.
+describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
+  for (const [total, fail] of [
+    [100, 30],
+    [100, 0],
+    [100, 100],
+    [50, 17],
+    [700, 600],
+  ] as const) {
+    test(`${total} pages, ${fail} failing → identical to the materialized path`, async () => {
+      const native = nativeChecks(total, fail);
+      const crawled = native.map((c) => c.pageUrl!);
+      const ingested = toIngested(native, "web_d", "audit_1");
+      const shell = sampledReport(native);
+      const bounded = await runCloudSmartAudits({
+        store: new MemStore(),
+        siteKey: "web_d",
+        crawlId: "audit_1",
+        ruleResults: shell,
+        pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
+        completeStore: completeInput(ingested, crawled),
+      });
+      expect(completeHealthScore(bounded)).toEqual(
+        materializedCompleteScore(shell, ingested, crawled),
+      );
+    });
+  }
+
+  test("multi-item checks (per-key unit cap + additional) survive page-at-a-time folding", async () => {
+    // The fold's byte-identity rests on (checkName, pageUrl) buckets never being
+    // split across calls: items and `details.additional` feed a per-key SUM and
+    // MAX that are local to one addChecksToTally call. Items per page + a
+    // remainder is exactly the shape that would diverge if a page were split.
+    const native: CheckResult[] = [];
+    for (let i = 0; i < 40; i++) {
+      native.push({
+        name: "img-alt",
+        status: i % 3 === 0 ? "warn" : "fail",
+        message: "missing alt",
+        pageUrl: url(i),
+        items: Array.from({ length: 1 + (i % 7) }, (_, k) => ({ id: `img-${k}`, label: `#${k}` })),
+        details: { additional: i % 5 },
+      });
+    }
+    const crawled = Array.from({ length: 60 }, (_, i) => url(i));
+    const ingested = toIngested(native, "web_units", "audit_1");
+    const shell = sampledReport(native);
+    const bounded = await runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "web_units",
+      crawlId: "audit_1",
+      ruleResults: shell,
+      pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
+      completeStore: completeInput(ingested, crawled),
+    });
+    expect(completeHealthScore(bounded)).toEqual(
+      materializedCompleteScore(shell, ingested, crawled),
+    );
+  });
+
+  test("skippedPassCounts (#1305) and its security clamp fold identically", async () => {
+    const native: CheckResult[] = [
+      { name: "faq-questions", status: "warn", message: "1 invalid", pageUrl: url(0) },
+      { name: "faq-questions", status: "fail", message: "broken", pageUrl: url(1) },
+    ];
+    const crawled = [url(0), url(1), url(2)];
+    const ingested = toIngested(native, "web_skip", "audit_1");
+    const shell = sampledReport(native);
+    for (const counts of [
+      { [pageMeta.id]: { "faq-valid": 2 } },
+      { [pageMeta.id]: { "faq-valid": 1_000_000_000 } }, // clamped to crawled.size
+    ]) {
+      const bounded = await runCloudSmartAudits({
+        store: new MemStore(),
+        siteKey: "web_skip",
+        crawlId: "audit_1",
+        ruleResults: shell,
+        pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
+        completeStore: completeInput(ingested, crawled, counts),
+      });
+      expect(completeHealthScore(bounded)).toEqual(
+        materializedCompleteScore(shell, ingested, crawled, counts),
+      );
+    }
+  });
+
+  test("carried findings on un-crawled pages fold identically to the union replay", async () => {
+    // 10 crawled pages (2 failing) + 5 still-active pages this run did not crawl,
+    // 2 of which carry an open finding. Exercises every carried term at once:
+    // the replayed carried checks, and the 3 clean carried pages that must keep
+    // counting in the pass denominator (#918).
+    const native = nativeChecks(10, 2);
+    const crawled = native.map((c) => c.pageUrl!);
+    const ingested = toIngested(native, "web_carry", "audit_1");
+    const shell = sampledReport(native);
+
+    const store = new MemStore();
+    const carriedPages = Array.from({ length: 5 }, (_, i) => `https://x.test/old/${i}`);
+    const seeded: PageFindingRecord[] = carriedPages.slice(0, 2).map((u) => ({
+      siteKey: "web_carry",
+      normalizedUrl: u,
+      ruleId: pageMeta.id,
+      checkName: "has-meta-description",
+      locator: "",
+      status: "fail",
+      severity: pageMeta.severity,
+      message: "Missing meta description",
+      value: null,
+      expected: null,
+      payload: null,
+      fingerprint: findingFingerprint("fail", "Missing meta description", null, null),
+      firstSeenAt: 1_600_000_000_000,
+      lastSeenCrawlId: "audit_0",
+      lastSeenAt: 1_600_000_000_000,
+      provenance: "fresh",
+      state: "open",
+    }));
+    await store.upsertFindings(seeded);
+    await store.upsertSitePages(
+      carriedPages.map((u) => ({
+        siteKey: "web_carry",
+        normalizedUrl: u,
+        lastStatus: 200,
+        state: "active" as const,
+        lastSeenCrawlId: "audit_0",
+        lastSeenAt: 1_600_000_000_000,
+      })),
+    );
+
+    const bounded = await runCloudSmartAudits({
+      store,
+      siteKey: "web_carry",
+      crawlId: "audit_1",
+      ruleResults: shell,
+      pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
+      completeStore: {
+        findingPages: pageSource(ingested),
+        // Mirrors the API: prior OPEN rows EXCLUDING this audit's own ingest.
+        priorOpenFindings: (await store.getFindings("web_carry", ["open"])).filter(
+          (f) => f.lastSeenCrawlId !== "audit_1",
+        ),
+        crawledUrls: crawled,
+      },
+    });
+
+    // Reference: the materialized union with the same carried inputs.
+    const freshResults = reconstructCompleteResults({
+      ruleResults: shell,
+      ingestedFindings: ingested,
+      crawledUrls: new Set(crawled),
+    });
+    const union = buildScoringResultsFromMerged({
+      freshResults,
+      carriedFindings: seeded.map((f) => ({
+        normalizedUrl: f.normalizedUrl,
+        ruleId: f.ruleId,
+        checkName: f.checkName,
+        status: f.status,
+        message: f.message,
+        value: f.value,
+        expected: f.expected,
+        payload: f.payload,
+        neverRendered: false,
+      })),
+      carriedPageUrls: new Set(carriedPages),
+      ruleMetaIndex: new Map([[pageMeta.id, pageMeta]]),
+    });
+    expect(completeHealthScore(bounded)).toEqual(calculateHealthScore({ results: union }));
+
+    // And the carried terms really are there: 2 fresh + 2 carried fails, 8 fresh
+    // clean + 3 clean carried pages.
+    const tally = bounded.scoringTallies!.get(pageMeta.id)!.tally;
+    expect(tally.failed).toBe(4);
+    expect(tally.passed).toBe(11);
+    expect(bounded.coverage.carriedFindings).toBe(2);
   });
 });

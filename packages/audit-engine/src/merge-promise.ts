@@ -30,9 +30,16 @@ import {
   type MergedState,
   type MergeResolutionInput,
 } from "./merge-core";
-import { reconstructCompleteResults } from "./reconstruct";
+import {
+  foldCompleteStoreTallies,
+  type FindingPageSource,
+} from "./complete-store-fold";
 import type { SkippedPassCounts } from "./stream-findings";
-import { buildScoringResultsFromMerged, type CarriedFinding } from "./scoring";
+import {
+  buildScoringResultsFromMerged,
+  type CarriedFinding,
+  type RuleTally,
+} from "./scoring";
 
 /** 404/410 = page gone → stale its findings (not carry). */
 const REMOVED_STATUSES = new Set([404, 410]);
@@ -80,6 +87,14 @@ export interface MergeFindingsPromiseInput {
   sampledCheckPages?: Map<string, Set<string>>;
   /** (#1185) Pre-indexed publish resolution signal — see {@link ComputeMergeInput.resolution}. */
   resolution?: MergeResolutionInput;
+  /**
+   * (#1873) Prior OPEN findings, already loaded by the caller — skips the
+   * `store.getFindings(siteKey, ["open"])` read. The complete-store finalize uses
+   * it to pass the findings this audit did NOT re-observe: the chunk ingest has
+   * already upserted every re-observed finding under this run's crawlId, so the
+   * store read would return the whole audit a second time.
+   */
+  priorFindings?: PageFindingRecord[];
 }
 
 /**
@@ -87,8 +102,8 @@ export interface MergeFindingsPromiseInput {
  * via the store, then run the pure {@link computeMerge}.
  */
 export async function mergeFindingsPromise(input: MergeFindingsPromiseInput): Promise<MergedState> {
-  const { store, siteKey, now, ...rest } = input;
-  const priorFindings = await store.getFindings(siteKey, ["open"]);
+  const { store, siteKey, now, priorFindings: preloaded, ...rest } = input;
+  const priorFindings = preloaded ?? (await store.getFindings(siteKey, ["open"]));
   const priorPages = await store.getSitePages(siteKey);
   return computeMerge({
     ...rest,
@@ -129,8 +144,21 @@ export interface CloudSmartAuditsInput {
    * page's absence from the fresh set authoritative — so both are skipped.
    */
   completeStore?: {
-    /** Complete per-(page,rule,check,locator) findings for this audit. */
-    ingestedFindings: PageFindingRecord[];
+    /**
+     * (#1873) Complete per-(page,rule,check,locator) findings for this audit,
+     * delivered ONE PAGE AT A TIME and folded into per-rule tallies rather than
+     * materialized — a 43k-finding audit does not fit in the 128 MB API isolate.
+     * See {@link FindingPageSource} for the page-boundary contract.
+     */
+    findingPages: FindingPageSource;
+    /**
+     * (#1873) Prior OPEN findings for the site EXCLUDING the rows this audit's
+     * chunk ingest wrote. Required in complete mode: those rows are the fresh
+     * evidence (already persisted, and folded from `findingPages`), so loading
+     * them as "prior" would both double the isolate's memory and make the merge
+     * reason about this run's own findings as if a previous run had left them.
+     */
+    priorOpenFindings: PageFindingRecord[];
     /** Full crawled-URL list (`resolutionSignal.crawledUrls`); normalized here. */
     crawledUrls: string[];
     /**
@@ -145,8 +173,25 @@ export interface CloudSmartAuditsInput {
 }
 
 export interface CloudSmartAuditsResult {
-  /** UNION rule results (fresh + carried) for authoritative scoring + report. */
+  /**
+   * UNION rule results (fresh + carried) for authoritative scoring + report.
+   *
+   * (#1873) In COMPLETE-STORE mode this is the REPORT surface only: page-scope
+   * rules carry the staged shell's bounded checks (the container's
+   * `slimPageChecksForShell` aggregates, which keep every affected page as
+   * `details.occurrences` + `pagesTruncated`) plus the carried replays — NOT one
+   * check per affected page. The authoritative numbers come from
+   * {@link scoringTallies} instead, which sees every page.
+   */
   unionRuleResults: Map<string, RuleRunResult>;
+  /**
+   * (#1873) Per-rule folded tallies over the COMPLETE findings — present ONLY in
+   * complete-store mode. When set, the caller MUST take the health score
+   * (`calculateHealthScoreFromTallies`) and the passed/warnings/failed totals from
+   * these, not from {@link unionRuleResults}: the tallies count every affected
+   * page, the union map only lists the shell's sample.
+   */
+  scoringTallies?: Map<string, RuleTally>;
   /** Coverage line data for surfacing. */
   coverage: {
     auditedPages: number;
@@ -229,14 +274,15 @@ export async function runCloudSmartAudits(
     for (const u of completeStore.crawledUrls) crawledUrls.add(normalizeUrl(u));
     for (const u of statusByUrl.keys()) crawledUrls.add(u);
     for (const u of removedUrls) crawledUrls.delete(u);
-    // Reconstruct AFTER crawledUrls is final — the per-rule syntheticPassCount
-    // denominator (crawled − failing pages) is measured against it.
-    freshResults = reconstructCompleteResults({
-      ruleResults: input.ruleResults,
-      ingestedFindings: completeStore.ingestedFindings,
-      crawledUrls,
-      skippedPassCounts: completeStore.skippedPassCounts,
-    });
+    // (#1873) NOT reconstructed here. The complete findings are folded into
+    // per-rule tallies page at a time (below, after the merge), so nothing
+    // audit-sized is ever resident. `freshResults` keeps the SHELL's rules: they
+    // are the report surface and the site-scope rules' checks, exactly what the
+    // materialized reconstruction passed through untouched.
+    freshResults = new Map<string, RuleRunResult>();
+    for (const [ruleId, r] of Object.entries(input.ruleResults)) {
+      freshResults.set(ruleId, { meta: r.meta, checks: r.checks });
+    }
   } else {
     // A published report arrives already folded (#910): an over-cap per-rule
     // check array is collapsed into per-issue-class aggregates that carry every
@@ -286,22 +332,31 @@ export async function runCloudSmartAudits(
   // Flatten fresh page-scope fail/warn checks into findings, grouped per page
   // (flattenChecks stamps one normalizedUrl across the checks it's given). Skip
   // pages removed this run — they're gone, not active issues.
+  // (#1873) Complete mode flattens NOTHING: the chunk ingest already persisted
+  // this run's findings (same rows, same PK, and the store's LEAST(first_seen)
+  // conflict rule already preserved the earliest first-seen), so re-deriving them
+  // from the shell would both re-materialize the audit and re-write rows that are
+  // already correct. The merge below therefore sees an empty fresh set and treats
+  // the prior OPEN findings the caller passed — which EXCLUDE this run's ingest —
+  // as the only rows needing a resolve/carry/stale decision.
   const freshFindings: FlatFinding[] = [];
-  for (const [ruleId, r] of freshResults) {
-    const byUrl = new Map<string, CheckResult[]>();
-    for (const c of r.checks) {
-      if (!c.pageUrl) continue; // site-scope check — not a per-page finding
-      const u = normalizeUrl(c.pageUrl);
-      if (removedUrls.has(u)) continue;
-      let arr = byUrl.get(u);
-      if (!arr) {
-        arr = [];
-        byUrl.set(u, arr);
+  if (!completeStore) {
+    for (const [ruleId, r] of freshResults) {
+      const byUrl = new Map<string, CheckResult[]>();
+      for (const c of r.checks) {
+        if (!c.pageUrl) continue; // site-scope check — not a per-page finding
+        const u = normalizeUrl(c.pageUrl);
+        if (removedUrls.has(u)) continue;
+        let arr = byUrl.get(u);
+        if (!arr) {
+          arr = [];
+          byUrl.set(u, arr);
+        }
+        arr.push(c);
       }
-      arr.push(c);
-    }
-    for (const [u, checks] of byUrl) {
-      freshFindings.push(...flattenChecks(u, ruleId, checks));
+      for (const [u, checks] of byUrl) {
+        freshFindings.push(...flattenChecks(u, ruleId, checks));
+      }
     }
   }
 
@@ -345,24 +400,8 @@ export async function runCloudSmartAudits(
     now,
     sampledCheckPages,
     resolution,
+    priorFindings: completeStore?.priorOpenFindings,
   });
-
-  // Persist: removed pages (transactional stale) first, then the rest. One tx
-  // for the whole removed set rather than one round-trip per url (#288).
-  const removedPages = Array.from(removedUrls, (url) => ({
-    normalizedUrl: url,
-    lastStatus: statusByUrl.get(url) ?? 404,
-  }));
-  await store.markPagesRemoved(siteKey, removedPages, crawlId);
-  await store.upsertFindings(merged.persisted.filter((f) => !removedUrls.has(f.normalizedUrl)));
-  await store.upsertSitePages(merged.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl)));
-  // Best-effort hygiene — only ever prunes terminal rows, never open/carried, so
-  // it can't affect the merged report. NEVER fail the audit on a prune error.
-  try {
-    await store.compactFindings(siteKey);
-  } catch {
-    // degrade to "no pruning this run"
-  }
 
   // Carried pages = every active page NOT (re-)crawled this run (incl. clean
   // ones, so the union scorer can emit synthetic passes for them).
@@ -398,6 +437,43 @@ export async function runCloudSmartAudits(
     carriedLastSeen.set(carriedKey(f.normalizedUrl, f.ruleId, f.checkName), f.lastSeenAt);
   }
 
+  // (#1873) COMPLETE mode: fold this audit's findings into per-rule tallies, page
+  // at a time, straight off the store.
+  //
+  // ORDER IS LOAD-BEARING — this MUST run before the persistence block below.
+  // `computeMerge` stamps RESOLVED rows with THIS run's crawlId, and the fold's
+  // source selects by that crawlId, so folding after the writes would read a
+  // finding the merge just resolved back as fresh evidence that the page fails.
+  let scoringTallies: Map<string, RuleTally> | undefined;
+  if (completeStore) {
+    scoringTallies = await foldCompleteStoreTallies({
+      ruleResults: input.ruleResults,
+      findingPages: completeStore.findingPages,
+      crawledUrls,
+      skippedPassCounts: completeStore.skippedPassCounts,
+      carriedFindings,
+      carriedPageUrls,
+      ruleMetaIndex,
+    });
+  }
+
+  // Persist: removed pages (transactional stale) first, then the rest. One tx
+  // for the whole removed set rather than one round-trip per url (#288).
+  const removedPages = Array.from(removedUrls, (url) => ({
+    normalizedUrl: url,
+    lastStatus: statusByUrl.get(url) ?? 404,
+  }));
+  await store.markPagesRemoved(siteKey, removedPages, crawlId);
+  await store.upsertFindings(merged.persisted.filter((f) => !removedUrls.has(f.normalizedUrl)));
+  await store.upsertSitePages(merged.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl)));
+  // Best-effort hygiene — only ever prunes terminal rows, never open/carried, so
+  // it can't affect the merged report. NEVER fail the audit on a prune error.
+  try {
+    await store.compactFindings(siteKey);
+  } catch {
+    // degrade to "no pruning this run"
+  }
+
   // Drop checks for removed (404/410) pages from the fresh results before union
   // scoring — removed pages are not "known non-removed" pages. Site-scope checks
   // (no pageUrl) pass through untouched.
@@ -431,6 +507,7 @@ export async function runCloudSmartAudits(
 
   return {
     unionRuleResults,
+    ...(scoringTallies ? { scoringTallies } : {}),
     coverage: {
       auditedPages: crawledUrls.size,
       knownPages: merged.activePageUrls.size,
