@@ -65,6 +65,15 @@ interface ParsedPayload {
   /** Emission-order index of this item within its check (flattenChecks stamps
    * it on every item finding). See {@link reconstructRuleChecks}. */
   i?: number;
+  /** (#1881) Parent check's PAGE-LEVEL message. An item row's own `message`
+   * column describes the item (so its fingerprint follows the defect, not the
+   * page's item count), so the aggregate text lives here. Absent on pre-#1881
+   * rows, whose `message` column still holds the page-level text. */
+  m?: string;
+  /** (#1881) Parent check's page-level `value`; absent when it had none. */
+  v?: string;
+  /** (#1881) Parent check's page-level `expected`; absent when it had none. */
+  e?: string;
 }
 
 /** Emission-order key for an item finding's payload; findings without a stamped
@@ -120,26 +129,48 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
     // flattenChecks emits EITHER one whole-check finding (locator "") OR one per
     // item (locator = item.id) for a given check — never both — so a group is
     // homogeneous and this split is exhaustive.
-    const itemFindings = group.filter((f) => f.locator !== "");
+    // Parse each row's payload exactly ONCE: the aggregate scan, details/pages
+    // and the item-order sort all read it.
+    const parsed = group.map((f) => parsePayload(f.payload));
+    const payload = parsed[0]!;
+    const itemIdx: number[] = [];
+    for (let k = 0; k < group.length; k++) if (group[k]!.locator !== "") itemIdx.push(k);
 
-    const payload = parsePayload(first.payload);
+    // (#1881) An item row's message/value/expected describe the ITEM; the parent
+    // check's page-level trio was stashed in the payload, so restore it here and
+    // the rebuilt CheckResult is byte-identical to the one flattenChecks was
+    // given. The presence of `m` is the ONLY marker used, deliberately:
+    //  - a pre-#1881 row has no `m` and its own `message` IS the page-level text;
+    //  - a whole-check row never writes one (its payload can still carry
+    //    details/pages, so payload presence alone would misfire);
+    //  - an item whose id is "" lands in a locator-"" group, so gating on the
+    //    locator would drop ITS aggregate — `m` catches it either way.
+    // Scanned over the WHOLE group, not just the first row: the payload size
+    // budget is decided per item, so an item with a long `sourcePages` list can
+    // drop its stash while its siblings keep theirs, and reading only `group[0]`
+    // would make the restore depend on row order.
+    // When `m` is present the row's own value/expected are null by construction,
+    // so `v`/`e` being absent means the source check carried none.
+    const aggregate = parsed.find((p) => typeof p.m === "string");
+    const message = typeof aggregate?.m === "string" ? aggregate.m : first.message;
+    const value = aggregate ? (aggregate.v ?? null) : first.value;
+    const expected = aggregate ? (aggregate.e ?? null) : first.expected;
     const check: CheckResult = {
       name: first.checkName,
       status,
-      message: first.message,
+      message,
       pageUrl: first.normalizedUrl,
     };
-    if (first.value != null) check.value = first.value;
-    if (first.expected != null) check.expected = first.expected;
+    if (value != null) check.value = value;
+    if (expected != null) check.expected = expected;
 
-    if (itemFindings.length > 0) {
-      // Restore the ORIGINAL item emission order. `itemFindings` arrives in
+    if (itemIdx.length > 0) {
+      // Restore the ORIGINAL item emission order. Item findings arrive in
       // loadIngestedFindings' `locator` (item id) sort order, which scrambles
       // unpadded numeric ids ("parse-10" < "parse-2"), so we re-sort by the
       // emission index (`i`) flattenChecks stamped into each item's payload.
       // Array.sort is stable, so item findings missing `i` keep their load order.
-      const parsed = itemFindings.map((f) => parsePayload(f.payload));
-      const order = itemFindings.map((_, idx) => idx);
+      const order = [...itemIdx];
       order.sort((a, b) => emissionIndex(parsed[a]!) - emissionIndex(parsed[b]!));
       const items: CheckItem[] = [];
       for (const idx of order) {

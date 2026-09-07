@@ -139,10 +139,17 @@ export function carriedFindingToCheck(
   return {
     name: f.checkName,
     status: f.status === "fail" ? "fail" : "warn",
-    message: f.message,
+    // (#1881) Restore the parent check's page-level text for an item row, so the
+    // replayed union check renders exactly as it did before item rows became
+    // item-scoped. Report grouping keys on the message, so reading the item's own
+    // text here would split one carried aggregate into one group per item. `m`
+    // is the sole marker (see reconstructRuleChecks): when it is present the
+    // row's own value/expected are null by construction, so an absent `v`/`e`
+    // means the source check carried none.
+    message: payload.m ?? f.message,
     pageUrl: normalizedUrl,
-    value: f.value ?? undefined,
-    expected: f.expected ?? undefined,
+    value: (payload.m !== undefined ? payload.v : f.value) ?? undefined,
+    expected: (payload.m !== undefined ? payload.e : f.expected) ?? undefined,
     ...(payload.items ? { items: payload.items } : {}),
     ...(payload.details ? { details: payload.details } : {}),
     ...(payload.pages ? { pages: payload.pages } : {}),
@@ -249,6 +256,14 @@ interface CarriedPayload {
   items?: CheckResult["items"];
   details?: CheckResult["details"];
   pages?: CheckResult["pages"];
+  /** (#1881) Parent check's PAGE-LEVEL message/value/expected, stashed by
+   * `flattenChecks` because an item row's own columns describe the ITEM (so its
+   * fingerprint follows the defect, not the page's item count). Absent on
+   * pre-#1881 rows and on whole-check rows, whose columns already hold the
+   * page-level text. */
+  m?: string;
+  v?: string;
+  e?: string;
 }
 
 /** Safely parse a carried finding's stored payload JSON. */

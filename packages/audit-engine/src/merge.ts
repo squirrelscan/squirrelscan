@@ -25,6 +25,7 @@ export {
   fingerprint,
   findingKey,
   flattenChecks,
+  itemFindingMessage,
 } from "./merge-core";
 export type {
   ComputeMergeInput,

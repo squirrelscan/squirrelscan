@@ -8,11 +8,13 @@
 // `computeMerge`, so the algorithm lives in EXACTLY one place (no drift).
 
 import type {
+  CheckItem,
   CheckResult,
   FindingProvenance,
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 
 import { findingFingerprint } from "./fingerprint";
@@ -168,13 +170,162 @@ export function findingKey(
 export const fingerprint = findingFingerprint;
 
 /**
+ * Max chars of the page-invariant check text kept in front of the item id, so a
+ * pathologically long rule message cannot crowd the id out of the store's
+ * `maxMediumString` clamp on the `message` column. Real rule messages are well
+ * under this (the longest on a 401-page production audit is ~110 chars).
+ */
+const ITEM_MESSAGE_PREFIX_MAX = 240;
+
+/**
+ * Reduce a page-scope check's message to the part that does NOT depend on the
+ * page: drop a leading count, then neutralise any digit run left behind.
+ *
+ * A page-scope check's message COUNTS that page's items ("26 cross-origin
+ * resources without Subresource Integrity"), which is why it cannot ride on an
+ * item row verbatim. `N` as the placeholder is not invented here — the report's
+ * own grouping already shows exactly that for a merged group whose members'
+ * messages differ only in digits (`packages/report/src/grouping.ts`), so the two
+ * surfaces read alike.
+ *
+ * Anchored and non-overlapping: the leading `\s*` and the trailing `\s+` are
+ * separated by a mandatory digit and the class between them excludes whitespace,
+ * so there is no ambiguity for a backtracker to explore (#150/#175/#177).
+ *
+ * KNOWN LIMIT: a leading number that is WORDING rather than a count is eaten the
+ * same way ("404 Not Found" → "Not Found"). No rule in the catalog opens an
+ * item-bearing check's message that way today, and the alternative — keeping the
+ * number and writing "N cross-origin resources …" on every item row — is worse
+ * copy for the shapes that actually occur. Public #229 is the gate that would
+ * catch a future rule reintroducing it.
+ */
+function pageInvariantCheckText(message: string, max: number): string {
+  const stripped = message.replace(/^\s*\d[\d,._]*\s+/, "").trim();
+  // Nothing but a number ("26", "2.5") — there is no wording to keep, and the
+  // caller falls back to the check name. Tested BEFORE the substitution, because
+  // afterwards the placeholder `N` is itself a letter.
+  if (!/\p{L}/u.test(stripped)) return "";
+  return sliceWholeChars(stripped.replace(/\d+/g, "N").trim(), max);
+}
+
+/** `slice` on a UTF-16 code-unit boundary can cut a surrogate PAIR in half and
+ * leave a lone surrogate, which is not valid text to hand a database or a JSON
+ * encoder. Drop the orphan. */
+function sliceWholeChars(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
+/**
+ * Page-invariant, ITEM-scoped message for an item finding (#1881).
+ *
+ * WHY: `findingFingerprint` hashes [status, message, value, expected] and is
+ * nominally URL-free, so `finding_defs` (keyed by site + fingerprint) is meant to
+ * hold ONE row per distinct defect. Copying the parent check's message onto every
+ * item row defeats that, because a page-scope check's message is a COUNT of that
+ * page's items: one Shopify CDN script missing SRI on 401 pages stored 25 distinct
+ * messages ("26 cross-origin resources without Subresource Integrity" on one page,
+ * "24 ..." on another) and therefore 25 fingerprints for one defect. On a real
+ * 401-page audit that inflated distinct (rule, check, locator, status, message,
+ * value, expected) from 2,606 to 4,201.
+ *
+ * Reads as `<page-invariant check text>: <item id>`, e.g.
+ * `cross-origin resources without Subresource Integrity: https://cdn.shopify.com/…/globo.js`.
+ * The id alone would also be page-invariant and is what the fingerprint really
+ * needs, but this column is a display string wherever a reader does not rebuild a
+ * CheckResult first, and a bare URL is not a finding description.
+ *
+ * `item.label` deliberately does NOT feed this. It is free-form per-check text
+ * and several rules stamp per-PAGE numbers into it (content/keyword-stuffing
+ * emits `"everyday" (2.3%)`, a density that moves page to page), which would
+ * re-create the very split this fixes. The label is not lost: it rides in the
+ * payload's `items[0]`, which every reader that rebuilds a CheckResult replays.
+ *
+ * Derived generically here rather than edited into ~280 rules. Measured on a real
+ * 45,663-row site: distinct (rule, check, locator, status) is 4,068 and adding
+ * this message takes it to 4,069, so the text contributes one tuple in 45k rows.
+ * That is empirical, not a proof — a rule that put some OTHER page-varying token
+ * in its message (a URL, a page title) would still split, which is a rule bug and
+ * is what public #229 exists to catch.
+ */
+export function itemFindingMessage(check: CheckResult, item: CheckItem): string {
+  const id = item.id.trim();
+  // The ID is the discriminator, so it gets first claim on the store's
+  // `maxMediumString` clamp: budget the prefix against what the id leaves behind,
+  // or a long URL would be truncated away and two distinct items would display
+  // identically. Still a pure function of (check message, item id), so this does
+  // not weaken page-invariance.
+  const budget = Math.min(
+    ITEM_MESSAGE_PREFIX_MAX,
+    Math.max(0, REPORT_LIMITS.maxMediumString - id.length - 2)
+  );
+  // A message with no wording in it ("26") yields "" — fall back to the check
+  // name, which is page-invariant too.
+  const text = pageInvariantCheckText(check.message, budget) || sliceWholeChars(check.name, budget);
+  // An empty id makes the locator "" (colliding with a whole-check row) — a
+  // degenerate case, but still never the parent's page-level message.
+  if (id === "") return text;
+  return text === "" ? id : `${text}: ${id}`;
+}
+
+/**
+ * Serialize one item finding's payload, adding the aggregate stash only when the
+ * result still fits `maxFindingPayload`.
+ *
+ * WHY A BUDGET: the chunk ingest DROPS a payload over that cap whole, and
+ * `details` is load-bearing for scoring (`details.additional` feeds the density
+ * penalty), so letting the stash tip a near-cap payload over the line would
+ * inflate the health score — the #1179 class. The stash is display detail, so it
+ * is the part that yields, and a row that loses it reads its own message exactly
+ * like a pre-#1881 row.
+ *
+ * The budget only ever REMOVES the stash. It never trims `items`/`details`/`pages`
+ * to make room, because this function also feeds the CLI's local SQLite store,
+ * which persists the payload with no cap at all — dropping detail here to work
+ * around a transport limit would destroy data that the local path would have
+ * kept. Shrinking an already-over-cap payload for transport belongs at the
+ * transport boundary (`clampFindingPayload` in the API's chunk ingest), not here.
+ */
+function itemFindingPayload(
+  check: CheckResult,
+  item: CheckItem,
+  i: number,
+  value: string | null,
+  expected: string | null
+): string {
+  const base = { items: [item], details: check.details, pages: check.pages, i };
+  const withAggregate = JSON.stringify({
+    ...base,
+    // Short keys: this rides on EVERY item row. `v`/`e` are omitted when the
+    // check carried none, and `m` is the marker a reader keys the whole restore
+    // on — a pre-#1881 row has no `m`, and a whole-check row never writes one.
+    m: check.message,
+    ...(value !== null ? { v: value } : {}),
+    ...(expected !== null ? { e: expected } : {}),
+  });
+  if (withAggregate.length <= REPORT_LIMITS.maxFindingPayload) return withAggregate;
+  // Byte-identical to the pre-#1881 payload, so an over-cap finding is no worse
+  // off than it was — the ingest drops it exactly as before, and the local store
+  // keeps every field exactly as before.
+  return JSON.stringify(base);
+}
+
+/**
  * Flatten a page's CheckResults into per-finding rows. Only failing/warning
  * checks become persisted findings — `pass`/`info`/`skipped` checks are not
  * issues to carry (the union scorer re-derives pass denominators from the
  * active-page set, so we never need to persist passes).
  *
  * A check with `items[]` yields one finding per item (locator = item.id); a
- * check without items yields a single whole-check finding (locator = "").
+ * check without items yields a single whole-check finding (locator = "") and
+ * keeps the check's page-level message/value/expected verbatim.
+ *
+ * (#1881) An ITEM finding's message/value/expected describe the ITEM, not the
+ * page — see {@link itemFindingMessage}. The check's page-level trio is stashed
+ * in the payload as `m`/`v`/`e` so a reader rebuilding a CheckResult
+ * (`carriedFindingToCheck`, `reconstructRuleChecks`) restores it unchanged.
  *
  * Each item finding's payload carries `i` = the item's index within the check's
  * `items[]` — its EMISSION order. The page_findings PK is keyed by `locator`
@@ -204,15 +355,15 @@ export function flattenChecks(
           checkName: check.name,
           locator: item.id,
           status: check.status,
-          message: check.message,
-          value,
-          expected,
-          payload: JSON.stringify({
-            items: [item],
-            details: check.details,
-            pages: check.pages,
-            i,
-          }),
+          // (#1881) ITEM-scoped, so the fingerprint follows the defect rather
+          // than the page's item count. `value`/`expected` are the same
+          // page-level aggregate the message was, so they are dropped from the
+          // row for the same reason; all three are stashed in the payload below
+          // and restored by every reader that rebuilds a CheckResult.
+          message: itemFindingMessage(check, item),
+          value: null,
+          expected: null,
+          payload: itemFindingPayload(check, item, i, value, expected),
         });
       }
     } else {
