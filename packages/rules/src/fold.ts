@@ -794,7 +794,22 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
     })
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-  const details: Record<string, unknown> = { aggregated: true, occurrences: group.length };
+  // Occurrence total, independent of how many OBJECTS this group holds (#1873).
+  // A constituent that is itself an aggregate already stands for `occurrences`
+  // findings, so counting objects would replace a true 600 with "1 aggregate + 3
+  // carried checks" = 4 — and issue-sync reads this as the tracker's occurrence
+  // count. Summing is exact here (unlike the pagesTruncated floor above): a
+  // per-page check is one occurrence, an aggregate's count is its own disjoint
+  // fold, and `unfoldAggregateCheck` DELETES `occurrences` when it expands one,
+  // so the unfold → re-fold path still sums to the per-page count.
+  let occurrences = 0;
+  for (const check of group) {
+    const prior = check.details?.occurrences;
+    occurrences +=
+      typeof prior === "number" && Number.isFinite(prior) && prior > 0 ? Math.floor(prior) : 1;
+  }
+
+  const details: Record<string, unknown> = { aggregated: true, occurrences };
   if (additional + droppedIds.size > 0) details.additional = additional + droppedIds.size;
   if (pagesTotal > pages.length) details.pagesTruncated = pagesTotal;
 

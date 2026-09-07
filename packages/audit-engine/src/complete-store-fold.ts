@@ -67,6 +67,15 @@ export interface CompleteStoreTallyInput {
   crawledUrls: Set<string>;
   /** (#1305) Passing sibling checks on dirty pages; see reconstructCompleteResults. */
   skippedPassCounts?: SkippedPassCounts;
+  /**
+   * Normalized URLs that returned 404/410 this run. Their fresh checks are NOT
+   * scored: the page is gone, so it is not one of the "known non-removed" pages
+   * the union covers. This mirrors the materialized path's `freshForUnion` filter
+   * in runCloudSmartAudits — a removed page can still carry ingested findings (the
+   * crawl rendered it before the status was known), and folding those would count
+   * a deleted page against the score.
+   */
+  removedUrls?: Set<string>;
   /** Issues on un-crawled, still-active pages carried forward by the merge. */
   carriedFindings: readonly CarriedFinding[];
   /** Normalized URLs of pages carried forward (un-crawled but still active). */
@@ -95,6 +104,7 @@ export async function foldCompleteStoreTallies(
     carriedFindings,
     carriedPageUrls,
     ruleMetaIndex,
+    removedUrls,
   } = input;
 
   const tallies = new Map<string, RuleTally>();
@@ -152,6 +162,11 @@ export async function foldCompleteStoreTallies(
     // carried pass must not fold them a second time.
     if (carriedForPage) carriedByPage.delete(normalizedUrl);
     const isCrawled = crawledUrls.has(normalizedUrl);
+    // 404/410 this run: the page is gone, so its fresh checks leave the union
+    // (mirroring freshForUnion). Carried findings are folded regardless — the
+    // merge stales anything on a removed page, so in practice there are none, but
+    // the shape then matches the materialized path rather than relying on that.
+    const isRemoved = removedUrls?.has(normalizedUrl) ?? false;
 
     const ruleIds = new Set<string>(freshByRule.keys());
     if (carriedForPage) for (const ruleId of carriedForPage.keys()) ruleIds.add(ruleId);
@@ -162,11 +177,12 @@ export async function foldCompleteStoreTallies(
       // a site-scope rule never has per-page findings. Mirrors the unknown-rule
       // guards in reconstructCompleteResults / buildScoringResultsFromMerged.
       if (meta?.scope !== "page") continue;
-      const fresh = freshByRule.get(ruleId);
+      const fresh = isRemoved ? undefined : freshByRule.get(ruleId);
       const carried = carriedForPage?.get(ruleId);
       const checks: CheckResult[] = carried
         ? [...(fresh ?? []), ...carried.map((f) => carriedFindingToCheck(f, normalizedUrl))]
         : (fresh ?? []);
+      if (checks.length === 0) continue;
       addChecksToTally(entryFor(ruleId, meta).tally, checks, advisory(meta), 0);
       if (fresh && fresh.length > 0 && isCrawled) {
         dirtyPagesByRule.set(ruleId, (dirtyPagesByRule.get(ruleId) ?? 0) + 1);

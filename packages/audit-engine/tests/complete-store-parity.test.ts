@@ -758,6 +758,61 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
     }
   });
 
+  test("a page that 404'd this run leaves the score, exactly as freshForUnion drops it", async () => {
+    // A removed page can still carry ingested findings — the crawl rendered it
+    // before the 404 was known — and the materialized path filtered those checks
+    // out of the union before scoring. Folding them instead would count a deleted
+    // page against the site.
+    const native = nativeChecks(10, 3);
+    const crawled = native.map((c) => c.pageUrl!);
+    const removed = url(0); // a FAILING page, so dropping it actually moves the score
+    const ingested = toIngested(native, "web_gone", "audit_1");
+    const shell = sampledReport(native);
+
+    const bounded = await runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "web_gone",
+      crawlId: "audit_1",
+      ruleResults: shell,
+      pageStatuses: crawled.map((u) => ({ url: u, status: u === removed ? 404 : 200 })),
+      completeStore: completeInput(ingested, crawled),
+    });
+
+    // Reference: the materialized path — crawledUrls loses the removed page, then
+    // freshForUnion drops any check still sitting on it.
+    const crawledUrls = new Set(crawled);
+    crawledUrls.delete(removed);
+    const freshResults = reconstructCompleteResults({
+      ruleResults: shell,
+      ingestedFindings: ingested,
+      crawledUrls,
+    });
+    const freshForUnion = new Map(
+      Array.from(freshResults, ([ruleId, r]) => [
+        ruleId,
+        {
+          meta: r.meta,
+          checks: r.checks.filter((c) => c.pageUrl !== removed),
+          ...(r.syntheticPassCount !== undefined
+            ? { syntheticPassCount: r.syntheticPassCount }
+            : {}),
+        },
+      ]),
+    );
+    const union = buildScoringResultsFromMerged({
+      freshResults: freshForUnion,
+      carriedFindings: [],
+      carriedPageUrls: new Set<string>(),
+      ruleMetaIndex: new Map([[pageMeta.id, pageMeta]]),
+    });
+    expect(completeHealthScore(bounded)).toEqual(calculateHealthScore({ results: union }));
+
+    // 3 pages failed, one of them is gone: 2 fails scored over the 9 live pages.
+    const tally = bounded.scoringTallies!.get(pageMeta.id)!.tally;
+    expect(tally.failed).toBe(2);
+    expect(tally.passed).toBe(7);
+  });
+
   test("carried findings on un-crawled pages fold identically to the union replay", async () => {
     // 10 crawled pages (2 failing) + 5 still-active pages this run did not crawl,
     // 2 of which carry an open finding. Exercises every carried term at once:

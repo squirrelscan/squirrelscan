@@ -454,6 +454,9 @@ export async function runCloudSmartAudits(
       carriedFindings,
       carriedPageUrls,
       ruleMetaIndex,
+      // Same exclusion the union scoring applies below via `freshForUnion`: a
+      // page that 404/410'd this run is not one of the known non-removed pages.
+      removedUrls,
     });
   }
 
