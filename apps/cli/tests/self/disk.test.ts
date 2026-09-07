@@ -44,6 +44,7 @@ beforeEach(() => {
     releases: join(home, ".squirrel", "releases"),
     logs: join(home, ".squirrel", "logs"),
     contentStore: join(home, ".squirrel", "content-store.db"),
+    linkCache: join(home, ".squirrel", "link-cache.db"),
   };
 });
 
@@ -122,12 +123,68 @@ describe("collectDiskUsage", () => {
     // The store is shared by every project, so it must not be attributed to one.
     expect(result.data.contentStoreBytes).toBe(4096);
     expect(result.data.projectsBytes).toBeGreaterThan(0);
-    expect(result.data.totalBytes).toBe(
-      result.data.projectsBytes +
-        result.data.contentStoreBytes +
-        result.data.releasesBytes +
-        result.data.logsBytes
+    // Asserted against the fixture bytes rather than by restating the sum the
+    // implementation computes, which would agree with any double count.
+    expect(result.data.totalBytes).toBe(result.data.projectsBytes + 4096);
+  });
+
+  test("counts the shared link cache", () => {
+    mkdirSync(join(home, ".squirrel"), { recursive: true });
+    writeFileSync(join(home, ".squirrel", "link-cache.db"), "x".repeat(2048));
+
+    const result = collectDiskUsage(roots);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.linkCacheBytes).toBe(2048);
+    expect(result.data.totalBytes).toBe(2048);
+  });
+
+  test("a shared database INSIDE a counted directory is not counted twice", () => {
+    // SQUIRREL_CONTENT_STORE_PATH can point anywhere, and the benchmark
+    // harnesses put it under a project. Counted on its own line as well as in
+    // the project directory, it would inflate the total and blame that project
+    // for bytes it does not own.
+    writeProject("a-site", 1, 10);
+    const inside = join(
+      home,
+      ".squirrel",
+      "projects",
+      "a-site",
+      "content-store.db"
     );
+    writeFileSync(inside, "x".repeat(8192));
+
+    const result = collectDiskUsage({ ...roots, contentStore: inside });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.data.contentStoreBytes).toBe(0);
+    // The bytes are still reported, once, against the directory holding them.
+    expect(result.data.projectsBytes).toBeGreaterThanOrEqual(8192);
+    expect(result.data.totalBytes).toBe(result.data.projectsBytes);
+  });
+
+  test("sums files nested deeper than a project ever nests", () => {
+    // The depth backstop must not silently understate a real tree.
+    const deep = join(
+      home,
+      ".squirrel",
+      "projects",
+      "deep",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e"
+    );
+    mkdirSync(deep, { recursive: true });
+    writeFileSync(join(deep, "blob.bin"), "x".repeat(5000));
+
+    const result = collectDiskUsage(roots);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const project = result.data.projects.find((p) => p.name === "deep");
+    expect(project?.bytes).toBe(5000);
   });
 });
 

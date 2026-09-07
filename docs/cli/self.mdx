@@ -281,6 +281,7 @@ Projects
 Totals
      2.7 GB  projects
      948 MB  content store (shared)
+    12.4 MB  link cache (shared)
      203 MB  releases
      4.0 MB  logs
      3.8 GB  total
@@ -295,8 +296,9 @@ retires nothing, so a project grows by roughly one audit's worth each time. On a
 results: around 204 rows per page, which with their indexes are about 70% of the
 file. A large site audited weekly will add most of a gigabyte a week.
 
-The content store is shared by every project rather than owned by one, so it is
-reported separately.
+The content store and the external-link cache are shared by every project rather
+than owned by one, so they are reported separately. A shared database that has
+been pointed inside a project directory is counted once, against that directory.
 
 ### Options
 
@@ -306,7 +308,9 @@ reported separately.
 | `--limit <n>` | Show at most this many projects (default 15) |
 
 <Note>
-This command only reports. Nothing here deletes an audit or reclaims space.
+This command does not delete an audit or reclaim any space, and it opens each
+project database read-only. It is also excluded from the usual startup
+maintenance, so running it will not rotate the logs it is about to measure.
 </Note>
 
 ---

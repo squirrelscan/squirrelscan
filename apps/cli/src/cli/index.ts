@@ -105,7 +105,10 @@ export function run(): void {
  * resets settings, racing registerInstall; self update IS the updater —
  * including the detached --auto child — and must not spawn further checks or
  * installs), for `mcp` (JSON-RPC on stdout, nothing may pollute the stream),
- * and for --offline, which promises zero network.
+ * for `self disk` (it MEASURES the logs directory, and the maintenance below
+ * compresses and deletes logs — leaving it in lets the command change the
+ * number it is about to print, and lets an update land mid-measurement), and
+ * for --offline, which promises zero network.
  *
  * Exported for tests: it decides, among other things, which commands can print
  * the auto-updated notice.
@@ -114,6 +117,7 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
   const isSelfInstallCommand =
     args[0] === "self" &&
     (args[1] === "install" || args[1] === "update" || args[1] === "uninstall");
+  const isSelfDisk = args[0] === "self" && args[1] === "disk";
   const isSimpleCommand =
     args.length === 0 ||
     args.includes("--version") ||
@@ -121,6 +125,7 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
     args.includes("--help") ||
     args.includes("-h") ||
     isSelfInstallCommand ||
+    isSelfDisk ||
     args[0] === "mcp";
 
   return !isSimpleCommand && !args.includes("--offline");

@@ -376,6 +376,9 @@ const selfDisk = defineCommand({
     console.log(
       `  ${formatBytes(usage.contentStoreBytes).padStart(9)}  content store (shared)`
     );
+    console.log(
+      `  ${formatBytes(usage.linkCacheBytes).padStart(9)}  link cache (shared)`
+    );
     console.log(`  ${formatBytes(usage.releasesBytes).padStart(9)}  releases`);
     console.log(`  ${formatBytes(usage.logsBytes).padStart(9)}  logs`);
     console.log(`  ${formatBytes(usage.totalBytes).padStart(9)}  total`);

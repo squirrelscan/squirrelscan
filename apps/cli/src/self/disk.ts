@@ -11,12 +11,13 @@
 
 import { Database } from "bun:sqlite";
 import { existsSync, readdirSync, statSync, type Dirent } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 
 import { type Result, ok } from "@/controllers/types";
 
 import {
   getContentStorePath,
+  getLinkCachePath,
   getLogsPath,
   getProjectsPath,
   getSquirrelPaths,
@@ -44,6 +45,8 @@ export interface DiskUsage {
   readonly projectsBytes: number;
   /** The global content store, shared by every project. */
   readonly contentStoreBytes: number;
+  /** The global external-link cache, also shared by every project. */
+  readonly linkCacheBytes: number;
   readonly releasesBytes: number;
   readonly logsBytes: number;
   readonly totalBytes: number;
@@ -66,11 +69,14 @@ function dbFamilyBytes(dbPath: string): number {
 /**
  * Bytes under a directory, following no symlinks and never throwing.
  *
- * Depth-limited rather than unbounded: `releases/` is two levels deep and a
- * symlink loop or a pathological tree must not turn `self disk` into the thing
- * that hangs.
+ * A symlink loop cannot happen: `readdirSync` with `withFileTypes` reports link
+ * entries by lstat, so a symlink to a directory answers false to `isDirectory()`
+ * and is never recursed into. The depth limit is only a backstop against a
+ * pathological real tree, and is set well beyond anything squirrel writes
+ * (`releases/` is two levels, a project one) so that it cannot silently
+ * understate a total.
  */
-function directoryBytes(dir: string, depth = 4): number {
+function directoryBytes(dir: string, depth = 16): number {
   if (depth < 0 || !existsSync(dir)) return 0;
   let total = 0;
   let entries: Dirent<string>[];
@@ -136,6 +142,7 @@ export interface DiskUsageRoots {
   readonly releases: string;
   readonly logs: string;
   readonly contentStore: string;
+  readonly linkCache: string;
 }
 
 export function defaultDiskUsageRoots(): DiskUsageRoots {
@@ -145,6 +152,7 @@ export function defaultDiskUsageRoots(): DiskUsageRoots {
     releases: paths.releases,
     logs: getLogsPath(),
     contentStore: getContentStorePath(),
+    linkCache: getLinkCachePath(),
   };
 }
 
@@ -185,18 +193,40 @@ export function collectDiskUsage(
   projects.sort((a, b) => b.bytes - a.bytes);
 
   const projectsBytes = projects.reduce((sum, p) => sum + p.bytes, 0);
-  const contentStoreBytes = dbFamilyBytes(roots.contentStore);
   const releasesBytes = directoryBytes(roots.releases);
   const logsBytes = directoryBytes(roots.logs);
+
+  // The two shared databases are normally siblings of `projects/`, but
+  // SQUIRREL_CONTENT_STORE_PATH can put the store anywhere, including inside a
+  // project, which is what the benchmark harnesses do. Counting it on its own
+  // line AND inside that project's directory would inflate the total and, worse,
+  // blame a project for bytes it does not own.
+  const countedDirs = [roots.projects, roots.releases, roots.logs];
+  const sharedBytes = (path: string): number =>
+    countedDirs.some((dir) => isInside(path, dir)) ? 0 : dbFamilyBytes(path);
+  const contentStoreBytes = sharedBytes(roots.contentStore);
+  const linkCacheBytes = sharedBytes(roots.linkCache);
 
   return ok({
     projects,
     projectsBytes,
     contentStoreBytes,
+    linkCacheBytes,
     releasesBytes,
     logsBytes,
-    totalBytes: projectsBytes + contentStoreBytes + releasesBytes + logsBytes,
+    totalBytes:
+      projectsBytes +
+      contentStoreBytes +
+      linkCacheBytes +
+      releasesBytes +
+      logsBytes,
   });
+}
+
+/** Whether `path` sits under `dir`, without resolving symlinks. */
+function isInside(path: string, dir: string): boolean {
+  const rel = relative(dir, path);
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
 /** Human-readable bytes, at the precision someone deciding what to delete needs. */

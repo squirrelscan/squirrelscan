@@ -41,4 +41,14 @@ describe("shouldRunBackgroundTasks (#170)", () => {
   ])("%s skips them", (_name, args) => {
     expect(shouldRunBackgroundTasks(args)).toBe(false);
   });
+
+  test("self disk is excluded: it measures what the maintenance deletes (#1912)", () => {
+    // Log rotation compresses and deletes logs, and `self disk` reports the
+    // size of the logs directory. Left in, the command changes the number it is
+    // about to print.
+    expect(shouldRunBackgroundTasks(["self", "disk"])).toBe(false);
+    expect(shouldRunBackgroundTasks(["self", "disk", "--json"])).toBe(false);
+    // Its siblings are unaffected.
+    expect(shouldRunBackgroundTasks(["self", "doctor"])).toBe(true);
+  });
 });
