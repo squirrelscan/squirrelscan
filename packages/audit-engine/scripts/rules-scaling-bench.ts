@@ -42,10 +42,21 @@
 // the rule profiler, because a near-linear total cannot rule out a superlinear
 // site component hiding inside it.
 //
-// Those per-rule sums are OVERLAPPING WALL DURATIONS: rules run with bounded
-// concurrency, so they add to more than the phase they came from. Read them
-// against each other and against the same column at another page count, never
-// against a phase time.
+// ONLY SITE RULES ARE REPORTED PER RULE, and that is a hard limit of the
+// profiler rather than a choice. It rounds every invocation to whole
+// milliseconds. A site rule runs ONCE per audit and takes tens or hundreds of
+// ms, so rounding costs it under half a millisecond. A page rule runs once per
+// page — 198 rules across 2,500 pages is 495,000 rounded samples — and summing
+// them buries every sub-millisecond invocation at zero while any rule that
+// crosses the 1 ms boundary as pages get heavier jumps a whole unit. Summed page
+// -scope profiler numbers made the two arms look like n^1.47 against n^1.01 when
+// unrounded timings of the same invocations put both near n^1.0. Page-rule cost
+// is read from the PHASE timings above, which are plain unrounded spans.
+//
+// Site rules also run with bounded concurrency, so their per-rule times add to
+// more than the site phase they came from; page rules run serially. Read a
+// per-rule number against the same rule at another page count, never against a
+// phase.
 //
 // --child is the inner half; the parent re-invokes this file with it.
 
@@ -188,13 +199,15 @@ function child(mode: string, db: string): Record<string, number> | null {
 }
 
 /** arm -> db -> ruleId -> summed ms, and the page/site split, per attempt. */
-const profiles = new Map<string, Map<string, { page: number; site: number; rules: Map<string, number> }>>();
+const profiles = new Map<string, Map<string, { pageInvocations: number; site: number; rules: Map<string, number> }>>();
 
 function recordProfile(mode: string, db: string, stderr: string): void {
   const byDb = profiles.get(mode) ?? new Map();
-  // Lowest attempt wins, same as the phase numbers: keep whichever attempt
-  // produced the smaller site total rather than averaging across noise.
-  const acc = { page: 0, site: 0, rules: new Map<string, number>() };
+  // Lowest SITE TOTAL wins, and that is the whole selection: the per-rule rows
+  // shown come from that same attempt rather than being a per-rule minimum
+  // across attempts, so they are internally consistent with each other and with
+  // the total above them.
+  const acc = { pageInvocations: 0, site: 0, rules: new Map<string, number>() };
   for (const line of stderr.split("\n")) {
     if (!line.startsWith("[rule-profile]")) continue;
     try {
@@ -202,10 +215,13 @@ function recordProfile(mode: string, db: string, stderr: string): void {
       const ms = d.durationMs ?? 0;
       // A site-scope rule runs once per audit and carries no pageUrl; a page
       // rule emits one line per page.
+      // Page-scope lines are COUNTED, not summed: see the header. Their summed
+      // durations are a rounding artifact, and reporting the count instead makes
+      // it visible that both arms ran the same number of rule invocations.
       if (d.pageUrl === undefined) {
         acc.site += ms;
         acc.rules.set(d.ruleId, (acc.rules.get(d.ruleId) ?? 0) + ms);
-      } else acc.page += ms;
+      } else acc.pageInvocations += 1;
     } catch {
       // A truncated line at the end of a pipe is not worth failing a run over.
     }
@@ -250,7 +266,9 @@ const COLUMNS: Array<[string, string, string]> = [
 const rows = DBS.map((db) => {
   const perMode = results.get(db)!;
   const pages = perMode.get("streamed")?.pages ?? perMode.get("v1")?.pages ?? perMode.get("parse")?.pages ?? 0;
-  const values = COLUMNS.map(([mode, key]) => perMode.get(mode)?.[key] ?? 0);
+  // `undefined`, not 0: an arm whose every attempt failed would otherwise print
+  // "0ms / 0.00" and read as the fastest row in the table.
+  const values = COLUMNS.map(([mode, key]) => perMode.get(mode)?.[key]);
   return { db, pages, values };
 }).filter((r) => r.pages > 0);
 
@@ -262,7 +280,11 @@ for (const row of rows) {
   console.log(
     `${String(row.pages).padStart(6)} ` +
       row.values
-        .map((ms) => `${`${ms}ms`.padStart(16)} ${(ms / row.pages).toFixed(2).padStart(6)}`)
+        .map((ms) =>
+          ms === undefined
+            ? `${"failed".padStart(16)} ${"-".padStart(6)}`
+            : `${`${ms}ms`.padStart(16)} ${(ms / row.pages).toFixed(2).padStart(6)}`,
+        )
         .join(" "),
   );
 }
@@ -282,9 +304,10 @@ if (PROFILE) {
     const k = (x: number, y: number) =>
       x > 0 && y > 0 && ratio > 1 ? `n^${(Math.log(y / x) / Math.log(ratio)).toFixed(2)}` : "n/a";
     console.log(
-      `\n=== ${mode} arm, per-rule (summed overlapping wall time, NOT a phase) ===\n` +
-        `  page-scope total  ${a.page.toFixed(0)}ms -> ${b.page.toFixed(0)}ms   ${k(a.page, b.page)}\n` +
-        `  site-scope total  ${a.site.toFixed(0)}ms -> ${b.site.toFixed(0)}ms   ${k(a.site, b.site)}`,
+      `\n=== ${mode} arm, SITE rules (one attempt, the one with the lowest total) ===\n` +
+        `  page-rule invocations  ${a.pageInvocations} -> ${b.pageInvocations} ` +
+        `(counted, not timed — the profiler's whole-ms rounding makes their sum meaningless)\n` +
+        `  site-scope total       ${a.site.toFixed(0)}ms -> ${b.site.toFixed(0)}ms   ${k(a.site, b.site)}`,
     );
     const top = [...b.rules].sort((x, y) => y[1] - x[1]).slice(0, TOP_RULES);
     console.log(`  ${"site rule".padEnd(36)} ${"first".padStart(8)} ${"last".padStart(8)} ${"slope".padStart(8)}`);
@@ -308,9 +331,11 @@ if (rows.length >= 2) {
     const ratio = last.pages / first.pages;
     console.log(`\nobserved slope across ${first.pages} -> ${last.pages} pages (${ratio.toFixed(1)}x), cost ~ n^k:`);
     COLUMNS.forEach(([, , label], i) => {
-      const a = first.values[i]!;
-      const b = last.values[i]!;
-      const k = a > 0 && b > 0 ? (Math.log(b / a) / Math.log(ratio)).toFixed(2) : "n/a";
+      const a = first.values[i];
+      const b = last.values[i];
+      const k = a !== undefined && b !== undefined && a > 0 && b > 0
+        ? (Math.log(b / a) / Math.log(ratio)).toFixed(2)
+        : "n/a";
       console.log(`  ${label.padEnd(16)} n^${k}`);
     });
   }

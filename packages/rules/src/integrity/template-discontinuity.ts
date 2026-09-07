@@ -120,6 +120,18 @@ export const templateDiscontinuityRule: Rule = {
       ? new Map(collected.pages.map((r) => [r.url, r.signals.length]))
       : null;
 
+    // v1 looks the outlier's page up by url to build a context for the signal
+    // detectors. That lookup used to be `pages.find(...)`, a scan of the whole
+    // page set PER OUTLIER: with an outlier share f that is f*n lookups over n
+    // pages, so the branch was quadratic in page count and linear in the share.
+    // It only ever ran on the v1 path — streaming reads the map above — and only
+    // on a site that actually has outliers, which is why a corpus of uniformly
+    // themed pages never showed it (#1910).
+    //
+    // Built once, and only when it will be used, so a streamed run and a site
+    // with no outliers both pay nothing.
+    const pageByUrl = signalCountByUrl ? null : new Map(pages.map((p) => [p.url, p]));
+
     for (const { url, fp } of entries) {
       const similarity = similarityToBaseline(fp, baseline);
       if (similarity >= threshold) continue;
@@ -132,7 +144,7 @@ export const templateDiscontinuityRule: Rule = {
         // signals? Build a minimal page ctx for the signal detectors. `html: ""` is
         // intentional — the detectors read parsed.document/parsed.content, not
         // page.html (see orphan-page.ts for the same note).
-        const page = pages.find((p) => p.url === url)!;
+        const page = pageByUrl!.get(url)!;
         const pageCtx: RuleContext = {
           page: {
             url: page.url,

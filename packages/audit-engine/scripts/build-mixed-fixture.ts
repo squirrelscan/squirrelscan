@@ -102,23 +102,54 @@ interface Page {
 const DIVERGENT_IN = 10;
 const isDivergent = (i: number) => i % DIVERGENT_IN === 3;
 
-function theme(i: number): { head: string; bodyClass: string; footer: string } {
+interface Theme {
+  head: string;
+  bodyClass: string;
+  footer: string;
+  /** Wrapper for the internal links. `<nav>` is itself a fingerprint signal. */
+  navTag: string;
+  imageHost: string;
+}
+
+/**
+ * Divergence has to beat the rule's own similarity threshold, not just look
+ * different. `similarityToBaseline` is a weighted Jaccard over stylesheet
+ * hrefs (0.35), asset hosts (0.25), body classes (0.15), CSS variables (0.10)
+ * and nav/footer presence (0.15), and the default threshold is 0.2. A first
+ * attempt at this scored 0.258 and produced ZERO outliers:
+ *
+ *   - the divergent pages still resolved `bench.test` from their canonical link
+ *     and their relative image srcs, so host Jaccard was 1/3 rather than near 0;
+ *   - both sides had NO css variables, and Jaccard of two empty sets is 1, so
+ *     that term paid full weight to similarity;
+ *   - both sides had a `<nav>`, so half the chrome term matched.
+ *
+ * So the baseline declares CSS variables, the divergent pages spread their
+ * assets over three foreign hosts, and they wrap their links in a div. That
+ * scores about 0.05 and the outliers are real.
+ */
+function theme(i: number): Theme {
   if (isDivergent(i)) {
     return {
       head:
-        `<link rel="stylesheet" href="https://assets.other-cdn.test/legacy-${i % 3}.css">` +
-        `<script src="https://assets.other-cdn.test/legacy.js"></script>`,
+        `<link rel="stylesheet" href="https://css.other-cdn.test/legacy-${i % 3}.css">` +
+        `<script src="https://js.other-cdn.test/legacy.js"></script>`,
       bodyClass: `legacy-page variant-${i % 3}`,
       footer: "",
+      navTag: "div",
+      imageHost: "https://img.other-cdn.test",
     };
   }
   return {
     head:
       `<link rel="stylesheet" href="https://cdn.bench.test/theme.css">` +
       `<link rel="stylesheet" href="https://cdn.bench.test/layout.css">` +
-      `<script src="https://cdn.bench.test/app.js"></script>`,
+      `<script src="https://cdn.bench.test/app.js"></script>` +
+      `<style>:root{--brand-color:#123456;--brand-space:8px;--brand-font:sans-serif;}</style>`,
     bodyClass: "theme-main site-page",
     footer: `<footer class="site-footer"><a href="/">Home</a><p>Bench Store</p></footer>`,
+    navTag: "nav",
+    imageHost: "",
   };
 }
 
@@ -228,18 +259,19 @@ for (let i = 0; i < N; i++) {
   const links = linkTargets(i, p.outLinks, orphanFrom)
     .map((t) => `<a href="${pathFor(t)}">Link ${t}</a>`)
     .join("");
+  const t = theme(i);
   const images = Array.from(
     { length: i % 13 === 0 ? 24 : 6 },
-    (_, k) => `<img src="/img/${i}/${k}.jpg"${k % 5 === 0 ? "" : ` alt="Image ${k} for ${i}"`}>`,
+    (_, k) => `<img src="${t.imageHost}/img/${i}/${k}.jpg"${k % 5 === 0 ? "" : ` alt="Image ${k} for ${i}"`}>`,
   ).join("");
   const external = `<a href="https://partner-${i % 50}.example.com/r">Partner</a>`;
   const robots = p.noindex ? `<meta name="robots" content="noindex,follow">` : "";
-  const t = theme(i);
   const html =
     `<!doctype html><html lang="en"><head><title>${p.title}</title>` +
     `<meta name="description" content="${p.description}">` +
     `<link rel="canonical" href="${p.canonical}">${robots}${t.head}</head>` +
-    `<body class="${t.bodyClass}">${p.body}<nav>${links}</nav>${images}${external}${t.footer}</body></html>`;
+    `<body class="${t.bodyClass}">${p.body}<${t.navTag}>${links}</${t.navTag}>` +
+    `${images}${external}${t.footer}</body></html>`;
   const url = `${BASE}${pathFor(i)}`;
   totalBytes += Buffer.byteLength(html, "utf8");
 
