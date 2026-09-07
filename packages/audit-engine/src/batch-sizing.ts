@@ -68,7 +68,7 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
  * Bun honours mimalloc's environment options — `MIMALLOC_VERBOSE=1` prints its
  * option dump — so `MIMALLOC_PURGE_DELAY=0`, which asks it to decommit freed
  * pages immediately, is a setting that reaches the allocator. One run per cell
- * (`--mimalloc`), so read it as "no visible effect", not as a bound:
+ * (`--mimalloc`):
  *
  *   budget      default    purge delay 0
  *     6 MB       303 MB           312 MB
@@ -77,9 +77,11 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
  *    48 MB       552 MB           878 MB
  *    96 MB      1070 MB           719 MB
  *
- * It moved in both directions, and by more than the spread above in the two
- * largest budgets, which is what a single run of a noisy measurement looks
- * like rather than an effect.
+ * The differences are +9, -8, +41, +326 and -351 MB. They go both ways and the
+ * two largest exceed the whole within-budget spread above, but one run per cell
+ * cannot separate an allocator effect from run variability in either direction.
+ * This is a reason to measure the setting before relying on it, not evidence
+ * that it does nothing.
  *
  * Every peak in the table is a whole child process's high-water — universe, site
  * fetch, page loop, site query, site rules, assembly — because that is what a

@@ -252,6 +252,22 @@ function spawnChild(flag: string, budget: number, purge: string): ChildResult | 
   // also defeats a pre-created symlink at a predictable name.
   const childErrDir = mkdtempSync(join(tmpdir(), "sq-sweep-"));
   const childErrPath = join(childErrDir, "child.err");
+  try {
+    return spawnUnder(childErrPath, flag, budget, env);
+  } finally {
+    // In `finally` because `Bun.spawnSync` THROWS when the executable is
+    // missing — no `time` on the box — and an early return path would leave a
+    // directory behind for every budget in the sweep.
+    rmSync(childErrDir, { recursive: true, force: true });
+  }
+}
+
+function spawnUnder(
+  childErrPath: string,
+  flag: string,
+  budget: number,
+  env: Record<string, string>,
+): ChildResult | null {
   const proc = Bun.spawnSync({
     cmd: [
       ...TIME.cmd,
@@ -284,16 +300,18 @@ function spawnChild(flag: string, budget: number, purge: string): ChildResult | 
     // The redirect itself failed, or the child never started. `timeErr` then
     // holds the shell's complaint, which is the only diagnostic there is.
   }
-  rmSync(childErrDir, { recursive: true, force: true });
-  // BOTH streams on failure: a setup failure leaves its message on time's fd 2,
-  // and printing only the child's file would report an empty error.
-  const err = `${childErr}${childErr && timeErr ? "\n-- time/shell --\n" : ""}${timeErr}`;
+  // Kept SEPARATE, and both printed on failure. Concatenating them and taking
+  // a tail loses the error: `time -l` appends ~800 characters of statistics
+  // after the child's message, so the last 500 are all statistics.
+  
   // A non-zero exit invalidates the run even when the child printed its line
   // first: a failure after the print is still a failure, and the maxrss of a
   // process that died early is a small and entirely plausible number.
   if (proc.exitCode !== 0) {
     console.error(
-      `  ${flag} budget ${budget / MB} MB (${purge}): exit ${proc.exitCode}\n${err.slice(-500)}`,
+      `  ${flag} budget ${budget / MB} MB: exit ${proc.exitCode}\n` +
+        `  child stderr: ${childErr.trim().slice(-500) || "(empty)"}\n` +
+        `  time/shell stderr: ${timeErr.trim().slice(-300) || "(empty)"}`,
     );
     return null;
   }
@@ -303,7 +321,10 @@ function spawnChild(flag: string, budget: number, purge: string): ChildResult | 
     .split("\n")
     .find((l) => l.startsWith(prefix));
   if (!line) {
-    console.error(`  ${flag} budget ${budget / MB} MB (${purge}): no result line`);
+    console.error(
+      `  ${flag} budget ${budget / MB} MB: no result line\n` +
+        `  child stderr: ${childErr.trim().slice(-500) || "(empty)"}`,
+    );
     return null;
   }
   return { record: JSON.parse(line.slice(prefix.length)), maxRss: TIME.parse(timeErr) };
