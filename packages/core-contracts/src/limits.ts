@@ -33,8 +33,13 @@ export const AUDIT_RUNTIME = {
   // worker-agent, so before this these were duplicated literals; drift between
   // the two would mean the reaper reaps a run before/after the container is
   // actually guaranteed dead.
-  //   full budget ÷ its 500-page preset — page-count scaling for oversized runs.
-  runPerPageMs: 4_800,
+  //   Was 4_800 (full budget ÷ its 500-page preset), which gave a 500-page full
+  //   audit exactly the 2400s base. A 474-page rendered crawl of ~1MB Shopify
+  //   pages needs ~27min to crawl + ~16min of rules on the container (#1864) and
+  //   timed out at 310/474 pages with memory to spare (#1862). 7_200 lets the
+  //   500-page preset reach the 1h ceiling; quick/surface presets are unchanged
+  //   (25 × 7.2s = 180s < 240s base, 100 × 7.2s = 720s < 900s base).
+  runPerPageMs: 7_200,
   // 1h ceiling so a wedged crawl can't pin a container indefinitely.
   maxRunTimeoutMs: 3_600_000,
   // Gap the DO leaves between the runtime cap and container SIGKILL. Wider
