@@ -1378,9 +1378,12 @@ export class SQLiteStorage implements CrawlStorage {
         const rows = stmt.all(
           ...(params as (string | number | null)[])
         ) as Record<string, unknown>[];
+        // Cast, not `?? null`: `rowToPageRecord` reads the same column the same
+        // way, and a normalization here would be a divergence from `getPages`
+        // that a parity test could not see.
         return rows.map((row) => ({
           normalizedUrl: row.normalized_url as string,
-          parsedData: (row.parsed_data as string | null) ?? null,
+          parsedData: row.parsed_data as string | null,
         }));
       },
       catch: (e) => StorageError.read(e),

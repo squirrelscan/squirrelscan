@@ -126,8 +126,10 @@ describe("getPageLinkRows", () => {
     const full = await run(store.getPages(crawlId));
     const projected = await run(store.getPageLinkRows(crawlId));
 
+    // Compared RAW, with no `?? null` on either side: normalizing here would
+    // hide exactly the kind of divergence this test exists to catch.
     expect(projected).toEqual(
-      full.map((p) => ({ normalizedUrl: p.normalizedUrl, parsedData: p.parsedData ?? null })),
+      full.map((p) => ({ normalizedUrl: p.normalizedUrl, parsedData: p.parsedData })),
     );
     expect(projected.map((r) => r.normalizedUrl)).toEqual([...urls].sort());
     // The one page stored without a parse (inserted third, sorts second).
@@ -139,7 +141,7 @@ describe("getPageLinkRows", () => {
         const a = await run(store.getPages(crawlId, { limit, offset }));
         const b = await run(store.getPageLinkRows(crawlId, { limit, offset }));
         expect(b).toEqual(
-          a.map((p) => ({ normalizedUrl: p.normalizedUrl, parsedData: p.parsedData ?? null })),
+          a.map((p) => ({ normalizedUrl: p.normalizedUrl, parsedData: p.parsedData })),
         );
       }
     }
