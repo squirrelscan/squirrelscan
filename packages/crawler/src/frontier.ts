@@ -131,6 +131,50 @@ function isAllowedDomain(hostname: string, allowedDomains: string[]): boolean {
   });
 }
 
+/**
+ * True when `candidateHost` is the `www.` host of a base pinned to the bare
+ * apex (squirrelscan/repo#1899).
+ *
+ * The base is decided by ONE probe of the seed, before the crawl has fetched
+ * anything. When that probe cannot see the apex→www redirect — a WAF answering
+ * the apex with 403 or 429 carries no `Location`, so there is nothing to follow
+ * and nothing to distinguish it from an apex that genuinely serves the site —
+ * the base stays on the apex while every link on the page is `www.`. Requiring
+ * an exact host match then empties the frontier and the whole audit is one
+ * page, charged in full, with nothing in the run saying why.
+ *
+ * Deliberately ONE-DIRECTIONAL. A base already on `www.` does not adopt the
+ * apex: on these sites the apex only redirects back, so adopting it would
+ * re-crawl every page through a redirect and double the frontier for nothing.
+ * Only the direction that rescues a collapsed crawl is opened.
+ *
+ * The base must BE a registrable domain. "Does not start with www." is not the
+ * same test: it would also hand `shop.example.com` the unrelated host
+ * `www.shop.example.com`, a different service on the same site rather than the
+ * apex/www pair of one.
+ *
+ * Read straight off tldts rather than through {@link registrableDomain}, whose
+ * fallback returns the host itself for a public suffix (`pages.dev`, `co.uk`),
+ * an IP literal, `localhost` or any single-label host. Equality against a
+ * fallback proves nothing — every one of those would qualify as its own apex
+ * and pick up a `www.` host that may be an unrelated tenant. A null lookup means
+ * "not a registrable domain", and those opt out. A trailing-dot base
+ * (`example.com.`) opts out too: tldts strips the dot, so the hostname and the
+ * lookup no longer match, and the alternative is a normalization the rest of
+ * scope checking does not do.
+ *
+ * Compares `URL.host`, so the port travels with it: `example.com:8443` matches
+ * `www.example.com:8443` and never `www.example.com`. A host that merely starts
+ * with the base (`wwwexample.com`) is not a match — the separating dot is part
+ * of the prefix being tested.
+ */
+function isWwwHostOfApex(base: URL, candidate: URL): boolean {
+  const baseHostname = base.hostname.toLowerCase();
+  if (baseHostname.startsWith("www.")) return false;
+  if (getDomain(baseHostname, { allowPrivateDomains: true }) !== baseHostname) return false;
+  return candidate.host.toLowerCase() === `www.${base.host.toLowerCase()}`;
+}
+
 export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
   const { baseUrl, include, exclude, allowedDomains } = options;
   const baseUrlObj = new URL(baseUrl);
@@ -159,7 +203,7 @@ export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
     return { allowed: true };
   }
 
-  if (candidateHost !== baseHost) {
+  if (candidateHost !== baseHost && !isWwwHostOfApex(baseUrlObj, candidateUrlObj)) {
     return { allowed: false, reason: "cross_domain" };
   }
 

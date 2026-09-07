@@ -1919,7 +1919,30 @@ export function createCrawler(
             const hopUrl = currentUrl;
             const redirectTo = await withRequestDeadline(
               Math.min(hopTimeoutMs, remainingMs),
-              (signal) => fetch(hopUrl, { method: "GET", signal, redirect: "follow" }),
+              (signal) =>
+                fetch(hopUrl, {
+                  method: "GET",
+                  signal,
+                  redirect: "follow",
+                  // Identify as the crawl does (squirrelscan/repo#1899). This was
+                  // the only request in the whole crawl going out under the
+                  // runtime's default agent, and origins behind a WAF refuse
+                  // that agent — with a 403 that carries no `Location`, which
+                  // this loop then reads as "the seed does not redirect". The
+                  // base gets pinned to the seed, every `www.` link goes
+                  // cross_domain, and the audit is one page.
+                  //
+                  // The crawl's own `config.headers` deliberately do NOT ride
+                  // along: `redirect: "follow"` hands them to whatever origin
+                  // the chain lands on, and a custom header may be a credential
+                  // (#1395). The agent is not a secret; the rest are.
+                  //
+                  // Only when there is one to send. A header object built from
+                  // an absent value does not omit the header, it sends the
+                  // string "undefined", and an empty one asks the origin to
+                  // treat the request as agentless — the very thing being fixed.
+                  ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                }),
               // The deadline stays armed for the whole callback, so the body
               // read below is bounded too — before #1699 the timer was cleared
               // as soon as the headers landed and a stalled body hung here
@@ -1931,6 +1954,25 @@ export function createCrawler(
                 // runtimes and mocks that leave it empty.
                 const served = response.url || hopUrl;
                 settledUrl = served;
+
+                // A refusal is not an answer (squirrelscan/repo#1899). A 403 or
+                // 429 carries no `Location`, so the loop below reads it as "this
+                // URL does not redirect" and the crawl's base is pinned here.
+                // The value is the same either way — there is no second URL to
+                // fall back to — so this says so out loud rather than changing
+                // it: an audit that turns out to be about the wrong half of an
+                // apex/www pair has one line naming the reason. `isInScope`'s
+                // apex/www rule is the recovery; this is the diagnosis.
+                //
+                // 4xx/5xx only. `response.ok` is also false for a 3xx that
+                // `redirect: "follow"` declined to follow (a `Location`-less
+                // 302), which is a different thing from an origin refusing us.
+                if (response.status >= 400 && served === hopUrl) {
+                  logger.warn(
+                    "seed redirect probe refused",
+                    `${hopUrl} answered ${response.status}; the crawl base stays pinned to it`,
+                  );
+                }
 
                 // Check if HTTP redirect occurred
                 if (served !== hopUrl) {
