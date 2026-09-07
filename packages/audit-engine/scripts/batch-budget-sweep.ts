@@ -311,7 +311,10 @@ function spawnUnder(
     console.error(
       `  ${flag} budget ${budget / MB} MB: exit ${proc.exitCode}\n` +
         `  child stderr: ${childErr.trim().slice(-500) || "(empty)"}\n` +
-        `  time/shell stderr: ${timeErr.trim().slice(-300) || "(empty)"}`,
+        // NOT truncated: a shell redirect failure prints one line and `time -l`
+        // then appends ~800 characters of statistics, so any tail drops the
+        // only sentence that says what went wrong.
+        `  time/shell stderr: ${timeErr.trim() || "(empty)"}`,
     );
     return null;
   }
@@ -323,7 +326,8 @@ function spawnUnder(
   if (!line) {
     console.error(
       `  ${flag} budget ${budget / MB} MB: no result line\n` +
-        `  child stderr: ${childErr.trim().slice(-500) || "(empty)"}`,
+        `  child stderr: ${childErr.trim().slice(-500) || "(empty)"}\n` +
+        `  time/shell stderr: ${timeErr.trim() || "(empty)"}`,
     );
     return null;
   }
