@@ -73,19 +73,27 @@ const APP_BLOCK_BEGIN = /^\s*BEGIN app block:\s*shopify:\/\//i;
 const APP_BLOCK_END = /^\s*END app block\s*$/i;
 
 /**
- * Recognizes a Shopify analytics payload — the only place identity fields are
- * neutralized.
+ * Request/visitor identity fields, matched by NAME **and** by the shape of the
+ * value.
  *
- * Anchored on the payload, not on the field name alone and not on the uuid
- * shape. `"u"` in an arbitrary script can be content: the script
- * `document.body.textContent=({"u":"Alice"}).u` renders "Alice", and blanking
- * that field would collide it with "Bob". Inside Shopify's analytics bootstrap
- * the same field is a per-visitor token that rotates with every cache entry.
+ * Neither half is sufficient alone, and both were tried:
+ *
+ *  - Shape alone (any uuid in any script) collapses two pages whose only
+ *    difference is the resource a script fetches.
+ *  - Name alone erases content: `document.body.textContent=({"u":"Alice"}).u`
+ *    renders "Alice", and blanking that field collides it with "Bob".
+ *  - Recognizing the enclosing analytics payload and neutralizing names within
+ *    it sounds tighter and is not: a mention in a comment qualifies the whole
+ *    body, and the real payloads include a 16 KB minified bundle with no stable
+ *    anchor to recognize.
+ *
+ * Together they are narrow. `reqid` and `requestId` must hold a uuid, optionally
+ * with the `-<epoch-seconds>` suffix Shopify appends; `eventMetadataId` a uuid;
+ * `u` exactly twelve lowercase hex, which is the visitor-token shape. A field
+ * carrying a name, a word or an id of any other shape is left alone.
  */
-const SHOPIFY_ANALYTICS = /\b(?:__st\b|ShopifyAnalytics|Shopify\.shop\b)/;
-
-/** Request/visitor identity fields, neutralized only inside the above. */
-const IDENTITY_FIELD = /"(reqid|requestId|eventMetadataId|u)"\s*:\s*"[^"]*"/g;
+const IDENTITY_FIELD =
+  /"(reqid|requestId|eventMetadataId)"(\s*:\s*)"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-\d{6,})?"|"(u)"(\s*:\s*)"[0-9a-f]{12}"/gi;
 
 interface Region {
   start: number;
@@ -113,6 +121,19 @@ function isExtensionAsset(url: string | undefined): boolean {
   }
 }
 
+/**
+ * The index just past a tag's `>`, given a parser end index.
+ *
+ * `endIndex + 1` is right for `</script>` and wrong for `</script >`, where
+ * htmlparser2 reports the index of the space. Taking the reported index
+ * literally left the stray `>` behind on a removal, and carried it along when a
+ * neighbouring asset was sorted.
+ */
+function closeEnd(html: string, endIndex: number): number {
+  const gt = html.indexOf(">", endIndex);
+  return gt < 0 ? html.length : gt + 1;
+}
+
 /** Rewrite `html` by replacing disjoint regions, left to right. */
 function spliceRegions(html: string, edits: Array<Region & { text: string }>): string {
   if (edits.length === 0) return html;
@@ -136,12 +157,20 @@ function spliceRegions(html: string, edits: Array<Region & { text: string }>): s
  * Sorting every match in the document, or the span from the first match to the
  * last, would silently relocate everything in between.
  */
+function isHtmlWhitespaceOnly(text: string): boolean {
+  // HTML ASCII whitespace, explicitly. `String.prototype.trim` also strips
+  // NBSP and other Unicode spaces, which are substantive TEXT: two blocks
+  // separated by an NBSP are not adjacent siblings, and treating them as such
+  // sorts across visible content.
+  return /^[\t\n\f\r ]*$/.test(text);
+}
+
 function groupAdjacent(html: string, regions: Region[]): Region[][] {
   const runs: Region[][] = [];
   let current: Region[] = [];
   for (const region of regions) {
     const prev = current[current.length - 1];
-    if (prev && html.slice(prev.end, region.start).trim() !== "") {
+    if (prev && !isHtmlWhitespaceOnly(html.slice(prev.end, region.start))) {
       if (current.length > 1) runs.push(current);
       current = [];
     }
@@ -172,19 +201,13 @@ function neutralizeScripts(html: string): string {
   const edits: Array<Region & { text: string }> = [];
   let openEnd: number | null = null;
   let start = 0;
-  let isSt = false;
 
   const parser: Parser = new Parser(
     {
-      onopentag(name, attribs) {
+      onopentag(name) {
         if (name !== "script") return;
         start = parser.startIndex;
         openEnd = parser.endIndex + 1;
-        // An EXACT attribute value. `id="__st suffix"` is a different id, and a
-        // `data-note` whose value merely contains `id="__st"` is not an id at
-        // all — both were false positives when this was matched with a regex
-        // over the raw open tag.
-        isSt = attribs.id === "__st";
       },
       onclosetag(name) {
         if (name !== "script" || openEnd === null) return;
@@ -198,16 +221,22 @@ function neutralizeScripts(html: string): string {
         // body is empty and whose src is the giveaway.
         const openTag = html.slice(start, bodyStart);
         if (CF_CHALLENGE.test(openTag) || CF_CHALLENGE.test(body)) {
-          edits.push({ start, end: parser.endIndex + 1, text: "" });
+          // A comment, not "". Deleting the block outright can JOIN the text on
+          // either side into markup that was not there: a stray `<` before the
+          // block and an attribute-looking string after it become a tag once the
+          // block between them vanishes, and the next pass then treats that
+          // manufactured tag as a real element. A placeholder keeps the boundary.
+          edits.push({ start, end: closeEnd(html, parser.endIndex), text: "<!--cf-->" });
           return;
         }
         // JSON-LD bodies are deliberately in scope for the epoch pass: a payload
         // differing only in a 13-digit numeric field reuses a stale render —
         // accepted narrowing, bounded by the 7-day TTL (#991).
-        let rewritten = body.replace(EPOCH_MS_TOKEN, "0");
-        if (isSt || SHOPIFY_ANALYTICS.test(body)) {
-          rewritten = rewritten.replace(IDENTITY_FIELD, '"$1":""');
-        }
+        const rewritten = body
+          .replace(EPOCH_MS_TOKEN, "0")
+          .replace(IDENTITY_FIELD, (_m, name1, sep1, name2, sep2) =>
+            `"${name1 ?? name2}"${name1 ? sep1 : sep2}""`,
+          );
         if (rewritten !== body) edits.push({ start: bodyStart, end: bodyEnd, text: rewritten });
       },
     },
@@ -240,7 +269,7 @@ function sortShopifyRuns(html: string): string {
         if (APP_BLOCK_END.test(text) && blockDepth > 0) {
           blockDepth--;
           if (blockDepth === 0 && blockStart !== null) {
-            appBlocks.push({ start: blockStart, end: parser.endIndex + 1 });
+            appBlocks.push({ start: blockStart, end: closeEnd(html, parser.endIndex) });
             blockStart = null;
           }
         }
@@ -250,13 +279,16 @@ function sortShopifyRuns(html: string): string {
           pendingAsset = parser.startIndex;
           return;
         }
-        if (name === "link" && isExtensionAsset(attribs.href)) {
+        // Only a stylesheet. `rel="canonical"` and `rel="preconnect"` pointing
+        // at the same host are metadata, not assets, and reordering metadata is
+        // outside the accepted narrowing.
+        if (name === "link" && attribs.rel === "stylesheet" && isExtensionAsset(attribs.href)) {
           assetTags.push({ start: parser.startIndex, end: parser.endIndex + 1 });
         }
       },
       onclosetag(name) {
         if (name === "script" && pendingAsset !== null) {
-          assetTags.push({ start: pendingAsset, end: parser.endIndex + 1 });
+          assetTags.push({ start: pendingAsset, end: closeEnd(html, parser.endIndex) });
           pendingAsset = null;
         }
       },
@@ -266,16 +298,55 @@ function sortShopifyRuns(html: string): string {
   parser.write(html);
   parser.end();
 
+  // INNER FIRST. An app block can contain a run of asset tags, so the two edit
+  // classes overlap and "keep the first" would discard the inner sort whenever
+  // the enclosing blocks also needed reordering — and keep it when they did not.
+  // The same page then normalizes two ways depending on the order it arrived in,
+  // and `f(f(x))` stops equalling `f(x)`. Sorting the assets first and then
+  // sorting blocks over the RESULT composes instead of competing.
+  return sortRuns(sortRuns(html, assetTags), appBlocks, true);
+}
+
+/**
+ * Sort each contiguous run among `regions`. When `rescan` is set the regions
+ * were located against a DIFFERENT string, so they are re-derived here.
+ */
+function sortRuns(html: string, regions: Region[], rescan = false): string {
+  const located = rescan ? locateAppBlocks(html) : regions;
   const edits: Array<Region & { text: string }> = [];
-  for (const regions of [appBlocks, assetTags]) {
-    for (const run of groupAdjacent(html, regions)) {
-      const texts = run.map((r) => html.slice(r.start, r.end));
-      const sorted = [...texts].sort();
-      if (sorted.every((t, i) => t === texts[i])) continue;
-      run.forEach((region, i) => {
-        edits.push({ start: region.start, end: region.end, text: sorted[i]! });
-      });
-    }
+  for (const run of groupAdjacent(html, located)) {
+    const texts = run.map((r) => html.slice(r.start, r.end));
+    const sorted = [...texts].sort();
+    if (sorted.every((t, i) => t === texts[i])) continue;
+    run.forEach((region, i) => {
+      edits.push({ start: region.start, end: region.end, text: sorted[i]! });
+    });
   }
   return spliceRegions(html, edits);
+}
+
+/** Re-derive app-block regions against a rewritten string. */
+function locateAppBlocks(html: string): Region[] {
+  const blocks: Region[] = [];
+  let blockStart: number | null = null;
+  let depth = 0;
+  const parser: Parser = new Parser({
+    oncomment(text) {
+      if (APP_BLOCK_BEGIN.test(text)) {
+        if (depth === 0) blockStart = parser.startIndex;
+        depth++;
+        return;
+      }
+      if (APP_BLOCK_END.test(text) && depth > 0) {
+        depth--;
+        if (depth === 0 && blockStart !== null) {
+          blocks.push({ start: blockStart, end: closeEnd(html, parser.endIndex) });
+          blockStart = null;
+        }
+      }
+    },
+  });
+  parser.write(html);
+  parser.end();
+  return blocks;
 }
