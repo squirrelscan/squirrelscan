@@ -6,13 +6,18 @@
 // to be controlled for the answer to mean anything, and four of them cost a
 // wrong answer rather than a vague one:
 //
-//   1. THE NETWORK. `security/http-to-https` probes sample URLs over HTTP with
-//      staggered sleeps, and none of the cloud/intel/external-link switches
-//      turns it off. On this fixture it was 508-790 ms of a 518-790 ms site
+//   1. THE NETWORK. Two things reach it. `security/http-to-https` probes sample
+//      URLs over HTTP with staggered sleeps, and none of the cloud, intel or
+//      external-link switches turns it off. On this fixture it was 508-790 ms of a 518-790 ms site
 //      phase: the whole phase was one rule waiting on sockets, and every other
 //      site rule's scaling was invisible underneath it. It is DISABLED by
 //      default here (`--disable`), and the disabled set is printed, because a
-//      site-rule number measured with it on is a number about the network.
+//      site-rule number measured with it on is a number about the network. And
+//      the soft-404 confirmation pass re-fetches every flagged candidate with a
+//      sleep between same-host requests; it is off here too. Neither fires on
+//      these fixtures, but another database could make either of them the
+//      measurement. Note this also means the result is about the REMAINING
+//      rules, not about production rules-phase latency.
 //   2. THE CONTENT STORE. #1908's full-table scan per stored page makes a crawl
 //      quadratic in its own page count. The fixtures keep html in the crawl DB
 //      and never touch the global store.
@@ -32,10 +37,15 @@
 //   bun run scripts/rules-scaling-bench.ts --dbs /tmp/mix400.sqlite,/tmp/mix2500.sqlite
 //
 // The CLI runs v1 (`runRulesOnStorage`, every page resident) and the cloud runs
-// the streamed pass; #1910 measured the CLI, so both are timed, and v1 is split
-// into its page-scope and site-scope halves with the rule profiler rather than
-// reported as one number — a near-linear total cannot rule out a superlinear
+// the streamed pass; #1910 measured the CLI, so both are timed. With `--profile`
+// the parent also splits each arm into its page-scope and site-scope halves from
+// the rule profiler, because a near-linear total cannot rule out a superlinear
 // site component hiding inside it.
+//
+// Those per-rule sums are OVERLAPPING WALL DURATIONS: rules run with bounded
+// concurrency, so they add to more than the phase they came from. Read them
+// against each other and against the same column at another page count, never
+// against a phase time.
 //
 // --child is the inner half; the parent re-invokes this file with it.
 
@@ -92,6 +102,7 @@ function benchConfig(): Config {
     cloud: { ...base.cloud, enabled: false },
     intel: { ...base.intel, enabled: false },
     external_links: { ...base.external_links, enabled: false },
+    soft404_confirm: { ...(base as { soft404_confirm?: object }).soft404_confirm, enabled: false },
     rules: { enable: ["*"], disable: DISABLE },
   } as unknown as Config;
 }
@@ -152,6 +163,7 @@ const DBS = arg("dbs", "")
   .filter(Boolean);
 const REPEATS = Math.max(1, Number.parseInt(arg("repeat", "3"), 10));
 const PROFILE = process.argv.includes("--profile");
+const TOP_RULES = Math.max(1, Number.parseInt(arg("top", "10"), 10));
 
 function child(mode: string, db: string): Record<string, number> | null {
   const proc = Bun.spawnSync({
@@ -163,14 +175,44 @@ function child(mode: string, db: string): Record<string, number> | null {
     // set here rather than passed as a flag the child would have to re-plumb.
     env: PROFILE ? { ...process.env, SQUIRREL_RULE_PROFILE: "1" } : process.env,
     stdout: "pipe",
-    stderr: PROFILE ? "inherit" : "pipe",
+    stderr: "pipe",
   });
+  const stderr = proc.stderr?.toString() ?? "";
   if (proc.exitCode !== 0) {
-    console.error(`  ${mode} on ${db}: exit ${proc.exitCode}\n${proc.stderr?.toString().slice(-500) ?? ""}`);
+    console.error(`  ${mode} on ${db}: exit ${proc.exitCode}\n${stderr.slice(-500)}`);
     return null;
   }
+  if (PROFILE) recordProfile(mode, db, stderr);
   const line = proc.stdout.toString().split("\n").find((l) => l.startsWith("CHILD "));
   return line ? (JSON.parse(line.slice(6)) as Record<string, number>) : null;
+}
+
+/** arm -> db -> ruleId -> summed ms, and the page/site split, per attempt. */
+const profiles = new Map<string, Map<string, { page: number; site: number; rules: Map<string, number> }>>();
+
+function recordProfile(mode: string, db: string, stderr: string): void {
+  const byDb = profiles.get(mode) ?? new Map();
+  // Lowest attempt wins, same as the phase numbers: keep whichever attempt
+  // produced the smaller site total rather than averaging across noise.
+  const acc = { page: 0, site: 0, rules: new Map<string, number>() };
+  for (const line of stderr.split("\n")) {
+    if (!line.startsWith("[rule-profile]")) continue;
+    try {
+      const d = JSON.parse(line.slice(14)) as { ruleId: string; pageUrl?: string; durationMs?: number };
+      const ms = d.durationMs ?? 0;
+      // A site-scope rule runs once per audit and carries no pageUrl; a page
+      // rule emits one line per page.
+      if (d.pageUrl === undefined) {
+        acc.site += ms;
+        acc.rules.set(d.ruleId, (acc.rules.get(d.ruleId) ?? 0) + ms);
+      } else acc.page += ms;
+    } catch {
+      // A truncated line at the end of a pipe is not worth failing a run over.
+    }
+  }
+  const prev = byDb.get(db);
+  if (!prev || acc.site < prev.site) byDb.set(db, acc);
+  profiles.set(mode, byDb);
 }
 
 const MODES = ["streamed", "v1", "parse"] as const;
@@ -223,6 +265,34 @@ for (const row of rows) {
         .map((ms) => `${`${ms}ms`.padStart(16)} ${(ms / row.pages).toFixed(2).padStart(6)}`)
         .join(" "),
   );
+}
+
+if (PROFILE) {
+  const sizeOf = (db: string) => rows.find((r) => r.db === db)?.pages ?? 0;
+  const ordered = [...DBS].sort((a, b) => sizeOf(a) - sizeOf(b));
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  for (const mode of ["streamed", "v1"] as const) {
+    const byDb = profiles.get(mode);
+    if (!byDb || !first || !last) continue;
+    const a = byDb.get(first);
+    const b = byDb.get(last);
+    if (!a || !b) continue;
+    const ratio = sizeOf(last) / sizeOf(first);
+    const k = (x: number, y: number) =>
+      x > 0 && y > 0 && ratio > 1 ? `n^${(Math.log(y / x) / Math.log(ratio)).toFixed(2)}` : "n/a";
+    console.log(
+      `\n=== ${mode} arm, per-rule (summed overlapping wall time, NOT a phase) ===\n` +
+        `  page-scope total  ${a.page.toFixed(0)}ms -> ${b.page.toFixed(0)}ms   ${k(a.page, b.page)}\n` +
+        `  site-scope total  ${a.site.toFixed(0)}ms -> ${b.site.toFixed(0)}ms   ${k(a.site, b.site)}`,
+    );
+    const top = [...b.rules].sort((x, y) => y[1] - x[1]).slice(0, TOP_RULES);
+    console.log(`  ${"site rule".padEnd(36)} ${"first".padStart(8)} ${"last".padStart(8)} ${"slope".padStart(8)}`);
+    for (const [rule, ms] of top) {
+      const before = a.rules.get(rule) ?? 0;
+      console.log(`  ${rule.padEnd(36)} ${`${before.toFixed(0)}ms`.padStart(8)} ${`${ms.toFixed(0)}ms`.padStart(8)} ${k(before, ms).padStart(8)}`);
+    }
+  }
 }
 
 // Slopes across the endpoints, and only when the endpoints differ. Two points

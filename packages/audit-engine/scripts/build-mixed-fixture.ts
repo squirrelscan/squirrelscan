@@ -17,6 +17,14 @@
 //   - SOME PAGES FAIL. 4xx pages are what broken-link and error-page rules read.
 //   - TITLES AND DESCRIPTIONS REPEAT in more than one distribution: a few large
 //     duplicate groups and a long tail of pairs.
+//   - THERE IS A SHARED THEME, AND A MINORITY THAT DIVERGES FROM IT. This one
+//     matters more than it looks. `integrity/template-discontinuity` compares
+//     each page's fingerprint — asset hosts, stylesheet hrefs, body classes,
+//     nav/footer presence — against a site baseline, and gives up immediately if
+//     no baseline exists. A corpus where every page is identically themed
+//     produces no outliers and never reaches the branch that costs anything, and
+//     on the v1 path that branch does a linear scan of the page set PER OUTLIER.
+//     A fixed share of divergent pages is what makes that term visible.
 //
 // It still is not a real estate. It has no redirect chains, no sitemap records,
 // no fetched sub-resources and no cross-origin variety, so any rule whose cost
@@ -82,6 +90,36 @@ interface Page {
   noindex: boolean;
   canonical: string;
   outLinks: number;
+}
+
+/**
+ * The site's shared theme, and the minority that diverges from it.
+ *
+ * `DIVERGENT_IN` of every that-many pages carry a different asset host, a
+ * different stylesheet and different body classes, which is what makes them
+ * outliers against the baseline the other pages establish.
+ */
+const DIVERGENT_IN = 10;
+const isDivergent = (i: number) => i % DIVERGENT_IN === 3;
+
+function theme(i: number): { head: string; bodyClass: string; footer: string } {
+  if (isDivergent(i)) {
+    return {
+      head:
+        `<link rel="stylesheet" href="https://assets.other-cdn.test/legacy-${i % 3}.css">` +
+        `<script src="https://assets.other-cdn.test/legacy.js"></script>`,
+      bodyClass: `legacy-page variant-${i % 3}`,
+      footer: "",
+    };
+  }
+  return {
+    head:
+      `<link rel="stylesheet" href="https://cdn.bench.test/theme.css">` +
+      `<link rel="stylesheet" href="https://cdn.bench.test/layout.css">` +
+      `<script src="https://cdn.bench.test/app.js"></script>`,
+    bodyClass: "theme-main site-page",
+    footer: `<footer class="site-footer"><a href="/">Home</a><p>Bench Store</p></footer>`,
+  };
 }
 
 function build(i: number): Page {
@@ -196,11 +234,12 @@ for (let i = 0; i < N; i++) {
   ).join("");
   const external = `<a href="https://partner-${i % 50}.example.com/r">Partner</a>`;
   const robots = p.noindex ? `<meta name="robots" content="noindex,follow">` : "";
+  const t = theme(i);
   const html =
     `<!doctype html><html lang="en"><head><title>${p.title}</title>` +
     `<meta name="description" content="${p.description}">` +
-    `<link rel="canonical" href="${p.canonical}">${robots}</head>` +
-    `<body>${p.body}<nav>${links}</nav>${images}${external}</body></html>`;
+    `<link rel="canonical" href="${p.canonical}">${robots}${t.head}</head>` +
+    `<body class="${t.bodyClass}">${p.body}<nav>${links}</nav>${images}${external}${t.footer}</body></html>`;
   const url = `${BASE}${pathFor(i)}`;
   totalBytes += Buffer.byteLength(html, "utf8");
 
@@ -234,6 +273,7 @@ console.log(
     `  mix: ${[...counts].map(([k, v]) => `${k} ${((100 * v) / N).toFixed(0)}%`).join(", ")}\n` +
     `  ${Math.max(0, N - orphanFrom)} pages with no inbound link, ` +
     `${Math.floor(N / 50)} hubs of 120 links, ` +
-    `${Math.floor(N / 97)} 4xx, ${Math.floor(N / 23)} noindex, ${Math.floor(N / 11)} off-page canonicals`,
+    `${Math.floor(N / 97)} 4xx, ${Math.floor(N / 23)} noindex, ${Math.floor(N / 11)} off-page canonicals, ` +
+    `${Math.floor(N / DIVERGENT_IN)} off-theme`,
 );
 await run(storage.close());
