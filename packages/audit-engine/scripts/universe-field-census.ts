@@ -67,24 +67,29 @@ const pages = kept.length;
 // per-field drop would attribute the shared data to whichever half is deleted
 // second (adapter.ts's parseHtmlForRules):
 //
-//   h1.texts   IS headings.h1Texts
-//   schema.{types,valid,errors,raw} ARE schemas.{types,valid,errors,raw}
+//   h1.texts               IS headings.h1Texts
+//   schema.errors / .raw   ARE schemas.errors / .raw
+//   author.socialProfiles  IS the Person/Organization schema's `sameAs` array,
+//                          and author's name/url/image/jobTitle come from the
+//                          same schema data — the identity survives the clone
 //
 // Deleting `schemas` alone freed 1 KB/page here and `schema` then freed 5, which
 // reads as "the deprecated field is the expensive one" and is an artifact of the
-// order. Everything else owns its structure, so the remaining rows are true
-// independent drops.
+// order.
+//
+// `schema.types` is a fresh array rather than an alias, so grouping it in is
+// conservative: a group can over-attribute to itself, never to another row.
 const FIELD_GROUPS: Array<[string, string[]]> = [
   ["links", ["links"]],
   ["images", ["images"]],
   ["content", ["content"]],
-  ["schema+schemas", ["schemas", "schema"]],
+  ["schema+schemas+author", ["schemas", "schema", "author"]],
   ["headings+h1", ["headings", "h1"]],
   ["meta", ["meta"]],
   ["og", ["og"]],
   ["twitter", ["twitter"]],
   ["contactLinks", ["contactLinks"]],
-  ["author", ["author"]],
+  ["visible*", ["visibleAuthor", "visibleDatePublished", "visibleDateModified"]],
   ["pageType", ["pageType"]],
 ];
 
@@ -103,7 +108,8 @@ for (const [label, fields] of FIELD_GROUPS) {
   prev = now;
 }
 kept.length = 0;
-rows.push(["(page objects)", prev - retained()]);
+// Whatever is left: the object shells plus any field not named above.
+rows.push(["(objects + unlisted)", prev - retained()]);
 
 rows.sort((a, b) => b[1] - a[1]);
 for (const [field, bytes] of rows) {

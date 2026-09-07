@@ -8,17 +8,23 @@
 //
 // This samples BOTH, each after a synchronous collect, at two different points:
 //
-//   - at every BATCH BOUNDARY, which is where the slope comes from. Inside a
-//     batch the loop releases each page's document as it finishes it, so the
-//     batch's working set is DRAINING while the accumulators fill; a slope
-//     fitted to mid-batch samples mixes the two and can report a negative
-//     per-page retention for a loop whose accumulators are growing. A crawl
-//     that fits in one batch reports no slope at all, which is honest.
-//   - at every heartbeat, as an in-batch trace, for the peak. Reported, not
-//     fitted.
+//   - at every FULL BATCH boundary, which is where the slope comes from. Two
+//     things make any other sample incomparable. Inside a batch the loop
+//     releases each page's document as it finishes it, so the working set is
+//     DRAINING while the accumulators fill. And the boundary hook runs before
+//     the batch's PageRecords leave scope, so a short final batch is holding
+//     fewer of them than a full one — 30 pages of html against 50 — which on
+//     its own can turn a growing loop into a negative slope. Partial batches
+//     are therefore printed and excluded from the fit.
+//   - at every heartbeat, as an in-batch trace. Reported, not fitted.
 //
 // A gap between the retained and RSS slopes means the growth is allocator
 // residency, not retained data.
+//
+// What it reports is a TAIL slope, not a steady state: the first boundary is
+// excluded because it alone carries the walk's one-time startup allocation, and
+// that allocation is real memory the run holds — it moves into the intercept,
+// it does not vanish. Read the printed absolute samples alongside the slope.
 //
 // This is a DIAGNOSTIC, not a measurement of any one structure. Its slope moves
 // by a factor of two between runs of the same fixture, because a whole-pipeline
@@ -106,9 +112,10 @@ async function main(): Promise<void> {
   );
 
   const started = new Map<StreamingRulePhase, { retained: number; rss: number }>();
-  /** Batch-boundary samples — the only ones the slope is fitted to. */
+  /** Full-batch boundary samples — the only ones the slope is fitted to. */
   const samples: Array<[number, number]> = [];
   const rssSamples: Array<[number, number]> = [];
+  let lastBoundaryPages = 0;
   let peakInLoop = 0;
 
   const result = await run(
@@ -133,10 +140,18 @@ async function main(): Promise<void> {
         onBatch: ({ batchIndex, pagesDone }) => {
           const r = retained();
           const s = rss();
-          samples.push([pagesDone, r]);
-          rssSamples.push([pagesDone, s]);
+          // The hook runs while this batch's PageRecords are still in scope, so
+          // a short batch is holding less html than a full one and its sample
+          // is not comparable to the others.
+          const full = pagesDone - lastBoundaryPages === BATCH;
+          lastBoundaryPages = pagesDone;
+          if (full) {
+            samples.push([pagesDone, r]);
+            rssSamples.push([pagesDone, s]);
+          }
           console.log(
-            `  batch ${String(batchIndex).padStart(3)} end (${String(pagesDone).padStart(4)} pages)  ` +
+            `  batch ${String(batchIndex).padStart(3)} end (${String(pagesDone).padStart(4)} pages)` +
+              `${full ? "     " : " PART"}  ` +
               `retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  rss=${`${(s / MB).toFixed(0)}`.padStart(5)} MB`,
           );
         },
@@ -144,9 +159,12 @@ async function main(): Promise<void> {
       pageLoopHooks: {
         heartbeatEveryPages: EVERY,
         onProgress: (done) => {
-          // Peak only. See the header: these land mid-batch, where the batch's
-          // documents are part-released, so they are not comparable to each
-          // other and must not be fitted.
+          // Trace only. These land mid-batch, where the batch's documents are
+          // part-released, so they are not comparable to each other and must
+          // not be fitted. The maximum over them is a POST-COLLECT high-water,
+          // not the container's: `retained()` collects before it samples, so a
+          // real RSS peak between two heartbeats is never seen. batch-floor.ts
+          // is what samples the uncollected peak.
           const r = retained();
           peakInLoop = Math.max(peakInLoop, r);
           console.log(
@@ -158,26 +176,28 @@ async function main(): Promise<void> {
     }),
   );
 
-  // The FIRST boundary is dropped: it is the only one whose preceding state is
-  // "no batch has ever been read", so it carries the walk's one-time warm-up
-  // (the rule set, the storage handles, the arena's first growth) on top of the
-  // per-page term. Fitting it in reported 301 KB/page on a fixture whose steady
-  // state was 150.
+  // The first FULL boundary is dropped too: it is the only one whose preceding
+  // state is "no batch has ever been read", so it carries the walk's one-time
+  // startup allocation. That allocation does not disappear by being excluded —
+  // it moves into the intercept, which is why the absolute samples are printed.
   const fitted = samples.slice(1);
   const fittedRss = rssSamples.slice(1);
   if (fitted.length < 2) {
     console.log(
-      `\nPAGE LOOP SLOPE  not measurable: ${samples.length} batch boundaries, and the ` +
-        `first is warm-up. Lower --batch, or use more pages.`,
+      `\nPAGE LOOP TAIL SLOPE  not measurable: ${samples.length} full-batch boundaries, ` +
+        `and the first is startup. Lower --batch, or use more pages.`,
     );
   } else {
     console.log(
-      `\nPAGE LOOP SLOPE (batch boundaries 2..${samples.length})  ` +
+      `\nPAGE LOOP TAIL SLOPE (full boundaries 2..${samples.length}, startup excluded)  ` +
         `retained ${(slope(fitted) / 1024).toFixed(0)} KB/page   ` +
         `rss ${(slope(fittedRss) / 1024).toFixed(0)} KB/page`,
     );
   }
-  console.log(`peak-in-loop retained ${(peakInLoop / MB).toFixed(0)} MB (mid-batch samples)`);
+  console.log(
+    `max post-collect retained across mid-batch samples ${(peakInLoop / MB).toFixed(0)} MB ` +
+      `(NOT the container peak — see batch-floor.ts)`,
+  );
 
   // What the RESULT holds after the run, measured by dropping one field at a
   // time: each line is the drop in retained bytes when that reference goes.
