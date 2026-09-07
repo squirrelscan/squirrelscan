@@ -6,6 +6,7 @@ import { articleLinksRule } from "./article-links";
 import { authorInfoRule } from "./author-info";
 import { brokenHtmlRule } from "./broken-html";
 import { dateAgreementRule } from "./date-agreement";
+import { devLeakageRule } from "./dev-leakage";
 import { duplicateDescriptionRule } from "./duplicate-description";
 import { duplicateTitleRule } from "./duplicate-title";
 import { freshnessRule } from "./freshness";
@@ -46,6 +47,7 @@ export const rules: Rule[] = [
   dateAgreementRule,
   placeholderTextRule,
   unrenderedMarkupRule,
+  devLeakageRule,
 ];
 
 export {
@@ -54,6 +56,7 @@ export {
   brokenHtmlRule,
   contentQualityRule,
   dateAgreementRule,
+  devLeakageRule,
   duplicateDescriptionRule,
   duplicateTitleRule,
   freshnessRule,
