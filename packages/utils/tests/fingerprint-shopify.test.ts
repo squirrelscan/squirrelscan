@@ -175,15 +175,17 @@ describe("a block that contains a script", () => {
     // exactly the pages whose blocks needed reordering, and leaves it
     // neutralized for the pages that did not — so two fetches of the SAME page
     // normalize differently, which is the failure the function exists to stop.
-    const a = `<body>${block("aaa", "R1")}${block("bbb", "R1")}</body>`;
-    const b = `<body>${block("bbb", "R2")}${block("aaa", "R2")}</body>`;
+    const one = "d95d8a62-c404-4417-b6ab-289c89e9dd61-1788784074";
+    const two = "33449930-e1b6-47fe-934c-09410b1932fe-1788784195";
+    const a = `<body>${block("aaa", one)}${block("bbb", one)}</body>`;
+    const b = `<body>${block("bbb", two)}${block("aaa", two)}</body>`;
     expect(normalizeHtmlForFingerprint(a)).toBe(normalizeHtmlForFingerprint(b));
     // And the token really is gone, rather than the two just agreeing.
-    expect(normalizeHtmlForFingerprint(b)).not.toContain("R2");
+    expect(normalizeHtmlForFingerprint(b)).not.toContain(two);
   });
 
   test("a change to the contained script still moves the fingerprint", () => {
-    const a = `<body>${block("aaa", "R1")}${block("bbb", "R1")}</body>`;
+    const a = `<body>${block("aaa", "d95d8a62-c404-4417-b6ab-289c89e9dd61")}${block("bbb", "d95d8a62-c404-4417-b6ab-289c89e9dd61")}</body>`;
     const changed = a.replace("window.ShopifyAnalytics.meta=", "window.ShopifyAnalytics.other=");
     expect(normalizeHtmlForFingerprint(changed)).not.toBe(normalizeHtmlForFingerprint(a));
   });
@@ -246,6 +248,70 @@ describe("review counterexamples", () => {
     const one = `<body><script id="__st">var __st={"u":"fc3e51fed339"}</script></body>`;
     const two = `<body><script id="__st">var __st={"u":"be9f47fdfff1"}</script></body>`;
     expect(normalizeHtmlForFingerprint(one)).toBe(normalizeHtmlForFingerprint(two));
+  });
+
+  test("an identity field mentioned near 'ShopifyAnalytics' is still content", () => {
+    // Recognizing the enclosing payload and neutralizing names inside it was
+    // tried and is not tighter: a mention in a COMMENT qualified the whole body.
+    const one = `<body><script>/* ShopifyAnalytics */document.body.textContent=({"u":"Alice"}).u</script></body>`;
+    const two = `<body><script>/* ShopifyAnalytics */document.body.textContent=({"u":"Bob"}).u</script></body>`;
+    expect(normalizeHtmlForFingerprint(one)).not.toBe(normalizeHtmlForFingerprint(two));
+  });
+
+  test("an identity field holding something that is not identity-shaped is content", () => {
+    // Name AND shape, together. A "requestId" holding a slug is a page's own
+    // data; one holding a uuid is Shopify's rotating request id.
+    const slugA = `<body><script>var x={"requestId":"order-alpha"}</script></body>`;
+    const slugB = `<body><script>var x={"requestId":"order-beta"}</script></body>`;
+    expect(normalizeHtmlForFingerprint(slugA)).not.toBe(normalizeHtmlForFingerprint(slugB));
+
+    const uuidA = `<body><script>var x={"requestId":"d95d8a62-c404-4417-b6ab-289c89e9dd61-1788784074"}</script></body>`;
+    const uuidB = `<body><script>var x={"requestId":"33449930-e1b6-47fe-934c-09410b1932fe-1788784195"}</script></body>`;
+    expect(normalizeHtmlForFingerprint(uuidA)).toBe(normalizeHtmlForFingerprint(uuidB));
+  });
+
+  test("a deleted Cloudflare block cannot join text into a tag the sort then eats", () => {
+    // Removing the block outright let a stray `<` before it and an
+    // attribute-looking string after it become a tag that pass 2 sorted.
+    const ext = (x: string) =>
+      `<script src="https://cdn.shopify.com/extensions/${x}/a.js"></script>`;
+    const cf = `<script src="/cdn-cgi/challenge-platform/x"></script>`;
+    const ghost = (x: string) => "<" + cf + ext(x).slice(1);
+    expect(normalizeHtmlForFingerprint(ghost("b") + ext("a"))).not.toBe(
+      normalizeHtmlForFingerprint(ghost("a") + ext("b")),
+    );
+  });
+
+  test("a non-breaking space between blocks is text, not adjacency", () => {
+    const block = (x: string, c: string) =>
+      `<!-- BEGIN app block: shopify://apps/${x}/b/1 -->${c}<!-- END app block -->`;
+    const a = `${block("b", "<p>1</p>")}\u00a0${block("a", "<p>2</p>")}`;
+    const b = `${block("a", "<p>2</p>")}\u00a0${block("b", "<p>1</p>")}`;
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+  });
+
+  test("a canonical or preconnect link to the CDN is metadata, not an asset", () => {
+    const canonical = (x: string) =>
+      `<link rel="canonical" href="https://cdn.shopify.com/extensions/${x}">`;
+    expect(normalizeHtmlForFingerprint(canonical("z") + canonical("a"))).not.toBe(
+      normalizeHtmlForFingerprint(canonical("a") + canonical("z")),
+    );
+  });
+
+  test("sorting composes: assets inside blocks survive the block sort", () => {
+    // The two edit classes overlap. Sorting blocks over raw text discarded the
+    // asset sort inside them, so the same page normalized two ways depending on
+    // the order it arrived in, and f(f(x)) stopped equalling f(x).
+    const ext = (x: string) =>
+      `<script src="https://cdn.shopify.com/extensions/${x}/a.js"></script>`;
+    const block = (x: string, c: string) =>
+      `<!-- BEGIN app block: shopify://apps/${x}/b/1 -->${c}<!-- END app block -->`;
+    const one = block("b", ext("z") + ext("a")) + block("a", "<p>A</p>");
+    const two = block("a", "<p>A</p>") + block("b", ext("z") + ext("a"));
+    expect(normalizeHtmlForFingerprint(one)).toBe(normalizeHtmlForFingerprint(two));
+    expect(normalizeHtmlForFingerprint(normalizeHtmlForFingerprint(one))).toBe(
+      normalizeHtmlForFingerprint(one),
+    );
   });
 
   test("the CDN string in a data attribute does not make a script sortable", () => {
