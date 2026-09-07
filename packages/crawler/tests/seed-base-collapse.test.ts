@@ -17,7 +17,9 @@
 //      refused for reasons the crawler cannot fix.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Duration, Effect, Fiber, Stream } from "effect";
+
+import type { CrawlerEvent } from "@squirrelscan/core-contracts";
 
 import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
@@ -184,22 +186,50 @@ interface CrawlResult {
   fetched: string[];
   /** URLs the crawl came away with a stored 200 page for. */
   stored: string[];
+  /** Every `warning` event the crawl published. */
+  warnings: { code: string; message: string }[];
+  /**
+   * EVERY event seen. Without this a silent-warning assertion cannot tell "no
+   * warning was emitted" from "the subscription was never live", and would pass
+   * against a collector that saw nothing at all.
+   */
+  events: CrawlerEvent["type"][];
 }
 
 async function crawl(site: Record<string, Page>): Promise<CrawlResult> {
   const fetched: string[] = [];
   const fetcher = buildFetcher(site, fetched);
   const storage = new SQLiteStorage(":memory:");
+  const warnings: { code: string; message: string }[] = [];
+  const events: CrawlerEvent["type"][] = [];
   const stored = await Effect.runPromise(
     Effect.gen(function* () {
       yield* storage.init();
       const crawler = yield* createCrawler({ fetcher, storage, config: CONFIG });
+      // Subscribed BEFORE start(), or the seed page's warning is published to
+      // nobody and the assertion below passes against a crawler that never
+      // emits one.
+      const collector = yield* Stream.runForEach(
+        crawler.events.pipe(Stream.takeUntil((e) => e.type === "completed")),
+        (event: CrawlerEvent) =>
+          Effect.sync(() => {
+            events.push(event.type);
+            if (event.type === "warning") {
+              warnings.push({ code: event.code, message: event.message });
+            }
+          }),
+      ).pipe(Effect.fork);
+      yield* Effect.yieldNow();
       const crawlId = yield* crawler.start(`${APEX}/`, `${APEX}/`);
+      // Joined, not ignored: the collector ends when it sees `completed`, so a
+      // timeout here means the stream died or the crawl never completed, and
+      // both must fail the test rather than leave the arrays quietly short.
+      yield* Fiber.join(collector).pipe(Effect.timeout(Duration.seconds(10)));
       const pages = yield* storage.getPages(crawlId);
       return pages.filter((page) => page.status === 200).map((page) => page.normalizedUrl);
     }),
   );
-  return { fetched, stored };
+  return { fetched, stored, warnings, events };
 }
 
 describe("seed probe refused (#1899)", () => {
@@ -223,6 +253,126 @@ describe("seed probe refused (#1899)", () => {
     expect(stored).toContain(`${WWW}/b`);
     // The regression this pins: one page audited, a 150-page audit charged.
     expect(stored.length).toBe(3);
+  });
+
+  test("the crawl says out loud that its base is the wrong host", async () => {
+    // The second detector. The scope rule keeps the crawl whole, so without
+    // this the run looks entirely healthy while describing a host the site
+    // redirects away from — which is how this went unnoticed for weeks.
+    stubRefusedPreamble();
+    const { warnings } = await crawl({
+      [`${APEX}/`]: { body: linksTo(`${WWW}/a`), finalUrl: `${WWW}/` },
+      [`${WWW}/a`]: { body: linksTo() },
+    });
+
+    expect(warnings.map((w) => w.code)).toEqual(["seed-base-mismatch"]);
+    expect(warnings[0]?.message).toContain("example.com");
+    expect(warnings[0]?.message).toContain("www.example.com");
+  });
+
+  test("a canonical on the other host raises it even when the fetch did not redirect", async () => {
+    // An apex that serves the site rather than redirecting still tells us which
+    // host it considers canonical, and that is the same mistake.
+    stubRefusedPreamble();
+    const body =
+      `<!doctype html><html><head><link rel="canonical" href="${WWW}/"></head>` +
+      `<body><a href="${WWW}/a">link</a></body></html>`;
+    const { warnings } = await crawl({
+      [`${APEX}/`]: { body },
+      [`${WWW}/a`]: { body: linksTo() },
+    });
+
+    expect(warnings.map((w) => w.code)).toEqual(["seed-base-mismatch"]);
+    expect(warnings[0]?.message).toContain("canonical");
+  });
+
+  test("a seed page that links only to the other host raises it with no canonical", async () => {
+    // The weakest of the three signals and the one the tech lead asked for by
+    // name. No redirect, no canonical: only the navigation gives it away.
+    stubRefusedPreamble();
+    const { warnings } = await crawl({
+      [`${APEX}/`]: { body: linksTo(`${WWW}/a`, `${WWW}/b`) },
+      [`${WWW}/a`]: { body: linksTo() },
+      [`${WWW}/b`]: { body: linksTo() },
+    });
+
+    expect(warnings.map((w) => w.code)).toEqual(["seed-base-mismatch"]);
+    expect(warnings[0]?.message).toContain("without ever linking back to the base");
+  });
+
+  test("an in-page anchor or mailto link cannot veto the link evidence", async () => {
+    // `parsed.links` drops `#`-only hrefs and non-crawlable schemes before this
+    // sees them, so a skip link resolving onto the base host cannot silence it.
+    // Pinned because it would be a silent false negative on almost every real
+    // page, and nothing in this file would otherwise notice the day it changes.
+    stubRefusedPreamble();
+    const body =
+      `<!doctype html><html><body><a href="#main">skip</a>` +
+      `<a href="mailto:hi@example.com">mail</a><a href="${WWW}/a">link</a></body></html>`;
+    const { warnings } = await crawl({
+      [`${APEX}/`]: { body },
+      [`${WWW}/a`]: { body: linksTo() },
+    });
+
+    expect(warnings.map((w) => w.code)).toEqual(["seed-base-mismatch"]);
+  });
+
+  test("links to unrelated sites neither trigger nor suppress it", async () => {
+    stubRefusedPreamble();
+    const body =
+      `<!doctype html><html><body><a href="https://other.test/x">out</a>` +
+      `<a href="${WWW}/a">link</a></body></html>`;
+    const { warnings } = await crawl({
+      [`${APEX}/`]: { body },
+      [`${WWW}/a`]: { body: linksTo() },
+    });
+
+    // The reported host is the SAME-SITE one, never the unrelated domain.
+    expect(warnings.map((w) => w.code)).toEqual(["seed-base-mismatch"]);
+    expect(warnings[0]?.message).toContain("www.example.com");
+    expect(warnings[0]?.message).not.toContain("other.test");
+  });
+
+  test("one link back to the base is enough to stay silent", async () => {
+    // A single same-site link elsewhere proves nothing. Only a seed page that
+    // never links to its own base has the shape of the collapse.
+    stubRefusedPreamble();
+    const { warnings } = await crawl({
+      [`${APEX}/`]: { body: linksTo(`${APEX}/a`, `${WWW}/b`) },
+      [`${APEX}/a`]: { body: linksTo() },
+      [`${WWW}/b`]: { body: linksTo() },
+    });
+
+    expect(warnings).toEqual([]);
+  });
+
+  test("a crawl whose base agrees with the seed page stays quiet", async () => {
+    stubRefusedPreamble();
+    const { warnings, events } = await crawl({
+      [`${APEX}/`]: { body: linksTo(`${APEX}/a`) },
+      [`${APEX}/a`]: { body: linksTo() },
+    });
+
+    expect(warnings).toEqual([]);
+    // Proves the silence is the crawler's and not a dead subscription.
+    expect(events).toContain("page:fetched");
+    expect(events).toContain("completed");
+  });
+
+  test("it reports once, not once per source of evidence", async () => {
+    // The seed here redirects to www AND canonicalises there AND links only
+    // there. All three detectors see it; one warning comes out.
+    stubRefusedPreamble();
+    const body =
+      `<!doctype html><html><head><link rel="canonical" href="${WWW}/"></head>` +
+      `<body><a href="${WWW}/a">link</a></body></html>`;
+    const { warnings } = await crawl({
+      [`${APEX}/`]: { body, finalUrl: `${WWW}/` },
+      [`${WWW}/a`]: { body: linksTo() },
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("landed on");
   });
 
   test("the seed probe identifies itself with the crawl's user agent", async () => {

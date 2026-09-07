@@ -749,7 +749,36 @@ export type CrawlerEvent =
       durationMs: number;
       timestamp: number;
     }
+  | {
+      /**
+       * The crawl found something a human should see and carried on anyway.
+       * Non-fatal by construction — `error` is the other case — so a consumer
+       * that ignores this type loses information but never correctness.
+       *
+       * Added for squirrelscan/repo#1899, where a crawl audited the wrong half
+       * of an apex/www pair and said nothing: `logger.warn` reaches a terminal
+       * or a container's stdout, neither of which is where a hosted run is
+       * investigated weeks later. This rides the event stream the run already
+       * records.
+       */
+      type: "warning";
+      code: CrawlWarningCode;
+      message: string;
+      timestamp: number;
+    }
   | { type: "error"; error: string; fatal: boolean; timestamp: number };
+
+/**
+ * Stable keys for {@link CrawlerEvent} warnings, so a consumer can branch or
+ * aggregate without parsing the prose in `message`.
+ *
+ * `seed-base-mismatch`: the crawl's base origin disagrees with where the seed
+ * page itself landed, or with the canonical the seed page declares, on the same
+ * site. The base is pinned from one probe before anything is fetched; when that
+ * probe cannot see an apex→www redirect the whole audit describes the wrong
+ * host. The page fetch is the first evidence that contradicts it.
+ */
+export type CrawlWarningCode = "seed-base-mismatch";
 
 export interface AuditLifecycleEvent {
   type:

@@ -3,7 +3,7 @@
 import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import type { Stream, Effect } from "effect";
 
-import type { RedirectChain } from "@squirrelscan/core-contracts";
+import type { CrawlWarningCode, RedirectChain } from "@squirrelscan/core-contracts";
 
 import type { CrawlStorage, CrawlStats, StorageError } from "../storage/types";
 import type { TlsEvent } from "../fetcher";
@@ -204,6 +204,7 @@ export type CrawlerEvent =
   | CrawlerResumedEvent
   | CrawlerRateLimitedEvent
   | CrawlerCompletedEvent
+  | CrawlerWarningEvent
   | CrawlerErrorEvent;
 
 export interface CrawlerStartedEvent {
@@ -340,6 +341,21 @@ export interface CrawlerCompletedEvent {
   type: "completed";
   stats: CrawlStats;
   durationMs: number;
+  timestamp: number;
+}
+
+/**
+ * Something a human should see that did not stop the crawl (#1899).
+ *
+ * `code` is the machine key and lives in core-contracts, because THIS UNION IS A
+ * DUPLICATE of the one there: a consumer outside this package reads that copy,
+ * so an event added to one and not the other type-checks locally and is invisible
+ * to every consumer. Both must move together.
+ */
+export interface CrawlerWarningEvent {
+  type: "warning";
+  code: CrawlWarningCode;
+  message: string;
   timestamp: number;
 }
 

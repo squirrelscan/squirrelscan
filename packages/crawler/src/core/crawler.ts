@@ -472,6 +472,66 @@ export function createCrawler(
     // this database can still revalidate against it.
     const cacheStore = options.cacheStore ?? new StorageCacheStore(storage);
 
+    /**
+     * A host on the crawl's own site that the base should have been pinned to,
+     * or null when `candidateUrl` agrees with the base (squirrelscan/repo#1899).
+     *
+     * The base is decided by one probe of the seed before anything is fetched.
+     * When that probe is refused — a WAF 403 carries no `Location`, so it is
+     * indistinguishable from an apex that serves the site — the base stays on
+     * the seed's host while the site lives on another. The seed page's own fetch
+     * is the first evidence that contradicts it, and it arrives too late to move
+     * the base: every root probe has already run against the wrong origin.
+     *
+     * A DIFFERENT SITE is not this. That is the #1418 case, refused deliberately
+     * by `resolveSeedRedirect` and already logged where it happens; repeating it
+     * here would turn a security decision into a bug report.
+     */
+    const sameSiteHostOtherThanBase = (candidateUrl: string): string | null => {
+      let host: string;
+      let baseHost: string;
+      try {
+        host = new URL(candidateUrl).host.toLowerCase();
+        baseHost = new URL(baseUrl).host.toLowerCase();
+      } catch {
+        return null;
+      }
+      if (!host || host === baseHost) return null;
+      if (isOffSiteFinalUrl(baseUrl, candidateUrl)) return null;
+      return host;
+    };
+
+    /**
+     * Once per crawl. Three sources of evidence feed this, in descending
+     * strength, and a seed can be re-processed; reporting each would turn one
+     * finding into a stream of them and make the count meaningless.
+     */
+    let seedBaseMismatchReported = false;
+
+    const reportSeedBaseMismatch = (
+      host: string,
+      evidence: string,
+    ): Effect.Effect<void, never, never> =>
+      Effect.gen(function* () {
+        if (seedBaseMismatchReported) return;
+        seedBaseMismatchReported = true;
+        // States what was OBSERVED and offers the cause as a possibility. A
+        // mis-pinned base is the likeliest explanation and the one worth acting
+        // on, but an apex can serve content and canonicalize elsewhere without
+        // ever redirecting, and this cannot tell those apart from here.
+        const message =
+          `the crawl is based on ${new URL(baseUrl).host} but the seed page ${evidence} ` +
+          `${host}. The base is pinned from a probe made before any page was fetched, so if ` +
+          `that probe could not see a redirect, this audit describes the wrong host of the two`;
+        logger.warn("seed base mismatch", message);
+        yield* emit({
+          type: "warning",
+          code: "seed-base-mismatch",
+          message,
+          timestamp: Date.now(),
+        });
+      });
+
     // ----------------------------------------
     // URL Normalization and Scope
     // ----------------------------------------
@@ -1341,6 +1401,25 @@ export function createCrawler(
             xRobotsTag: result.securityHeaders.xRobotsTag ?? null,
           };
 
+          // The second detector for a mis-pinned base (#1899). The seed page is
+          // the first thing the crawl fetches with its own agent, its own
+          // headers and its retry stack, so it gets through where the bare
+          // preamble probe did not — and where it LANDS is evidence the probe
+          // never had. Strongest of the three signals, and the only one that
+          // does not need the body, so it sits outside the HTML branch: a seed
+          // serving a PDF still proves which host the site is on.
+          //
+          // This does not move the base and must not: the root probes are
+          // already done against it, and re-basing mid-crawl would file one
+          // origin's content under another's name. It reports, and the apex/www
+          // scope rule keeps the crawl whole meanwhile. So it fires on a crawl
+          // that then succeeds, deliberately — that the audit describes a host
+          // the site redirects away from is worth knowing either way.
+          if (entry.source === "seed") {
+            const landedHost = sameSiteHostOtherThanBase(result.finalUrl);
+            if (landedHost) yield* reportSeedBaseMismatch(landedHost, "landed on");
+          }
+
           // Parse and discover URLs if HTML (before storing page)
           let parsedData: string | null = null;
           if (
@@ -1359,6 +1438,82 @@ export function createCrawler(
               options.parsedPageCache.size < PARSED_PAGE_CACHE_MAX_PAGES
             ) {
               options.parsedPageCache.set(entry.normalizedUrl, parsed);
+            }
+
+            // The second detector for a mis-pinned base (#1899). The seed page
+            // is the first thing the crawl fetches with its own agent, its own
+            // headers and its retry stack, so it gets through where the bare
+            // preamble probe did not — and where it LANDS, plus the canonical it
+            // declares, is evidence the probe never had.
+            //
+            // This does not move the base and must not: the root probes are
+            // already done against it, and re-basing mid-crawl would file one
+            // origin's content under another's name. It reports, and the
+            // apex/www scope rule keeps the crawl whole meanwhile. So it fires
+            // on a crawl that then succeeds, deliberately — the point is that
+            // the audit describes a host the site redirects away from, which is
+            // worth knowing whether or not the pages were reached.
+            // Second-strongest evidence: the host the seed page itself says it
+            // is. Gated on a successful response — an error page's canonical
+            // describes the error template, not the site.
+            if (entry.source === "seed" && result.status >= 200 && result.status < 300) {
+              // Resolved against the page, since a canonical may be relative.
+              let canonicalHost: string | null = null;
+              if (parsed.meta.canonical) {
+                try {
+                  canonicalHost = sameSiteHostOtherThanBase(
+                    new URL(parsed.meta.canonical, result.finalUrl).href,
+                  );
+                } catch {
+                  canonicalHost = null;
+                }
+              }
+              if (canonicalHost) {
+                yield* reportSeedBaseMismatch(canonicalHost, "declares a canonical on");
+              }
+
+              // Weakest evidence, and so the strictest test: a seed page that
+              // links to its own site but NEVER to the base host is the shape of
+              // the collapse. One stray same-site link proves nothing, so a
+              // single link back to the base is enough to stay silent.
+              //
+              // Read off `parsed.links`, not the crawlable set: that set is
+              // already filtered to the PAGE's own hostname, so on exactly the
+              // origin this is trying to describe — an apex serving the site
+              // while every link points at www — it is empty.
+              //
+              // `parsed.links` has already dropped `#`-only anchors and
+              // mailto:/tel: (`shouldSkipUrl`), so an in-page skip link cannot
+              // resolve onto the base host and veto this. Off-site links are
+              // ignored rather than counted either way: `elsewhere` only takes a
+              // SAME-SITE host, so a page linking to www plus a dozen other
+              // domains still reports, and reports the same-site host.
+              const baseHost = new URL(baseUrl).host.toLowerCase();
+              let elsewhere: string | null = null;
+              let onBase = false;
+              for (const link of parsed.links) {
+                let host: string;
+                try {
+                  host = new URL(link.url, result.finalUrl).host.toLowerCase();
+                } catch {
+                  continue;
+                }
+                if (host === baseHost) {
+                  onBase = true;
+                  break;
+                }
+                elsewhere ??= sameSiteHostOtherThanBase(new URL(link.url, result.finalUrl).href);
+              }
+              if (!onBase && elsewhere) {
+                // Not "links only to X": the page may link to several same-site
+                // hosts, and to any number of other sites. What was actually
+                // observed is that nothing points back at the base, and `elsewhere`
+                // is the first same-site host that does not.
+                yield* reportSeedBaseMismatch(
+                  elsewhere,
+                  "links to its own site without ever linking back to the base, for example at",
+                );
+              }
             }
 
             // Reuse document for URL extraction (no second parse)
@@ -2079,6 +2234,10 @@ export function createCrawler(
         prefixStats.clear();
         pendingDepth1Count = 0;
 
+        // A crawler instance can start more than one crawl, and the base moves
+        // with each; the previous crawl's report must not silence this one.
+        seedBaseMismatchReported = false;
+
         // Reset pattern stats for new crawl
         clearPatternStats(patternStats);
 
@@ -2535,6 +2694,9 @@ export function createCrawler(
         currentCrawlId = crawlId;
         isRunning = true;
         isPaused = false;
+        // A restart re-crawls from an empty frontier, so it is a fresh run for
+        // reporting purposes and must be able to say this again (#1899).
+        seedBaseMismatchReported = false;
 
         // Merge new config with existing
         const mergedConfig = { ...crawl.config, ...newConfig };
