@@ -63,22 +63,29 @@ for (let offset = 0; ; offset += BATCH) {
 const after = retained();
 const pages = kept.length;
 
-// Ordered biggest-suspect first only for readability; the drops are independent
-// because no two fields share structure.
-const FIELDS = [
-  "links",
-  "images",
-  "content",
-  "schemas",
-  "schema",
-  "headings",
-  "meta",
-  "og",
-  "twitter",
-  "h1",
-  "contactLinks",
-  "author",
-  "pageType",
+// GROUPS, not fields, because two pairs ALIAS each other on a fresh parse and a
+// per-field drop would attribute the shared data to whichever half is deleted
+// second (adapter.ts's parseHtmlForRules):
+//
+//   h1.texts   IS headings.h1Texts
+//   schema.{types,valid,errors,raw} ARE schemas.{types,valid,errors,raw}
+//
+// Deleting `schemas` alone freed 1 KB/page here and `schema` then freed 5, which
+// reads as "the deprecated field is the expensive one" and is an artifact of the
+// order. Everything else owns its structure, so the remaining rows are true
+// independent drops.
+const FIELD_GROUPS: Array<[string, string[]]> = [
+  ["links", ["links"]],
+  ["images", ["images"]],
+  ["content", ["content"]],
+  ["schema+schemas", ["schemas", "schema"]],
+  ["headings+h1", ["headings", "h1"]],
+  ["meta", ["meta"]],
+  ["og", ["og"]],
+  ["twitter", ["twitter"]],
+  ["contactLinks", ["contactLinks"]],
+  ["author", ["author"]],
+  ["pageType", ["pageType"]],
 ];
 
 console.log(
@@ -89,10 +96,10 @@ console.log(
 
 let prev = after;
 const rows: Array<[string, number]> = [];
-for (const field of FIELDS) {
-  for (const page of kept) page[field] = undefined;
+for (const [label, fields] of FIELD_GROUPS) {
+  for (const page of kept) for (const field of fields) page[field] = undefined;
   const now = retained();
-  rows.push([field, prev - now]);
+  rows.push([label, prev - now]);
   prev = now;
 }
 kept.length = 0;

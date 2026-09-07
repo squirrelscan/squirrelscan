@@ -6,9 +6,26 @@
 // a flat loop over a leak and a rising loop over churn. heapUsed + external is
 // the retention measure (see #234 / the detach work).
 //
-// This samples BOTH at every heartbeat, each after a synchronous collect, and
-// reports the per-page slope of each across the loop. A gap between the two
-// slopes means the growth is allocator residency, not retained data.
+// This samples BOTH, each after a synchronous collect, at two different points:
+//
+//   - at every BATCH BOUNDARY, which is where the slope comes from. Inside a
+//     batch the loop releases each page's document as it finishes it, so the
+//     batch's working set is DRAINING while the accumulators fill; a slope
+//     fitted to mid-batch samples mixes the two and can report a negative
+//     per-page retention for a loop whose accumulators are growing. A crawl
+//     that fits in one batch reports no slope at all, which is honest.
+//   - at every heartbeat, as an in-batch trace, for the peak. Reported, not
+//     fitted.
+//
+// A gap between the retained and RSS slopes means the growth is allocator
+// residency, not retained data.
+//
+// This is a DIAGNOSTIC, not a measurement of any one structure. Its slope moves
+// by a factor of two between runs of the same fixture, because a whole-pipeline
+// heapUsed sample carries the arena's growth policy along with the data. To
+// attribute bytes to a structure, drop that structure inside one process and
+// re-collect — page-loop-census.ts and universe-field-census.ts do that, and
+// their per-page figures repeat exactly at 50, 100 and 150 pages.
 //
 //   bun run scripts/page-loop-growth.ts --db /tmp/real150.sqlite --batch 50
 //
@@ -89,6 +106,7 @@ async function main(): Promise<void> {
   );
 
   const started = new Map<StreamingRulePhase, { retained: number; rss: number }>();
+  /** Batch-boundary samples — the only ones the slope is fitted to. */
   const samples: Array<[number, number]> = [];
   const rssSamples: Array<[number, number]> = [];
   let peakInLoop = 0;
@@ -111,30 +129,55 @@ async function main(): Promise<void> {
             `(${((toRss - from.rss) / MB).toFixed(0).padStart(5)})`,
         );
       },
+      hooks: {
+        onBatch: ({ batchIndex, pagesDone }) => {
+          const r = retained();
+          const s = rss();
+          samples.push([pagesDone, r]);
+          rssSamples.push([pagesDone, s]);
+          console.log(
+            `  batch ${String(batchIndex).padStart(3)} end (${String(pagesDone).padStart(4)} pages)  ` +
+              `retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  rss=${`${(s / MB).toFixed(0)}`.padStart(5)} MB`,
+          );
+        },
+      },
       pageLoopHooks: {
         heartbeatEveryPages: EVERY,
         onProgress: (done) => {
+          // Peak only. See the header: these land mid-batch, where the batch's
+          // documents are part-released, so they are not comparable to each
+          // other and must not be fitted.
           const r = retained();
-          const s = rss();
           peakInLoop = Math.max(peakInLoop, r);
-          samples.push([done, r]);
-          rssSamples.push([done, s]);
           console.log(
             `  pages ${String(done).padStart(4)}  retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  ` +
-              `rss=${`${(s / MB).toFixed(0)}`.padStart(5)} MB`,
+              `rss=${`${(rss() / MB).toFixed(0)}`.padStart(5)} MB`,
           );
         },
       },
     }),
   );
 
-  const perPage = slope(samples);
-  const perPageRss = slope(rssSamples);
-  console.log(
-    `\nPAGE LOOP SLOPE  retained ${(perPage / 1024).toFixed(0)} KB/page   ` +
-      `rss ${(perPageRss / 1024).toFixed(0)} KB/page   ` +
-      `peak-in-loop retained ${(peakInLoop / MB).toFixed(0)} MB`,
-  );
+  // The FIRST boundary is dropped: it is the only one whose preceding state is
+  // "no batch has ever been read", so it carries the walk's one-time warm-up
+  // (the rule set, the storage handles, the arena's first growth) on top of the
+  // per-page term. Fitting it in reported 301 KB/page on a fixture whose steady
+  // state was 150.
+  const fitted = samples.slice(1);
+  const fittedRss = rssSamples.slice(1);
+  if (fitted.length < 2) {
+    console.log(
+      `\nPAGE LOOP SLOPE  not measurable: ${samples.length} batch boundaries, and the ` +
+        `first is warm-up. Lower --batch, or use more pages.`,
+    );
+  } else {
+    console.log(
+      `\nPAGE LOOP SLOPE (batch boundaries 2..${samples.length})  ` +
+        `retained ${(slope(fitted) / 1024).toFixed(0)} KB/page   ` +
+        `rss ${(slope(fittedRss) / 1024).toFixed(0)} KB/page`,
+    );
+  }
+  console.log(`peak-in-loop retained ${(peakInLoop / MB).toFixed(0)} MB (mid-batch samples)`);
 
   // What the RESULT holds after the run, measured by dropping one field at a
   // time: each line is the drop in retained bytes when that reference goes.
