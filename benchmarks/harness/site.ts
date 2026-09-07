@@ -23,6 +23,7 @@
  * Prints the chosen port on stdout, then serves until killed.
  */
 
+import { parseDocument } from "@squirrelscan/parser";
 const basePath = process.argv[2];
 const N = Number(process.argv[3] ?? 1000);
 const portArgIdx = process.argv.indexOf("--port");
@@ -61,9 +62,8 @@ function tplFor(i: number): Tpl {
 // ── collection template: real page with most inline script removed ──
 // Parsed with a real HTML parser rather than a regex, so `</script >` variants and
 // nested `<script` text cannot leak through (CodeQL js/bad-tag-filter).
-import { parseHTML } from "linkedom";
 const COLLECTION_BASE = (() => {
-  const { document } = parseHTML(BASE);
+  const document = parseDocument(BASE);
   const scripts = Array.from(document.querySelectorAll("script"));
   for (const el of scripts.slice(6)) el.remove();
   return document.toString();

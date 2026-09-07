@@ -3,12 +3,18 @@
  * Reads: rss.log (external sampler), mem.jsonl (in-process probe),
  *        audit.time (/usr/bin/time -l), report.json, audit.out.
  */
-import { statSync, existsSync, readFileSync } from "node:fs";
+import { statSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 
 const dir = process.argv[2];
 const mb = (b: number) => (b / 1048576).toFixed(0);
-const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
+const read = (p: string) => {
+  try {
+    return readFileSync(p, "utf8");
+  } catch {
+    return "";
+  }
+};
 
 // ── external RSS sampler ────────────────────────────────────────
 const rss = read(`${dir}/rss.log`)
@@ -81,9 +87,19 @@ if (rpText !== null) {
 const project = read(`${dir}/project.txt`).trim() || read(`${dir}/project`).trim();
 const slug = project.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 const pdb = `${homedir()}/.squirrel/projects/${slug}/project.db`;
-const pdbSize = existsSync(pdb) ? statSync(pdb).size : 0;
+let pdbSize = 0;
+try {
+  pdbSize = statSync(pdb).size;
+} catch {
+  pdbSize = 0;
+}
 const csdb = `${homedir()}/.squirrel/content-store.db`;
-const csSize = existsSync(csdb) ? statSync(csdb).size : 0;
+let csSize = 0;
+try {
+  csSize = statSync(csdb).size;
+} catch {
+  csSize = 0;
+}
 
 // ── phase attribution from rss.log shape ────────────────────────
 // print a coarse profile: RSS at 10% intervals of wall time
