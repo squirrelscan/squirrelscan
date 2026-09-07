@@ -36,8 +36,13 @@
 //   bun run scripts/build-mixed-fixture.ts --db /tmp/mix400.sqlite --pages 400
 //   bun run scripts/rules-scaling-bench.ts --dbs /tmp/mix400.sqlite,/tmp/mix2500.sqlite
 //
-// The CLI runs v1 (`runRulesOnStorage`, every page resident) and the cloud runs
-// the streamed pass; #1910 measured the CLI, so both are timed. With `--profile`
+// Both rule paths are timed. When #1910 was filed the CLI's `audit` ran v1
+// (`runRulesOnStorage`, every page held resident through the rules pass) and the
+// cloud ran the streamed pass, and #1910 measured the CLI. #252 has since moved
+// `audit` onto the streamed pipeline, so v1 now serves `squirrel analyze` and
+// any caller still on `runRulesOnStorage` — which is why it is still measured
+// here, and why the arm that turns out to be the superlinear one is the one
+// being retired rather than the one most audits run. With `--profile`
 // the parent also splits each arm into its page-scope and site-scope halves from
 // the rule profiler, because a near-linear total cannot rule out a superlinear
 // site component hiding inside it.

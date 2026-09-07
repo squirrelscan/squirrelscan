@@ -128,6 +128,15 @@ export const templateDiscontinuityRule: Rule = {
     // on a site that actually has outliers, which is why a corpus of uniformly
     // themed pages never showed it (#1910).
     //
+    // The saving is ASYMPTOTIC, not something you can see today. At the largest
+    // share the rule can be given (one page in three; at one in two the baseline
+    // absorbs both groups and there are no outliers at all) 2,500 pages is
+    // 833 outliers over 2,500 entries, about a million string compares, which is
+    // a small part of a rule that takes ~215 ms. Measured before and after at
+    // that size and share on a quiet machine: 215 ms and 225 ms, i.e. nothing.
+    // The term is real and grows as f*n^2; it is simply not what dominates at a
+    // size this fixture can reach.
+    //
     // LAZY, so a site with no outliers pays nothing and an outlier run pays one
     // O(n) build instead of one O(n) scan per outlier, and FIRST-WINS, because
     // `find` returned the first match and `SiteData.pages` is caller-supplied
