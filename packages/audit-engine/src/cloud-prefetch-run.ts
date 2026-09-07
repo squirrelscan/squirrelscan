@@ -535,10 +535,15 @@ export function createCloudPrefetchCollector(siteUrl: string): {
         if (home && !sample.includes(home)) sample.push(home);
       }
       // The batches these entries came from were released long ago; re-parse.
+      // Deterministic: `buildSiteContext` never yields a non-null `parsed`
+      // without html, so every retained entry can be rebuilt identically.
       ensureSiteContextDocuments(sample);
       const metadataPages = buildMetadataPayload(sample, siteUrl);
       // Release again — the sample is not read past this point, and the caller
-      // may still have a long network phase ahead of it.
+      // may still have a long network phase ahead of it. NOTE this mutates
+      // entries the caller handed to `absorb`; both callers release the whole
+      // context immediately after anyway, but a future caller that still needs
+      // those DOMs must re-materialize them.
       releaseSiteContextDocuments(sample);
 
       const urls = [...blocklistUrls];

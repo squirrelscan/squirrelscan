@@ -436,8 +436,14 @@ export function buildV1Report(
     const pageStatuses: Array<{ status: number }> = [];
     let pagesCrawled = 0;
     for (let offset = 0; ; offset += batchSize) {
-      // Fail-loud: a mid-stream read failure must not masquerade as end-of-crawl
-      // and silently truncate the report's page set (matches streamPageRules).
+      // Fail-loud, and a deliberate change from the single resident read this
+      // replaced. That read degraded to `[]` on failure, which produced a
+      // `totalPages: 0` report — wrong, but visibly wrong. Degrading a BATCHED
+      // read the same way is worse: it would end the walk at an arbitrary offset
+      // and publish a confident report over a truncated page set. So a mid-walk
+      // read failure now kills the run instead. The cost is that a caller which
+      // used to get a failed-looking report for an unreadable crawl now gets a
+      // rejected promise (matches streamPageRules and site-query.ts).
       const batch = yield* storage
         .getPages(crawlId, { limit: batchSize, offset })
         .pipe(Effect.orDie);
