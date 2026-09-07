@@ -7,9 +7,8 @@
 // which is a different event: a 10,000-page request against a 4,000-page site
 // was clamped and never mentioned.
 
-import { describe, expect, test } from "bun:test";
-
 import { MAX_PAGES_CAP } from "@squirrelscan/core-contracts/limits";
+import { describe, expect, test } from "bun:test";
 
 import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 
@@ -62,7 +61,8 @@ describe("resolvePageLimit", () => {
 
 describe("pageLimitNotice", () => {
   test("says 'unlimited' rather than a rendering artefact for Infinity", () => {
-    const notice = pageLimitNotice(resolvePageLimit(Number.POSITIVE_INFINITY)) ?? "";
+    const notice =
+      pageLimitNotice(resolvePageLimit(Number.POSITIVE_INFINITY)) ?? "";
     expect(notice).toContain("unlimited pages");
     expect(notice).not.toContain("∞");
   });

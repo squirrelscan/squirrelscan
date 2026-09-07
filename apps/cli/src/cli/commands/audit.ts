@@ -60,6 +60,7 @@ import {
   type ReportVisibility,
 } from "@/controllers/report/publish";
 import { formatBalance, isUnlimitedBalance } from "@/lib/balance";
+import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 import {
   createRunFinalizer,
   type FinalizeRunInput,
@@ -93,7 +94,6 @@ import { safeExit } from "@/self/updater";
 import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { configureLogger, logger, setLogInterceptor } from "@/utils/logger";
 import { getProjectNameContext, parseUserUrl } from "@/utils/url";
-import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 
 import { version as packageVersion } from "../../../package.json";
 import {
@@ -1190,7 +1190,9 @@ export const audit = defineCommand({
         url: args.url,
         maxPages,
         // Carried so the report can record the clamp; the controller stamps it.
-        ...(pageLimit.clamped ? { requestedMaxPages: pageLimit.requested } : {}),
+        ...(pageLimit.clamped
+          ? { requestedMaxPages: pageLimit.requested }
+          : {}),
         maxDepth,
         outputFormat: args.format as
           | "console"

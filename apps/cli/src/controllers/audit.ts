@@ -75,6 +75,7 @@ import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { getGlobalLinkCache } from "@/crawler/storage/link-cache";
 import { preflightBalanceOf } from "@/lib/balance";
+import { resolvePageLimit } from "@/lib/page-limit";
 import { reconstructReport } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
@@ -89,7 +90,6 @@ import {
   parseUserUrl,
 } from "@/utils/url";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
-import { resolvePageLimit } from "@/lib/page-limit";
 
 /**
  * Fields that affect crawl scope - changes require fresh crawl_id
@@ -1614,7 +1614,9 @@ export async function runAudit(
         // recompute here, since a caller reaching the controller directly never
         // passed through that layer (#1909).
         const requested =
-          options.requestedMaxPages ?? options.maxPages ?? config.crawler.max_pages;
+          options.requestedMaxPages ??
+          options.maxPages ??
+          config.crawler.max_pages;
         const scopeLimit = resolvePageLimit(requested);
         // FINITE only. `[crawler] max_pages = inf` is a real clamp and the
         // command says so on stderr, but `JSON.stringify(Infinity)` is `null`,
@@ -1625,7 +1627,9 @@ export async function runAudit(
         report.scanScope = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
-          ...(recordRequested ? { requestedMaxPages: scopeLimit.requested } : {}),
+          ...(recordRequested
+            ? { requestedMaxPages: scopeLimit.requested }
+            : {}),
           pagesCrawled: report.pages.length,
           capped: report.pages.length >= scopeMaxPages,
         };

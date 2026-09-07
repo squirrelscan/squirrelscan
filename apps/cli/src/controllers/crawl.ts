@@ -24,12 +24,12 @@ import {
 } from "@/controllers/types";
 import { createCrawler } from "@/crawler/core";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
+import { resolvePageLimit } from "@/lib/page-limit";
 import { initRequestTool } from "@/tools/request";
 import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
 import { getHostname, isLoopbackHost, parseUserUrl } from "@/utils/url";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
-import { resolvePageLimit } from "@/lib/page-limit";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
 

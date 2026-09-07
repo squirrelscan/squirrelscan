@@ -11,12 +11,12 @@ import {
   COVERAGE_FULL_MAX_PAGES,
 } from "@/constants";
 import { runCrawl, type CrawlerEvent } from "@/controllers/crawl";
+import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { loadUserSettings, updateSettings } from "@/self/settings";
 import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { logger, setLogInterceptor } from "@/utils/logger";
 import { getProjectNameContext, parseUserUrl } from "@/utils/url";
-import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 
 import { version as packageVersion } from "../../../package.json";
 import {
