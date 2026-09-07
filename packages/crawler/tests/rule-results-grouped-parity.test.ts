@@ -92,6 +92,39 @@ describe("getRuleResultsGrouped", () => {
     expect(grouped.byPage.get("")![0]?.pageUrl).toBeUndefined();
   });
 
+  test("parity holds under an index that reorders the ties (#1920)", async () => {
+    // The version of this that read once ORDER BY id and grouped passed every
+    // other test here, because on today's schema both original queries happen to
+    // return their ties in id order. Add an index that makes the per-rule query
+    // walk in page_url order and the two disagree: a, m, z against z, a, m. That
+    // is the emitted issue order, so it has to come from SQLite rather than from
+    // an assumption about ties.
+    const store = await storeWith([
+      { page: "https://e.test/z", rule: "seo/title", check: "title-present" },
+      { page: "https://e.test/a", rule: "seo/title", check: "title-present" },
+      { page: "https://e.test/m", rule: "seo/title", check: "title-present" },
+    ]);
+    // Reaching into the connection deliberately: the point is a DIFFERENT query
+    // plan from the one the schema gives today.
+    (
+      store as unknown as { getDb(): { exec(sql: string): void } }
+    ).getDb().exec(
+      "CREATE INDEX IF NOT EXISTS idx_rr_probe ON rule_results (crawl_id, rule_id, page_url)"
+    );
+
+    const byRuleId = await run(store.getRuleResultsByRuleId("crawl-1"));
+    const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
+
+    expect(grouped.byRuleId.get("seo/title")?.map((c) => c.pageUrl)).toEqual(
+      byRuleId.get("seo/title")!.map((c) => c.pageUrl)
+    );
+    expect(grouped.byRuleId).toEqual(byRuleId);
+
+    const byPage = await run(store.getRuleResultsByPage("crawl-1"));
+    expect([...grouped.byPage.keys()]).toEqual([...byPage.keys()]);
+    expect(grouped.byPage).toEqual(byPage);
+  });
+
   test("an empty crawl yields two empty maps, not an error", async () => {
     const store = new SQLiteStorage(":memory:");
     await run(store.init());

@@ -3093,26 +3093,7 @@ export class SQLiteStorage implements CrawlStorage {
         const result = new Map<string, CheckResult[]>();
         for (const row of rows) {
           const pageUrl = row.page_url as string;
-          const check: CheckResult = {
-            name: row.check_name as string,
-            status: row.status as CheckResult["status"],
-            message: row.message as string,
-            value:
-              row.value !== null ? (row.value as string | number) : undefined,
-            expected:
-              row.expected !== null
-                ? (row.expected as string | number)
-                : undefined,
-            pageUrl: pageUrl || undefined,
-            items: row.items ? JSON.parse(row.items as string) : undefined,
-            details: row.details
-              ? JSON.parse(row.details as string)
-              : undefined,
-            pages: row.pages ? JSON.parse(row.pages as string) : undefined,
-            skipReason: row.skip_reason
-              ? (row.skip_reason as string)
-              : undefined,
-          };
+          const check = this.rowToCheckResult(row);
           const existing = result.get(pageUrl) ?? [];
           existing.push(check);
           result.set(pageUrl, existing);
@@ -3141,27 +3122,7 @@ export class SQLiteStorage implements CrawlStorage {
         const result = new Map<string, CheckResult[]>();
         for (const row of rows) {
           const ruleId = row.rule_id as string;
-          const pageUrl = row.page_url as string;
-          const check: CheckResult = {
-            name: row.check_name as string,
-            status: row.status as CheckResult["status"],
-            message: row.message as string,
-            value:
-              row.value !== null ? (row.value as string | number) : undefined,
-            expected:
-              row.expected !== null
-                ? (row.expected as string | number)
-                : undefined,
-            pageUrl: pageUrl || undefined,
-            items: row.items ? JSON.parse(row.items as string) : undefined,
-            details: row.details
-              ? JSON.parse(row.details as string)
-              : undefined,
-            pages: row.pages ? JSON.parse(row.pages as string) : undefined,
-            skipReason: row.skip_reason
-              ? (row.skip_reason as string)
-              : undefined,
-          };
+          const check = this.rowToCheckResult(row);
           const existing = result.get(ruleId) ?? [];
           existing.push(check);
           result.set(ruleId, existing);
@@ -3173,25 +3134,27 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
-   * Both groupings of a crawl's rule results, from ONE read (#1920).
+   * Both groupings of a crawl's rule results, from ONE materialization (#1920).
    *
    * `getRuleResultsByPage` and `getRuleResultsByRuleId` differ only in their
-   * `ORDER BY`; every other line, including the CheckResult they build per row,
-   * is the same. The report path calls both, so a crawl's checks were read
-   * twice and materialized twice: at 1,000 pages that is 203,687 rows, 204 per
-   * page, and about 500 bytes of object per 55 bytes of data.
+   * `ORDER BY`; every other line, including the CheckResult built per row, is
+   * the same. The report path calls both, so a crawl's checks were read twice
+   * and materialized twice: at 1,000 pages that is 203,687 rows, 204 per page,
+   * and about 500 bytes of object per 55 bytes of data. Measured in isolation,
+   * the two reads grow RSS by 441 MB against 249 MB for this one.
    *
-   * Here the rows are read once and each CheckResult is SHARED by both maps, so
-   * the second grouping is two Maps of references rather than a second copy.
+   * ORDER COMES FROM SQLITE, not from a rule about ties. An earlier version of
+   * this read once `ORDER BY id` and grouped, having measured that both original
+   * queries returned their ties in `id` order. That was incidental to today's
+   * indexes: with an index on `(crawl_id, rule_id, page_url)` the per-rule query
+   * returns its ties in page_url order instead, and the emitted issue order
+   * changes with it. SQLite leaves tied `ORDER BY` rows unordered by contract.
    *
-   * The orders are preserved exactly. Measured on a 1,000-page crawl, both
-   * `ORDER BY page_url` and `ORDER BY rule_id` return their ties in `id` order
-   * (0 rows out of order across 203,687), and each is identical to the fully
-   * specified `ORDER BY <column>, id` — so reading in `id` order and grouping
-   * gives each map the within-key order it had. The KEY order comes from SQLite
-   * rather than from sorting in JS, because SQLite's BINARY collation compares
-   * UTF-8 bytes while JavaScript compares UTF-16 code units, and the two
-   * disagree on some non-ASCII urls.
+   * So the heavy work happens once and the ORDER is asked for twice, with the
+   * same `ORDER BY` each original used, reading only `id` and the grouping key.
+   * Those two extra queries carry integers and one short string per row instead
+   * of a parsed CheckResult, and the result is byte-identical to the readers
+   * this replaces under any index or query plan.
    */
   getRuleResultsGrouped(crawlId: string): Effect.Effect<
     {
@@ -3204,53 +3167,41 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const rows = db
-          .prepare(
-            "SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY id"
-          )
-          .all(crawlId) as Record<string, unknown>[];
 
-        // Grouped in row order first; the maps are then rebuilt in the key order
-        // each caller used to get.
-        const pageGroups = new Map<string, CheckResult[]>();
-        const ruleGroups = new Map<string, CheckResult[]>();
-        for (const row of rows) {
-          const pageUrl = row.page_url as string;
-          const ruleId = row.rule_id as string;
-          const check = this.rowToCheckResult(row);
-          const pageList = pageGroups.get(pageUrl);
-          if (pageList) pageList.push(check);
-          else pageGroups.set(pageUrl, [check]);
-          const ruleList = ruleGroups.get(ruleId);
-          if (ruleList) ruleList.push(check);
-          else ruleGroups.set(ruleId, [check]);
+        // The one materialization. Keyed by row id so the ordering passes below
+        // can address a check without rebuilding it.
+        const byId = new Map<number, CheckResult>();
+        for (const row of db
+          .prepare("SELECT * FROM rule_results WHERE crawl_id = ?")
+          .all(crawlId) as Record<string, unknown>[]) {
+          byId.set(row.id as number, this.rowToCheckResult(row));
         }
 
-        const orderedKeys = (column: "page_url" | "rule_id"): string[] =>
-          (
-            db
-              .prepare(
-                `SELECT DISTINCT ${column} AS k FROM rule_results WHERE crawl_id = ? ORDER BY ${column}`
-              )
-              .all(crawlId) as Array<{ k: string }>
-          ).map((r) => r.k);
-
-        const inKeyOrder = (
-          groups: Map<string, CheckResult[]>,
-          keys: string[]
+        // `ORDER BY <column>` verbatim from the reader being replaced, so the
+        // sequence is whatever SQLite would have produced there.
+        const groupBy = (
+          column: "page_url" | "rule_id"
         ): Map<string, CheckResult[]> => {
+          const ordered = db
+            .prepare(
+              `SELECT id, ${column} AS k FROM rule_results WHERE crawl_id = ? ORDER BY ${column}`
+            )
+            .all(crawlId) as Array<{ id: number; k: string }>;
           const out = new Map<string, CheckResult[]>();
-          for (const key of keys) {
-            const list = groups.get(key);
-            if (list) out.set(key, list);
+          for (const { id, k } of ordered) {
+            const check = byId.get(id);
+            // Unreachable: both statements read the same rows in one connection.
+            // Skipping rather than asserting keeps a torn read from throwing in
+            // the report path, where the alternative is no report at all.
+            if (!check) continue;
+            const list = out.get(k);
+            if (list) list.push(check);
+            else out.set(k, [check]);
           }
           return out;
         };
 
-        return {
-          byPage: inKeyOrder(pageGroups, orderedKeys("page_url")),
-          byRuleId: inKeyOrder(ruleGroups, orderedKeys("rule_id")),
-        };
+        return { byPage: groupBy("page_url"), byRuleId: groupBy("rule_id") };
       },
       catch: (e) => StorageError.read(e),
     });

@@ -138,13 +138,21 @@ across the call with a forced collection at each end
 
 | arm | RSS | external | wall |
 |---|---|---|---|
-| two reads | +441 MB | +40 MB | 443-765 ms |
-| one grouped read | +249 MB | +20 MB | 256-258 ms |
+| two reads | +341 to +368 MB | +40 MB | 542-890 ms |
+| one materialization | +202 to +206 MB | +20 MB | 424-536 ms |
 
 `heapUsed` moved by under 10 MB either way, which is the point worth recording:
 the cost of the duplicate is allocator residency and string backing store, not
 JS heap objects, so the metric most people reach for cannot see it. Same class
 as the `SELECT *` link scan above.
+
+The rows are materialized once and the ORDER is then asked for twice, with the
+same `ORDER BY` each original reader used, reading only the row id and the
+grouping key. Deriving the order instead — reading once in `id` order and
+grouping — measured faster still, and was wrong: it relied on tied `ORDER BY`
+rows coming back in `id` order, which held on today's schema but flips under an
+index on `(crawl_id, rule_id, page_url)`, changing the emitted issue order.
+SQLite leaves tied rows unordered by contract.
 
 End to end the change is real but below the noise floor of an exit measurement.
 Reports are byte-identical at 400 and 2,500 pages, and wall time and peak RSS
