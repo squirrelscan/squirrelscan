@@ -280,8 +280,53 @@ A second hosted audit of an unchanged 150-page site on the old code: crawl
 renders. Cross-run reuse of the previous audit's pages
 (squirrelscan/repo#1902) and a source fingerprint that survives Shopify's
 cache-entry regeneration ([#242](https://github.com/squirrelscan/squirrelscan/pull/242),
-[#244](https://github.com/squirrelscan/squirrelscan/pull/244)) are deployed;
-the measured pair will be added here when it completes.
+[#244](https://github.com/squirrelscan/squirrelscan/pull/244)) are deployed.
+
+**Measured pair, reuse live, same Shopify site at 150 pages, coverage full,
+render on, 51 minutes apart. Nothing was reused, and the re-run cost 8% MORE.**
+
+| | first run | second run |
+|---|---|---|
+| crawl | 1,197 s | 1,066 s |
+| pages fetched | 150 | 150 |
+| `[reuse]` tally | 0 reused | 0 reused |
+| renders / cache hits | 150 / 2 | 125 / 39 |
+| render-side credits | 304 | **328** |
+| health score | 47 | 47 |
+| issues | 29,412 | 28,844 |
+
+The two crawl times are **not comparable** and no speedup should be read from
+them. The first run's seed probe was refused, so it based on the apex and
+filled its frontier from links (pending 140 at the first page); the second
+based on `www` and seeded from the sitemap (pending 349). Different frontier
+construction, not different reuse.
+
+The credits are comparable, and they went the wrong way. Charge attribution on
+the second run: 125 `render` debits from the render service, and of 39
+`render_cached`, **38 were the crawl cache and 1 was the render service**. The
+crawl cache was charging on lookup — for a body the crawler then declined to
+reuse — and the render happened anyway, so 37 of 150 urls carried both debits
+(squirrelscan/repo#1940, fixed by charging on adoption instead).
+
+**Cause of the zero, which is upstream of all of it:** the origin serves our
+egress a different body on every request. Since the deploy, 228 new
+`domain_renders` rows for that domain, and every path crawled by both runs has
+exactly two distinct content hashes — one per run. One new fingerprint per run
+per path is the churn not being absorbed.
+
+The normalizer is not at fault. Three fetches of one of those pages from a
+residential vantage returned byte-identical bodies and identical
+`normalizeHtmlForFingerprint` hashes. The stored pages also carry no
+`Cache-Control`, no `Expires` and no `Last-Modified`, and their ETag is
+Shopify's per-request `page_cache:` token, so the freshness path is unreachable
+and a conditional GET can never answer 304. Every page falls through to a full
+re-fetch, and `[reuse] 0` is the correct answer to the inputs rather than a
+plumbing failure.
+
+Reuse should be expected to pay off on origins that send validators or freshness
+directives, and to pay nothing on this class until the per-request variation is
+characterised. That is what squirrelscan/repo#1899 acceptance criterion 1 was
+asking, and it is now answered: the body differs, the normalizer does not.
 
 ## Fixed along the way
 
