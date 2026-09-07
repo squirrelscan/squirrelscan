@@ -385,6 +385,51 @@ export function flattenChecks(
   return out;
 }
 
+/** Inputs to a {@link createMergeSession}: everything except the prior findings,
+ *  which the session consumes incrementally. */
+export type MergeSessionInput = Omit<ComputeMergeInput, "priorFindings">;
+
+/**
+ * Where a merge session sends the records it derives from PRIOR findings (#1876).
+ *
+ * Prior-derived output is pushed rather than returned so a caller can stream tens
+ * of thousands of priors past the session without any of them, or of the records
+ * they produce, being resident at once. {@link computeMerge}'s sink appends to
+ * arrays, which is what keeps the array API byte-identical.
+ */
+export interface MergePriorSink {
+  /** A row to upsert: a carried, resolved or staled prior. */
+  persist(record: PageFindingRecord): void;
+  /** A prior that is OPEN in the merged union (i.e. carried). Fresh actives are
+   *  NOT sent here — they come back from {@link MergeSession.finish}. */
+  active(finding: MergedFinding): void;
+}
+
+/** A merge in progress: prior findings stream in, fresh records come out at the end. */
+export interface MergeSession {
+  /**
+   * Site pages after the merge, and the URLs active afterwards. Step 3 of the
+   * merge reads only `priorPages` + this run's crawl, never a prior FINDING, so
+   * both are known before the first prior arrives — which is what lets the caller
+   * derive `carriedPageUrls` up front and fold carried findings as they stream.
+   */
+  readonly sitePages: SitePageRecord[];
+  readonly activePageUrls: Set<string>;
+  /**
+   * Decide one batch of prior OPEN findings, pushing the results to the sink.
+   * The decision is per row and never depends on how the priors are batched, so
+   * any batching (one array, one page, one row) yields the same records in the
+   * same order.
+   */
+  addPriorFindings(priors: readonly PageFindingRecord[]): void;
+  /**
+   * Emit this run's FRESH records. Call once, AFTER every prior has been added:
+   * a fresh finding inherits `firstSeenAt` from the prior it supersedes, and
+   * those stamps are harvested as the priors go past.
+   */
+  finish(): { persisted: PageFindingRecord[]; active: MergedFinding[] };
+}
+
 /**
  * Merge this run's fresh findings against the prior site state (pure).
  *
@@ -395,8 +440,99 @@ export function flattenChecks(
  * - stale: a previously-active page that returned 404/410 this run → page
  *   removed, its findings staled. (Pages merely scoped-out — not popped this
  *   run — are NOT removed; they carry.)
+ *
+ * (#1876) The whole-array form: it drives a {@link createMergeSession} with a
+ * sink that collects, so there is exactly ONE decision implementation shared with
+ * the API's streaming driver. Fresh records lead `persisted`/`findings` here
+ * because that is the order the pre-#1876 two-pass loop produced and the report's
+ * carried replays are built from it.
  */
 export function computeMerge(input: ComputeMergeInput): MergedState {
+  const priorPersisted: PageFindingRecord[] = [];
+  const priorActive: MergedFinding[] = [];
+  const session = createMergeSession(input, {
+    persist: (record) => {
+      priorPersisted.push(record);
+    },
+    active: (finding) => {
+      priorActive.push(finding);
+    },
+  });
+  // The array API takes an ARRAY, so nothing stops a caller passing the same
+  // finding key twice, and the pre-#1876 loop handled a repeat by ignoring it
+  // (one `handledKeys` set answered both "superseded by a fresh finding" and
+  // "already decided"). The session does not carry that set — it is the one
+  // structure whose size is the prior count, and a store read cannot produce a
+  // repeat because the key IS the primary key — so the dedupe lives here, where
+  // the whole array is resident anyway.
+  session.addPriorFindings(dedupeByKey(input.priorFindings, freshKeysOf(input.freshFindings)));
+  const fresh = session.finish();
+  return {
+    findings: [...fresh.active, ...priorActive],
+    persisted: [...fresh.persisted, ...priorPersisted],
+    sitePages: session.sitePages,
+    activePageUrls: session.activePageUrls,
+  };
+}
+
+function freshKeysOf(fresh: readonly FlatFinding[]): Set<string> {
+  const keys = new Set<string>();
+  for (const f of fresh) keys.add(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator));
+  return keys;
+}
+
+/**
+ * Repeated prior keys, resolved the way the pre-#1876 loop resolved them — which
+ * is NOT one rule (see {@link computeMerge}).
+ *
+ * A prior the merge decides on: FIRST wins. `handledKeys` was set by the decision,
+ * so every later repeat hit the `continue` at the top of the loop.
+ *
+ * A prior a FRESH finding supersedes: LAST wins. Those never reached the loop's
+ * decision at all — they were read out of `priorByKey`, an index built by
+ * assigning each prior in turn, so the last assignment is the one the fresh
+ * record inherited its `firstSeenAt` from. They are passed through here for the
+ * same reason: the session returns early on them, keeping only the stamp, and the
+ * last one to go past sets it.
+ */
+function dedupeByKey(
+  priors: readonly PageFindingRecord[],
+  freshKeys: Set<string>
+): readonly PageFindingRecord[] {
+  const seen = new Set<string>();
+  const out: PageFindingRecord[] = [];
+  for (const p of priors) {
+    const key = findingKey(p.normalizedUrl, p.ruleId, p.checkName, p.locator);
+    if (!freshKeys.has(key)) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(p);
+  }
+  return out.length === priors.length ? priors : out;
+}
+
+/**
+ * The merge as a resumable state machine (#1876), so prior findings can arrive
+ * from a cursor in bounded batches instead of as one materialized array.
+ *
+ * PRECONDITION: prior findings are unique by {@link findingKey}. That is the
+ * page_findings primary key, so every store read satisfies it; the array-shaped
+ * {@link computeMerge} enforces it for callers that build the list by hand.
+ *
+ * WHAT CHANGED vs the pre-#1876 two-pass loop, and why it is equivalent: that
+ * version indexed EVERY prior into `priorByKey` so the fresh pass could ask "did a
+ * previous audit see this one" (for `firstSeenAt`), then walked the priors again.
+ * The index is the unbounded part, and it only ever answered questions about keys
+ * in the FRESH set — which is bounded by the run. So the lookup is flipped: the
+ * fresh set is indexed, priors stream past it, and a prior that matches one leaves
+ * its `firstSeenAt` behind on the way through. The fresh records are then emitted
+ * by {@link MergeSession.finish}, which is why it must be called last.
+ */
+export function createMergeSession(
+  input: MergeSessionInput,
+  sink: MergePriorSink
+): MergeSession {
   const {
     siteKey,
     crawlId,
@@ -405,21 +541,11 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
     removedUrls,
     severityByRule,
     statusByUrl,
-    priorFindings,
     priorPages,
     now,
     sampledCheckPages,
     resolution,
   } = input;
-
-  // Index prior findings by full key for O(1) lookup.
-  const priorByKey = new Map<string, PageFindingRecord>();
-  for (const p of priorFindings) {
-    priorByKey.set(
-      findingKey(p.normalizedUrl, p.ruleId, p.checkName, p.locator),
-      p
-    );
-  }
 
   // Index fresh findings by key (latest wins on dup keys within a run).
   const freshByKey = new Map<string, FlatFinding>();
@@ -430,9 +556,10 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
     );
   }
 
-  const persisted: PageFindingRecord[] = [];
-  const activeFindings: MergedFinding[] = [];
-  const handledKeys = new Set<string>();
+  // (#1876) First-seen stamps harvested from the priors this run's fresh findings
+  // SUPERSEDE — the one thing the fresh pass needed the prior index for. Bounded
+  // by the fresh set, so it is the half of the old index that can stay resident.
+  const firstSeenByFreshKey = new Map<string, number>();
 
   // (#1652) The site's render history: `site_pages` rows are written only for
   // pages a run actually crawled (step 3 below), in any lifecycle state — a
@@ -459,174 +586,12 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
   const neverRendered = (normalizedUrl: string, renderedThisRun: boolean): boolean =>
     !renderedThisRun && !everRenderedUrls.has(normalizedUrl);
 
-  // 1) FRESH — upsert findings for crawled URLs.
-  for (const [key, f] of freshByKey) {
-    const prior = priorByKey.get(key);
-    const fp = fingerprint(f.status, f.message, f.value, f.expected);
-    const severity = severityByRule.get(f.ruleId) ?? "warning";
-    const record: PageFindingRecord = {
-      siteKey,
-      normalizedUrl: f.normalizedUrl,
-      ruleId: f.ruleId,
-      checkName: f.checkName,
-      locator: f.locator,
-      status: f.status,
-      severity,
-      message: f.message,
-      value: f.value,
-      expected: f.expected,
-      payload: f.payload,
-      fingerprint: fp,
-      firstSeenAt: prior?.firstSeenAt ?? now,
-      lastSeenCrawlId: crawlId,
-      lastSeenAt: now,
-      provenance: "fresh",
-      state: "open",
-    };
-    persisted.push(record);
-    // A fresh finding was evaluated on a page rendered this run, by definition.
-    activeFindings.push(toMerged(record, false));
-    handledKeys.add(key);
-  }
-
-  // 2) Prior OPEN findings (we only loaded "open"): resolve, stale, or carry.
-  for (const prior of priorFindings) {
-    const key = findingKey(
-      prior.normalizedUrl,
-      prior.ruleId,
-      prior.checkName,
-      prior.locator
-    );
-    if (handledKeys.has(key)) continue; // superseded by a fresh finding
-
-    const wasCrawled = crawledUrls.has(prior.normalizedUrl);
-    const wasRemoved = removedUrls.has(prior.normalizedUrl);
-    // (#1185) Crawled per the unsampled signal ONLY — the page produced no
-    // checks in the sampled payload (clean everywhere, or clipped from every
-    // sample) so it's absent from the payload-derived `crawledUrls`.
-    const signalCrawled =
-      !wasCrawled && (resolution?.crawledUrls.has(prior.normalizedUrl) ?? false);
-    // (#1652) Same value for every carry branch below — computed once here so a
-    // new branch can't silently forget it and default a never-rendered page back
-    // to "carried".
-    const unrendered = neverRendered(
-      prior.normalizedUrl,
-      wasCrawled || signalCrawled
-    );
-
-    if (wasRemoved) {
-      // Page gone — stale this finding. NOTE: site_pages state + the bulk
-      // finding-stale UPDATE are written transactionally by `markPageRemoved`
-      // (the orchestrator); we only record the staled row here so the
-      // returned union correctly EXCLUDES it from scoring/report this run.
-      persisted.push({
-        ...prior,
-        state: "stale",
-        lastSeenCrawlId: crawlId,
-        lastSeenAt: now,
-      });
-      handledKeys.add(key);
-      continue;
-    }
-
-    if (wasCrawled || signalCrawled) {
-      // (#1185) Resolution-signal override: a key present in `failingByCheck`
-      // means the check RAN this run with page-attributable results, so its
-      // UNSAMPLED failing set is authoritative — hash present → still failing
-      // (clipped from the sample, carry); hash absent → crawled clean this run
-      // → resolve, regardless of the #1167 sample guard below. A key marked
-      // truncated (or absent — rule disabled, unknown shape, old CLI) gives no
-      // authority and falls through to the pre-#1185 behavior.
-      const checkKey = `${prior.ruleId}${KEY_SEP}${prior.checkName}`;
-      const priorHash = resolution ? resolutionUrlHash(prior.normalizedUrl) : "";
-      // The check produced NO evaluated result for this page this run (the rule
-      // `skipped` it — perf/ttfb without timing data — or emitted nothing for
-      // it). Its absence from the fresh findings is not evidence the finding is
-      // gone, so it can never resolve: carry regardless of what the sampled
-      // payload suggests.
-      if (resolution?.notEvaluatedByCheck.get(checkKey)?.has(priorHash)) {
-        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
-        persisted.push(carried);
-        activeFindings.push(toMerged(carried, unrendered));
-        handledKeys.add(key);
-        continue;
-      }
-      const failingSet = resolution?.failingByCheck.get(checkKey);
-      if (failingSet) {
-        if (failingSet.has(priorHash)) {
-          // Unlike the sample-guard carry below, this page WAS observed failing
-          // this run — the signal is unsampled, so its presence is positive
-          // evidence, not an absence we couldn't rule out. Refresh the
-          // last-seen stamps so the dashboard's "carried forward" badge doesn't
-          // read as stale on exactly the >100-page sites this fixes. Provenance
-          // stays "carried": presence was reconfirmed, but the check payload
-          // (message/details/severity) wasn't re-derived.
-          const carried: PageFindingRecord = {
-            ...prior,
-            provenance: "carried",
-            lastSeenCrawlId: crawlId,
-            lastSeenAt: now,
-          };
-          persisted.push(carried);
-          activeFindings.push(toMerged(carried, unrendered));
-          handledKeys.add(key);
-          continue;
-        }
-        if (!resolution!.truncatedChecks.has(checkKey)) {
-          persisted.push({
-            ...prior,
-            state: "resolved",
-            lastSeenCrawlId: crawlId,
-            lastSeenAt: now,
-          });
-          handledKeys.add(key);
-          continue;
-        }
-      }
-
-      if (signalCrawled) {
-        // No authoritative signal for this check and the page is absent from
-        // the sampled payload — exactly today's un-crawled behavior: carry.
-        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
-        persisted.push(carried);
-        activeFindings.push(toMerged(carried, unrendered));
-        handledKeys.add(key);
-        continue;
-      }
-
-      // (#1167) Truncated-sample guard: if this rule+check shipped a SAMPLE of its
-      // affected pages and THIS page was clipped out of it, its absence from the
-      // fresh findings is NOT evidence the finding is gone — carry it forward.
-      // Only a page that WAS in the sample (or a non-truncated check) gives an
-      // authoritative "re-crawled, no longer present → resolved".
-      const sample = sampledCheckPages?.get(checkKey);
-      if (sample && !sample.has(prior.normalizedUrl)) {
-        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
-        persisted.push(carried);
-        activeFindings.push(toMerged(carried, unrendered));
-        handledKeys.add(key);
-        continue;
-      }
-
-      // Re-crawled and the finding is no longer present → resolved (evidence).
-      persisted.push({
-        ...prior,
-        state: "resolved",
-        lastSeenCrawlId: crawlId,
-        lastSeenAt: now,
-      });
-      handledKeys.add(key);
-      continue;
-    }
-
-    // Un-crawled, still-active page: carry forward unchanged (no TTL).
-    const carried: PageFindingRecord = { ...prior, provenance: "carried" };
-    persisted.push(carried);
-    activeFindings.push(toMerged(carried, unrendered));
-    handledKeys.add(key);
-  }
-
   // 3) Site pages — active set (crawled non-removed) ∪ prior actives minus removed.
+  //
+  // (#1876) Hoisted ahead of the finding passes: it reads `priorPages`, not prior
+  // FINDINGS, so it can be settled before a single prior streams in. The caller
+  // needs `activePageUrls` to derive `carriedPageUrls`, and the carried scoring
+  // fold needs THAT before it can fold the first carried page.
   const sitePageMap = new Map<string, SitePageRecord>();
   for (const p of priorPages) {
     sitePageMap.set(p.normalizedUrl, p);
@@ -661,7 +626,183 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
     sitePages.filter((p) => p.state === "active").map((p) => p.normalizedUrl)
   );
 
-  return { findings: activeFindings, persisted, sitePages, activePageUrls };
+  /** This run's FRESH records — emitted by `finish()`, once every prior has had
+   *  its chance to leave a `firstSeenAt` behind. */
+  const emitFresh = (): { persisted: PageFindingRecord[]; active: MergedFinding[] } => {
+    const persisted: PageFindingRecord[] = [];
+    const active: MergedFinding[] = [];
+    for (const [key, f] of freshByKey) {
+      const fp = fingerprint(f.status, f.message, f.value, f.expected);
+      const severity = severityByRule.get(f.ruleId) ?? "warning";
+      const record: PageFindingRecord = {
+        siteKey,
+        normalizedUrl: f.normalizedUrl,
+        ruleId: f.ruleId,
+        checkName: f.checkName,
+        locator: f.locator,
+        status: f.status,
+        severity,
+        message: f.message,
+        value: f.value,
+        expected: f.expected,
+        payload: f.payload,
+        fingerprint: fp,
+        firstSeenAt: firstSeenByFreshKey.get(key) ?? now,
+        lastSeenCrawlId: crawlId,
+        lastSeenAt: now,
+        provenance: "fresh",
+        state: "open",
+      };
+      persisted.push(record);
+      // A fresh finding was evaluated on a page rendered this run, by definition.
+      active.push(toMerged(record, false));
+    }
+    return { persisted, active };
+  };
+
+  /** Prior OPEN findings (we only ever load "open"): resolve, stale, or carry. */
+  const addPrior = (prior: PageFindingRecord): void => {
+    const key = findingKey(
+      prior.normalizedUrl,
+      prior.ruleId,
+      prior.checkName,
+      prior.locator
+    );
+    // Superseded by a fresh finding this run. The fresh record inherits this
+    // prior's first-seen (a finding that resolved and returned must not reset it),
+    // which is the ONLY thing the pre-#1876 whole-prior index was for.
+    if (freshByKey.has(key)) {
+      firstSeenByFreshKey.set(key, prior.firstSeenAt);
+      return;
+    }
+
+    const wasCrawled = crawledUrls.has(prior.normalizedUrl);
+    const wasRemoved = removedUrls.has(prior.normalizedUrl);
+    // (#1185) Crawled per the unsampled signal ONLY — the page produced no
+    // checks in the sampled payload (clean everywhere, or clipped from every
+    // sample) so it's absent from the payload-derived `crawledUrls`.
+    const signalCrawled =
+      !wasCrawled && (resolution?.crawledUrls.has(prior.normalizedUrl) ?? false);
+    // (#1652) Same value for every carry branch below — computed once here so a
+    // new branch can't silently forget it and default a never-rendered page back
+    // to "carried".
+    const unrendered = neverRendered(
+      prior.normalizedUrl,
+      wasCrawled || signalCrawled
+    );
+
+    if (wasRemoved) {
+      // Page gone — stale this finding. NOTE: site_pages state + the bulk
+      // finding-stale UPDATE are written transactionally by `markPageRemoved`
+      // (the orchestrator); we only record the staled row here so the
+      // returned union correctly EXCLUDES it from scoring/report this run.
+      sink.persist({
+        ...prior,
+        state: "stale",
+        lastSeenCrawlId: crawlId,
+        lastSeenAt: now,
+      });
+      return;
+    }
+
+    if (wasCrawled || signalCrawled) {
+      // (#1185) Resolution-signal override: a key present in `failingByCheck`
+      // means the check RAN this run with page-attributable results, so its
+      // UNSAMPLED failing set is authoritative — hash present → still failing
+      // (clipped from the sample, carry); hash absent → crawled clean this run
+      // → resolve, regardless of the #1167 sample guard below. A key marked
+      // truncated (or absent — rule disabled, unknown shape, old CLI) gives no
+      // authority and falls through to the pre-#1185 behavior.
+      const checkKey = `${prior.ruleId}${KEY_SEP}${prior.checkName}`;
+      const priorHash = resolution ? resolutionUrlHash(prior.normalizedUrl) : "";
+      // The check produced NO evaluated result for this page this run (the rule
+      // `skipped` it — perf/ttfb without timing data — or emitted nothing for
+      // it). Its absence from the fresh findings is not evidence the finding is
+      // gone, so it can never resolve: carry regardless of what the sampled
+      // payload suggests.
+      if (resolution?.notEvaluatedByCheck.get(checkKey)?.has(priorHash)) {
+        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        sink.persist(carried);
+        sink.active(toMerged(carried, unrendered));
+        return;
+      }
+      const failingSet = resolution?.failingByCheck.get(checkKey);
+      if (failingSet) {
+        if (failingSet.has(priorHash)) {
+          // Unlike the sample-guard carry below, this page WAS observed failing
+          // this run — the signal is unsampled, so its presence is positive
+          // evidence, not an absence we couldn't rule out. Refresh the
+          // last-seen stamps so the dashboard's "carried forward" badge doesn't
+          // read as stale on exactly the >100-page sites this fixes. Provenance
+          // stays "carried": presence was reconfirmed, but the check payload
+          // (message/details/severity) wasn't re-derived.
+          const carried: PageFindingRecord = {
+            ...prior,
+            provenance: "carried",
+            lastSeenCrawlId: crawlId,
+            lastSeenAt: now,
+          };
+          sink.persist(carried);
+          sink.active(toMerged(carried, unrendered));
+          return;
+        }
+        if (!resolution!.truncatedChecks.has(checkKey)) {
+          sink.persist({
+            ...prior,
+            state: "resolved",
+            lastSeenCrawlId: crawlId,
+            lastSeenAt: now,
+          });
+          return;
+        }
+      }
+
+      if (signalCrawled) {
+        // No authoritative signal for this check and the page is absent from
+        // the sampled payload — exactly today's un-crawled behavior: carry.
+        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        sink.persist(carried);
+        sink.active(toMerged(carried, unrendered));
+        return;
+      }
+
+      // (#1167) Truncated-sample guard: if this rule+check shipped a SAMPLE of its
+      // affected pages and THIS page was clipped out of it, its absence from the
+      // fresh findings is NOT evidence the finding is gone — carry it forward.
+      // Only a page that WAS in the sample (or a non-truncated check) gives an
+      // authoritative "re-crawled, no longer present → resolved".
+      const sample = sampledCheckPages?.get(checkKey);
+      if (sample && !sample.has(prior.normalizedUrl)) {
+        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        sink.persist(carried);
+        sink.active(toMerged(carried, unrendered));
+        return;
+      }
+
+      // Re-crawled and the finding is no longer present → resolved (evidence).
+      sink.persist({
+        ...prior,
+        state: "resolved",
+        lastSeenCrawlId: crawlId,
+        lastSeenAt: now,
+      });
+      return;
+    }
+
+    // Un-crawled, still-active page: carry forward unchanged (no TTL).
+    const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+    sink.persist(carried);
+    sink.active(toMerged(carried, unrendered));
+  };
+
+  return {
+    sitePages,
+    activePageUrls,
+    addPriorFindings: (priors) => {
+      for (const prior of priors) addPrior(prior);
+    },
+    finish: emitFresh,
+  };
 }
 
 function toMerged(

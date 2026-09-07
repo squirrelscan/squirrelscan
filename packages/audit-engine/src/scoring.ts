@@ -85,6 +85,38 @@ export interface CarriedFinding {
    * relabelling it "carried" — both preserve an already-set provenance.
    */
   neverRendered?: boolean;
+  /**
+   * (#1876) When set, {@link carriedFindingToCheck} stamps the replayed check
+   * `provenance: "carried"` + this `lastSeenAt` itself, instead of leaving the
+   * caller to do it from a `${url}|${rule}|${check}` → lastSeenAt map.
+   *
+   * WHY IT MOVED: that map is one entry per carried finding, so a partial
+   * re-audit of a site with tens of thousands of open findings has to build tens
+   * of thousands of entries to tag a report that keeps a bounded sample of them.
+   * Stamping at construction is the same information carried by the object that
+   * needs it. Left undefined by the sampled path, where the caller's tagging pass
+   * still runs and the map is bounded by the run.
+   */
+  lastSeenAt?: number;
+}
+
+/**
+ * (#1876) The carried half of the union, pre-indexed and BOUNDED, for callers that
+ * cannot hold the carried findings themselves.
+ *
+ * The complete-store finalize scores from tallies and uses the union map only as
+ * the report body, so it folds carried findings into a per-rule sample as they
+ * stream and hands the result over through this. `carriedFindings` stays the input
+ * for the sampled path, where the union IS the score and is bounded by the run.
+ */
+export interface CarriedUnionSource {
+  /** Rules with at least one carried finding (page-scope ones matter). */
+  ruleIds(): Iterable<string>;
+  /** The carried checks to replay into the union for a rule — already bounded. */
+  checksFor(ruleId: string): readonly CheckResult[];
+  /** How many pages in `carriedPageUrls` have a carried finding for this rule.
+   *  `carriedPageUrls.size` minus this is the clean-carried pass count. */
+  dirtyCarriedPageCount(ruleId: string): number;
 }
 
 /** Minimal rule meta the union scorer needs. */
@@ -101,6 +133,9 @@ export interface MergedScoringInput {
   carriedPageUrls: Set<string>;
   /** ruleId -> meta for rules absent from `freshResults` (carried-only rules). */
   ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
+  /** (#1876) Bounded pre-indexed carried side. When present it REPLACES
+   *  `carriedFindings` entirely — pass `[]` for that. */
+  carriedSource?: CarriedUnionSource;
 }
 
 /**
@@ -153,14 +188,21 @@ export function carriedFindingToCheck(
     ...(payload.items ? { items: payload.items } : {}),
     ...(payload.details ? { details: payload.details } : {}),
     ...(payload.pages ? { pages: payload.pages } : {}),
-    ...(f.neverRendered ? { provenance: "unrendered" as const } : {}),
+    // Key ORDER matters: the sampled path's caller ASSIGNS provenance then
+    // lastSeenAt after this returns, so stamping them last here serializes
+    // identically to a check the caller tagged (#1876).
+    ...(f.neverRendered
+      ? { provenance: "unrendered" as const }
+      : f.lastSeenAt !== undefined
+        ? { provenance: "carried" as const, lastSeenAt: f.lastSeenAt }
+        : {}),
   };
 }
 
 export function buildScoringResultsFromMerged(
   input: MergedScoringInput
 ): Map<string, RuleRunResult> {
-  const { freshResults, carriedFindings, carriedPageUrls, ruleMetaIndex } =
+  const { freshResults, carriedFindings, carriedPageUrls, ruleMetaIndex, carriedSource } =
     input;
 
   // Clone fresh results (don't mutate the caller's map / arrays). Preserve any
@@ -179,17 +221,20 @@ export function buildScoringResultsFromMerged(
     });
   }
 
-  // Index carried findings by (ruleId -> normalizedUrl -> findings).
+  // Index carried findings by (ruleId -> normalizedUrl -> findings). Skipped when
+  // the caller supplied a pre-indexed bounded source (#1876).
   const carriedByRule = new Map<string, Map<string, CarriedFinding[]>>();
-  for (const f of carriedFindings) {
-    let byUrl = carriedByRule.get(f.ruleId);
-    if (!byUrl) {
-      byUrl = new Map();
-      carriedByRule.set(f.ruleId, byUrl);
+  if (!carriedSource) {
+    for (const f of carriedFindings) {
+      let byUrl = carriedByRule.get(f.ruleId);
+      if (!byUrl) {
+        byUrl = new Map();
+        carriedByRule.set(f.ruleId, byUrl);
+      }
+      const list = byUrl.get(f.normalizedUrl) ?? [];
+      list.push(f);
+      byUrl.set(f.normalizedUrl, list);
     }
-    const list = byUrl.get(f.normalizedUrl) ?? [];
-    list.push(f);
-    byUrl.set(f.normalizedUrl, list);
   }
 
   // Every page-scope rule that exists this run OR carried a finding applies to
@@ -198,7 +243,7 @@ export function buildScoringResultsFromMerged(
   for (const [ruleId, result] of union) {
     if (result.meta.scope === "page") pageScopeRuleIds.add(ruleId);
   }
-  for (const ruleId of carriedByRule.keys()) {
+  for (const ruleId of carriedSource?.ruleIds() ?? carriedByRule.keys()) {
     const meta = union.get(ruleId)?.meta ?? ruleMetaIndex.get(ruleId);
     if (meta?.scope === "page") pageScopeRuleIds.add(ruleId);
   }
@@ -222,7 +267,11 @@ export function buildScoringResultsFromMerged(
     // the replay were gated on carriedPageUrls (which excludes crawled pages) that
     // finding would persist open in storage yet vanish from the union score,
     // report, and issue-sync — re-inflating exactly the score #1167 protects.
-    if (carriedForRule) {
+    if (carriedSource) {
+      // Already built and already bounded — the caller replayed each carried
+      // finding as it streamed and kept a per-rule sample.
+      for (const check of carriedSource.checksFor(ruleId)) result.checks.push(check);
+    } else if (carriedForRule) {
       for (const [url, findings] of carriedForRule) {
         for (const f of findings) {
           result.checks.push(carriedFindingToCheck(f, url));
@@ -237,10 +286,17 @@ export function buildScoringResultsFromMerged(
     // passed+total. Only carriedPageUrls (un-crawled active pages) are eligible —
     // a crawled page's pass/fail is already counted by its fresh (or replayed
     // carried) check, so it must not also count here.
+    // (#1876) Counted, not enumerated, when the caller pre-indexed: it tracked how
+    // many carried pages have a finding for the rule as they streamed, and
+    // |carriedPageUrls| minus that is the same set difference.
     let cleanCarriedPasses = 0;
-    for (const url of carriedPageUrls) {
-      const findings = carriedForRule?.get(url);
-      if (!findings || findings.length === 0) cleanCarriedPasses++;
+    if (carriedSource) {
+      cleanCarriedPasses = carriedPageUrls.size - carriedSource.dirtyCarriedPageCount(ruleId);
+    } else {
+      for (const url of carriedPageUrls) {
+        const findings = carriedForRule?.get(url);
+        if (!findings || findings.length === 0) cleanCarriedPasses++;
+      }
     }
     // ADD to any fresh-clean count the reconstruction stamped (#1023), rather
     // than overwrite — a complete-store re-audit has BOTH fresh crawled-clean

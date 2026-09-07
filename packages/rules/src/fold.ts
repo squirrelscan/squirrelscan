@@ -829,7 +829,16 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
 
   // Composed message must stay under the API's medium-string cap or the whole
   // publish 400s (strings are rejected, not truncated).
-  const message = `${first.message} (+${group.length - 1} more pages)`.slice(
+  //
+  // Counted off `occurrences`, not off how many OBJECTS this group holds — the
+  // same distinction the occurrences sum above draws, for the same reason. They
+  // are equal for a group of plain per-page checks (each contributes 1), so every
+  // ordinary fold is byte-identical; they differ only when a constituent already
+  // stands for many findings, which is exactly when the object count is the wrong
+  // number to show. (#1876) That case is now routine: a rule carrying more than
+  // `maxChecksPerRule` findings reaches the report as a bounded sample whose
+  // occurrence total is stamped rather than materialized.
+  const message = `${first.message} (+${occurrences - 1} more pages)`.slice(
     0,
     REPORT_LIMITS.maxMediumString,
   );

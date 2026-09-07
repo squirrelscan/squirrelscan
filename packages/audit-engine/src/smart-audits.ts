@@ -9,6 +9,7 @@
 
 export {
   computeMerge,
+  createMergeSession,
   fingerprint,
   findingKey,
   flattenChecks,
@@ -17,6 +18,9 @@ export type {
   ComputeMergeInput,
   FlatFinding,
   MergedFinding,
+  MergePriorSink,
+  MergeSession,
+  MergeSessionInput,
   MergedState,
 } from "./merge-core";
 
@@ -30,6 +34,11 @@ export type {
   CloudSmartAuditsInput,
   CloudSmartAuditsResult,
   MergeFindingsPromiseInput,
+  // (#1876) The finalize's bounded prior read: both halves of a page's open
+  // findings from one cursor.
+  OpenFindingPage,
+  OpenFindingPageSource,
+  PriorFindingPageSource,
   SmartAuditStore,
 } from "./merge-promise";
 
@@ -48,6 +57,7 @@ export {
 } from "./scoring";
 export type {
   CarriedFinding,
+  CarriedUnionSource,
   IssueTally,
   MergedScoringInput,
   RuleTally,
@@ -57,8 +67,13 @@ export type {
 export { reconstructCompleteResults, reconstructPageRuleChecks } from "./reconstruct";
 export type { ReconstructCompleteInput } from "./reconstruct";
 
-export { foldCompleteStoreTallies } from "./complete-store-fold";
-export type { CompleteStoreTallyInput, FindingPageSource } from "./complete-store-fold";
+export { createCompleteStoreTallyFold, foldCompleteStoreTallies } from "./complete-store-fold";
+export type {
+  CompleteStoreFoldInput,
+  CompleteStoreTallyFold,
+  CompleteStoreTallyInput,
+  FindingPageSource,
+} from "./complete-store-fold";
 
 export { buildStreamFindings, buildSkippedPassCounts } from "./stream-findings";
 export type { StreamFindingLine, SkippedPassCounts } from "./stream-findings";

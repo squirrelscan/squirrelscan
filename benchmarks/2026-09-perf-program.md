@@ -425,6 +425,50 @@ read, and three of the five objects in the per-page detach. That is not recorded
 here as a number because it was not measured. A fixture that can show it needs
 stored links and images, which means an audit with external-link checking on.
 
+## The publish finalize's carried side
+
+The chunked publish's `/finalize` runs in a 128 MB API isolate. #1873 bounded the
+FRESH half: this audit's findings stream out of Postgres a page at a time and fold
+into per-rule tallies. The CARRIED half stayed an array — every open finding the
+site had outside this run, loaded, indexed by key, walked twice, replayed as a
+`CheckResult` and folded into the report — which costs nothing on a full re-audit
+(almost everything is re-observed) and everything on a PARTIAL re-audit of a site
+with a large open backlog (almost nothing is).
+
+Whole-handler RSS growth through `handlePublishFinalize` against a real local
+Postgres, the fixture seeded by a SUBPROCESS so the measuring process never
+allocated it, 2,000 fresh findings and 500 crawled pages throughout, 40 page-scope
+rules. Harness: `apps/api/tests/routes/finalize-memory-scale.test.ts` in the
+private repo, `FINALIZE_MEMORY_CARRIED` arm.
+
+| carried findings | before | after |
+|---|---|---|
+| 0 | 42.2 MiB | 39 MiB |
+| 5,000 | 90.5 MiB | 62 MiB |
+| 20,000 | 189.6 MiB | 65 MiB |
+| 60,000 | 328.6 MiB | 98 MiB |
+
+Before is linear at about 4.8 KiB per carried finding. After is not: both halves of
+a page now arrive together from ONE keyset cursor over the site's open findings,
+the merge decides each prior as it goes past, and the page is dropped. Medians of
+three to four runs per cell; the spread within a cell is 10 to 15 MiB.
+
+**Peak RSS still climbs from 20,000 to 60,000, and residency does not.** Settled
+`heapUsed` after a forced collection at the end of the handler is 20.3 MiB at
+20,000 carried findings and 21.0 MiB at 60,000 — flat, which is the claim. Peak RSS
+is a high-water mark over the whole handler, so it also records how far the runtime
+lets the heap run ahead of the driver's churn while 60,000 rows are read and
+rewritten, and that is proportional to the work whatever the design holds. Read the
+two numbers together before concluding a streaming path has a leak.
+
+Two of the three cuts were not the ones the shape predicted. The report's carried
+sample is capped at 25 checks per rule because 100 cost ~25 MiB of peak and 500
+cost ~80 — the retained checks are small, but a larger live set raises the heap the
+runtime grows to under this path's churn, so the price is a multiple of their own
+size. And the read and write batches were quartered (1,000 to 250 rows, 500 to 200)
+for ~15 MiB, because a batch's cost is the graph the driver builds around it, not
+the rows.
+
 ## Still open
 
 - Site rules are quadratic in page count (4 s at 400 pages, 99 s at 2,500,
@@ -434,3 +478,6 @@ stored links and images, which means an audit with external-link checking on.
   rather than twice is done (above); dropping the passing rows needs a decision
   about the publish payload first.
 - `--max-pages` above 5,000 is silently clamped: squirrelscan/repo#1909.
+- The finalize rewrites every carried finding to stamp `provenance`, even when it
+  already reads "carried" from an earlier run. A no-op write is most of the write
+  traffic on a site that carries the same backlog audit after audit.
