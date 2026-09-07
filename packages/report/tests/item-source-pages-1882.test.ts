@@ -117,6 +117,28 @@ describe("per-page check items are attributed to their page (#1882)", () => {
     expect(affectedPages(check!).count).toBe(2);
   });
 
+  test("a carried per-page check's resource items are not carried PAGES", () => {
+    const [check] = grouped({
+      "security/sri": {
+        meta,
+        checks: [
+          {
+            name: "c",
+            status: "fail",
+            message: "m",
+            pageUrl: pages[0],
+            provenance: "carried",
+            lastSeenAt: 5,
+            items: [{ id: GLOBAL }],
+          },
+        ],
+      },
+    } as unknown as Record<string, ReportRuleResult>);
+    // Was "2 of 1 pages carried": the CDN URL counted as a carried page.
+    expect(check!.carriedPages).toEqual([pages[0]]);
+    expect(affectedPages(check!).count).toBe(1);
+  });
+
   test("source pages per item are capped like the publish fold; the page union is not", () => {
     const n = PUBLISH_LIMITS.maxSourcePagesPerItemPublish + 5;
     const many = Array.from(

@@ -196,7 +196,12 @@ export function groupIssuesByCategory(
       // so a carried site-scope check (blocked-links, duplicate-title,
       // sitemap-*) whose pages live under `items` isn't undercounted in
       // GroupedCheck.carriedPages relative to the rule's total affected count.
-      const allPages = checkAffectedPages({ pages: checkPages, items });
+      // Attributed the same way the merged items are below, so a carried
+      // per-page check's resource items do not count as carried PAGES.
+      const allPages = checkAffectedPages({
+        pages: checkPages,
+        items: items?.map((item) => attributeItemToPage(item, pageUrl)),
+      });
       if (pageUrl) allPages.add(pageUrl);
 
       const checkName = (check as { name: string }).name;
