@@ -1750,6 +1750,22 @@ function createParsedUniverseAccumulator(): {
           continue;
         }
 
+        // Drop the page's extracted TEXT before retaining the parse (#1860).
+        //
+        // This is the single largest thing the streamed universe holds: measured
+        // over a 509-page crawl of ~1 MB pages, the retained ParsedPage set is
+        // 40.5 KB per page and `content.textContent` is 39.1 KB of it — 97%.
+        // Nothing that reads this universe wants it. Site rules take their text
+        // from `ctx.collectedSignals` or from their own DOM walk; the four rules
+        // that do read `content.textContent` read it off `ctx.parsed`, the PAGE
+        // context, which Pass 2 re-parses fresh; and the report's summary and
+        // page audits read only meta/og/twitter/schema/h1 and the `isThinContent`
+        // flag, all of which survive. Every other `content` field is kept.
+        //
+        // The golden diff is the check on that reasoning: a site rule that did
+        // read this text would produce different findings than v1 and fail.
+        if (parsed.content?.textContent) parsed.content.textContent = "";
+
         const headers = buildHeadersMap(page);
         htmlPages.push({
           url: page.normalizedUrl,

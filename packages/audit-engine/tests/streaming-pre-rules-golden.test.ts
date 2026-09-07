@@ -34,6 +34,8 @@ import {
   createSiteAssetCollector,
   releaseSiteContextDocuments,
   renderedPageUrlsFrom,
+  runStreamingRules,
+  type PreFetchedAssets,
   type ExternalLinkOccurrences,
   type SiteAssetOccurrences,
   type SiteContextPage,
@@ -61,6 +63,13 @@ const CONFIG = {
 } as unknown as Config;
 
 const SITE_URL = "http://synthetic.test";
+
+const EMPTY_ASSETS: PreFetchedAssets = {
+  resourceSizes: { css: [], images: [] },
+  scripts: [],
+  pdfSizes: [],
+  sitemapUrlStatuses: [],
+};
 
 /** Minimal non-null crawl stats — the crawls table requires the column. */
 const CRAWL_STATS = {
@@ -427,3 +436,45 @@ function htmlPage(url: string, title: string): PageRecord {
     securityHeaders: EMPTY_SECURITY_HEADERS,
   };
 }
+
+// #1860 P0: the streamed universe must stay O(1) per page in the fields it
+// retains, not just DOM-free. A 5,000-10,000 page audit is the target, and the
+// retained ParsedPage set is the structure that decides whether that fits.
+//
+// `content.textContent` is the whole page's extracted text and was 97% of the
+// retained universe (39.1 KB of 40.5 KB per page on a 509-page crawl of ~1 MB
+// pages). Nothing that reads this universe wants it: site rules take text from
+// `ctx.collectedSignals` or their own DOM walk, the four rules reading
+// `content.textContent` read it off `ctx.parsed` (the page context, re-parsed
+// fresh per batch), and the report reads only meta/og/twitter/schema/h1 and the
+// `isThinContent` flag. So it is dropped — and this test is what stops it
+// silently coming back, or a future site rule quietly depending on it.
+describe("streamed universe retention (#1860)", () => {
+  test("the retained universe carries no page text and no live documents", async () => {
+    const model = generateSiteModel({ seed: 23, pageCount: 40 });
+    const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
+
+    const result = await run(
+      runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 7 }),
+    );
+
+    const retained = [...result.parsedPages.values()];
+    expect(retained.length).toBeGreaterThan(0);
+    for (const parsed of retained) {
+      expect(parsed.content.textContent).toBe("");
+      // The residency invariant the whole pipeline rests on.
+      expect(parsed.document).toBeNull();
+    }
+
+    // The rest of `content` must SURVIVE — the report's summary reads
+    // isThinContent, and dropping the lot would silently change every report.
+    const anyThin = retained.some((p) => typeof p.content.isThinContent === "boolean");
+    expect(anyThin).toBeTrue();
+    expect(retained.some((p) => p.content.wordCount > 0)).toBeTrue();
+    // And the fields site rules actually read must survive too.
+    expect(retained.some((p) => p.meta.title !== null)).toBeTrue();
+    expect(retained.some((p) => p.links.length > 0)).toBeTrue();
+
+    await run(storage.close());
+  }, T);
+});
