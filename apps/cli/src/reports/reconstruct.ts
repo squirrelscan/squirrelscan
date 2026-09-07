@@ -3,6 +3,7 @@
 
 import type { ResponseHeaders as StoredResponseHeaders } from "@squirrelscan/core-contracts";
 
+import { detachFromPage } from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -381,17 +382,39 @@ export function reconstructReport(
           }
         }
 
+        // Every string below that came off the DOM is a SLICE of this page's
+        // html, and in JSC a retained slice pins the whole buffer it was cut
+        // from (#240). The resident path never had to care — it was holding the
+        // page anyway — but here the batch is dropped a few lines later and each
+        // kept title would hold its megabyte, which is the page-count-scaled
+        // term this walk exists to remove. Measured on ~1 MB pages: 77.5 MB
+        // retained across 80 pages attached, 2.1 MB detached. One copy per page
+        // of five small objects; everything else on the PageAudit comes from a
+        // storage row and is already free of the html.
+        const kept = parsed
+          ? detachFromPage(
+              {
+                meta: parsed.meta,
+                og: parsed.og,
+                twitter: parsed.twitter,
+                schema: parsed.schema,
+                h1Text: parsed.h1.texts,
+              },
+              "report-page"
+            )
+          : null;
+
         const pageAudit: PageAudit = {
           url: page.url,
           statusCode: page.status,
           loadTime: page.loadTimeMs,
-          meta: parsed?.meta ?? {
+          meta: kept?.meta ?? {
             title: null,
             description: null,
             canonical: null,
             robots: null,
           },
-          og: parsed?.og ?? {
+          og: kept?.og ?? {
             title: null,
             description: null,
             url: null,
@@ -399,13 +422,13 @@ export function reconstructReport(
             image: null,
             siteName: null,
           },
-          twitter: parsed?.twitter ?? {
+          twitter: kept?.twitter ?? {
             card: null,
             title: null,
             description: null,
             image: null,
           },
-          schema: parsed?.schema ?? {
+          schema: kept?.schema ?? {
             types: [],
             valid: true,
             errors: [],
@@ -414,7 +437,7 @@ export function reconstructReport(
           links: pageLinks,
           images: pageImages,
           h1Count: parsed?.h1.count ?? 0,
-          h1Text: parsed?.h1.texts ?? [],
+          h1Text: kept?.h1Text ?? [],
           checks: pageChecks,
           redirectChain: page.redirectChain,
           fetcherId: page.fetcherId,

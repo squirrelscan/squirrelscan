@@ -12,7 +12,9 @@ export type DetachBoundary =
   | "parsed-universe"
   | "external-links"
   /** Cloud-prefetch payloads collected during a streamed pre-rules walk (#1913). */
-  | "cloud-payload";
+  | "cloud-payload"
+  /** Per-page fields the CLI's report keeps after its page batch is dropped (#1913). */
+  | "report-page";
 
 export interface DetachCounts {
   /** Values copied free of their page. */

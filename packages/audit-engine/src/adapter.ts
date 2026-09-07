@@ -727,9 +727,18 @@ export function fetchAssetsFromOccurrences(
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
     };
 
+    // Every orphan the coverage pass found, in its order. These are the
+    // sitemap-status check's CANDIDATES; what bounds them is `sitemapStatusLimit`
+    // below (the configured resource limit), not the report's array cap.
+    // Capping here instead silently stopped checking past REPORT_LIMITS.maxPages,
+    // so a 404 at orphan 2,001 of a 3,000-page crawl was never looked at and
+    // `crawl/sitemap-4xx` reported a pass (#1913). The cloud is unaffected: it
+    // passes resourceCheckMaxItems = 100.
+    let orphanCandidates: string[] = [];
     if (sitemapDiscovery.discovered.length > 0) {
       const coverage = computeSitemapCoverageData(occurrences.coveragePages, sitemapDiscovery);
-      // Cap to keep resource-check URLs within reasonable bounds
+      orphanCandidates = coverage.orphanPages;
+      // The arrays that TRAVEL stay capped at the schema's array limit.
       sitemapDiscovery.orphanPages = coverage.orphanPages.slice(0, REPORT_LIMITS.maxPages);
       sitemapDiscovery.missingPages = coverage.missingPages.slice(0, REPORT_LIMITS.maxPages);
     }
@@ -800,7 +809,7 @@ export function fetchAssetsFromOccurrences(
     };
 
     const sitemapStatusLimit = Math.min(
-      sitemapDiscovery.orphanPages.length,
+      orphanCandidates.length,
       maxResources ?? config.crawler?.max_pages ?? 500,
     );
 
@@ -830,7 +839,7 @@ export function fetchAssetsFromOccurrences(
           resourceCheckOptions,
         ),
         sitemap: checkResourceSizes(
-          sitemapDiscovery.orphanPages.slice(0, sitemapStatusLimit),
+          orphanCandidates.slice(0, sitemapStatusLimit),
           resourceCheckOptions,
         ),
       },

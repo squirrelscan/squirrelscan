@@ -74,6 +74,7 @@ import {
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
+import { getGlobalLinkCache } from "@/crawler/storage/link-cache";
 import { preflightBalanceOf } from "@/lib/balance";
 import { reconstructReport } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
@@ -1302,6 +1303,14 @@ export async function runAudit(
             ? {
                 externalLinks: {
                   config: mergedConfig.external_links,
+                  // The CLI's own persistent dead-link cache. The resident
+                  // path took it as a given inside checkExternalLinksOnStorage;
+                  // the engine's collected-links entry point takes it as an
+                  // argument and treats an absent one as "no caching", so
+                  // omitting it here would make every re-audit re-check every
+                  // external link AND resubmit already-known urls to the PAID
+                  // bulk checker.
+                  linkCache: getGlobalLinkCache(),
                   onProgress: (progress) => {
                     logger.debug(
                       "external links",
