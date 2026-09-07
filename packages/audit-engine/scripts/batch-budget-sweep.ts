@@ -154,11 +154,16 @@ if (process.argv.includes("--probe-child")) {
   );
   Bun.gc(true);
 
-  // WARM: the same batch again. Fresh RSS needed for it is what the allocator
-  // could NOT hand back. Read the two together and nothing else: both arms have
-  // the same SQLite and OS page cache state by construction, but the warm arm
-  // also has a warm parser and JIT, so this is an upper bound on reuse rather
-  // than an isolate of it.
+  // WARM: the same batch again, after the whole pipeline has run.
+  //
+  // The two arms are NOT controlled against each other, and the gap between
+  // them should not be read as a reuse fraction. Before COLD, storage is open
+  // and `resolveStreamBatch` has already sampled a dozen pages. Before WARM,
+  // the entire pipeline has run: SQLite's cache, the OS page cache, the parser
+  // and the JIT are all warm, and the arena has grown. What the pair shows is
+  // narrower and still worth having — the incremental RSS a batch costs after
+  // the run is far smaller than before it — and every one of those warm caches
+  // is an alternative explanation for that on its own.
   const warmBefore = process.memoryUsage().rss;
   rows = await run(storage.getPages(crawlId, { limit: batch.pages, offset: 0 }));
   parsed = await run(buildSiteContext(rows));
@@ -186,6 +191,12 @@ if (process.argv.includes("--probe-child")) {
  * macOS `-l` prints "<bytes> maximum resident set size"; GNU time has no `-l`
  * and its own label and order, so it is given an explicit format with a marker
  * of ours and anchored parsing.
+ *
+ * Anchoring is not enough on its own, because `time` and the child SHARE stderr:
+ * a child line matching the pattern is accepted as the measurement, and the
+ * first match wins. So the child's stderr is redirected to its own file by an
+ * inner shell, leaving `time`'s output alone on the pipe. macOS `time` has no
+ * `-o`, which is why this is done with a redirect rather than a flag.
  */
 const TIME = ((): { cmd: string[]; parse: (stderr: string) => number | null } => {
   if (process.platform === "darwin") {
@@ -231,9 +242,16 @@ interface ChildResult {
 function spawnChild(flag: string, budget: number, purge: string): ChildResult | null {
   const env = { ...process.env } as Record<string, string>;
   if (purge === "purge0") env.MIMALLOC_PURGE_DELAY = "0";
+  const childErrPath = `${process.env.TMPDIR ?? "/tmp"}/sweep-child-${process.pid}.err`;
   const proc = Bun.spawnSync({
     cmd: [
       ...TIME.cmd,
+      "/bin/sh",
+      "-c",
+      // Only the CHILD's fd 2 is redirected; `time` writes to the fd 2 it was
+      // started with, which is still the pipe.
+      `exec "$@" 2>"${childErrPath}"`,
+      "sh",
       process.execPath,
       "run",
       import.meta.path,
@@ -247,7 +265,14 @@ function spawnChild(flag: string, budget: number, purge: string): ChildResult | 
     stdout: "pipe",
     stderr: "pipe",
   });
-  const err = proc.stderr.toString();
+  const timeErr = proc.stderr.toString();
+  const err = (() => {
+    try {
+      return require("node:fs").readFileSync(childErrPath, "utf8") as string;
+    } catch {
+      return "";
+    }
+  })();
   // A non-zero exit invalidates the run even when the child printed its line
   // first: a failure after the print is still a failure, and the maxrss of a
   // process that died early is a small and entirely plausible number.
@@ -266,7 +291,7 @@ function spawnChild(flag: string, budget: number, purge: string): ChildResult | 
     console.error(`  ${flag} budget ${budget / MB} MB (${purge}): no result line`);
     return null;
   }
-  return { record: JSON.parse(line.slice(prefix.length)), maxRss: TIME.parse(err) };
+  return { record: JSON.parse(line.slice(prefix.length)), maxRss: TIME.parse(timeErr) };
 }
 
 interface Cell {

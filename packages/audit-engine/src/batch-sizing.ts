@@ -29,56 +29,53 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
  * heaviest pages measured, which fits a standard-3 container (8 GiB) alongside
  * the crawl's own high-water and the report tail with room to spare.
  *
- * WHAT THE DIAL BUYS, measured (scripts/batch-budget-sweep.ts, 150 real 959 KB
- * pages, peak read from the OS rather than an in-process sampler, batch resolved
- * from the budget by this module, three runs per budget):
+ * WHAT WAS MEASURED (scripts/batch-budget-sweep.ts, 150 real 959 KB pages, peak
+ * read from the OS rather than an in-process sampler, batch resolved from the
+ * budget by this module, three runs per budget, one machine, one load):
  *
- *   budget    batch    peak RSS (min .. max over 3 runs)
- *     6 MB        6      480 .. 516 MB
- *    12 MB       12      344 .. 417 MB
- *    24 MB       25      492 .. 592 MB
- *    48 MB       51      509 .. 707 MB
- *    96 MB      102      655 .. 706 MB
+ *   budget    batch    peak RSS over 3 runs
+ *     6 MB        6      480, 486, 516 MB
+ *    12 MB       12      357, 401, 417 MB
+ *    24 MB       25      492, 517, 592 MB
+ *    48 MB       51      579, 634, 635 MB
+ *    96 MB      102      682, 705, 706 MB
  *
- * Three things, and only these three, follow from that table.
+ * OBSERVATIONS, and deliberately not more than these.
  *
- * THE PEAK NEVER GOT BELOW ~340 MB at any budget tried, so a large part of it
- * is not reachable with this dial: the rule set, the runner, SQLite's caches
- * and the arena. Halving the budget cannot halve a container. Between 12 and
- * 102 pages a batch eight times larger cost a peak under twice as large, so the
- * budget-dependent part is real but sub-proportional. Do not read a formula off
- * these five points — a straight line through the ends misses the middle by
- * 100 MB, and the run-to-run spread within one budget is 60 to 200 MB.
+ * No budget tried produced a peak under 344 MB, and an eight-fold larger batch
+ * (12 to 102 pages) produced a peak 1.9 times larger on the minima and at most
+ * 2.0 times larger taking the extremes. What that means for the invariant part
+ * of the peak is not established here: five budgets on one fixture cannot
+ * identify a component or say what it is made of. Do not read a formula off
+ * these points either — a straight line through the ends misses the middle of
+ * its own table by 100 MB, and the spread within a single budget is 36 to
+ * 198 MB.
  *
- * SMALLER IS NOT MONOTONICALLY BETTER. Every one of three runs at a 6 MB budget
- * peaked above every one of five runs at 12 MB. Two things differ at once
- * there — the batch holds less, and the same crawl takes about twice as many
- * read-parse-collect cycles — so this says the direction is not safe to assume,
- * not that a threshold sits at twelve pages. If a container is tight, measure
- * the budget you intend to set; do not assume turning it down helps.
+ * All three runs at a 6 MB budget peaked above all three at 12 MB. Two things
+ * differ between them at once — the batch holds less, and the same crawl takes
+ * about twice as many read-parse-collect cycles — so this is a reason not to
+ * assume the direction, not a threshold and not a cause. If a container is
+ * tight, measure the budget you intend to set.
  *
- * WHAT IS NOT HANDED BACK BETWEEN BATCHES IS LARGELY REUSABLE. The script's
- * cold/warm probe parses one batch from a standing start, runs the whole
- * pipeline, then parses that same batch again: 51 pages cost 312 MB of fresh
- * RSS cold and 41 MB the second time, and 12 pages cost 89 MB and then 0. That
- * is an upper bound on reuse rather than an isolate of it — the warm arm also
- * has a warm parser and JIT — and it says nothing about whether anything is
- * retained. It is evidence that the peak is a high-water rather than a
- * compounding cost, not proof of it.
+ * The incremental RSS one batch costs is much smaller after a run than before
+ * it: 51 pages cost 312 MB of fresh RSS from a standing start and 41 MB again
+ * afterwards; 12 pages cost 89 MB and then 0. The two arms are not controlled
+ * against each other — after the run, SQLite's cache, the OS page cache, the
+ * parser and the JIT are all warm — so each of those is an alternative
+ * explanation, and this does not measure how much of the residency is reusable.
  *
  * Also measured: Bun honours mimalloc's environment options (`MIMALLOC_VERBOSE=1`
  * prints its option dump), but `MIMALLOC_PURGE_DELAY=0` moved the peak in both
  * directions across five budgets and never beyond the run-to-run spread.
  *
- * Every number above is the whole pipeline's high-water — universe, site fetch,
- * page loop, site query, site rules, assembly — because that is what a container
- * is charged for. The budget sizes more than one of those phases, so none of it
- * attributes a peak to the page loop alone.
- *
- * And they are ABSOLUTE numbers from one machine under one load. A later run of
- * the same two budgets on a busy machine measured 515 and 845 MB where the table
- * says 344 and 509. The shape is the finding; the values are not a spec, and a
- * container is not safe because it exceeds a number in this comment.
+ * Every peak in the table is a whole child process's high-water — universe, site
+ * fetch, page loop, site query, site rules, assembly — because that is what a
+ * container is charged for. The budget sizes more than one of those phases, so
+ * none of the table attributes a peak to the page loop alone. And the values are
+ * one machine under one load: re-running two of these budgets while the machine
+ * was busy gave 515 and 845 MB where the table says 357 and 579. The shape is
+ * the finding; the numbers are not a spec, and a container is not safe because
+ * it exceeds one of them.
  */
 export const STREAM_BATCH_BYTES = 48 * 1024 * 1024;
 
