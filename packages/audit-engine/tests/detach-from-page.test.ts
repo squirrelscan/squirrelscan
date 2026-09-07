@@ -16,14 +16,23 @@ import { describe, expect, test } from "bun:test";
 
 import { detachCounts, detachFromPage, resetDetachCounts } from "../src/detach";
 
-/** Retained bytes after holding `n` copies of what `make` returns. */
+/**
+ * Retained bytes after holding `n` copies of what `make` returns.
+ *
+ * heapUsed + external, not heapUsed alone: a string's backing store is not on
+ * the JS heap, and a slice pins the BUFFER, not a heap object. Measured on
+ * heapUsed by itself the attached control reported 0 KB/item, which sent this
+ * test down its INCONCLUSIVE branch on every run — green, and asserting
+ * nothing.
+ */
 function retainedPerItem(n: number, make: (i: number) => unknown): number {
   Bun.gc(true);
-  const before = process.memoryUsage().heapUsed;
+  const before = process.memoryUsage();
   const kept: unknown[] = [];
   for (let i = 0; i < n; i++) kept.push(make(i));
   Bun.gc(true);
-  const grown = process.memoryUsage().heapUsed - before;
+  const after = process.memoryUsage();
+  const grown = after.heapUsed - before.heapUsed + (after.external - before.external);
   // Touch `kept` after the sample so it cannot be collected early.
   expect(kept.length).toBe(n);
   return grown / n;

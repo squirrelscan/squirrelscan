@@ -30,6 +30,12 @@ const N = Number.parseInt(arg("pages", "150"), 10);
 // measures a path production does not take. `--no-parsed-data` keeps the old
 // behaviour so the two can be compared.
 const STORE_PARSED = !process.argv.includes("--no-parsed-data");
+// Per-page-distinct external links and sub-resource URLs. The site-wide
+// collectors in the pre-rules walk are keyed by href / asset URL, so a fixture
+// of identical pages gives them a handful of keys however many pages it has and
+// cannot show what they retain per page. A real catalogue has its own product
+// images and its own outbound links on every page. See scripts/prerules-retention.ts.
+const DISTINCT_ASSETS = process.argv.includes("--distinct-assets");
 const BASE = "https://www.drscholls.com";
 
 const base = await Bun.file(PAGE).text();
@@ -71,9 +77,30 @@ for (let i = 0; i < N; i++) {
     // stored under is an external/broken link, not a link-graph edge.
     return `<a href="${pathFor(target)}">Product ${target}</a>`;
   }).join("\n");
+  const distinct = DISTINCT_ASSETS
+    ? {
+        head:
+          `<link rel="stylesheet" href="https://cdn.example.com/c/${i}/style-${i}.css">` +
+          `<script src="https://cdn.example.com/j/${i}/bundle-${i}.js"></script>`,
+        body:
+          Array.from(
+            { length: 6 },
+            (_, k) =>
+              `<a href="https://partner-${i}-${k}.example.com/ref/${i}">` +
+              `Partner link for product ${i} variant ${k}</a>`,
+          ).join("\n") +
+          Array.from(
+            { length: 12 },
+            (_, k) =>
+              `<img src="https://cdn.example.com/i/${i}/${k}/product-${i}-${k}.jpg" ` +
+              `alt="Product ${i} view ${k}">`,
+          ).join("\n"),
+      }
+    : { head: "", body: "" };
   const html = base
     .replace(/<title>[^<]*<\/title>/, `<title>Page ${i} Dr Scholls</title>`)
-    .replace("</body>", `<nav id="syn">${links}</nav></body>`);
+    .replace("</head>", `${distinct.head}</head>`)
+    .replace("</body>", `<nav id="syn">${links}</nav>${distinct.body}</body>`);
   const url = `${BASE}${pathFor(i)}`;
   await run(
     storage.upsertPage(crawlId, {

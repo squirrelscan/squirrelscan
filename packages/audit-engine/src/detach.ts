@@ -6,7 +6,11 @@ import type { ParsedPage } from "@squirrelscan/rules";
 import { logger } from "./adapter-logger";
 
 /** Where a detach happened, so a fallback can name the boundary that failed. */
-export type DetachBoundary = "page-rules" | "collected-signal" | "parsed-universe";
+export type DetachBoundary =
+  | "page-rules"
+  | "collected-signal"
+  | "parsed-universe"
+  | "external-links";
 
 export interface DetachCounts {
   /** Values copied free of their page. */

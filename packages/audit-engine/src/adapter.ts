@@ -2550,11 +2550,36 @@ export type ExternalLinkOccurrences = Map<string, ExternalLinkOccurrence[]>;
  * parsed document per page. Split out of {@link checkExternalLinksOnStorage}
  * (#1860) so the cloud can accumulate over batches instead of holding every
  * page's DOM resident to make one pass.
+ *
+ * The appearances are DETACHED before they land in `target`, for the same
+ * reason the page-rule findings are (#1860). `href` and `text` are read off the
+ * batch's live DOM, so both are slices of that page's html, and JSC keeps a
+ * slice attached to the buffer it came from. `target` outlives every batch, so
+ * one retained anchor text holds its whole page as UTF-16 until the walk ends —
+ * including the map KEY, which pins a page just as effectively as a value.
+ *
+ * Measured by scripts/prerules-retention.ts over real 959 KB pages with
+ * per-page-distinct external links, batch 50, against a control that absorbs
+ * nothing. String backing store held above the control:
+ *
+ *          50 pages   100 pages   150 pages
+ *   before    0 MB       94 MB      187 MB
+ *   after     3 MB        0 MB       -1 MB
+ *
+ * 1.87 MB per page, which is one 959 KB page as UTF-16 — every page walked,
+ * pinned whole, for ~200 KB of actual link data. It reads as zero at 50 pages
+ * because that is one batch: the retention only shows once a pinned page is one
+ * the walk has already moved past.
  */
 export function absorbExternalLinkOccurrences(
   target: ExternalLinkOccurrences,
   siteContext: SiteContextPage[],
 ): void {
+  // Collected for THIS call first so the whole batch is detached in ONE
+  // structuredClone. Cloning per link would be the same detach at many times
+  // the per-call cost, and a link-heavy crawl absorbs tens of thousands.
+  const fresh: Array<{ href: string; occurrence: ExternalLinkOccurrence }> = [];
+
   for (const { page, parsed } of siteContext) {
     if (!parsed || !parsed.document) continue; // Skip non-HTML or failed parses
 
@@ -2564,16 +2589,26 @@ export function absorbExternalLinkOccurrences(
 
     for (const link of links) {
       if (!link.isInternal && link.href) {
-        const occurrences = target.get(link.href) ?? [];
-        occurrences.push({
-          pageUrl: page.normalizedUrl,
-          text: link.text,
-          position: link.position,
-          isNofollow: link.isNofollow,
+        fresh.push({
+          href: link.href,
+          occurrence: {
+            pageUrl: page.normalizedUrl,
+            text: link.text,
+            position: link.position,
+            isNofollow: link.isNofollow,
+          },
         });
-        target.set(link.href, occurrences);
       }
     }
+  }
+
+  // Merged in absorption order, so `target` ends up with exactly the entries and
+  // per-href order the attached version produced. String map keys compare by
+  // value, so a detached href still finds an entry an earlier batch stored.
+  for (const { href, occurrence } of detachFromPage(fresh, "external-links")) {
+    const occurrences = target.get(href) ?? [];
+    occurrences.push(occurrence);
+    target.set(href, occurrences);
   }
 }
 

@@ -21,12 +21,17 @@ import { createRunner, type SiteData } from "@squirrelscan/rules";
 import { SchemaCollection } from "@squirrelscan/parser";
 
 import {
+  absorbExternalLinkOccurrences,
   buildSiteContext,
   buildHeadersMap,
   isRenderedFetch,
+  parseHtmlForRules,
   runStreamingRules,
+  type ExternalLinkOccurrences,
   type PreFetchedAssets,
+  type SiteContextPage,
 } from "../src/adapter";
+import { extractLinks } from "@squirrelscan/parser";
 import { detachCounts, detachFromPage, detachParsedPage, resetDetachCounts } from "../src/detach";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -199,4 +204,130 @@ describe("detach at the production boundaries", () => {
 
     await run(storage.close());
   }, 120_000);
+
+  test("external-link occurrences detach, and stop pinning their page", async () => {
+    // This boundary is the pre-rules walk's, not the page loop's, and it outlives
+    // every batch for the whole walk. `href` and `text` come off the LIVE DOM, so
+    // both are slices of the page's html — including the map KEY, which pins a
+    // page exactly as well as a value does.
+    //
+    // Hand-built pages rather than the synthetic model: the model renders no
+    // external links at all, so a fixture-driven version of this test would
+    // compare two empty maps and pass while asserting nothing.
+    const ctx = [0, 1, 2].flatMap((i) => externalLinkPage(i, 2_000));
+
+    resetDetachCounts();
+    const collected: ExternalLinkOccurrences = new Map();
+    absorbExternalLinkOccurrences(collected, ctx);
+
+    expect(collected.size).toBeGreaterThan(0);
+
+    const counts = detachCounts("external-links");
+    // One clone per absorb CALL, not per link — so this is the batch count.
+    expect(counts.detached).toBe(1);
+    expect(counts.fallbacks).toBe(0);
+
+    // Same entries, same per-href order, as the attached version produced. The
+    // batched-vs-resident parity is pinned separately by
+    // streaming-pre-rules-golden.test.ts; this pins detached-vs-attached.
+    const reference: ExternalLinkOccurrences = new Map();
+    absorbAttached(reference, ctx);
+    expect([...collected.keys()]).toEqual([...reference.keys()]);
+    for (const [href, list] of reference) expect(collected.get(href)).toEqual(list);
+  }, 120_000);
+
+  test("absorbing from a page-sized document does not retain the document", () => {
+    // The assertions above cannot see the thing this change is for: the values
+    // are identical whether or not they are attached. So this measures on
+    // page-sized inputs, with the same INCONCLUSIVE guard
+    // detach-from-page.test.ts uses — a run where the control retains nothing
+    // demonstrates nothing, and asserting on it would report a pass it did not
+    // earn.
+    //
+    // heapUsed + external, not heapUsed alone: a string's backing store is not
+    // on the JS heap, and a slice pins the BUFFER. Measuring heapUsed by itself
+    // reports 0 KB/page for the attached control and makes this test
+    // permanently inconclusive.
+    // Page-SIZED, and few enough that the transient DOMs stay modest: a real
+    // drscholls page is ~959 KB, and the retention this catches is proportional
+    // to the source buffer, so a small fixture makes the control indistinguishable
+    // from noise (a 300 KB one measured 30 KB/page and stayed inconclusive).
+    const N = 30;
+
+    function retainedPerPage(
+      absorb: (target: ExternalLinkOccurrences, ctx: SiteContextPage[]) => void,
+    ): number {
+      Bun.gc(true);
+      const before = process.memoryUsage();
+      const target: ExternalLinkOccurrences = new Map();
+      for (let i = 0; i < N; i++) absorb(target, externalLinkPage(i, 900_000));
+      Bun.gc(true);
+      const after = process.memoryUsage();
+      const grown = after.heapUsed - before.heapUsed + (after.external - before.external);
+      expect(target.size).toBe(N); // touch it after the sample
+      return grown / N;
+    }
+
+    // Warm both paths before measuring either. The first arm to run pays for
+    // the parser's one-time structures, which on this fixture is hundreds of KB
+    // per page — enough to make whichever arm goes first look like the leaker.
+    retainedPerPage(absorbExternalLinkOccurrences);
+    retainedPerPage(absorbAttached);
+
+    const detached = retainedPerPage(absorbExternalLinkOccurrences);
+    const attached = retainedPerPage(absorbAttached);
+
+    const KB = 1024;
+    if (attached < 100 * KB) {
+      console.warn(
+        `[detach] INCONCLUSIVE: control retained only ${Math.round(attached / KB)} KB/page, ` +
+          `so this run did not demonstrate the retention it is meant to catch.`,
+      );
+      return;
+    }
+    expect(detached).toBeLessThan(attached / 4);
+  }, 120_000);
 });
+
+/**
+ * One page carrying one distinct external link, parsed the way production parses.
+ * `filler` is unique per page so the html cannot share a backing store with any
+ * other page's — a corpus built by repeating one string is nearly free to hold
+ * and would make the attached control look detached.
+ */
+function externalLinkPage(i: number, fillerChars: number): SiteContextPage[] {
+  const url = `http://synthetic.test/p/${i}`;
+  // Long text per node rather than many tiny nodes: the size that matters here
+  // is the html BUFFER, and a node-dense page of the same byte count costs
+  // several times as much to hold as a live DOM for no extra signal.
+  const chunk = 200;
+  const filler = Array.from(
+    { length: Math.ceil(fillerChars / (chunk + 24)) },
+    (_, k) => `<p>${`${i}-${k} `.padEnd(chunk, "abcdefghij")}</p>`,
+  ).join("");
+  const html =
+    `<html><body>${filler}` +
+    `<a href="https://partner-${i}.example.com/ref/${i}">Partner ${i} anchor text</a>` +
+    `<a href="/local/${i}">Local ${i}</a></body></html>`;
+  return [
+    { page: { normalizedUrl: url, finalUrl: url, html } as never, parsed: parseHtmlForRules(html, url) },
+  ] as unknown as SiteContextPage[];
+}
+
+/** Exactly what absorbExternalLinkOccurrences did before the detach. */
+function absorbAttached(target: ExternalLinkOccurrences, siteContext: SiteContextPage[]): void {
+  for (const { page, parsed } of siteContext) {
+    if (!parsed || !parsed.document) continue;
+    for (const link of extractLinks(parsed.document, page.finalUrl)) {
+      if (link.isInternal || !link.href) continue;
+      const list = target.get(link.href) ?? [];
+      list.push({
+        pageUrl: page.normalizedUrl,
+        text: link.text,
+        position: link.position,
+        isNofollow: link.isNofollow,
+      });
+      target.set(link.href, list);
+    }
+  }
+}
