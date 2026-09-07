@@ -85,7 +85,9 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
   });
 
   test("http_5xx: a server error keeps its status and stays attributed to the origin", () => {
-    const detail = crawlErrorToFailureDetail(CrawlError.network(URL_ROOT, "Server error: 503", 503));
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.network(URL_ROOT, "Server error: 503", 503),
+    );
     expect(detail.code).toBe("http_5xx");
     expect(detail.status).toBe(503);
   });
@@ -134,7 +136,12 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
     // (squirrelscan/repo#1840). Reading the code means the classification
     // follows the runtime instead of chasing its wording.
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "Unable to connect. Is the computer able to access the url?", undefined, "ENOTFOUND"),
+      CrawlError.network(
+        URL_ROOT,
+        "Unable to connect. Is the computer able to access the url?",
+        undefined,
+        "ENOTFOUND",
+      ),
     );
     expect(detail.code).toBe("dns");
   });

@@ -474,9 +474,14 @@ export function classifyAuditFailureReasonText(
     /rate[\s-]?limit/.test(r) ||
     /\bwaf\b/.test(r) ||
     r.includes("captcha") ||
-    /\b429\b/.test(r) ||
+    // ALL THREE refusal statuses require the status lead-in. A bare number
+    // match reads "failed after 403 retries" as a bot block, which is the same
+    // hole the bare "HTTP NNN" fix closed. Nothing is lost: "429 Too Many
+    // Requests" classifies on the "too many requests" marker above, and the
+    // crawler's own throttle message classifies on "rate limit".
     statusIn(r, 401, 401) ||
-    statusIn(r, 403, 403)
+    statusIn(r, 403, 403) ||
+    statusIn(r, 429, 429)
   ) {
     return "http_4xx";
   }

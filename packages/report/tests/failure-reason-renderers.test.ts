@@ -33,7 +33,10 @@ function failedReport(
 }
 
 const DNS = failedReport("DNS lookup failed for ejconsultor.es: NXDOMAIN", "dns");
-const TLS = failedReport("TLS handshake with ejconsultor.es failed: certificate has expired", "tls");
+const TLS = failedReport(
+  "TLS handshake with ejconsultor.es failed: certificate has expired",
+  "tls",
+);
 const SERVER = failedReport("ejconsultor.es returned 503 Service Unavailable", "http_5xx");
 
 describe("text output (#1822)", () => {

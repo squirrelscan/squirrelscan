@@ -44,6 +44,21 @@ describe("classifier parity corpus (#1822)", () => {
     }
   });
 
+  test("a bare 429 in an internal message is not read as a refusal", () => {
+    // 429 needs the status lead-in like 401 and 403. Every real throttle string
+    // still classifies, on a marker rather than on the number.
+    expect(classifyAuditFailureReasonText("database query failed after 429 retries")).toBe(
+      "unknown",
+    );
+    for (const reason of [
+      "429 Too Many Requests",
+      "Rate limited (429), retry after 30s",
+      "example.com returned 429 Too Many Requests",
+    ]) {
+      expect(classifyAuditFailureReasonText(reason)).toBe("http_4xx");
+    }
+  });
+
   test("our own internal failures never read as the audited site's", () => {
     // The half of the corpus that matters most: every one of these would
     // otherwise tell a site owner to fix something that was never theirs.
