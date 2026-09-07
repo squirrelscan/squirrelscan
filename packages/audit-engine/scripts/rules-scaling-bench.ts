@@ -1,34 +1,43 @@
 // How the rules phases scale with page count (#1910).
 //
 // #1910 reports site rules going from 4s at 400 pages to 687s at 5,000 — about
-// n^2 — with page rules at n^1.6 and even `parsePageRecord` per page rising from
-// 5.5 to 40 ms, which is the strangest of the three, because parsing one page
-// should not depend on how many other pages exist. This is the benchmark that
-// re-measures those numbers under conditions where they can be believed.
+// n^2 — with page rules at n^1.6 and per-page `parsePageRecord` cost rising from
+// 5.5 to 40 ms, and asks for a re-measurement it can believe. Five things have
+// to be controlled for the answer to mean anything, and four of them cost a
+// wrong answer rather than a vague one:
 //
-// THREE THINGS THE ORIGINAL MEASUREMENT COULD NOT CONTROL, and this does:
-//
-//   - CONTENTION. #1910's own caveat says its 2,500 row was 589s wall against
-//     360s CPU and its 5,000 row 2,236s against 1,023s, on a 16 GB box doing
-//     150 MB/s of swap with a load average of 13. Wall time under those
-//     conditions is mostly waiting. Run this on a quiet machine and read the
-//     per-page columns, which is where a superlinear term shows up as a rising
-//     number rather than as a big one.
-//   - THE CONTENT STORE. #1908's full-table scan per stored page makes a single
-//     crawl quadratic in its own page count and would dominate anything measured
-//     through it. The fixtures here store html in the crawl DB itself and never
-//     touch the global store, so it cannot participate.
-//   - THE PATH. The CLI runs v1 (`runRulesOnStorage`, every page resident) and
-//     the cloud runs the streamed pass; #1910 measured the CLI. Both are timed
-//     here, because "site rules are quadratic" would mean something different
-//     about each.
+//   1. THE NETWORK. `security/http-to-https` probes sample URLs over HTTP with
+//      staggered sleeps, and none of the cloud/intel/external-link switches
+//      turns it off. On this fixture it was 508-790 ms of a 518-790 ms site
+//      phase: the whole phase was one rule waiting on sockets, and every other
+//      site rule's scaling was invisible underneath it. It is DISABLED by
+//      default here (`--disable`), and the disabled set is printed, because a
+//      site-rule number measured with it on is a number about the network.
+//   2. THE CONTENT STORE. #1908's full-table scan per stored page makes a crawl
+//      quadratic in its own page count. The fixtures keep html in the crawl DB
+//      and never touch the global store.
+//   3. CONTENTION. #1910's own caveat records its 2,500 row as 589s wall against
+//      360s CPU and its 5,000 row as 2,236s against 1,023s, on a 16 GB box doing
+//      150 MB/s of swap at load average 13. Read the per-page columns on a quiet
+//      machine; a superlinear term shows up there as a rising number.
+//   4. ORDER AND WARMTH. Every measurement runs in its OWN child process, so no
+//      arm inherits another's warm JIT, parser structures or SQLite cache, and
+//      the sizes cannot warm each other.
+//   5. WHICH PARSE. `parsePageRecord` is the full extraction. `buildSiteContext`
+//      on a fixture with stored `parsedData` only re-parses the DOM and
+//      deserializes the rest, which is a different and cheaper thing. Both are
+//      timed, separately, and only the first answers #1910's parse observation.
 //
 //   bun run scripts/build-mixed-fixture.ts --db /tmp/mix400.sqlite --pages 400
 //   bun run scripts/rules-scaling-bench.ts --dbs /tmp/mix400.sqlite,/tmp/mix2500.sqlite
 //
-// Add `--profile` for per-rule timings, which is what names an individual rule
-// that walks the page set once per page. Note that site rules run with bounded
-// concurrency, so their per-rule times sum to MORE than the phase's wall time.
+// The CLI runs v1 (`runRulesOnStorage`, every page resident) and the cloud runs
+// the streamed pass; #1910 measured the CLI, so both are timed, and v1 is split
+// into its page-scope and site-scope halves with the rule profiler rather than
+// reported as one number — a near-linear total cannot rule out a superlinear
+// site component hiding inside it.
+//
+// --child is the inner half; the parent re-invokes this file with it.
 
 import { getDefaultConfig, type Config } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
@@ -36,6 +45,7 @@ import { Effect } from "effect";
 
 import {
   buildSiteContext,
+  parsePageRecord,
   runRulesOnStorage,
   runStreamingRules,
   type PreFetchedAssets,
@@ -50,11 +60,18 @@ const arg = (n: string, d: string) => {
   return i >= 0 ? (process.argv[i + 1] ?? d) : d;
 };
 
-const DBS = arg("dbs", "")
+const MODE = arg("mode", "streamed");
+const DB = arg("db", "");
+const BATCH = Number.parseInt(arg("batch", "200"), 10);
+/**
+ * Rules excluded from every arm. Not a convenience: a rule that waits on the
+ * network contributes a fixed, sleep-shaped cost that swamps the computational
+ * term this benchmark exists to measure.
+ */
+const DISABLE = arg("disable", "security/http-to-https")
   .split(",")
   .map((d) => d.trim())
   .filter(Boolean);
-const BATCH = Number.parseInt(arg("batch", "200"), 10);
 
 const EMPTY_ASSETS: PreFetchedAssets = {
   resourceSizes: { css: [], images: [] },
@@ -64,9 +81,9 @@ const EMPTY_ASSETS: PreFetchedAssets = {
 };
 
 /**
- * Every rule on, nothing that reaches the network. `rules.enable: ["*"]` is not
- * optional: `filterRules` defaults every rule to DISABLED, so a bench without it
- * measures an empty rule set and reports a flat, meaningless line.
+ * Every rule on except the excluded ones. `rules.enable: ["*"]` is not optional:
+ * `filterRules` defaults every rule to DISABLED, so a bench without it measures
+ * an empty rule set and reports a flat, meaningless line.
  */
 function benchConfig(): Config {
   const base = getDefaultConfig();
@@ -75,106 +92,156 @@ function benchConfig(): Config {
     cloud: { ...base.cloud, enabled: false },
     intel: { ...base.intel, enabled: false },
     external_links: { ...base.external_links, enabled: false },
-    rules: { enable: ["*"] },
+    rules: { enable: ["*"], disable: DISABLE },
   } as unknown as Config;
 }
 
-interface Row {
-  pages: number;
-  universeMs: number;
-  pageRulesMs: number;
-  siteRulesMs: number;
-  siteQueryMs: number;
-  v1ParseMs: number;
-  v1RulesMs: number;
-}
+// ── child ────────────────────────────────────────────────────────────────────
 
-async function measure(db: string): Promise<Row> {
-  const storage = new SQLiteStorage(db);
+if (process.argv.includes("--child")) {
+  const storage = new SQLiteStorage(DB);
   await run(storage.init());
   const crawls = await run(storage.listCrawls(1));
   const crawlId = (crawls as Array<{ id: string }>)[0]!.id;
   const pages = await run(storage.getPageCount(crawlId));
+  const out: Record<string, number> = { pages };
 
-  const started = new Map<StreamingRulePhase, number>();
-  const phase = new Map<StreamingRulePhase, number>();
-  await run(
-    runStreamingRules(storage, crawlId, benchConfig(), EMPTY_ASSETS, undefined, {
-      batchSize: BATCH,
-      onPhase: (name, boundary) => {
-        if (boundary === "start") started.set(name, Date.now());
-        else phase.set(name, Date.now() - started.get(name)!);
-      },
-    }),
-  );
-
-  // v1, the path the CLI takes and the one #1910 measured. Its parse is timed
-  // separately because #1910 reports per-page PARSE cost rising too, and in v1
-  // the parse is a distinct step rather than part of the batched walk.
-  const t0 = Date.now();
-  const all = await run(storage.getPages(crawlId));
-  const ctx = await run(buildSiteContext(all));
-  const v1ParseMs = Date.now() - t0;
-  const t1 = Date.now();
-  await run(runRulesOnStorage(storage, crawlId, ctx, benchConfig(), EMPTY_ASSETS));
-  const v1RulesMs = Date.now() - t1;
+  if (MODE === "streamed") {
+    const started = new Map<StreamingRulePhase, number>();
+    await run(
+      runStreamingRules(storage, crawlId, benchConfig(), EMPTY_ASSETS, undefined, {
+        batchSize: BATCH,
+        onPhase: (name, boundary) => {
+          if (boundary === "start") started.set(name, Date.now());
+          else out[name] = Date.now() - started.get(name)!;
+        },
+      }),
+    );
+  } else if (MODE === "v1") {
+    const t0 = Date.now();
+    const all = await run(storage.getPages(crawlId));
+    const ctx = await run(buildSiteContext(all));
+    // NOT parsePageRecord: with stored parsedData this re-parses the DOM and
+    // deserializes the rest. Named `hydrate` so it cannot be read as the parse
+    // #1910 is talking about.
+    out.hydrate = Date.now() - t0;
+    const t1 = Date.now();
+    await run(runRulesOnStorage(storage, crawlId, ctx, benchConfig(), EMPTY_ASSETS));
+    out.v1Rules = Date.now() - t1;
+  } else if (MODE === "parse") {
+    // The real thing: full extraction per page, which is what #1910 reports
+    // rising from 5.5 to 40 ms per page.
+    const all = await run(storage.getPages(crawlId));
+    const t0 = Date.now();
+    let parsed = 0;
+    for (const page of all) if (parsePageRecord(page)) parsed++;
+    out.parse = Date.now() - t0;
+    out.parsedPages = parsed;
+  }
 
   await run(storage.close());
-  return {
-    pages,
-    universeMs: phase.get("universe") ?? 0,
-    pageRulesMs: phase.get("page-rules") ?? 0,
-    siteRulesMs: phase.get("site-rules") ?? 0,
-    siteQueryMs: phase.get("site-query") ?? 0,
-    v1ParseMs,
-    v1RulesMs,
-  };
+  console.log(`CHILD ${JSON.stringify(out)}`);
+  process.exit(0);
 }
 
-const rows: Row[] = [];
+// ── parent ───────────────────────────────────────────────────────────────────
+
+const DBS = arg("dbs", "")
+  .split(",")
+  .map((d) => d.trim())
+  .filter(Boolean);
+const REPEATS = Math.max(1, Number.parseInt(arg("repeat", "3"), 10));
+const PROFILE = process.argv.includes("--profile");
+
+function child(mode: string, db: string): Record<string, number> | null {
+  const proc = Bun.spawnSync({
+    cmd: [
+      process.execPath, "run", import.meta.path, "--child",
+      "--mode", mode, "--db", db, "--batch", String(BATCH), "--disable", DISABLE.join(","),
+    ],
+    // The profiler is read from the environment at module load, so it has to be
+    // set here rather than passed as a flag the child would have to re-plumb.
+    env: PROFILE ? { ...process.env, SQUIRREL_RULE_PROFILE: "1" } : process.env,
+    stdout: "pipe",
+    stderr: PROFILE ? "inherit" : "pipe",
+  });
+  if (proc.exitCode !== 0) {
+    console.error(`  ${mode} on ${db}: exit ${proc.exitCode}\n${proc.stderr?.toString().slice(-500) ?? ""}`);
+    return null;
+  }
+  const line = proc.stdout.toString().split("\n").find((l) => l.startsWith("CHILD "));
+  return line ? (JSON.parse(line.slice(6)) as Record<string, number>) : null;
+}
+
+const MODES = ["streamed", "v1", "parse"] as const;
+/** db -> mode -> metric -> the best (lowest) of the repeats. */
+const results = new Map<string, Map<string, Record<string, number>>>();
+
 for (const db of DBS) {
-  const row = await measure(db);
-  rows.push(row);
-  console.log(`measured ${db.split("/").pop()} (${row.pages} pages)`);
+  const perMode = new Map<string, Record<string, number>>();
+  for (const mode of MODES) {
+    let best: Record<string, number> | null = null;
+    for (let attempt = 0; attempt < REPEATS; attempt++) {
+      const got = child(mode, db);
+      if (!got) continue;
+      // Lowest of the repeats per metric. Noise on a timing bench adds work; it
+      // does not remove it, so the minimum is the closest thing to the cost.
+      if (!best) best = got;
+      else for (const [k, v] of Object.entries(got)) best[k] = Math.min(best[k] ?? v, v);
+    }
+    if (best) perMode.set(mode, best);
+  }
+  results.set(db, perMode);
+  console.log(`measured ${db.split("/").pop()}`);
 }
 
-// PER-PAGE is the column that answers the question. A phase that doubles when
-// the crawl doubles is linear and its per-page number is flat; a superlinear
-// phase shows up here as a rising one, whatever the absolute times are.
-const per = (ms: number, pages: number) => (ms / pages).toFixed(2);
+const COLUMNS: Array<[string, string, string]> = [
+  ["streamed", "universe", "universe"],
+  ["streamed", "page-rules", "pageRules"],
+  ["streamed", "site-query", "siteQuery"],
+  ["streamed", "site-rules", "siteRules"],
+  ["v1", "hydrate", "v1 hydrate"],
+  ["v1", "v1Rules", "v1 rules"],
+  ["parse", "parse", "parsePageRecord"],
+];
+
+const rows = DBS.map((db) => {
+  const perMode = results.get(db)!;
+  const pages = perMode.get("streamed")?.pages ?? perMode.get("v1")?.pages ?? perMode.get("parse")?.pages ?? 0;
+  const values = COLUMNS.map(([mode, key]) => perMode.get(mode)?.[key] ?? 0);
+  return { db, pages, values };
+}).filter((r) => r.pages > 0);
+
+console.log(`\nrules disabled: ${DISABLE.join(", ") || "(none)"}   repeats: ${REPEATS} (minimum shown)`);
 console.log(
-  `\n${"pages".padStart(6)} ` +
-    `${"universe".padStart(9)} ${"/pg".padStart(6)} ` +
-    `${"pageRules".padStart(10)} ${"/pg".padStart(6)} ` +
-    `${"siteRules".padStart(10)} ${"/pg".padStart(6)} ` +
-    `${"v1 parse".padStart(9)} ${"/pg".padStart(6)} ` +
-    `${"v1 rules".padStart(9)} ${"/pg".padStart(6)}`,
+  `${"pages".padStart(6)} ` + COLUMNS.map(([, , label]) => `${label.padStart(16)} ${"/pg".padStart(6)}`).join(" "),
 );
-for (const r of rows) {
+for (const row of rows) {
   console.log(
-    `${String(r.pages).padStart(6)} ` +
-      `${`${r.universeMs}ms`.padStart(9)} ${per(r.universeMs, r.pages).padStart(6)} ` +
-      `${`${r.pageRulesMs}ms`.padStart(10)} ${per(r.pageRulesMs, r.pages).padStart(6)} ` +
-      `${`${r.siteRulesMs}ms`.padStart(10)} ${per(r.siteRulesMs, r.pages).padStart(6)} ` +
-      `${`${r.v1ParseMs}ms`.padStart(9)} ${per(r.v1ParseMs, r.pages).padStart(6)} ` +
-      `${`${r.v1RulesMs}ms`.padStart(9)} ${per(r.v1RulesMs, r.pages).padStart(6)}`,
+    `${String(row.pages).padStart(6)} ` +
+      row.values
+        .map((ms) => `${`${ms}ms`.padStart(16)} ${(ms / row.pages).toFixed(2).padStart(6)}`)
+        .join(" "),
   );
 }
 
+// Slopes across the endpoints, and only when the endpoints differ. Two points
+// cannot separate `A + Bn` from `A + Bn + Cn²` over a narrow range — a fixed
+// cost A makes per-page fall either way — so this is labelled an OBSERVED slope
+// and the per-page columns above are the thing to read.
 if (rows.length >= 2) {
   const first = rows[0]!;
   const last = rows[rows.length - 1]!;
-  const ratio = last.pages / first.pages;
-  // The exponent, so a reader does not have to divide in their head. Linear is
-  // 1.0; #1910 reports 2.0 for site rules.
-  const exponent = (a: number, b: number) =>
-    a > 0 && b > 0 ? (Math.log(b / a) / Math.log(ratio)).toFixed(2) : "n/a";
-  console.log(
-    `\nacross ${first.pages} -> ${last.pages} pages (${ratio.toFixed(1)}x), cost ~ n^k:\n` +
-      `  universe   n^${exponent(first.universeMs, last.universeMs)}\n` +
-      `  pageRules  n^${exponent(first.pageRulesMs, last.pageRulesMs)}\n` +
-      `  siteRules  n^${exponent(first.siteRulesMs, last.siteRulesMs)}\n` +
-      `  v1 parse   n^${exponent(first.v1ParseMs, last.v1ParseMs)}\n` +
-      `  v1 rules   n^${exponent(first.v1RulesMs, last.v1RulesMs)}`,
-  );
+  if (last.pages === first.pages) {
+    console.log(`\nno slope: endpoint page counts are equal (${first.pages}).`);
+  } else {
+    const ratio = last.pages / first.pages;
+    console.log(`\nobserved slope across ${first.pages} -> ${last.pages} pages (${ratio.toFixed(1)}x), cost ~ n^k:`);
+    COLUMNS.forEach(([, , label], i) => {
+      const a = first.values[i]!;
+      const b = last.values[i]!;
+      const k = a > 0 && b > 0 ? (Math.log(b / a) / Math.log(ratio)).toFixed(2) : "n/a";
+      console.log(`  ${label.padEnd(16)} n^${k}`);
+    });
+  }
 }
