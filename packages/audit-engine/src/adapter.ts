@@ -107,6 +107,7 @@ import {
   type StreamPageRulesHooks,
 } from "./streaming";
 import { collectDroppedBatch } from "./batch-gc";
+import { detachFromPage } from "./detach";
 import { resolveCloakingProbes } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
 import { confirmSoft404Candidates } from "./soft404-confirm";
@@ -2380,7 +2381,9 @@ export function runStreamingRules(
       id: "site-dom-signals",
       collect(page, parsed) {
         collectedPages.push(
-          buildCollectedPageSignal({ url: page.normalizedUrl, finalUrl: page.finalUrl, parsed }),
+          detachFromPage(
+            buildCollectedPageSignal({ url: page.normalizedUrl, finalUrl: page.finalUrl, parsed }),
+          ),
         );
       },
     };

@@ -27,6 +27,7 @@ import { mergeRuleRunResult } from "@squirrelscan/rules";
 
 import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./adapter";
 import { collectDroppedBatch } from "./batch-gc";
+import { detachFromPage } from "./detach";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
 import type { PageRuleLoopHooks } from "./page-rule-executor";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
@@ -206,9 +207,44 @@ export function streamPageRules(
           rendered: isRenderedFetch(page.fetcherId),
         };
 
-        const result = yield* Effect.promise(() =>
+        const raw = yield* Effect.promise(() =>
           runner.runPageRules(pageData, siteDataForPageRules)
         );
+
+        // Detach the findings from the page before retaining them (#1860). Every
+        // string a rule pulled out of this page — a message, an item label, a
+        // matched value — is a slice of the page's HTML, and JSC keeps a slice
+        // attached to the buffer it came from, so retaining any one of them
+        // retains the whole page as UTF-16 for the rest of the run.
+        //
+        // ONLY the checks graph is cloned. Two things must stay out of it:
+        //
+        //  - `meta`, which carries the rule's Zod `optionsSchema`. structuredClone
+        //    throws on it (20 of 198 page rules), and because ONE failure aborts
+        //    the whole clone, including meta made this a silent no-op that the
+        //    golden tests could never catch — the findings were unchanged, just
+        //    still attached. meta is per-RULE, not per-page, so it retains nothing.
+        //  - `parsed`, which the runner returns and nothing here reads. Cloning it
+        //    would copy the live document and strip SchemaCollection's methods.
+        //
+        // One clone for the whole graph, not one per consumer: `pageResults`,
+        // `pageRuleResults` and `ruleResultsMap` all reference the SAME check
+        // objects, and cloning the container in a single call preserves that
+        // sharing. Cloning them separately would triple the findings.
+        const byRule = [...raw.ruleResults];
+        const detached = detachFromPage({
+          checks: raw.checks,
+          ruleChecks: byRule.map(([, rr]) => rr.checks),
+        });
+        const result = {
+          checks: detached.checks,
+          ruleResults: new Map(
+            byRule.map(([ruleId, rr], i) => [
+              ruleId,
+              { ...rr, checks: detached.ruleChecks[i]! },
+            ]),
+          ),
+        };
 
         const pageUrl = page.normalizedUrl;
         pageResults.set(pageUrl, result.checks);
