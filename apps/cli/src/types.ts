@@ -542,6 +542,8 @@ export interface AuditReport {
   scanScope?: {
     origin: "cli" | "ci" | "cloud";
     maxPages?: number;
+    /** Requested page cap, when it exceeded MAX_PAGES_CAP and was clamped (#1909). */
+    requestedMaxPages?: number;
     pagesCrawled: number;
     capped: boolean;
   };
@@ -588,6 +590,15 @@ export type CoverageMode = "quick" | "surface" | "full";
 export interface AuditOptions {
   url: string;
   maxPages?: number;
+  /**
+   * What the caller asked for BEFORE `MAX_PAGES_CAP` was applied (#1909).
+   *
+   * The command layer clamps `maxPages` for its own display and cost estimate,
+   * so by the time the controller sees it the request is already gone. Passing
+   * it separately is what lets the report record that a clamp happened at all.
+   * Unset when nothing asked for more than the cap.
+   */
+  requestedMaxPages?: number;
   maxDepth?: number; // optional crawl-depth ceiling (#318); unset = unlimited
   outputFormat?:
     | "json"

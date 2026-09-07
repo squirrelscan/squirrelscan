@@ -16,6 +16,7 @@ import { loadUserSettings, updateSettings } from "@/self/settings";
 import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { logger, setLogInterceptor } from "@/utils/logger";
 import { getProjectNameContext, parseUserUrl } from "@/utils/url";
+import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 
 import { version as packageVersion } from "../../../package.json";
 import {
@@ -113,14 +114,17 @@ export const crawl = defineCommand({
 
       // CLI --max-pages > config max_pages (if non-default) > coverage mode default
       const configMaxPagesIsDefault = config.crawler.max_pages === 100;
-      const maxPages = Math.min(
+      // Clamped and reported identically to `audit` (#1909).
+      const pageLimit = resolvePageLimit(
         args["max-pages"]
           ? Number.parseInt(args["max-pages"], 10)
           : configMaxPagesIsDefault
             ? coverageMaxPages
-            : config.crawler.max_pages,
-        MAX_PAGES_CAP
+            : config.crawler.max_pages
       );
+      const maxPages = pageLimit.effective;
+      const crawlClampNotice = pageLimitNotice(pageLimit);
+      if (crawlClampNotice) console.error(fmt.yellow(crawlClampNotice));
 
       // --concurrency / --per-host: positive-integer crawl parallelism
       // overrides, shared with `audit` (#1068/#1084).

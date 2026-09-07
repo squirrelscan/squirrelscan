@@ -453,6 +453,13 @@ export interface ScanScope {
   origin: "cli" | "ci" | "cloud";
   /** Page cap in effect for this run; absent when the runner had no cap. */
   maxPages?: number;
+  /**
+   * What the run ASKED for, present only when that exceeded the ceiling and was
+   * clamped down to `maxPages` (#1909). Absent on every ordinary run, so a
+   * caller detects a clamp by its presence rather than by comparing to a cap it
+   * would have to know.
+   */
+  requestedMaxPages?: number;
   /** Pages freshly crawled this run (the report.pages basis, before publish drops pages[]). */
   pagesCrawled: number;
   /** The page cap was the binding constraint — the site likely has more pages. */

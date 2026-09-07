@@ -239,6 +239,26 @@ first looked like the change breaking something: the crawl is non-deterministic
 at concurrency 8, because discovery order decides each URL's depth and parent,
 and `port: 0` puts a different ephemeral port in every stored URL, so identical
 code hashed differently three times running.
+## Not a performance change: the page cap said nothing
+
+Recorded here because #1028 needs the page count to be expressible from the CLI
+at all, and it was not. `squirrel audit --max-pages 10000` crawled 5,000 and
+reported `maxPages: 5000`, which is byte-identical to what a 5,000-page site
+reports ([#1909](https://github.com/squirrelscan/repo/issues/1909),
+[#263](https://github.com/squirrelscan/squirrelscan/pull/263)).
+
+No timings: nothing about this change affects how long anything takes, and there
+is no before/after to measure. What it changes is whether the number a
+measurement was taken at is knowable afterwards, which is what every other row
+in this file depends on.
+
+`MAX_PAGES_CAP` was applied with a bare `Math.min` in three places — the `audit`
+command, the `crawl` command and the audit controller — none of which said
+anything. The existing notice fires when a crawl REACHES the cap, a different
+event: a 10,000-page request against a 4,000-page site was clamped and never
+mentioned. Now one helper resolves the request, both commands print the clamp,
+and the report carries `meta.maxPages` alongside `meta.requestedMaxPages`, the
+latter present only when a clamp happened so its absence is the normal case.
 
 ## Hosted runtime, in production
 

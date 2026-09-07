@@ -35,6 +35,19 @@ interface SlimJsonReport {
     };
     timestamp: string;
     totalPages: number;
+    /**
+     * The page cap in force for this run (#1909). Present whenever the report
+     * carries a scan scope.
+     */
+    maxPages?: number;
+    /**
+     * What the run ASKED for, present only when that exceeded the ceiling and
+     * was clamped down to `maxPages` (#1909). Its ABSENCE is the normal case,
+     * so a caller detects a clamp by whether this field is here rather than by
+     * knowing the cap. Without it, a request for 10,000 pages and a 5,000-page
+     * site produce identical reports.
+     */
+    requestedMaxPages?: number;
     /** Smart audits (#110): present only when `smart_audits` ran. */
     coverage?: {
       auditedPages: number;
@@ -183,6 +196,12 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
         : {}),
       timestamp: report.timestamp,
       totalPages: report.totalPages,
+      ...(report.scanScope?.maxPages !== undefined
+        ? { maxPages: report.scanScope.maxPages }
+        : {}),
+      ...(report.scanScope?.requestedMaxPages !== undefined
+        ? { requestedMaxPages: report.scanScope.requestedMaxPages }
+        : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
     },
     status: report.status ?? "completed",
