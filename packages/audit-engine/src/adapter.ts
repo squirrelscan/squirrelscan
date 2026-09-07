@@ -2432,17 +2432,28 @@ export function runStreamingRules(
     // Step 6: assemble. Page rules were already merged + folded by streamPageRules;
     // merge + fold the site rules on top so ruleResultsMap and tallies stay in
     // lockstep — calculateHealthScoreFromTallies(tallies) === calculateHealthScore(ruleResultsMap).
-    const ruleResultsMap = streamed.ruleResultsMap;
-    const tallies = streamed.tallies;
-    for (const [ruleId, rr] of sitePass.siteRuleRunResults) {
-      mergeRuleRunResult(ruleResultsMap, ruleId, rr);
-      foldRuleResultIntoTallies(tallies, ruleId, rr);
-    }
+    //
+    // Reported as a phase like the rest: this is where the report's parsed-page
+    // cache is built, which is one of the structures that still scales with page
+    // count, so it is exactly the step whose cost we want visible when deciding
+    // whether to bound it. It was the one declared phase the pass never emitted.
+    const { ruleResultsMap, tallies, parsedPagesCache } = yield* phase("assemble", () =>
+      Effect.sync(() => {
+        const map = streamed.ruleResultsMap;
+        const folded = streamed.tallies;
+        for (const [ruleId, rr] of sitePass.siteRuleRunResults) {
+          mergeRuleRunResult(map, ruleId, rr);
+          foldRuleResultIntoTallies(folded, ruleId, rr);
+        }
 
-    // Parsed-page cache for the report tail — same universe (auditable pages) v1
-    // returns, with DOMs already dropped (report reads only extracted fields).
-    const parsedPagesCache = new Map<string, ParsedPage>();
-    for (const [url, { parsed }] of pageDataMap) parsedPagesCache.set(url, parsed);
+        // Parsed-page cache for the report tail — same universe (auditable pages)
+        // v1 returns, with DOMs already dropped (report reads only extracted
+        // fields).
+        const cache = new Map<string, ParsedPage>();
+        for (const [url, { parsed }] of pageDataMap) cache.set(url, parsed);
+        return { ruleResultsMap: map, tallies: folded, parsedPagesCache: cache };
+      }),
+    );
 
     return {
       pageResults: streamed.pageResults,
