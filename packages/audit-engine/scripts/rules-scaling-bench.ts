@@ -113,7 +113,15 @@ function benchConfig(): Config {
     cloud: { ...base.cloud, enabled: false },
     intel: { ...base.intel, enabled: false },
     external_links: { ...base.external_links, enabled: false },
-    soft404_confirm: { ...(base as { soft404_confirm?: object }).soft404_confirm, enabled: false },
+    // NESTED under `integrity`, which is where both engine paths read it. A
+    // root-level `soft404_confirm` is silently ignored and the pass stays on.
+    integrity: {
+      ...(base as { integrity?: { soft404_confirm?: object } }).integrity,
+      soft404_confirm: {
+        ...(base as { integrity?: { soft404_confirm?: object } }).integrity?.soft404_confirm,
+        enabled: false,
+      },
+    },
     rules: { enable: ["*"], disable: DISABLE },
   } as unknown as Config;
 }

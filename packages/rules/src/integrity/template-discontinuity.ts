@@ -128,9 +128,19 @@ export const templateDiscontinuityRule: Rule = {
     // on a site that actually has outliers, which is why a corpus of uniformly
     // themed pages never showed it (#1910).
     //
-    // Built once, and only when it will be used, so a streamed run and a site
-    // with no outliers both pay nothing.
-    const pageByUrl = signalCountByUrl ? null : new Map(pages.map((p) => [p.url, p]));
+    // LAZY, so a site with no outliers pays nothing, and FIRST-WINS, because
+    // `find` returned the first match and `SiteData.pages` is caller-supplied
+    // and not deduplicated. Building it with `new Map(pages.map(...))` would
+    // keep the LAST entry for a repeated url, which flips this rule's verdict
+    // from info to fail when a benign page and a compromised one share one.
+    let pageByUrl: Map<string, (typeof pages)[number]> | null = null;
+    const pageFor = (url: string) => {
+      if (!pageByUrl) {
+        pageByUrl = new Map();
+        for (const p of pages) if (!pageByUrl.has(p.url)) pageByUrl.set(p.url, p);
+      }
+      return pageByUrl.get(url)!;
+    };
 
     for (const { url, fp } of entries) {
       const similarity = similarityToBaseline(fp, baseline);
@@ -144,7 +154,7 @@ export const templateDiscontinuityRule: Rule = {
         // signals? Build a minimal page ctx for the signal detectors. `html: ""` is
         // intentional — the detectors read parsed.document/parsed.content, not
         // page.html (see orphan-page.ts for the same note).
-        const page = pageByUrl!.get(url)!;
+        const page = pageFor(url);
         const pageCtx: RuleContext = {
           page: {
             url: page.url,

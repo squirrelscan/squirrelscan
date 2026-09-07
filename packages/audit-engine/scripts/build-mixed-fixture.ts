@@ -36,6 +36,11 @@
 // prints the resulting mean page size rather than asserting one, because the
 // mean is a consequence of the template mix and the weight, and quoting a
 // remembered number is how a fixture comment goes stale.
+//
+// `--divergent-in N` puts one page in every N off the shared theme. The default
+// of 10 is a plausible share for a real site; a lower number is how you make a
+// term that is linear in the OUTLIER SHARE and quadratic in page count visible
+// above the noise, which at a 10% share it is not.
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { Effect } from "effect";
@@ -99,8 +104,8 @@ interface Page {
  * different stylesheet and different body classes, which is what makes them
  * outliers against the baseline the other pages establish.
  */
-const DIVERGENT_IN = 10;
-const isDivergent = (i: number) => i % DIVERGENT_IN === 3;
+const DIVERGENT_IN = Math.max(2, Number.parseInt(arg("divergent-in", "10"), 10));
+const isDivergent = (i: number) => i % DIVERGENT_IN === 1;
 
 interface Theme {
   head: string;
