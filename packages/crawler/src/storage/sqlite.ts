@@ -42,6 +42,7 @@ import type {
   SitePageRecord,
   CompactFindingsOptions,
   PageFeatureRow,
+  PageLinkRow,
   PageFeatureDuplicateField,
   DuplicateGroup,
   TemplateCluster,
@@ -1334,6 +1335,53 @@ export class SQLiteStorage implements CrawlStorage {
           ...(params as (string | number | null)[])
         ) as Record<string, unknown>[];
         return rows.map((row) => this.rowToPageRecord(row));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Just `normalized_url` + `parsed_data`, for the audit's incoming-link scan
+   * (#1860).
+   *
+   * `getPages` is `SELECT *`: on a script-heavy site it materializes ~1 MB of
+   * HTML per page (and re-reads it from the content store when the column is
+   * empty) so the scan can look at two small fields. That HTML is never touched
+   * and is dropped at the end of the batch, but the allocator keeps the pages it
+   * grew for it: measured over 150 real 959 KB pages, the two link-graph scans
+   * grew RSS 345 MB and gave none of it back, while the JS heap grew 343 KB.
+   *
+   * Same ordering and pagination as `getPages`, so a caller swapping one for the
+   * other sees the same rows in the same order.
+   */
+  getPageLinkRows(
+    crawlId: string,
+    options?: PaginationOptions
+  ): Effect.Effect<PageLinkRow[], StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        let query =
+          "SELECT normalized_url, parsed_data FROM pages WHERE crawl_id = ? ORDER BY normalized_url ASC";
+        const params: unknown[] = [crawlId];
+
+        if (options?.limit) {
+          query += " LIMIT ?";
+          params.push(options.limit);
+        }
+        if (options?.offset) {
+          query += " OFFSET ?";
+          params.push(options.offset);
+        }
+
+        const stmt = db.prepare(query);
+        const rows = stmt.all(
+          ...(params as (string | number | null)[])
+        ) as Record<string, unknown>[];
+        return rows.map((row) => ({
+          normalizedUrl: row.normalized_url as string,
+          parsedData: (row.parsed_data as string | null) ?? null,
+        }));
       },
       catch: (e) => StorageError.read(e),
     });
