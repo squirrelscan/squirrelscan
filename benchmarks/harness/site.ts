@@ -59,11 +59,15 @@ function tplFor(i: number): Tpl {
 }
 
 // ── collection template: real page with most inline script removed ──
-let scriptSeen = 0;
-const COLLECTION_BASE = BASE.replace(
-  /<script\b[^>]*>[\s\S]*?<\/script>/gi,
-  (m) => (scriptSeen++ < 6 ? m : ""),
-);
+// Parsed with a real HTML parser rather than a regex, so `</script >` variants and
+// nested `<script` text cannot leak through (CodeQL js/bad-tag-filter).
+import { parseHTML } from "linkedom";
+const COLLECTION_BASE = (() => {
+  const { document } = parseHTML(BASE);
+  const scripts = Array.from(document.querySelectorAll("script"));
+  for (const el of scripts.slice(6)) el.remove();
+  return document.toString();
+})();
 
 // ── light templates, built once, node-dense (not rope-cheap filler) ──
 const WORDS =

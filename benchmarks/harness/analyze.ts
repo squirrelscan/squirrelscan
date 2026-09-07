@@ -55,10 +55,16 @@ let pagesCrawled = 0;
 let findings = 0;
 let score: unknown = "?";
 let reportBytes = 0;
-if (existsSync(rpPath)) {
-  reportBytes = statSync(rpPath).size;
+let rpText: string | null = null;
+try {
+  rpText = readFileSync(rpPath, "utf8"); // read once; no exists/stat/read race
+} catch {
+  rpText = null;
+}
+if (rpText !== null) {
+  reportBytes = Buffer.byteLength(rpText, "utf8");
   try {
-    const r = JSON.parse(readFileSync(rpPath, "utf8")) as Record<string, unknown>;
+    const r = JSON.parse(rpText) as Record<string, unknown>;
     const meta = (r.meta ?? {}) as Record<string, unknown>;
     const summary = (r.summary ?? {}) as Record<string, unknown>;
     pagesCrawled = Number(meta.totalPages ?? summary.pagesCrawled ?? 0) || 0;
