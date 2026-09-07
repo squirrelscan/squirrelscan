@@ -153,44 +153,70 @@ before publishing a delta.
 `bun:sqlite` has two ways to get a statement and they are not interchangeable:
 `db.query(sql)` caches the compiled statement by SQL text, `db.prepare(sql)`
 compiles a new one every call. The crawler's storage layer used `prepare` in all
-116 places, so every operation re-parsed its SQL
-([#1911](https://github.com/squirrelscan/repo/issues/1911)).
+116 places ([#1911](https://github.com/squirrelscan/repo/issues/1911)).
 [#247](https://github.com/squirrelscan/squirrelscan/pull/247) converted the
 per-link frontier check; a census of a real crawl then showed which of the
-remaining 95 were worth touching, and the answer was four
-([#259](https://github.com/squirrelscan/squirrelscan/pull/259)).
+remaining 95 were worth touching, and the answer was five
+([#262](https://github.com/squirrelscan/squirrelscan/pull/262)).
 
-| statements compiled | before | after |
+| statements compiled, 120-page crawl at 40 links/page | before | after |
 |---|---|---|
-| 120-page crawl, 40 links/page | 513 | 37 |
-| per page | 4.3 | 0.3 |
-| scaling in page count | O(pages) | O(1) |
+| `incremental: true`, the CLI default | 168 | 50 |
+| per page | 1.4 | 0.4 |
+| `incremental: false` | 513 | 48 |
+| per page | 4.3 | 0.4 |
+| scaling in page count, both | O(pages) | O(1) |
 
-The four were `upsertPage`, `upsertFrontier`, `getIncomingLinkCount` and the
-crawl-stats `UPDATE`. Every other statement in the file runs once per crawl, and
+The five were `upsertPage`, `upsertFrontier`, `getIncomingLinkCount`, the
+crawl-stats `UPDATE` and `getCachedPage`. That last one only appears with
+`incremental` on, which is the CLI's default and was NOT what the first census
+run measured — the count fell from 4.3 to 1.4 per page purely by turning the
+real default on, because incremental replaces four cheap compilations with one
+expensive one. Everything else in the file runs once or twice per crawl, and
 tripling links per page from 40 to 120 changed the total by nothing, which is
-what confirmed #247 had already removed the only per-link one.
+what confirms #247 had already removed the only per-link statement.
 
-**This is a count, not a time, and that is the point.** Compilation costs
-2.4 us (minimum of five interleaved rounds of 20,000; `db.query` on a cache hit
-is 0.01 us), so removing four per page is worth about 10 us per page, or
-0.1 s across a 10,000-page crawl. An interleaved A/B of the crawl itself at 400
-pages gave minima of 1.1 s before and 0.9 s after, but the arithmetic above can
-only account for 4 ms of that 200 ms, so the rest is noise and the wall-clock
-pair is not evidence of anything. A count is immune to that, which is why it is
-the headline here and why the regression test asserts on compilations rather
-than on a clock.
+Compilation cost per statement, against the real schema, minimum of five
+interleaved rounds of 5,000:
 
+| statement | `prepare` | `query` cache hit |
+|---|---|---|
+| `getCachedPage` | 15.11 us | 0.01 us |
+| `upsertFrontier` | 5.50 us | 0.01 us |
+| `updateCrawl` (stats) | 3.27 us | 0.01 us |
+| `getIncomingLinkCount` | 2.97 us | 0.01 us |
+
+So about 27 us per page, or **0.3 s across a 10,000-page crawl**. `upsertPage`
+is excluded: it is the widest statement in the file and quoting a number for it
+without the full binding set would be a guess.
+
+**This is a count, not a time.** An interleaved A/B of the crawl at 400 pages
+gave minima of 1.1 s before and 0.9 s after, but the arithmetic above accounts
+for 11 ms of that 200 ms, so the wall-clock pair is noise and is not evidence.
+A count is immune to what else the machine is doing, which is why it is the
+headline and why the regression test asserts on compilation rather than a clock.
 Machine: 16 GB Apple Silicon laptop, load average 8.9 with other lanes running.
-Stated because it disqualifies the timing rows and does not touch the counts.
 
-Crawl output is byte-identical: a serialised crawl at 120, 250 and 400 pages
-produces the same digest of stored pages, frontier verdicts and link
-appearances before and after. Two things had to be fixed before that digest
-meant anything, and both looked like failures at first — the crawl is
-non-deterministic at concurrency 8, because discovery order decides each URL's
-depth and parent, and `port: 0` puts a different ephemeral port in every URL, so
-identical code hashed differently three times running.
+Crawl output is unchanged: a serialised crawl at 120, 250 and 400 pages produces
+the same digest before and after over stored pages including `html`,
+`parsed_data` and `headers`, every frontier verdict, and the crawls row. The
+first version of that digest omitted `parsed_data` and would have passed with
+all 120 values nulled, so the projection is deliberately wide rather than
+readable. The crawler does not populate `link_appearances`, so the link table
+contributes nothing to the comparison and is not evidence of anything.
+
+Two things had to be fixed before the digest meant anything, and both first
+looked like the change breaking something: the crawl is non-deterministic at
+concurrency 8, because discovery order decides each URL's depth and parent, and
+`port: 0` puts a different ephemeral port in every stored URL, so identical code
+hashed differently three times running.
+
+One trap for anyone repeating this. Hooking `Database.prototype.prepare` counts
+`prepare` and NOTHING ELSE: `db.query` compiles through an internal path the
+hook never sees, so a suite that only counts `prepare` passes just as happily
+with the statement cache disabled. The census counts `prepare` calls and
+distinct `query` texts separately, and the test asserts the cache directly by
+checking `db.query(sql)` returns the same object twice.
 
 ## Hosted runtime, in production
 

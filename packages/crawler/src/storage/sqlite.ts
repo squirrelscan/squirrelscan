@@ -1132,14 +1132,14 @@ export class SQLiteStorage implements CrawlStorage {
 
         if (sets.length > 0) {
           values.push(id);
-          // Cached, and safe to cache even though the SQL is built here: the
-          // statement cache is keyed by TEXT, and `sets` is drawn from a fixed
-          // list of eight optional columns, so the number of distinct texts is
-          // bounded by their combinations rather than by anything a caller
-          // controls. A dynamically-built statement whose shape came from user
-          // input would grow this cache without limit and should keep using
-          // `prepare`. The crawl loop's stats write lands here once per page
-          // (#1911).
+          // Cached, and safe to cache even though the SQL is built here. The
+          // statement cache is keyed by TEXT and `sets` is drawn from eight
+          // fixed optional columns in a fixed order, so there are at most 255
+          // distinct texts however a caller mixes them. Bun's cache is a small
+          // LRU, so the risk from a dynamically-built statement is not an
+          // unbounded cache but CHURN: a shape space larger than that LRU
+          // evicts entries and quietly puts you back on a compile per call.
+          // The crawl loop writes only `stats` here, once per page (#1911).
           const stmt = db.query(
             `UPDATE crawls SET ${sets.join(", ")} WHERE id = ?`
           );
@@ -1449,7 +1449,10 @@ export class SQLiteStorage implements CrawlStorage {
         // shadowing the just-persisted source_hash. `rowid` tracks insert order
         // for this retained, append-like pages table (it isn't WITHOUT ROWID),
         // so DESC prefers the most recently written row on a tie.
-        const stmt = db.prepare(`
+        // Cached: once per URL on the incremental path, which the CLI takes by
+        // default (#1911). Same SQL text, so the plan and the tie-break above
+        // are unchanged; only the compilation is reused.
+        const stmt = db.query(`
           SELECT * FROM pages
           WHERE normalized_url = ?
           ORDER BY fetched_at DESC, rowid DESC

@@ -7,10 +7,17 @@
 // (scripts/statement-compile-census.ts) then showed exactly four statements
 // left running once per page and every other one running once per crawl.
 //
-// This pins those four. It counts COMPILATIONS rather than timing anything: the
-// saving is about 2.2 us per compilation, which is far too small to assert on a
-// clock and far too easy to assert on by accident. A regression to `prepare`
-// shows up here as one compile per call instead of one per suite.
+// This pins those five. It asserts on COMPILATION rather than on a clock: the
+// saving is tens of microseconds per page, far too small to assert on time and
+// far too easy to assert on by accident.
+//
+// TWO assertions are needed, and the first alone is not enough. Counting calls
+// to `Database.prototype.prepare` catches a regression BACK to `prepare` — and
+// only that. `db.query` compiles through an internal path that a hook on
+// `prepare` never sees, so a suite that only counts `prepare` passes just as
+// happily with the statement cache disabled entirely. The second assertion
+// tests the mechanism directly: `db.query` must hand back the SAME statement
+// object for the same SQL text on the Bun actually running.
 
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
@@ -126,6 +133,20 @@ async function compilationsDuring(body: () => Promise<void>): Promise<number> {
 describe("per-page storage statements are cached", () => {
   const N = 50;
 
+  test("db.query really caches on this Bun, which the counters assume", () => {
+    // The counters below prove the code no longer calls `prepare`. They cannot
+    // prove `query` caches, because its compilation is invisible to them. If
+    // this ever fails, every other test in this file is passing for free.
+    const db = new Database(":memory:");
+    db.run("CREATE TABLE t (a TEXT)");
+    const sql = "SELECT a FROM t WHERE a = ?";
+    expect(db.query(sql)).toBe(db.query(sql));
+    // Different text is a different statement, which is what makes the cache a
+    // cache rather than a single slot.
+    expect(db.query(sql)).not.toBe(db.query("SELECT a FROM t WHERE a != ?"));
+    db.close();
+  });
+
   test("upsertPage compiles once, not once per page", async () => {
     const { store, crawlId } = await freshCrawl();
     // Warm first: the first call of anything also compiles whatever the method
@@ -162,6 +183,20 @@ describe("per-page storage statements are cached", () => {
     await run(store.close());
   });
 
+  test("getCachedPage compiles once, not once per url on the incremental path", async () => {
+    // The CLI defaults `incremental` to true, so this runs once per URL on the
+    // path most audits take. A census run with incremental off does not see it,
+    // which is how it was missed the first time.
+    const { store, crawlId } = await freshCrawl();
+    await run(store.getCachedPage("http://example.test/p/0"));
+    const compiles = await compilationsDuring(async () => {
+      for (let i = 1; i <= N; i++) await run(store.getCachedPage(`http://example.test/p/${i}`));
+    });
+    expect(compiles).toBe(0);
+    expect(crawlId).toBeTruthy();
+    await run(store.close());
+  });
+
   test("the crawl stats write compiles once, not once per page", async () => {
     const { store, crawlId } = await freshCrawl();
     // Always the same SET clause, which is what the crawl loop emits. A caller
@@ -177,15 +212,20 @@ describe("per-page storage statements are cached", () => {
     await run(store.close());
   });
 
-  test("a whole crawl's storage work does not compile per page", async () => {
-    // The four above in one loop, which is the shape the crawl loop runs them
-    // in. Asserted as a total rather than per method so a NEW per-page
-    // statement added later fails here too, which is the regression this is
-    // actually guarding against.
+  test("the converted methods together compile nothing per round", async () => {
+    // The converted methods in one loop, in the shape the crawl loop runs them.
+    //
+    // This does NOT catch a new per-page statement added elsewhere in the
+    // storage layer: it only calls these methods, so a `prepare` introduced in,
+    // say, updateFrontierStatus passes here untouched (I checked). The guard
+    // for that is scripts/statement-compile-census.ts, which drives a real
+    // crawl and counts everything; this test is the fast regression pin for the
+    // five that census already found.
     const { store, crawlId } = await freshCrawl();
     const oneRound = async (i: number) => {
       await run(store.upsertFrontier(crawlId, frontier(i)));
       await run(store.getIncomingLinkCount(crawlId, `http://example.test/p/${i}`));
+      await run(store.getCachedPage(`http://example.test/p/${i}`));
       await run(store.upsertPage(crawlId, page(crawlId, i)));
       await run(store.updateCrawl(crawlId, { stats: { ...STATS, pagesFetched: i } }));
     };

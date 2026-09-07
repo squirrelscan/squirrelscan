@@ -37,40 +37,62 @@ const arg = (n: string, d: string) => {
 };
 
 const PAGES = Number.parseInt(arg("pages", "200"), 10);
+// The CLI defaults `incremental` to TRUE, and that path reads a cached page per
+// URL, so a census run with it off measures a configuration real audits do not
+// use. Default it on here and let it be turned off rather than the reverse.
+const INCREMENTAL = !process.argv.includes("--no-incremental");
 const LINKS = Number.parseInt(arg("links", "50"), 10);
 const TOP = Number.parseInt(arg("top", "20"), 10);
 // `--digest` prints a hash of what the crawl actually stored instead of the
 // ranking, so the same crawl can be run on two revisions and the outputs
 // compared. A statement-caching change must not move it by a byte.
 const DIGEST = process.argv.includes("--digest");
-// `--cost` measures what one compilation of the converted statements costs, so
-// the census's count can be turned into time without borrowing a number from
-// somewhere else.
+// `--cost` measures what one compilation of each converted statement costs
+// against the real schema, so the census's count can be turned into time
+// without borrowing a number from somewhere else or from a toy table.
 const COST = process.argv.includes("--cost");
 const REPEATS = Math.max(1, Number.parseInt(arg("repeat", "1"), 10));
 
 if (COST) {
-  const db = new Database(":memory:");
-  db.run("CREATE TABLE pages (crawl_id TEXT, normalized_url TEXT, depth INT)");
-  const sql = "SELECT COUNT(*) as count FROM pages WHERE crawl_id = ? AND normalized_url = ?";
-  const N = 20_000;
+  // The REAL statements, against the real schema, because a toy SELECT against
+  // a three-column table compiles faster than a twenty-column INSERT and would
+  // understate what the conversion removes.
+  const costStore = new SQLiteStorage(":memory:");
+  await run(costStore.init());
+  const db = (costStore as unknown as { getDb(): Database }).getDb();
+  const SQL: Array<[string, string]> = [
+    ["getIncomingLinkCount", "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?"],
+    ["getCachedPage", "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1"],
+    ["updateCrawl (stats)", "UPDATE crawls SET stats = ? WHERE id = ?"],
+    ["upsertFrontier", "INSERT OR REPLACE INTO frontier (crawl_id, normalized_url, raw_url, depth, parent_url, priority, status, source, enqueued_at, fetched_at, retry_count, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
+  ];
+  const N = 5_000;
   // Interleaved, minimum of five rounds: the two arms then share whatever the
   // machine is doing rather than one of them getting a quiet stretch.
-  let bestPrepare = Infinity;
-  let bestQuery = Infinity;
-  for (let round = 0; round < 5; round++) {
-    let t = Bun.nanoseconds();
-    for (let i = 0; i < N; i++) db.prepare(sql);
-    bestPrepare = Math.min(bestPrepare, (Bun.nanoseconds() - t) / N / 1000);
-    t = Bun.nanoseconds();
-    for (let i = 0; i < N; i++) db.query(sql);
-    bestQuery = Math.min(bestQuery, (Bun.nanoseconds() - t) / N / 1000);
+  console.log(`compilation cost per statement, minimum of five interleaved rounds of ${N}:`);
+  console.log(`  ${"statement".padEnd(22)} ${"prepare".padStart(10)} ${"query hit".padStart(10)}`);
+  let totalPrepare = 0;
+  for (const [name, sql] of SQL) {
+    let bestPrepare = Infinity;
+    let bestQuery = Infinity;
+    for (let round = 0; round < 5; round++) {
+      let t = Bun.nanoseconds();
+      for (let i = 0; i < N; i++) db.prepare(sql);
+      bestPrepare = Math.min(bestPrepare, (Bun.nanoseconds() - t) / N / 1000);
+      t = Bun.nanoseconds();
+      for (let i = 0; i < N; i++) db.query(sql);
+      bestQuery = Math.min(bestQuery, (Bun.nanoseconds() - t) / N / 1000);
+    }
+    totalPrepare += bestPrepare;
+    console.log(
+      `  ${name.padEnd(22)} ${`${bestPrepare.toFixed(2)} us`.padStart(10)} ${`${bestQuery.toFixed(2)} us`.padStart(10)}`,
+    );
   }
-  console.log(
-    `compilation cost, minimum of five interleaved rounds of ${N}:\n` +
-      `  db.prepare  ${bestPrepare.toFixed(2)} us/call\n` +
-      `  db.query    ${bestQuery.toFixed(2)} us/call (cache hit)`,
-  );
+  // `upsertPage` is left out: its INSERT is the widest statement in the file and
+  // needs the full binding set to compile representatively, so quoting a number
+  // for it here would be a guess. The four above are the measurable ones.
+  console.log(`  ${"sum of the four".padEnd(22)} ${`${totalPrepare.toFixed(2)} us`.padStart(10)}`);
+  await run(costStore.close());
   process.exit(0);
 }
 
@@ -113,14 +135,36 @@ const origin = `http://127.0.0.1:${server.port}`;
 
 // ── the census ───────────────────────────────────────────────────────────────
 
-// Patched on the PROTOTYPE, before any Database is constructed, so it catches
-// every statement the storage layer compiles including the ones in `init`.
-const compiles = new Map<string, number>();
+// BOTH entry points are patched, and they are counted differently, because
+// hooking `prepare` alone counts the wrong thing.
+//
+// `db.query` does not go through the public `prepare`: Bun compiles it via an
+// internal path, so a hook on `prepare` sees none of it and a run that converted
+// everything to `query` would report zero compilations whether or not the cache
+// was working. What `query` guarantees instead is one compilation per distinct
+// SQL TEXT, with every later call a cache hit — so its compilations are the
+// count of distinct texts, and its calls beyond the first are free.
+//
+// `prepare` compiles on every call, so each call is one compilation.
+const prepareCalls = new Map<string, number>();
+const queryCalls = new Map<string, number>();
 const realPrepare = Database.prototype.prepare;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(Database.prototype as any).prepare = function patched(this: Database, sql: string, ...rest: unknown[]) {
-  compiles.set(sql, (compiles.get(sql) ?? 0) + 1);
-  return (realPrepare as (this: Database, sql: string, ...rest: unknown[]) => unknown).call(this, sql, ...rest);
+const realQuery = Database.prototype.query;
+(Database.prototype as unknown as Record<string, unknown>).prepare = function patched(
+  this: Database,
+  sql: string,
+  ...rest: unknown[]
+) {
+  prepareCalls.set(sql, (prepareCalls.get(sql) ?? 0) + 1);
+  return (realPrepare as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
+};
+(Database.prototype as unknown as Record<string, unknown>).query = function patchedQuery(
+  this: Database,
+  sql: string,
+  ...rest: unknown[]
+) {
+  queryCalls.set(sql, (queryCalls.get(sql) ?? 0) + 1);
+  return (realQuery as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
 };
 
 const storage = new SQLiteStorage(":memory:");
@@ -132,7 +176,7 @@ await run(storage.init());
 // worker makes discovery order a function of the site, which is what lets two
 // revisions be compared at all.
 const concurrency = DIGEST ? 1 : 8;
-const crawler = await run(createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false } as never }));
+const crawler = await run(createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false, incremental: INCREMENTAL } as never }));
 
 const startedAt = Date.now();
 const crawlId = await run(crawler.start(origin) as Effect.Effect<string, unknown, never>);
@@ -145,17 +189,26 @@ if (DIGEST) {
   // out on purpose — timings and row ids differ run to run and would mask the
   // question with noise rather than answer it.
   const db = (storage as unknown as { getDb(): import("bun:sqlite").Database }).getDb();
+  // Every column a statement-caching bug could corrupt, not a readable subset.
+  // A narrower projection let a version of this pass with `parsed_data` nulled
+  // on all 120 rows: the digest is only as good as what it looks at.
   const pages = db
     .query(
-      `SELECT normalized_url, final_url, depth, status, content_type, size_bytes, content_hash
+      `SELECT normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type,
+              size_bytes, content_hash, html, parsed_data, headers, security_headers
        FROM pages WHERE crawl_id = ? ORDER BY normalized_url`,
     )
     .all(crawlId);
   const frontier = db
     .query(
-      `SELECT normalized_url, depth, status, source, retry_count, reason
+      `SELECT normalized_url, raw_url, depth, parent_url, priority, status, source, retry_count, reason
        FROM frontier WHERE crawl_id = ? ORDER BY normalized_url`,
     )
+    .all(crawlId);
+  // The crawls row too: the stats UPDATE is one of the converted statements, so
+  // leaving its output out would exempt the change from its own check.
+  const crawls = db
+    .query(`SELECT base_url, seed_url, original_url, status, config, stats FROM crawls WHERE id = ?`)
     .all(crawlId);
   const links = db
     .query(
@@ -173,7 +226,12 @@ if (DIGEST) {
     rows.map((row) =>
       Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([k, v]) => [k, strip(v)])),
     );
-  const digestable = { pages: normalise(pages), frontier: normalise(frontier), links: normalise(links) };
+  const digestable = {
+    pages: normalise(pages),
+    frontier: normalise(frontier),
+    links: normalise(links),
+    crawls: normalise(crawls),
+  };
 
   const outPath = arg("out", "");
   if (outPath) await Bun.write(outPath, JSON.stringify(digestable, null, 1));
@@ -181,6 +239,7 @@ if (DIGEST) {
   hash.update(JSON.stringify(digestable));
   console.log(
     `DIGEST pages=${pages.length} frontier=${frontier.length} links=${links.length} ` +
+      `crawls=${crawls.length} ` +
       `sha256=${hash.digest("hex").slice(0, 32)}`,
   );
   await run(storage.close());
@@ -190,13 +249,25 @@ if (DIGEST) {
 
 server.stop(true);
 
-const rows = [...compiles].sort((a, b) => b[1] - a[1]);
-const total = rows.reduce((sum, [, n]) => sum + n, 0);
+// One compilation per `prepare` CALL; one per distinct `query` TEXT.
+const rows = [...prepareCalls].sort((a, b) => b[1] - a[1]);
+const prepareCompiles = rows.reduce((sum, [, n]) => sum + n, 0);
+const queryCompiles = queryCalls.size;
+const queryHits = [...queryCalls.values()].reduce((sum, n) => sum + n, 0) - queryCompiles;
+const total = prepareCompiles + queryCompiles;
 console.log(
-  `crawled ${pageCount} pages in ${(elapsed / 1000).toFixed(1)}s, ${LINKS} links/page\n` +
-    `${total} statement compilations across ${rows.length} distinct SQL texts ` +
-    `(${(total / Math.max(1, pageCount)).toFixed(1)} per page)\n`,
+  `crawled ${pageCount} pages in ${(elapsed / 1000).toFixed(1)}s, ${LINKS} links/page, ` +
+    `incremental=${INCREMENTAL}\n` +
+    `${total} statement compilations (${(total / Math.max(1, pageCount)).toFixed(1)} per page): ` +
+    `${prepareCompiles} from ${rows.length} prepare texts, ` +
+    `${queryCompiles} from ${queryCalls.size} query texts with ${queryHits} cache hits\n`,
 );
+if (queryCalls.size > 20) {
+  // Bun caches query statements in a bounded LRU. Past its size the cache
+  // thrashes and `query` starts recompiling, which would make every number
+  // above wrong in the safe-looking direction.
+  console.log(`  WARNING: ${queryCalls.size} distinct query texts may exceed Bun's statement cache\n`);
+}
 console.log(`${"count".padStart(8)} ${"per page".padStart(9)}  sql`);
 for (const [sql, n] of rows.slice(0, TOP)) {
   const flat = sql.replace(/\s+/g, " ").trim();
