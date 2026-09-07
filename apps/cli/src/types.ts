@@ -344,18 +344,31 @@ export interface ImageData {
   height: string | null;
 }
 
+/**
+ * One page in a report.
+ *
+ * Several fields are optional because the CLI's report builder stopped
+ * populating them (#1938): nothing read them. No output format emits
+ * `report.pages` at all, and the publish path sends `pages: []` after taking
+ * the urls, the statuses and the home page's title. They stay in the type,
+ * optional, so anything constructing or consuming a PageAudit still compiles —
+ * and so the hosted builder, which DOES publish these, keeps the same shape.
+ *
+ * Read by production code: `url`, `statusCode`, `checks`, `meta` and `og` (the
+ * home-page summary that seeds the website record), `fallbackReason`.
+ */
 export interface PageAudit {
   url: string;
   statusCode: number;
-  loadTime: number;
+  loadTime?: number;
   meta: MetaData;
   og: OpenGraphData;
-  twitter: TwitterData;
-  schema: SchemaData;
-  links: LinkData[];
-  images: ImageData[];
-  h1Count: number;
-  h1Text: string[];
+  twitter?: TwitterData;
+  schema?: SchemaData;
+  links?: LinkData[];
+  images?: ImageData[];
+  h1Count?: number;
+  h1Text?: string[];
   checks: CheckResult[];
   // New fields for expanded audit
   urlAnalysis?: UrlAnalysis;

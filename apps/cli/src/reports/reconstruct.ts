@@ -1,8 +1,6 @@
 // Reconstruct AuditReport from SQLite storage
 // Rebuilds full report structure from crawl data
 
-import type { ResponseHeaders as StoredResponseHeaders } from "@squirrelscan/core-contracts";
-
 import { detachFromPage } from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
@@ -61,22 +59,6 @@ export interface SmartMergeOverride {
     unrenderedFindings?: number;
   };
   carriedLastSeen: Map<string, number>;
-}
-
-// Cookie values are crawl-session artifacts, not report content — publish
-// keeps `security/cookie-flags` rule-input-only and never sends the raw
-// Set-Cookie bytes onward (the publish schema doesn't accept `setCookie` and
-// would silently drop it anyway, but by then the bytes have already ridden
-// the wire and counted against the request body cap). `PageAudit.responseHeaders`
-// is typed WITHOUT `setCookie` (see `@/types`), but `page.headers` (the
-// storage-layer `ResponseHeaders` from core-contracts) carries it at
-// runtime — assigning it straight through would leak the raw value despite
-// the narrower static type.
-function omitSetCookie(
-  headers: StoredResponseHeaders
-): Omit<StoredResponseHeaders, "setCookie"> {
-  const { setCookie: _setCookie, ...responseHeaders } = headers;
-  return responseHeaders;
 }
 
 function computeSitemapCoverage(
@@ -264,9 +246,6 @@ export function reconstructReport(
       .getSitemapUrlStatuses(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed([])));
 
-    // 5. Get all links (for broken links lookup)
-    const links = yield* storage.getLinks(crawlId);
-
     // 6. Rule results, both groupings, from ONE read (#1920). The two readers
     // this replaces differed only in their ORDER BY and each built its own
     // CheckResult per row, so a crawl's checks were materialized twice: 203,687
@@ -277,9 +256,6 @@ export function reconstructReport(
 
     // 7. Load rule registry to get metadata
     const ruleRegistry = loadAllRules();
-
-    // Create lookup maps for link data
-    const linkByHref = new Map(links.map((l) => [l.href, l]));
 
     // 8. Build PageAudit[] from page records with parsed data and rule results
     const pages: PageAudit[] = [];
@@ -327,33 +303,15 @@ export function reconstructReport(
         // Parse page HTML if available
         const parsed = page.html ? parsePageRecord(page) : null;
 
-        // Get links that appear on this page (per-page index lookup)
-        const pageLinkAppearances = yield* storage.getLinkAppearancesForPage(
-          crawlId,
-          page.normalizedUrl
-        );
-        const pageLinks = pageLinkAppearances.map((a) => {
-          const link = linkByHref.get(a.href);
-          return {
-            url: a.href,
-            text: a.anchorText,
-            isInternal: link?.isInternal ?? false,
-            status: link?.status,
-            error: link?.error,
-          };
-        });
-
-        // Get images that appear on this page (per-page index lookup)
+        // Image appearances still drive `summary.missingAltText`, which IS
+        // emitted. The per-page LINK query that used to sit here, and the
+        // whole-crawl `getLinks` that fed it, are gone with `PageAudit.links`
+        // (#1938): two queries per page and their arrays, for a field no
+        // consumer read.
         const pageImageAppearances = yield* storage.getImageAppearancesForPage(
           crawlId,
           page.normalizedUrl
         );
-        const pageImages = pageImageAppearances.map((a) => ({
-          src: a.src,
-          alt: a.alt ?? null,
-          width: null,
-          height: null,
-        }));
 
         // Get rule results for this page
         const pageChecks = ruleResultsByPage.get(page.normalizedUrl) ?? [];
@@ -386,32 +344,23 @@ export function reconstructReport(
           }
         }
 
-        // Every string below that came off the DOM is a SLICE of this page's
-        // html, and in JSC a retained slice pins the whole buffer it was cut
-        // from (#240). The resident path never had to care — it was holding the
-        // page anyway — but here the batch is dropped a few lines later and each
-        // kept title would hold its megabyte, which is the page-count-scaled
-        // term this walk exists to remove. Measured on ~1 MB pages: 77.5 MB
-        // retained across 80 pages attached, 2.1 MB detached. One copy per page
-        // of five small objects; everything else on the PageAudit comes from a
-        // storage row and is already free of the html.
+        // `meta` and `og` are the only DOM-derived fields still kept: publish
+        // reads them off the home page to seed the website record's title and
+        // description (`pickHomepageSummary`). Everything else the parse
+        // produced had no reader and is no longer carried (#1938).
+        //
+        // Detached because each of those strings is a SLICE of this page's html,
+        // and in JSC a retained slice pins the whole buffer it was cut from
+        // (#240). The batch is dropped a few lines later, so an attached title
+        // would hold its page's megabyte. Measured on ~1 MB pages: 77.5 MB
+        // retained across 80 pages attached, 2.1 MB detached.
         const kept = parsed
-          ? detachFromPage(
-              {
-                meta: parsed.meta,
-                og: parsed.og,
-                twitter: parsed.twitter,
-                schema: parsed.schema,
-                h1Text: parsed.h1.texts,
-              },
-              "report-page"
-            )
+          ? detachFromPage({ meta: parsed.meta, og: parsed.og }, "report-page")
           : null;
 
         const pageAudit: PageAudit = {
           url: page.url,
           statusCode: page.status,
-          loadTime: page.loadTimeMs,
           meta: kept?.meta ?? {
             title: null,
             description: null,
@@ -426,35 +375,10 @@ export function reconstructReport(
             image: null,
             siteName: null,
           },
-          twitter: kept?.twitter ?? {
-            card: null,
-            title: null,
-            description: null,
-            image: null,
-          },
-          schema: kept?.schema ?? {
-            types: [],
-            valid: true,
-            errors: [],
-            raw: null,
-          },
-          links: pageLinks,
-          images: pageImages,
-          h1Count: parsed?.h1.count ?? 0,
-          h1Text: kept?.h1Text ?? [],
           checks: pageChecks,
           redirectChain: page.redirectChain,
           fetcherId: page.fetcherId,
           fallbackReason: page.fallbackReason,
-          responseHeaders: omitSetCookie(page.headers),
-          security: {
-            isHttps: page.url.startsWith("https"),
-            hasMixedContent: false,
-            mixedContentUrls: [],
-            insecureFormActions: [],
-            headers: page.securityHeaders,
-            httpToHttpsRedirect: false,
-          },
         };
 
         pages.push(pageAudit);

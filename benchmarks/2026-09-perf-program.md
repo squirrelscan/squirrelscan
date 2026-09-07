@@ -256,6 +256,38 @@ factor of four), and those figures should be read as the shape rather than to
 three digits. For a change worth tens or low hundreds of megabytes, measure the
 call in isolation against a retain-nothing control instead.
 
+## The report's per-page fields that nothing read
+
+`reconstructReport` built a full `PageAudit` per page: `meta`, `og`, `twitter`,
+`schema`, `links`, `images`, `h1Count`, `h1Text`, `loadTime`, `responseHeaders`,
+`security`. No output format emits `report.pages`, and the publish path sends
+`pages: []` after taking the urls, the statuses and the home page's title, so
+most of that was built and discarded ([#260](https://github.com/squirrelscan/squirrelscan/pull/260)).
+
+Only `meta` and `og` survived the search for a reader: `pickHomepageSummary`
+reads them off the home page to seed the website record. A differential test
+pins the publish body as byte-identical with and without the dropped fields.
+
+**Measured neutral on this fixture, and the reason is the fixture.** Growth
+across `reconstructReport` on the 1,000-page corpus, warmed, two runs per side:
+
+| | heap | RSS | wall |
+|---|---|---|---|
+| before | +114 MB | +52 to +127 MB | 468-479 ms |
+| after | +113 to +117 MB | +82 to +152 MB | 446-607 ms |
+
+The two largest fields dropped are `links` and `images`, and this corpus stores
+**zero** of either: they are written by the external-link phase, and the
+benchmark runs `--offline` against a site with no outbound links. So the arrays
+being dropped were already empty, and the per-page `getLinkAppearancesForPage`
+query the change also removes had nothing to return.
+
+What the change removes structurally, and what a site with external links would
+therefore save, is one storage query per page plus a whole-crawl `getLinks`
+read, and three of the five objects in the per-page detach. That is not recorded
+here as a number because it was not measured. A fixture that can show it needs
+stored links and images, which means an audit with external-link checking on.
+
 ## Still open
 
 - Site rules are quadratic in page count (4 s at 400 pages, 99 s at 2,500,

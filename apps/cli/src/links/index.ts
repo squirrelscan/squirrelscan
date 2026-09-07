@@ -116,7 +116,7 @@ export function analyzeInternalLinks(
 
   // Build link graph
   for (const page of pages) {
-    for (const link of page.links) {
+    for (const link of page.links ?? []) {
       if (link.isInternal) {
         totalInternalLinks++;
         const normalizedLinkUrl = normalizeUrl(link.url);
@@ -146,7 +146,7 @@ export function analyzeInternalLinks(
     const currentPage = pages.find((p) => normalizeUrl(p.url) === currentUrl);
     if (!currentPage) continue;
 
-    for (const link of currentPage.links) {
+    for (const link of currentPage.links ?? []) {
       if (!link.isInternal) continue;
 
       const normalizedLinkUrl = normalizeUrl(link.url);
@@ -179,7 +179,9 @@ export function analyzeInternalLinks(
   const pagesWithManyLinks: { url: string; count: number }[] = [];
 
   for (const page of pages) {
-    const internalLinkCount = page.links.filter((l) => l.isInternal).length;
+    const internalLinkCount = (page.links ?? []).filter(
+      (l) => l.isInternal
+    ).length;
 
     if (internalLinkCount < 3) {
       pagesWithFewLinks.push({ url: page.url, count: internalLinkCount });
@@ -212,7 +214,7 @@ export function analyzeAnchorText(
 
   for (const page of pages) {
     // We need enhanced link data - for now, analyze from raw links
-    for (const link of page.links) {
+    for (const link of page.links ?? []) {
       const text = link.text.toLowerCase().trim();
 
       // Track anchor text distribution
