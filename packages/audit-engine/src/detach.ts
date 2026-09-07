@@ -107,9 +107,12 @@ export function resetDetachCounts(): void {
  * Only worth doing because the retained scalars are slices of the page's HTML
  * when the parse ran against a live DOM. Measured over a 150-page crawl of real
  * 959 KB pages with NO stored parsedData (the CLI path, and the fallback for
- * older crawls): the universe held 3749 KB per page, and 0 after this. With
- * parsedData present the strings come from `JSON.parse`, which already produces
- * fresh ones, and the same measurement shows 126 KB per page falling to 100.
+ * older crawls): the universe held 3900 KB per page and holds 77 KB after this.
+ * With parsedData present the strings come from `JSON.parse`, which already
+ * produces fresh ones, and the same measurement shows 126 KB per page falling
+ * to 100. Both figures are taken above a control that retains nothing, because
+ * the arena alone plateaus at a flat ~210 MB on that fixture whatever the page
+ * count.
  */
 export function detachParsedPage(parsed: ParsedPage): ParsedPage {
   const { document: _document, ...rest } = parsed;

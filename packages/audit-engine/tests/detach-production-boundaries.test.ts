@@ -117,14 +117,17 @@ describe("detach at the production boundaries", () => {
 
     const pageRules = detachCounts("page-rules");
     const signals = detachCounts("collected-signal");
+    const universe = detachCounts("parsed-universe");
 
-    // Removing either call site zeroes its counter — an equality-only test would
+    // Removing any call site zeroes its counter — an equality-only test would
     // not notice, because the findings are identical either way.
     expect(pageRules.detached).toBeGreaterThan(0);
     expect(signals.detached).toBeGreaterThan(0);
+    expect(universe.detached).toBeGreaterThan(0);
     // And no page silently kept its attachment.
     expect(pageRules.fallbacks).toBe(0);
     expect(signals.fallbacks).toBe(0);
+    expect(universe.fallbacks).toBe(0);
 
     await run(storage.close());
   }, 120_000);
@@ -161,10 +164,38 @@ describe("detach at the production boundaries", () => {
       const { document: _d, schemas: _s, ...restCopy } = copy;
       const { document: _d2, schemas: _s2, ...restSource } = parsed;
       expect(restCopy).toEqual(restSource);
+
+      // DEEP, not shallow. A copy that only dropped `document` would satisfy
+      // every assertion above while every nested string still pinned the page,
+      // which is the whole point of the change.
+      expect(copy.schemas).not.toBe(parsed.schemas);
+      for (const key of ["meta", "content", "h1", "links", "images"] as const) {
+        const nested = parsed[key] as unknown;
+        if (nested && typeof nested === "object") {
+          expect(copy[key] as unknown).not.toBe(nested);
+        }
+      }
     }
 
     expect(checked).toBeGreaterThan(0);
     expect(detachCounts("parsed-universe")).toEqual({ detached: checked, fallbacks: 0 });
+
+    // The path this change is FOR: a crawl with no stored parsedData, where the
+    // parse ran against a live DOM and every scalar is a slice of the page.
+    resetDetachCounts();
+    const pagesNoParse = pages.map((p) => ({ ...p, parsedData: null }));
+    const ctxNoParse = await run(buildSiteContext(pagesNoParse));
+    let reparsed = 0;
+    for (const { parsed } of ctxNoParse) {
+      if (!parsed) continue;
+      const copy = detachParsedPage(parsed);
+      expect(copy.document).toBeNull();
+      expect(copy.schemas).toBeInstanceOf(SchemaCollection);
+      expect(copy.links).toEqual(parsed.links);
+      reparsed++;
+    }
+    expect(reparsed).toBeGreaterThan(0);
+    expect(detachCounts("parsed-universe")).toEqual({ detached: reparsed, fallbacks: 0 });
 
     await run(storage.close());
   }, 120_000);
