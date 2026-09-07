@@ -49,13 +49,20 @@ export function absorbUrls(
 
     for (const link of parsed.links) {
       if (urls.size >= MAX_URLS) return;
-      if (!link.isInternal && isHttpUrl(link.url))
+      // `has` first: the cap counts UNIQUE urls, but the clone was being paid
+      // per occurrence, and a site that links the same forty hosts from every
+      // page has far more occurrences than uniques.
+      if (!link.isInternal && isHttpUrl(link.url) && !urls.has(link.url))
         urls.add(detachFromPage(link.url, "cloud-payload"));
     }
 
     for (const image of parsed.images) {
       if (urls.size >= MAX_URLS) return;
-      if (isHttpUrl(image.src) && getHostname(image.src) !== pageHost)
+      if (
+        isHttpUrl(image.src) &&
+        getHostname(image.src) !== pageHost &&
+        !urls.has(image.src)
+      )
         urls.add(detachFromPage(image.src, "cloud-payload"));
     }
 
@@ -66,7 +73,12 @@ export function absorbUrls(
     for (const script of doc.querySelectorAll("script[src]")) {
       if (urls.size >= MAX_URLS) return;
       const src = script.getAttribute("src");
-      if (src && isHttpUrl(src) && getHostname(src) !== pageHost)
+      if (
+        src &&
+        isHttpUrl(src) &&
+        getHostname(src) !== pageHost &&
+        !urls.has(src)
+      )
         urls.add(detachFromPage(src, "cloud-payload"));
     }
   }
@@ -82,6 +94,12 @@ function collectSelectors(siteContext: SiteContextPage[]): string[] {
 export interface SelectorState {
   selectors: Set<string>;
   pagesScanned: number;
+}
+
+/** Add a selector once, detaching only the copy that is actually kept. */
+function addSelector(selectors: Set<string>, selector: string): void {
+  if (!selectors.has(selector))
+    selectors.add(detachFromPage(selector, "cloud-payload"));
 }
 
 export function createSelectorState(): SelectorState {
@@ -118,14 +136,12 @@ export function absorbSelectors(
     for (const el of elements) {
       if (selectors.size >= MAX_SELECTORS) break;
       const id = el.getAttribute("id");
-      if (id && SIMPLE_TOKEN_RE.test(id))
-        selectors.add(detachFromPage(`#${id}`, "cloud-payload"));
+      if (id && SIMPLE_TOKEN_RE.test(id)) addSelector(selectors, `#${id}`);
       const classAttr = el.getAttribute("class");
       if (!classAttr) continue;
       for (const cls of classAttr.split(/\s+/)) {
         if (selectors.size >= MAX_SELECTORS) break;
-        if (cls && SIMPLE_TOKEN_RE.test(cls))
-          selectors.add(detachFromPage(`.${cls}`, "cloud-payload"));
+        if (cls && SIMPLE_TOKEN_RE.test(cls)) addSelector(selectors, `.${cls}`);
       }
     }
   }

@@ -242,12 +242,15 @@ function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]):
     const pageHost = getHostname(page.url);
     for (const link of parsed.links) {
       if (urls.size >= BL_MAX_URLS) return;
-      if (!link.isInternal && isHttpUrl(link.url))
+      // `has` first: the cap counts UNIQUE urls, but the clone was being paid
+      // per occurrence, and a site that links the same forty hosts from every
+      // page has far more occurrences than uniques.
+      if (!link.isInternal && isHttpUrl(link.url) && !urls.has(link.url))
         urls.add(detachFromPage(link.url, "cloud-payload"));
     }
     for (const image of parsed.images) {
       if (urls.size >= BL_MAX_URLS) return;
-      if (isHttpUrl(image.src) && getHostname(image.src) !== pageHost)
+      if (isHttpUrl(image.src) && getHostname(image.src) !== pageHost && !urls.has(image.src))
         urls.add(detachFromPage(image.src, "cloud-payload"));
     }
     const doc = parsed.document;
@@ -255,10 +258,15 @@ function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]):
     for (const script of doc.querySelectorAll("script[src]")) {
       if (urls.size >= BL_MAX_URLS) return;
       const src = (script as Element).getAttribute("src");
-      if (src && isHttpUrl(src) && getHostname(src) !== pageHost)
+      if (src && isHttpUrl(src) && getHostname(src) !== pageHost && !urls.has(src))
         urls.add(detachFromPage(src, "cloud-payload"));
     }
   }
+}
+
+/** Add a selector once, detaching only the copy that is actually kept. */
+function addSelector(selectors: Set<string>, selector: string): void {
+  if (!selectors.has(selector)) selectors.add(detachFromPage(selector, "cloud-payload"));
 }
 
 function collectBlocklistSelectors(siteContext: SiteContextPage[]): string[] {
@@ -287,14 +295,12 @@ function absorbBlocklistSelectors(
     for (const el of elements) {
       if (selectors.size >= BL_MAX_SELECTORS) break;
       const id = el.getAttribute("id");
-      if (id && SIMPLE_TOKEN_RE.test(id))
-        selectors.add(detachFromPage(`#${id}`, "cloud-payload"));
+      if (id && SIMPLE_TOKEN_RE.test(id)) addSelector(selectors, `#${id}`);
       const classAttr = el.getAttribute("class");
       if (!classAttr) continue;
       for (const cls of classAttr.split(/\s+/)) {
         if (selectors.size >= BL_MAX_SELECTORS) break;
-        if (cls && SIMPLE_TOKEN_RE.test(cls))
-          selectors.add(detachFromPage(`.${cls}`, "cloud-payload"));
+        if (cls && SIMPLE_TOKEN_RE.test(cls)) addSelector(selectors, `.${cls}`);
       }
     }
   }
@@ -402,7 +408,12 @@ function absorbSeeds(
       const key = seed.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      seeds.push(detachFromPage(seed, "cloud-payload"));
+      // No detach: this `cleanSeed` assembles its result character by character
+      // and returns `parts.join("")`, a fresh string that references no page.
+      // The CLI's twin builds the same value with split/replace/trim, whose
+      // results CAN be slices, so its seeds do need one — a real difference
+      // between the two, not a missed case.
+      seeds.push(seed);
       if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return;
     }
   }
