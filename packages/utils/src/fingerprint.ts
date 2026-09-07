@@ -22,19 +22,24 @@
 // All three yield a stable hash across fetches while keeping the fingerprint
 // sensitive to real payload changes.
 //
-// ORDER-INSENSITIVITY IS DELIBERATE AND NARROW. Sorting is applied to exactly
-// two things: Shopify app blocks, and asset tags pointing at
-// `cdn.shopify.com/extensions/`. A page whose ONLY change is the order of those
-// is a page the audit reports identically, so reusing its render is right.
-// Anything else — the order of ordinary stylesheets or scripts, which decides
-// the CSS cascade and execution order — still rotates the hash, because we have
-// NOT established that reordering those is immaterial. The narrowing is the
-// safety argument; widening it later needs its own evidence.
+// ORDER-INSENSITIVITY IS AN ACCEPTED NARROWING, approved by the team lead on
+// 2026-09-07, in these words: "order-insensitivity for Shopify app blocks and
+// cdn.shopify.com/extensions asset tags is an accepted narrowing: the miss case
+// is a page whose only change is block order, which an audit does not read."
 //
-// The scan is a forward-only tokenizer (fingerprint-scan.ts), not a regex.
-// Regexes here were both slow (cubic on hostile input, 523 ms on 14 KB against
-// a 2 MB ceiling) and wrong (they match inside `<textarea>` and script
-// payloads, where markup-looking text is data).
+// It is deliberately not general. The order of ordinary stylesheets and scripts
+// decides the CSS cascade and execution order and still rotates the hash,
+// because nobody has established that reordering THOSE is immaterial. Widening
+// it needs its own evidence.
+//
+// The scan uses htmlparser2's tokenizer — not a regex, and not a hand-rolled
+// one. Regexes here were both slow (cubic on hostile input, 523 ms on 14 KB
+// against a 2 MB ceiling) and wrong (matching inside `<textarea>` and script
+// payloads, where markup-looking text is data). A hand-rolled scanner fixed the
+// speed and kept the wrongness in nine new shapes: `</textareaX>` ended a
+// textarea, an apostrophe in an unquoted attribute let a script region swallow
+// visible markup, `<scripté>` aliased to `script`, and `xmp`, CDATA and SVG
+// were all missing. HTML-correct answers need an HTML tokenizer.
 //
 // This normalizes for FINGERPRINTING ONLY. Never feed its output back into
 // stored/served content — it deletes/rewrites markup.
@@ -44,7 +49,7 @@
 // source before hashing, or client and server fingerprints will disagree and no
 // render will ever be reused. Keep both callers on this one implementation.
 
-import { scanSource, type SourceRegion } from "./fingerprint-scan";
+import { Parser } from "htmlparser2";
 
 // Anchors that identify a Cloudflare challenge-platform script: the inline
 // snippet sets `window.__CF$cv$params`; both the inline and external forms
@@ -58,69 +63,64 @@ const CF_CHALLENGE = /__CF\$cv\$params|\/cdn-cgi\/challenge-platform\//i;
 // deploy-version cache-buster; both must stay fingerprint-significant.
 const EPOCH_MS_TOKEN = /\b\d{13}\b/g;
 
-/**
- * Shopify's analytics bootstrap: `<script id="__st">var __st={…}` carrying a
- * per-request `reqid` and a per-visitor `u` token. Matched on the open tag's
- * attributes, and only as a whole attribute so `data-id="__st"` does not
- * qualify.
- */
-const ST_ID_ATTR = /(?:^|\s)id\s*=\s*["']?__st["']?(?:\s|$|>)/i;
 
-/**
- * Request-identity fields inside an analytics payload. Anchored on the FIELD
- * NAME, not on the uuid shape: a bare uuid is not evidence of request identity,
- * and neutralizing every uuid in every script body would collapse two pages
- * whose only difference is the resource a script fetches.
- */
-const IDENTITY_FIELD = /"(reqid|requestId|eventMetadataId|u)"\s*:\s*"[^"]*"/g;
+const SHOPIFY_EXTENSION_HOST = "cdn.shopify.com";
+const SHOPIFY_EXTENSION_PATH = "/extensions/";
 
 /** `<!-- BEGIN app block: shopify://apps/… -->` opens a Shopify app block. */
 const APP_BLOCK_BEGIN = /^\s*BEGIN app block:\s*shopify:\/\//i;
 /** `<!-- END app block -->` closes one. */
 const APP_BLOCK_END = /^\s*END app block\s*$/i;
-/** An asset tag pointing at the theme-app-extension CDN. */
-const EXTENSION_ASSET = /\bcdn\.shopify\.com\/extensions\//i;
 
-/** A located run of sibling regions that may be reordered among themselves. */
-interface Run {
-  items: SourceRegion[];
+/**
+ * Recognizes a Shopify analytics payload — the only place identity fields are
+ * neutralized.
+ *
+ * Anchored on the payload, not on the field name alone and not on the uuid
+ * shape. `"u"` in an arbitrary script can be content: the script
+ * `document.body.textContent=({"u":"Alice"}).u` renders "Alice", and blanking
+ * that field would collide it with "Bob". Inside Shopify's analytics bootstrap
+ * the same field is a per-visitor token that rotates with every cache entry.
+ */
+const SHOPIFY_ANALYTICS = /\b(?:__st\b|ShopifyAnalytics|Shopify\.shop\b)/;
+
+/** Request/visitor identity fields, neutralized only inside the above. */
+const IDENTITY_FIELD = /"(reqid|requestId|eventMetadataId|u)"\s*:\s*"[^"]*"/g;
+
+interface Region {
+  start: number;
+  end: number;
 }
 
 /**
- * Group regions into runs of ADJACENT siblings — regions separated by nothing
- * but whitespace.
+ * Is this the URL of a Shopify theme-app-extension asset?
  *
- * Adjacency is the safety boundary. Sorting a run of siblings cannot move
- * markup past unrelated content, so a real change anywhere else still changes
- * the hash. Sorting every match in the document, or the whole span from the
- * first match to the last, would silently relocate everything in between.
+ * Parsed, not substring-matched: `data-note="cdn.shopify.com/extensions/"` on an
+ * ordinary script must not make it order-insensitive, and neither must
+ * `https://not-cdn.shopify.com/extensions/` or another origin carrying the
+ * string somewhere in its path.
  */
-function groupAdjacent(html: string, regions: SourceRegion[]): Run[] {
-  const runs: Run[] = [];
-  let current: SourceRegion[] = [];
-  for (const region of regions) {
-    const prev = current[current.length - 1];
-    if (prev && html.slice(prev.end, region.start).trim() !== "") {
-      if (current.length > 1) runs.push({ items: current });
-      current = [];
-    }
-    current.push(region);
+function isExtensionAsset(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, "https://placeholder.invalid");
+    return (
+      parsed.hostname === SHOPIFY_EXTENSION_HOST &&
+      parsed.pathname.startsWith(SHOPIFY_EXTENSION_PATH)
+    );
+  } catch {
+    return false;
   }
-  if (current.length > 1) runs.push({ items: current });
-  return runs;
 }
 
-/** Rewrite `html`, replacing each region's text via `replace`, in order. */
-function spliceRegions(
-  html: string,
-  edits: Array<{ start: number; end: number; text: string }>,
-): string {
+/** Rewrite `html` by replacing disjoint regions, left to right. */
+function spliceRegions(html: string, edits: Array<Region & { text: string }>): string {
   if (edits.length === 0) return html;
   edits.sort((a, b) => a.start - b.start);
   let out = "";
   let cursor = 0;
   for (const edit of edits) {
-    if (edit.start < cursor) continue; // overlapping edit: keep the first
+    if (edit.start < cursor) continue;
     out += html.slice(cursor, edit.start) + edit.text;
     cursor = edit.end;
   }
@@ -128,95 +128,151 @@ function spliceRegions(
 }
 
 /**
+ * Group regions into runs of ADJACENT siblings — separated by nothing but
+ * whitespace.
+ *
+ * Adjacency is the safety boundary. Sorting a run of siblings cannot move markup
+ * past unrelated content, so a real change anywhere else still changes the hash.
+ * Sorting every match in the document, or the span from the first match to the
+ * last, would silently relocate everything in between.
+ */
+function groupAdjacent(html: string, regions: Region[]): Region[][] {
+  const runs: Region[][] = [];
+  let current: Region[] = [];
+  for (const region of regions) {
+    const prev = current[current.length - 1];
+    if (prev && html.slice(prev.end, region.start).trim() !== "") {
+      if (current.length > 1) runs.push(current);
+      current = [];
+    }
+    current.push(region);
+  }
+  if (current.length > 1) runs.push(current);
+  return runs;
+}
+
+/**
  * Neutralize well-anchored per-request volatility so two fetches of an
- * otherwise-identical page normalize to the same string: strip the Cloudflare
- * challenge-platform block, blank Shopify's `__st` request-identity bootstrap,
- * replace epoch-ms tokens and named identity fields inside every other
- * `<script>`, and sort each contiguous run of Shopify app blocks and
- * app-extension asset tags. A page carrying none of these passes through
- * unchanged.
+ * otherwise-identical page normalize to the same string.
+ *
+ * Two passes, and the order matters: an app block can CONTAIN a script, so the
+ * regions overlap and one edit would win. Sorting raw text carried an
+ * un-neutralized identity token into the output for exactly the pages whose
+ * blocks needed reordering, and left it neutralized for the pages that did not —
+ * so two fetches of the same page normalized differently, which is the failure
+ * this function exists to prevent. Sorting text that is already neutralized
+ * cannot do that.
  */
 export function normalizeHtmlForFingerprint(html: string): string {
   return sortShopifyRuns(neutralizeScripts(html));
 }
 
-/**
- * Pass 1: rewrite script bodies. Strips the Cloudflare challenge block, blanks
- * Shopify's `__st` request-identity bootstrap, and neutralizes epoch-ms tokens
- * and named identity fields everywhere else.
- */
+/** Pass 1: strip the CF challenge block and neutralize script-borne identity. */
 function neutralizeScripts(html: string): string {
-  const edits: Array<{ start: number; end: number; text: string }> = [];
-  scanSource(html, {
-    onScript: (region) => {
-      const openTag = html.slice(region.start, region.openTagEnd);
-      const body = html.slice(region.openTagEnd, region.bodyEnd);
-      if (CF_CHALLENGE.test(openTag) || CF_CHALLENGE.test(body)) {
-        edits.push({ start: region.start, end: region.end, text: "" });
-        return;
-      }
-      // JSON-LD bodies are deliberately in scope: a payload differing only in a
-      // 13-digit numeric field reuses a stale render — accepted narrowing,
-      // bounded by the render cache's 7-day TTL (#991).
-      const rewritten = ST_ID_ATTR.test(openTag)
-        ? ""
-        : body.replace(EPOCH_MS_TOKEN, "0").replace(IDENTITY_FIELD, '"$1":""');
-      if (rewritten !== body) {
-        edits.push({ start: region.openTagEnd, end: region.bodyEnd, text: rewritten });
-      }
+  const edits: Array<Region & { text: string }> = [];
+  let openEnd: number | null = null;
+  let start = 0;
+  let isSt = false;
+
+  const parser: Parser = new Parser(
+    {
+      onopentag(name, attribs) {
+        if (name !== "script") return;
+        start = parser.startIndex;
+        openEnd = parser.endIndex + 1;
+        // An EXACT attribute value. `id="__st suffix"` is a different id, and a
+        // `data-note` whose value merely contains `id="__st"` is not an id at
+        // all — both were false positives when this was matched with a regex
+        // over the raw open tag.
+        isSt = attribs.id === "__st";
+      },
+      onclosetag(name) {
+        if (name !== "script" || openEnd === null) return;
+        const bodyStart = openEnd;
+        const bodyEnd = parser.startIndex;
+        openEnd = null;
+        if (bodyEnd < bodyStart) return;
+        const body = html.slice(bodyStart, bodyEnd);
+        // The open tag too: the challenge platform ships in two forms, an inline
+        // snippet setting `window.__CF$cv$params` and an EXTERNAL script whose
+        // body is empty and whose src is the giveaway.
+        const openTag = html.slice(start, bodyStart);
+        if (CF_CHALLENGE.test(openTag) || CF_CHALLENGE.test(body)) {
+          edits.push({ start, end: parser.endIndex + 1, text: "" });
+          return;
+        }
+        // JSON-LD bodies are deliberately in scope for the epoch pass: a payload
+        // differing only in a 13-digit numeric field reuses a stale render —
+        // accepted narrowing, bounded by the 7-day TTL (#991).
+        let rewritten = body.replace(EPOCH_MS_TOKEN, "0");
+        if (isSt || SHOPIFY_ANALYTICS.test(body)) {
+          rewritten = rewritten.replace(IDENTITY_FIELD, '"$1":""');
+        }
+        if (rewritten !== body) edits.push({ start: bodyStart, end: bodyEnd, text: rewritten });
+      },
     },
-  });
+    { lowerCaseTags: true, lowerCaseAttributeNames: true },
+  );
+  parser.write(html);
+  parser.end();
   return spliceRegions(html, edits);
 }
 
-/**
- * Pass 2: sort each contiguous run of Shopify app blocks and app-extension
- * asset tags.
- *
- * Deliberately a SECOND pass over the already-rewritten string rather than more
- * edits in the first. An app block can contain a script, so the two edit sets
- * overlap, and one has to win: sorting raw text would carry an un-neutralized
- * identity token back into the output for exactly the pages whose blocks needed
- * reordering, and leave it neutralized for the ones that did not. Two fetches
- * of the same page would then normalize differently — the failure this whole
- * function exists to prevent. Sorting text that is already neutralized cannot
- * do that.
- */
+/** Pass 2: sort each contiguous run of app blocks and extension asset tags. */
 function sortShopifyRuns(html: string): string {
-  const appBlocks: SourceRegion[] = [];
-  const assetTags: SourceRegion[] = [];
+  const appBlocks: Region[] = [];
+  const assetTags: Region[] = [];
   let blockStart: number | null = null;
+  let blockDepth = 0;
+  let pendingAsset: number | null = null;
 
-  scanSource(html, {
-    onScript: (region) => {
-      const openTag = html.slice(region.start, region.openTagEnd);
-      if (EXTENSION_ASSET.test(openTag)) assetTags.push({ start: region.start, end: region.end });
+  const parser: Parser = new Parser(
+    {
+      oncomment(text) {
+        if (APP_BLOCK_BEGIN.test(text)) {
+          // Nesting is COUNTED, not ignored. An inner END closing an outer block
+          // would emit a region that is not a sibling of the ones beside it, and
+          // sorting could then move markup across a boundary.
+          if (blockDepth === 0) blockStart = parser.startIndex;
+          blockDepth++;
+          return;
+        }
+        if (APP_BLOCK_END.test(text) && blockDepth > 0) {
+          blockDepth--;
+          if (blockDepth === 0 && blockStart !== null) {
+            appBlocks.push({ start: blockStart, end: parser.endIndex + 1 });
+            blockStart = null;
+          }
+        }
+      },
+      onopentag(name, attribs) {
+        if (name === "script" && isExtensionAsset(attribs.src)) {
+          pendingAsset = parser.startIndex;
+          return;
+        }
+        if (name === "link" && isExtensionAsset(attribs.href)) {
+          assetTags.push({ start: parser.startIndex, end: parser.endIndex + 1 });
+        }
+      },
+      onclosetag(name) {
+        if (name === "script" && pendingAsset !== null) {
+          assetTags.push({ start: pendingAsset, end: parser.endIndex + 1 });
+          pendingAsset = null;
+        }
+      },
     },
-    onComment: (region, text) => {
-      if (APP_BLOCK_BEGIN.test(text)) {
-        // A nested BEGIN keeps the OUTERMOST start, so a block and the block it
-        // contains are never emitted as two overlapping regions.
-        if (blockStart === null) blockStart = region.start;
-        return;
-      }
-      if (APP_BLOCK_END.test(text) && blockStart !== null) {
-        appBlocks.push({ start: blockStart, end: region.end });
-        blockStart = null;
-      }
-    },
-    onTag: (region, name) => {
-      if (name !== "link") return;
-      if (EXTENSION_ASSET.test(html.slice(region.start, region.end))) assetTags.push(region);
-    },
-  });
+    { lowerCaseTags: true, lowerCaseAttributeNames: true },
+  );
+  parser.write(html);
+  parser.end();
 
-  const edits: Array<{ start: number; end: number; text: string }> = [];
+  const edits: Array<Region & { text: string }> = [];
   for (const regions of [appBlocks, assetTags]) {
     for (const run of groupAdjacent(html, regions)) {
-      const texts = run.items.map((r) => html.slice(r.start, r.end));
+      const texts = run.map((r) => html.slice(r.start, r.end));
       const sorted = [...texts].sort();
       if (sorted.every((t, i) => t === texts[i])) continue;
-      run.items.forEach((region, i) => {
+      run.forEach((region, i) => {
         edits.push({ start: region.start, end: region.end, text: sorted[i]! });
       });
     }
