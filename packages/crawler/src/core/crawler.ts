@@ -68,7 +68,7 @@ import {
   isNotModifiedResponse,
   type FreshReason,
 } from "../incremental";
-import { StorageCacheStore } from "../cache-store";
+import { StorageCacheStore, type CacheStore } from "../cache-store";
 import {
   createPatternStats,
   getPatternStats,
@@ -304,6 +304,22 @@ export interface CreateCrawlerOptions {
   parsedPageCache?: ParsedPageCache;
   // Opt-in: injectable fetch seam; defaults to the real fetchPageWithRetry (#315)
   fetcher?: CrawlFetcher;
+  /**
+   * Opt-in: injectable cache seam; defaults to {@link StorageCacheStore} over
+   * `storage` (#1899).
+   *
+   * The default reads the previous crawl straight out of the same SQLite the
+   * current crawl writes, which is why a CLI re-run is near free and a cloud
+   * run is not: a cloud container starts with an empty database, so there is
+   * nothing to revalidate against. A caller that HAS a previous crawl
+   * elsewhere supplies a store that can reach it.
+   *
+   * Anything reached over a network belongs behind this seam rather than in the
+   * crawl loop: the loop asks for one URL at a time, so an implementation that
+   * fetches a body per lookup keeps residency at one page, and a lookup that
+   * fails or returns `{ entry: null }` simply costs a normal fetch.
+   */
+  cacheStore?: CacheStore;
 }
 
 export function createCrawler(
@@ -451,8 +467,10 @@ export function createCrawler(
         }
       });
 
-    // Shared cache seam (#147): same lookup logic runs local + cloud.
-    const cacheStore = new StorageCacheStore(storage);
+    // Shared cache seam (#147): same lookup logic runs local + cloud. Injectable
+    // since #1899 so a caller whose previous crawl lives somewhere other than
+    // this database can still revalidate against it.
+    const cacheStore = options.cacheStore ?? new StorageCacheStore(storage);
 
     // ----------------------------------------
     // URL Normalization and Scope
