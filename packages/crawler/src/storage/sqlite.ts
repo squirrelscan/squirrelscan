@@ -1132,7 +1132,15 @@ export class SQLiteStorage implements CrawlStorage {
 
         if (sets.length > 0) {
           values.push(id);
-          const stmt = db.prepare(
+          // Cached, and safe to cache even though the SQL is built here: the
+          // statement cache is keyed by TEXT, and `sets` is drawn from a fixed
+          // list of eight optional columns, so the number of distinct texts is
+          // bounded by their combinations rather than by anything a caller
+          // controls. A dynamically-built statement whose shape came from user
+          // input would grow this cache without limit and should keep using
+          // `prepare`. The crawl loop's stats write lands here once per page
+          // (#1911).
+          const stmt = db.query(
             `UPDATE crawls SET ${sets.join(", ")} WHERE id = ?`
           );
           stmt.run(...(values as (string | number | null)[]));
@@ -1247,7 +1255,10 @@ export class SQLiteStorage implements CrawlStorage {
           htmlToStore = null; // HTML is in content-store, not local DB
         }
 
-        const stmt = db.prepare(`
+        // Cached: once per crawled page (#1911). See the census in
+        // scripts/statement-compile-census.ts for why this one and not the
+        // other ninety.
+        const stmt = db.query(`
           INSERT OR REPLACE INTO pages (
             crawl_id, url, normalized_url, final_url, depth, parent_url,
             redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at,
@@ -1535,7 +1546,8 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(`
+        // Cached: once per newly discovered URL (#1911).
+        const stmt = db.query(`
           INSERT OR REPLACE INTO frontier (
             crawl_id, normalized_url, raw_url, depth, parent_url,
             priority, status, source, enqueued_at, fetched_at, retry_count, reason
@@ -2000,7 +2012,9 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
+        // Cached: once per newly discovered URL, on the enqueue path that has no
+        // link-count cache to read from (#1911).
+        const stmt = db.query(
           "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?"
         );
         const row = stmt.get(crawlId, normalizedUrl) as { count: number };

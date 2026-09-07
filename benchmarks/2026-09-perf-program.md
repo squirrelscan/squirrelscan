@@ -148,6 +148,50 @@ not merely add noise to a cache-hostile scan, it systematically inflates it**, s
 minimum-of-N on a busy box is not a defence. Re-run the pair on a quiet machine
 before publishing a delta.
 
+## Storage statement compilation in the crawler
+
+`bun:sqlite` has two ways to get a statement and they are not interchangeable:
+`db.query(sql)` caches the compiled statement by SQL text, `db.prepare(sql)`
+compiles a new one every call. The crawler's storage layer used `prepare` in all
+116 places, so every operation re-parsed its SQL
+([#1911](https://github.com/squirrelscan/repo/issues/1911)).
+[#247](https://github.com/squirrelscan/squirrelscan/pull/247) converted the
+per-link frontier check; a census of a real crawl then showed which of the
+remaining 95 were worth touching, and the answer was four
+([#259](https://github.com/squirrelscan/squirrelscan/pull/259)).
+
+| statements compiled | before | after |
+|---|---|---|
+| 120-page crawl, 40 links/page | 513 | 37 |
+| per page | 4.3 | 0.3 |
+| scaling in page count | O(pages) | O(1) |
+
+The four were `upsertPage`, `upsertFrontier`, `getIncomingLinkCount` and the
+crawl-stats `UPDATE`. Every other statement in the file runs once per crawl, and
+tripling links per page from 40 to 120 changed the total by nothing, which is
+what confirmed #247 had already removed the only per-link one.
+
+**This is a count, not a time, and that is the point.** Compilation costs
+2.4 us (minimum of five interleaved rounds of 20,000; `db.query` on a cache hit
+is 0.01 us), so removing four per page is worth about 10 us per page, or
+0.1 s across a 10,000-page crawl. An interleaved A/B of the crawl itself at 400
+pages gave minima of 1.1 s before and 0.9 s after, but the arithmetic above can
+only account for 4 ms of that 200 ms, so the rest is noise and the wall-clock
+pair is not evidence of anything. A count is immune to that, which is why it is
+the headline here and why the regression test asserts on compilations rather
+than on a clock.
+
+Machine: 16 GB Apple Silicon laptop, load average 8.9 with other lanes running.
+Stated because it disqualifies the timing rows and does not touch the counts.
+
+Crawl output is byte-identical: a serialised crawl at 120, 250 and 400 pages
+produces the same digest of stored pages, frontier verdicts and link
+appearances before and after. Two things had to be fixed before that digest
+meant anything, and both looked like failures at first — the crawl is
+non-deterministic at concurrency 8, because discovery order decides each URL's
+depth and parent, and `port: 0` puts a different ephemeral port in every URL, so
+identical code hashed differently three times running.
+
 ## Hosted runtime, in production
 
 Same 149-page rendered audit of the same site an hour apart, old image against
