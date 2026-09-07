@@ -1348,8 +1348,9 @@ export class SQLiteStorage implements CrawlStorage {
    * HTML per page (and re-reads it from the content store when the column is
    * empty) so the scan can look at two small fields. That HTML is never touched
    * and is dropped at the end of the batch, but the allocator keeps the pages it
-   * grew for it: measured over 150 real 959 KB pages, the two link-graph scans
-   * grew RSS 345 MB and gave none of it back, while the JS heap grew 343 KB.
+   * grew for it: measured over 150 real 959 KB pages at batch 50, three runs,
+   * the two link-graph scans grew RSS a median 431 MB through `getPages` and
+   * 88 MB through this, while the JS heap grew ~0.3 MB either way.
    *
    * Same ordering and pagination as `getPages`, so a caller swapping one for the
    * other sees the same rows in the same order.

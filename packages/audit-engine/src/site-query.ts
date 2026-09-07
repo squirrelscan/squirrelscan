@@ -255,8 +255,9 @@ function buildPagesByType(
  * would materialize ~1 MB per page (and pull it back out of the content store
  * when the column is empty) so the loop below can look at `parsedData.links`.
  * That memory is dropped at the end of each batch, but the allocator keeps the
- * pages it grew for it — measured over 150 real 959 KB pages, the two scans grew
- * RSS 345 MB and returned none of it.
+ * pages it grew for it — measured over 150 real 959 KB pages at batch 50, three
+ * runs, the two scans grew RSS a median 431 MB through `getPages` and 88 MB
+ * through this, while the JS heap grew ~0.3 MB either way.
  */
 function streamPageLinkRows(
   storage: SQLiteStorage,
