@@ -160,3 +160,25 @@ export const CRAWL_PHASE_MIN_TIMEOUT_MS = 120_000;
 export const CRAWL_PHASE_MAX_TIMEOUT_MS = 1_800_000; // 30 min
 
 // CSR-shell thresholds (#294) moved to @squirrelscan/fetchers csr-detect.ts.
+
+// ── Streamed rules pipeline (#1913) ─────────────────────────────────────────
+//
+// The audit's post-crawl phases walk the pages table in byte-budgeted batches
+// instead of materializing every page, so peak residency is set by the batch,
+// not by the crawl. Same two dials the hosted runtime reads, with the same
+// names and the same default, so a batch tuned in one place means the same
+// thing in the other.
+//
+// Sizing, measured on real ~1 MB pages: peak ≈ a ~300 MB floor (rule set,
+// runner, SQLite caches, allocator arena) plus ~3.5 MB per page of batch. The
+// budget is NOT worth turning down below about 12 pages' worth — under that the
+// same crawl becomes several times as many read/parse/collect cycles and the
+// churn sets a HIGHER high-water than a larger batch does.
+/** Raw html held per streamed batch. `SQUIRREL_STREAM_BATCH_BYTES` overrides. */
+export const STREAM_BATCH_BYTES_DEFAULT = 48 * 1024 * 1024;
+/** Clamp band for the byte budget, so a typo can't ask for a gigabyte or a byte. */
+export const STREAM_BATCH_BYTES_MIN = 1024 * 1024;
+export const STREAM_BATCH_BYTES_MAX = 512 * 1024 * 1024;
+/** Clamp band for an explicit page count (`SQUIRREL_STREAM_BATCH_PAGES`). */
+export const STREAM_BATCH_PAGES_MIN = 5;
+export const STREAM_BATCH_PAGES_MAX = 500;

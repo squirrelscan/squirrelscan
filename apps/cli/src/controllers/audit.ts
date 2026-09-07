@@ -27,17 +27,18 @@ import {
 import type { PreflightBalance } from "@/lib/balance";
 
 import {
-  fetchResourceAssets,
-  runRulesOnStorage,
-  checkExternalLinksOnStorage,
-  buildSiteContext,
-  releaseSiteContextDocuments,
+  resolveStreamBatch,
+  runStreamingPreRules,
+  runStreamingRules,
 } from "@/audit/adapter";
 import {
+  absorbExternalLinkUrls,
+  createCloudPrefetchCollector,
+  createTechDetectSampleCollector,
   resolveDeadLinksBulkChecker,
   runCloudDomainStats,
   runCloudEditorSummary,
-  runCloudPrefetch,
+  runCloudPrefetchFromPayloads,
   runCloudTechDetect,
   detectLocalTechnologies,
   type CloudPrefetchResult,
@@ -46,6 +47,10 @@ import {
 import { gateStage1 } from "@/audit/cloud-gating";
 import { resolveRulesConfig } from "@/audit/rule-filter";
 import { runSmartAudits } from "@/audit/smart-audits";
+import {
+  resolveStreamBatchBytes,
+  resolveStreamBatchPagesOverride,
+} from "@/audit/stream-batch";
 import {
   loadConfig,
   DEFAULT_CRAWLER_CONCURRENCY,
@@ -358,8 +363,11 @@ export function foldRenderSpendLines(
  */
 export const AUDIT_PHASES = [
   "crawl",
-  "external_links",
-  "assets",
+  // One streamed walk over the crawl's pages does the external-link collection
+  // + check and the resource-asset fetch that used to be timed separately as
+  // `external_links` and `assets` (#1913). They cannot be split without
+  // reintroducing the whole-crawl page array, so they are reported as one.
+  "pre_rules",
   "cloud_prefetch",
   "tech_detect",
   "rules",
@@ -369,6 +377,34 @@ export const AUDIT_PHASES = [
   "domain_stats",
   "publish",
 ] as const;
+
+/**
+ * Opt-in per-sub-phase memory line for the streamed rules pass (#1913).
+ *
+ * The rules phase is one long synchronous block, so an interval sampler is
+ * starved by it — a 10-minute run yielded three samples, only the last of which
+ * meant anything — and on macOS the compressor absorbs the growth, so RSS reads
+ * flat while the heap is climbing by gigabytes. These boundaries are the only
+ * place a local repro can see where a phase's heap went, which is why the hosted
+ * runtime samples the same ones.
+ *
+ * Off unless `SQUIRREL_STREAM_PHASE_MEM=1`: the forced collect each boundary
+ * needs to make the number mean anything is not free, and the line is
+ * diagnostic output, not part of any report.
+ */
+export function streamPhaseMemoryLogger():
+  | ((phase: string, boundary: "start" | "end") => void)
+  | undefined {
+  if (process.env.SQUIRREL_STREAM_PHASE_MEM !== "1") return undefined;
+  const mb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))}MB`;
+  return (phase, boundary) => {
+    Bun.gc(true);
+    const m = process.memoryUsage();
+    console.error(
+      `[stream] ${phase} ${boundary} heapUsed=${mb(m.heapUsed)} external=${mb(m.external)} rss=${mb(m.rss)}`
+    );
+  };
+}
 
 /**
  * `CommandError.details` shape on a failed `runAudit()` (#871) — the partial
@@ -1111,19 +1147,34 @@ export async function runAudit(
       );
 
       // ============================================
-      // BUILD SITE CONTEXT (parse once, use everywhere)
+      // POST-CRAWL: STREAMED PIPELINE (#1913)
       // ============================================
-      logger.debug("building site context", crawlId);
-      const pages = await Effect.runPromise(
-        storage
-          .getPages(crawlId)
-          .pipe(Effect.catchAll(() => Effect.succeed([])))
+      // Everything from here to the report walks the pages table in
+      // byte-budgeted batches and drops each batch's DOMs before reading the
+      // next. The resident pipeline this replaced built one site context over
+      // every crawled page and held a parsed page plus its DOM through the whole
+      // rules phase: ~1.5 MB of retained heap per crawled page, 3.9 GB at 2,500
+      // pages. Nothing here holds a page-count-scaled structure of pages.
+      //
+      // A page COUNT is all the empty-crawl guard needs; reading every
+      // PageRecord to check for zero would reintroduce the term this exists to
+      // remove.
+      //
+      // The streamed passes need the concrete SQLite storage (LIMIT/OFFSET
+      // paging + page_features). `createStorage` only ever builds one; the
+      // narrowing here is the same one the report path already makes below.
+      const sqliteStorage =
+        storage as import("@/crawler/storage/sqlite").SQLiteStorage;
+      const pageCount = await Effect.runPromise(
+        sqliteStorage
+          .getPageCount(crawlId)
+          .pipe(Effect.catchAll(() => Effect.succeed(0)))
       );
 
       // If the crawl phase was force-stopped by the wall-clock backstop and
       // produced nothing, fail with a clear reason instead of analyzing an
       // empty site (which would surface as confusing all-pass/zero results).
-      if (crawlPhaseStopped && pages.length === 0) {
+      if (crawlPhaseStopped && pageCount === 0) {
         throw new Error(
           `Crawl phase timed out after ${Math.round((crawlPhaseTimeoutMs ?? 0) / 1000)}s with no pages collected`
         );
@@ -1131,7 +1182,7 @@ export async function runAudit(
       if (crawlPhaseStopped) {
         logger.warn(
           "partial crawl",
-          `analyzing ${pages.length} page(s) collected before the crawl-phase timeout`
+          `analyzing ${pageCount} page(s) collected before the crawl-phase timeout`
         );
       }
       // #1829: name the throttling host(s) and the knobs that fix it. Without
@@ -1144,13 +1195,34 @@ export async function runAudit(
         );
       }
 
-      const siteContext = await Effect.runPromise(
-        buildSiteContext(pages, parsedPageCache)
-      ).finally(() => {
-        // siteContext owns the reused DOMs now; drop crawl-time refs on any path
-        parsedPageCache.clear();
-      });
+      // Nothing downstream reads the crawl-time DOMs now that each streamed
+      // batch parses its own: drop them here rather than carrying up to
+      // PARSED_PAGE_CACHE_MAX_PAGES documents through the rest of the run.
+      parsedPageCache.clear();
       phaseTimer.mark("crawl");
+
+      // One batch size for every streamed walk, derived from this site's own
+      // average page size against a byte budget rather than fixed at a page
+      // count — a docs site of 30 KB pages and a storefront of 1 MB ones need
+      // very different page counts to hold the same bytes. Sampling costs a
+      // dozen page reads and is what makes the bound hold across site shapes.
+      const streamBatch = await Effect.runPromise(
+        resolveStreamBatch(sqliteStorage, crawlId, pageCount, {
+          pages: resolveStreamBatchPagesOverride(),
+          byteBudget: resolveStreamBatchBytes(),
+        })
+      );
+      const streamBatchSize = streamBatch.pages;
+      logger.debug(
+        "stream batch",
+        streamBatch.explicit
+          ? `${streamBatchSize} pages (explicit)`
+          : `${streamBatchSize} pages (avg page ${
+              streamBatch.avgPageBytes >= 1024
+                ? `${Math.round(streamBatch.avgPageBytes / 1024)} KB`
+                : `${streamBatch.avgPageBytes} B`
+            }, budget ${Math.round(streamBatch.byteBudget / (1024 * 1024))} MB)`
+      );
 
       // Queue-wait vs render-time breakdown for the crawl just finished
       // (#826) — tells cloud render latency apart as browser-pool queueing
@@ -1165,119 +1237,168 @@ export async function runAudit(
       }
 
       // ============================================
-      // STEP 1.5: CHECK EXTERNAL LINKS
+      // STEP 1.5 + 2: PRE-RULES WALK (external links, resource assets, payloads)
       // ============================================
-      if (mergedConfig.external_links.enabled) {
-        phaseTimer.enter("external_links");
-        logger.debug("step 1.5: checking external links", crawlId);
-        onProgress({ phase: "external-links" });
+      // One batched walk of the pages table replaces the whole-crawl
+      // buildSiteContext + checkExternalLinksOnStorage + fetchResourceAssets
+      // sequence (#1913). Each collector below absorbs a batch while its DOMs
+      // are live and keeps only capped, page-detached output; the batch is then
+      // dropped. The network halves (link checking, asset fetching) run once
+      // over the collected occurrences, in the same order as before.
+      phaseTimer.enter("pre_rules");
+      logger.debug("step 1.5+2: pre-rules walk", crawlId);
+      const externalLinksEnabled = mergedConfig.external_links.enabled;
+      onProgress({ phase: externalLinksEnabled ? "external-links" : "rules" });
 
-        // Cloud bulk dead-link checks (shared global cache) when authed and
-        // the links/dead-links rule is enabled; null → plain local checking.
-        // Gated behind the SAME spend confirmation as STEP 2.4 prefetch so the
-        // dead_links charge (which happens here, before that confirm) can't be
-        // a surprise: when the estimate exceeds [cloud].confirm_threshold and a
-        // TTY confirm callback exists, the user is prompted first; a decline
-        // falls back to local per-link checks.
-        const deadLinksClient =
-          options.cloudAvailable === false || isQuickMode
-            ? null
-            : createCloudClientFromSettings();
-        const bulkChecker = await resolveDeadLinksBulkChecker({
-          client: deadLinksClient,
-          config: mergedConfig,
-          auditId: crawlId,
-          siteContext,
-          getBalance: deadLinksClient
-            ? async () =>
-                preflightBalanceOf((await deadLinksClient.getBalance()).balance)
-            : undefined,
-          confirm: options.confirmCloudSpend,
-          onSpend: (units, credits) => {
-            deadLinksUnits += units;
-            deadLinksCredits += credits;
+      // Cloud bulk dead-link checks (shared global cache) when authed and
+      // the links/dead-links rule is enabled; null → plain local checking.
+      // Gated behind the SAME spend confirmation as STEP 2.4 prefetch so the
+      // dead_links charge (which happens here, before that confirm) can't be
+      // a surprise: when the estimate exceeds [cloud].confirm_threshold and a
+      // TTY confirm callback exists, the user is prompted first; a decline
+      // falls back to local per-link checks.
+      const deadLinksClient =
+        options.cloudAvailable === false || isQuickMode
+          ? null
+          : createCloudClientFromSettings();
+
+      // Cloud-prefetch payloads (STEP 2.4) and the tech-detect sample (STEP 2.6
+      // / the local fallback) are the two consumers that used to read the whole
+      // site context AFTER this walk. Both collect during it instead: the
+      // prefetch collector keeps capped payload lists plus the bounded Stage-0
+      // metadata sample, the tech collector keeps at most techDetectMaxPages
+      // page records.
+      const cloudPrefetchEnabled =
+        mergedConfig.cloud.enabled &&
+        options.cloudAvailable !== false &&
+        !isQuickMode;
+      const prefetchCollector = cloudPrefetchEnabled
+        ? createCloudPrefetchCollector(url)
+        : null;
+      const techSampleCollector = createTechDetectSampleCollector(url);
+      // normalizedUrl + status per page, for the smart-audits merge and nothing
+      // else — two scalars a page instead of the PageRecord it used to slice
+      // them off.
+      const pageStatuses: Array<{ normalizedUrl: string; status: number }> = [];
+      // Distinct external link urls, sized exactly as countExternalLinks does,
+      // so the dead-links spend estimate is the number v1 showed. Only
+      // accumulated when a paid checker could ask for it — this is the one
+      // collector here whose size follows the crawl rather than a cap, and on
+      // the common signed-out or `--offline` run nothing ever reads it.
+      const needExternalLinkCount =
+        cloudPrefetchEnabled && externalLinksEnabled;
+      const externalLinkUrls = new Set<string>();
+
+      const preRules = await Effect.runPromise(
+        runStreamingPreRules(sqliteStorage, crawlId, mergedConfig, {
+          batchSize: streamBatchSize,
+          resourceOverrides: {
+            resourceCheckMaxItems: options.resourceCheckMaxItems,
+            resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
+            // Sub-resource cache reuse (#107): mirrors the crawler's incremental flag.
+            incremental: incrementalEnabled,
           },
-        });
-
-        await Effect.runPromise(
-          checkExternalLinksOnStorage(
-            storage,
-            crawlId,
-            siteContext,
-            mergedConfig.external_links,
-            (progress) => {
-              logger.debug(
-                "external links",
-                `${progress.checked}/${progress.total}`,
-                `(${progress.fromCache} cached)`
-              );
-              onProgress({
-                phase: "external-links",
-                current: progress.checked,
-                total: progress.total,
+          ...(externalLinksEnabled
+            ? {
+                externalLinks: {
+                  config: mergedConfig.external_links,
+                  onProgress: (progress) => {
+                    logger.debug(
+                      "external links",
+                      `${progress.checked}/${progress.total}`,
+                      `(${progress.fromCache} cached)`
+                    );
+                    onProgress({
+                      phase: "external-links",
+                      current: progress.checked,
+                      total: progress.total,
+                    });
+                  },
+                  // Resolved after the walk has counted the links and before any
+                  // of them is checked, so the spend confirm still lands ahead
+                  // of the phase rather than inside its progress output.
+                  resolveBulkChecker: async () =>
+                    (await resolveDeadLinksBulkChecker({
+                      client: deadLinksClient,
+                      config: mergedConfig,
+                      auditId: crawlId,
+                      externalLinkCount: externalLinkUrls.size,
+                      getBalance: deadLinksClient
+                        ? async () =>
+                            preflightBalanceOf(
+                              (await deadLinksClient.getBalance()).balance
+                            )
+                        : undefined,
+                      confirm: options.confirmCloudSpend,
+                      onSpend: (units, credits) => {
+                        deadLinksUnits += units;
+                        deadLinksCredits += credits;
+                      },
+                    })) ?? undefined,
+                },
+              }
+            : {}),
+          onBatchContext: (batchContext) => {
+            prefetchCollector?.absorb(batchContext);
+            techSampleCollector.absorb(batchContext);
+            if (needExternalLinkCount)
+              absorbExternalLinkUrls(externalLinkUrls, batchContext);
+            for (const { page } of batchContext) {
+              pageStatuses.push({
+                normalizedUrl: page.normalizedUrl,
+                status: page.status,
               });
-            },
-            bulkChecker ?? undefined
-          )
-        );
-        phaseTimer.mark("external_links");
-      }
-
-      // ============================================
-      // STEP 2: FETCH RESOURCE ASSETS
-      // ============================================
-      phaseTimer.enter("assets");
-      logger.debug("step 2: fetching resource assets", crawlId);
-      onProgress({ phase: "rules" });
-
-      const assets = await Effect.runPromise(
-        fetchResourceAssets(storage, crawlId, siteContext, mergedConfig, {
-          resourceCheckMaxItems: options.resourceCheckMaxItems,
-          resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
-          // Sub-resource cache reuse (#107): mirrors the crawler's incremental flag.
-          incremental: incrementalEnabled,
+            }
+          },
         })
       );
-      phaseTimer.mark("assets");
+      const assets = preRules.assets;
+      const techSample = techSampleCollector.build();
+      // v1 opened the external-links phase and then the rules phase separately,
+      // the second just before the asset fetch. The asset fetch is inside the
+      // walk now, so the opener went above and the rules banner comes here —
+      // both markers a run used to emit, still exactly once.
+      if (externalLinksEnabled) onProgress({ phase: "rules" });
+      phaseTimer.mark("pre_rules");
 
       // ============================================
       // STEP 2.4: CLOUD PREFETCH (the only networked enrichment step)
       // ============================================
       let cloudResult: CloudPrefetchResult | null = null;
-      if (
-        mergedConfig.cloud.enabled &&
-        options.cloudAvailable !== false &&
-        !isQuickMode
-      ) {
+      // `prefetchCollector` is non-null on exactly the condition this block used
+      // to spell out (see `cloudPrefetchEnabled`); testing it here is the same
+      // gate and narrows the collector for the dispatch below.
+      if (prefetchCollector) {
         phaseTimer.enter("cloud_prefetch");
         logger.debug("step 2.4: cloud prefetch", crawlId);
         onProgress({ phase: "cloud" });
         try {
-          cloudResult = await runCloudPrefetch({
-            client: createCloudClientFromSettings(),
-            cloudConfig: mergedConfig.cloud,
-            config: mergedConfig,
-            siteContext,
-            baseUrl: url,
-            auditId: crawlId,
-            // Stage-1 gating policy (CLI-owned): Stage-0 metadata gates which
-            // downstream cloud features run before the per-audit cap.
-            gate: gateStage1,
-            // Consented users skip THIS confirm (capped + disclosed up front);
-            // dead-links/tech/editor keep their gate below.
-            confirm: options.cloudConsented
-              ? undefined
-              : options.confirmCloudSpend,
-            onProgress: (detail) => onProgress({ phase: "cloud", detail }),
-            // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page — i.e. the
-            // resolved fetcher is the full-render one ("cloud-render"), NOT the "auto" hybrid ("hybrid-http-
-            // first", most pages raw) or plain HTTP (undefined). #673.
-            crawlRendered: documentFetcher?.id === "cloud-render",
-            // Payloads built → nothing reads the DOMs again until the rules
-            // phase (which re-parses on demand). Drop them so the cloud round
-            // trips don't idle a GB-scale working set (#858).
-            onPayloadsBuilt: () => releaseSiteContextDocuments(siteContext),
-          });
+          cloudResult = await runCloudPrefetchFromPayloads(
+            {
+              client: createCloudClientFromSettings(),
+              cloudConfig: mergedConfig.cloud,
+              config: mergedConfig,
+              baseUrl: url,
+              auditId: crawlId,
+              // Stage-1 gating policy (CLI-owned): Stage-0 metadata gates which
+              // downstream cloud features run before the per-audit cap.
+              gate: gateStage1,
+              // Consented users skip THIS confirm (capped + disclosed up front);
+              // dead-links/tech/editor keep their gate below.
+              confirm: options.cloudConsented
+                ? undefined
+                : options.confirmCloudSpend,
+              onProgress: (detail) => onProgress({ phase: "cloud", detail }),
+              // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page — i.e. the
+              // resolved fetcher is the full-render one ("cloud-render"), NOT the "auto" hybrid ("hybrid-http-
+              // first", most pages raw) or plain HTTP (undefined). #673.
+              crawlRendered: documentFetcher?.id === "cloud-render",
+            },
+            // Collected batch by batch during the pre-rules walk (#1913), so
+            // there is no whole-crawl DOM working set left to release for the
+            // duration of the cloud round trips — each batch's went with it.
+            prefetchCollector.build()
+          );
           logger.debug(
             "cloud prefetch done",
             `spent=${cloudResult.totalSpent}`,
@@ -1312,7 +1433,9 @@ export async function runAudit(
           config: mergedConfig,
           auditId: crawlId,
           baseUrl: url,
-          siteContext,
+          // The bounded sample collected during the pre-rules walk. It yields
+          // the same ordered page list the whole-crawl context did (#1913).
+          siteContext: techSample,
           scripts: assets.scripts,
           getBalance: techClient
             ? async () =>
@@ -1336,16 +1459,16 @@ export async function runAudit(
       // Thread cloud results + the resolved Stage-0 profile into the rules phase
       // per audit run — no process-global singleton. The metadata drives
       // `appliesWhen` rule gating; undefined = run as today.
-      const rulesEffect = runRulesOnStorage(
-        storage,
+      const rulesEffect = runStreamingRules(
+        sqliteStorage,
         crawlId,
-        siteContext,
         mergedConfig,
         assets,
         {
           cloudResults: cloudResult?.store,
           siteMetadata: cloudResult?.siteMetadata ?? undefined,
-        }
+        },
+        { batchSize: streamBatchSize, onPhase: streamPhaseMemoryLogger() }
       );
       const rulesPhaseTimeoutMs = options.rulesPhaseTimeoutMs;
       let ruleResults: Effect.Effect.Success<typeof rulesEffect>;
@@ -1444,10 +1567,9 @@ export async function runAudit(
               crawlId,
               siteKey: baseUrl,
               ruleResults,
-              pages: pages.map((p) => ({
-                normalizedUrl: p.normalizedUrl,
-                status: p.status,
-              })),
+              // Collected during the pre-rules walk in the same
+              // normalized_url order `getPages` returns (#1913).
+              pages: pageStatuses,
             })
           );
         } catch (error) {
@@ -1467,11 +1589,11 @@ export async function runAudit(
       logger.debug("step 3: generating report", crawlId);
 
       const report = await Effect.runPromise(
-        reconstructReport(
-          storage as import("@/crawler/storage/sqlite").SQLiteStorage,
-          crawlId,
-          smartMerge
-        )
+        reconstructReport(sqliteStorage, crawlId, smartMerge, {
+          // Same batch the streamed rules phases used, so one setting describes
+          // the whole post-crawl pipeline's residency.
+          batchSize: streamBatchSize,
+        })
       );
 
       // Scan scope disclosure (#1180): stamp where this audit ran and how much
@@ -1495,7 +1617,7 @@ export async function runAudit(
       } else {
         const localTech = detectLocalTechnologies({
           baseUrl: url,
-          siteContext,
+          siteContext: techSample,
           scripts: assets.scripts,
         });
         if (localTech) report.technologies = localTech;

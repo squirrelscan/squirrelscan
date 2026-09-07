@@ -10,7 +10,9 @@ export type DetachBoundary =
   | "page-rules"
   | "collected-signal"
   | "parsed-universe"
-  | "external-links";
+  | "external-links"
+  /** Cloud-prefetch payloads collected during a streamed pre-rules walk (#1913). */
+  | "cloud-payload";
 
 export interface DetachCounts {
   /** Values copied free of their page. */

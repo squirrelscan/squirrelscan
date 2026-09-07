@@ -2,8 +2,10 @@
 // request payloads from crawl artifacts + config. Pure adaptation: the prefetch
 // phase (@squirrelscan/audit-engine) dispatches these; no HTTP here.
 
-import type { CloudSitePayloads } from "@squirrelscan/audit-engine";
-
+import {
+  detachFromPage,
+  type CloudSitePayloads,
+} from "@squirrelscan/audit-engine";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts";
 
 import type { SiteContextPage } from "@/audit/adapter";
@@ -65,8 +67,33 @@ function cleanSeed(text: string): string | null {
 
 /** Seed keywords / covered topics from page titles + h1s (dedup, ≤50). */
 function collectSeeds(siteContext: SiteContextPage[]): string[] {
-  const seeds: string[] = [];
-  const seen = new Set<string>();
+  const state = createSeedState();
+  absorbSeeds(state, siteContext);
+  return state.seeds;
+}
+
+export interface SeedState {
+  seeds: string[];
+  seen: Set<string>;
+}
+
+export function createSeedState(): SeedState {
+  return { seeds: [], seen: new Set<string>() };
+}
+
+/**
+ * {@link collectSeeds}' body over caller-owned state, so the ≤50 seed cap and
+ * the dedupe set span page batches instead of resetting on each one (#1913).
+ * A seed is a title/h1 substring, so it pins the page it was read off (#240)
+ * unless detached — and on the streamed path that page is dropped immediately
+ * after this returns.
+ */
+export function absorbSeeds(
+  state: SeedState,
+  siteContext: SiteContextPage[]
+): void {
+  const { seeds, seen } = state;
+  if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return;
   for (const { page, parsed } of siteContext) {
     if (!parsed || page.status < 200 || page.status >= 300) continue;
     const candidates = [parsed.meta.title ?? "", ...parsed.h1.texts];
@@ -76,11 +103,10 @@ function collectSeeds(siteContext: SiteContextPage[]): string[] {
       const key = seed.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      seeds.push(seed);
-      if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return seeds;
+      seeds.push(detachFromPage(seed, "cloud-payload"));
+      if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return;
     }
   }
-  return seeds;
 }
 
 /**
@@ -93,8 +119,19 @@ export function buildGapsPayloads(
   baseUrl: string,
   config: Config
 ): GapsPayloads {
+  return buildGapsPayloadsFromSeeds(collectSeeds(siteContext), baseUrl, config);
+}
+
+/**
+ * {@link buildGapsPayloads} over seeds gathered elsewhere — the streamed
+ * pre-rules walk accumulates them batch by batch (#1913).
+ */
+export function buildGapsPayloadsFromSeeds(
+  seeds: string[],
+  baseUrl: string,
+  config: Config
+): GapsPayloads {
   const domain = apexDomain(baseUrl);
-  const seeds = collectSeeds(siteContext);
   if (!domain || seeds.length === 0) return {};
 
   const keywordOpts = gapsOptions(config, "gaps/keywords");

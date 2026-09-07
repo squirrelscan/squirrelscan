@@ -143,23 +143,44 @@ function computeSitemapCoverage(
   return { orphanPages, missingPages };
 }
 
+/** Default page batch for the report's summary + pageAudits walk (#1913). */
+export const RECONSTRUCT_PAGE_BATCH = 100;
+
+export interface ReconstructOptions {
+  /**
+   * Pages read per `getPages` batch. The audit controller passes the same batch
+   * the streamed rules phases used, so one setting describes the whole
+   * post-crawl pipeline's residency.
+   */
+  batchSize?: number;
+}
+
 /**
  * Reconstruct full AuditReport from stored crawl data
  */
 export function reconstructReport(
   storage: SQLiteStorage,
   crawlId: string,
-  smartMerge?: SmartMergeOverride
+  smartMerge?: SmartMergeOverride,
+  options?: ReconstructOptions
 ): Effect.Effect<AuditReport, Error, never> {
   return Effect.gen(function* () {
+    // Clamped: SQLite reads `LIMIT 0` as no limit, so a zero batch would return
+    // the whole table every iteration while `offset += 0` never advanced.
+    const batchSize = Math.max(1, options?.batchSize ?? RECONSTRUCT_PAGE_BATCH);
     // 1. Get crawl metadata
     const crawl = yield* storage.getCrawl(crawlId);
     if (!crawl) {
       return yield* Effect.fail(new Error(`Crawl not found: ${crawlId}`));
     }
 
-    // 2. Get all pages for this crawl
-    const pageRecords = yield* storage.getPages(crawlId);
+    // 2. The crawl's pages are read in batches further down, not here (#1913).
+    // A PageRecord carries the page's full html, so one `getPages(crawlId)`
+    // held the whole crawl resident for the length of the report assembly —
+    // a second page-count-scaled term landing on top of the rules phase's
+    // peak. `getPages` orders by normalized_url ASC with or without
+    // LIMIT/OFFSET, so the batched walk visits exactly the sequence the
+    // resident array did: same summary entries, same page order, same report.
 
     // 3. Get robots.txt data
     const robotsRecord = yield* storage.getRobotsTxt(crawlId);
@@ -231,18 +252,9 @@ export function reconstructReport(
           }
         : undefined;
 
-    if (sitemaps) {
-      const coverage = computeSitemapCoverage(
-        pageRecords.map((p) => ({
-          url: p.normalizedUrl,
-          finalUrl: p.finalUrl,
-          statusCode: p.status,
-        })),
-        sitemaps.discovered.flatMap((s: SitemapData) => s.urls)
-      );
-      sitemaps.orphanPages = coverage.orphanPages;
-      sitemaps.missingPages = coverage.missingPages;
-    }
+    // Sitemap coverage needs one scalar triple per page, which the batched page
+    // walk below collects; computed once it has them (pure, so moving it past
+    // the walk changes nothing but when it runs).
 
     const resourceSizeRecords = yield* storage
       .getResourceSizes(crawlId)
@@ -280,118 +292,157 @@ export function reconstructReport(
       securityIssues: [],
     };
 
-    for (const page of pageRecords) {
-      // Parse page HTML if available
-      const parsed = page.html ? parsePageRecord(page) : null;
+    // Scalars the sections after this walk need, so nothing has to keep a
+    // PageRecord alive past the batch it arrived in: three fields for sitemap
+    // coverage, the status for the audit-validity verdict + rate-limit count.
+    const coverageInputs: Array<{
+      url: string;
+      finalUrl?: string;
+      statusCode: number;
+    }> = [];
+    const pageStatuses: Array<{ status: number }> = [];
 
-      // Get links that appear on this page (per-page index lookup)
-      const pageLinkAppearances = yield* storage.getLinkAppearancesForPage(
-        crawlId,
-        page.normalizedUrl
-      );
-      const pageLinks = pageLinkAppearances.map((a) => {
-        const link = linkByHref.get(a.href);
-        return {
-          url: a.href,
-          text: a.anchorText,
-          isInternal: link?.isInternal ?? false,
-          status: link?.status,
-          error: link?.error,
-        };
+    for (let offset = 0; ; offset += batchSize) {
+      // Fails rather than degrading: the whole-crawl read this replaced
+      // propagated its StorageError too, and ending a BATCHED walk early would
+      // publish a confident report over a truncated page set instead.
+      const batch = yield* storage.getPages(crawlId, {
+        limit: batchSize,
+        offset,
       });
+      if (batch.length === 0) break;
 
-      // Get images that appear on this page (per-page index lookup)
-      const pageImageAppearances = yield* storage.getImageAppearancesForPage(
-        crawlId,
-        page.normalizedUrl
-      );
-      const pageImages = pageImageAppearances.map((a) => ({
-        src: a.src,
-        alt: a.alt ?? null,
-        width: null,
-        height: null,
-      }));
+      for (const page of batch) {
+        coverageInputs.push({
+          url: page.normalizedUrl,
+          finalUrl: page.finalUrl,
+          statusCode: page.status,
+        });
+        pageStatuses.push({ status: page.status });
+        // Parse page HTML if available
+        const parsed = page.html ? parsePageRecord(page) : null;
 
-      // Get rule results for this page
-      const pageChecks = ruleResultsByPage.get(page.normalizedUrl) ?? [];
+        // Get links that appear on this page (per-page index lookup)
+        const pageLinkAppearances = yield* storage.getLinkAppearancesForPage(
+          crawlId,
+          page.normalizedUrl
+        );
+        const pageLinks = pageLinkAppearances.map((a) => {
+          const link = linkByHref.get(a.href);
+          return {
+            url: a.href,
+            text: a.anchorText,
+            isInternal: link?.isInternal ?? false,
+            status: link?.status,
+            error: link?.error,
+          };
+        });
 
-      // Build summary data
-      if (parsed) {
-        if (!parsed.meta.title) summary.missingTitles.push(page.normalizedUrl);
-        if (!parsed.meta.description)
-          summary.missingDescriptions.push(page.normalizedUrl);
-        if (!parsed.og.title && !parsed.og.image)
-          summary.missingOgTags.push(page.normalizedUrl);
-        if (!parsed.twitter.card)
-          summary.missingTwitterCards.push(page.normalizedUrl);
-        if (!parsed.schema.types.length)
-          summary.missingSchemas.push(page.normalizedUrl);
-        if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
-        if (parsed.content.isThinContent)
-          summary.thinContentPages.push(page.normalizedUrl);
-      }
+        // Get images that appear on this page (per-page index lookup)
+        const pageImageAppearances = yield* storage.getImageAppearancesForPage(
+          crawlId,
+          page.normalizedUrl
+        );
+        const pageImages = pageImageAppearances.map((a) => ({
+          src: a.src,
+          alt: a.alt ?? null,
+          width: null,
+          height: null,
+        }));
 
-      // Check missing alt text. alt="" is the correct markup for a decorative
-      // image (HTML spec, WCAG H67), so only an absent attribute counts (#143).
-      for (const imgAppearance of pageImageAppearances) {
-        if (imgAppearance.alt === undefined || imgAppearance.alt === null) {
-          summary.missingAltText.push({
-            page: page.normalizedUrl,
-            image: imgAppearance.src,
-          });
+        // Get rule results for this page
+        const pageChecks = ruleResultsByPage.get(page.normalizedUrl) ?? [];
+
+        // Build summary data
+        if (parsed) {
+          if (!parsed.meta.title)
+            summary.missingTitles.push(page.normalizedUrl);
+          if (!parsed.meta.description)
+            summary.missingDescriptions.push(page.normalizedUrl);
+          if (!parsed.og.title && !parsed.og.image)
+            summary.missingOgTags.push(page.normalizedUrl);
+          if (!parsed.twitter.card)
+            summary.missingTwitterCards.push(page.normalizedUrl);
+          if (!parsed.schema.types.length)
+            summary.missingSchemas.push(page.normalizedUrl);
+          if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
+          if (parsed.content.isThinContent)
+            summary.thinContentPages.push(page.normalizedUrl);
         }
+
+        // Check missing alt text. alt="" is the correct markup for a decorative
+        // image (HTML spec, WCAG H67), so only an absent attribute counts (#143).
+        for (const imgAppearance of pageImageAppearances) {
+          if (imgAppearance.alt === undefined || imgAppearance.alt === null) {
+            summary.missingAltText.push({
+              page: page.normalizedUrl,
+              image: imgAppearance.src,
+            });
+          }
+        }
+
+        const pageAudit: PageAudit = {
+          url: page.url,
+          statusCode: page.status,
+          loadTime: page.loadTimeMs,
+          meta: parsed?.meta ?? {
+            title: null,
+            description: null,
+            canonical: null,
+            robots: null,
+          },
+          og: parsed?.og ?? {
+            title: null,
+            description: null,
+            url: null,
+            type: null,
+            image: null,
+            siteName: null,
+          },
+          twitter: parsed?.twitter ?? {
+            card: null,
+            title: null,
+            description: null,
+            image: null,
+          },
+          schema: parsed?.schema ?? {
+            types: [],
+            valid: true,
+            errors: [],
+            raw: null,
+          },
+          links: pageLinks,
+          images: pageImages,
+          h1Count: parsed?.h1.count ?? 0,
+          h1Text: parsed?.h1.texts ?? [],
+          checks: pageChecks,
+          redirectChain: page.redirectChain,
+          fetcherId: page.fetcherId,
+          fallbackReason: page.fallbackReason,
+          responseHeaders: omitSetCookie(page.headers),
+          security: {
+            isHttps: page.url.startsWith("https"),
+            hasMixedContent: false,
+            mixedContentUrls: [],
+            insecureFormActions: [],
+            headers: page.securityHeaders,
+            httpToHttpsRedirect: false,
+          },
+        };
+
+        pages.push(pageAudit);
       }
 
-      const pageAudit: PageAudit = {
-        url: page.url,
-        statusCode: page.status,
-        loadTime: page.loadTimeMs,
-        meta: parsed?.meta ?? {
-          title: null,
-          description: null,
-          canonical: null,
-          robots: null,
-        },
-        og: parsed?.og ?? {
-          title: null,
-          description: null,
-          url: null,
-          type: null,
-          image: null,
-          siteName: null,
-        },
-        twitter: parsed?.twitter ?? {
-          card: null,
-          title: null,
-          description: null,
-          image: null,
-        },
-        schema: parsed?.schema ?? {
-          types: [],
-          valid: true,
-          errors: [],
-          raw: null,
-        },
-        links: pageLinks,
-        images: pageImages,
-        h1Count: parsed?.h1.count ?? 0,
-        h1Text: parsed?.h1.texts ?? [],
-        checks: pageChecks,
-        redirectChain: page.redirectChain,
-        fetcherId: page.fetcherId,
-        fallbackReason: page.fallbackReason,
-        responseHeaders: omitSetCookie(page.headers),
-        security: {
-          isHttps: page.url.startsWith("https"),
-          hasMixedContent: false,
-          mixedContentUrls: [],
-          insecureFormActions: [],
-          headers: page.securityHeaders,
-          httpToHttpsRedirect: false,
-        },
-      };
+      if (batch.length < batchSize) break;
+    }
 
-      pages.push(pageAudit);
+    if (sitemaps) {
+      const coverage = computeSitemapCoverage(
+        coverageInputs,
+        sitemaps.discovered.flatMap((s: SitemapData) => s.urls)
+      );
+      sitemaps.orphanPages = coverage.orphanPages;
+      sitemaps.missingPages = coverage.missingPages;
     }
 
     // 9. Calculate totals from rule results
@@ -540,9 +591,9 @@ export function reconstructReport(
     // count; a stored 429/430 page adds to it.
     const rateLimitedCount =
       (crawl.stats?.pagesRateLimited ?? 0) +
-      pageRecords.filter((p) => isRateLimitStatus(p.status)).length;
+      pageStatuses.filter((p) => isRateLimitStatus(p.status)).length;
     const runStatus = deriveAuditStatusFromPages(
-      pageRecords,
+      pageStatuses,
       crawl.stats?.pagesBlocked ?? 0,
       {
         // #1829: a rate-limited fetch stores no page, so the count comes from

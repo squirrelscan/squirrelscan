@@ -14,6 +14,27 @@ How it works:
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
 - A `## [Unreleased]
 
+## [Unreleased]
+
+### Changed
+
+- **A local audit no longer holds the whole site in memory.** The CLI's
+  post-crawl phases ran the resident pipeline: one parsed page plus its DOM per
+  crawled page, held from the end of the crawl through the entire rules pass,
+  and a second full read of every page to assemble the report. Retained heap
+  grew about 1.5 MB per crawled page, so a 2,500-page audit ended holding 3.9 GB
+  while the operating system's "resident" figure read a reassuring 1.4 GB.
+  Every phase after the crawl now walks the pages table in batches sized to the
+  site and drops each batch before reading the next, which is what the hosted
+  runtime has done since v0.0.91. Reports are unchanged, page for page.
+
+  Batch size follows the site's own average page against a byte budget.
+  `SQUIRREL_STREAM_BATCH_BYTES` sets that budget (48 MB of raw HTML by default)
+  and `SQUIRREL_STREAM_BATCH_PAGES` pins an exact page count instead. Turning
+  the budget below roughly a dozen pages' worth is counterproductive: the same
+  crawl becomes several times as many read-parse-collect cycles and peaks
+  higher, not lower.
+
 ## v0.0.91
 
 A release about big sites. A 500-page audit of a store whose pages weigh a

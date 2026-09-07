@@ -3,9 +3,14 @@
 
 import {
   generateReportFromStorage as generateReportFromStorageCore,
+  resolveStreamBatch,
   runRulesOnStorage as runRulesOnStorageCore,
+  runStreamingPreRules as runStreamingPreRulesCore,
+  runStreamingRules as runStreamingRulesCore,
   setAdapterLogger,
+  STREAM_BATCH_BYTES,
   type AdapterLogger,
+  type StreamingRulePhase,
 } from "@squirrelscan/audit-engine";
 import {
   detectPageType,
@@ -191,6 +196,11 @@ export {
   releaseSiteContextDocuments,
   ensureSiteContextDocuments,
 } from "@squirrelscan/audit-engine";
+
+// Batch sizing for the streamed passes (#1913) — same helper and same default
+// byte budget the hosted runtime resolves its batch from.
+export { resolveStreamBatch, STREAM_BATCH_BYTES };
+export type { StreamPreRulesResult } from "@squirrelscan/audit-engine";
 
 // ============================================
 // PARSED PAGE CONVERSION
@@ -799,6 +809,39 @@ export function fetchResourceAssets(
     return result;
   });
 }
+
+/**
+ * Streamed twin of {@link runRulesOnStorage} — the live CLI rules path (#1913).
+ *
+ * Delegates to the same engine function the hosted runtime uses: DOM residency
+ * is one page batch instead of one per crawled page, and the report it feeds is
+ * byte-identical (the engine's canonical-vs-streaming golden and its 518-page
+ * baseline gate that). Wired here rather than called directly so the CLI keeps
+ * one seam onto the engine and its logger stays injected.
+ */
+export function runStreamingRules(
+  storage: import("@/crawler/storage/sqlite").SQLiteStorage,
+  crawlId: string,
+  config: Config,
+  assets: PreFetchedAssets,
+  scope?: RunnerScope,
+  opts?: {
+    batchSize?: number;
+    onPhase?: (phase: StreamingRulePhase, boundary: "start" | "end") => void;
+  }
+): Effect.Effect<RuleExecutionResult, never, never> {
+  return runStreamingRulesCore(storage, crawlId, config, assets, scope, opts);
+}
+
+export type { StreamingRulePhase };
+
+/**
+ * Streamed pre-rules phase (#1913) — the batched walk that replaces
+ * `buildSiteContext` + {@link checkExternalLinksOnStorage} +
+ * {@link fetchResourceAssets} over a whole-crawl page array. Same delegating
+ * seam as {@link runStreamingRules}.
+ */
+export const runStreamingPreRules = runStreamingPreRulesCore;
 
 // runRulesOnStorage lives once in @squirrelscan/audit-engine (#145); this CLI
 // wrapper delegates to the shared core (CLI logger injected at module load).

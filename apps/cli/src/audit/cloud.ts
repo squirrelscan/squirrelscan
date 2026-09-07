@@ -20,8 +20,11 @@ import type {
 import type { Document } from "linkedom";
 
 import {
+  detachFromPage,
   detectReportTechnologiesMulti,
+  ensureSiteContextDocuments,
   prefetchCloudData,
+  releaseSiteContextDocuments,
   renderedPageUrlsFrom,
   type CloudPrefetchResult,
 } from "@squirrelscan/audit-engine";
@@ -43,8 +46,18 @@ import type { ExternalBulkChecker, SiteContextPage } from "@/audit/adapter";
 import type { Config } from "@/config";
 import type { PreflightBalance } from "@/lib/balance";
 
-import { buildBlocklistPayload } from "@/audit/cloud-payloads-blocklist";
-import { buildGapsPayloads } from "@/audit/cloud-payloads-gaps";
+import {
+  absorbSelectors,
+  absorbUrls,
+  buildBlocklistPayload,
+  createSelectorState,
+} from "@/audit/cloud-payloads-blocklist";
+import {
+  absorbSeeds,
+  buildGapsPayloads,
+  buildGapsPayloadsFromSeeds,
+  createSeedState,
+} from "@/audit/cloud-payloads-gaps";
 import { logger } from "@/utils/logger";
 import { getOrigin, getPathname } from "@/utils/url";
 
@@ -176,18 +189,29 @@ export function buildCloudPagePayloads(
         0,
         MAX_DESCRIPTION_CHARS
       );
-    payloads.push({
-      url: page.url,
-      title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
-      textExcerpt: truncateUtf8Bytes(
-        parsed.content.textContent,
-        MAX_EXCERPT_BYTES
-      ),
-      meta: Object.keys(meta).length > 0 ? meta : undefined,
-      headings: parsed.headings.headings
-        .slice(0, 20)
-        .map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
-    });
+    payloads.push(
+      // Every field here is a SLICE of the page's html, and a retained slice
+      // pins that page's whole backing store (#240) — one 6 KB excerpt holding
+      // a megabyte, per page, which would put the page-count-scaled term
+      // straight back into the streamed walk (#1913). Detached at the point of
+      // retention; the resident path pays the same copy for pages it was
+      // holding anyway.
+      detachFromPage(
+        {
+          url: page.url,
+          title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
+          textExcerpt: truncateUtf8Bytes(
+            parsed.content.textContent,
+            MAX_EXCERPT_BYTES
+          ),
+          meta: Object.keys(meta).length > 0 ? meta : undefined,
+          headings: parsed.headings.headings
+            .slice(0, 20)
+            .map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
+        },
+        "cloud-payload"
+      )
+    );
   }
   return payloads;
 }
@@ -428,6 +452,209 @@ export async function runCloudPrefetch(
   });
 }
 
+// ── Streamed payload collection (#1913) ─────────────────────────────────────
+//
+// The audit controller no longer holds a whole-crawl site context: pages are
+// walked in byte-budgeted batches and each batch's DOMs are dropped as soon as
+// the walk moves on. Everything below is the batch-at-a-time form of the
+// builders above, so the prefetch request body is identical either way while
+// what stays resident is a fixed sample plus explicitly capped payload lists.
+
+/** Prefetch inputs gathered across a streamed walk, ready for dispatch. */
+export interface CloudPrefetchPayloadSet {
+  pages: CloudPagePayload[];
+  metadataPages: SiteMetadataPagePayload[];
+  blocklist: { urls: string[]; selectors: string[] } | null;
+  gapsSeeds: string[];
+  renderedPageUrls: Set<string>;
+}
+
+/**
+ * Accumulate every cloud-prefetch payload one page batch at a time.
+ *
+ * The page payloads and the blocklist/gaps/rendered collectors are capped lists
+ * that carry across batches, so they see exactly the sequence a whole-array pass
+ * would. The Stage-0 metadata sample is different: `buildMetadataPayload` reads
+ * the DOM, and by the time the walk ends every batch is long gone. So the
+ * collector RETAINS the bounded set of entries that pass can possibly choose —
+ * the first `metadataMaxPages` usable pages, plus the two home-page candidates
+ * its fallback chain looks for — and re-parses just those at build time.
+ */
+export function createCloudPrefetchCollector(baseUrl: string): {
+  absorb: (siteContext: SiteContextPage[]) => void;
+  build: () => CloudPrefetchPayloadSet;
+} {
+  const pages: CloudPagePayload[] = [];
+  const renderedPageUrls = new Set<string>();
+  const blocklistUrls = new Set<string>();
+  const selectorState = createSelectorState();
+  const seedState = createSeedState();
+
+  // Bounded metadata sample — never page-count-scaled. Entries keep their
+  // PageRecord (so `page.html` can be re-parsed at build time) but their DOMs go
+  // with the batch like everything else.
+  const metadataPrefix: SiteContextPage[] = [];
+  let primaryHome: SiteContextPage | undefined;
+  let rootHome: SiteContextPage | undefined;
+
+  const baseOrigin = getOrigin(baseUrl);
+  const isRoot = (u: string): boolean => {
+    const path = getPathname(u);
+    return getOrigin(u) === baseOrigin && (path === "" || path === "/");
+  };
+
+  return {
+    absorb(siteContext: SiteContextPage[]): void {
+      for (const payload of buildCloudPagePayloads(siteContext))
+        pages.push(payload);
+      for (const url of renderedPageUrlsFrom(siteContext))
+        renderedPageUrls.add(url);
+      absorbUrls(blocklistUrls, siteContext);
+      absorbSelectors(selectorState, siteContext);
+      absorbSeeds(seedState, siteContext);
+
+      for (const entry of siteContext) {
+        // The same "usable" test buildMetadataPayload applies.
+        if (entry.parsed?.document == null) continue;
+        const { url, finalUrl, status } = entry.page;
+        if (status < 200 || status >= 300) continue;
+        if (metadataPrefix.length < SERVICE_LIMITS.metadataMaxPages)
+          metadataPrefix.push(entry);
+        if (!primaryHome && (finalUrl === baseUrl || url === baseUrl)) {
+          primaryHome = entry;
+        }
+        if (!rootHome && (isRoot(finalUrl || url) || isRoot(url))) {
+          rootHome = entry;
+        }
+      }
+    },
+
+    build(): CloudPrefetchPayloadSet {
+      // Dedupe by identity, preserving encounter order: a home already inside
+      // the retained prefix must not appear twice, or buildMetadataPayload's
+      // `usable.filter(p => p !== home)` would leave a duplicate in `rest`.
+      const sample: SiteContextPage[] = [...metadataPrefix];
+      for (const home of [primaryHome, rootHome]) {
+        if (home && !sample.includes(home)) sample.push(home);
+      }
+      // The batches these entries came from were released long ago; re-parse.
+      // Deterministic: `buildSiteContext` never yields a non-null `parsed`
+      // without html, so every retained entry rebuilds identically.
+      ensureSiteContextDocuments(sample);
+      const metadataPages = buildMetadataPayload(sample, baseUrl);
+      releaseSiteContextDocuments(sample);
+
+      const urls = [...blocklistUrls];
+      const selectors = [...selectorState.selectors];
+      return {
+        pages,
+        metadataPages,
+        blocklist:
+          urls.length === 0 && selectors.length === 0
+            ? null
+            : { urls, selectors },
+        gapsSeeds: seedState.seeds,
+        renderedPageUrls,
+      };
+    },
+  };
+}
+
+/**
+ * A bounded sample of crawled pages that yields the SAME ordered page list the
+ * tech-detect builders would pick from the whole crawl (#1913).
+ *
+ * Both `runCloudTechDetect` and `detectLocalTechnologies` filter to HTML 2xx
+ * pages, put the base-URL page first when there is one, and keep at most
+ * `techDetectMaxPages`. Retaining that prefix plus the home candidate is enough
+ * to reproduce the selection exactly: when the home page is inside the prefix
+ * the sample IS the prefix, and when it is not, appending it puts it exactly
+ * where the builders' `findIndex` will pick it up while the prefix supplies the
+ * same `rest`. Neither builder reads `parsed`, so the entries carry a null one.
+ */
+export function createTechDetectSampleCollector(baseUrl: string): {
+  absorb: (siteContext: SiteContextPage[]) => void;
+  build: () => SiteContextPage[];
+} {
+  const prefix: SiteContextPage["page"][] = [];
+  let home: SiteContextPage["page"] | undefined;
+
+  return {
+    absorb(siteContext: SiteContextPage[]): void {
+      for (const { page } of siteContext) {
+        if (!page.html || page.status < 200 || page.status >= 300) continue;
+        if (prefix.length < SERVICE_LIMITS.techDetectMaxPages)
+          prefix.push(page);
+        if (!home && (page.finalUrl === baseUrl || page.url === baseUrl))
+          home = page;
+      }
+    },
+    build(): SiteContextPage[] {
+      const sample = [...prefix];
+      if (home && !sample.includes(home)) sample.push(home);
+      return sample.map((page) => ({ page, parsed: null }));
+    },
+  };
+}
+
+/**
+ * {@link countExternalLinks} accumulating into a caller-owned set so the
+ * streamed walk can feed it batch by batch. Reads the crawl-time extraction
+ * (`parsed.links`), never the DOM.
+ */
+export function absorbExternalLinkUrls(
+  seen: Set<string>,
+  siteContext: SiteContextPage[]
+): void {
+  for (const { parsed } of siteContext) {
+    if (!parsed) continue;
+    for (const link of parsed.links) {
+      // Crawl-time extraction keeps unparseable hrefs as error entries (with
+      // isInternal=false); the DOM re-walk this replaced skipped those, so
+      // filter them to keep the estimate equivalent.
+      if (!link.isInternal && link.url && !link.error)
+        seen.add(detachFromPage(link.url, "cloud-payload"));
+    }
+  }
+}
+
+/**
+ * {@link runCloudPrefetch} over payloads collected during a streamed pre-rules
+ * walk (#1913) instead of from a whole-crawl site context. Same request body.
+ */
+export async function runCloudPrefetchFromPayloads(
+  opts: Omit<RunCloudPrefetchOptions, "siteContext" | "onPayloadsBuilt">,
+  payloads: CloudPrefetchPayloadSet
+): Promise<CloudPrefetchResult> {
+  const sitePayloads = {
+    ...(payloads.blocklist ? { "blocklist-check": payloads.blocklist } : {}),
+    ...buildGapsPayloadsFromSeeds(
+      payloads.gapsSeeds,
+      opts.baseUrl,
+      opts.config
+    ),
+    // Archive Indexing (#789) — the payload is just the site URL; the server
+    // resolves the domain and runs the Wayback + Common Crawl lookups.
+    "archive-indexing": { url: opts.baseUrl },
+  };
+
+  return prefetchCloudData({
+    client: opts.client,
+    config: opts.cloudConfig,
+    rules: selectCloudRules(opts.config),
+    pages: payloads.pages,
+    siteUrl: opts.baseUrl,
+    sitePayloads,
+    metadataPages: payloads.metadataPages,
+    gate: opts.gate,
+    auditId: opts.auditId,
+    confirm: opts.confirm,
+    onProgress: opts.onProgress,
+    crawlRendered: opts.crawlRendered ?? false,
+    renderedPageUrls: payloads.renderedPageUrls,
+  });
+}
+
 /**
  * Build the cloud dead-links bulk checker for the external-links phase, or
  * null when cloud is off / logged out / the `links/dead-links` rule is not
@@ -473,15 +700,7 @@ function buildDeadLinksBulkChecker(
  */
 function countExternalLinks(siteContext: SiteContextPage[]): number {
   const seen = new Set<string>();
-  for (const { parsed } of siteContext) {
-    if (!parsed) continue;
-    for (const link of parsed.links) {
-      // Crawl-time extraction keeps unparseable hrefs as error entries (with
-      // isInternal=false); the DOM re-walk this replaced skipped those, so
-      // filter them to keep the estimate equivalent.
-      if (!link.isInternal && link.url && !link.error) seen.add(link.url);
-    }
-  }
+  absorbExternalLinkUrls(seen, siteContext);
   return seen.size;
 }
 
@@ -503,7 +722,15 @@ export async function resolveDeadLinksBulkChecker(opts: {
   client: CloudServicesClient | null;
   config: Config;
   auditId: string;
-  siteContext: SiteContextPage[];
+  /** Whole-crawl site context, when the caller holds one. */
+  siteContext?: SiteContextPage[];
+  /**
+   * The estimate's basis, when the caller counted the crawl's distinct external
+   * links itself — the streamed walk accumulates it batch by batch (#1913)
+   * rather than holding every parsed page to count them at the end. Same number
+   * {@link countExternalLinks} produces; supplying it wins over `siteContext`.
+   */
+  externalLinkCount?: number;
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
   getBalance?: () => Promise<PreflightBalance>;
   confirm?: (
@@ -517,14 +744,15 @@ export async function resolveDeadLinksBulkChecker(opts: {
    */
   onSpend?: (units: number, credits: number) => void;
 }): Promise<ExternalBulkChecker | null> {
-  const { client, config, auditId, siteContext, confirm } = opts;
+  const { client, config, auditId, confirm } = opts;
   if (!client || !config.cloud.enabled) return null;
   const enabled = selectCloudRules(config).some(
     (r) => r.id === "links/dead-links"
   );
   if (!enabled) return null;
 
-  const linkCount = countExternalLinks(siteContext);
+  const linkCount =
+    opts.externalLinkCount ?? countExternalLinks(opts.siteContext ?? []);
   if (linkCount === 0) return null;
 
   const estimate = computeCost("dead_links", linkCount);

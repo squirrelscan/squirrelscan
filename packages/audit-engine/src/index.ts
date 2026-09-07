@@ -201,6 +201,7 @@ export type { PageSignalCollector, StreamPageRulesHooks, StreamPageRulesResult }
 // Streamed pre-rules phase (#1860) — one batched walk that feeds the asset,
 // external-link, tech-detect, intel and cloud-prefetch collectors together.
 export { runStreamingPreRules, PRE_RULES_PAGE_BATCH } from "./streaming-pre-rules";
+export { detachFromPage, type DetachBoundary } from "./detach";
 export type { StreamPreRulesOptions, StreamPreRulesResult } from "./streaming-pre-rules";
 
 // Byte-budget batch sizing (#1860) — pages per batch derived from the site's own
