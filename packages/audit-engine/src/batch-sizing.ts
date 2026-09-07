@@ -28,10 +28,51 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
  * Default raw-html bytes held per batch. 48 MB parses to roughly 600 MB on the
  * heaviest pages measured, which fits a standard-3 container (8 GiB) alongside
  * the crawl's own high-water and the report tail with room to spare.
+ *
+ * WHAT THE DIAL ACTUALLY BUYS, measured (scripts/batch-budget-sweep.ts, 150 real
+ * 959 KB pages, peak from the OS rather than an in-process sampler, minimum over
+ * repeated runs because a single run of the same budget varies by 100 MB):
+ *
+ *   budget    batch    peak RSS
+ *     6 MB        6      480 MB
+ *    12 MB       12      344 MB
+ *    24 MB       25      492 MB
+ *    48 MB       51      509 MB
+ *    96 MB      102      655 MB
+ *
+ * From 12 pages up that is a floor of about 300 MB plus 3.5 MB per page of
+ * batch. The floor is not reachable with this dial — it is the rule set, the
+ * runner, SQLite's own caches and the arena — so the budget controls the term
+ * ABOVE 300 MB and nothing below it. Halving a container's memory by halving
+ * this number therefore does not work.
+ *
+ * BELOW ROUGHLY 12 PAGES THE DIAL REVERSES. A 6 MB budget measured WORSE than a
+ * 12 MB one, on every run of both, because the same crawl then costs four times
+ * as many read-parse-collect cycles and the arena's high-water is set by that
+ * churn rather than by what is held. Turning this down when a container is
+ * tight is the intuitive move and it is the wrong one past that point.
+ *
+ * The RSS the loop does not give back between batches is REUSABLE, not lost:
+ * parsing one more batch after the run finishes costs a fraction of a cold
+ * batch (102 pages for 2 MB against roughly 300 MB cold, in the best case
+ * measured). So the peak is a true high-water rather than something that
+ * compounds, and it is why the walk is safe at page counts far past 150.
+ *
+ * mimalloc's environment options ARE honoured by Bun (`MIMALLOC_VERBOSE=1`
+ * prints its option dump), but `MIMALLOC_PURGE_DELAY=0` is not a lever here:
+ * across five budgets it moved the peak in both directions and never more than
+ * the run-to-run noise.
  */
 export const STREAM_BATCH_BYTES = 48 * 1024 * 1024;
 
-/** Floor: below this the per-batch storage round-trips start to dominate. */
+/**
+ * Floor: below this the per-batch storage round-trips start to dominate.
+ *
+ * It also sits below the point where a smaller batch stops helping memory (see
+ * STREAM_BATCH_BYTES), but raising it would not change any real run: this clamp
+ * only binds when the budget divided by the average page is under five pages,
+ * which at the default budget means pages of nearly 10 MB.
+ */
 export const STREAM_BATCH_MIN_PAGES = 5;
 
 /** Ceiling: a light-page site must not talk itself into a whole-crawl batch. */
