@@ -2257,6 +2257,25 @@ function runSitePass(
   });
 }
 
+/**
+ * The sub-phases of {@link runStreamingRules}, in execution order. Named so a
+ * memory or wall-clock step can be attributed to one of them instead of to
+ * "rules" as a whole (#1860).
+ */
+export type StreamingRulePhase =
+  /** Pass 1: the streamed DOM-free scalar universe. */
+  | "universe"
+  /** Steps 2+3: robots/sitemaps/links/cloaking/soft-404, plus siteData assembly. */
+  | "site-fetch"
+  /** Pass 2: the streamed page-rule loop (this one already heartbeats per N pages). */
+  | "page-rules"
+  /** The bounded aggregate view over the crawl (incoming links, page_features). */
+  | "site-query"
+  /** The site-rule pass over the DOM-free universe + collected signals. */
+  | "site-rules"
+  /** Merging + folding the site results and building the report's parsed cache. */
+  | "assemble";
+
 /** {@link runStreamingRules} result: the v1 {@link RuleExecutionResult} plus the folded per-rule tallies and the page-stream DOM-residency high-water mark. */
 export interface StreamingRuleExecutionResult extends RuleExecutionResult {
   /**
@@ -2304,11 +2323,30 @@ export function runStreamingRules(
      * progress marker every N pages; omitted → byte-identical local behavior.
      */
     pageLoopHooks?: PageRuleLoopHooks;
+    /**
+     * Sub-phase boundaries inside the rules pass (#1860).
+     *
+     * The pass emits nothing between "rules started" and "rules completed", and a
+     * production run at 150 pages showed two ~1 GB steps hiding in exactly those
+     * gaps — one before the first page heartbeat, one after the last — which the
+     * event stream could not attribute to anything. Callers hook this to sample
+     * RSS (or time) per sub-phase. The engine deliberately does not sample
+     * anything itself: `process` is the caller's concern.
+     */
+    onPhase?: (phase: StreamingRulePhase, boundary: "start" | "end") => void;
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
     // Clamped — see streaming.ts; a 0 batch would loop forever over the crawl.
     const batchSize = Math.max(1, opts?.batchSize ?? STREAM_PAGE_BATCH);
+    const onPhase = opts?.onPhase;
+    const phase = <T,>(name: StreamingRulePhase, body: () => Effect.Effect<T, never, never>) =>
+      Effect.gen(function* () {
+        onPhase?.(name, "start");
+        const out = yield* body();
+        onPhase?.(name, "end");
+        return out;
+      });
 
     // Threat-intel scope + runner (mirror of runRulesOnStorage).
     const effectiveScope =
@@ -2317,17 +2355,19 @@ export function runStreamingRules(
 
     // Pass 1: DOM-free scalar universe (one batch of DOMs live at a time).
     const { parsedPages, pageDataMap, totalPageCount, wafBlockedPages, rateLimitedPages } =
-      yield* streamParsedUniverse(storage, crawlId, batchSize);
+      yield* phase("universe", () => streamParsedUniverse(storage, crawlId, batchSize));
 
     // Steps 2+3: site-fetch phase + soft-404 verdict map.
-    const { siteDataForPageRules, soft404Map } = yield* buildStreamingSiteData(
-      storage,
-      crawlId,
-      config,
-      assets,
-      parsedPages,
-      pageDataMap,
-      totalPageCount,
+    const { siteDataForPageRules, soft404Map } = yield* phase("site-fetch", () =>
+      buildStreamingSiteData(
+        storage,
+        crawlId,
+        config,
+        assets,
+        parsedPages,
+        pageDataMap,
+        totalPageCount,
+      ),
     );
 
     // Pass 2: streamed page-rule pass — per-page DOM-drop, merge + fold. The
@@ -2344,7 +2384,8 @@ export function runStreamingRules(
         );
       },
     };
-    const streamed = yield* streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
+    const streamed = yield* phase("page-rules", () =>
+      streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
       batchSize,
       soft404Confirmations: soft404Map,
       collectors: [signalCollector],
@@ -2356,7 +2397,8 @@ export function runStreamingRules(
       pageUniverse: new Set(pageDataMap.keys()),
       totalPages: pageDataMap.size,
       pageLoopHooks: opts?.pageLoopHooks,
-    });
+      }),
+    );
     const collectedSignals: CollectedSiteSignals = { pages: collectedPages };
 
     // Bounded, read-only aggregate view over the crawl (#1022): the site pass's
@@ -2367,19 +2409,24 @@ export function runStreamingRules(
     // failure is a hard error, not a silent empty view (matches the streaming reads).
     // `universe` = v1's assembled site.pages order (parsedPages) so the incoming-link
     // graph's membership/order/sources match v1 exactly (E-E2 (b) reconciliation).
-    const siteQuery = yield* createSiteQuery(storage, crawlId, {
-      universe: parsedPages.map((p) => p.url),
-    }).pipe(Effect.orDie);
+    const siteQuery = yield* phase("site-query", () =>
+      createSiteQuery(storage, crawlId, {
+        universe: parsedPages.map((p) => p.url),
+        pageScanBatchSize: batchSize,
+      }).pipe(Effect.orDie),
+    );
 
     // Step 5: site pass over the DOM-free scalar universe (no re-materialization).
-    const sitePass = yield* runSitePass(
-      runner,
-      siteDataForPageRules,
-      assets,
-      wafBlockedPages,
-      rateLimitedPages,
-      collectedSignals,
-      siteQuery,
+    const sitePass = yield* phase("site-rules", () =>
+      runSitePass(
+        runner,
+        siteDataForPageRules,
+        assets,
+        wafBlockedPages,
+        rateLimitedPages,
+        collectedSignals,
+        siteQuery,
+      ),
     );
 
     // Step 6: assemble. Page rules were already merged + folded by streamPageRules;

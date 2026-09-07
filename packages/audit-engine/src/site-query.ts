@@ -26,9 +26,19 @@ import type {
   StorageError,
 } from "@squirrelscan/core-contracts";
 
-// Page-scan / cursor batch size. Bounds residency to one batch of pages while
-// pre-materializing the incoming-link counts and while walking `pagesMatching`.
-const PAGE_SCAN_BATCH = 500;
+// Cursor batch for the page_features reads, whose rows are small scalars.
+const FEATURE_SCAN_BATCH = 500;
+
+/**
+ * Default batch for the PAGES scan, which is a different animal: `getPages`
+ * returns whole `PageRecord`s, html included, and this scan reads only
+ * `normalizedUrl` and `parsedData`. At 500 that pulled every page of a
+ * 150-page crawl resident at once — roughly 1.5 GB on ~1 MB pages, inside the
+ * window a production run showed a ~1 GB step it could not attribute (#1860).
+ * Callers that know their memory ceiling pass `pageScanBatchSize`; the default
+ * stays modest so a caller that does not is not handed the old behaviour.
+ */
+const PAGE_SCAN_BATCH = 50;
 
 /**
  * Build a {@link SiteQuery} over one crawl's stored pages + page_features rows.
@@ -51,12 +61,27 @@ export function createSiteQuery(
      * (all-HTML-2xx fixtures) → falls back to the raw stored-pages set.
      */
     universe?: readonly string[];
+    /**
+     * Pages pulled per batch by the link-graph scan (#1860). `getPages` returns
+     * whole PageRecords, so this multiplies by the site's page size; the cloud
+     * passes the same batch its other streamed walks use, sized from the
+     * container's memory ceiling. Unset → {@link PAGE_SCAN_BATCH}.
+     */
+    pageScanBatchSize?: number;
   }
 ): Effect.Effect<SiteQuery, StorageError, never> {
   return Effect.gen(function* () {
     // Incoming internal-link counts — reconstructed from parsed page links, NOT
     // link_appearances (which stores only external links; see below).
-    const incoming = yield* buildIncomingLinkCounts(storage, crawlId, opts?.universe);
+    // Clamped like every other streamed batch: `getPages` treats limit 0 as no
+    // limit, which would pull the whole crawl and never advance the offset.
+    const pageScanBatch = Math.max(1, opts?.pageScanBatchSize ?? PAGE_SCAN_BATCH);
+    const incoming = yield* buildIncomingLinkCounts(
+      storage,
+      crawlId,
+      opts?.universe,
+      pageScanBatch,
+    );
 
     // page_features rollups (PR-A read API). All bounded by construction.
     const pageCount = yield* storage.getPageFeaturesCount(crawlId);
@@ -125,7 +150,8 @@ export function createSiteQuery(
 function buildIncomingLinkCounts(
   storage: SQLiteStorage,
   crawlId: string,
-  universe?: readonly string[]
+  universe: readonly string[] | undefined,
+  pageScanBatch: number
 ): Effect.Effect<
   { all: Map<string, number>; contextual: Map<string, number> },
   StorageError,
@@ -152,7 +178,7 @@ function buildIncomingLinkCounts(
         contextualBucket.set(normalizeUrl(url), 0);
       }
     } else {
-      yield* streamPages(storage, crawlId, (page) => {
+      yield* streamPages(storage, crawlId, pageScanBatch, (page) => {
         orderedUrls.push(page.normalizedUrl);
         bucket.set(normalizeUrl(page.normalizedUrl), 0);
         contextualBucket.set(normalizeUrl(page.normalizedUrl), 0);
@@ -162,7 +188,7 @@ function buildIncomingLinkCounts(
     // Pass B: count internal dofollow links whose resolved+normalized target is a
     // crawled page. A second scan keeps at most one page batch resident (vs.
     // holding every page's links). Only pages in the universe are valid sources.
-    yield* streamPages(storage, crawlId, (page) => {
+    yield* streamPages(storage, crawlId, pageScanBatch, (page) => {
       if (universeSet && !universeSet.has(page.normalizedUrl)) return;
       for (const link of parseLinks(page.parsedData)) {
         if (link.isInternal && link.url && !link.isNofollow) {
@@ -206,7 +232,7 @@ function buildPagesByType(
     for (;;) {
       const rows = yield* storage.getPageFeaturesPage(crawlId, {
         after,
-        limit: PAGE_SCAN_BATCH,
+        limit: FEATURE_SCAN_BATCH,
       });
       if (rows.length === 0) break;
       for (const row of rows) {
@@ -216,7 +242,7 @@ function buildPagesByType(
           else byType.set(row.pageType, [row.normalizedUrl]);
         }
       }
-      if (rows.length < PAGE_SCAN_BATCH) break;
+      if (rows.length < FEATURE_SCAN_BATCH) break;
       after = rows[rows.length - 1]!.normalizedUrl;
     }
     return byType;
@@ -227,18 +253,19 @@ function buildPagesByType(
 function streamPages(
   storage: SQLiteStorage,
   crawlId: string,
+  batchSize: number,
   onPage: (page: PageRecord) => void
 ): Effect.Effect<void, StorageError, never> {
   return Effect.gen(function* () {
     let offset = 0;
     for (;;) {
       const batch = yield* storage.getPages(crawlId, {
-        limit: PAGE_SCAN_BATCH,
+        limit: batchSize,
         offset,
       });
       for (const page of batch) onPage(page);
-      if (batch.length < PAGE_SCAN_BATCH) break;
-      offset += PAGE_SCAN_BATCH;
+      if (batch.length < batchSize) break;
+      offset += batchSize;
     }
   });
 }
@@ -264,7 +291,7 @@ async function* iteratePagesMatching(
   for (;;) {
     const rows = await Effect.runPromise(
       storage
-        .getPageFeaturesPage(crawlId, { after, limit: PAGE_SCAN_BATCH })
+        .getPageFeaturesPage(crawlId, { after, limit: FEATURE_SCAN_BATCH })
         // A read failure mid-cursor is a hard error, not a silent truncation.
         .pipe(Effect.orDie)
     );
@@ -272,7 +299,7 @@ async function* iteratePagesMatching(
     for (const row of rows) {
       if (pred(row)) yield row;
     }
-    if (rows.length < PAGE_SCAN_BATCH) return;
+    if (rows.length < FEATURE_SCAN_BATCH) return;
     after = rows[rows.length - 1]!.normalizedUrl;
   }
 }
