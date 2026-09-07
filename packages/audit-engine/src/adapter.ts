@@ -106,6 +106,7 @@ import {
   type PageSignalCollector,
   type StreamPageRulesHooks,
 } from "./streaming";
+import { collectDroppedBatch } from "./batch-gc";
 import { resolveCloakingProbes } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
 import { confirmSoft404Candidates } from "./soft404-confirm";
@@ -1824,6 +1825,7 @@ function streamParsedUniverse(
       // WAF detection but never `parsed.document`.
       universe.absorb(ctx);
       releaseSiteContextDocuments(ctx);
+      collectDroppedBatch();
 
       if (batch.length < batchSize) break;
     }

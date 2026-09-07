@@ -42,6 +42,7 @@ import {
   type PreFetchedAssets,
   type ResourceCheckOverrides,
 } from "./adapter";
+import { collectDroppedBatch } from "./batch-gc";
 import { createCloudPrefetchCollector, type CloudPrefetchPayloadSet } from "./cloud-prefetch-run";
 import type { ExternalCheckResult, LinkCache } from "./external-checker";
 
@@ -166,6 +167,9 @@ export function runStreamingPreRules(
       if (externalLinksEnabled) absorbExternalLinkOccurrences(externalLinkOccurrences, ctx);
       prefetchCollector?.absorb(ctx);
       releaseSiteContextDocuments(ctx);
+      // Dropped is not collected — see batch-gc.ts. Without this the walk's peak
+      // is set by how far behind the collector happens to be, not by batchSize.
+      collectDroppedBatch();
 
       options?.onBatch?.({ pagesDone: pageCount });
       if (batch.length < batchSize) break;

@@ -26,6 +26,7 @@ import type { RuleRunner } from "@squirrelscan/rules";
 import { mergeRuleRunResult } from "@squirrelscan/rules";
 
 import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./adapter";
+import { collectDroppedBatch } from "./batch-gc";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
 import type { PageRuleLoopHooks } from "./page-rule-executor";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
@@ -260,6 +261,9 @@ export function streamPageRules(
       // guarantees a future early-continue that skips the explicit drop still can't
       // leak a live DOM past the batch boundary (the residency invariant).
       for (const { parsed } of parsedBatch) if (parsed) parsed.document = null;
+      // Collect the batch we just dropped, so peak residency tracks batchSize
+      // rather than the collector's timing (see batch-gc.ts).
+      collectDroppedBatch();
 
       batchIndex++;
       opts?.hooks?.onBatch?.({
