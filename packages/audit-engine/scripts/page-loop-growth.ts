@@ -115,7 +115,6 @@ async function main(): Promise<void> {
   /** Full-batch boundary samples — the only ones the slope is fitted to. */
   const samples: Array<[number, number]> = [];
   const rssSamples: Array<[number, number]> = [];
-  let lastBoundaryPages = 0;
   let peakInLoop = 0;
 
   const result = await run(
@@ -143,14 +142,20 @@ async function main(): Promise<void> {
           // The hook runs while this batch's PageRecords are still in scope, so
           // a short batch is holding less html than a full one and its sample
           // is not comparable to the others.
-          const full = pagesDone - lastBoundaryPages === BATCH;
-          lastBoundaryPages = pagesDone;
+          //
+          // Fullness is decided from the FETCHED rows, not from `pagesDone`:
+          // that counter advances only for pages the loop actually scores, so a
+          // full 50-row batch containing one non-HTML or WAF page would look
+          // short and be thrown away. The loop reads by OFFSET over the same
+          // rows `getPageCount` counts, so batch i covers [BATCH*(i-1), BATCH*i)
+          // and is full exactly when that window fits inside the crawl.
+          const full = BATCH * batchIndex <= pageCount;
           if (full) {
             samples.push([pagesDone, r]);
             rssSamples.push([pagesDone, s]);
           }
           console.log(
-            `  batch ${String(batchIndex).padStart(3)} end (${String(pagesDone).padStart(4)} pages)` +
+            `  batch ${String(batchIndex).padStart(3)} end (${String(pagesDone).padStart(4)} scored)` +
               `${full ? "     " : " PART"}  ` +
               `retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  rss=${`${(s / MB).toFixed(0)}`.padStart(5)} MB`,
           );
@@ -161,10 +166,13 @@ async function main(): Promise<void> {
         onProgress: (done) => {
           // Trace only. These land mid-batch, where the batch's documents are
           // part-released, so they are not comparable to each other and must
-          // not be fitted. The maximum over them is a POST-COLLECT high-water,
-          // not the container's: `retained()` collects before it samples, so a
-          // real RSS peak between two heartbeats is never seen. batch-floor.ts
-          // is what samples the uncollected peak.
+          // not be fitted. The maximum over them is a POST-COLLECT high-water
+          // and NOT the container's: `retained()` collects before it samples,
+          // and the loop is sync CPU that yields only when `yieldEveryMs` is
+          // set, so any spike between two heartbeats — a batch's parse, one
+          // expensive rule — is invisible here. A container-sizing number has
+          // to come from outside the process (`/usr/bin/time -l`, the cgroup's
+          // own high-water), not from this sampler.
           const r = retained();
           peakInLoop = Math.max(peakInLoop, r);
           console.log(
@@ -196,7 +204,7 @@ async function main(): Promise<void> {
   }
   console.log(
     `max post-collect retained across mid-batch samples ${(peakInLoop / MB).toFixed(0)} MB ` +
-      `(NOT the container peak — see batch-floor.ts)`,
+      `(a sampled floor on the peak, NOT the container's high-water)`,
   );
 
   // What the RESULT holds after the run, measured by dropping one field at a
