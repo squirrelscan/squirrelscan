@@ -29,6 +29,9 @@ export type {
   SiteContextPage,
   RuleExecutionResult,
   StreamingRuleExecutionResult,
+  // #1860: the sub-phase names, so a consumer can map them exhaustively rather
+  // than reconstructing the strings and casting.
+  StreamingRulePhase,
   PreFetchedAssets,
   ResourceCheckOverrides,
   ExternalLinkCheckProgress,
