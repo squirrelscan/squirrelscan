@@ -12,17 +12,64 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]` heading also ends a section (keep-a-changelog style); it's never extracted as a release body.
-- If no matching section exists, the release still ships with a minimal body — you can
-  refine it any time with `gh release edit "vX.Y.Z" --repo squirrelscan/squirrelscan --notes-file notes.md`.
-- Keep it public-facing: user-visible CLI/rules/reliability changes only — no internal refs.
+- A `## [Unreleased]
 
-Earlier releases (v0.0.56 and prior) are on the
-[GitHub releases page](https://github.com/squirrelscan/squirrelscan/releases).
+## v0.0.91
 
-## [Unreleased]
+A release about big sites. A 500-page audit of a store whose pages weigh a
+megabyte each used to hold every parsed page in memory at once, run out of
+room, and fail three times in a row after the crawl had already finished. The
+audit engine now streams: pages are parsed in batches sized to the site, the
+rules pass runs over one batch at a time, and the report is assembled from
+per-rule tallies instead of from every finding at once. The same pass makes a
+finding mean one defect instead of one defect per page, adds three content
+rules for things that should never have shipped, and tightens the installer.
+
+### Added
+
+- **Three content rules for leftovers.** `content/placeholder-text` flags lorem
+  ipsum, unrendered template tags such as `{{ user.name }}`, `[object Object]`,
+  `undefined` in a table cell and `TODO` markers in visible copy.
+  `content/unrendered-markup` catches literal markdown, escaped HTML and
+  double-encoded entities that reached the page as text, and stays quiet
+  inside code blocks and syntax-highlighted samples. `content/dev-leakage`
+  finds `localhost`, private IP ranges, `staging.` and `dev.` hosts, preview
+  deploys (`vercel.app`, `netlify.app`, `pages.dev`, ngrok) and plain `http://`
+  links back to the site's own origin, on a production page.
+
+- **A zero-page audit says why.** When the crawl fetches nothing, the report,
+  the CLI output and the failure notice now name the cause: the host did not
+  resolve, the certificate was rejected, the connection closed before a
+  response, the origin timed out, or it answered with a 4xx or 5xx. Before,
+  every one of those read "No pages were crawled".
 
 ### Changed
+
+- **The audit engine streams instead of holding the whole site.** Link checks,
+  asset fetches, the rules pass and the report are all built from batches of
+  parsed pages rather than one array of every page. The batch is sized from a
+  byte budget (48 MB of raw HTML by default, `SQUIRREL_STREAM_BATCH_BYTES`)
+  divided by the site's own average page size, so a docs site with 20 KB pages
+  and a store with 1 MB pages both fit. Peak memory now tracks the batch, not
+  the page count. Progress output reports the sub-phases of the pass
+  (universe, site fetch, page rules, site rules, assemble) as they happen.
+
+- **A finding is one defect, not one defect per page.** An item-level finding
+  such as a cross-origin script without Subresource Integrity now carries its
+  own message and locator instead of inheriting the page's count ("26
+  resources without SRI" on one page, "24" on the next). The same script
+  missing on 400 pages is one finding with 400 affected pages. This also fixes
+  the reverse defect, where unrelated items on the same page shared a
+  fingerprint because the page count matched.
+
+- **Longer budget for large full audits.** The per-page time allowance for a
+  full-coverage audit rose from 4.8 to 7.2 seconds, so a 500-page audit of
+  script-heavy pages reaches the one-hour ceiling instead of being cut off
+  partway through the rules pass.
+
+- **The installer pins its transport.** Every `curl` in `install.sh` now
+  refuses anything but HTTPS (including across redirects), requires TLS 1.2 or
+  newer and follows at most three redirects.
 
 - **The CLI is built on Bun 1.4.** The runtime the `squirrel` binary is
   compiled with moved from 1.3.14 to 1.4.0, the release Bun rewrote in Rust.
