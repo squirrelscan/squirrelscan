@@ -27,7 +27,8 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
 /**
  * Default raw-html bytes held per batch. 48 MB parses to roughly 600 MB on the
  * heaviest pages measured, which fits a standard-3 container (8 GiB) alongside
- * the crawl's own high-water and the report tail with room to spare.
+ * the crawl's own high-water and the report tail with room to spare. That
+ * sizing predates the sweep below and is not established by it.
  *
  * WHAT WAS MEASURED (scripts/batch-budget-sweep.ts, 150 real 959 KB pages, peak
  * read from the OS rather than an in-process sampler, batch resolved from the
@@ -42,14 +43,14 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
  *
  * OBSERVATIONS, and deliberately not more than these.
  *
- * No budget tried produced a peak under 344 MB, and an eight-fold larger batch
- * (12 to 102 pages) produced a peak 1.9 times larger on the minima and at most
- * 2.0 times larger taking the extremes. What that means for the invariant part
+ * No budget tried produced a peak under 357 MB, and an 8.5-fold larger batch
+ * (12 to 102 pages) produced a peak 1.9 times larger on the minima and 2.0
+ * times larger taking the extremes. What that means for the invariant part
  * of the peak is not established here: five budgets on one fixture cannot
  * identify a component or say what it is made of. Do not read a formula off
  * these points either — a straight line through the ends misses the middle of
- * its own table by 100 MB, and the spread within a single budget is 36 to
- * 198 MB.
+ * its own table by 100 MB, and the spread within a single budget runs from 24 to
+ * 100 MB.
  *
  * All three runs at a 6 MB budget peaked above all three at 12 MB. Two things
  * differ between them at once — the batch holds less, and the same crawl takes
@@ -64,9 +65,21 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
  * parser and the JIT are all warm — so each of those is an alternative
  * explanation, and this does not measure how much of the residency is reusable.
  *
- * Also measured: Bun honours mimalloc's environment options (`MIMALLOC_VERBOSE=1`
- * prints its option dump), but `MIMALLOC_PURGE_DELAY=0` moved the peak in both
- * directions across five budgets and never beyond the run-to-run spread.
+ * Bun honours mimalloc's environment options — `MIMALLOC_VERBOSE=1` prints its
+ * option dump — so `MIMALLOC_PURGE_DELAY=0`, which asks it to decommit freed
+ * pages immediately, is a setting that reaches the allocator. One run per cell
+ * (`--mimalloc`), so read it as "no visible effect", not as a bound:
+ *
+ *   budget      default    purge delay 0
+ *     6 MB       303 MB           312 MB
+ *    12 MB       370 MB           362 MB
+ *    24 MB       541 MB           582 MB
+ *    48 MB       552 MB           878 MB
+ *    96 MB      1070 MB           719 MB
+ *
+ * It moved in both directions, and by more than the spread above in the two
+ * largest budgets, which is what a single run of a noisy measurement looks
+ * like rather than an effect.
  *
  * Every peak in the table is a whole child process's high-water — universe, site
  * fetch, page loop, site query, site rules, assembly — because that is what a

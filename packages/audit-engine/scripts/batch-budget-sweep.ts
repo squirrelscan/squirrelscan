@@ -42,6 +42,10 @@
 // --child and --probe-child are the inner halves; the parent re-invokes this
 // file with them.
 
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { getDefaultConfig, type Config } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { Effect } from "effect";
@@ -242,16 +246,23 @@ interface ChildResult {
 function spawnChild(flag: string, budget: number, purge: string): ChildResult | null {
   const env = { ...process.env } as Record<string, string>;
   if (purge === "purge0") env.MIMALLOC_PURGE_DELAY = "0";
-  const childErrPath = `${process.env.TMPDIR ?? "/tmp"}/sweep-child-${process.pid}.err`;
+  // A private directory, and the path is passed as a POSITIONAL ARGUMENT rather
+  // than interpolated into the shell source: `TMPDIR` is attacker-influenced on
+  // a shared machine, and a `$(...)` in it would otherwise be executed. mkdtemp
+  // also defeats a pre-created symlink at a predictable name.
+  const childErrDir = mkdtempSync(join(tmpdir(), "sq-sweep-"));
+  const childErrPath = join(childErrDir, "child.err");
   const proc = Bun.spawnSync({
     cmd: [
       ...TIME.cmd,
       "/bin/sh",
       "-c",
       // Only the CHILD's fd 2 is redirected; `time` writes to the fd 2 it was
-      // started with, which is still the pipe.
-      `exec "$@" 2>"${childErrPath}"`,
+      // started with, which is still the pipe. `exec` replaces the shell, so
+      // `time` still measures the child and not a wrapper.
+      'exec 2>"$1"; shift; exec "$@"',
       "sh",
+      childErrPath,
       process.execPath,
       "run",
       import.meta.path,
@@ -266,13 +277,17 @@ function spawnChild(flag: string, budget: number, purge: string): ChildResult | 
     stderr: "pipe",
   });
   const timeErr = proc.stderr.toString();
-  const err = (() => {
-    try {
-      return require("node:fs").readFileSync(childErrPath, "utf8") as string;
-    } catch {
-      return "";
-    }
-  })();
+  let childErr = "";
+  try {
+    childErr = readFileSync(childErrPath, "utf8");
+  } catch {
+    // The redirect itself failed, or the child never started. `timeErr` then
+    // holds the shell's complaint, which is the only diagnostic there is.
+  }
+  rmSync(childErrDir, { recursive: true, force: true });
+  // BOTH streams on failure: a setup failure leaves its message on time's fd 2,
+  // and printing only the child's file would report an empty error.
+  const err = `${childErr}${childErr && timeErr ? "\n-- time/shell --\n" : ""}${timeErr}`;
   // A non-zero exit invalidates the run even when the child printed its line
   // first: a failure after the print is still a failure, and the maxrss of a
   // process that died early is a small and entirely plausible number.
@@ -352,15 +367,17 @@ for (const budget of budgets) {
 // A minimum alone hides how far apart the runs were, and a fixed "n runs"
 // heading would claim samples that were dropped. Every column here comes from
 // the same cell's own runs — no row mixes an aggregate with one run's value.
+// EVERY run, not a min/max range. A range hides whether three runs clustered or
+// straddled, which is exactly what a reader needs to judge a comparison between
+// two adjacent budgets.
 console.log(
-  `\n${"budget".padStart(7)} ${"batch".padStart(6)} ${"purge".padEnd(8)} ${"runs".padStart(5)} ` +
-    `${"peak min".padStart(9)} ${"peak max".padStart(9)} ${"cold".padStart(7)} ${"warm".padStart(7)}`,
+  `\n${"budget".padStart(7)} ${"batch".padStart(6)} ${"purge".padEnd(8)} ` +
+    `${"peaks (MB, per run)".padEnd(28)} ${"cold".padStart(7)} ${"warm".padStart(7)}`,
 );
 for (const cell of cells) {
   console.log(
     `${`${cell.budgetMB} MB`.padStart(7)} ${String(cell.batchPages).padStart(6)} ${cell.purge.padEnd(8)} ` +
-      `${String(cell.peaksMB.length).padStart(5)} ${`${Math.min(...cell.peaksMB)} MB`.padStart(9)} ` +
-      `${`${Math.max(...cell.peaksMB)} MB`.padStart(9)} ` +
+      `${[...cell.peaksMB].sort((a, b) => a - b).join(", ").padEnd(28)} ` +
       `${(cell.coldMB === null ? "-" : `${cell.coldMB} MB`).padStart(7)} ` +
       `${(cell.warmMB === null ? "-" : `${cell.warmMB} MB`).padStart(7)}`,
   );
