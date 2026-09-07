@@ -152,9 +152,10 @@ if (process.argv.includes("--child")) {
     const all = await run(storage.getPages(crawlId));
     const ctx = await run(buildSiteContext(all));
     // NOT parsePageRecord: with stored parsedData this re-parses the DOM and
-    // deserializes the rest. Named `hydrate` so it cannot be read as the parse
-    // #1910 is talking about.
-    out.hydrate = Date.now() - t0;
+    // deserializes the rest. It also includes the `getPages` read, which the
+    // parse arm excludes — hence `load+hydrate`, so neither the name nor the
+    // number can be read as the parse #1910 is talking about.
+    out["load+hydrate"] = Date.now() - t0;
     const t1 = Date.now();
     await run(runRulesOnStorage(storage, crawlId, ctx, benchConfig(), EMPTY_ASSETS));
     out.v1Rules = Date.now() - t1;
@@ -266,7 +267,7 @@ const COLUMNS: Array<[string, string, string]> = [
   ["streamed", "page-rules", "pageRules"],
   ["streamed", "site-query", "siteQuery"],
   ["streamed", "site-rules", "siteRules"],
-  ["v1", "hydrate", "v1 hydrate"],
+  ["v1", "load+hydrate", "v1 load+hydrate"],
   ["v1", "v1Rules", "v1 rules"],
   ["parse", "parse", "parsePageRecord"],
 ];

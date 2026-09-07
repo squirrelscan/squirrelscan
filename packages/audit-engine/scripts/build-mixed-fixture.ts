@@ -1,8 +1,8 @@
 // A mixed-shape crawl DB for the rules-scaling work (#1910).
 //
 // A NEGATIVE result is only as good as its corpus, and this fixture exists to
-// support one — "the rules phases are not superlinear in page count" — so what
-// it does NOT contain is as important as what it does. Each of these is here
+// support claims of the shape "this phase did not grow superlinearly HERE", so
+// what it does NOT contain is as important as what it does. Each of these is here
 // because a uniform corpus lets a rule take an early exit and then report a flat
 // line that says nothing:
 //
@@ -40,7 +40,10 @@
 // `--divergent-in N` puts one page in every N off the shared theme. The default
 // of 10 is a plausible share for a real site; a lower number is how you make a
 // term that is linear in the OUTLIER SHARE and quadratic in page count visible
-// above the noise, which at a 10% share it is not.
+// above the noise, which at a 10% share it is not. Do not go below 3: at one
+// page in two the baseline is built from a majority threshold that includes
+// BOTH groups' markers, which lifts the divergent pages' similarity from 0.05
+// to 0.2375, above the 0.2 threshold, and the rule reports no outliers at all.
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { Effect } from "effect";
@@ -258,9 +261,17 @@ const crawlId = await run(
 // a fully connected corpus never reaches that branch.
 const orphanFrom = Math.max(1, Math.floor(N * 0.95));
 let totalBytes = 0;
+// Counted while generating rather than derived with `Math.floor(N / k)`, which
+// ignores the residue offset and was reporting 4 and 17 where 5 and 18 were
+// written.
+const tally = { errors: 0, noindex: 0, offCanonical: 0, offTheme: 0 };
 
 for (let i = 0; i < N; i++) {
   const p = build(i);
+  if (p.status >= 400) tally.errors++;
+  if (p.noindex) tally.noindex++;
+  if (p.canonical !== `${BASE}${pathFor(i)}`) tally.offCanonical++;
+  if (isDivergent(i)) tally.offTheme++;
   const links = linkTargets(i, p.outLinks, orphanFrom)
     .map((t) => `<a href="${pathFor(t)}">Link ${t}</a>`)
     .join("");
@@ -310,7 +321,7 @@ console.log(
     `  mix: ${[...counts].map(([k, v]) => `${k} ${((100 * v) / N).toFixed(0)}%`).join(", ")}\n` +
     `  ${Math.max(0, N - orphanFrom)} pages with no inbound link, ` +
     `${Math.floor(N / 50)} hubs of 120 links, ` +
-    `${Math.floor(N / 97)} 4xx, ${Math.floor(N / 23)} noindex, ${Math.floor(N / 11)} off-page canonicals, ` +
-    `${Math.floor(N / DIVERGENT_IN)} off-theme`,
+    `${tally.errors} 4xx, ${tally.noindex} noindex, ${tally.offCanonical} off-page canonicals, ` +
+    `${tally.offTheme} off-theme`,
 );
 await run(storage.close());

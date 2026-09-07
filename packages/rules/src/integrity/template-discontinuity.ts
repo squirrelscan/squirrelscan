@@ -128,7 +128,8 @@ export const templateDiscontinuityRule: Rule = {
     // on a site that actually has outliers, which is why a corpus of uniformly
     // themed pages never showed it (#1910).
     //
-    // LAZY, so a site with no outliers pays nothing, and FIRST-WINS, because
+    // LAZY, so a site with no outliers pays nothing and an outlier run pays one
+    // O(n) build instead of one O(n) scan per outlier, and FIRST-WINS, because
     // `find` returned the first match and `SiteData.pages` is caller-supplied
     // and not deduplicated. Building it with `new Map(pages.map(...))` would
     // keep the LAST entry for a repeated url, which flips this rule's verdict
