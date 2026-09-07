@@ -29,6 +29,7 @@ import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
 import { getHostname, isLoopbackHost, parseUserUrl } from "@/utils/url";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
+import { resolvePageLimit } from "@/lib/page-limit";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
 
@@ -232,10 +233,9 @@ export async function runCrawl(
       const crawler = await Effect.runPromise(
         createCrawler({
           config: {
-            maxPages: Math.min(
-              options.maxPages ?? config.crawler.max_pages,
-              MAX_PAGES_CAP
-            ),
+            maxPages: resolvePageLimit(
+              options.maxPages ?? config.crawler.max_pages
+            ).effective,
             concurrency: crawlConcurrency.concurrency,
             perHostConcurrency: crawlConcurrency.perHostConcurrency,
             delayMs: config.crawler.delay_ms,
@@ -283,10 +283,8 @@ export async function runCrawl(
       );
 
       const crawlerConfig = {
-        maxPages: Math.min(
-          options.maxPages ?? config.crawler.max_pages,
-          MAX_PAGES_CAP
-        ),
+        maxPages: resolvePageLimit(options.maxPages ?? config.crawler.max_pages)
+          .effective,
         concurrency: crawlConcurrency.concurrency,
         perHostConcurrency: crawlConcurrency.perHostConcurrency,
         delayMs: config.crawler.delay_ms,

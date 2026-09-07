@@ -208,8 +208,15 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   if (report.scanScope) {
     const s = report.scanScope;
     const cap = s.maxPages !== undefined ? ` max-pages="${s.maxPages}"` : "";
+    // Present only when the request was clamped (#1909). An agent reading this
+    // otherwise cannot tell a 5,000-page site from a refusal to crawl the rest,
+    // and the LLM render is the whole response for an MCP caller.
+    const requested =
+      s.requestedMaxPages !== undefined
+        ? ` requested-max-pages="${s.requestedMaxPages}"`
+        : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap} capped="${s.capped}"/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"/>`,
     );
   }
 

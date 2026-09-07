@@ -1616,10 +1616,16 @@ export async function runAudit(
         const requested =
           options.requestedMaxPages ?? options.maxPages ?? config.crawler.max_pages;
         const scopeLimit = resolvePageLimit(requested);
+        // FINITE only. `[crawler] max_pages = inf` is a real clamp and the
+        // command says so on stderr, but `JSON.stringify(Infinity)` is `null`,
+        // and a null here would read as "no request recorded" rather than as
+        // "asked for everything" — worse than leaving it out.
+        const recordRequested =
+          scopeLimit.clamped && Number.isFinite(scopeLimit.requested);
         report.scanScope = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
-          ...(scopeLimit.clamped ? { requestedMaxPages: scopeLimit.requested } : {}),
+          ...(recordRequested ? { requestedMaxPages: scopeLimit.requested } : {}),
           pagesCrawled: report.pages.length,
           capped: report.pages.length >= scopeMaxPages,
         };

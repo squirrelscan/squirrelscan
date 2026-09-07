@@ -25,16 +25,25 @@ export interface PageLimit {
 /**
  * Resolve a requested page count against the cap.
  *
- * A non-finite or non-positive request is passed through untouched rather than
- * coerced: the commands reject those with their own message naming the flag,
- * and silently turning `NaN` into the cap here would hide that.
+ * `effective` is exactly `Math.min(requested, MAX_PAGES_CAP)`, which is what the
+ * three call sites did before this existed, so the ceiling behaves identically
+ * for every input including the strange ones. An earlier version of this
+ * returned non-finite and non-positive requests UNTOUCHED, on the reasoning
+ * that the commands reject them with their own message — but `[crawler]
+ * max_pages = inf` passes the config schema and never reaches that check, so
+ * `Infinity` went straight to the crawler and the hard cap stopped being hard.
+ * A safety bound does not get to have exceptions for inputs that look invalid.
+ *
+ * `clamped` is the narrower question of whether to SAY anything, so it is false
+ * for `NaN` (which no comparison makes true) and for anything at or under the
+ * cap. `Infinity` does get a notice: it really was clamped.
  */
 export function resolvePageLimit(requested: number): PageLimit {
-  if (!Number.isFinite(requested) || requested < 1) {
-    return { requested, effective: requested, clamped: false };
-  }
-  const effective = Math.min(requested, MAX_PAGES_CAP);
-  return { requested, effective, clamped: effective < requested };
+  return {
+    requested,
+    effective: Math.min(requested, MAX_PAGES_CAP),
+    clamped: requested > MAX_PAGES_CAP,
+  };
 }
 
 /**
@@ -46,9 +55,13 @@ export function resolvePageLimit(requested: number): PageLimit {
  */
 export function pageLimitNotice(limit: PageLimit): string | null {
   if (!limit.clamped) return null;
+  // `Infinity.toLocaleString()` is "∞", which reads as a rendering fault rather
+  // than as what the user typed.
+  const asked = Number.isFinite(limit.requested)
+    ? `${limit.requested.toLocaleString("en-US")} pages`
+    : "unlimited pages";
   return (
-    `⚠ Requested ${limit.requested.toLocaleString("en-US")} pages, capped at ` +
-    `${limit.effective.toLocaleString("en-US")}. This is the hard limit; split the audit ` +
-    `by section (e.g. [crawler] include) to scan more.`
+    `⚠ Requested ${asked}, capped at ${limit.effective.toLocaleString("en-US")}. ` +
+    `This is the hard limit; split the audit by section (e.g. [crawler] include) to scan more.`
   );
 }

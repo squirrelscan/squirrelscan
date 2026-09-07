@@ -252,13 +252,21 @@ is no before/after to measure. What it changes is whether the number a
 measurement was taken at is knowable afterwards, which is what every other row
 in this file depends on.
 
-`MAX_PAGES_CAP` was applied with a bare `Math.min` in three places — the `audit`
-command, the `crawl` command and the audit controller — none of which said
-anything. The existing notice fires when a crawl REACHES the cap, a different
+`MAX_PAGES_CAP` was applied with a bare `Math.min` in five places — the `audit`
+and `crawl` commands, the audit controller, and twice in the crawl controller —
+none of which said anything. The existing notice fires when a crawl REACHES the cap, a different
 event: a 10,000-page request against a 4,000-page site was clamped and never
-mentioned. Now one helper resolves the request, both commands print the clamp,
-and the report carries `meta.maxPages` alongside `meta.requestedMaxPages`, the
-latter present only when a clamp happened so its absence is the normal case.
+mentioned. Now one helper resolves the request, both commands print the clamp, and the
+report carries `meta.maxPages` alongside `meta.requestedMaxPages`, the latter
+present only when a clamp happened so its absence is the normal case. The LLM
+render carries the same pair, which is the whole response for an MCP caller.
+
+Worth recording because it nearly went the other way: a first version of the
+helper passed non-finite requests through untouched, reasoning that the commands
+reject bad input themselves. `[crawler] max_pages = inf` passes the config
+schema and never reaches that check, so `Infinity` went straight to the crawler
+and the hard cap stopped being hard. A safety bound does not get exceptions for
+inputs that look invalid; `effective` is `Math.min` for every input, as it was.
 
 ## Hosted runtime, in production
 

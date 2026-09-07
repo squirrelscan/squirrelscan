@@ -36,19 +36,37 @@ describe("resolvePageLimit", () => {
     expect(resolvePageLimit(MAX_PAGES_CAP + 1).clamped).toBe(true);
   });
 
-  test("passes a rejected value through rather than coercing it", () => {
-    // The commands reject NaN and non-positive values with a message naming the
-    // flag. Turning them into the cap here would hide that and crawl 5,000
-    // pages for someone who typed `--max-pages abc`.
-    for (const bad of [Number.NaN, 0, -5, Number.POSITIVE_INFINITY]) {
-      const limit = resolvePageLimit(bad);
-      expect(limit.clamped).toBe(false);
-      expect(Object.is(limit.effective, bad)).toBe(true);
+  test("NEVER returns an effective limit above the cap", () => {
+    // The regression this exists to stop. A first version passed non-finite and
+    // non-positive requests through untouched, so `[crawler] max_pages = inf`
+    // — which the config schema accepts, and which never reaches the flag
+    // validation — sent Infinity to the crawler and the hard cap stopped being
+    // hard. `effective` is `Math.min` for every input, as it was before.
+    for (const value of [Number.POSITIVE_INFINITY, 1e12, MAX_PAGES_CAP * 2]) {
+      expect(resolvePageLimit(value).effective).toBe(MAX_PAGES_CAP);
+      expect(resolvePageLimit(value).clamped).toBe(true);
     }
+  });
+
+  test("leaves the strange inputs exactly where Math.min left them", () => {
+    // Not this change's job to fix: `crawl` does no flag validation at all, so
+    // its NaN and zero behaviour is pre-existing, and quietly turning either
+    // into 5,000 here would be a new bug wearing a fix's clothes.
+    expect(Number.isNaN(resolvePageLimit(Number.NaN).effective)).toBe(true);
+    expect(resolvePageLimit(Number.NaN).clamped).toBe(false);
+    expect(resolvePageLimit(0).effective).toBe(0);
+    expect(resolvePageLimit(-5).effective).toBe(-5);
+    expect(resolvePageLimit(-5).clamped).toBe(false);
   });
 });
 
 describe("pageLimitNotice", () => {
+  test("says 'unlimited' rather than a rendering artefact for Infinity", () => {
+    const notice = pageLimitNotice(resolvePageLimit(Number.POSITIVE_INFINITY)) ?? "";
+    expect(notice).toContain("unlimited pages");
+    expect(notice).not.toContain("∞");
+  });
+
   test("names both numbers when the cap bound", () => {
     const notice = pageLimitNotice(resolvePageLimit(10_000));
     expect(notice).toBeTruthy();
