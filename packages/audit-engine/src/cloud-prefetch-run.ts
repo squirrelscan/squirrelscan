@@ -34,6 +34,7 @@ import {
   releaseSiteContextDocuments,
   type SiteContextPage,
 } from "./adapter";
+import { detachFromPage } from "./detach";
 
 // The parsed page's linkedom Document, without adding a direct linkedom dep here.
 type Document = NonNullable<NonNullable<SiteContextPage["parsed"]>["document"]>;
@@ -80,15 +81,28 @@ export function buildCloudPagePayloads(siteContext: SiteContextPage[]): CloudPag
     const meta: Record<string, string> = {};
     if (parsed.meta.description)
       meta.description = parsed.meta.description.slice(0, MAX_DESCRIPTION_CHARS);
-    payloads.push({
-      url: page.url,
-      title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
-      textExcerpt: truncateUtf8Bytes(parsed.content.textContent, MAX_EXCERPT_BYTES),
-      meta: Object.keys(meta).length > 0 ? meta : undefined,
-      headings: parsed.headings.headings
-        .slice(0, 20)
-        .map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
-    });
+    payloads.push(
+      // Every field here is a SLICE of the page's html, and in JSC a retained
+      // slice pins the buffer it was cut from (#240). One payload per page, so
+      // this is the page-count-scaled term the streamed pre-rules walk exists to
+      // remove: the 6 KB excerpt alone held a megabyte per page on the sites
+      // that OOM-killed #1862. `truncateUtf8Bytes` returns the slice UNCHANGED
+      // whenever it already fits the byte budget, which is every all-ASCII page,
+      // so it detaches nothing on its own. Invisible in `heapUsed` and in RSS;
+      // it shows only in `process.memoryUsage().external`.
+      detachFromPage(
+        {
+          url: page.url,
+          title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
+          textExcerpt: truncateUtf8Bytes(parsed.content.textContent, MAX_EXCERPT_BYTES),
+          meta: Object.keys(meta).length > 0 ? meta : undefined,
+          headings: parsed.headings.headings
+            .slice(0, 20)
+            .map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
+        },
+        "cloud-payload",
+      ),
+    );
   }
   return payloads;
 }
@@ -228,18 +242,21 @@ function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]):
     const pageHost = getHostname(page.url);
     for (const link of parsed.links) {
       if (urls.size >= BL_MAX_URLS) return;
-      if (!link.isInternal && isHttpUrl(link.url)) urls.add(link.url);
+      if (!link.isInternal && isHttpUrl(link.url))
+        urls.add(detachFromPage(link.url, "cloud-payload"));
     }
     for (const image of parsed.images) {
       if (urls.size >= BL_MAX_URLS) return;
-      if (isHttpUrl(image.src) && getHostname(image.src) !== pageHost) urls.add(image.src);
+      if (isHttpUrl(image.src) && getHostname(image.src) !== pageHost)
+        urls.add(detachFromPage(image.src, "cloud-payload"));
     }
     const doc = parsed.document;
     if (!doc) continue;
     for (const script of doc.querySelectorAll("script[src]")) {
       if (urls.size >= BL_MAX_URLS) return;
       const src = (script as Element).getAttribute("src");
-      if (src && isHttpUrl(src) && getHostname(src) !== pageHost) urls.add(src);
+      if (src && isHttpUrl(src) && getHostname(src) !== pageHost)
+        urls.add(detachFromPage(src, "cloud-payload"));
     }
   }
 }
@@ -270,12 +287,14 @@ function absorbBlocklistSelectors(
     for (const el of elements) {
       if (selectors.size >= BL_MAX_SELECTORS) break;
       const id = el.getAttribute("id");
-      if (id && SIMPLE_TOKEN_RE.test(id)) selectors.add(`#${id}`);
+      if (id && SIMPLE_TOKEN_RE.test(id))
+        selectors.add(detachFromPage(`#${id}`, "cloud-payload"));
       const classAttr = el.getAttribute("class");
       if (!classAttr) continue;
       for (const cls of classAttr.split(/\s+/)) {
         if (selectors.size >= BL_MAX_SELECTORS) break;
-        if (cls && SIMPLE_TOKEN_RE.test(cls)) selectors.add(`.${cls}`);
+        if (cls && SIMPLE_TOKEN_RE.test(cls))
+          selectors.add(detachFromPage(`.${cls}`, "cloud-payload"));
       }
     }
   }
@@ -383,7 +402,7 @@ function absorbSeeds(
       const key = seed.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      seeds.push(seed);
+      seeds.push(detachFromPage(seed, "cloud-payload"));
       if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return;
     }
   }
