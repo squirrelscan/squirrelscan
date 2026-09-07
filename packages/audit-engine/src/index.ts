@@ -199,3 +199,16 @@ export type { PageSignalCollector, StreamPageRulesHooks, StreamPageRulesResult }
 // external-link, tech-detect, intel and cloud-prefetch collectors together.
 export { runStreamingPreRules, PRE_RULES_PAGE_BATCH } from "./streaming-pre-rules";
 export type { StreamPreRulesOptions, StreamPreRulesResult } from "./streaming-pre-rules";
+
+// Byte-budget batch sizing (#1860) — pages per batch derived from the site's own
+// average page size, because peak RSS is batch x per-page cost and per-page cost
+// is a property of the site, not of us.
+export {
+  resolveStreamBatch,
+  resolveStreamBatchPages,
+  sampleAveragePageBytes,
+  STREAM_BATCH_BYTES,
+  STREAM_BATCH_MIN_PAGES,
+  STREAM_BATCH_MAX_PAGES,
+} from "./batch-sizing";
+export type { ResolvedStreamBatch } from "./batch-sizing";
