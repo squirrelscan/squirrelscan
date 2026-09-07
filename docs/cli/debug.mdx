@@ -100,6 +100,43 @@ Traces include:
 - Rule execution duration
 - Crawl phase boundaries
 
+## Memory on large audits
+
+Everything after the crawl reads the site in batches and drops each batch before
+reading the next, so a 2,500-page audit holds roughly what a 400-page one does
+rather than several gigabytes. The batch is sized from the site's own average
+page against a byte budget, because a docs site of 30 KB pages and a storefront
+of 1 MB ones need very different page counts to hold the same bytes.
+
+Two environment variables override that, and they are the same names and the
+same default the hosted runtime uses:
+
+| Variable | Meaning |
+| --- | --- |
+| `SQUIRREL_STREAM_BATCH_BYTES` | Raw HTML held per batch. Default 48 MB. |
+| `SQUIRREL_STREAM_BATCH_PAGES` | An exact page count, taking the byte budget out of the decision. |
+
+Both take a plain integer. A value with a unit suffix is refused with a warning
+rather than partly read, so `SQUIRREL_STREAM_BATCH_BYTES=48mb` does not quietly
+become 48 bytes.
+
+Turning the budget down is usually the wrong move. Peak memory is a fixed floor
+for the rule set and caches plus a few megabytes per page of batch, so the floor
+is not reachable from this dial, and below roughly a dozen pages per batch the
+same crawl becomes several times as many read-and-parse cycles whose churn peaks
+*higher* than a larger batch does.
+
+To see where memory goes, set `SQUIRREL_STREAM_PHASE_MEM=1`. Each sub-phase of
+the rules pass then prints its heap after a forced collection:
+
+```text
+[stream] universe end heapUsed=285MB external=51MB rss=915MB
+[stream] page-rules end heapUsed=287MB external=56MB rss=798MB
+```
+
+Read `heapUsed`, not `rss`. Under memory pressure macOS compresses pages and the
+resident figure stops tracking what the process actually holds.
+
 ## Sensitive data redaction
 
 Logs automatically redact sensitive data:
