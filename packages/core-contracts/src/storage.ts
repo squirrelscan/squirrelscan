@@ -1041,6 +1041,15 @@ export interface CrawlStorage {
 
   // Frontier
   upsertFrontier(crawlId: string, entry: FrontierRecord): Effect.Effect<void, StorageError, never>;
+  /**
+   * Existence-only frontier lookup for the enqueue path, which asks once per
+   * discovered link and only needs to know whether the URL is already known.
+   * Use `getFrontierEntry` when the record itself is needed.
+   */
+  hasFrontierEntry(
+    crawlId: string,
+    normalizedUrl: string,
+  ): Effect.Effect<boolean, StorageError, never>;
   getFrontierEntry(
     crawlId: string,
     normalizedUrl: string,

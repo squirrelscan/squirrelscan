@@ -1078,7 +1078,7 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare("SELECT * FROM crawls WHERE id = ?");
+        const stmt = db.query("SELECT * FROM crawls WHERE id = ?");
         const row = stmt.get(id) as Record<string, unknown> | undefined;
         if (!row) return null;
         return this.rowToCrawlMetadata(row);
@@ -1412,10 +1412,12 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT 1 FROM pages WHERE crawl_id = ? AND normalized_url = ?"
+        const stmt = db.query(
+          "SELECT 1 FROM pages WHERE crawl_id = ? AND normalized_url = ? LIMIT 1"
         );
-        return stmt.get(crawlId, normalizedUrl) !== undefined;
+        // bun:sqlite returns NULL (not undefined) for no row, so a
+        // `!== undefined` test here is always true. See hasFrontierEntry.
+        return stmt.get(crawlId, normalizedUrl) != null;
       },
       catch: (e) => StorageError.read(e),
     });
@@ -1558,6 +1560,33 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Existence-only frontier lookup for the enqueue path.
+   *
+   * `enqueueUrl` runs this once per discovered link -- the highest-frequency
+   * read in a crawl, roughly 50x per page on a link-dense site -- and only
+   * needs to know whether the URL is already known. `getFrontierEntry` stays
+   * for the watchdog path, which reads `status` off the record.
+   */
+  hasFrontierEntry(
+    crawlId: string,
+    normalizedUrl: string
+  ): Effect.Effect<boolean, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const stmt = db.query(
+          "SELECT 1 FROM frontier WHERE crawl_id = ? AND normalized_url = ? LIMIT 1"
+        );
+        // `!= null`, NOT `!== undefined`: bun:sqlite's Statement.get() returns
+        // NULL when no row matches, so an undefined test never fails and the
+        // helper answers "yes" for every URL.
+        return stmt.get(crawlId, normalizedUrl) != null;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
   getFrontierEntry(
     crawlId: string,
     normalizedUrl: string
@@ -1565,7 +1594,7 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
+        const stmt = db.query(
           "SELECT * FROM frontier WHERE crawl_id = ? AND normalized_url = ?"
         );
         const row = stmt.get(crawlId, normalizedUrl) as
@@ -1599,7 +1628,7 @@ export class SQLiteStorage implements CrawlStorage {
         if (!row) return null;
 
         // Update status to fetching
-        const updateStmt = db.prepare(`
+        const updateStmt = db.query(`
           UPDATE frontier SET status = 'fetching'
           WHERE crawl_id = ? AND normalized_url = ?
         `);
@@ -1628,7 +1657,7 @@ export class SQLiteStorage implements CrawlStorage {
         const db = this.getDb();
 
         // Get next N pending URLs with highest priority
-        const selectStmt = db.prepare(`
+        const selectStmt = db.query(`
           SELECT * FROM frontier
           WHERE crawl_id = ? AND status = 'pending'
           ORDER BY priority ASC, enqueued_at ASC
@@ -1644,7 +1673,7 @@ export class SQLiteStorage implements CrawlStorage {
         const rows = capBatchPerHost(candidates, perHostLimit);
 
         // Update all selected to fetching in one transaction
-        const updateStmt = db.prepare(`
+        const updateStmt = db.query(`
           UPDATE frontier SET status = 'fetching'
           WHERE crawl_id = ? AND normalized_url = ?
         `);
@@ -1668,7 +1697,7 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
+        const stmt = db.query(
           "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'pending'"
         );
         const row = stmt.get(crawlId) as { count: number };
@@ -1684,7 +1713,7 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
+        const stmt = db.query(
           "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'fetching'"
         );
         const row = stmt.get(crawlId) as { count: number };
@@ -1707,14 +1736,14 @@ export class SQLiteStorage implements CrawlStorage {
           status === "done" || status === "failed" ? Date.now() : null;
 
         if (reason !== undefined) {
-          const stmt = db.prepare(`
+          const stmt = db.query(`
             UPDATE frontier
             SET status = ?, reason = ?, fetched_at = COALESCE(?, fetched_at)
             WHERE crawl_id = ? AND normalized_url = ?
           `);
           stmt.run(status, reason, fetchedAt, crawlId, normalizedUrl);
         } else {
-          const stmt = db.prepare(`
+          const stmt = db.query(`
             UPDATE frontier
             SET status = ?, fetched_at = COALESCE(?, fetched_at)
             WHERE crawl_id = ? AND normalized_url = ?

@@ -523,9 +523,10 @@ export function createCrawler(
         // Depth ceiling (#318): never enqueue past maxDepth. Unset = unlimited (no-op).
         if (config.maxDepth != null && depth > config.maxDepth) return;
 
-        // Check if already in frontier
-        const existing = yield* storage.getFrontierEntry(crawlId, normalized);
-        if (existing) return;
+        // Check if already in frontier. Existence only: this runs once per
+        // discovered link, so it must not read or materialise the whole row.
+        const alreadyQueued = yield* storage.hasFrontierEntry(crawlId, normalized);
+        if (alreadyQueued) return;
 
         // Oversize URLs (#1229): the publish schema caps pages[].url et al at
         // REPORT_LIMITS.maxUrlLength STRICT (no clamp — they're join keys the
