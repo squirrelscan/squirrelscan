@@ -242,6 +242,17 @@ describe("findDevHostsInText", () => {
     expect(textKinds("Bound to 127.0.0.1 on the office LAN")).toContain("localhost");
   });
 
+  test("ordinary prose full of dotted words stays clean", () => {
+    // The named-host scan is deliberately generic, so abbreviations, file names
+    // and third-party domains all reach it and must all be discarded.
+    expect(
+      textKinds(
+        "See e.g. the notes in README.md and config.yaml, or our partners at " +
+          "acme.io, shop.co.uk and example.com. Docs live at https://example.com/docs.",
+      ),
+    ).toHaveLength(0);
+  });
+
   test("a bare platform name is not a deployment", () => {
     expect(textKinds("We deploy to pages.dev and vercel.app")).toHaveLength(0);
     expect(textKinds("We deploy to acme.pages.dev")).toContain("preview-host");

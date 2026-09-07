@@ -59,6 +59,13 @@ const MAX_HITS_PER_KIND = 200;
  */
 const MAX_ATTRIBUTE_HITS = MAX_HITS_PER_KIND * 5;
 
+/**
+ * Candidates the named-host scan will look at. Host-SHAPED, not host: every
+ * abbreviation and file name in prose reaches this scan and is discarded by
+ * `classifyHost`, so the budget is on the candidates rather than on the hits.
+ */
+const MAX_NAMED_HOST_MATCHES = 20_000;
+
 /** Reports get these verbatim, so no newline and no unbounded site-controlled string. */
 const MAX_SAMPLE_LENGTH = 120;
 
@@ -157,6 +164,11 @@ export function isPrivateIpHost(host: string): boolean {
   return a === 172 && b >= 16 && b <= 31;
 }
 
+/** True for the platform's own bare domain, e.g. `pages.dev` itself. */
+export function isPreviewSuffix(host: string): boolean {
+  return PREVIEW_HOST_SUFFIXES.some((s) => host === s);
+}
+
 /** A host on one of the ephemeral-deployment platforms. */
 export function isPreviewHost(host: string): boolean {
   return PREVIEW_HOST_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`));
@@ -172,9 +184,12 @@ export function isPreviewHost(host: string): boolean {
  */
 export function isDevSubdomainOf(host: string, apex: string): boolean {
   if (!apex || host === apex) return false;
-  if (registrableDomain(host) !== apex) return false;
+  // Label test BEFORE the PSL lookup. Every named host in the page's prose
+  // reaches this function, and `getDomain` is the expensive half; almost none of
+  // them start with a tier label, so this ordering is what keeps the scan cheap.
   const leftmost = host.split(".")[0] ?? "";
-  return DEV_SUBDOMAIN_LABELS.has(leftmost);
+  if (!DEV_SUBDOMAIN_LABELS.has(leftmost)) return false;
+  return registrableDomain(host) === apex;
 }
 
 /**
@@ -273,11 +288,6 @@ function toSample(raw: string): string {
   return flat.length > MAX_SAMPLE_LENGTH ? `${flat.slice(0, MAX_SAMPLE_LENGTH - 1)}…` : flat;
 }
 
-/** Escape a host for literal use inside a RegExp. */
-function escapeForRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
-}
-
 // ---------------------------------------------------------------------------
 // Prose scanning
 // ---------------------------------------------------------------------------
@@ -324,26 +334,24 @@ const IPV4_TEXT_RE = new RegExp(
 );
 
 /**
- * At least one leading label is REQUIRED. A page that writes "we deploy to
- * pages.dev" is naming a platform, not leaking a deployment; `abc123.pages.dev`
- * is a deployment.
- */
-const PREVIEW_TEXT_RE = new RegExp(
-  `${LEFT_BOUNDARY}${OPTIONAL_SCHEME}((?:[a-z0-9-]{1,63}\\.){1,10}(?:${PREVIEW_HOST_SUFFIXES.map(
-    escapeForRegExp,
-  ).join("|")}))${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
-  "gi",
-);
-
-/**
- * `http://` spelled out in copy, host left open so the apex test can judge it.
+ * Any dotted, named host in the text. Deliberately carries NO hostname literal
+ * of its own: every judgement about WHICH hosts matter is made afterwards by
+ * `classifyHost`, the same function the attribute path uses.
  *
- * Spelled as labels rather than as one `[a-z0-9.-]` run so the host cannot end
- * on a dot: a flat class is greedy and would capture the full stop in
- * "…point at http://example.com." into the reported sample.
+ * Written this way for three reasons. It is one classification path instead of
+ * two, so the text and attribute halves cannot drift. It removes the per-page
+ * `RegExp` this used to compile from the audited apex. And a suffix list
+ * interpolated into an unanchored pattern is exactly the shape of a host-
+ * matching bypass — the pattern matches anywhere in a string, so a reader (and
+ * CodeQL) has to reason about whether the boundaries around it really pin the
+ * host down. Comparing a parsed host against a list has no such question.
+ *
+ * The final label is ALPHABETIC, which is what keeps dotted-quad addresses out:
+ * they have their own scan below with its own rule about bare occurrences, and
+ * matching them here would bypass it.
  */
-const INSECURE_URL_TEXT_RE = new RegExp(
-  `${LEFT_BOUNDARY}(http):\\/\\/((?:[a-z0-9-]{1,63}\\.){1,10}[a-z0-9-]{1,63})${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
+const NAMED_HOST_TEXT_RE = new RegExp(
+  `${LEFT_BOUNDARY}${OPTIONAL_SCHEME}((?:[a-z0-9-]{1,63}\\.){1,10}[a-z]{2,24})${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
   "gi",
 );
 
@@ -430,33 +438,31 @@ export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHi
     add("private-ip", true, m);
   }
 
-  for (const m of scanUrlish(PREVIEW_TEXT_RE, scanned, MAX_HITS_PER_KIND)) {
-    add("preview-host", looksLikeOwnPreview(m.host, site.apexLabel), m);
-  }
-
-  if (site.apex) {
-    const devSubdomainRe = new RegExp(
-      `${LEFT_BOUNDARY}${OPTIONAL_SCHEME}((?:staging|dev|test)\\.${LEADING_LABELS}${escapeForRegExp(
-        site.apex,
-      )})${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
-      "gi",
-    );
-    for (const m of scanUrlish(devSubdomainRe, scanned, MAX_HITS_PER_KIND)) {
-      add("dev-subdomain", true, m);
+  // One pass over every named host, classified by the same function the
+  // attribute path uses. The cap is generous because the scan matches ordinary
+  // prose too — an abbreviation like "e.g" is host-shaped — and almost all of
+  // those are discarded a line later.
+  for (const m of scanUrlish(NAMED_HOST_TEXT_RE, scanned, MAX_NAMED_HOST_MATCHES)) {
+    const classified = classifyHost(m.host, site);
+    if (classified) {
+      // A bare platform name is not a deployment: "we deploy to pages.dev" names
+      // Cloudflare, `abc123.pages.dev` names something that will stop resolving.
+      // The attribute path has no such reading, so this lives here.
+      if (classified.kind === "preview-host" && isPreviewSuffix(m.host)) continue;
+      add(classified.kind, classified.own, m);
+      if (hits.length >= MAX_HITS_PER_KIND * 2) break;
+      continue;
     }
-  }
-
-  // Only on an HTTPS page, and only for the site's own domain: a printed
-  // `http://` URL for somebody else's site is their transport problem, and
-  // `links/https-downgrade` already owns the page-level downgrade story.
-  if (site.secure && site.apex) {
-    for (const m of scanUrlish(INSECURE_URL_TEXT_RE, scanned, MAX_HITS_PER_KIND)) {
-      if (registrableDomain(m.host) !== site.apex) continue;
-      // A dev host that happens to be reachable over http is already reported as
-      // what it is; saying it twice would double-count the same string.
-      if (classifyHost(m.host, site)) continue;
-      add("insecure-self-link", true, m);
-    }
+    // Only on an HTTPS page, and only for the site's own domain: a printed
+    // `http://` URL for somebody else's site is their transport problem, and
+    // `links/https-downgrade` already owns the page-level downgrade story. The
+    // `classified` check above means a dev host reachable over http is reported
+    // as what it is rather than counted twice.
+    if (!site.secure || !site.apex) continue;
+    if (m.scheme !== "http") continue;
+    if (registrableDomain(m.host) !== site.apex) continue;
+    add("insecure-self-link", true, m);
+    if (hits.length >= MAX_HITS_PER_KIND * 2) break;
   }
 
   return hits;
