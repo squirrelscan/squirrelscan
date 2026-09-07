@@ -161,62 +161,75 @@ remaining 95 were worth touching, and the answer was five
 
 | statements compiled, 120-page crawl at 40 links/page | before | after |
 |---|---|---|
-| `incremental: true`, the CLI default | 168 | 50 |
-| per page | 1.4 | 0.4 |
-| `incremental: false` | 513 | 48 |
-| per page | 4.3 | 0.4 |
+| `incremental: true`, the CLI default | 633 (5.3/page) | 38 (0.3/page) |
+| `incremental: false` | 513 (4.3/page) | 37 (0.3/page) |
 | scaling in page count, both | O(pages) | O(1) |
 
 The five were `upsertPage`, `upsertFrontier`, `getIncomingLinkCount`, the
-crawl-stats `UPDATE` and `getCachedPage`. That last one only appears with
-`incremental` on, which is the CLI's default and was NOT what the first census
-run measured — the count fell from 4.3 to 1.4 per page purely by turning the
-real default on, because incremental replaces four cheap compilations with one
-expensive one. Everything else in the file runs once or twice per crawl, and
-tripling links per page from 40 to 120 changed the total by nothing, which is
-what confirms #247 had already removed the only per-link statement.
+crawl-stats `UPDATE` and `getCachedPage`. That last one only runs with
+`incremental` on, which is the CLI's default and was not what the first census
+measured. Everything else in the file runs once or twice per crawl, and tripling
+links per page from 40 to 120 changed the total by nothing, which confirms #247
+had already removed the only per-link statement.
 
 Compilation cost per statement, against the real schema, minimum of five
 interleaved rounds of 5,000:
 
 | statement | `prepare` | `query` cache hit |
 |---|---|---|
-| `getCachedPage` | 15.11 us | 0.01 us |
-| `upsertFrontier` | 5.50 us | 0.01 us |
-| `updateCrawl` (stats) | 3.27 us | 0.01 us |
-| `getIncomingLinkCount` | 2.97 us | 0.01 us |
+| `getCachedPage` | 10.47 us | 0.01 us |
+| `upsertPage` | 6.80 us | 0.01 us |
+| `upsertFrontier` | 4.89 us | 0.01 us |
+| `getIncomingLinkCount` | 2.45 us | 0.01 us |
+| `updateCrawl` (stats) | 1.78 us | 0.01 us |
 
-So about 27 us per page, or **0.3 s across a 10,000-page crawl**. `upsertPage`
-is excluded: it is the widest statement in the file and quoting a number for it
-without the full binding set would be a guess.
+26.4 us per page, or **0.26 s across a 10,000-page crawl**.
 
 **This is a count, not a time.** An interleaved A/B of the crawl at 400 pages
-gave minima of 1.1 s before and 0.9 s after, but the arithmetic above accounts
-for 11 ms of that 200 ms, so the wall-clock pair is noise and is not evidence.
-A count is immune to what else the machine is doing, which is why it is the
+gave minima of 1.1 s before and 0.9 s after, but the arithmetic accounts for
+11 ms of that 200 ms, so the wall-clock pair is noise and is not evidence. A
+count is immune to what else the machine is doing, which is why it is the
 headline and why the regression test asserts on compilation rather than a clock.
-Machine: 16 GB Apple Silicon laptop, load average 8.9 with other lanes running.
+Machine: 16 GB Apple Silicon laptop, load average 4 to 9 with other lanes
+running, which disqualifies the timing rows and does not touch the counts.
 
-Crawl output is unchanged: a serialised crawl at 120, 250 and 400 pages produces
-the same digest before and after over stored pages including `html`,
-`parsed_data` and `headers`, every frontier verdict, and the crawls row. The
-first version of that digest omitted `parsed_data` and would have passed with
-all 120 values nulled, so the projection is deliberately wide rather than
-readable. The crawler does not populate `link_appearances`, so the link table
-contributes nothing to the comparison and is not evidence of anything.
+### The statement cache has a hard ceiling
 
-Two things had to be fixed before the digest meant anything, and both first
-looked like the change breaking something: the crawl is non-deterministic at
-concurrency 8, because discovery order decides each URL's depth and parent, and
-`port: 0` puts a different ephemeral port in every stored URL, so identical code
-hashed differently three times running.
+On Bun 1.3.14 it holds the first **20 texts per Database and never evicts**: the
+21st and beyond recompile on every call, forever and silently. Measured — 25
+distinct texts, then three passes over the same 25, gave 18 compilations rather
+than 0. The crawler now uses 12 texts. Converting another nine would not fail,
+it would quietly push earlier statements back onto a compile per call, so this
+is a ceiling on the whole approach rather than a tuning knob.
 
-One trap for anyone repeating this. Hooking `Database.prototype.prepare` counts
-`prepare` and NOTHING ELSE: `db.query` compiles through an internal path the
-hook never sees, so a suite that only counts `prepare` passes just as happily
-with the statement cache disabled. The census counts `prepare` calls and
-distinct `query` texts separately, and the test asserts the cache directly by
-checking `db.query(sql)` returns the same object twice.
+### Counting compilations is version-dependent
+
+On 1.3.14 `db.query` routes a cache MISS through the public `prepare`, so a hook
+on `prepare` sees every compilation from both call styles. On Bun 1.4.0 `query`
+compiles through an internal path that hook cannot see, and a census there would
+report zero and look like a pass. Two earlier versions of this measurement were
+wrong in both directions — one missed query compilations entirely, the next
+added them to the prepare count and double-counted — so check the mechanism
+before trusting a number from another Bun.
+
+### Byte-identity, and two digests that were not
+
+A serialised crawl at 120 and 250 pages produces the same digest before and
+after, over every deterministic page column, every frontier verdict and the
+crawls row, with the site crawled **twice** so the incremental path is exercised.
+
+Both narrower versions of that digest were defeated in review. The first omitted
+`parsed_data` and passed with all 120 values nulled. The second omitted the
+stored `url` and passed with every one replaced by `CORRUPTED`. A third problem
+was subtler: crawling once leaves the cache empty, so `getCachedPage` never hits
+and a version of it returning `null` unconditionally produced the same digest.
+Crawling twice catches that — verified, the mutation now changes the hash.
+
+Two further things had to be fixed before any digest meant anything, and both
+first looked like the change breaking something: the crawl is non-deterministic
+at concurrency 8, because discovery order decides each URL's depth and parent,
+and `port: 0` puts a different ephemeral port in every stored URL, so identical
+code hashed differently three times running.
 
 ## Hosted runtime, in production
 

@@ -1133,13 +1133,18 @@ export class SQLiteStorage implements CrawlStorage {
         if (sets.length > 0) {
           values.push(id);
           // Cached, and safe to cache even though the SQL is built here. The
-          // statement cache is keyed by TEXT and `sets` is drawn from eight
-          // fixed optional columns in a fixed order, so there are at most 255
-          // distinct texts however a caller mixes them. Bun's cache is a small
-          // LRU, so the risk from a dynamically-built statement is not an
-          // unbounded cache but CHURN: a shape space larger than that LRU
-          // evicts entries and quietly puts you back on a compile per call.
-          // The crawl loop writes only `stats` here, once per page (#1911).
+          // cache is keyed by TEXT and `sets` is drawn from eight fixed
+          // optional columns in a fixed order, so there are at most 255 distinct
+          // texts however a caller mixes them.
+          //
+          // The hazard is not an unbounded cache. On Bun 1.3.14 the cache holds
+          // the first 20 texts PER DATABASE and never evicts: the 21st text and
+          // beyond recompile on every call, forever and silently. Measured — 25
+          // distinct texts, then three passes over the same 25, gave 18
+          // compilations rather than 0. So a caller that exercised many shapes
+          // here would not slow this statement down, it would push some OTHER
+          // converted statement out of the cache. The crawl loop writes only
+          // `stats`, once per page (#1911).
           const stmt = db.query(
             `UPDATE crawls SET ${sets.join(", ")} WHERE id = ?`
           );

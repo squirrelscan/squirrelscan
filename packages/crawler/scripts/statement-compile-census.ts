@@ -47,6 +47,11 @@ const TOP = Number.parseInt(arg("top", "20"), 10);
 // ranking, so the same crawl can be run on two revisions and the outputs
 // compared. A statement-caching change must not move it by a byte.
 const DIGEST = process.argv.includes("--digest");
+// `--twice` crawls the same storage a second time before digesting. The first
+// crawl starts empty, so `getCachedPage` never hits and a version of it that
+// returned `null` unconditionally produced the same digest — the incremental
+// path was not being compared at all.
+const TWICE = process.argv.includes("--twice");
 // `--cost` measures what one compilation of each converted statement costs
 // against the real schema, so the census's count can be turned into time
 // without borrowing a number from somewhere else or from a toy table.
@@ -65,6 +70,10 @@ if (COST) {
     ["getCachedPage", "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1"],
     ["updateCrawl (stats)", "UPDATE crawls SET stats = ? WHERE id = ?"],
     ["upsertFrontier", "INSERT OR REPLACE INTO frontier (crawl_id, normalized_url, raw_url, depth, parent_url, priority, status, source, enqueued_at, fetched_at, retry_count, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
+    // The widest statement in the file. Compilation does not need bindings —
+    // it reports its 25 parameters and compiles fine — so an earlier version of
+    // this that excluded it for "needing the full binding set" was wrong.
+    ["upsertPage", "INSERT OR REPLACE INTO pages (crawl_id, url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at, etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers, fetcher_id, fallback_reason, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
   ];
   const N = 5_000;
   // Interleaved, minimum of five rounds: the two arms then share whatever the
@@ -88,10 +97,7 @@ if (COST) {
       `  ${name.padEnd(22)} ${`${bestPrepare.toFixed(2)} us`.padStart(10)} ${`${bestQuery.toFixed(2)} us`.padStart(10)}`,
     );
   }
-  // `upsertPage` is left out: its INSERT is the widest statement in the file and
-  // needs the full binding set to compile representatively, so quoting a number
-  // for it here would be a guess. The four above are the measurable ones.
-  console.log(`  ${"sum of the four".padEnd(22)} ${`${totalPrepare.toFixed(2)} us`.padStart(10)}`);
+  console.log(`  ${"sum of the five".padEnd(22)} ${`${totalPrepare.toFixed(2)} us`.padStart(10)}`);
   await run(costStore.close());
   process.exit(0);
 }
@@ -135,17 +141,19 @@ const origin = `http://127.0.0.1:${server.port}`;
 
 // ── the census ───────────────────────────────────────────────────────────────
 
-// BOTH entry points are patched, and they are counted differently, because
-// hooking `prepare` alone counts the wrong thing.
+// Both entry points are patched, but only ONE of them counts compilations, and
+// which one depends on the Bun in use. Verify this before trusting a number
+// from another version.
 //
-// `db.query` does not go through the public `prepare`: Bun compiles it via an
-// internal path, so a hook on `prepare` sees none of it and a run that converted
-// everything to `query` would report zero compilations whether or not the cache
-// was working. What `query` guarantees instead is one compilation per distinct
-// SQL TEXT, with every later call a cache hit — so its compilations are the
-// count of distinct texts, and its calls beyond the first are free.
+// On Bun 1.3.14, which this repo pins, `db.query` routes a cache MISS through
+// the public `prepare` and a cache HIT through nothing. So the `prepare` hook
+// already sees every compilation, from both call styles, and adding the query
+// texts to it would double-count. On Bun 1.4.0 `query` compiles through an
+// internal path the hook cannot see, and a census there would need a different
+// mechanism — a hook on `prepare` alone would report zero and look like a pass.
 //
-// `prepare` compiles on every call, so each call is one compilation.
+// `query` calls are counted anyway, because their distribution is what says
+// whether the statement cache is being used and whether it is big enough.
 const prepareCalls = new Map<string, number>();
 const queryCalls = new Map<string, number>();
 const realPrepare = Database.prototype.prepare;
@@ -179,7 +187,13 @@ const concurrency = DIGEST ? 1 : 8;
 const crawler = await run(createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false, incremental: INCREMENTAL } as never }));
 
 const startedAt = Date.now();
-const crawlId = await run(crawler.start(origin) as Effect.Effect<string, unknown, never>);
+let crawlId = await run(crawler.start(origin) as Effect.Effect<string, unknown, never>);
+if (TWICE) {
+  const second = await run(
+    createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false, incremental: INCREMENTAL } as never }),
+  );
+  crawlId = await run(second.start(origin) as Effect.Effect<string, unknown, never>);
+}
 const elapsed = Date.now() - startedAt;
 const pageCount = await run(storage.getPageCount(crawlId));
 
@@ -189,13 +203,15 @@ if (DIGEST) {
   // out on purpose — timings and row ids differ run to run and would mask the
   // question with noise rather than answer it.
   const db = (storage as unknown as { getDb(): import("bun:sqlite").Database }).getDb();
-  // Every column a statement-caching bug could corrupt, not a readable subset.
-  // A narrower projection let a version of this pass with `parsed_data` nulled
-  // on all 120 rows: the digest is only as good as what it looks at.
+  // Every deterministic column, not a readable subset. Two narrower versions of
+  // this were defeated in review: one passed with `parsed_data` nulled on all
+  // 120 rows, the next passed with every stored `url` replaced by CORRUPTED.
+  // Timings and row ids are still excluded because they differ run to run.
   const pages = db
     .query(
-      `SELECT normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type,
-              size_bytes, content_hash, html, parsed_data, headers, security_headers
+      `SELECT url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type,
+              size_bytes, content_hash, html, parsed_data, headers, security_headers,
+              request_headers, etag, last_modified, fetcher_id, fallback_reason, source_hash
        FROM pages WHERE crawl_id = ? ORDER BY normalized_url`,
     )
     .all(crawlId);
@@ -249,24 +265,30 @@ if (DIGEST) {
 
 server.stop(true);
 
-// One compilation per `prepare` CALL; one per distinct `query` TEXT.
+// Every compilation is a `prepare` call, cache misses included. See the note
+// above the hooks.
 const rows = [...prepareCalls].sort((a, b) => b[1] - a[1]);
-const prepareCompiles = rows.reduce((sum, [, n]) => sum + n, 0);
-const queryCompiles = queryCalls.size;
-const queryHits = [...queryCalls.values()].reduce((sum, n) => sum + n, 0) - queryCompiles;
-const total = prepareCompiles + queryCompiles;
+const total = rows.reduce((sum, [, n]) => sum + n, 0);
+const queryTotal = [...queryCalls.values()].reduce((sum, n) => sum + n, 0);
 console.log(
   `crawled ${pageCount} pages in ${(elapsed / 1000).toFixed(1)}s, ${LINKS} links/page, ` +
-    `incremental=${INCREMENTAL}\n` +
-    `${total} statement compilations (${(total / Math.max(1, pageCount)).toFixed(1)} per page): ` +
-    `${prepareCompiles} from ${rows.length} prepare texts, ` +
-    `${queryCompiles} from ${queryCalls.size} query texts with ${queryHits} cache hits\n`,
+    `incremental=${INCREMENTAL}, bun ${Bun.version}\n` +
+    `${total} statement compilations (${(total / Math.max(1, pageCount)).toFixed(1)} per page) ` +
+    `across ${rows.length} distinct texts\n` +
+    `${queryTotal} query calls over ${queryCalls.size} distinct texts, of which ` +
+    `${Math.max(0, queryTotal - queryCalls.size)} were served without compiling\n`,
 );
-if (queryCalls.size > 20) {
-  // Bun caches query statements in a bounded LRU. Past its size the cache
-  // thrashes and `query` starts recompiling, which would make every number
-  // above wrong in the safe-looking direction.
-  console.log(`  WARNING: ${queryCalls.size} distinct query texts may exceed Bun's statement cache\n`);
+// Bun 1.3.14 caches the first 20 texts PER DATABASE and never evicts: text 21
+// and beyond recompile on every call, forever, silently. Measured: 25 texts
+// then three passes over the same 25 gave 18 compilations rather than 0. So
+// this is a real ceiling on how many statements can be converted, not a
+// tuning knob.
+const CACHE_TEXTS = 20;
+if (queryCalls.size >= CACHE_TEXTS) {
+  console.log(
+    `  WARNING: ${queryCalls.size} distinct query texts against a ${CACHE_TEXTS}-entry cache. ` +
+      `Texts past the ${CACHE_TEXTS}th recompile on EVERY call on this Bun.\n`,
+  );
 }
 console.log(`${"count".padStart(8)} ${"per page".padStart(9)}  sql`);
 for (const [sql, n] of rows.slice(0, TOP)) {

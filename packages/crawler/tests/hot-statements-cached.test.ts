@@ -11,13 +11,15 @@
 // saving is tens of microseconds per page, far too small to assert on time and
 // far too easy to assert on by accident.
 //
-// TWO assertions are needed, and the first alone is not enough. Counting calls
-// to `Database.prototype.prepare` catches a regression BACK to `prepare` — and
-// only that. `db.query` compiles through an internal path that a hook on
-// `prepare` never sees, so a suite that only counts `prepare` passes just as
-// happily with the statement cache disabled entirely. The second assertion
-// tests the mechanism directly: `db.query` must hand back the SAME statement
-// object for the same SQL text on the Bun actually running.
+// TWO assertions are needed, and which one carries the weight depends on the
+// Bun in use. On 1.3.14, which this repo pins, `db.query` routes a cache MISS
+// through the public `prepare`, so the counters below really do see every
+// compilation and a disabled cache fails them (verified: forcing the cache to
+// zero entries fails six of these seven). On Bun 1.4.0 `query` compiles through
+// an internal path the hook cannot see, and the counters alone would pass with
+// the cache off. The first test therefore checks the mechanism directly —
+// `db.query` must hand back the SAME object for the same text — so this file
+// keeps meaning something when the Bun under it moves.
 
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
