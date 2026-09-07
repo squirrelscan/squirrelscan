@@ -241,3 +241,103 @@ export function formatBytes(bytes: number): string {
   }
   return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
 }
+
+// ── Reclaiming (#1912) ──────────────────────────────────────────────────────
+//
+// Explicit and user-driven. There is no automatic retention: retiring a crawl
+// makes its report unrenderable, and `report --list`, `--diff` and
+// `--regression-since <audit-id>` all reach back into that history, so how many
+// audits a project should keep is a product decision rather than a default this
+// code gets to pick. The window is a required argument here for that reason.
+
+/** What retiring would remove from one project. */
+export interface ProjectPrunePlan {
+  readonly name: string;
+  readonly path: string;
+  /** Audits that would stop being renderable, oldest first. */
+  readonly retiring: ReadonlyArray<{ id: string; startedAt: number }>;
+  /** Audits that stay fully renderable. */
+  readonly keeping: number;
+  readonly rows: number;
+  /** File size before, so the caller can report what was actually returned. */
+  readonly bytesBefore: number;
+}
+
+/**
+ * Plan the retirement of every audit outside the newest `keep` for one project.
+ *
+ * Reads only. The counts come from the same predicate the delete uses, because
+ * a user confirms on these numbers.
+ */
+export async function planProjectPrune(
+  dbPath: string,
+  keep: number
+): Promise<ProjectPrunePlan | null> {
+  if (!existsSync(dbPath)) return null;
+  const { SQLiteStorage } = await import("@/crawler/storage/sqlite");
+  const { Effect } = await import("effect");
+
+  const storage = new SQLiteStorage(dbPath);
+  try {
+    await Effect.runPromise(storage.init());
+    const crawls = await Effect.runPromise(storage.listCrawls());
+    // listCrawls is newest first; everything past the window retires.
+    const retiring = crawls.slice(Math.max(0, keep)).map((c) => ({
+      id: c.id,
+      startedAt: c.startedAt,
+    }));
+    if (retiring.length === 0) return null;
+
+    const preview = await Effect.runPromise(
+      storage.previewRetireCrawls(retiring.map((c) => c.id))
+    );
+    if (preview.totalRows === 0) return null;
+
+    return {
+      name: dbPath,
+      path: dbPath,
+      retiring: [...retiring].reverse(),
+      keeping: crawls.length - retiring.length,
+      rows: preview.totalRows,
+      bytesBefore: dbFamilyBytes(dbPath),
+    };
+  } finally {
+    // close() is a lazy Effect; calling it without running it leaves the
+    // connection, and its -wal, open.
+    await Effect.runPromise(storage.close());
+  }
+}
+
+/**
+ * Carry out a plan: retire the crawls, then rebuild the file so the space
+ * actually returns to the filesystem.
+ *
+ * VACUUM is here rather than inside `retireCrawls` because it rewrites the
+ * whole database. That is fine once, on request, and would be a serious
+ * regression if it ever ran as part of an audit.
+ */
+export async function runProjectPrune(
+  plan: ProjectPrunePlan
+): Promise<{ rows: number; bytesBefore: number; bytesAfter: number }> {
+  const { SQLiteStorage } = await import("@/crawler/storage/sqlite");
+  const { Effect } = await import("effect");
+
+  const storage = new SQLiteStorage(plan.path);
+  let rows = 0;
+  try {
+    await Effect.runPromise(storage.init());
+    rows = await Effect.runPromise(
+      storage.retireCrawls(plan.retiring.map((c) => c.id))
+    );
+    await Effect.runPromise(storage.vacuum());
+  } finally {
+    await Effect.runPromise(storage.close());
+  }
+  // Measured AFTER the connection closes. With it open the `-wal` still holds
+  // the rewrite and the family reads larger than it started.
+  return {
+    rows,
+    bytesBefore: plan.bytesBefore,
+    bytesAfter: dbFamilyBytes(plan.path),
+  };
+}

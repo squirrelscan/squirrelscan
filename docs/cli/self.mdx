@@ -307,10 +307,60 @@ been pointed inside a project directory is counted once, against that directory.
 | `--json` | Emit the usage as JSON, for scripting |
 | `--limit <n>` | Show at most this many projects (default 15) |
 
+Reporting opens each project database read-only, and the command is excluded
+from the usual startup maintenance, so running it will not rotate the logs it is
+about to measure.
+
+### Reclaiming space
+
+`--prune` retires the audits beyond the newest `--keep`, then rebuilds the
+database so the space returns to the filesystem.
+
+```bash
+squirrel self disk --prune --keep 3 --dry-run
+squirrel self disk --prune --keep 3
+```
+
+`--keep` is required and has no default. A retired audit's report can no longer
+be rendered, and `report --list`, `report --diff` and `report --regression-since`
+all reach back into that history, so how many audits to keep is your call rather
+than a number this command picks for you.
+
+The plan is printed and confirmed before anything is deleted:
+
+```text
+Keeping the newest 1 audit(s) per project.
+
+acme-docs  11.5 MB  retiring 1 of 2 audits
+    2026-09-07  6a1b45df
+
+12,635 rows across 1 project(s). Their reports stop being renderable; the audits stay listed.
+
+Retire them? [y/N]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--prune` | Retire audits beyond `--keep` and reclaim the space |
+| `--keep <n>` | How many recent audits per project stay renderable. Required |
+| `--project <name>` | Limit the prune to one project directory |
+| `--dry-run` | List what would go and stop |
+| `--yes` | Skip the confirmation prompt |
+
+What retiring removes is a crawl's rule results, sitemaps, page features and
+frontier, plus the page rows a newer audit already supersedes. What it keeps is
+everything the next audit reads: the newest page record per URL (so an
+incremental re-crawl still gets its `ETag` rather than refetching the site), the
+sub-resource records, the links and images (a reused page copies those forward
+from whichever crawl last saw them), and the `crawls` row itself, so the audit is
+still listed.
+
+Measured on two audits of a 60-page site: 11.5 MB to 5.7 MB, and the next audit
+still reported every page unchanged rather than refetching it.
+
 <Note>
-This command does not delete an audit or reclaim any space, and it opens each
-project database read-only. It is also excluded from the usual startup
-maintenance, so running it will not rotate the logs it is about to measure.
+Retiring is the only thing in the CLI that deletes audit history. It never runs
+on its own; an audit will not prune anything.
 </Note>
 
 ---

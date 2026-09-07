@@ -320,6 +320,127 @@ const selfDoctor = defineCommand({
   },
 });
 
+/**
+ * `self disk --prune --keep N`: retire audits beyond the newest N and give the
+ * space back (#1912).
+ *
+ * Deliberately awkward to fire by accident. `--keep` has no default because
+ * retiring a crawl makes its report unrenderable and `report --list`, `--diff`
+ * and `--regression-since` all reach into that history; the plan is printed and
+ * confirmed before anything is deleted; and `--dry-run` stops after printing.
+ */
+async function runPrune(
+  args: {
+    keep?: string;
+    project?: string;
+    "dry-run"?: boolean;
+    yes?: boolean;
+  },
+  deps: {
+    formatBytes: (bytes: number) => string;
+    planProjectPrune: typeof import("@/self/disk").planProjectPrune;
+    runProjectPrune: typeof import("@/self/disk").runProjectPrune;
+  }
+): Promise<void> {
+  const { formatBytes, planProjectPrune, runProjectPrune } = deps;
+  const { existsSync, readdirSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { getProjectsPath } = await import("@/self/paths");
+
+  // Whole-string match, not parseInt: `parseInt("1e3")` is 1, so `--keep 1e3
+  // --yes` would keep ONE audit and delete the rest of a user's history while
+  // reading as a request to keep a thousand. Same class as the batch-budget
+  // parser in audit/stream-batch.ts.
+  const raw = String(args.keep ?? "").trim();
+  const keep = /^\d+$/.test(raw) ? Number.parseInt(raw, 10) : Number.NaN;
+  if (!Number.isSafeInteger(keep) || keep < 1) {
+    console.error(
+      "--prune needs --keep <n>, at least 1: the audits beyond the newest n stop being renderable,\n" +
+        "so there is no default that would be safe to guess."
+    );
+    process.exit(1);
+  }
+
+  const root = getProjectsPath();
+  const names = existsSync(root)
+    ? readdirSync(root, { withFileTypes: true, encoding: "utf8" })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+        .filter((n) => !args.project || n === args.project)
+        .sort()
+    : [];
+
+  if (args.project && names.length === 0) {
+    console.error(`No project directory named ${args.project} under ${root}`);
+    process.exit(1);
+  }
+
+  const plans = [];
+  for (const name of names) {
+    const plan = await planProjectPrune(join(root, name, "project.db"), keep);
+    if (plan) plans.push({ name, plan });
+  }
+
+  if (plans.length === 0) {
+    console.log(
+      `Nothing to retire: every project holds at most ${keep} audit(s).`
+    );
+    return;
+  }
+
+  const date = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  console.log(`Keeping the newest ${keep} audit(s) per project.\n`);
+  let rows = 0;
+  for (const { name, plan } of plans) {
+    rows += plan.rows;
+    console.log(
+      `${name}  ${formatBytes(plan.bytesBefore)}  retiring ${plan.retiring.length} of ${
+        plan.retiring.length + plan.keeping
+      } audits`
+    );
+    for (const crawl of plan.retiring) {
+      console.log(`    ${date(crawl.startedAt)}  ${crawl.id.slice(0, 8)}`);
+    }
+  }
+  console.log(
+    `\n${rows.toLocaleString()} rows across ${plans.length} project(s). ` +
+      "Their reports stop being renderable; the audits stay listed."
+  );
+
+  if (args["dry-run"]) {
+    console.log("\nDry run: nothing was deleted.");
+    return;
+  }
+
+  if (!args.yes) {
+    const { createInterface } = await import("node:readline");
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    const answer = await new Promise<string>((resolve) => {
+      rl.question("\nRetire them? [y/N] ", resolve);
+    });
+    rl.close();
+    if (answer.trim().toLowerCase() !== "y") {
+      console.log("Cancelled.");
+      return;
+    }
+  }
+
+  let before = 0;
+  let after = 0;
+  for (const { name, plan } of plans) {
+    const result = await runProjectPrune(plan);
+    before += result.bytesBefore;
+    after += result.bytesAfter;
+    console.log(
+      `${name}: ${formatBytes(result.bytesBefore)} -> ${formatBytes(result.bytesAfter)}`
+    );
+  }
+  console.log(`\nReclaimed ${formatBytes(Math.max(0, before - after))}.`);
+}
+
 const selfDisk = defineCommand({
   meta: {
     name: "disk",
@@ -334,9 +455,36 @@ const selfDisk = defineCommand({
       type: "string",
       description: "Show at most this many projects (default 15)",
     },
+    prune: {
+      type: "boolean",
+      description:
+        "Retire audits beyond --keep and reclaim the space (requires --keep)",
+    },
+    keep: {
+      type: "string",
+      description:
+        "How many recent audits per project stay renderable. No default: this deletes report history, so it must be said out loud",
+    },
+    project: {
+      type: "string",
+      description: "Limit --prune to one project (its directory name)",
+    },
+    "dry-run": {
+      type: "boolean",
+      description: "With --prune, list what would go and stop",
+    },
+    yes: {
+      type: "boolean",
+      description: "Skip the confirmation prompt",
+    },
   },
   async run({ args }) {
-    const { collectDiskUsage, formatBytes } = await import("@/self/disk");
+    const { collectDiskUsage, formatBytes, planProjectPrune, runProjectPrune } =
+      await import("@/self/disk");
+
+    if (args.prune) {
+      return runPrune(args, { formatBytes, planProjectPrune, runProjectPrune });
+    }
 
     const result = collectDiskUsage();
     if (!result.ok) {

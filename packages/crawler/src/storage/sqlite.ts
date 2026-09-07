@@ -3255,6 +3255,191 @@ export class SQLiteStorage implements CrawlStorage {
     };
   }
 
+  /**
+   * Tables holding a crawl's DERIVED output — everything that can be recomputed
+   * by auditing again, and nothing another crawl reads (#1912).
+   *
+   * Deliberately excluded, and why:
+   *  - `pages`, handled separately below: the newest row per url is the
+   *    conditional-GET cache the next crawl reads.
+   *  - `resource_sizes`: `getCachedResources` takes the most recent per
+   *    (type, url) across OTHER crawls, so a retired crawl's rows may still be
+   *    the freshest sub-resource record anyone has (#107). Small, and load-bearing.
+   *  - `published_reports`: the record that this crawl was published. Not
+   *    recomputable, and tiny.
+   *  - `links`, `images` and their `_appearances`: read ACROSS crawls.
+   *    `getLinksByPage` and `getImagesByPage` take the most recent crawl that
+   *    has them, with no crawl_id filter, and `reuseCachedPage` copies the
+   *    result into the next crawl when it serves a page from cache. Retiring
+   *    them would leave a reused page with no links or images in the NEXT
+   *    audit's report, which is a quiet wrong answer rather than a missing one.
+   *  - `crawls` itself: the row stays so `report --list` can still show the
+   *    audit and say it is no longer renderable, rather than the history
+   *    silently shrinking.
+   */
+  private static readonly RETIREABLE_TABLES = [
+    "rule_results",
+    "sitemap_urls",
+    "sitemaps",
+    "sitemap_url_statuses",
+    "page_features",
+    "robots_txt",
+    "llms_txt",
+    "markdown_response",
+    "agent_well_known",
+    "agent_access",
+    "agent_rsl",
+    "frontier",
+  ] as const;
+
+  /**
+   * What {@link retireCrawls} would delete, without deleting it.
+   *
+   * Counted rather than estimated: this is what a user sees before confirming
+   * that some of their audit history stops being renderable, so it must be the
+   * real number.
+   */
+  previewRetireCrawls(crawlIds: string[]): Effect.Effect<
+    { rowsByTable: Record<string, number>; supersededPages: number; totalRows: number },
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        const rowsByTable: Record<string, number> = {};
+        let totalRows = 0;
+        if (crawlIds.length === 0)
+          return { rowsByTable, supersededPages: 0, totalRows: 0 };
+
+        const db = this.getDb();
+        const placeholders = crawlIds.map(() => "?").join(", ");
+        for (const table of SQLiteStorage.RETIREABLE_TABLES) {
+          const row = db
+            .prepare(
+              `SELECT COUNT(*) AS c FROM ${table} WHERE crawl_id IN (${placeholders})`
+            )
+            .get(...crawlIds) as { c: number };
+          if (row.c > 0) {
+            rowsByTable[table] = row.c;
+            totalRows += row.c;
+          }
+        }
+
+        const superseded = db
+          .prepare(this.supersededPagesSql("COUNT(*) AS c", placeholders))
+          .get(...crawlIds) as { c: number };
+        totalRows += superseded.c;
+        return { rowsByTable, supersededPages: superseded.c, totalRows };
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Pages belonging to the named crawls that a newer row already supersedes.
+   *
+   * `getCachedPage` reads `ORDER BY fetched_at DESC, rowid DESC LIMIT 1`, so a
+   * row with a newer sibling for the same url can never be returned by it. The
+   * predicate is that ordering, inverted — which is why these rows are dead to
+   * the crawler even though the crawl they belong to is being retired for a
+   * different reason. A page whose ONLY row belongs to a retired crawl is kept:
+   * it is still the freshest thing known about that url.
+   */
+  private supersededPagesSql(select: string, placeholders: string): string {
+    return `
+      SELECT ${select} FROM pages p
+      WHERE p.crawl_id IN (${placeholders})
+        AND EXISTS (
+          SELECT 1 FROM pages newer
+          WHERE newer.normalized_url = p.normalized_url
+            AND (
+              newer.fetched_at > p.fetched_at
+              OR (newer.fetched_at = p.fetched_at AND newer.rowid > p.rowid)
+            )
+        )
+    `;
+  }
+
+  /**
+   * Retire the derived output of the named crawls (#1912).
+   *
+   * Their reports stop being renderable; the crawl rows remain. Everything the
+   * NEXT crawl reads is preserved — see RETIREABLE_TABLES for what is excluded
+   * and why. One transaction, so a crash cannot leave a half-retired crawl that
+   * renders a partial report.
+   */
+  retireCrawls(crawlIds: string[]): Effect.Effect<number, StorageError, never> {
+    // Never a crawl that is still being written. A prune racing a live audit
+    // would delete the frontier out from under it and leave a half-written run.
+    // Checked HERE rather than only in the caller so the guard cannot be
+    // bypassed by a future caller that forgets it.
+
+    return Effect.try({
+      try: () => {
+        if (crawlIds.length === 0) return 0;
+        const db = this.getDb();
+        const idList = crawlIds.map(() => "?").join(", ");
+        const active = db
+          .prepare(
+            `SELECT id FROM crawls WHERE id IN (${idList}) AND status NOT IN ('completed', 'analyzed', 'failed')`
+          )
+          .all(...crawlIds) as Array<{ id: string }>;
+        if (active.length > 0) {
+          throw new Error(
+            `Refusing to retire ${active.length} crawl(s) that are not finished: ${active
+              .map((c) => c.id)
+              .join(", ")}`
+          );
+        }
+        const placeholders = idList;
+        let deleted = 0;
+        const run = db.transaction(() => {
+          for (const table of SQLiteStorage.RETIREABLE_TABLES) {
+            const result = db
+              .prepare(
+                `DELETE FROM ${table} WHERE crawl_id IN (${placeholders})`
+              )
+              .run(...crawlIds);
+            deleted += Number(result.changes ?? 0);
+          }
+          const pageResult = db
+            .prepare(
+              `DELETE FROM pages WHERE rowid IN (${this.supersededPagesSql("p.rowid", placeholders)})`
+            )
+            .run(...crawlIds);
+          deleted += Number(pageResult.changes ?? 0);
+        });
+        run();
+        return deleted;
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
+  /**
+   * Rebuild the database file so deleted space returns to the filesystem.
+   *
+   * Separate from {@link retireCrawls} on purpose: SQLite only moves freed pages
+   * to a freelist, so without this the file never shrinks, and VACUUM rewrites
+   * the whole file, which is far too expensive to run as part of an audit
+   * (#1908 is what happens when a per-audit full pass slips in).
+   */
+  vacuum(): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        db.exec("VACUUM");
+        // In WAL mode the rewrite lands in the write-ahead log, so without this
+        // the main file shrinks and the `-wal` beside it grows by more than was
+        // saved: a prune measured 189 MB before and 239 MB after. TRUNCATE
+        // folds the log back in and takes it to zero, which is what makes the
+        // reclaimed space real rather than moved.
+        db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
   getCrawlByUrl(
     baseUrl: string
   ): Effect.Effect<CrawlMetadata | null, StorageError, never> {

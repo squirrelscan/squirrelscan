@@ -496,6 +496,42 @@ runtime grows to under this path's churn, so the price is a multiple of their ow
 size. And the read and write batches were quartered (1,000 to 250 rows, 500 to 200)
 for ~15 MiB, because a batch's cost is the graph the driver builds around it, not
 the rows.
+## Disk: a project keeps every audit it has ever run
+
+Re-auditing writes a new crawl and retires nothing, so `project.db` grows by
+about one audit each time: 95 MB after one audit of a 1,000-page site, 189 MB
+after two, 215 MB after three. Where it goes, for two audits of that site:
+
+| object | size | share |
+|---|---|---|
+| `rule_results` | 79.8 MB | 42.1% |
+| `pages` | 53.3 MB | 28.2% |
+| `idx_rule_results_page` | 31.9 MB | 16.9% |
+| `idx_rule_results_crawl` | 20.0 MB | 10.6% |
+| everything else | ~4 MB | ~2% |
+
+`squirrel self disk` reports this
+([#256](https://github.com/squirrelscan/squirrelscan/pull/256)) and
+`--prune --keep N` reclaims it
+([#259](https://github.com/squirrelscan/squirrelscan/pull/259), still a draft).
+Measured on two audits of a 60-page site, keeping one:
+
+| measurement | before | after |
+|---|---|---|
+| `project.db` | 11.5 MB | 5.7 MB |
+| page rows for the retired crawl | 60 | 0 |
+| next audit's pages fetched | | 0 of 60, all unchanged |
+
+That last row is the one that matters: the reclaim keeps the newest page record
+per url, so an incremental re-audit still serves every page from its conditional
+GET rather than refetching the site. Retention is not automatic; how many audits
+to keep is squirrelscan/repo#1912.
+
+A trap worth recording: `VACUUM` alone made the file BIGGER, 189 MB to 239 MB.
+In WAL mode the rewrite lands in the write-ahead log, so the main file shrinks
+while the `-wal` beside it grows by more than was saved. `PRAGMA
+wal_checkpoint(TRUNCATE)` after the vacuum, and measuring after the connection
+actually closes, is what makes the saving real.
 
 ## Still open
 
