@@ -459,8 +459,11 @@ export interface CloudPrefetchPayloadSet {
 /**
  * Batch-absorbing collector for the cloud-prefetch payloads (#1860). Every
  * payload but the site-metadata sample accumulates straight out of each batch
- * (with the DOMs live for blocklist srcs and selectors), so nothing page-scaled
- * is retained.
+ * (with the DOMs live for blocklist srcs and selectors), so no DOM and no page
+ * html is retained. `pages` IS one payload per 2xx page — a 6 KB excerpt plus
+ * headings, so a few MB on a 500-page crawl — which is what v1 built too; the
+ * change is that it is now live for the whole pre-rules phase rather than only
+ * at prefetch time.
  *
  * The metadata sample is the exception: {@link buildMetadataPayload} picks the
  * homepage plus the first `metadataMaxPages` usable pages and shares one JSON-LD

@@ -110,7 +110,11 @@ export function runStreamingPreRules(
   options?: StreamPreRulesOptions,
 ): Effect.Effect<StreamPreRulesResult, never, never> {
   return Effect.gen(function* () {
-    const batchSize = options?.batchSize ?? PRE_RULES_PAGE_BATCH;
+    // Math.max, not `??` alone: `??` lets a 0 through, and SQLite reads
+    // `LIMIT 0` as no limit (sqlite.ts guards with `if (options?.limit)`), so a
+    // zero batch would return the WHOLE table every iteration while `offset +=
+    // 0` never advanced — an infinite loop that re-absorbs the crawl forever.
+    const batchSize = Math.max(1, options?.batchSize ?? PRE_RULES_PAGE_BATCH);
     const crawl = yield* storage
       .getCrawl(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
@@ -123,7 +127,10 @@ export function runStreamingPreRules(
       ? createCloudPrefetchCollector(options.cloudPrefetchSiteUrl)
       : null;
 
-    // Seeded and ordered exactly as collectIntelUrls does.
+    // Seeded and ordered exactly as collectIntelUrls does. Threat-intel is opt-in
+    // and off by default, so the caller omits `intelBaseUrl` when it is off and
+    // the per-page accumulation below is skipped entirely.
+    const collectIntelUrls = options?.intelBaseUrl !== undefined;
     const intelUrlSet = new Set<string>();
     if (options?.intelBaseUrl) intelUrlSet.add(options.intelBaseUrl);
 
@@ -143,9 +150,13 @@ export function runStreamingPreRules(
       if (techDetectPage === null) techDetectPage = batch[0] ?? null;
       pageCount += batch.length;
 
-      for (const page of batch) {
-        if (page.url) intelUrlSet.add(page.url);
-        if (page.finalUrl) intelUrlSet.add(page.finalUrl);
+      // Only when a base URL was supplied, i.e. the caller actually wants intel
+      // candidates; otherwise this is two Set writes per page for nothing.
+      if (collectIntelUrls) {
+        for (const page of batch) {
+          if (page.url) intelUrlSet.add(page.url);
+          if (page.finalUrl) intelUrlSet.add(page.finalUrl);
+        }
       }
 
       const ctx = yield* buildSiteContext(batch);

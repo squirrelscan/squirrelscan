@@ -2289,7 +2289,8 @@ export function runStreamingRules(
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
-    const batchSize = opts?.batchSize ?? STREAM_PAGE_BATCH;
+    // Clamped — see streaming.ts; a 0 batch would loop forever over the crawl.
+    const batchSize = Math.max(1, opts?.batchSize ?? STREAM_PAGE_BATCH);
 
     // Threat-intel scope + runner (mirror of runRulesOnStorage).
     const effectiveScope =

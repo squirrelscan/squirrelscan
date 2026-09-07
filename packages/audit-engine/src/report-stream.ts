@@ -338,7 +338,9 @@ export function buildV1Report(
 ): Effect.Effect<FullAuditReport, never, never> {
   return Effect.gen(function* () {
     const reportSpan = logger.traceStart("generateReportFromStorage");
-    const batchSize = options?.batchSize ?? V1_REPORT_PAGE_BATCH;
+    // Clamped — a 0 batch is an infinite loop (LIMIT 0 is unlimited in SQLite
+    // and the offset never advances). See streaming-pre-rules.ts.
+    const batchSize = Math.max(1, options?.batchSize ?? V1_REPORT_PAGE_BATCH);
     const crawl = yield* storage
       .getCrawl(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
@@ -442,90 +444,90 @@ export function buildV1Report(
       if (batch.length === 0) break;
 
       for (const page of batch) {
-      pagesCrawled++;
-      pageStatuses.push({ status: page.status });
-      const parsed = ruleResults.parsedPages.get(page.normalizedUrl) ?? null;
-      const pageChecks = ruleResults.pageResults.get(page.normalizedUrl) ?? [];
+        pagesCrawled++;
+        pageStatuses.push({ status: page.status });
+        const parsed = ruleResults.parsedPages.get(page.normalizedUrl) ?? null;
+        const pageChecks = ruleResults.pageResults.get(page.normalizedUrl) ?? [];
 
-      if (parsed) {
-        if (!parsed.meta.title) summary.missingTitles.push(page.normalizedUrl);
-        if (!parsed.meta.description) summary.missingDescriptions.push(page.normalizedUrl);
-        if (!parsed.og.title && !parsed.og.image) summary.missingOgTags.push(page.normalizedUrl);
-        if (!parsed.twitter.card) summary.missingTwitterCards.push(page.normalizedUrl);
-        if (!parsed.schema.types.length) summary.missingSchemas.push(page.normalizedUrl);
-        if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
-        if (parsed.content.isThinContent) summary.thinContentPages.push(page.normalizedUrl);
-      }
+        if (parsed) {
+          if (!parsed.meta.title) summary.missingTitles.push(page.normalizedUrl);
+          if (!parsed.meta.description) summary.missingDescriptions.push(page.normalizedUrl);
+          if (!parsed.og.title && !parsed.og.image) summary.missingOgTags.push(page.normalizedUrl);
+          if (!parsed.twitter.card) summary.missingTwitterCards.push(page.normalizedUrl);
+          if (!parsed.schema.types.length) summary.missingSchemas.push(page.normalizedUrl);
+          if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
+          if (parsed.content.isThinContent) summary.thinContentPages.push(page.normalizedUrl);
+        }
 
-      // Get links for this page using per-page index lookup
-      const pageLinkAppearances = hasSqliteStorage
-        ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
-            .getLinkAppearancesForPage(crawlId, page.normalizedUrl)
-            .pipe(Effect.catchAll(() => Effect.succeed([])))
-        : [];
-      const pageLinks = pageLinkAppearances.map((a) => ({
-        url: a.href,
-        text: a.anchorText,
-        isInternal: linkByHref.get(a.href)?.isInternal ?? false,
-      }));
+        // Get links for this page using per-page index lookup
+        const pageLinkAppearances = hasSqliteStorage
+          ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
+              .getLinkAppearancesForPage(crawlId, page.normalizedUrl)
+              .pipe(Effect.catchAll(() => Effect.succeed([])))
+          : [];
+        const pageLinks = pageLinkAppearances.map((a) => ({
+          url: a.href,
+          text: a.anchorText,
+          isInternal: linkByHref.get(a.href)?.isInternal ?? false,
+        }));
 
-      // Get images for this page using per-page index lookup
-      const pageImageAppearances = hasSqliteStorage
-        ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
-            .getImageAppearancesForPage(crawlId, page.normalizedUrl)
-            .pipe(Effect.catchAll(() => Effect.succeed([])))
-        : [];
-      const pageImages = pageImageAppearances.map((a) => ({
-        src: a.src,
-        alt: a.alt ?? null,
-        width: null,
-        height: null,
-      }));
+        // Get images for this page using per-page index lookup
+        const pageImageAppearances = hasSqliteStorage
+          ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
+              .getImageAppearancesForPage(crawlId, page.normalizedUrl)
+              .pipe(Effect.catchAll(() => Effect.succeed([])))
+          : [];
+        const pageImages = pageImageAppearances.map((a) => ({
+          src: a.src,
+          alt: a.alt ?? null,
+          width: null,
+          height: null,
+        }));
 
-      pageAudits.push({
-        url: page.normalizedUrl,
-        statusCode: page.status,
-        loadTime: page.loadTimeMs,
-        meta: parsed?.meta ?? {
-          title: null,
-          description: null,
-          canonical: null,
-          robots: null,
-        },
-        og: parsed?.og ?? {
-          title: null,
-          description: null,
-          url: null,
-          type: null,
-          image: null,
-          siteName: null,
-        },
-        twitter: parsed?.twitter ?? {
-          card: null,
-          title: null,
-          description: null,
-          image: null,
-        },
-        schema: parsed?.schema ?? {
-          types: [],
-          valid: true,
-          errors: [],
-          raw: null,
-        },
-        links: pageLinks,
-        images: pageImages,
-        h1Count: parsed?.h1.count ?? 0,
-        h1Text: parsed?.h1.texts ?? [],
-        // #1003: bound oversize item ids/items-arrays and cap a page's own
-        // checks count at maxChecksPerPage — the cloud path publishes pages[]
-        // unstripped, so an over-cap single page hit the schema's silent
-        // slice. A page's checks mix many DIFFERENT rules, so this must NOT
-        // fold by (name,status) like capChecksForPublish does (see its doc).
-        checks: capMixedRuleChecksForPublish(pageChecks, REPORT_LIMITS.maxChecksPerPage),
-        redirectChain: page.redirectChain,
-        fetcherId: page.fetcherId,
-        fallbackReason: page.fallbackReason,
-      });
+        pageAudits.push({
+          url: page.normalizedUrl,
+          statusCode: page.status,
+          loadTime: page.loadTimeMs,
+          meta: parsed?.meta ?? {
+            title: null,
+            description: null,
+            canonical: null,
+            robots: null,
+          },
+          og: parsed?.og ?? {
+            title: null,
+            description: null,
+            url: null,
+            type: null,
+            image: null,
+            siteName: null,
+          },
+          twitter: parsed?.twitter ?? {
+            card: null,
+            title: null,
+            description: null,
+            image: null,
+          },
+          schema: parsed?.schema ?? {
+            types: [],
+            valid: true,
+            errors: [],
+            raw: null,
+          },
+          links: pageLinks,
+          images: pageImages,
+          h1Count: parsed?.h1.count ?? 0,
+          h1Text: parsed?.h1.texts ?? [],
+          // #1003: bound oversize item ids/items-arrays and cap a page's own
+          // checks count at maxChecksPerPage — the cloud path publishes pages[]
+          // unstripped, so an over-cap single page hit the schema's silent
+          // slice. A page's checks mix many DIFFERENT rules, so this must NOT
+          // fold by (name,status) like capChecksForPublish does (see its doc).
+          checks: capMixedRuleChecksForPublish(pageChecks, REPORT_LIMITS.maxChecksPerPage),
+          redirectChain: page.redirectChain,
+          fetcherId: page.fetcherId,
+          fallbackReason: page.fallbackReason,
+        });
       }
 
       options?.onBatch?.({ pagesDone: pagesCrawled });
@@ -721,7 +723,8 @@ export function buildV2Report(
 ): Effect.Effect<FullAuditReport, never, never> {
   return Effect.gen(function* () {
     const reportSpan = logger.traceStart("buildV2Report");
-    const batchSize = options?.batchSize ?? V2_REPORT_BATCH;
+    // Clamped for the same reason as buildV1Report's walk above.
+    const batchSize = Math.max(1, options?.batchSize ?? V2_REPORT_BATCH);
     const maxSummaryItems = REPORT_LIMITS.maxSummaryItems;
 
     const crawl = yield* storage

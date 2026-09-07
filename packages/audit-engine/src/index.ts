@@ -41,11 +41,6 @@ export type {
   AdapterLogger,
 } from "./adapter";
 
-// Streamed pre-rules phase (#1860) — one batched walk that feeds the asset,
-// external-link, tech-detect, intel and cloud-prefetch collectors together.
-export { runStreamingPreRules, PRE_RULES_PAGE_BATCH } from "./streaming-pre-rules";
-export type { StreamPreRulesOptions, StreamPreRulesResult } from "./streaming-pre-rules";
-
 export {
   calculateHealthScore,
   deriveAuditStatus,
@@ -120,6 +115,7 @@ export * from "./runner";
 export {
   localIntelContext,
   buildFullIntelContext,
+  buildFullIntelContextFromUrls,
   mapIntelConfig,
   collectIntelUrls,
 } from "./intel";
@@ -193,3 +189,8 @@ export { isHtmlContentType } from "./adapter";
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";
 export type { PageSignalCollector, StreamPageRulesHooks, StreamPageRulesResult } from "./streaming";
+
+// Streamed pre-rules phase (#1860) — one batched walk that feeds the asset,
+// external-link, tech-detect, intel and cloud-prefetch collectors together.
+export { runStreamingPreRules, PRE_RULES_PAGE_BATCH } from "./streaming-pre-rules";
+export type { StreamPreRulesOptions, StreamPreRulesResult } from "./streaming-pre-rules";

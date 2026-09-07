@@ -4,8 +4,11 @@
 // `runStreamingRules` (site-fetch phase + site pass + RuleExecutionResult
 // assembly) is built on top of it.
 //
-// Dark: nothing wires this into a production audit path yet. v1 (runRulesOnStorage)
-// is untouched; v2 is flag-gated and golden-diff-gated (blueprint §5).
+// No longer dark: the CLOUD audit path runs on this as of #1860. The CLI still
+// runs v1 (runRulesOnStorage), which is untouched, so the two paths must be kept
+// byte-identical by the golden diffs (blueprint §5) — and note those gates only
+// cover cases their fixtures contain. #1829's rate-limited-page handling landed
+// after they were written and diverged here unnoticed until #1860.
 //
 // Page rules are per-page independent (verified: no page rule reads other pages —
 // the 8 touching ctx.site read only scripts/resourceSizes/siteMetadata), so
@@ -131,7 +134,9 @@ export function streamPageRules(
   }
 ): Effect.Effect<StreamPageRulesResult, never, never> {
   return Effect.gen(function* () {
-    const batchSize = opts?.batchSize ?? STREAM_PAGE_BATCH;
+    // Clamped: a 0 batch means `LIMIT 0` (no limit in SQLite) plus `offset += 0`,
+    // i.e. an infinite loop over the whole crawl. See streaming-pre-rules.ts.
+    const batchSize = Math.max(1, opts?.batchSize ?? STREAM_PAGE_BATCH);
     const collectors = opts?.collectors ?? [];
     const soft404 = opts?.soft404Confirmations;
     const universe = opts?.pageUniverse;
@@ -166,6 +171,10 @@ export function streamPageRules(
       peakLiveDocs = Math.max(peakLiveDocs, parsedBatch.filter((p) => p.parsed?.document).length);
 
       for (const { page, parsed } of parsedBatch) {
+        // Per-page interruption checkpoint, matching SerialPageRuleExecutor's.
+        // Checking only per batch would let a `rulesPhaseTimeoutMs` breach run a
+        // whole batch of heavy pages to completion before it took effect.
+        opts?.signal?.throwIfAborted();
         if (!parsed) continue; // non-HTML / failed parse — v1 skips these too
         // WAF-challenge pages are excluded from page-level scoring (v1 parity).
         // With a `pageUniverse` that set is v1's own, so WAF *and* rate-limited
@@ -233,7 +242,9 @@ export function streamPageRules(
         // #1252 parity with SerialPageRuleExecutor: heartbeat every N pages, then
         // a cooperative macrotask yield once enough sync time has elapsed, so the
         // rules deadline and the container liveness heartbeat can actually fire.
-        // The DOM is already dropped above, so the yield never holds one open.
+        // This page's DOM is dropped above; the REST of the batch still holds
+        // live documents across the yield, so the residency bound over a yield is
+        // the batch, not zero.
         if (onLoopProgress && pagesDone % heartbeatEvery === 0) {
           onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
         }
