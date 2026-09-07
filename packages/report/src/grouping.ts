@@ -1,5 +1,6 @@
 // Category-grouped issues derived from rule results
 
+import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type { ReportRuleResult, CheckItem, CheckResult } from "./types";
 import { KEY_SEPARATOR } from "./constants";
 import { checkOccurrences } from "./occurrences";
@@ -104,6 +105,25 @@ const RULE_SEVERITY_RANK: Record<"error" | "info" | "warning", number> = {
 };
 
 /**
+ * An item a PER-PAGE check reports was found ON that page, so the page is the
+ * item's source. Stamp it (the fold does exactly this when it merges per-page
+ * checks into an aggregate) so `checkAffectedPages` attributes the item to the
+ * page (case 2) instead of treating a bare-URL id as a page of its own (case 3:
+ * a CDN script flagged on 3 pages otherwise reads as "3 pages + N scripts",
+ * and the API's per-locator grouping counts 3). Case 3 stays for site-scope
+ * checks (no `pageUrl`), where each item really is a page. Capped at the same
+ * per-item bound the publish fold uses; `pages` already carries every member
+ * page, so the cap never shrinks the affected-page union.
+ */
+function attributeItemToPage(item: CheckItem, pageUrl: string | undefined): CheckItem {
+  if (!pageUrl) return item;
+  const sources = item.sourcePages ?? [];
+  if (sources.includes(pageUrl)) return item;
+  if (sources.length >= PUBLISH_LIMITS.maxSourcePagesPerItemPublish) return item;
+  return { ...item, sourcePages: [...sources, pageUrl] };
+}
+
+/**
  * Group rule results by category for display
  * Only includes rules with issues (fail or warn)
  *
@@ -141,7 +161,11 @@ export function groupIssuesByCategory(
     // both normalize to "Thin content: # words (min #)" → same group
     const checkMap = new Map<
       string,
-      GroupedCheck & { pageSet: Set<string>; itemSet: Set<string>; carriedPageSet: Set<string> }
+      GroupedCheck & {
+        pageSet: Set<string>;
+        itemById: Map<string, CheckItem>;
+        carriedPageSet: Set<string>;
+      }
     >();
     // #1135: the "fixed on all pages checked this run" note reads every
     // status (pass included), not just fail/warn — computed via the SAME
@@ -233,33 +257,28 @@ export function groupIssuesByCategory(
             }
           }
         }
-        // Merge explicit items
+        // Merge explicit items by id; a repeat of a known item (the same
+        // script on another page) gains that page as a source, never a row.
         if (items) {
           for (const item of items) {
-            if (!existing.itemSet.has(item.id)) {
-              existing.items = existing.items ?? [];
-              existing.items.push(item);
-              existing.itemSet.add(item.id);
-            }
+            const prev = existing.itemById.get(item.id);
+            existing.itemById.set(item.id, attributeItemToPage(prev ?? item, pageUrl));
           }
         }
         // Merge auto-generated item from per-page message
-        if (autoItem && !existing.itemSet.has(autoItem.id)) {
-          existing.items = existing.items ?? [];
-          existing.items.push(autoItem);
-          existing.itemSet.add(autoItem.id);
+        if (autoItem && !existing.itemById.has(autoItem.id)) {
+          existing.itemById.set(autoItem.id, autoItem);
         }
         if (details) {
           existing.details = { ...existing.details, ...details };
         }
       } else {
-        const initialItems: CheckItem[] = items ? [...items] : [];
-        const initialItemIds = new Set(initialItems.map((i) => i.id));
-        // Add auto-generated item if not already covered by explicit items
-        if (autoItem && !initialItemIds.has(autoItem.id)) {
-          initialItems.push(autoItem);
-          initialItemIds.add(autoItem.id);
+        const itemById = new Map<string, CheckItem>();
+        for (const item of items ?? []) {
+          if (!itemById.has(item.id)) itemById.set(item.id, attributeItemToPage(item, pageUrl));
         }
+        // Add auto-generated item if not already covered by explicit items
+        if (autoItem && !itemById.has(autoItem.id)) itemById.set(autoItem.id, autoItem);
         const initialPages = pageUrl ? [pageUrl] : [];
         const initialPageSet = new Set(initialPages);
         for (const page of checkPages) {
@@ -277,8 +296,9 @@ export function groupIssuesByCategory(
           count: occurrences,
           pages: initialPages,
           pageSet: initialPageSet,
-          items: initialItems.length > 0 ? initialItems : undefined,
-          itemSet: initialItemIds,
+          // Materialized from itemById once the rule's checks are all merged.
+          items: undefined,
+          itemById,
           carriedPages: initialCarriedPages.length > 0 ? initialCarriedPages : undefined,
           carriedPageSet: initialCarriedPageSet,
           details: details ? { ...details } : undefined,
@@ -297,10 +317,10 @@ export function groupIssuesByCategory(
     // (#150) — #114's bounded-concurrency rule execution otherwise leaves them
     // in nondeterministic insertion order, churning report diffs run-to-run.
     const checks = Array.from(checkMap.values()).map(
-      ({ pageSet: _, itemSet: __, carriedPageSet: ___, ...check }) => {
+      ({ pageSet: _, itemById, carriedPageSet: ___, ...check }) => {
         check.pages = [...check.pages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-        if (check.items) {
-          check.items = [...check.items].sort((a, b) =>
+        if (itemById.size > 0) {
+          check.items = [...itemById.values()].sort((a, b) =>
             a.id < b.id ? -1 : a.id > b.id ? 1 : 0
           );
         }
