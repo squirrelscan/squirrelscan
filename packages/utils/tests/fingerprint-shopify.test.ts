@@ -162,6 +162,31 @@ describe("what is deliberately NOT reordered", () => {
   });
 });
 
+describe("a block that contains a script", () => {
+  const block = (app: string, reqid: string) =>
+    `<!-- BEGIN app block: shopify://apps/${app}/blocks/x/y --><script>var m={"reqid":"${reqid}"}</script><!-- END app block -->`;
+
+  test("is both sorted AND neutralized, not one or the other", () => {
+    // The overlap that makes a single-pass rewrite wrong: the app-block region
+    // contains the script region, so the two edits collide and one wins. Sorting
+    // raw text carries an un-neutralized identity token into the output for
+    // exactly the pages whose blocks needed reordering, and leaves it
+    // neutralized for the pages that did not — so two fetches of the SAME page
+    // normalize differently, which is the failure the function exists to stop.
+    const a = `<body>${block("aaa", "R1")}${block("bbb", "R1")}</body>`;
+    const b = `<body>${block("bbb", "R2")}${block("aaa", "R2")}</body>`;
+    expect(normalizeHtmlForFingerprint(a)).toBe(normalizeHtmlForFingerprint(b));
+    // And the token really is gone, rather than the two just agreeing.
+    expect(normalizeHtmlForFingerprint(b)).not.toContain("R2");
+  });
+
+  test("a change to the contained script still moves the fingerprint", () => {
+    const a = `<body>${block("aaa", "R1")}${block("bbb", "R1")}</body>`;
+    const changed = a.replace("var m=", "var different=");
+    expect(normalizeHtmlForFingerprint(changed)).not.toBe(normalizeHtmlForFingerprint(a));
+  });
+});
+
 describe("hostile and malformed input", () => {
   test("unterminated markup terminates the scan rather than looping", () => {
     for (const broken of [
