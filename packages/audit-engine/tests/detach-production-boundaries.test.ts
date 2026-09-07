@@ -32,6 +32,7 @@ import {
   type SiteContextPage,
 } from "../src/adapter";
 import { extractLinks } from "@squirrelscan/parser";
+import { compareRetention, expectDetached, MB } from "./helpers/retention";
 import { detachCounts, detachFromPage, detachParsedPage, resetDetachCounts } from "../src/detach";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -237,56 +238,65 @@ describe("detach at the production boundaries", () => {
   }, 120_000);
 
   test("absorbing from a page-sized document does not retain the document", () => {
-    // The assertions above cannot see the thing this change is for: the values
-    // are identical whether or not they are attached. So this measures on
-    // page-sized inputs, with the same INCONCLUSIVE guard
-    // detach-from-page.test.ts uses — a run where the control retains nothing
-    // demonstrates nothing, and asserting on it would report a pass it did not
-    // earn.
+    // Three arms over the SAME pages, differing only in what they keep, with
+    // the retain-nothing arm subtracted from the other two. See
+    // helpers/retention.ts for why external rather than heapUsed, why the
+    // control is not optional, and why an unusable run fails instead of
+    // passing quietly.
     //
-    // heapUsed + external, not heapUsed alone: a string's backing store is not
-    // on the JS heap, and a slice pins the BUFFER. Measuring heapUsed by itself
-    // reports 0 KB/page for the attached control and makes this test
-    // permanently inconclusive.
-    // Page-SIZED, and few enough that the transient DOMs stay modest: a real
-    // drscholls page is ~959 KB, and the retention this catches is proportional
-    // to the source buffer, so a small fixture makes the control indistinguishable
-    // from noise (a 300 KB one measured 30 KB/page and stayed inconclusive).
-    const N = 30;
+    // MULTI-MEGABYTE pages, few of them. The retention is proportional to the
+    // source buffer, and a shared CI runner moves by tens of MB on its own, so
+    // the fixture is sized to put the attached arm hundreds of MB clear rather
+    // than tens — an earlier ~900 KB version landed the two arms within 2% of
+    // each other on CI and went red. The markup is deliberately node-POOR:
+    // what has to be large is the buffer a slice can pin, and a page of the
+    // same weight in small elements costs several times as much to hold as a
+    // live DOM for no extra signal.
+    // 48 pages of 6 MB. Sized from the measurement rather than guessed: 24
+    // pages of 3.8 MB put the attached arm 82 MB above the control and the
+    // detached arm on top of it, so this scales the source until the attached
+    // figure is comfortably past the margin while the whole test still runs in
+    // seconds and the process stays a few hundred MB.
+    const PAGES = 48;
+    const PAGE_BYTES = 6_000_000;
 
-    function retainedPerPage(
-      absorb: (target: ExternalLinkOccurrences, ctx: SiteContextPage[]) => void,
-    ): number {
-      Bun.gc(true);
-      const before = process.memoryUsage();
-      const target: ExternalLinkOccurrences = new Map();
-      for (let i = 0; i < N; i++) absorb(target, externalLinkPage(i, 900_000));
-      Bun.gc(true);
-      const after = process.memoryUsage();
-      const grown = after.heapUsed - before.heapUsed + (after.external - before.external);
-      expect(target.size).toBe(N); // touch it after the sample
-      return grown / N;
-    }
+    const result = compareRetention({
+      iterations: PAGES,
+      control: (i) => {
+        // Parses and extracts exactly as the other arms do, and keeps only a
+        // count. Everything the parse costs is in all three arms.
+        let seen = 0;
+        for (const { page, parsed } of externalLinkPage(i, PAGE_BYTES)) {
+          if (!parsed?.document) continue;
+          for (const link of extractLinks(parsed.document, page.finalUrl)) {
+            if (!link.isInternal && link.href) seen++;
+          }
+        }
+        return seen;
+      },
+      attached: (i) => {
+        const target: ExternalLinkOccurrences = new Map();
+        absorbAttached(target, externalLinkPage(i, PAGE_BYTES));
+        return target;
+      },
+      detached: (i) => {
+        const target: ExternalLinkOccurrences = new Map();
+        absorbExternalLinkOccurrences(target, externalLinkPage(i, PAGE_BYTES));
+        return target;
+      },
+    });
 
-    // Warm both paths before measuring either. The first arm to run pays for
-    // the parser's one-time structures, which on this fixture is hundreds of KB
-    // per page — enough to make whichever arm goes first look like the leaker.
-    retainedPerPage(absorbExternalLinkOccurrences);
-    retainedPerPage(absorbAttached);
-
-    const detached = retainedPerPage(absorbExternalLinkOccurrences);
-    const attached = retainedPerPage(absorbAttached);
-
-    const KB = 1024;
-    if (attached < 100 * KB) {
-      console.warn(
-        `[detach] INCONCLUSIVE: control retained only ${Math.round(attached / KB)} KB/page, ` +
-          `so this run did not demonstrate the retention it is meant to catch.`,
-      );
-      return;
-    }
-    expect(detached).toBeLessThan(attached / 4);
-  }, 120_000);
+    // 150 MB of margin against a runner that moves by ~50, and a 4x ratio: the
+    // detached arm holds the link data, which is kilobytes, so anything near
+    // the attached figure means a page is still pinned.
+    expectDetached(result, {
+      marginBytes: 150 * MB,
+      ratio: 4,
+      label:
+        `external-link occurrences over ${PAGES} pages of ` +
+        `${(PAGE_BYTES / MB).toFixed(0)} MB`,
+    });
+  }, 300_000);
 });
 
 /**
@@ -300,9 +310,14 @@ function externalLinkPage(i: number, fillerChars: number): SiteContextPage[] {
   // Long text per node rather than many tiny nodes: the size that matters here
   // is the html BUFFER, and a node-dense page of the same byte count costs
   // several times as much to hold as a live DOM for no extra signal.
-  const chunk = 200;
+  //
+  // Each chunk starts with its own page and chunk number, so no two pages share
+  // a backing store. A corpus built by repeating one string is nearly free to
+  // hold — JSC ropes share storage — and would make the attached arm look
+  // detached.
+  const chunk = 20_000;
   const filler = Array.from(
-    { length: Math.ceil(fillerChars / (chunk + 24)) },
+    { length: Math.max(1, Math.ceil(fillerChars / (chunk + 7))) },
     (_, k) => `<p>${`${i}-${k} `.padEnd(chunk, "abcdefghij")}</p>`,
   ).join("");
   const html =

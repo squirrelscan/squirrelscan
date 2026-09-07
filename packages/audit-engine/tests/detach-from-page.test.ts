@@ -9,68 +9,62 @@
 //
 // This is invisible to every obvious measure — `JSON.stringify(x).length` sees
 // the logical size, and RSS sees nothing because the arena absorbs it — so it
-// needs a test that looks at `heapUsed` directly. A production run held ~8 MB
+// needs a test that looks at the allocator directly. A production run held ~8 MB
 // per page while a local census of the same structures reported 96 KB.
+//
+// The measurement itself lives in helpers/retention.ts, which explains why it
+// reads `external` rather than `heapUsed`, why it subtracts a retain-nothing
+// control, and why an unusable run fails rather than passing quietly.
 
 import { describe, expect, test } from "bun:test";
 
 import { detachCounts, detachFromPage, resetDetachCounts } from "../src/detach";
+import { compareRetention, expectDetached, MB } from "./helpers/retention";
 
 /**
- * Retained bytes after holding `n` copies of what `make` returns.
+ * A page-sized string and a small slice of it, as a parse would produce.
  *
- * heapUsed + external, not heapUsed alone: a string's backing store is not on
- * the JS heap, and a slice pins the BUFFER, not a heap object. Measured on
- * heapUsed by itself the attached control reported 0 KB/item, which sent this
- * test down its INCONCLUSIVE branch on every run — green, and asserting
- * nothing.
+ * Built from per-source UNIQUE chunks rather than one repeated character: JSC
+ * ropes share backing storage, so a corpus made with `.repeat()` is nearly free
+ * to hold and the attached arm would look detached.
  */
-function retainedPerItem(n: number, make: (i: number) => unknown): number {
-  Bun.gc(true);
-  const before = process.memoryUsage();
-  const kept: unknown[] = [];
-  for (let i = 0; i < n; i++) kept.push(make(i));
-  Bun.gc(true);
-  const after = process.memoryUsage();
-  const grown = after.heapUsed - before.heapUsed + (after.external - before.external);
-  // Touch `kept` after the sample so it cannot be collected early.
-  expect(kept.length).toBe(n);
-  return grown / n;
-}
-
-/** A page-sized string and a small slice of it, as a parse would produce. */
-function pageAndSlice(i: number): { page: string; slice: string } {
-  const page = `<html><body>${"a".repeat(500_000)}${i}</body></html>`;
+function pageAndSlice(i: number, bytes: number): { page: string; slice: string } {
+  const chunk = 20_000;
+  const body = Array.from(
+    { length: Math.max(1, Math.ceil(bytes / chunk)) },
+    (_, k) => `${i}-${k} `.padEnd(chunk, "abcdefghij"),
+  ).join("");
+  const page = `<html><body>${body}</body></html>`;
   return { page, slice: page.slice(120, 180) };
 }
 
-const KB = 1024;
-
 describe("detachFromPage", () => {
   test("a raw slice of a page retains the page; a detached copy does not", () => {
-    const N = 80;
-    const attached = retainedPerItem(N, (i) => ({ text: pageAndSlice(i).slice }));
-    const detached = retainedPerItem(N, (i) => detachFromPage({ text: pageAndSlice(i).slice }, "page-rules"));
+    // Three arms with a retain-nothing control subtracted, on multi-megabyte
+    // sources — see helpers/retention.ts. The previous version compared the two
+    // real arms against each other on 500 KB pages and, when they landed on top
+    // of one another, printed INCONCLUSIVE and passed. It did that on every run.
+    const N = 48;
+    const SOURCE_BYTES = 6_000_000;
 
-    // The measurement itself is environment-dependent: a collector that absorbs
-    // the allocation reports no growth for EITHER case, and a review pass saw
-    // exactly that. Comparing two zeroes proves nothing, and asserting anything
-    // at all in that state would report a pass the run did not earn — so this
-    // says INCONCLUSIVE out loud and asserts nothing. The deterministic
-    // guarantees are the tests below plus detach-production-boundaries.test.ts.
-    if (attached < 100 * KB) {
-      console.warn(
-        `[detach] INCONCLUSIVE: control retained only ${Math.round(attached / KB)} KB/item, ` +
-          `so this run did not demonstrate the retention it is meant to catch.`,
-      );
-      return;
-    }
+    const result = compareRetention({
+      iterations: N,
+      // The control builds the same source and takes the same slice, then keeps
+      // only its length: the allocation is identical, the retention is not.
+      control: (i) => pageAndSlice(i, SOURCE_BYTES).slice.length,
+      attached: (i) => ({ text: pageAndSlice(i, SOURCE_BYTES).slice }),
+      detached: (i) => detachFromPage({ text: pageAndSlice(i, SOURCE_BYTES).slice }, "page-rules"),
+    });
 
-    // Attached holds something on the order of the page; detached, of the slice.
-    // A ratio rather than absolute bytes, so this is not pinned to one engine's
-    // object layout.
-    expect(detached).toBeLessThan(attached / 4);
-  });
+    // Attached holds something on the order of the source; detached, of the
+    // slice. A ratio rather than absolute bytes, so this is not pinned to one
+    // engine's object layout.
+    expectDetached(result, {
+      marginBytes: 150 * MB,
+      ratio: 4,
+      label: `raw slices of ${N} sources of ${(SOURCE_BYTES / MB).toFixed(0)} MB`,
+    });
+  }, 300_000);
 
   test("preserves Sets, which a JSON round-trip would silently empty", () => {
     // PageFingerprint carries Sets. `JSON.parse(JSON.stringify(x))` also detaches
