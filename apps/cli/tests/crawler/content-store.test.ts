@@ -178,6 +178,30 @@ describe("Content Store", () => {
   });
 
   describe("getStats", () => {
+    // getStats() runs on every put() that stores new content (the prune check).
+    // Without a covering index SQLite scans the table and pages in every
+    // gzipped BLOB just to sum their sizes, which on a filled ~1GB store cost
+    // ~300ms per stored page and dominated a cold audit.
+    test("should answer the aggregate query from a covering index", () => {
+      store.put("some content to make the table non-empty", "text/html");
+
+      const db = (
+        store as unknown as { getDb: () => import("bun:sqlite").Database }
+      ).getDb();
+      const plan = db
+        .prepare(
+          `EXPLAIN QUERY PLAN
+           SELECT COUNT(*) as count, SUM(compressed_size) as total_compressed,
+                  SUM(original_size) as total_original, MIN(last_accessed) as oldest
+           FROM content`
+        )
+        .all() as Array<{ detail: string }>;
+
+      const detail = plan.map((row) => row.detail).join(" | ");
+      expect(detail).toContain("COVERING INDEX");
+      expect(detail).toContain("idx_content_sizes");
+    });
+
     test("should return empty stats for new store", () => {
       const stats = store.getStats();
 

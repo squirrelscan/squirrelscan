@@ -53,6 +53,16 @@ CREATE TABLE IF NOT EXISTS content (
 
 CREATE INDEX IF NOT EXISTS idx_content_last_accessed ON content(last_accessed);
 CREATE INDEX IF NOT EXISTS idx_content_type ON content(content_type);
+
+-- Covering index for getStats(). Every put() that stores new content runs the
+-- prune check, which aggregates COUNT + SUM(compressed_size) +
+-- SUM(original_size) + MIN(last_accessed) over this table. Without an index
+-- holding all four values, SQLite scans the table itself and therefore pages in
+-- every gzipped BLOB just to add up their sizes -- on a filled ~1GB store that
+-- is ~300ms per stored page, which made it the single largest cost in a cold
+-- audit. Listing the columns in this order lets one covering-index scan answer
+-- the whole query without touching the table.
+CREATE INDEX IF NOT EXISTS idx_content_sizes ON content(compressed_size, original_size, last_accessed);
 `;
 
 const SQLITE_BUSY_TIMEOUT_MS = 15000;
