@@ -19,7 +19,7 @@ A URL that was correct in development shipped to production. Find where it is st
 
 ## What it checks
 
-Five kinds, in `href` and `src` attributes and in the copy a visitor reads:
+Five kinds, in every `href` and `src` on the page and in the copy a visitor reads. The head is included: a `<link rel="canonical">` at localhost de-indexes the page and a stylesheet or script at localhost breaks it outright, so those are the highest-impact findings the rule has.
 
 | Kind | Example | Meaning |
 |---|---|---|
@@ -41,7 +41,7 @@ The rule is mostly a list of ways to tell a leaked URL apart from a URL a page i
 - **A bare `localhost` in a sentence.** "The app also runs on localhost during development" is a sentence people write. A scheme, a port or a path is required before a bare `localhost` counts, so `localhost:5173` and `http://localhost` do. A qualified name like `api.acme.localhost` has no second reading and counts on its own.
 - **A bare address in `10.0.0.0/8`.** Four dotted numbers starting at 10 is also how enterprise software spells a version, so `Contoso Server 10.0.0.1` is not reported. With a scheme, a port or a path it is unmistakably a host and is. The `192.168.*`, `172.16-31.*` and `127.*` blocks have no such reading and count bare.
 - **A bare platform name.** "We deploy to pages.dev" names a platform. `abc123.pages.dev` names a deployment, so at least one leading label is required.
-- **Non-production audits.** If the audited origin is itself a localhost, private, preview or `staging.`/`dev.`/`test.` host, the rule skips the page rather than passing it. Auditing a preview deploy would otherwise report every internal link on it as leakage. Both the seed URL and the page's own URL are checked, so a page that redirected onto a preview host skips too.
+- **Non-production audits.** If the audited origin is itself a localhost, private, preview or `staging.`/`dev.`/`test.` host, the rule skips the page rather than passing it. Auditing a preview deploy would otherwise report every internal link on it as leakage. Both the seed URL and the URL the page finally resolved to are checked, so a page that redirected onto a preview host skips too. A tier word only counts when it really is a tier: `dev.to`, `test.com` and `staging.com` are registrable domains in their own right, and sites hosted on them are audited normally.
 
 ## Subdomain matching
 
@@ -52,6 +52,8 @@ The rule is mostly a list of ways to tell a leaked URL apart from a URL a page i
 ## Preview hosts that are not yours
 
 Plenty of production sites live on `vercel.app` and `pages.dev`, and a page may legitimately link to somebody else's project there. A preview host whose leftmost label carries this site's own name (`example-git-main.vercel.app` for `example.com`) is treated as this site's own deployment and fails. One that does not is still reported, because linking production content at an ephemeral platform host is worth knowing about, but it only warns.
+
+The name has to be a whole hyphen-separated segment of the label, never a substring. Vercel, Netlify and Cloudflare all build the label out of hyphen-joined parts, so a project's own name is always a segment; a substring test would instead read `sandbox-demo.vercel.app` as `box.com`'s own deployment and fail a link its owner cannot do anything about.
 
 ## Related rules
 

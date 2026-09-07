@@ -35,13 +35,22 @@ const NAV = '<header><nav><a href="/">Home</a><a href="/pricing">Pricing</a></na
 
 function run(
   body: string,
-  opts: { url?: string; baseUrl?: string } = {},
+  opts: { url?: string; baseUrl?: string; finalUrl?: string; head?: string } = {},
 ): CheckResult[] {
   const url = opts.url ?? "https://example.com/about";
-  const html = page(body);
+  const html = opts.head
+    ? `<html><head><title>t</title>${opts.head}</head><body>${body}</body></html>`
+    : page(body);
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url,
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+      ...(opts.finalUrl ? { finalUrl: opts.finalUrl } : {}),
+    },
     parsed: { document } as unknown as ParsedPage,
     ...(opts.baseUrl ? { site: { baseUrl: opts.baseUrl } as unknown as SiteData } : {}),
     options: {},
@@ -157,6 +166,27 @@ describe("preview ownership", () => {
     expect(looksLikeOwnPreview("someones-portfolio.vercel.app", "acme")).toBe(false);
   });
 
+  test("a label that merely CONTAINS the apex label is not", () => {
+    // Whole hyphen-separated segments only. A substring test reads every one of
+    // these as the site's own deployment and escalates the finding to `fail`.
+    expect(looksLikeOwnPreview("sandbox-demo.vercel.app", "box")).toBe(false);
+    expect(looksLikeOwnPreview("shopify-theme.vercel.app", "shop")).toBe(false);
+    expect(looksLikeOwnPreview("my-nextjs-demo.vercel.app", "next")).toBe(false);
+    expect(looksLikeOwnPreview("moneyapp.vercel.app", "one")).toBe(false);
+    expect(looksLikeOwnPreview("blog-application.pages.dev", "app")).toBe(false);
+    // The segment itself still matches.
+    expect(looksLikeOwnPreview("blog-app.pages.dev", "app")).toBe(true);
+  });
+
+  test("a stranger's preview warns rather than fails, even on a short apex", () => {
+    const check = only(
+      run(`${NAV}<main><a href="https://sandbox-demo.vercel.app/">Partner demo</a></main>`, {
+        url: "https://box.com/x",
+      }),
+    );
+    expect(check.status).toBe("warn");
+  });
+
   test("a two-letter apex label never claims ownership", () => {
     expect(looksLikeOwnPreview("wp-demo.vercel.app", "wp")).toBe(false);
   });
@@ -215,6 +245,27 @@ describe("findDevHostsInText", () => {
   test("a bare platform name is not a deployment", () => {
     expect(textKinds("We deploy to pages.dev and vercel.app")).toHaveLength(0);
     expect(textKinds("We deploy to acme.pages.dev")).toContain("preview-host");
+  });
+
+  test("a host at the end of a sentence still counts", () => {
+    // The most common way copy mentions a host is with a full stop after it.
+    expect(textKinds("Bound to 192.168.1.10.")).toContain("private-ip");
+    expect(textKinds("Bound to 127.0.0.1.")).toContain("localhost");
+    expect(textKinds("Preview at acme-git-main.vercel.app.")).toContain("preview-host");
+    expect(textKinds("Draft on staging.example.com.")).toContain("dev-subdomain");
+    expect(textKinds("(see acme.vercel.app)")).toContain("preview-host");
+  });
+
+  test("but a dot followed by MORE host is a different domain", () => {
+    // `dev.example.com.au` must not match as `dev.example.com`.
+    expect(textKinds("Read dev.example.com.au for theirs")).toHaveLength(0);
+  });
+
+  test("the sentence's full stop stays out of the reported sample", () => {
+    const hits = findDevHostsInText("Old links point at http://example.com. Next.", site());
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.host).toBe("example.com");
+    expect(hits[0]?.sample).toBe("http://example.com");
   });
 
   test("the left boundary keeps lookalike hosts out", () => {
@@ -395,6 +446,54 @@ describe("devLeakageRule outcomes", () => {
     expect(check.status).toBe("skipped");
   });
 
+  test("fail: the head is scanned, where the worst leaks live", () => {
+    // A canonical at localhost de-indexes the page; a stylesheet or script at
+    // localhost breaks it outright. Body copy here is entirely clean.
+    const check = only(
+      run(`${NAV}<main><p>Plans start at ten dollars.</p></main>`, {
+        head:
+          '<link rel="canonical" href="http://localhost:3000/about">' +
+          '<link rel="stylesheet" href="http://localhost:3000/a.css">' +
+          '<script src="http://localhost:3000/app.js"></script>',
+      }),
+    );
+    expect(check.status).toBe("fail");
+    expect(check.value).toBe(3);
+  });
+
+  test("skipped: the page redirected onto a preview host", () => {
+    const check = only(
+      run(`${NAV}<main><a href="/pricing">Pricing</a></main>`, {
+        url: "https://example.com/about",
+        finalUrl: "https://example-git-main.vercel.app/about",
+      }),
+    );
+    expect(check.status).toBe("skipped");
+    expect(check.skipReason).toBe("non-production-origin");
+  });
+
+  test("the redirected-to URL decides whether the page is secure", () => {
+    // Seeded over http, redirected to https: the self-link kind is live now.
+    const check = only(
+      run(`${NAV}<main><a href="http://example.com/pricing">Pricing</a></main>`, {
+        url: "http://example.com/about",
+        finalUrl: "https://example.com/about",
+      }),
+    );
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("insecure-self-link");
+  });
+
+  test("an unparseable finalUrl falls back to the page URL rather than disabling the rule", () => {
+    const check = only(
+      run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
+        url: "https://example.com/about",
+        finalUrl: "not a url",
+      }),
+    );
+    expect(check.status).toBe("fail");
+  });
+
   test("skipped: no document", () => {
     const ctx = {
       page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -480,6 +579,47 @@ describe("reporting", () => {
     expect(check.message).toContain("http://192.168.1.10/admin");
   });
 
+  test("item ids are kinds, never URLs", () => {
+    // report/affected-pages reads an item id starting with `http` as a page of
+    // the audited site, which would both inflate the affected-page count and
+    // suppress the row as redundant.
+    const check = only(
+      run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`),
+    );
+    expect(check.items).toEqual([
+      {
+        id: "localhost",
+        label: "localhost",
+        snippet: "http://localhost:3000/api",
+        meta: { count: 1, inAttribute: true },
+      },
+    ]);
+  });
+
+  test("markdown link syntax in a hostile href cannot survive into the report", () => {
+    // Canonicalizing is not enough: new URL() leaves brackets and parentheses
+    // alone, and the renderer would turn them into a clickable attacker link.
+    const check = only(
+      run(
+        `${NAV}<main><a href="http://localhost/[click here](https://evil.example/pwn)">x</a></main>`,
+      ),
+    );
+    const sample = (check.items?.[0]?.snippet ?? "") as string;
+    expect(sample).not.toContain("[");
+    expect(sample).not.toContain("]");
+    expect(sample).not.toContain("(");
+    expect(sample).not.toContain(")");
+    expect(sample).toContain("%5Bclick%20here%5D");
+  });
+
+  test("a very long site-controlled URL is truncated", () => {
+    const long = `http://localhost:3000/${"a".repeat(500)}`;
+    const check = only(run(`${NAV}<main><a href="${long}">x</a></main>`));
+    const sample = (check.items?.[0]?.snippet ?? "") as string;
+    expect(sample.length).toBeLessThanOrEqual(120);
+    expect(sample.endsWith("…")).toBe(true);
+  });
+
   test("summarize prefers an attribute sample over an earlier text one", () => {
     const rows = summarize([
       { kind: "localhost", source: "text", host: "localhost", sample: "localhost:1", own: true },
@@ -517,5 +657,24 @@ describe("seed classification", () => {
     expect(isNonProductionSeedHost("example.com")).toBe(false);
     expect(isNonProductionSeedHost("www.example.com")).toBe(false);
     expect(isNonProductionSeedHost("notdev.example.com")).toBe(false);
+  });
+
+  test("a real site whose APEX starts with a tier word is production", () => {
+    // dev.to, test.com and staging.com are registrable domains, not tiers of
+    // anything. A bare leftmost-label test disables the whole rule on them.
+    expect(isNonProductionSeedHost("dev.to")).toBe(false);
+    expect(isNonProductionSeedHost("test.com")).toBe(false);
+    expect(isNonProductionSeedHost("staging.com")).toBe(false);
+    // …and agrees with itself when the same site is reached as www.
+    expect(isNonProductionSeedHost("www.dev.to")).toBe(false);
+  });
+
+  test("the rule still runs on a site hosted at dev.to", () => {
+    const check = only(
+      run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
+        url: "https://dev.to/some-post",
+      }),
+    );
+    expect(check.status).toBe("fail");
   });
 });

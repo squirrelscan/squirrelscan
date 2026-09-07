@@ -52,6 +52,13 @@ const MAX_ELEMENTS_SCANNED = 50_000;
 /** Per kind, so one pathological page cannot allocate an unbounded hit list. */
 const MAX_HITS_PER_KIND = 200;
 
+/**
+ * The same budget for the attribute pass, which has no per-kind regex cap to
+ * inherit one from. A page of 30,000 localhost anchors still renders as a
+ * single row, so nothing is lost by stopping early.
+ */
+const MAX_ATTRIBUTE_HITS = MAX_HITS_PER_KIND * 5;
+
 /** Reports get these verbatim, so no newline and no unbounded site-controlled string. */
 const MAX_SAMPLE_LENGTH = 120;
 
@@ -180,19 +187,32 @@ export function isDevSubdomainOf(host: string, apex: string): boolean {
  * can act on) from "you linked to a site that happens to be on Vercel".
  */
 export function looksLikeOwnPreview(host: string, apexLabel: string): boolean {
-  // Two characters match far too much — `wp-abc.vercel.app` would "contain" the
-  // apex label of `wp.com`.
+  // Two characters match far too much even as a whole segment.
   if (apexLabel.length < 3) return false;
   const leftmost = host.split(".")[0] ?? "";
-  return leftmost.includes(apexLabel);
+  // WHOLE hyphen-separated segments, never a substring. Vercel, Netlify and
+  // Cloudflare all build the label out of hyphen-joined parts
+  // (`<project>-git-<branch>-<team>`), so the site's own name is always a
+  // segment. A substring test instead reads `sandbox-demo.vercel.app` as
+  // `box.com`'s own deployment, `shopify-theme.vercel.app` as `shop.com`'s and
+  // `my-nextjs-demo.vercel.app` as `next.com`'s — and this flag is what raises
+  // the finding to `fail`, the hardest status the rule has, on a link the site
+  // owner cannot act on.
+  return leftmost.split("-").includes(apexLabel);
 }
 
 /** True for a host that means "this audit is not of a production origin". */
 export function isNonProductionSeedHost(host: string): boolean {
   if (isLoopbackHost(host) || isPrivateIpHost(host) || isPreviewHost(host)) return true;
-  // A seed whose OWN leftmost label names a tier: auditing `staging.example.com`
-  // is auditing staging, and every internal link on it is a staging link.
-  return DEV_SUBDOMAIN_LABELS.has(host.split(".")[0] ?? "");
+  // A seed that is a tier of its OWN apex: auditing `staging.example.com` is
+  // auditing staging, and every internal link on it is a staging link.
+  //
+  // Routed through the same PSL helper rather than a bare leftmost-label test,
+  // because `dev.to`, `test.com` and `staging.com` ARE registrable domains —
+  // real production sites whose apex happens to start with a tier word. A bare
+  // label test disables the whole rule on every one of them, and disagrees with
+  // itself the moment the same site is reached as `www.dev.to`.
+  return isDevSubdomainOf(host, registrableDomain(host));
 }
 
 /** Which family `host` belongs to, and whether it is this site's own artifact. */
@@ -227,8 +247,29 @@ export function siteOriginOf(pageUrl: string): SiteOrigin | null {
   };
 }
 
+/**
+ * Markdown link syntax, percent-encoded. URL canonicalization is NOT enough on
+ * its own: `new URL()` leaves `[`, `]`, `(` and `)` untouched in a path, so a
+ * site-controlled href like `/[click here](https://evil.example/pwn)` survives
+ * into the message and the markdown renderer turns it into a clickable link
+ * pointing wherever the audited page chose. Percent-encoding is lossless — the
+ * URL still resolves and still reads — and the escape is done here rather than
+ * in the renderer because every rule that puts a URL in a message would
+ * otherwise have to remember to ask for it.
+ */
+const MARKDOWN_ACTIVE = /[[\]()]/g;
+const MARKDOWN_ACTIVE_ESCAPES: Record<string, string> = {
+  "[": "%5B",
+  "]": "%5D",
+  "(": "%28",
+  ")": "%29",
+};
+
 function toSample(raw: string): string {
-  const flat = raw.replace(/\s+/g, " ").trim();
+  const flat = raw
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(MARKDOWN_ACTIVE, (c) => MARKDOWN_ACTIVE_ESCAPES[c] ?? c);
   return flat.length > MAX_SAMPLE_LENGTH ? `${flat.slice(0, MAX_SAMPLE_LENGTH - 1)}…` : flat;
 }
 
@@ -249,8 +290,15 @@ function escapeForRegExp(value: string): string {
  */
 const LEFT_BOUNDARY = String.raw`(?:^|[^A-Za-z0-9.\-_])`;
 
-/** Nothing may follow the host that could have been part of it. */
-const RIGHT_BOUNDARY = String.raw`(?![A-Za-z0-9.\-])`;
+/**
+ * Nothing may follow the host that could have been part of it.
+ *
+ * A trailing dot is only disqualifying when MORE host follows it, so
+ * `dev.example.com.au` cannot match as `dev.example.com` while
+ * "Bound to 192.168.1.10." — a host at the end of a sentence, which is how copy
+ * usually mentions one — still does.
+ */
+const RIGHT_BOUNDARY = String.raw`(?![A-Za-z0-9\-])(?!\.[A-Za-z0-9])`;
 
 const OPTIONAL_SCHEME = String.raw`(?:(https?):\/\/)?`;
 const OPTIONAL_PORT = String.raw`(?::(\d{1,5}))?`;
@@ -287,9 +335,15 @@ const PREVIEW_TEXT_RE = new RegExp(
   "gi",
 );
 
-/** `http://` spelled out in copy, host left open so the apex test can judge it. */
+/**
+ * `http://` spelled out in copy, host left open so the apex test can judge it.
+ *
+ * Spelled as labels rather than as one `[a-z0-9.-]` run so the host cannot end
+ * on a dot: a flat class is greedy and would capture the full stop in
+ * "…point at http://example.com." into the reported sample.
+ */
 const INSECURE_URL_TEXT_RE = new RegExp(
-  `${LEFT_BOUNDARY}(http):\\/\\/([a-z0-9][a-z0-9.\\-]{0,253})${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
+  `${LEFT_BOUNDARY}(http):\\/\\/((?:[a-z0-9-]{1,63}\\.){1,10}[a-z0-9-]{1,63})${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
   "gi",
 );
 
@@ -412,8 +466,11 @@ export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHi
 // Attribute scanning
 // ---------------------------------------------------------------------------
 
+/** Cap on the collected list itself, so the DOM pass cannot allocate unbounded. */
+const MAX_URL_ATTRIBUTES = 2_000;
+
 /**
- * Every `href`/`src` value on the page, in document order.
+ * Every `href`/`src` value under `root`, in document order.
  *
  * Attribute names are folded from `el.attributes` rather than looked up by
  * name: `getAttribute` follows the HTML case rules only through the parser's
@@ -431,6 +488,7 @@ export function collectUrlAttributes(root: Element): string[] {
       const value = attr.value?.trim();
       if (value) out.push(value);
     }
+    if (out.length >= MAX_URL_ATTRIBUTES) break;
   }
   return out;
 }
@@ -542,7 +600,13 @@ export const devLeakageRule: Rule = {
       return { checks };
     }
 
-    const site = siteOriginOf(ctx.page.url);
+    // The URL the browser ENDED on, which is both what relative `href`s resolve
+    // against and what decides whether this page sits on a production origin. A
+    // page that redirected from the apex onto a preview host is a preview page,
+    // and reading `ctx.page.url` would judge the pre-redirect URL — the same
+    // reason `security/form-https` and the link adapter prefer `finalUrl`.
+    const pageUrl = ctx.page.finalUrl ?? ctx.page.url;
+    const site = siteOriginOf(pageUrl) ?? siteOriginOf(ctx.page.url);
     if (!site) {
       checks.push({
         name,
@@ -552,11 +616,14 @@ export const devLeakageRule: Rule = {
       });
       return { checks };
     }
+    // A `finalUrl` that will not parse must not silently become the base for
+    // every relative href on the page.
+    const baseUrl = siteOriginOf(pageUrl) ? pageUrl : ctx.page.url;
 
     // The audited origin, which is the SEED when the runner supplied site data
-    // and the page's own URL otherwise. Both are checked: a seed on a preview
-    // host means the whole audit is of a preview, and a page that redirected
-    // onto one means this page is.
+    // and this page's own final URL otherwise. Both are checked: a seed on a
+    // preview host means the whole audit is of a preview, and a page that
+    // redirected onto one means this page is.
     const seedHost = ctx.site?.baseUrl ? siteOriginOf(ctx.site.baseUrl)?.host : undefined;
     const nonProductionHost = [seedHost, site.host].find(
       (h): h is string => h !== undefined && isNonProductionSeedHost(h),
@@ -571,27 +638,25 @@ export const devLeakageRule: Rule = {
       return { checks };
     }
 
-    const body = doc.querySelector("body");
-    if (!body) {
-      checks.push({
-        name,
-        status: "skipped",
-        message: "No body element to read visible text from",
-        skipReason: "no-body",
-      });
-      return { checks };
-    }
-
     const hits: DevLeakageHit[] = [];
-    for (const raw of collectUrlAttributes(body)) {
-      const hit = classifyUrlAttribute(raw, ctx.page.url, site);
-      if (hit) hits.push(hit);
+    // The WHOLE document, head included. A `<link rel="canonical">` at localhost
+    // de-indexes the page and a `<script src>` or stylesheet at localhost breaks
+    // it outright, so the head carries this rule's highest-impact findings and
+    // scanning only the body would pass every one of them.
+    const root = doc.documentElement ?? doc.querySelector("body");
+    if (root) {
+      for (const raw of collectUrlAttributes(root)) {
+        const hit = classifyUrlAttribute(raw, baseUrl, site);
+        if (hit) hits.push(hit);
+        if (hits.length >= MAX_ATTRIBUTE_HITS) break;
+      }
     }
     // Prose only, and never the raw HTML. `getRenderedProseText` drops `<code>`,
     // `<pre>`, `<template>` and highlighter containers, which is what lets a
     // tutorial print `http://localhost:3000` in a code sample and stay clean —
     // the single largest false-positive class this rule has.
-    hits.push(...findDevHostsInText(getRenderedProseText(body), site));
+    const body = doc.querySelector("body");
+    if (body) hits.push(...findDevHostsInText(getRenderedProseText(body), site));
 
     if (hits.length === 0) {
       checks.push({
@@ -625,9 +690,15 @@ export const devLeakageRule: Rule = {
       status,
       message: `${total} development host reference(s) on a production page (${kinds}): example ${leading.sample}`,
       value: total,
+      // `id` is the KIND, never the URL. `report/affected-pages` reads an item
+      // id that starts with `http` as a page of the site being audited, so a
+      // leaked `http://localhost:3000/api` id would be counted as an affected
+      // page AND make the row itself redundant, suppressing the kind and count
+      // in every renderer. `content/placeholder-text` sets the same shape.
       items: rows.map((r) => ({
-        id: r.sample,
+        id: r.kind,
         label: r.kind,
+        snippet: r.sample,
         meta: { count: r.count, inAttribute: r.inAttribute },
       })),
       details: {
