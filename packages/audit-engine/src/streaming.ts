@@ -232,10 +232,13 @@ export function streamPageRules(
         // objects, and cloning the container in a single call preserves that
         // sharing. Cloning them separately would triple the findings.
         const byRule = [...raw.ruleResults];
-        const detached = detachFromPage({
-          checks: raw.checks,
-          ruleChecks: byRule.map(([, rr]) => rr.checks),
-        });
+        const detached = detachFromPage(
+          {
+            checks: raw.checks,
+            ruleChecks: byRule.map(([, rr]) => rr.checks),
+          },
+          "page-rules",
+        );
         const result = {
           checks: detached.checks,
           ruleResults: new Map(

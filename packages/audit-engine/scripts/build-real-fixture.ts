@@ -34,6 +34,9 @@ const BASE = "https://www.drscholls.com";
 
 const base = await Bun.file(PAGE).text();
 
+/** The ONE path function: page records and the nav links both go through it. */
+const pathFor = (i: number): string => (i === 0 ? "/" : `/p/${String(i).padStart(4, "0")}`);
+
 /** What the crawler persists: the parsed scalars, minus the live document. */
 function serializeParsed(html: string, url: string): string {
   const parsed = parseHtmlForRules(html, url) as unknown as Record<string, unknown>;
@@ -62,14 +65,16 @@ for (let i = 0; i < N; i++) {
   // Same per-page variation the live repro server applies: a distinct title and
   // a nav of internal links, so link-graph and duplicate rules see a real site
   // rather than N copies of one page.
-  const links = Array.from(
-    { length: 40 },
-    (_, k) => `<a href="/p/${(i * 7 + k * 13) % N}">Product ${(i * 7 + k * 13) % N}</a>`,
-  ).join("\n");
+  const links = Array.from({ length: 40 }, (_, k) => {
+    const target = (i * 7 + k * 13) % N;
+    // Same path function the page RECORD uses — a link to a path no page is
+    // stored under is an external/broken link, not a link-graph edge.
+    return `<a href="${pathFor(target)}">Product ${target}</a>`;
+  }).join("\n");
   const html = base
     .replace(/<title>[^<]*<\/title>/, `<title>Page ${i} Dr Scholls</title>`)
     .replace("</body>", `<nav id="syn">${links}</nav></body>`);
-  const url = i === 0 ? `${BASE}/` : `${BASE}/p/${String(i).padStart(4, "0")}`;
+  const url = `${BASE}${pathFor(i)}`;
   await run(
     storage.upsertPage(crawlId, {
       url,

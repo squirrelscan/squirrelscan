@@ -2383,6 +2383,7 @@ export function runStreamingRules(
         collectedPages.push(
           detachFromPage(
             buildCollectedPageSignal({ url: page.normalizedUrl, finalUrl: page.finalUrl, parsed }),
+            "collected-signal",
           ),
         );
       },

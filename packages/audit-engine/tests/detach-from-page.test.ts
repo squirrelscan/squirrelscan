@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { detachFromPage } from "../src/detach";
+import { detachCounts, detachFromPage, resetDetachCounts } from "../src/detach";
 
 /** Retained bytes after holding `n` copies of what `make` returns. */
 function retainedPerItem(n: number, make: (i: number) => unknown): number {
@@ -41,15 +41,19 @@ describe("detachFromPage", () => {
   test("a raw slice of a page retains the page; a detached copy does not", () => {
     const N = 80;
     const attached = retainedPerItem(N, (i) => ({ text: pageAndSlice(i).slice }));
-    const detached = retainedPerItem(N, (i) => detachFromPage({ text: pageAndSlice(i).slice }));
+    const detached = retainedPerItem(N, (i) => detachFromPage({ text: pageAndSlice(i).slice }, "page-rules"));
 
     // The measurement itself is environment-dependent: a collector that absorbs
     // the allocation reports no growth for EITHER case, and a review pass saw
-    // exactly that. Comparing two zeroes proves nothing, so the assertion only
-    // runs where the attached case actually demonstrated the retention it is
-    // meant to catch. The deterministic guarantees below hold everywhere.
+    // exactly that. Comparing two zeroes proves nothing, and asserting anything
+    // at all in that state would report a pass the run did not earn — so this
+    // says INCONCLUSIVE out loud and asserts nothing. The deterministic
+    // guarantees are the tests below plus detach-production-boundaries.test.ts.
     if (attached < 100 * KB) {
-      expect(detached).toBeLessThanOrEqual(Math.max(attached, 100 * KB));
+      console.warn(
+        `[detach] INCONCLUSIVE: control retained only ${Math.round(attached / KB)} KB/item, ` +
+          `so this run did not demonstrate the retention it is meant to catch.`,
+      );
       return;
     }
 
@@ -68,7 +72,7 @@ describe("detachFromPage", () => {
       nested: { classes: new Set(["x"]) },
       list: [new Set(["y"])],
     };
-    const copy = detachFromPage(source);
+    const copy = detachFromPage(source, "page-rules");
 
     expect(copy.assetHosts).toBeInstanceOf(Set);
     expect([...copy.assetHosts]).toEqual(["a.example", "b.example"]);
@@ -85,7 +89,7 @@ describe("detachFromPage", () => {
       nothing: null,
       when: new Date(0),
     };
-    const copy = detachFromPage(source);
+    const copy = detachFromPage(source, "page-rules");
     expect(copy).toEqual(source);
     // A copy, not the same object — otherwise nothing was detached.
     expect(copy).not.toBe(source);
@@ -97,15 +101,20 @@ describe("detachFromPage", () => {
     // check objects. One clone of the container keeps that sharing; cloning each
     // consumer separately would triple the findings instead of detaching them.
     const shared = { name: "check" };
-    const copy = detachFromPage({ flat: [shared], byRule: { r: [shared] } });
+    const copy = detachFromPage({ flat: [shared], byRule: { r: [shared] } }, "page-rules");
     expect(copy.flat[0]).toBe(copy.byRule.r[0]);
   });
 
-  test("returns the original rather than throwing on a non-cloneable value", () => {
+  test("returns the original rather than throwing on a non-cloneable value, and COUNTS it", () => {
+    resetDetachCounts();
     // Safety valve: a value carrying a function cannot be structured-cloned.
     // Keeping the original costs the retention this exists to avoid, but it
     // cannot change what the audit reports.
     const withFn = { fn: () => 1, keep: "x" };
-    expect(detachFromPage(withFn)).toBe(withFn);
+    expect(detachFromPage(withFn, "page-rules")).toBe(withFn);
+    // Silent is the failure mode that matters: a fallback keeps the page
+    // attached with identical findings, so it has to be countable.
+    expect(detachCounts("page-rules").fallbacks).toBe(1);
+    resetDetachCounts();
   });
 });

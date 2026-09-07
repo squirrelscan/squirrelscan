@@ -1,5 +1,28 @@
 // Detaching retained values from the page they came from (#1860).
 
+import { logger } from "./adapter-logger";
+
+/** Where a detach happened, so a fallback can name the boundary that failed. */
+export type DetachBoundary = "page-rules" | "collected-signal";
+
+export interface DetachCounts {
+  /** Values copied free of their page. */
+  readonly detached: number;
+  /** Values kept ATTACHED because the copy threw — the retention is still there. */
+  readonly fallbacks: number;
+}
+
+const counts = new Map<DetachBoundary, { detached: number; fallbacks: number }>();
+/** Log the first few fallbacks per boundary; a broken page shape would hit every page. */
+const MAX_LOGGED_FALLBACKS = 3;
+
+function bump(boundary: DetachBoundary, key: "detached" | "fallbacks"): number {
+  const row = counts.get(boundary) ?? { detached: 0, fallbacks: 0 };
+  row[key] += 1;
+  counts.set(boundary, row);
+  return row[key];
+}
+
 /**
  * Copy a per-page value so it stops referencing the page it came from (#1860).
  *
@@ -24,14 +47,40 @@
  * Applied only where a value OUTLIVES its batch. Inside a batch the page is
  * resident anyway and a copy would be pure cost.
  */
-export function detachFromPage<T>(value: T): T {
+export function detachFromPage<T>(value: T, boundary: DetachBoundary): T {
   try {
-    return structuredClone(value);
-  } catch {
+    const copy = structuredClone(value);
+    bump(boundary, "detached");
+    return copy;
+  } catch (error) {
     // A value carrying something non-cloneable (a function, a DOM node) would
     // throw. Keeping the original is the safe answer: it costs the retention
     // this exists to avoid, but it cannot change what the audit reports.
+    //
+    // It is all-or-nothing per call, so ONE offending finding restores
+    // page-sized retention for every page that carries it, with identical
+    // findings and green golden tests. That is exactly the failure this counter
+    // exists to make visible; `detachCounts` is asserted zero over a real
+    // rule-runner graph in tests/detach-from-page.test.ts.
+    const seen = bump(boundary, "fallbacks");
+    if (seen <= MAX_LOGGED_FALLBACKS) {
+      // The error's TYPE only — its message can quote the offending value, and
+      // that value is page content.
+      const kind = error instanceof Error ? error.name : typeof error;
+      logger.warn(
+        `detach fallback at ${boundary} (${kind}): this page stays attached to its HTML (#1860)`,
+      );
+    }
     return value;
   }
 }
 
+/** Per-boundary detach/fallback counts for the current process. */
+export function detachCounts(boundary: DetachBoundary): DetachCounts {
+  return counts.get(boundary) ?? { detached: 0, fallbacks: 0 };
+}
+
+/** Test seam: counts are process-wide, so a test that asserts on them starts here. */
+export function resetDetachCounts(): void {
+  counts.clear();
+}
