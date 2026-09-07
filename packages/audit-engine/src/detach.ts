@@ -1,9 +1,12 @@
 // Detaching retained values from the page they came from (#1860).
 
+import { schemaCollectionFromJSON } from "@squirrelscan/parser";
+import type { ParsedPage } from "@squirrelscan/rules";
+
 import { logger } from "./adapter-logger";
 
 /** Where a detach happened, so a fallback can name the boundary that failed. */
-export type DetachBoundary = "page-rules" | "collected-signal";
+export type DetachBoundary = "page-rules" | "collected-signal" | "parsed-universe";
 
 export interface DetachCounts {
   /** Values copied free of their page. */
@@ -83,4 +86,49 @@ export function detachCounts(boundary: DetachBoundary): DetachCounts {
 /** Test seam: counts are process-wide, so a test that asserts on them starts here. */
 export function resetDetachCounts(): void {
   counts.clear();
+}
+
+/**
+ * Detach a parsed page for the streamed universe, which holds one per page for
+ * the whole run (#1860).
+ *
+ * `detachFromPage` cannot be used directly here for two reasons:
+ *
+ *  - `document` is a LIVE linkedom DOM at this point. Cloning it would throw,
+ *    and the throw is caught, so the whole page would silently stay attached.
+ *    The universe is DOM-free by contract (the batch's documents are released
+ *    immediately after), so it is dropped rather than copied.
+ *  - `schemas` is a `SchemaCollection`, a class with getters. `structuredClone`
+ *    keeps its data and loses its prototype, which would leave site rules
+ *    reading `undefined` off a plain object. It is rebuilt from the cloned data
+ *    with `schemaCollectionFromJSON` — the same rehydration `buildSiteContext`
+ *    already does for a page whose parse came out of storage.
+ *
+ * Only worth doing because the retained scalars are slices of the page's HTML
+ * when the parse ran against a live DOM. Measured over a 150-page crawl of real
+ * 959 KB pages with NO stored parsedData (the CLI path, and the fallback for
+ * older crawls): the universe held 3749 KB per page, and 0 after this. With
+ * parsedData present the strings come from `JSON.parse`, which already produces
+ * fresh ones, and the same measurement shows 126 KB per page falling to 100.
+ */
+export function detachParsedPage(parsed: ParsedPage): ParsedPage {
+  const { document: _document, ...rest } = parsed;
+  try {
+    const cloned = structuredClone(rest);
+    bump("parsed-universe", "detached");
+    return {
+      ...cloned,
+      schemas: schemaCollectionFromJSON(cloned.schemas),
+      document: null,
+    } as ParsedPage;
+  } catch (error) {
+    const seen = bump("parsed-universe", "fallbacks");
+    if (seen <= MAX_LOGGED_FALLBACKS) {
+      const kind = error instanceof Error ? error.name : typeof error;
+      logger.warn(
+        `detach fallback at parsed-universe (${kind}): this page stays attached to its HTML (#1860)`,
+      );
+    }
+    return parsed;
+  }
 }

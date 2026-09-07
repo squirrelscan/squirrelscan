@@ -18,6 +18,7 @@ import { Effect } from "effect";
 import type { Config } from "@squirrelscan/config";
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import { createRunner, type SiteData } from "@squirrelscan/rules";
+import { SchemaCollection } from "@squirrelscan/parser";
 
 import {
   buildSiteContext,
@@ -26,7 +27,7 @@ import {
   runStreamingRules,
   type PreFetchedAssets,
 } from "../src/adapter";
-import { detachCounts, detachFromPage, resetDetachCounts } from "../src/detach";
+import { detachCounts, detachFromPage, detachParsedPage, resetDetachCounts } from "../src/detach";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -124,6 +125,46 @@ describe("detach at the production boundaries", () => {
     // And no page silently kept its attachment.
     expect(pageRules.fallbacks).toBe(0);
     expect(signals.fallbacks).toBe(0);
+
+    await run(storage.close());
+  }, 120_000);
+
+  test("a real parsed page detaches with its schemas still usable", async () => {
+    const { storage, crawlId } = await fixture(9, 5);
+    const pages = await run(storage.getPages(crawlId));
+    const ctx = await run(buildSiteContext(pages));
+
+    resetDetachCounts();
+    let checked = 0;
+
+    for (const { parsed } of ctx) {
+      if (!parsed) continue;
+      const copy = detachParsedPage(parsed);
+      checked++;
+
+      // The DOM is dropped, not cloned: cloning a live linkedom document throws,
+      // and a throw here would silently keep the whole page attached.
+      expect(copy.document).toBeNull();
+      expect(copy).not.toBe(parsed);
+
+      // `structuredClone` keeps SchemaCollection's data and loses its prototype.
+      // Without the rehydrate, site rules would read `undefined` off a plain
+      // object and quietly stop reporting.
+      expect(copy.schemas).toBeInstanceOf(SchemaCollection);
+      expect(copy.schemas.types).toEqual(parsed.schemas.types);
+      expect(copy.schemas.all).toEqual(parsed.schemas.all);
+      expect(copy.schemas.organization).toEqual(parsed.schemas.organization);
+      expect(copy.schemas.raw).toEqual(parsed.schemas.raw);
+
+      // Everything else survives byte for byte — this is what the golden gate
+      // depends on, asserted here per field rather than per report.
+      const { document: _d, schemas: _s, ...restCopy } = copy;
+      const { document: _d2, schemas: _s2, ...restSource } = parsed;
+      expect(restCopy).toEqual(restSource);
+    }
+
+    expect(checked).toBeGreaterThan(0);
+    expect(detachCounts("parsed-universe")).toEqual({ detached: checked, fallbacks: 0 });
 
     await run(storage.close());
   }, 120_000);

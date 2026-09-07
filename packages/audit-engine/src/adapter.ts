@@ -107,7 +107,7 @@ import {
   type StreamPageRulesHooks,
 } from "./streaming";
 import { collectDroppedBatch } from "./batch-gc";
-import { detachFromPage } from "./detach";
+import { detachFromPage, detachParsedPage } from "./detach";
 import { resolveCloakingProbes } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
 import { confirmSoft404Candidates } from "./soft404-confirm";
@@ -1767,12 +1767,20 @@ function createParsedUniverseAccumulator(): {
         // read this text would produce different findings than v1 and fail.
         if (parsed.content?.textContent) parsed.content.textContent = "";
 
+        // Detach BEFORE retaining (#1860). A parse that ran against a live DOM
+        // hands back scalars that are slices of the page's HTML, and the
+        // universe outlives every batch, so one retained href holds a whole
+        // 959 KB page for the rest of the run. Cloned once and shared by both
+        // consumers below — `runSitePass`'s soft-404 confirm mutates the parse
+        // through `pageDataMap` and `parsedPages` has to see that mutation.
+        const kept = detachParsedPage(parsed);
+
         const headers = buildHeadersMap(page);
         htmlPages.push({
           url: page.normalizedUrl,
           finalUrl: page.finalUrl,
           statusCode: page.status,
-          parsed,
+          parsed: kept,
           headers,
           redirectChain: page.redirectChain,
         });
@@ -1781,7 +1789,7 @@ function createParsedUniverseAccumulator(): {
           normalizedUrl: page.normalizedUrl,
           status: page.status,
           fetcherId: page.fetcherId,
-          parsed,
+          parsed: kept,
         });
       }
     },
