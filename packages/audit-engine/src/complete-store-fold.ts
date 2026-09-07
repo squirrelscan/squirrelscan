@@ -42,11 +42,11 @@ import {
 import type { SkippedPassCounts } from "./stream-findings";
 
 /**
- * This audit's complete findings, delivered ONE PAGE AT A TIME. Each yielded array
- * holds every ingested finding for a single `normalizedUrl`; a page must never be
- * split across two items (see the module header). The API implements this as a
- * keyset cursor over page_findings that buffers to page boundaries, so no more
- * than one page's rows are resident at a time.
+ * This audit's complete findings, delivered a page at a time. A yielded array may
+ * hold several WHOLE pages, but a single page must never be SPLIT across two
+ * items — that is what the fold's byte-identity rests on (see the module header).
+ * The API implements this as a keyset cursor over page_findings that buffers to
+ * page boundaries, so no more than one page's rows are resident at a time.
  */
 export type FindingPageSource = AsyncIterable<readonly PageFindingRecord[]>;
 
@@ -153,9 +153,10 @@ export async function foldCompleteStoreTallies(
   // CRAWLED pages, matching reconstructCompleteResults' `crawledUrls \ failingPages`.
   const dirtyPagesByRule = new Map<string, number>();
 
-  for await (const page of findingPages) {
-    if (page.length === 0) continue;
-    const normalizedUrl = page[0]!.normalizedUrl;
+  /** Fold ONE page: its reconstructed fresh checks plus any carried findings that
+   * sit on the same page, in a single addChecksToTally call per rule so no
+   * (checkName, pageUrl) bucket is ever split. */
+  const foldPage = (normalizedUrl: string, page: readonly PageFindingRecord[]): void => {
     const freshByRule = reconstructPageRuleChecks(page);
     const carriedForPage = carriedByPage.get(normalizedUrl);
     // Consumed: this page's carried findings are folded here, so the trailing
@@ -188,6 +189,16 @@ export async function foldCompleteStoreTallies(
         dirtyPagesByRule.set(ruleId, (dirtyPagesByRule.get(ruleId) ?? 0) + 1);
       }
     }
+  };
+
+  for await (const batch of findingPages) {
+    if (batch.length === 0) continue;
+    // Re-group by page rather than trusting a batch to hold exactly one. What the
+    // invariant needs is that a page is never SPLIT across two items; a batch
+    // carrying several WHOLE pages is harmless, and grouping here means such a
+    // producer cannot silently attribute one page's findings to another page's
+    // crawled/removed state.
+    for (const [normalizedUrl, page] of groupByPage(batch)) foldPage(normalizedUrl, page);
   }
 
   // Trailing pass 1 — every rule the shell carries.
@@ -252,6 +263,19 @@ export async function foldCompleteStoreTallies(
   }
 
   return tallies;
+}
+
+/** Split a batch of findings into per-page groups, preserving arrival order. */
+function groupByPage(
+  batch: readonly PageFindingRecord[]
+): Map<string, PageFindingRecord[]> {
+  const byPage = new Map<string, PageFindingRecord[]>();
+  for (const f of batch) {
+    const rows = byPage.get(f.normalizedUrl);
+    if (rows) rows.push(f);
+    else byPage.set(f.normalizedUrl, [f]);
+  }
+  return byPage;
 }
 
 /**
