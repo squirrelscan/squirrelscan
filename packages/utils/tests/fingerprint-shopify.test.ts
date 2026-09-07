@@ -163,8 +163,10 @@ describe("what is deliberately NOT reordered", () => {
 });
 
 describe("a block that contains a script", () => {
+  // A RECOGNIZED analytics payload, because an ordinary script carrying a
+  // "reqid" field is deliberately left alone now.
   const block = (app: string, reqid: string) =>
-    `<!-- BEGIN app block: shopify://apps/${app}/blocks/x/y --><script>var m={"reqid":"${reqid}"}</script><!-- END app block -->`;
+    `<!-- BEGIN app block: shopify://apps/${app}/blocks/x/y --><script>window.ShopifyAnalytics.meta={"reqid":"${reqid}"}</script><!-- END app block -->`;
 
   test("is both sorted AND neutralized, not one or the other", () => {
     // The overlap that makes a single-pass rewrite wrong: the app-block region
@@ -182,8 +184,99 @@ describe("a block that contains a script", () => {
 
   test("a change to the contained script still moves the fingerprint", () => {
     const a = `<body>${block("aaa", "R1")}${block("bbb", "R1")}</body>`;
-    const changed = a.replace("var m=", "var different=");
+    const changed = a.replace("window.ShopifyAnalytics.meta=", "window.ShopifyAnalytics.other=");
     expect(normalizeHtmlForFingerprint(changed)).not.toBe(normalizeHtmlForFingerprint(a));
+  });
+});
+
+// Every case below is a counterexample a review produced against the previous
+// two implementations — a regex pass, then a hand-rolled scanner. They are kept
+// as fixtures because each one is a way to normalize text the page DISPLAYS,
+// which is the failure mode that matters: it does not show up as a cache miss,
+// it shows up as two different pages sharing a render.
+describe("review counterexamples", () => {
+  const ext = (n: string) =>
+    `<script src="https://cdn.shopify.com/extensions/${n}/a.js"></script>`;
+
+  test("a close tag with a longer name does not end a raw-text element", () => {
+    // `</textareaX>` is textarea TEXT in HTML. Ending the element there exposed
+    // the rest of the textarea's displayed content to sorting.
+    const a = `<body><textarea></textareaX>${ext("b")}${ext("a")}</textarea></body>`;
+    const b = `<body><textarea></textareaX>${ext("a")}${ext("b")}</textarea></body>`;
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+  });
+
+  test("an apostrophe in an unquoted attribute does not swallow visible markup", () => {
+    const html = `<script x=a'b></script>'><p>1111111111111</p><script></script>`;
+    // The paragraph is visible content; its 13-digit number must survive.
+    expect(normalizeHtmlForFingerprint(html)).toContain("<p>1111111111111</p>");
+  });
+
+  test("an element whose name merely starts with 'script' is not a script", () => {
+    const html = `<scripté><p>1111111111111</p></scripté>`;
+    expect(normalizeHtmlForFingerprint(html)).toContain("<p>1111111111111</p>");
+  });
+
+  test("xmp content is text, not markup", () => {
+    const a = `<body><xmp>${ext("b")}${ext("a")}</xmp></body>`;
+    const b = `<body><xmp>${ext("a")}${ext("b")}</xmp></body>`;
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+  });
+
+  test("an id-looking string inside another attribute's value is not an id", () => {
+    const a = `<body><script data-note=' id="__st" '>document.title="A"</script></body>`;
+    const b = `<body><script data-note=' id="__st" '>document.title="B"</script></body>`;
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+  });
+
+  test("a different id that starts with __st is not the bootstrap", () => {
+    const a = `<body><script id="__st suffix">document.title="A"</script></body>`;
+    const b = `<body><script id="__st suffix">document.title="B"</script></body>`;
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+  });
+
+  test("an identity FIELD NAME in an ordinary script is content, not identity", () => {
+    // The counterexample verbatim: this script renders its "u" field.
+    const alice = `<body><script>document.body.textContent=({"u":"Alice"}).u</script></body>`;
+    const bob = `<body><script>document.body.textContent=({"u":"Bob"}).u</script></body>`;
+    expect(normalizeHtmlForFingerprint(alice)).not.toBe(normalizeHtmlForFingerprint(bob));
+  });
+
+  test("the same field inside a recognized analytics payload IS identity", () => {
+    const one = `<body><script id="__st">var __st={"u":"fc3e51fed339"}</script></body>`;
+    const two = `<body><script id="__st">var __st={"u":"be9f47fdfff1"}</script></body>`;
+    expect(normalizeHtmlForFingerprint(one)).toBe(normalizeHtmlForFingerprint(two));
+  });
+
+  test("the CDN string in a data attribute does not make a script sortable", () => {
+    // The predicate resolves the real src and checks its hostname, so these two
+    // ordinary scripts keep their order significant.
+    const tag = (n: string) =>
+      `<script data-note="cdn.shopify.com/extensions/" src="/${n}.js"></script>`;
+    const a = `<body>${tag("b")}${tag("a")}</body>`;
+    const b = `<body>${tag("a")}${tag("b")}</body>`;
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+  });
+
+  test("a lookalike hostname is not the extension CDN", () => {
+    const tag = (n: string) =>
+      `<script src="https://not-cdn.shopify.com/extensions/${n}/a.js"></script>`;
+    const a = `<body>${tag("b")}${tag("a")}</body>`;
+    const b = `<body>${tag("a")}${tag("b")}</body>`;
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+  });
+
+  test("a nested app fence does not let a sort cross a boundary", () => {
+    // An inner END closing the outer block emitted a region that was not a
+    // sibling of the ones beside it.
+    const nested = (inner: string) =>
+      `<!-- BEGIN app block: shopify://apps/z/b/1 --><div>outer<!-- BEGIN app block: shopify://apps/${inner}/b/2 --><span>${inner}</span><!-- END app block --></div><!-- END app block -->`;
+    const a = `<body>${nested("aaa")}</body>`;
+    const b = `<body>${nested("bbb")}</body>`;
+    // Different inner content is a real difference; nothing may collapse it.
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    // And the outer div is never relocated.
+    expect(normalizeHtmlForFingerprint(a)).toContain("<div>outer");
   });
 });
 
