@@ -29,49 +29,68 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
  * heaviest pages measured, which fits a standard-3 container (8 GiB) alongside
  * the crawl's own high-water and the report tail with room to spare.
  *
- * WHAT THE DIAL ACTUALLY BUYS, measured (scripts/batch-budget-sweep.ts, 150 real
- * 959 KB pages, peak from the OS rather than an in-process sampler, minimum over
- * repeated runs because a single run of the same budget varies by 100 MB):
+ * WHAT THE DIAL BUYS, measured (scripts/batch-budget-sweep.ts, 150 real 959 KB
+ * pages, peak read from the OS rather than an in-process sampler, batch resolved
+ * from the budget by this module, three runs per budget):
  *
- *   budget    batch    peak RSS
- *     6 MB        6      480 MB
- *    12 MB       12      344 MB
- *    24 MB       25      492 MB
- *    48 MB       51      509 MB
- *    96 MB      102      655 MB
+ *   budget    batch    peak RSS (min .. max over 3 runs)
+ *     6 MB        6      480 .. 516 MB
+ *    12 MB       12      344 .. 417 MB
+ *    24 MB       25      492 .. 592 MB
+ *    48 MB       51      509 .. 707 MB
+ *    96 MB      102      655 .. 706 MB
  *
- * From 12 pages up that is a floor of about 300 MB plus 3.5 MB per page of
- * batch. The floor is not reachable with this dial — it is the rule set, the
- * runner, SQLite's own caches and the arena — so the budget controls the term
- * ABOVE 300 MB and nothing below it. Halving a container's memory by halving
- * this number therefore does not work.
+ * Three things, and only these three, follow from that table.
  *
- * BELOW ROUGHLY 12 PAGES THE DIAL REVERSES. A 6 MB budget measured WORSE than a
- * 12 MB one, on every run of both, because the same crawl then costs four times
- * as many read-parse-collect cycles and the arena's high-water is set by that
- * churn rather than by what is held. Turning this down when a container is
- * tight is the intuitive move and it is the wrong one past that point.
+ * THE PEAK NEVER GOT BELOW ~340 MB at any budget tried, so a large part of it
+ * is not reachable with this dial: the rule set, the runner, SQLite's caches
+ * and the arena. Halving the budget cannot halve a container. Between 12 and
+ * 102 pages a batch eight times larger cost a peak under twice as large, so the
+ * budget-dependent part is real but sub-proportional. Do not read a formula off
+ * these five points — a straight line through the ends misses the middle by
+ * 100 MB, and the run-to-run spread within one budget is 60 to 200 MB.
  *
- * The RSS the loop does not give back between batches is REUSABLE, not lost:
- * parsing one more batch after the run finishes costs a fraction of a cold
- * batch (102 pages for 2 MB against roughly 300 MB cold, in the best case
- * measured). So the peak is a true high-water rather than something that
- * compounds, and it is why the walk is safe at page counts far past 150.
+ * SMALLER IS NOT MONOTONICALLY BETTER. Every one of three runs at a 6 MB budget
+ * peaked above every one of five runs at 12 MB. Two things differ at once
+ * there — the batch holds less, and the same crawl takes about twice as many
+ * read-parse-collect cycles — so this says the direction is not safe to assume,
+ * not that a threshold sits at twelve pages. If a container is tight, measure
+ * the budget you intend to set; do not assume turning it down helps.
  *
- * mimalloc's environment options ARE honoured by Bun (`MIMALLOC_VERBOSE=1`
- * prints its option dump), but `MIMALLOC_PURGE_DELAY=0` is not a lever here:
- * across five budgets it moved the peak in both directions and never more than
- * the run-to-run noise.
+ * WHAT IS NOT HANDED BACK BETWEEN BATCHES IS LARGELY REUSABLE. The script's
+ * cold/warm probe parses one batch from a standing start, runs the whole
+ * pipeline, then parses that same batch again: 51 pages cost 312 MB of fresh
+ * RSS cold and 41 MB the second time, and 12 pages cost 89 MB and then 0. That
+ * is an upper bound on reuse rather than an isolate of it — the warm arm also
+ * has a warm parser and JIT — and it says nothing about whether anything is
+ * retained. It is evidence that the peak is a high-water rather than a
+ * compounding cost, not proof of it.
+ *
+ * Also measured: Bun honours mimalloc's environment options (`MIMALLOC_VERBOSE=1`
+ * prints its option dump), but `MIMALLOC_PURGE_DELAY=0` moved the peak in both
+ * directions across five budgets and never beyond the run-to-run spread.
+ *
+ * Every number above is the whole pipeline's high-water — universe, site fetch,
+ * page loop, site query, site rules, assembly — because that is what a container
+ * is charged for. The budget sizes more than one of those phases, so none of it
+ * attributes a peak to the page loop alone.
+ *
+ * And they are ABSOLUTE numbers from one machine under one load. A later run of
+ * the same two budgets on a busy machine measured 515 and 845 MB where the table
+ * says 344 and 509. The shape is the finding; the values are not a spec, and a
+ * container is not safe because it exceeds a number in this comment.
  */
 export const STREAM_BATCH_BYTES = 48 * 1024 * 1024;
 
 /**
  * Floor: below this the per-batch storage round-trips start to dominate.
  *
- * It also sits below the point where a smaller batch stops helping memory (see
- * STREAM_BATCH_BYTES), but raising it would not change any real run: this clamp
- * only binds when the budget divided by the average page is under five pages,
- * which at the default budget means pages of nearly 10 MB.
+ * Left where it is deliberately. The sweep above found a 6-page batch peaking
+ * higher than a 12-page one, but raising this clamp would bind at the NEW
+ * threshold rather than fixing that case, and it only engages at all when the
+ * budget divided by the average page falls under it — at the default budget,
+ * pages of nearly 10 MB. Moving it is a change to the budget's meaning at every
+ * size, on the evidence of two adjacent points.
  */
 export const STREAM_BATCH_MIN_PAGES = 5;
 
