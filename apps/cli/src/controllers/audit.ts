@@ -1575,6 +1575,8 @@ export async function runAudit(
       await Effect.runPromise(
         sqliteStorage
           .setReportStatus(crawlId, "building")
+          // A database that somehow lacks the column reads as NULL, which is
+          // "an ordinary audit" — today's behaviour, not a reason to fail here.
           .pipe(Effect.catchAll(() => Effect.void))
       );
       phaseTimer.mark("rules");
@@ -1852,18 +1854,31 @@ export async function runAudit(
       // nonzero on it. Deleting good history on the strength of that is the
       // worst thing this feature could do: a week of a site being down would
       // quietly take the audits you would use to find out when it broke.
-      // What this run actually said, recorded on the crawl so LATER audits can
-      // tell a real audit from a run that learned nothing. Without it the guard
-      // below only protects the failing run itself: three good audits, two
-      // blocked ones and a recovery run would keep the two blocked runs and
-      // delete all three from before the outage.
+      //
+      // That takes two things. This records what the run actually said, so a
+      // LATER audit can tell a real audit from one that learned nothing —
+      // without it the gate below protects only the failing run itself, and
+      // three good audits, two blocked ones and a recovery run would keep the
+      // two blocked runs and delete all three from before the outage. It also
+      // replaces the `building` sentinel stamped before the report was built.
       await Effect.runPromise(
         sqliteStorage
           .setReportStatus(crawlId, report.status ?? "completed")
-          .pipe(Effect.catchAll(() => Effect.void))
+          .pipe(
+            Effect.catchAll((error) => {
+              // Not worth failing a finished audit over, but not silent either:
+              // a crawl left reading `building` is never retired and never
+              // counted, so it holds its rows until someone prunes.
+              logger.warn(
+                `Could not record this audit's outcome on its crawl: ${String(error)}`
+              );
+              return Effect.void;
+            })
+          )
       );
 
-      // `auditMayRetire` is that rule, defined once next to the pass it gates.
+      // And this is the gate for the run in hand, defined once next to the pass
+      // it gates.
       if (auditMayRetire(report.status)) {
         try {
           const retention = await retainRecentAudits(sqliteStorage, {
