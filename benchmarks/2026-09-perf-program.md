@@ -752,10 +752,18 @@ two; and under the `u` flag the `i` flag folds beyond ASCII, so `/secret/iu`
 matches `ſecret`, which does not contain `secret`. Unicode-mode patterns are now
 declined whole.
 
+A second review pass found two more of the same family, both legacy escapes
+whose length is not knowable from the source: `\c` is a control escape only
+before an ASCII letter and otherwise the two characters `\` and `c`, and
+`\k<name>` is a named backreference only when the pattern declares a named
+group. Guessing either length walked the scan into a character class.
+
 The pattern in every one is the same: **the extractor read the regex as something
-the engine does not.** The defence that works is a counterexample corpus of
-(pattern, subject-it-really-matches) pairs, because that comparison does not
-depend on anyone's reading being right.
+the engine does not**, and the specific move that caused half of them was
+searching forward for a delimiter — `}`, `>`, `]` — which lands inside whatever
+structure happens to contain one. The defence that works is a counterexample
+corpus of (pattern, subject-it-really-matches) pairs, because that comparison
+does not depend on anyone's reading being right.
 
 The generative soundness test that was supposed to catch several of them could
 not run at all: its own string generator looped forever on `\d`, `\w` and `\s`,
