@@ -4,11 +4,11 @@
 // `runStreamingRules` (site-fetch phase + site pass + RuleExecutionResult
 // assembly) is built on top of it.
 //
-// No longer dark: the CLOUD audit path runs on this as of #1860. The CLI still
-// runs v1 (runRulesOnStorage), which is untouched, so the two paths must be kept
-// byte-identical by the golden diffs (blueprint §5) — and note those gates only
-// cover cases their fixtures contain. #1829's rate-limited-page handling landed
-// after they were written and diverged here unnoticed until #1860.
+// No longer dark: the CLOUD audit path runs on this as of #1860 and the CLI as of
+// #1913. `runRulesOnStorage` (v1) is still the reference the golden diffs compare
+// against (blueprint §5) — and note those gates only cover cases their fixtures
+// contain. #1829's rate-limited-page handling landed after they were written and
+// diverged here unnoticed until #1860.
 //
 // Page rules are per-page independent (verified: no page rule reads other pages —
 // the 8 touching ctx.site read only scripts/resourceSizes/siteMetadata), so
@@ -16,6 +16,12 @@
 // loop. Per-page results are folded into per-rule tallies via the proven-equal
 // foldRuleResultIntoTallies, so the growing O(pages) accumulation that drives v1's
 // superlinear per-batch wall-time is avoided.
+//
+// TEMPLATE FAN-OUT (#1951) rides on that independence: a rule declaring
+// `verdictScope: "template"` runs once per template cluster and its verdict is
+// copied onto the cluster's other members. It is ON here and only here — v1 has no
+// cluster key and is left alone — with `SQUIRREL_TEMPLATE_FANOUT=0` as the kill
+// switch. See template-fanout.ts for what makes it sound and what it can never do.
 
 import { Effect } from "effect";
 
@@ -31,6 +37,13 @@ import { detachFromPage } from "./detach";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
 import type { PageRuleLoopHooks } from "./page-rule-executor";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
+import { templateFingerprintKey } from "./template-key";
+import {
+  createTemplateFanout,
+  fanoutClusterKey,
+  templateFanoutEnabled,
+  type TemplateFanoutStats,
+} from "./template-fanout";
 
 /** Default page batch — bounds DOM residency to ≤ this many live docs at once. */
 export const STREAM_PAGE_BATCH = 200;
@@ -95,6 +108,13 @@ export interface StreamPageRulesResult {
   peakLiveDocs: number;
   /** Pages the extractor wrote page_features for (isAuditablePage-gated). */
   extractedCount: number;
+  /**
+   * What the template fan-out actually did (#1951). All zeros when it is off, and
+   * `fannedRuleRuns` is the number of page-rule invocations it removed — the only
+   * measure that distinguishes a working fan-out from one whose byte-identical
+   * output it produced by running everything anyway.
+   */
+  templateFanout: TemplateFanoutStats;
 }
 
 // Re-used shape; avoids pulling the CheckResult symbol name-collision into scope.
@@ -150,6 +170,17 @@ export function streamPageRules(
      * thing on both paths. Unset → the running done count is reported as total.
      */
     totalPages?: number;
+    /**
+     * Template fan-out (#1951): run each rule declaring `verdictScope: "template"`
+     * once per template cluster and give its verdict to the cluster's other
+     * members. Defaults to {@link templateFanoutEnabled} — ON, with
+     * `SQUIRREL_TEMPLATE_FANOUT=0` as the kill switch. Pass `false` to compare
+     * against the ordinary path; the two must produce byte-identical results,
+     * which is what `template-fanout-equivalence-golden.test.ts` asserts.
+     */
+    templateFanout?: boolean;
+    /** Test/bench seam: cap the cached clusters (see DEFAULT_MAX_CLUSTERS). */
+    templateFanoutMaxClusters?: number;
   }
 ): Effect.Effect<StreamPageRulesResult, never, never> {
   return Effect.gen(function* () {
@@ -163,6 +194,11 @@ export function streamPageRules(
     const heartbeatEvery = Math.max(1, opts?.pageLoopHooks?.heartbeatEveryPages ?? 1);
     const onLoopProgress = opts?.pageLoopHooks?.onProgress;
     let lastYieldAt = Date.now();
+    // #1951. Built per pass, so its cache and its counters belong to this run.
+    const fanout =
+      (opts?.templateFanout ?? templateFanoutEnabled())
+        ? createTemplateFanout(runner, { maxClusters: opts?.templateFanoutMaxClusters })
+        : null;
 
     const pageResults = new Map<string, CheckResultLike[]>();
     const pageRuleResults = new Map<string, Map<string, CheckResultLike[]>>();
@@ -210,6 +246,7 @@ export function streamPageRules(
         const confirmation = soft404?.get(page.normalizedUrl);
         if (confirmation !== undefined) parsed.soft404Confirmation = confirmation;
 
+        const pageUrl = page.normalizedUrl;
         const pageData: PageData = {
           url: page.url,
           html: page.html!,
@@ -224,8 +261,36 @@ export function streamPageRules(
           rendered: isRenderedFetch(page.fetcherId),
         };
 
+        // ONE fingerprint per page, three consumers now: `page_features.template_fp`
+        // reduces it to an equality cluster key (#1949), the collected signal keeps
+        // it whole for `template-discontinuity`'s fuzzy comparison, and the fan-out
+        // below groups on the same key. Built here rather than inside any consumer
+        // so the loop still walks each DOM exactly once.
+        //
+        // It moved ABOVE the rule run for #1951 — the cluster has to be known
+        // before the rules are dispatched, not after. That is safe because
+        // `fingerprintPage` reads only chrome (asset hosts, body classes, CSS
+        // custom properties, stylesheet hrefs, nav/footer) and page rules do not
+        // mutate the DOM; `template-cluster-key-golden.test.ts` pins the stored
+        // keys, so a rule that did would fail there.
+        const shared: SharedPageSignals = {
+          fingerprint: fingerprintPage(parsed, pageUrl),
+        };
+        // The grouping key is the template cluster AND this page's origin: a
+        // declared rule may resolve resources against the origin (`security/sri`
+        // decides "cross-origin" by comparing it), so a crawl spanning http:// and
+        // https:// must not copy a verdict across that boundary.
+        const clusterKey = fanout
+          ? fanoutClusterKey(templateFingerprintKey(shared.fingerprint), pageUrl)
+          : null;
+        const fanned = fanout?.take(clusterKey);
+
         const raw = yield* Effect.promise(() =>
-          runner.runPageRules(pageData, siteDataForPageRules)
+          runner.runPageRules(
+            pageData,
+            siteDataForPageRules,
+            fanned ? { fannedRuleChecks: fanned } : undefined
+          )
         );
 
         // Detach the findings from the page before retaining them (#1860). Every
@@ -266,7 +331,12 @@ export function streamPageRules(
           ),
         };
 
-        const pageUrl = page.normalizedUrl;
+        // Keep this page's template-scoped verdicts for the rest of its cluster,
+        // BEFORE `pageUrl` is stamped below, so what a member inherits is
+        // page-identity-free and its own stamp is a first write (#1951). Only when
+        // this page ran the rules itself — a member has nothing new to say.
+        if (!fanned) fanout?.record(clusterKey, result.ruleResults);
+
         pageResults.set(pageUrl, result.checks);
         const ruleChecksForPage = new Map<string, CheckResultLike[]>();
         for (const [ruleId, rr] of result.ruleResults) {
@@ -285,16 +355,8 @@ export function streamPageRules(
 
         // page_features + E-E2 collectors, DOM still live. The early
         // `!isAuditablePage(page)` continue above already guarantees this page is
-        // auditable, so no second gate is needed here.
-        //
-        // ONE fingerprint per page, two consumers: `page_features.template_fp`
-        // reduces it to an equality cluster key (#1949) and the collected signal
-        // keeps it whole for `template-discontinuity`'s fuzzy comparison. Built
-        // here rather than inside either consumer so the loop still walks each DOM
-        // exactly once.
-        const shared: SharedPageSignals = {
-          fingerprint: fingerprintPage(parsed, pageUrl),
-        };
+        // auditable, so no second gate is needed here. `shared` was built before
+        // the rules ran (see above); it is the same object either way.
         yield* storage
           .upsertPageFeatures(crawlId, extractPageFeatures(page, parsed, shared))
           .pipe(Effect.catchAll(() => Effect.void));
@@ -355,6 +417,12 @@ export function streamPageRules(
       pageUrls,
       peakLiveDocs,
       extractedCount,
+      templateFanout: fanout?.stats() ?? {
+        clusters: 0,
+        fannedPages: 0,
+        fannedRuleRuns: 0,
+        pagesOverCap: 0,
+      },
     };
   });
 }

@@ -198,6 +198,17 @@ export { isHtmlContentType } from "./adapter";
 // stored on page_features.template_fp and grouped by SiteQuery.templateClusters().
 export { templateFingerprintKey, templateVerdictKey } from "./template-key";
 
+// Template fan-out (#1951) — run a rule declaring verdictScope "template" once
+// per cluster and give its verdict to the members. The kill switch is
+// SQUIRREL_TEMPLATE_FANOUT=0; `templateFanoutEnabled` is what reads it.
+export {
+  createTemplateFanout,
+  fanoutClusterKey,
+  templateFanoutEnabled,
+  DEFAULT_MAX_CLUSTERS,
+} from "./template-fanout";
+export type { TemplateFanout, TemplateFanoutStats } from "./template-fanout";
+
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";
 export type {

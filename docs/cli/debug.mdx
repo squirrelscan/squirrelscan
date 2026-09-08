@@ -137,6 +137,31 @@ the rules pass then prints its heap after a forced collection:
 Read `heapUsed`, not `rss`. Under memory pressure macOS compresses pages and the
 resident figure stops tracking what the process actually holds.
 
+## Rules that run once per template
+
+Most of a large site is a handful of templates repeated: a real storefront of 247
+pages has 13 distinct page chromes. A rule whose answer is a property of the
+template rather than of the page therefore gives the same verdict hundreds of
+times, so the audit runs those rules once per template and reports the result on
+every page of it. The findings are the same either way, and the audit is faster on
+exactly the sites where the rules phase hurts.
+
+Which rules qualify is a property of the rule, not a setting: a rule reading
+anything that varies page to page, including any response header and the page's
+own URL, keeps running everywhere.
+
+If you suspect a finding that looks copied from a sibling page, turn it off and
+compare:
+
+```bash
+SQUIRREL_TEMPLATE_FANOUT=0 squirrel audit https://example.com
+```
+
+`0`, `false`, `off` and `no` all disable it; anything else, including leaving it
+unset, leaves it on. A report produced with it off should be identical to one
+produced with it on, so a difference is a bug worth
+[reporting](https://github.com/squirrelscan/squirrelscan/issues).
+
 ## Sensitive data redaction
 
 Logs automatically redact sensitive data:

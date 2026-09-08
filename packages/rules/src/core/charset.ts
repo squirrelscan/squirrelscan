@@ -12,8 +12,19 @@ export const charsetRule: Rule = {
     solution:
       'Add <meta charset="UTF-8"> as the first element in your <head> section. This tells browsers how to interpret the text on your page. UTF-8 is the standard encoding that supports all languages and special characters. Placing it first ensures browsers know the encoding before parsing any other content.',
     category: "core",
+    // NOT "template", even though it is constant on both measured corpora and on
+    // the authored one. The charset can come from the `Content-Type` RESPONSE
+    // HEADER, which the template cluster key constrains in no way and which two
+    // pages of one template routinely differ in — an origin that sets
+    // `text/html; charset=utf-8` on some routes and a bare `text/html` on others
+    // makes this rule pass on one and fail on the other. Every corpus in the gates
+    // declares the charset in a `<meta>` tag, so the header branch is never
+    // reached there and no measurement could have caught it. This is the same
+    // disqualification VerdictScope already applies to `perf/cache-headers`,
+    // `security/cookie-flags` and `perf/compression`; the counterexample is pinned
+    // in packages/rules/tests/template-verdict-page-independence.test.ts (#1951).
     scope: "page",
-    verdictScope: "template",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

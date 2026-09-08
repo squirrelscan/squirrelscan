@@ -93,6 +93,30 @@ export interface PageRunResult {
   ruleResults: Map<string, RuleRunResult>;
 }
 
+/** Per-page options for {@link RuleRunner.runPageRules}. */
+export interface PageRuleRunOptions {
+  /**
+   * Template fan-out (#1951): `ruleId -> checks` for rules that must NOT run on
+   * this page because a page sharing its template cluster already produced the
+   * verdict. Only rules for which {@link mayFanOutAcrossTemplate} holds may
+   * appear here, and it is the CALLER that owns the cluster identity — the runner
+   * has no view of the crawl and simply trusts the map.
+   *
+   * The contract on the values:
+   *
+   *  - they are the sibling's checks CLONED, so stamping `pageUrl` on them cannot
+   *    reach back into another page's result (see `template-fanout.ts`);
+   *  - they carry no `pageUrl`, so the caller's ordinary stamping applies;
+   *  - they contain nothing derived from the sibling's URL, which is the property
+   *    `template-verdict-page-independence.test.ts` asserts for every declaring
+   *    rule by running it under two urls that share only scheme and host.
+   *
+   * A rule id absent from the map runs normally, so an empty or omitted map is
+   * exactly today's behaviour.
+   */
+  fannedRuleChecks?: ReadonlyMap<string, CheckResult[]>;
+}
+
 export interface SiteRunResult {
   checks: CheckResult[];
   ruleResults: Map<string, RuleRunResult>;
@@ -185,12 +209,19 @@ export class RuleRunner {
    * Returns synchronously when `run()` is sync (nearly all rules) and a Promise
    * only for the few async rules, so the common path pays no microtask overhead
    * (#521). Callers must handle either shape.
+   *
+   * `fanned` substitutes a template sibling's checks for `run()` (#1951). It is
+   * consulted AFTER both gates, because both are decided per PAGE and a
+   * representative's verdict says nothing about them: applicability happens to be
+   * run-constant, but the soft-404 gate is not, so a member that serves 404
+   * content must take its own skip rather than a sibling's real verdict.
    */
   private runOneRule(
     rule: Rule,
     ctx: RuleContext,
     siteMetadata: SiteMetadata | undefined,
-    scopeForLog?: "site"
+    scopeForLog?: "site",
+    fanned?: CheckResult[]
   ): RuleRunResult | Promise<RuleRunResult> {
     // Run-time applicability gate — emit a visible `skipped` check and skip
     // `run()` when the Stage-0 metadata excludes this rule.
@@ -215,6 +246,14 @@ export class RuleRunner {
           },
         ],
       };
+    }
+
+    // #1951: this rule already ran on a page sharing this one's template cluster
+    // and declared its verdict a property of the template, so the sibling's checks
+    // ARE this page's checks. Handed in pre-cloned and free of `pageUrl`, so the
+    // caller stamps this page's url onto them exactly as it does a real run's.
+    if (fanned) {
+      return { meta: rule.meta, checks: fanned };
     }
 
     const ruleStart = performance.now();
@@ -284,7 +323,8 @@ export class RuleRunner {
   // Optional siteData allows page rules to access site-level data (scripts, resourceSizes, etc.)
   async runPageRules(
     page: PageData,
-    siteData?: SiteData
+    siteData?: SiteData,
+    opts?: PageRuleRunOptions
   ): Promise<PageRunResult> {
     return logger.withTraceAsync(
       "runPageRules:page",
@@ -329,6 +369,7 @@ export class RuleRunner {
         // microtask; sync rules run straight through, no Promise overhead (#521).
         const ruleResults = new Map<string, RuleRunResult>();
         const allChecks: CheckResult[] = [];
+        const fannedChecks = opts?.fannedRuleChecks;
         for (const rule of pageRules) {
           const ctx: RuleContext = {
             page,
@@ -339,7 +380,17 @@ export class RuleRunner {
             intel,
             options: getRuleOptions(rule, this.config),
           };
-          const out = this.runOneRule(rule, ctx, siteMetadata);
+          // The substitution happens INSIDE this loop rather than by splicing
+          // afterwards, so a fanned rule occupies exactly the position a real run
+          // would: `allChecks` stays in enabled-rule order and `ruleResults` keeps
+          // its insertion order, which is what makes the output byte-identical.
+          const out = this.runOneRule(
+            rule,
+            ctx,
+            siteMetadata,
+            undefined,
+            fannedChecks?.get(rule.meta.id)
+          );
           const result = out instanceof Promise ? await out : out;
           ruleResults.set(rule.meta.id, result);
           allChecks.push(...result.checks);

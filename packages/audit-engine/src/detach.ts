@@ -13,6 +13,13 @@ export type DetachBoundary =
   | "external-links"
   /** Cloud-prefetch payloads collected during a streamed pre-rules walk (#1913). */
   | "cloud-payload"
+  /**
+   * A template representative's verdicts, kept for the rest of its cluster and
+   * re-copied onto each member (#1951). Detaching matters twice here: the cached
+   * copy outlives its page, and a member's copy must not alias the sibling's,
+   * or stamping `pageUrl` would rewrite the other pages' results.
+   */
+  | "template-fanout"
   /** Per-page fields the CLI's report keeps after its page batch is dropped (#1913). */
   | "report-page";
 

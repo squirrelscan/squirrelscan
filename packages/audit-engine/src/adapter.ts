@@ -2352,6 +2352,12 @@ export function runStreamingRules(
      * anything itself: `process` is the caller's concern.
      */
     onPhase?: (phase: StreamingRulePhase, boundary: "start" | "end") => void;
+    /**
+     * Template fan-out (#1951), forwarded to {@link streamPageRules}. Omitted →
+     * the env default (ON, `SQUIRREL_TEMPLATE_FANOUT=0` to kill it). Benches and
+     * the equivalence test set it explicitly to run both arms in one process.
+     */
+    templateFanout?: boolean;
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
@@ -2427,6 +2433,7 @@ export function runStreamingRules(
       pageUniverse: new Set(pageDataMap.keys()),
       totalPages: pageDataMap.size,
       pageLoopHooks: opts?.pageLoopHooks,
+      templateFanout: opts?.templateFanout,
       }),
     );
     const collectedSignals: CollectedSiteSignals = { pages: collectedPages };
