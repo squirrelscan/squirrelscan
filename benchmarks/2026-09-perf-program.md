@@ -601,6 +601,61 @@ while the `-wal` beside it grows by more than was saved. `PRAGMA
 wal_checkpoint(TRUNCATE)` after the vacuum, and measuring after the connection
 actually closes, is what makes the saving real.
 
+## Template clustering: 94.7% redundant on a real storefront, 6.5% if you measure it the obvious way
+
+Two real crawls and two synthetic ones, clustered two ways: by the chrome
+fingerprint the audit already builds per page (external asset hosts, `<body>`
+class tokens, CSS custom-property names, stylesheet hrefs, nav/footer presence),
+and by an exact DOM skeleton with all text and attribute values stripped.
+"Redundant" is every page after the first of its cluster, the ceiling on what
+doing the work once per template could avoid.
+
+| corpus | pages | chrome clusters | chrome redundant | skeleton clusters | skeleton redundant |
+|---|---|---|---|---|---|
+| gymshark.com (real) | 247 | 13 | 94.7% | 231 | 6.5% |
+| openelectricity.org.au (real) | 100 | 12 | 88.0% | 42 | 58.0% |
+| drscholls-shaped synthetic | 150 | 1 | 99.3% | 1 | 99.3% |
+| 6-template synthetic | 1,000 | 3 | 99.7% | 7 | 99.3% |
+
+The two definitions disagree completely on real sites and agree completely on
+synthetic ones. Real product pages share their chrome and differ in their body:
+a different number of variants, reviews, related items. 224 of gymshark's 231
+skeletons are singletons. The bench corpora are generated from a handful of
+templates, so both definitions collapse to the same near-total redundancy there.
+
+**Anyone sizing this from the synthetic corpora would design exact-structure
+dedupe and ship something that saves 6.5% on a real storefront.** That is why
+whole-page template dedupe is not on the roadmap: html is already deduplicated by
+content hash in the global content store, so identical pages cost nothing twice
+today.
+
+The lever is compute, not storage. By chrome cluster, 96.5% of gymshark's
+page-rule time is spent on pages that are not the first of their cluster (64.6%
+on openelectricity). Running all 198 page rules on every page and comparing
+members of each multi-page cluster, the rules whose verdict is identical for
+every member:
+
+| corpus | rules constant in every multi-page cluster |
+|---|---|
+| gymshark.com | 89 of 198 |
+| openelectricity.org.au | 142 of 198 |
+
+85 are constant on both. Only 26 are declared safe to fan out
+([#269](https://github.com/squirrelscan/squirrelscan/pull/269)): the rest are
+constant on those two crawls and page-scoped anyway, because the cluster key
+constrains no response header, the page url is per-page by construction, and a
+rule scanning the whole document can see body content. `perf/compression` is the
+sharpest case: it is constant on both corpora only because every page of both is
+`content-encoding: br`, and its failure message interpolates the page's byte
+count.
+
+Storing the cluster key costs 0.04 to 0.08 ms/page
+([#267](https://github.com/squirrelscan/squirrelscan/pull/267)), against a 1.0 to
+5.6 ms/page fingerprint walk the audit was already paying. Reproduce both tables
+with `apps/cli/scripts/template-cluster-census.ts` and
+`apps/cli/scripts/template-rule-invariance.ts` against a finished `project.db`;
+they need no network and do not write to the crawl they read.
+
 ## Still open
 
 - Site rules are quadratic in page count (4 s at 400 pages, 99 s at 2,500,
