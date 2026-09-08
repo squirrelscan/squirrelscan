@@ -408,6 +408,21 @@ export function reconstructReport(
       sitemaps.missingPages = coverage.missingPages;
     }
 
+    // Re-read the stamp AFTER every page and rule-result read. The check above
+    // happens once, outside any read transaction, so a `self disk --prune` in
+    // another process can commit between it and the reads below — and this
+    // function would then combine pre-retirement metadata with data that is
+    // already gone and return a confident empty report, which is the exact
+    // outcome the first check exists to prevent.
+    const stillThere = yield* storage.getCrawl(crawlId);
+    if (stillThere?.retiredAt !== undefined) {
+      return yield* Effect.fail(
+        new Error(
+          `Audit ${retiredAuditReason(stillThere.retiredAt)}: ${crawlId}`
+        )
+      );
+    }
+
     // 9. Calculate totals from rule results
     const allChecks: CheckResult[] = Array.from(
       ruleResultsByPage.values()

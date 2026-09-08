@@ -11,6 +11,7 @@ import { Effect } from "effect";
 
 import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
 
+import { pickLatestAnalyzeReadyCrawl } from "@/controllers/analyze";
 import {
   isReportRenderable,
   reportUnavailableReason,
@@ -171,6 +172,53 @@ describe("a reclaimed audit refuses to render (#1912)", () => {
     const crawl = (await run(store.getCrawl(id)))!;
     expect(isReportRenderable(crawl)).toBe(false);
     expect(reportUnavailableReason(crawl)).toBe("still in progress");
+    await run(store.close());
+  });
+
+  test("a prune that commits mid-read is still refused", async () => {
+    // The metadata check happens once, before the page and rule-result reads.
+    // Another process pruning in that window would otherwise let this return a
+    // confident empty report built from pre-retirement metadata.
+    const { store, old } = await twoAudits();
+
+    let retired = false;
+    const realGetPages = store.getPages.bind(store);
+    (store as unknown as { getPages: typeof store.getPages }).getPages = ((
+      ...args: Parameters<typeof realGetPages>
+    ) => {
+      if (!retired) {
+        retired = true;
+        Effect.runSync(
+          Effect.orDie(store.retireCrawls([old], 1_700_000_000_000))
+        );
+      }
+      return realGetPages(...args);
+    }) as typeof store.getPages;
+
+    const result = await Effect.runPromise(
+      Effect.either(reconstructReport(store, old, undefined))
+    );
+    expect(result._tag).toBe("Left");
+    if (result._tag === "Left") {
+      expect(result.left.message).toContain("data was reclaimed on");
+    }
+    await run(store.close());
+  });
+
+  test("analyze refuses a reclaimed audit rather than re-scoring it", async () => {
+    // `analyze` keeps its own status gate, and retirement does not change the
+    // status, so without its own test this path re-runs the rules over whatever
+    // pages survived and reports "Analysis complete".
+    const { store, old, recent } = await twoAudits();
+    await run(store.retireCrawls([old], 1_700_000_000_000));
+
+    const crawls = await run(store.listCrawls());
+    const retired = crawls.find((c) => c.id === old)!;
+    const kept = crawls.find((c) => c.id === recent)!;
+
+    expect(pickLatestAnalyzeReadyCrawl([retired])).toBeNull();
+    // And it is not simply skipping everything: the kept audit is still chosen.
+    expect(pickLatestAnalyzeReadyCrawl([retired, kept])?.id).toBe(recent);
     await run(store.close());
   });
 

@@ -235,9 +235,30 @@ describe("retireCrawls", () => {
     expect(byId.get(recent)?.retiredAt).toBeUndefined();
   });
 
-  test("the stamp lands in the same transaction as the deletes", async () => {
-    // A crawl whose rows are gone but which still reads as renderable is the
-    // one state worse than either end, so the two must not be separable.
+  test("the stamp and the deletes roll back together", async () => {
+    // A crawl whose rows are gone but which still reads as renderable is the one
+    // state worse than either end, so the two must not be separable. Asserting
+    // the successful end state cannot show that — it holds either way. Failing
+    // the transaction can: if the stamp were its own statement outside it, the
+    // rollback would leave one of the two applied.
+    const { store, old } = await twoCrawls();
+    const db = (
+      store as unknown as { getDb(): { transaction(fn: () => void): () => void } }
+    ).getDb();
+
+    expect(() =>
+      db.transaction(() => {
+        Effect.runSync(Effect.orDie(store.retireCrawls([old])));
+        throw new Error("abort");
+      })()
+    ).toThrow("abort");
+
+    const crawl = (await run(store.listCrawls())).find((c) => c.id === old);
+    expect(crawl?.retiredAt).toBeUndefined();
+    expect((await run(store.getRuleResultsByPage(old))).size).toBe(2);
+  });
+
+  test("on success both the stamp and the deletes are applied", async () => {
     const { store, old } = await twoCrawls();
     await run(store.retireCrawls([old]));
 

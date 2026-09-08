@@ -106,11 +106,17 @@ describe("crawls.retired_at (#1912)", () => {
     const store = new SQLiteStorage(path);
     await run(store.init());
 
-    // The read that would throw "no such column: retired_at" if the reconcile
-    // had not run — and it is the read `report --list` makes.
     const crawls = await run(store.listCrawls());
     expect(crawls.map((c) => c.id)).toEqual([id]);
     expect(crawls[0]?.retiredAt).toBeUndefined();
+
+    // That assertion alone would pass WITHOUT the repair: reads are `SELECT *`
+    // mapped by key, so a missing column yields undefined rather than throwing,
+    // and a retired audit would silently read as not retired. What proves the
+    // repair is a WRITE, which is the part that fails loudly on a missing
+    // column — and it is the write the prune makes.
+    await run(store.retireCrawls([id], 1_700_000_000_000));
+    expect((await run(store.getCrawl(id)))?.retiredAt).toBe(1_700_000_000_000);
     await run(store.close());
   });
 

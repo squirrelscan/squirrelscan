@@ -405,11 +405,13 @@ const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: st
 ];
 
 // Same guard for `crawls`. Migration 25 added `retired_at`; a DB stamped past 25
-// by a build that numbered its own migration 25 would skip it forever, and then
-// every `listCrawls` SELECT throws "no such column: retired_at" — which fails
-// `report`, `report --list` and the prune itself, not just the new field. Four
-// tables have now been bitten by exactly this, so the column goes on the list at
-// the same time it goes in the migration.
+// by a build that numbered its own migration 25 would skip it forever. The
+// failure is quieter than the four tables before it and worse for that: reads
+// are `SELECT *` mapped by key, so a missing column does not throw, it yields
+// `undefined` — every retired audit silently reads as NOT retired and renders
+// the empty report this column exists to prevent. The prune's own UPDATE is the
+// only part that fails loudly. So the column goes on the list at the same time
+// it goes in the migration, like the five before it.
 const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "retired_at", type: "INTEGER" },
 ];

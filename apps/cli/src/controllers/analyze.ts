@@ -23,6 +23,7 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { createStorage } from "@/crawler/storage";
+import { retiredAuditReason } from "@/reports/retired";
 import { getProjectsPath } from "@/self/paths";
 import { configureLogger, logger } from "@/utils/logger";
 
@@ -71,6 +72,11 @@ export function pickLatestAnalyzeReadyCrawl(
 
   for (const crawl of crawls) {
     if (!isAnalyzeReadyStatus(crawl.status)) continue;
+    // A reclaimed audit keeps its `completed`/`analyzed` status (#1912), so a
+    // status-only test picks one and analyze happily re-runs the rules over
+    // whatever pages survived the prune, reporting "Analysis complete" for a
+    // crawl most of whose data is gone.
+    if (crawl.retiredAt !== undefined) continue;
     if (!best || crawl.startedAt > best.startedAt) {
       best = crawl;
     }
@@ -239,6 +245,18 @@ export async function runAnalyze(
     if (!crawl) {
       return err(
         commandError(ErrorCodes.CRAWL_NOT_FOUND, `Crawl not found: ${crawlId}`)
+      );
+    }
+
+    // Same reason as the selector above: retirement does not change the status,
+    // so this has to be its own test or `analyze <id>` re-analyzes reclaimed
+    // data and calls it a success.
+    if (crawl.retiredAt !== undefined) {
+      return err(
+        commandError(
+          ErrorCodes.CRAWL_NOT_READY,
+          `Crawl ${retiredAuditReason(crawl.retiredAt)}: ${crawlId}`
+        )
       );
     }
 
