@@ -40,6 +40,9 @@ import {
 import { fingerprintPage } from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { Effect } from "effect";
+import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 
@@ -58,16 +61,35 @@ if (!DB) {
   process.exit(1);
 }
 
-// Validated before anything opens: `getPages` passes the limit straight to
+// Validated as TEXT before anything opens. `getPages` passes the limit straight to
 // SQLite, where `LIMIT 0` means NO limit, and `offset += 0` never advances — so a
-// non-positive or NaN batch reads the whole crawl forever instead of erroring.
-const BATCH = Number.parseInt(arg("batch", "50"), 10);
-if (!Number.isSafeInteger(BATCH) || BATCH < 1) {
-  console.error(`--batch must be a positive integer, got ${JSON.stringify(arg("batch", "50"))}`);
+// non-positive batch reads the whole crawl forever instead of erroring. Checking
+// the string rather than the parsed number matters: `parseInt` turns "1.5" into 1,
+// "50garbage" into 50 and "1e3" into 1, and all three pass an is-integer test.
+const BATCH_ARG = arg("batch", "50");
+if (!/^[1-9][0-9]{0,6}$/.test(BATCH_ARG)) {
+  console.error(`--batch must be a positive integer, got ${JSON.stringify(BATCH_ARG)}`);
   process.exit(1);
 }
+const BATCH = Number.parseInt(BATCH_ARG, 10);
 
-const storage = new SQLiteStorage(DB, getGlobalContentStore());
+// `SQLiteStorage.init()` opens the file WRITABLE, switches it to WAL and runs
+// migrations, so pointing it at a corpus would silently upgrade someone's crawl,
+// and a mistyped path would create an empty database rather than fail. Census a
+// disposable copy instead, sidecars included so the copy is not missing committed
+// pages. This is what "no write to the crawl it reads" costs.
+if (!existsSync(DB)) {
+  console.error(`no such database: ${DB}`);
+  process.exit(1);
+}
+const scratch = mkdtempSync(join(tmpdir(), "squirrel-census-"));
+const dbCopy = join(scratch, "census.db");
+copyFileSync(DB, dbCopy);
+for (const suffix of ["-wal", "-shm"]) {
+  if (existsSync(DB + suffix)) copyFileSync(DB + suffix, dbCopy + suffix);
+}
+
+const storage = new SQLiteStorage(dbCopy, getGlobalContentStore());
 await run(storage.init());
 
 const crawlArg = arg("crawl", "");
@@ -188,3 +210,4 @@ for (const [key, urls] of clusters) {
 // `close()` returns an Effect; calling it bare leaves the handle open.
 await run(replay.close());
 await run(storage.close());
+rmSync(scratch, { recursive: true, force: true });
