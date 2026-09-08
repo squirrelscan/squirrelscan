@@ -720,9 +720,9 @@ literal at all** — `[0-9]{8,10}:[a-zA-Z0-9_-]{35}` has nothing to prove — an
 those 18 are the top of the remaining cost, led by the Telegram bot token at
 2.0 ms per page.
 
-Nine soundness bugs were found in the prefilter before it shipped, all of them
-silent false negatives, which in this rule means a deleted security finding. The
-first three came from reading the diff:
+Soundness bugs kept turning up in the prefilter before it shipped, all of them
+silent false negatives, which in this rule means a deleted security finding.
+Reading the diff found these three:
 
 - The rolling hash was masked with the TABLE's width rather than the window's,
   so a table wider than 20 bits kept the low bit of the character BEFORE the
@@ -752,7 +752,7 @@ two; and under the `u` flag the `i` flag folds beyond ASCII, so `/secret/iu`
 matches `ſecret`, which does not contain `secret`. Unicode-mode patterns are now
 declined whole.
 
-The pattern in all nine is the same: **the extractor read the regex as something
+The pattern in every one is the same: **the extractor read the regex as something
 the engine does not.** The defence that works is a counterexample corpus of
 (pattern, subject-it-really-matches) pairs, because that comparison does not
 depend on anyone's reading being right.

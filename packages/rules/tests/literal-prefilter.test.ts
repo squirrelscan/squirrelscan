@@ -1,15 +1,19 @@
-// The prefilter behind #1864 decides, from a one-pass 3-gram index, that a
+// The prefilter behind #1864 decides, from a one-pass 4-gram index, that a
 // pattern CANNOT match a page and skips running it. A wrong answer in that
 // direction silently deletes a security finding, so the tests here are about
 // one property and nothing else: `mandatoryLiterals` must only ever return
 // literals that every match of the pattern really does contain.
 //
-// Proving that by inspection does not scale to 70 secret patterns and 130
-// library patterns, so the main test GENERATES strings from each pattern's own
-// source, keeps the ones the pattern actually matches, and asserts the filter
-// admits every one of them. A regression in the extractor — treating an optional
-// group as mandatory, walking into a lookahead, mishandling `{0,3}` — shows up
-// as an admitted string the filter rejects.
+// Proving that by inspection does not scale to 70 secret patterns, 17 context
+// keywords and 62 library signatures, so the main test GENERATES strings from
+// each pattern's own source, keeps the ones the pattern actually matches, and
+// asserts the filter admits every one of them. A regression in the extractor —
+// treating an optional group as mandatory, walking into a lookahead,
+// mishandling `{0,3}` — shows up as an admitted string the filter rejects.
+//
+// The cases below it are counterexamples: a pattern plus a subject it really
+// matches. That comparison does not depend on anyone's reading of the regex
+// grammar being right, which is the only reason it caught the bugs it did.
 
 import { describe, expect, test } from "bun:test";
 
@@ -291,7 +295,7 @@ describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
 
 describe("the gram index", () => {
   test("never denies a substring that is present", () => {
-    const text = `${"x".repeat(5000)}AKIAIOSFODNN7EXAMPLE${"y".repeat(5000)}`;
+    const text = `${"x".repeat(5000)}AKIAIOSFODNN7EXAMPLE${"y".repeat(5000)}`; // pragma: allowlist secret
     const index = buildGramIndex(text)!;
     expect(index).not.toBeNull();
     for (let len = 3; len <= 12; len++) {
@@ -312,7 +316,7 @@ describe("the gram index", () => {
     // The leak was the low bit of the character BEFORE the window, so the
     // predecessor has to be varied: with the bug this denied every odd one.
     for (const prev of [..."abcdefghxyz0123456789"]) {
-      const text = `${"q".repeat(40_000)}${prev}AKIAIOSFODNN7EXAMPLE${"w".repeat(40_000)}`;
+      const text = `${"q".repeat(40_000)}${prev}AKIAIOSFODNN7EXAMPLE${"w".repeat(40_000)}`; // pragma: allowlist secret
       const index = buildGramIndex(text)!;
       if (!mayContain(index, needle)) denied.push(prev);
     }
@@ -321,7 +325,7 @@ describe("the gram index", () => {
 
   test("folds ASCII case on the needle as well, so an uppercase literal is found", () => {
     const index = buildGramIndex(`${"q".repeat(40_000)}akiaiosfodnn7example`)!;
-    expect(mayContain(index, "AKIAIOSFODNN7EXAMPLE")).toBe(true);
+    expect(mayContain(index, "AKIAIOSFODNN7EXAMPLE")).toBe(true); // pragma: allowlist secret
   });
 
   test("denies literals that are absent", () => {
@@ -331,7 +335,7 @@ describe("the gram index", () => {
   });
 
   test("folds ASCII case so a lowercase needle finds uppercase text", () => {
-    const index = buildGramIndex(`${"q".repeat(6000)}AKIAIOSFODNN7EXAMPLE`)!;
+    const index = buildGramIndex(`${"q".repeat(6000)}AKIAIOSFODNN7EXAMPLE`)!; // pragma: allowlist secret
     expect(mayContain(index, "akiaiosfodnn7example")).toBe(true);
   });
 
