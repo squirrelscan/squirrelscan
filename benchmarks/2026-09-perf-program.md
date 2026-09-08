@@ -24,7 +24,11 @@ the streaming pipeline ([#252](https://github.com/squirrelscan/squirrelscan/pull
 | 400 | 47 s | 47 s | 685 MB | 265 MB |
 | 1,000 | 194 s | 128 s | 1,662 MB | 565 MB |
 | 2,500 | 502 s | 177 s | 3,902 MB | 996 MB |
-| 1,000, warm re-audit | 87 s | 72 s | 1,651 MB | 561 MB |
+| 1,000, warm re-audit ([retracted](#ten-thousand-pages)) | 87 s | 72 s | 1,651 MB | 561 MB |
+
+**Retracted 2026-09-08:** the warm row was not a warm re-audit. `run-stage.sh`
+gave every stage a fresh origin port, so that run crawled a different host and
+reused nothing. The cold rows are unaffected. See "Ten thousand pages" below.
 
 Reports are byte-identical at all three sizes (at 2,500 pages excluding
 `perf/ttfb`, which grades the test server's response time and tripped on 14
@@ -46,7 +50,12 @@ covering index ([#246](https://github.com/squirrelscan/squirrelscan/pull/246)).
 | storing 60 pages into a 93 MB store | 32.4 ms/page | 0.38 ms/page |
 | 400-page cold crawl, 992 MB store | 333 s (833 ms/page) | see next row |
 | 1,000-page cold crawl, 947 MB store | | 26 s (26 ms/page) |
-| 1,000-page warm crawl, same store | | 15 s (15 ms/page) |
+| 1,000-page warm crawl, same store ([retracted](#ten-thousand-pages)) | | 15 s (15 ms/page) |
+
+**Retracted 2026-09-08:** same defect — that "warm" crawl ran against a
+different origin port, so it re-fetched every page and the 15 ms/page is a cold
+number against an already-populated store, not a re-crawl. The rows above it
+stand.
 
 Controlled triple that located it (400 identical pages, identical rules time):
 992 MB store 333 s, empty store 5 s, pages already stored 4 s.
@@ -166,6 +175,10 @@ Compilations from `prepare` and `query`, 120-page crawl at 40 links/page:
 | cold crawl, `incremental: true` (the CLI default) | 633 (5.3/page) | 38 (0.3/page) |
 | cold crawl, `incremental: false` | 513 (4.3/page) | 37 (0.3/page) |
 | **warm re-crawl of the same site** | **1,482 (12.3/page)** | **48 (0.4/page)** |
+
+This warm row is **not** covered by the 2026-09-08 retractions above: it was
+measured outside `run-stage.sh`, and counting statements that only run per
+REUSED page is itself proof the origin matched.
 
 The warm row is the one that matters, and it is the one a first census missed
 entirely. Five statements run per page on a cold crawl — `upsertPage`,
@@ -809,115 +822,143 @@ lands, then `Math.min(raw, REPORT_LIMITS.maxPages)` with `REPORT_LIMITS.maxPages
  "plan_id":"starter","plan_cap":2000}
 ```
 
-The 10,000-page rows below were produced with the CLI's cap raised locally. They
-describe the engine, not a shipped capability.
+The 10,000-page rows below were produced with the CLI's cap raised locally,
+because at the time no shipped configuration could ask for them.
 
-### Cold, at 5,000 and 10,000 pages
+**These ceilings have since moved.** On the evidence in this section,
+[#278](https://github.com/squirrelscan/squirrelscan/pull/278) raised
+`MAX_PAGES_CAP` and `REPORT_LIMITS.maxPages` to 10,000, removed the
+`TEAM_MAX_PAGES_UNLOCKED` flag, and lifted Team and Enterprise to a
+10,000-page-per-audit ceiling; free stays at 500 and Pro at 2,000. So the clamp
+behaviour described above is what these measurements were taken against, not
+what ships now. Note the ordering constraint that change carries: an older
+server rejects a publish carrying more than 2,000 page statuses, so the hosted
+side has to accept a crawl that size before a CLI is updated to produce one.
 
-Coverage full, `--http --offline`, a fresh content store per stage, one origin
-pinned across each pair. Two independent 5,000-page cold runs are included
-because the spread between them sets the noise floor for everything else.
+### Cold, from 1,000 to 10,000 pages
 
-These rows predate the script-heavy rules work in the section above
-([#271](https://github.com/squirrelscan/squirrelscan/pull/271)), which lands
-after them and cuts the rules phase on ~1 MB pages from 274 to 165 ms. Those
-pages are a tenth of this estate, so reproducing these totals on current `main`
-should come out faster.
+Coverage full, `--http --offline`, a fresh content store per pair, one origin
+pinned across each pair, heap sampled after a forced collection at exit. All
+eight stages exited 0 with no guard kill. Byte figures are MiB throughout.
 
-| stage | pages | wall | CPU | crawl span | ms/page | bytes fetched | parse | project.db | report.json |
-|---|---|---|---|---|---|---|---|---|---|
-| 5,000 cold, run 1 | 5,000 | 448 s | 460 s | 64 s | 13 | 818 MB | 36.1 s | 511 MB | 9 MB |
-| 5,000 cold, run 2 | 5,000 | 575 s | 582 s | 73 s | 15 | 818 MB | 43.5 s | 507 MB | 9 MB |
-| 10,000 cold | 10,000 | 929 s | 956 s | 125 s | 13 | 1.64 GB | 74.0 s | 1,008 MB | 17 MB |
+These rows were produced on the CLI at gitlink `1a3f405`, which predates the
+script-heavy rules work in the section above
+([#271](https://github.com/squirrelscan/squirrelscan/pull/271)). That change
+cuts the rules phase on ~1 MB pages from 274 to 165 ms, and those pages are a
+tenth of this estate, so reproducing these totals on current `main` should come
+out faster.
 
-Doubling the estate roughly doubles each measured quantity. Crawl span, taken
-from the origin's own request log, goes from 64-73 s to 125 s (1.71-1.95x) at
-13-15 ms per page. Parse, summed from the trace, goes from 36-44 s to 74 s
-(1.70-2.05x). Bytes fetched go from 818 MB to 1.64 GB. Wall goes from 448-575 s
-to 929 s, so 1.6-2.1x.
+| pages | wall | CPU | crawl phase | parse | peak RSS | heapUsed, collected | project.db |
+|---|---|---|---|---|---|---|---|
+| 1,000 | 68 s | 74 s | 10.9 s | 5.3 s | 1,813 MiB | 631 MiB | 106 MiB |
+| 2,500 | 174 s | 182 s | 26.2 s | 15.2 s | 2,179 MiB | 938 MiB | 257 MiB |
+| 5,000 | 359 s | 363 s | 49.5 s | 33.0 s | 3,641 MiB | 1,182 MiB | 509 MiB |
+| 10,000 | 746 s | 773 s | 98.7 s | 88.4 s | 5,447 MiB | 2,264 MiB | 1,011 MiB |
 
-**Two page counts cannot separate linear from quadratic** and this record should
-not be read as if they could: `357 + 143x²` seconds, with `x` in units of 5,000
-pages, fits both totals as well as a straight line does. What these runs do
-settle is narrower and does not need extrapolation: the whole 5,000-page audit
-finished in 448-575 s, which is *less than the 687 s that squirrelscan/repo#1910
-attributes to site rules alone at that same page count*. Something has changed
-since that measurement, and #1910 needs re-measuring before more work goes into
-it. Attributing the rest requires per-phase rules timing, which the streaming
-pipeline does not currently emit.
+"Crawl phase" is `completed_at - started_at` on the `crawls` row, which is the
+fetching proper. It is deliberately not the span of the origin's request log:
+that log keeps running through the post-crawl resource checks and is 14/33/63/126 s
+for these same four stages, about 30% longer, and using it would overstate what
+fetching costs.
 
-**Memory could not be resolved on this machine and this record should not be
-read as if it were.** Peak RSS for the two identical 5,000-page cold runs came
-out 2,721 MB and 4,507 MB, a 1.7x spread on the same workload, and the
-in-process heap figures were worse: the probe's exit sample was taken without
-forcing a collection, so it reported 2,461 MB and 1,275 MB for those same two
-runs. The probe is fixed below so the heap number means something next time; the RSS
-spread is a property of a machine under memory pressure and no harness change
-addresses it. Either way the numbers already collected cannot carry a per-page
-retention slope, and none is quoted here. What can be said is that a
-10,000-page audit's peak stayed near 4.5 GB on a 16 GB laptop under pressure and
-never approached the harness's 8 GB kill guard.
+Per page, the crawl phase is 10.9, 10.5, 9.9 and 9.9 ms and wall is 68, 70, 72
+and 75 ms, so the whole-run cost per page rises about 10% across a tenfold range
+in size. Parse is the one column that clearly does not keep pace: 5.3, 6.1, 6.6
+and 8.8 ms per page, a 67% rise, and it goes up 2.68x between the 5,000 and
+10,000-page stages against 2x the pages.
 
-### Re-auditing an unchanged site saves the network, not the work
+On squirrelscan/repo#1910, which recorded 687 s of site rules alone at 5,000
+pages: the entire 5,000-page audit here took 359 s. These were not run under
+equivalent conditions and this does not disprove that phase measurement, but the
+two cannot both describe the same code on the same workload, so #1910 needs
+re-measuring before more work goes into it. Settling how much of the remaining
+time is site rules needs per-phase rules timing, which the streaming pipeline
+does not currently emit.
 
-Each pair's second stage re-audited the same unchanged origin.
+**Memory.** Across a tenfold increase in pages, settled heap rises 3.6x
+(631 → 2,264 MiB) and peak RSS 3.0x (1,813 → 5,447 MiB). Those are endpoint
+ratios, not a complexity claim — a fixed overhead plus a linear per-page cost
+produces exactly this pattern, and heap does nearly double over the last
+doubling of pages. What can be said is that neither measure grows in step with
+page count, which is the behaviour the streaming pipeline was built for.
 
-| pair | stage | wall | HTTP requests | pagesFetched | pagesUnchanged | parse |
-|---|---|---|---|---|---|---|
-| 5,000 | cold | 575 s | 5,753 | 5,000 | 0 | 43.5 s |
-| 5,000 | warm | 600 s | 553 | 0 | 5,000 | 61.7 s |
-| 10,000 | cold | 929 s | 10,254 | 10,000 | 0 | 74.0 s |
-| 10,000 | warm | 1,033 s | 54 | 0 | 10,000 | 101.2 s |
+The gap between peak RSS and settled heap is large and unexplained here:
+5,447 against 2,264 MiB at 10,000 pages. `RSS - live` is not a residency figure
+— it also holds native allocations, SQLite's caches, resident JIT and allocator
+overhead — and on a machine under memory pressure it is not stable either, so no
+attribution is offered.
 
-Both warm stages reused **every audited page**. The crawls' stored stats say so
-exactly: `pagesFetched: 0`, `pagesUnchanged: 5000` / `10000`, and
-`cacheHitsByReason: {"stale-while-revalidate": …}` across the whole crawl. Each
-warm report is identical to its cold counterpart once `meta.timestamp` is
-removed.
+**Wall time on this machine is worth much less than the other columns.** The same
+5,000-page cold workload measured 359, 448 and 575 s across three runs today,
+a 60% spread, and CPU time moved with it (363, 460 and 582 s). Those runs
+differed in what else the machine was doing, though that association is not a
+controlled result. Treat any wall-clock difference under roughly 60% on this box
+as unresolved.
 
-The requests that remain are robots, the sitemap index and its children, the
-crawler's probes for sitemap paths that do not exist, the harness's own two
-sanity requests at startup, and the sitemap-status pass, which HEADs the sitemap
-URLs the crawl never visited. That pass is why the two sizes differ so much: the
-5,000-page audit leaves 5,000 sitemap URLs unvisited and checks 500 of them,
-while the 10,000-page audit leaves one. The trace records it directly, `"sitemap"
-: 500` against `"sitemap": 1`.
+### Re-auditing an unchanged site: how much is there to save
 
-**In these two pairs, eliminating every fetch produced no wall-time
-improvement.** Both warm stages came in slightly above their own cold stage, by
-4% and 11%, inside the 28% spread between the two identical cold runs — so this
-is "no speedup observed", not a measured slowdown, and two pairs cannot
-establish equivalence either.
+Each pair's second stage re-audited the same unchanged origin, on the same
+pinned port, against the same content store.
 
-The reason to expect little is visible in the same table: against this localhost
-origin the crawl is only 64-125 s of a 448-1,033 s run, so there was not much to
-give back. Rules, report reconstruction and parse re-run in full whatever the
-cache says. **Against a remote origin the saving would be real** and this
-measurement says nothing about how large it is — a localhost fetch is the
-cheapest one there is.
+| pages | cold wall | warm wall | observed change | cold crawl | warm crawl | fetching removed | as % of cold wall |
+|---|---|---|---|---|---|---|---|
+| 1,000 | 68 s | 61 s | -11% | 10.9 s | 2.8 s | 8.1 s | 12% |
+| 2,500 | 174 s | 146 s | -16% | 26.2 s | 6.5 s | 19.7 s | 11% |
+| 5,000 | 359 s | 295 s | -18% | 49.5 s | 12.8 s | 36.7 s | 10% |
+| 10,000 | 746 s | 900 s | +21% | 98.7 s | 29.5 s | 69.2 s | 9% |
 
-Parse rose on the warm stage of both pairs, +42% and +37%. That is two
-observations and the cause is not established here; the traced span parses an
-already-materialised `page.html` and does not isolate reading the page back out
-of the content store.
+**Every warm stage fetched zero pages.** The crawls' stored stats record
+`pagesFetched: 0`, `pagesUnchanged: N` and
+`cacheHitsByReason: {"stale-while-revalidate": N}` for the whole estate at all
+four sizes, and each warm report is identical to its cold counterpart once
+`meta.timestamp` is removed. Reuse works completely.
 
-So on this evidence crawl reuse is worth having for bandwidth and for not
-hammering an origin, and should not be sold as a way to make a re-audit finish
-sooner. The work a re-audit could genuinely skip is rules whose inputs did not
-change, which is squirrelscan/repo#1951.
+**The structural result is the useful one: fetching is 9-12% of a cold run
+here, so that is all a re-audit can give back.** Note that a warm crawl is not
+free even with nothing to fetch — it still costs 2.8 to 29.5 s of frontier and
+bookkeeping work — so the removable part is the difference, not the whole crawl
+phase.
 
-Two smaller things fall out. `squirrel audit -f json` carries no cache
-statistics at all, so nothing in its output distinguishes a fully-cached replay
-from a real audit (squirrelscan/repo#1981); the text and markdown reports do
-render it. And `project.db` roughly doubled across this
-one re-audit with no reclaim, 1,008 MB to 2,022 MB, which is consistent with
-history simply accumulating (squirrelscan/repo#1912).
+The observed wall changes do not settle anything on their own. Three stages came
+in 11-18% faster and one 21% slower, and the same machine reproduces a cold
+5,000-page run only to within 60%, which is wider than every one of those
+numbers. The two middle stages also came in *faster* than fetching alone can
+account for. So this table is quoted for its structure, not as a measured
+speedup, and the 10,000-page warm stage ran while the load average was about 5
+against about 2 elsewhere, which is an association rather than an explanation.
+
+What is not in doubt is where the rest of the time goes: rules, report
+reconstruction and parse re-run in full on every page whether or not that page
+changed, and that is roughly 90% of the run. Against a remote origin the fetch
+is worth more than it is here and this measurement puts no bound on that, but
+the other 90% is paid again either way. Caching that work rather than the bytes
+is squirrelscan/repo#1990.
+
+Reuse does not change what the run retains. Warm settled heap is 640, 934, 1,191
+and 2,415 MiB against 631, 938, 1,182 and 2,264 cold, agreeing within 1% at the
+1,000, 2,500 and 5,000-page sizes and within 7% at 10,000.
+
+The requests a warm stage still makes are robots, the sitemap index and its
+children, the sitemap-status pass that HEADs sitemap URLs the crawl never
+visited, and an assortment of discovery probes for paths that do not exist —
+`/llms.txt`, `/AGENTS.md`, well-known endpoints, API descriptions and similar.
+The sitemap-status pass is the bulk of it: 500 requests wherever the page cap
+left sitemap URLs unvisited, one at 10,000 pages where it did not.
+
+`project.db` doubled on all four re-audits with no reclaim — 106 to 213 MiB, 257
+to 515, 509 to 1,017, and 1,011 to 2,025 (squirrelscan/repo#1912).
+
+`squirrel audit -f json` carries no cache statistics at all, so nothing in its
+output distinguishes a fully-cached replay from a real audit
+(squirrelscan/repo#1981); the text and markdown reports do render it.
 
 ### Hosted, with rendering off
 
-Two audits of squirrelscan.com through the hosted MCP with `render: false`,
-`coverage: "full"` and `max_pages: 10000` clamped to 2,000, 144 pages actually
-crawled, twenty minutes apart.
+Two audits of **squirrelscan.com** (our own marketing site, 144 pages actually
+crawled — not the synthetic estate, which could not be published anywhere the
+crawler could reach at the time) through the hosted MCP with `render: false`,
+`coverage: "full"` and `max_pages: 10000` clamped to 2,000, twenty minutes
+apart.
 
 | run | wall | peak container RSS | credits | pages reused |
 |---|---|---|---|---|
@@ -938,20 +979,62 @@ get came from objects written before the uploader broke
 (squirrelscan/repo#1980). Settlement reported `settled 0 of 66 adopted pages`
 (squirrelscan/repo#1969).
 
-The hosted path has still never run anywhere near its own 2,000-page ceiling.
-Ranking every completed hosted audit that carries memory telemetry by peak
-container RSS, the top of the list is entirely 500- and 150-page runs, and the
-largest is the 500-page script-heavy audit at 4,112 MB recorded above. Two
-2,000-page runs did complete in July, before the runtime emitted `rssBytes` at
-all, so nothing is known about what they cost. Everything else configured at
-2,000 pages failed against an origin that could not be reached, which says
-nothing about capacity.
+### The hosted path at its own 2,000-page ceiling
 
-So the largest hosted audit ever *observed* is 500 pages, at a peak already
-above the free tier's 4 GiB container, against a ceiling four times higher. The
-measurement that would close this — the estate at 2,000 pages of script-heavy
-content — remains open, because the estate could not be published anywhere the
-crawler could reach from this machine.
+The 2,000-page ceiling had never been measured. The two runs above only reached
+144 pages, and ranking every completed hosted audit that carries memory
+telemetry by peak container RSS put 500- and 150-page runs at the top, the
+largest being a 500-page script-heavy audit at 4,112 MiB. Two 2,000-page runs
+did complete in July, before the runtime emitted `rssBytes`, so nothing is known
+about what they cost.
+
+So the estate was published through a Cloudflare tunnel and audited at the
+ceiling: run `01M1ZQNVM2663WRX29H2W4PWRW`, `coverage: "full"`, `render: false`,
+`max_pages: 10000` clamped to 2,000, crawl reuse disabled by the kill switch
+that was armed at the time.
+
+| phase | duration | peak container RSS |
+|---|---|---|
+| crawl, 2,000 pages | 4 m 51 s | 366-694 MB |
+| tech_detect | 5.3 s | 371 MB |
+| cloud_prefetch, abandoned at its budget | 10 m 00 s | 366 MB |
+| rules | 9 m 23 s | 1,493 MB |
+| report | 5.5 s | 1,404 MB |
+| publish + finalize | 5 m 29 s | |
+| the six above | 29 m 54 s | |
+| **run total** | **30 m 16 s** | **1,493 MiB** |
+
+The 22 s the phases do not account for is dispatch and the gaps between stages.
+
+The audit completed successfully: health 73, 25,580 issues, 50 credits, no
+failed stage other than the abandoned prefetch below. The crawl pulled 2,000
+pages through the tunnel in under five minutes with no fetch errors and no rate
+limiting.
+
+**Peak container memory was 1,493 MiB at the ceiling**, under the 4 GiB free
+container class let alone the 8 and 12 GiB paid ones, and 36% of what the
+500-page all-heavy drscholls audit needed.
+
+**The findings went through the chunked publish path, not a single POST.** The
+`publish_sessions` row records 40,148 expected findings and 40,148 received,
+closed `done` after 329 s. The 20 MB single-body gate that
+`REPORT_LIMITS.maxPages = 2000` is documented as guarding was never in the path,
+because chunked publish (squirrelscan/repo#1023) streams findings into
+`page_findings` and finalizes from a tiny body. Forty thousand findings
+finalized without the memory failure that the same shape produced before
+squirrelscan/repo#1873 and
+[#266](https://github.com/squirrelscan/squirrelscan/pull/266).
+
+What this establishes is bounded: **one mixed-shape estate, at exactly 2,000
+pages, with rendering off, stayed far inside the memory limit and never touched
+the payload gate.** It says nothing about heavier estates, larger crawls, or the
+single-POST path that a CLI publish still uses. It is enough to say the two
+rationales for the 2,000 ceiling were not observed to bind at the ceiling, and
+not enough to say what happens above it. What the run does surface is a different
+limit: `cloud_prefetch` spent its entire 600 s budget and was abandoned, so a
+third of the wall clock bought no enrichment (squirrelscan/repo#1995). That is
+the phase to fix before the ceiling moves, because its budget is a flat
+wall-clock cap while its work scales with the crawl.
 
 ### Three harness defects found while doing this
 
@@ -980,7 +1063,14 @@ actually changes.
 
 **The exit heap sample did not collect first**, despite the harness README
 saying it did, which is what produced 2,461 MB and 1,275 MB for the same
-workload. It forces a collection now.
+workload. A separate 10,000-page run sampled that way reported 4,425 MiB where
+the collected figure from an equivalent run is 2,264 — different runs, not a
+paired before/after, but the same order of discrepancy. It
+forces a collection now, and every collected-heap figure in the 1,000-to-10,000
+page tables was taken after the fix (the older tables in this document are
+unaffected and unchanged). Note that the forced collection costs wall time on a multi-GB
+heap and `/usr/bin/time` measures until exit, so a stage's wall time now
+includes it.
 
 The phase table's `rules` and `site` columns read trace spans the resident
 pipeline used to emit. The streaming pipeline (#252) emits neither, so both had
@@ -990,18 +1080,20 @@ the wall time. They print `n/a` now.
 ## Still open
 
 - Site rules were measured as quadratic in page count (4 s at 400 pages, 99 s
-  at 2,500, 687 s at 5,000): squirrelscan/repo#1910. The 10,000-page pass below
-  contradicts the 5,000-page figure — the whole audit finished in less time than
-  that row attributes to site rules alone — so the issue needs re-measuring
-  before it is worked.
+  at 2,500, 687 s at 5,000): squirrelscan/repo#1910. The
+  1,000-to-10,000-page pass above contradicts the 5,000-page figure — the whole
+  5,000-page audit finished in 359 s, less than that row attributes to site
+  rules alone — so the issue needs re-measuring before it is worked.
 - Report reconstruction materializes every check, including the 83.7% that
   pass and never reach the report: squirrelscan/repo#1920. Reading them once
   rather than twice is done (above); dropping the passing rows needs a decision
   about the publish payload first.
-- `--max-pages` above 5,000 is clamped to 5,000, and the hosted crawl to at
-  most 2,000 whatever the plan. The clamp is announced now
-  (squirrelscan/repo#1909); raising either ceiling is squirrelscan/repo#1028,
-  gated on chunked publish (squirrelscan/repo#1023).
+- The page ceilings moved on the evidence above: #278 took `MAX_PAGES_CAP` and
+  `REPORT_LIMITS.maxPages` to 10,000 and Team/Enterprise to a 10,000-page
+  audit. What is still open is the hosted side actually being exercised there —
+  everything measured above stops at 2,000 — and the prefetch budget, which
+  already failed at 2,000 (squirrelscan/repo#1995) and is a flat wall-clock cap
+  against work that scales with the crawl.
 - `legal/cookie-consent` (8.2 ms/page) and `social/share-buttons` (6.4) are now
   the top of the script-heavy rules phase and were left alone. The first is
   seven full-document `querySelectorAll` passes with substring attribute

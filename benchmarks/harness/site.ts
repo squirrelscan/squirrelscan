@@ -373,6 +373,13 @@ const server = Bun.serve({
         `${Date.now() - t0}\t${req.method}\t${p}\t${req.headers.get("accept") ?? ""}\t${inm}`,
       );
     }
+    // Behind a tunnel or proxy the server is reached over plain HTTP, so
+    // `url.origin` is `http://<public host>` while callers arrive on https. The
+    // sitemap and robots would then advertise a different scheme from the seed
+    // URL and split the crawl across two origins. Trust the forwarded scheme.
+    const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const origin =
+      proto === "http" || proto === "https" ? `${proto}://${url.host}` : url.origin;
     const cacheHeaders = { "cache-control": CACHE_CONTROL, "last-modified": LAST_MODIFIED };
     // Conditional requests only mean "you already have this" on a retrieval.
     // Evaluating them on anything else answered POST + `If-None-Match: *` with a
@@ -397,14 +404,14 @@ const server = Bun.serve({
     };
 
     if (p === "/robots.txt") {
-      return new Response(`User-agent: *\nAllow: /\nSitemap: ${url.origin}/sitemap.xml\n`, {
+      return new Response(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`, {
         headers: { "content-type": "text/plain" },
       });
     }
     if (p === "/sitemap.xml") {
       const body = `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Array.from(
         { length: SM_COUNT },
-        (_, s) => `<sitemap><loc>${url.origin}/sitemap-${s}.xml</loc></sitemap>`,
+        (_, s) => `<sitemap><loc>${origin}/sitemap-${s}.xml</loc></sitemap>`,
       ).join("")}</sitemapindex>`;
       return new Response(body, { headers: { "content-type": "application/xml" } });
     }
@@ -414,7 +421,7 @@ const server = Bun.serve({
       const start = s * SM_CHUNK;
       const end = Math.min(N, start + SM_CHUNK);
       const urls: string[] = [];
-      for (let i = start; i < end; i++) urls.push(`<url><loc>${url.origin}/p/${i}</loc></url>`);
+      for (let i = start; i < end; i++) urls.push(`<url><loc>${origin}/p/${i}</loc></url>`);
       return new Response(
         `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`,
         { headers: { "content-type": "application/xml" } },
