@@ -68,6 +68,23 @@ for accounts with more than one.
   producing a one-page audit. The probe now sends a real user agent, recovers
   the base from the links it sees, and warns when the two disagree.
 
+### Added
+
+- **A project keeps its last 3 audits.** Re-auditing wrote a whole new crawl and
+  retired nothing, so `project.db` grew by about one audit every time: roughly
+  95 MB per audit of a 1,000-page site, forever, with nothing saying so. A
+  successful audit now retires the audits older than the newest three, which
+  turns that growth into a ceiling. Set the window with `[storage] keep_audits`,
+  or turn it off with `0` or `false`. A retired audit stays listed and says when
+  its data went; it can no longer be opened, diffed, or used as a
+  `--regression-since` baseline, so raise the window if you keep an old audit as
+  a reference. A run that ends `failed` or `blocked` neither retires anything
+  nor takes a place in the window, and the page cache the next audit reads is
+  never part of what goes: a re-audit after retirement still serves every
+  unchanged page from its conditional GET. `squirrel self disk --prune` now
+  offers to rebuild a project whose audits were already retired, which is what
+  returns the freed space to the filesystem.
+
 ### Changed
 
 - **The rules pass on script-heavy pages is 40% cheaper.** On a page carrying
