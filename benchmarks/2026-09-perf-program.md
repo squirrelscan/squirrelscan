@@ -764,6 +764,12 @@ The gates for all three are `EXPLAIN QUERY PLAN` assertions, because the index
 existing proves nothing if the planner does not choose it, and a timing on a
 loaded box proves nothing at all.
 
+What the migrations cost the people who already have data: a real 100 MB
+`project.db` recorded at version 24, holding one crawl of 1,000 pages and
+203,687 rule results, opened at version 27 in **69 ms**. That includes adding
+both columns and building all three indexes over its page rows, once, on first
+open. Every row survived and its page cache still read back.
+
 The sweep is the one that took three attempts, and the lesson is that "bounded"
 has to name a variable. Driven by a join it was bounded by the size of `pages`.
 Driven by a list of every retired crawl id it was bounded by the number of
