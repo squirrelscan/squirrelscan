@@ -70,7 +70,7 @@ export interface CloudFetcherOptions {
   onRenderBlock?: (url: string) => void;
   /**
    * Called after every SUCCESSFUL render submit with the pages submitted in the
-   * batch, the actual credits debited (render 2cr / render_cached 1cr per page),
+   * batch, the actual credits debited (render 2cr / render_cached 2cr per page: a cache hit is the same customer price, the saving is our margin; see core-contracts credits.ts),
    * and the per-feature debit split (`breakdown`). Charged on submit, so this
    * fires even when a job later fails/times out. Lets the controller account
    * real spend — and split render vs render_cached so cache savings are visible.
