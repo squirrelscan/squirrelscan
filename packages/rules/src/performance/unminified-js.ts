@@ -16,11 +16,24 @@ export const optionsSchema = z.object({
 // Thresholds for detecting unminified JavaScript
 const NEWLINE_RATIO_THRESHOLD = 0.005; // 0.5% newlines = likely unminified
 const COMMENT_COUNT_THRESHOLD = 3;
+const LONG_FUNCTION_THRESHOLD = 5;
 const LONG_VAR_THRESHOLD = 0.002; // Long vars per character
 
 // Matches ONE leading `/*! ... */` or `//! ...` banner (plus surrounding whitespace), anchored to string start.
 // `.` never crosses a line terminator, so CRLF needs the explicit `\r?` before `\n`.
 const LEADING_BANNER_RE = /^\s*(?:\/\*!(?:[^*]|\*(?!\/))*\*\/|\/\/!.*(?:\r?\n|$))/;
+
+const LONG_VAR_RE = /(?:var|let|const)\s+[a-zA-Z_$][a-zA-Z0-9_$]{5,}/g;
+const LONG_FUNCTION_RE = /function\s+[a-zA-Z_$][a-zA-Z0-9_$]{10,}/g;
+const INDENT_RE = /\n[ \t]{2,}/g;
+const WHITESPACE_RUN_RE = /\s{2,}/g;
+
+/** Occurrences of a single character, without materialising a match array. */
+function countChar(text: string, ch: string): number {
+  let n = 0;
+  for (let i = text.indexOf(ch); i !== -1; i = text.indexOf(ch, i + 1)) n += 1;
+  return n;
+}
 
 // #698: strips bundler-preserved license banners (leading only, never mid-file) before the minification heuristic runs.
 function stripLeadingLicenseBanners(js: string): string {
@@ -54,8 +67,11 @@ function analyzeJs(rawJs: string): {
   const issues: string[] = [];
   let potentialSavings = 0;
 
-  // Count newlines
-  const newlines = (js.match(/\n/g) || []).length;
+  // Every counter below used to run `String.match` with a /g pattern, which
+  // builds an array of every match before throwing it away — on a 400 KB bundle
+  // that is tens of thousands of throwaway strings per counter (#1864). The
+  // counts and totals are identical; only the arrays are gone.
+  const newlines = countChar(js, "\n");
   const newlineRatio = newlines / js.length;
 
   if (newlineRatio > NEWLINE_RATIO_THRESHOLD) {
@@ -74,34 +90,48 @@ function analyzeJs(rawJs: string): {
   }
 
   // Check for readable variable names (minified typically has single-char vars)
-  const longVarDeclarations = js.match(/(?:var|let|const)\s+[a-zA-Z_$][a-zA-Z0-9_$]{5,}/g) || [];
-  const longVarRatio = longVarDeclarations.length / js.length;
+  let longVarCount = 0;
+  let longVarSavings = 0;
+  LONG_VAR_RE.lastIndex = 0;
+  for (let m = LONG_VAR_RE.exec(js); m !== null; m = LONG_VAR_RE.exec(js)) {
+    longVarCount += 1;
+    const varName = m[0].split(/\s+/)[1]!;
+    longVarSavings += Math.max(0, varName.length - 2);
+  }
+  const longVarRatio = longVarCount / js.length;
 
   if (longVarRatio > LONG_VAR_THRESHOLD) {
     issues.push("long variable names");
     // Estimate savings: assume minified names are 1-2 chars
-    potentialSavings += longVarDeclarations.reduce((sum, v) => {
-      const varName = v.split(/\s+/)[1];
-      return sum + Math.max(0, varName.length - 2);
-    }, 0);
+    potentialSavings += longVarSavings;
   }
 
-  // Check for function declarations with long names
-  const longFunctions = js.match(/function\s+[a-zA-Z_$][a-zA-Z0-9_$]{10,}/g) || [];
-  if (longFunctions.length > 5) {
+  // Check for function declarations with long names. Only "more than five"
+  // matters, so stop counting at six.
+  let longFunctions = 0;
+  LONG_FUNCTION_RE.lastIndex = 0;
+  while (longFunctions <= LONG_FUNCTION_THRESHOLD && LONG_FUNCTION_RE.exec(js) !== null) {
+    longFunctions += 1;
+  }
+  if (longFunctions > LONG_FUNCTION_THRESHOLD) {
     issues.push("long function names");
   }
 
   // Check for consistent indentation (sign of unminified code)
-  const indentedLines = (js.match(/\n[ \t]{2,}/g) || []).length;
+  let indentedLines = 0;
+  INDENT_RE.lastIndex = 0;
+  while (INDENT_RE.exec(js) !== null) indentedLines += 1;
   if (indentedLines > js.length / 200) {
     issues.push("formatted code");
     potentialSavings += indentedLines * 2; // Average 2 spaces per indent
   }
 
   // Check for excessive whitespace
-  const whitespaceMatches = js.match(/\s{2,}/g) || [];
-  const excessiveWhitespace = whitespaceMatches.reduce((sum, ws) => sum + ws.length - 1, 0);
+  let excessiveWhitespace = 0;
+  WHITESPACE_RUN_RE.lastIndex = 0;
+  for (let m = WHITESPACE_RUN_RE.exec(js); m !== null; m = WHITESPACE_RUN_RE.exec(js)) {
+    excessiveWhitespace += m[0].length - 1;
+  }
   if (excessiveWhitespace > js.length * 0.05) {
     issues.push("excessive whitespace");
     potentialSavings += excessiveWhitespace;

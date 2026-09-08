@@ -3,6 +3,10 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+// How far into the body a heading still counts as "early" — enough for a nav,
+// not enough for real content.
+const EARLY_HEADING_LIMIT = 2000;
+
 export const skipLinkRule: Rule = {
   meta: {
     id: "a11y/skip-link",
@@ -60,13 +64,23 @@ export const skipLinkRule: Rule = {
     const body = doc.querySelector("body");
     if (body) {
       const headings = body.querySelectorAll("h1, h2");
+      // `body.innerHTML` serialises the whole page, so building it INSIDE the
+      // loop cost one full serialisation per heading — 12 ms on a 1 MB page with
+      // eleven of them (#1864). It does not change between iterations.
+      const html = headings.length > 0 ? body.innerHTML || "" : "";
       for (const h of headings) {
         // Check if heading appears early in the document
-        const html = body.innerHTML || "";
         const hOuterHTML = (h as Element).outerHTML || "";
-        const position = html.indexOf(hOuterHTML);
+        // Only the first 2000 characters can satisfy the test below, so searching
+        // the whole megabyte for a heading that is not there is wasted. A match
+        // starting before 2000 lies entirely inside this prefix, and any match
+        // found only outside it is at or past 2000 either way, so the answer to
+        // `position >= 0 && position < 2000` is unchanged.
+        const position = html
+          .slice(0, EARLY_HEADING_LIMIT + hOuterHTML.length)
+          .indexOf(hOuterHTML);
         // Consider "early" if within first 2000 chars (allows for nav, but not much content)
-        if (position >= 0 && position < 2000) {
+        if (position >= 0 && position < EARLY_HEADING_LIMIT) {
           bypassMethods.push("early heading");
           break;
         }

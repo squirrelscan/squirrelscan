@@ -34,14 +34,44 @@ const REGEX_KEYWORDS = new Set([
   "yield",
 ]);
 
-function isIdentPart(ch: string): boolean {
+// Character CLASSIFICATION is on the per-character path of a scan that runs over
+// every inline script on every page, and comparing single-character strings
+// (`ch >= "a" && ch <= "z"`) is about thirteen times slower than comparing the
+// code point: 10.3 ms against 0.8 ms over one 390 KB bundle (#1864). The string
+// forms are kept as wrappers for the handful of callers that already hold a
+// character rather than a code.
+const CH_TAB = 9;
+const CH_LF = 10;
+const CH_CR = 13;
+const CH_DOLLAR = 36;
+const CH_QUOTE = 34;
+const CH_APOS = 39;
+const CH_STAR = 42;
+const CH_SLASH = 47;
+const CH_COLON = 58;
+const CH_LPAREN = 40;
+const CH_RPAREN = 41;
+const CH_BACKSLASH = 92;
+const CH_BACKTICK = 96;
+const CH_LBRACKET = 91;
+const CH_RBRACKET = 93;
+const CH_LBRACE = 123;
+const CH_RBRACE = 125;
+const CH_LS = 0x2028;
+const CH_PS = 0x2029;
+
+function isIdentCode(code: number): boolean {
   return (
-    (ch >= "a" && ch <= "z") ||
-    (ch >= "A" && ch <= "Z") ||
-    (ch >= "0" && ch <= "9") ||
-    ch === "_" ||
-    ch === "$"
+    (code >= 97 && code <= 122) || // a-z
+    (code >= 65 && code <= 90) || // A-Z
+    (code >= 48 && code <= 57) || // 0-9
+    code === 95 || // _
+    code === 36 // $
   );
+}
+
+function isIdentPart(ch: string): boolean {
+  return isIdentCode(ch.charCodeAt(0));
 }
 
 // Non-ASCII ECMAScript WhiteSpace and LineTerminator code points: NBSP, OGHAM
@@ -54,11 +84,11 @@ const NON_ASCII_SPACES = new Set([
   0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
 ]);
 
-function isWhitespace(ch: string): boolean {
-  if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r" || ch === "\f" || ch === "\v") {
+function isWhitespaceCode(code: number): boolean {
+  // space, tab, LF, CR, form feed, vertical tab
+  if (code === 32 || code === 9 || code === 10 || code === 13 || code === 12 || code === 11) {
     return true;
   }
-  const code = ch.charCodeAt(0);
   return code > 0x7f && NON_ASCII_SPACES.has(code);
 }
 
@@ -181,20 +211,20 @@ function regexCanStartAfter(
 }
 
 /** Index just past the closing quote, or at the line terminator that ended it. */
-function skipQuoted(src: string, start: number, quote: string): number {
+function skipQuoted(src: string, start: number, quote: number): number {
   let i = start + 1;
   while (i < src.length) {
-    const ch = src[i] as string;
-    if (ch === "\\") {
+    const code = src.charCodeAt(i);
+    if (code === CH_BACKSLASH) {
       // A backslash before CRLF is a single line continuation. Stepping over
       // only two characters would land on the `\n` and end the string early.
-      i += src[i + 1] === "\r" && src[i + 2] === "\n" ? 3 : 2;
+      i += src.charCodeAt(i + 1) === CH_CR && src.charCodeAt(i + 2) === CH_LF ? 3 : 2;
       continue;
     }
-    if (ch === quote) return i + 1;
+    if (code === quote) return i + 1;
     // An unterminated string must not swallow the rest of the file, and an
     // unescaped line terminator ends a quoted string anyway.
-    if (ch === "\n" || ch === "\r" || ch === "\u2028" || ch === "\u2029") return i;
+    if (code === CH_LF || code === CH_CR || code === CH_LS || code === CH_PS) return i;
     i++;
   }
   return src.length;
@@ -205,23 +235,23 @@ function skipRegex(src: string, start: number): number {
   let i = start + 1;
   let inClass = false;
   while (i < src.length) {
-    const ch = src[i] as string;
-    if (ch === "\\") {
+    const code = src.charCodeAt(i);
+    if (code === CH_BACKSLASH) {
       i += 2;
       continue;
     }
-    if (ch === "\n") return -1; // regex literals cannot span lines
+    if (code === CH_LF) return -1; // regex literals cannot span lines
     if (inClass) {
-      if (ch === "]") inClass = false;
-    } else if (ch === "[") {
+      if (code === CH_RBRACKET) inClass = false;
+    } else if (code === CH_LBRACKET) {
       inClass = true;
-    } else if (ch === "/") {
+    } else if (code === CH_SLASH) {
       // A regex whose closing delimiter is immediately followed by `/` or `*`
       // would be a regex being divided or multiplied, which is never real code.
       // `i++ / n // real` is division followed by a comment, so refusing here
       // keeps the comment countable instead of swallowing it as a regex body.
-      const after = src[i + 1];
-      if (after === "/" || after === "*") return -1;
+      const after = src.charCodeAt(i + 1);
+      if (after === CH_SLASH || after === CH_STAR) return -1;
       return i + 1;
     }
     i++;
@@ -264,14 +294,14 @@ export function scanJsComments(src: string): CommentScan {
   let i = 0;
 
   while (i < src.length) {
-    const ch = src[i] as string;
+    const code = src.charCodeAt(i);
 
     if (mode === "template") {
-      if (ch === "\\") {
+      if (code === CH_BACKSLASH) {
         i += 2;
         continue;
       }
-      if (ch === "`") {
+      if (code === CH_BACKTICK) {
         const frame = frames.pop();
         mode = frame?.mode ?? "code";
         braceDepth = frame?.braceDepth ?? 0;
@@ -279,7 +309,7 @@ export function scanJsComments(src: string): CommentScan {
         i++;
         continue;
       }
-      if (ch === "$" && src[i + 1] === "{") {
+      if (code === CH_DOLLAR && src.charCodeAt(i + 1) === CH_LBRACE) {
         frames.push({ mode: "template", braceDepth });
         mode = "code";
         braceDepth = 0;
@@ -291,16 +321,16 @@ export function scanJsComments(src: string): CommentScan {
       continue;
     }
 
-    if (ch === "/") {
-      const next = src[i + 1];
-      if (next === "/") {
+    if (code === CH_SLASH) {
+      const next = src.charCodeAt(i + 1);
+      if (next === CH_SLASH) {
         // Backstop for a URL that reached code context anyway, e.g. inside a
         // regex this scanner read as division. A real comment never abuts the
         // colon of a URL scheme, and a URL always has a host right after the
         // slashes, so `http:// text` stays a comment on a label named `http`.
         if (
           i > 0 &&
-          src[i - 1] === ":" &&
+          src.charCodeAt(i - 1) === CH_COLON &&
           isUrlHostStart(src[i + 2]) &&
           endsUrlScheme(src, i - 1)
         ) {
@@ -309,13 +339,13 @@ export function scanJsComments(src: string): CommentScan {
           continue;
         }
         let end = i + 2;
-        while (end < src.length && src[end] !== "\n") end++;
+        while (end < src.length && src.charCodeAt(end) !== CH_LF) end++;
         scan.lineComments++;
         scan.commentBytes += end - i;
         i = end;
         continue;
       }
-      if (next === "*") {
+      if (next === CH_STAR) {
         const close = src.indexOf("*/", i + 2);
         if (close === -1) {
           // Unterminated: the old regex did not match it either, so it is not
@@ -342,21 +372,21 @@ export function scanJsComments(src: string): CommentScan {
       continue;
     }
 
-    if (ch === '"' || ch === "'") {
-      const end = skipQuoted(src, i, ch);
+    if (code === CH_QUOTE || code === CH_APOS) {
+      const end = skipQuoted(src, i, code);
       lastCode = end - 1;
       i = end;
       continue;
     }
 
-    if (ch === "`") {
+    if (code === CH_BACKTICK) {
       frames.push({ mode: "code", braceDepth });
       mode = "template";
       i++;
       continue;
     }
 
-    if (ch === "(") {
+    if (code === CH_LPAREN) {
       const head = opensControlFlowHead(src, lastCode, ident);
       if (parens.length < PAREN_STACK_LIMIT) parens.push(head);
       else parenOverflow++;
@@ -365,7 +395,7 @@ export function scanJsComments(src: string): CommentScan {
       continue;
     }
 
-    if (ch === ")") {
+    if (code === CH_RPAREN) {
       if (parenOverflow > 0) {
         parenOverflow--;
       } else if (parens.pop() === true) {
@@ -376,14 +406,14 @@ export function scanJsComments(src: string): CommentScan {
       continue;
     }
 
-    if (ch === "{") {
+    if (code === CH_LBRACE) {
       braceDepth++;
       lastCode = i;
       i++;
       continue;
     }
 
-    if (ch === "}") {
+    if (code === CH_RBRACE) {
       const frame = frames[frames.length - 1];
       if (braceDepth === 0 && frame?.mode === "template") {
         frames.pop();
@@ -398,7 +428,7 @@ export function scanJsComments(src: string): CommentScan {
       continue;
     }
 
-    if (isIdentPart(ch)) {
+    if (isIdentCode(code)) {
       // `ident.end !== i` means this character opens a new identifier token
       // rather than continuing the one already being consumed.
       if (ident.end !== i) {
@@ -416,7 +446,7 @@ export function scanJsComments(src: string): CommentScan {
       }
       lastCode = i;
       ident.end = i + 1;
-    } else if (!isWhitespace(ch)) {
+    } else if (!isWhitespaceCode(code)) {
       lastCode = i;
     }
     i++;
@@ -434,14 +464,14 @@ export function scanCssComments(src: string): CommentScan {
   let i = 0;
 
   while (i < src.length) {
-    const ch = src[i] as string;
+    const code = src.charCodeAt(i);
 
-    if (ch === '"' || ch === "'") {
-      i = skipQuoted(src, i, ch);
+    if (code === CH_QUOTE || code === CH_APOS) {
+      i = skipQuoted(src, i, code);
       continue;
     }
 
-    if (ch === "/" && src[i + 1] === "*") {
+    if (code === CH_SLASH && src.charCodeAt(i + 1) === CH_STAR) {
       const close = src.indexOf("*/", i + 2);
       if (close === -1) break;
       scan.blockComments++;
