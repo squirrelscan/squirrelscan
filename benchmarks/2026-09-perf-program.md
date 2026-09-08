@@ -720,8 +720,9 @@ literal at all** — `[0-9]{8,10}:[a-zA-Z0-9_-]{35}` has nothing to prove — an
 those 18 are the top of the remaining cost, led by the Telegram bot token at
 2.0 ms per page.
 
-Three soundness bugs were found in the prefilter before it shipped, all of them
-silent false negatives, which in this rule means a deleted security finding:
+Nine soundness bugs were found in the prefilter before it shipped, all of them
+silent false negatives, which in this rule means a deleted security finding. The
+first three came from reading the diff:
 
 - The rolling hash was masked with the TABLE's width rather than the window's,
   so a table wider than 20 bits kept the low bit of the character BEFORE the
@@ -737,14 +738,37 @@ silent false negatives, which in this rule means a deleted security finding:
   U+0130 and U+212A KELVIN SIGN. `postmar<U+212A>_server_token` lowercases to
   `postmark_server_token`, and the index rightly said `postmark` was absent.
 
-The generative soundness test that was supposed to catch the first two could not
-run at all: its own string generator looped forever on `\d`, `\w` and `\s`, so
-three of its hand-written expectations described an implementation that no longer
-existed. **A skipped or hanging test is read as evidence.** Every regression test
-here was mutation-checked by restoring the bug it claims to catch, and two of
-them did not bite until the fixture varied the character immediately before the
-literal — `"` is even and `'` is odd, and a corpus that quotes everything the
-same way is blind to the whole class.
+Three more were escapes read as shorter than they are, each leaving its own tail
+behind as literal text no match contains: `\12` (a backreference to group 12,
+read as `\1` then `2`), `\k<x>`, and `\u{41}`, which is a code point only under
+the `u` flag and otherwise the letter `u` repeated 41 times.
+
+An adversarial review pass found three more of the same kind, all counterexamples
+rather than reproductions from the shipped tables: `.` was in the character class
+the group shortcut accepts as literal, so `/(abcd.efgh)/` proved a wildcard as
+itself; `[]` is an EMPTY class in JavaScript, not a literal bracket, so reading
+past its `]` in `/abcd[]|efgh/` hid the `|` and left one branch where there are
+two; and under the `u` flag the `i` flag folds beyond ASCII, so `/secret/iu`
+matches `ſecret`, which does not contain `secret`. Unicode-mode patterns are now
+declined whole.
+
+The pattern in all nine is the same: **the extractor read the regex as something
+the engine does not.** The defence that works is a counterexample corpus of
+(pattern, subject-it-really-matches) pairs, because that comparison does not
+depend on anyone's reading being right.
+
+The generative soundness test that was supposed to catch several of them could
+not run at all: its own string generator looped forever on `\d`, `\w` and `\s`,
+so three of its hand-written expectations described an implementation that no
+longer existed. Its random number generator also multiplied past 2^53 and lost
+its low bits, so 60 of 60 Redis samples took the same alternative and no Generic
+Secret Assignment sample ever chose `password` — a generator that walks one
+branch cannot notice an extractor that proves one branch. **A skipped, hanging or
+degenerate test is read as evidence.** Every regression test here was
+mutation-checked by restoring the bug it claims to catch, and two of them did not
+bite until the fixture varied the character immediately before the literal — `"`
+is even and `'` is odd, and a corpus that quotes everything the same way is blind
+to the whole class.
 
 ## Still open
 
