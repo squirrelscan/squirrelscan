@@ -130,6 +130,7 @@ describe("checkInstallLocation (#293)", () => {
       loadUser: user("/home/u/.local/bin"),
       which: () => link,
       realpath: (p) => (p === link ? target : p),
+      exists: () => true,
       isWindows: false,
     });
 
@@ -145,6 +146,7 @@ describe("checkInstallLocation (#293)", () => {
       loadUser: user(null),
       which: () => link,
       realpath: (p) => p,
+      exists: () => true,
       isWindows: false,
     });
 
@@ -161,6 +163,7 @@ describe("checkInstallLocation (#293)", () => {
       which: () => onPath,
       realpath: (p) =>
         p === onPath ? "/home/u/.squirrel/releases/0.0.81/squirrel" : p,
+      exists: () => true,
       isWindows: false,
     });
 
@@ -176,12 +179,31 @@ describe("checkInstallLocation (#293)", () => {
       loadUser: user("/home/u/.local/bin"),
       which: () => null,
       realpath: (p) => p,
+      exists: () => true,
       isWindows: false,
     });
 
     expect(check.status).toBe("warn");
     expect(check.message).toContain("no 'squirrel' found");
     expect(check.fix).toBe("Add /home/u/.local/bin to PATH");
+  });
+
+  // The link left behind by an update into a directory that has since been
+  // deleted resolves to itself; printing the same path twice would read like
+  // a healthy install.
+  test("a dangling link is reported as missing, not as its own target", () => {
+    const check = checkInstallLocation({
+      loadUser: user("/home/u/scratch/bin-beta"),
+      which: () => "/home/u/.local/bin/squirrel",
+      realpath: (p) => p,
+      exists: (p) => p === "/home/u/.local/bin/squirrel",
+      isWindows: false,
+    });
+
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain(
+      "link /home/u/scratch/bin-beta/squirrel -> /home/u/scratch/bin-beta/squirrel (missing)"
+    );
   });
 
   test("a recorded bin dir that can't be a link target warns instead of throwing", () => {

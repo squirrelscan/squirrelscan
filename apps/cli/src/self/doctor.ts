@@ -232,6 +232,13 @@ function releaseVersionOf(binaryPath: string): string | null {
   return isValidReleaseVersion(candidate) ? candidate : null;
 }
 
+/** "v0.0.92" for a managed release binary, the path otherwise. */
+function describeBinary(target: string, present: boolean): string {
+  if (!present) return `${target} (missing)`;
+  const releaseVersion = releaseVersionOf(target);
+  return releaseVersion ? `v${releaseVersion}` : target;
+}
+
 /**
  * The one check that answers "will my next `squirrel` be the version I just
  * installed?" — the question `self update` used to answer by assumption.
@@ -248,6 +255,7 @@ export function checkInstallLocation(
     loadUser?: typeof loadUserSettings;
     which?: (command: string) => string | null;
     realpath?: (path: string) => string;
+    exists?: (path: string) => boolean;
     isWindows?: boolean;
   } = {}
 ): DoctorCheck {
@@ -271,9 +279,11 @@ export function checkInstallLocation(
   }
 
   const isWindows = deps.isWindows ?? platform() === "win32";
+  const exists = deps.exists ?? existsSync;
   const linkTarget = safeRealpath(linkPath, deps.realpath);
-  const linkVersion = releaseVersionOf(linkTarget);
-  const linkNote = `link ${linkPath} -> ${linkVersion ? `v${linkVersion}` : linkTarget}`;
+  // A link whose release dir was pruned resolves to itself, so say "missing"
+  // rather than printing the same path twice and implying it is fine.
+  const linkNote = `link ${linkPath} -> ${describeBinary(linkTarget, exists(linkTarget))}`;
 
   const onPath = resolveSquirrelOnPath({ ...deps, isWindows });
   if (!onPath) {
@@ -285,8 +295,7 @@ export function checkInstallLocation(
     };
   }
 
-  const pathVersion = releaseVersionOf(onPath.target);
-  const pathNote = `PATH: ${onPath.binary} -> ${pathVersion ? `v${pathVersion}` : onPath.target}`;
+  const pathNote = `PATH: ${onPath.binary} -> ${describeBinary(onPath.target, exists(onPath.target))}`;
 
   if (!samePath(onPath.target, linkTarget, isWindows)) {
     return {
