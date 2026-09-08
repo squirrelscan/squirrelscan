@@ -203,11 +203,18 @@ export async function printAutoUpdateAppliedNotice(
   const warnings = applied.landing
     ? updateLandingWarnings(applied.landing)
     : [];
+  // The narrow reason to speak up on the old binary: PATH does not resolve
+  // what was installed, so the run that would print this normally is never
+  // coming. Anything else (a stale bin dir the updater already routed around)
+  // still waits, or an old process racing the symlink flip would eat the
+  // confirmation the next run owes the user.
+  const unreachable = applied.landing
+    ? applied.landing.on_path !== "same"
+    : false;
 
-  // Still running the old binary (e.g. resolved before the symlink flip) with
-  // nothing to warn about — keep the marker for the run that lands on the new
-  // version.
-  if (!onNewVersion && warnings.length === 0) return;
+  // Still running the old binary (e.g. resolved before the symlink flip) and
+  // the new one IS reachable — keep the marker for the run that lands on it.
+  if (!onNewVersion && !unreachable) return;
 
   if (settings.notifications) {
     if (onNewVersion) {

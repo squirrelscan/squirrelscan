@@ -1160,33 +1160,67 @@ async function performUpdate(
 
   const landingDeps = options?.landingDeps ?? {};
 
+  // Re-read rather than trust the snapshot: it predates a download that can
+  // take minutes, and `self install --bin-dir` (which the update lock does not
+  // cover) may have recorded a live directory in the meantime. Clearing that
+  // one because the OLD value was dead would be a worse bug than #293.
+  const freshSettings = loadSettings();
+  const recordedBinDir =
+    (freshSettings.ok ? freshSettings.data.install_bin_dir : null) ??
+    settings.install_bin_dir ??
+    null;
+
   // A recorded --bin-dir that has since been deleted (a scratch dir from a
   // test install, an unmounted volume) would otherwise have the update flip a
-  // link nobody can run, forever, in silence. Fall back to the default bin dir
-  // and forget the dead value — but only when it is provably gone.
-  const recordedBinDir = settings.install_bin_dir ?? null;
-  const staleBinDir =
+  // link nobody can run, forever, in silence. Prefer the default bin dir when
+  // that happens — but only when the recorded one is provably gone.
+  const recordedIsStale =
     recordedBinDir !== null &&
-    classifyBinDir(recordedBinDir, landingDeps) === "missing"
-      ? recordedBinDir
-      : null;
-  const binDir =
-    staleBinDir === null ? (recordedBinDir ?? undefined) : undefined;
+    classifyBinDir(recordedBinDir, landingDeps) === "missing";
 
-  let linkPath: string;
-  try {
-    linkPath = getSymlinkPath(binDir);
-  } catch (error) {
-    return err(
-      commandError(
-        "INVALID_BIN_DIR",
-        `Invalid bin directory: ${(error as Error).message}`
-      )
+  // Destinations in order of preference. The recorded directory stays as a
+  // last resort even when it is stale: updateSymlink would recreate it, which
+  // is what happened before this change, and falling back must never turn an
+  // update that used to succeed into a failure (an unwritable or obstructed
+  // default). The PATH check below still tells the user where it went.
+  const destinations: Array<string | undefined> = recordedIsStale
+    ? [undefined, recordedBinDir ?? undefined]
+    : [recordedBinDir ?? undefined];
+
+  let linked: { path: string; binDir: string | undefined } | null = null;
+  let failure: Result<UpdateLanding> | null = null;
+  for (const destination of destinations) {
+    let candidate: string;
+    try {
+      candidate = getSymlinkPath(destination);
+    } catch (error) {
+      failure = err(
+        commandError(
+          "INVALID_BIN_DIR",
+          `Invalid bin directory: ${(error as Error).message}`
+        )
+      );
+      continue;
+    }
+    const attempt = updateSymlink(manifest.version, destination);
+    if (attempt.ok) {
+      linked = { path: candidate, binDir: destination };
+      break;
+    }
+    failure = attempt;
+  }
+  if (!linked) {
+    return (
+      failure ?? err(commandError("SYMLINK_FAILED", "Failed to update symlink"))
     );
   }
 
-  const symlinkResult = updateSymlink(manifest.version, binDir);
-  if (!symlinkResult.ok) return symlinkResult;
+  // Only a fallback that actually took effect makes the recorded value stale;
+  // if the link went to the recorded directory after all, the setting is still
+  // in use and must not be cleared.
+  const staleBinDir =
+    recordedIsStale && linked.binDir === undefined ? recordedBinDir : null;
+  const linkPath = linked.path;
 
   const landing: UpdateLanding = {
     link_path: linkPath,

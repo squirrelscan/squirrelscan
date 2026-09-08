@@ -278,6 +278,38 @@ describe("printAutoUpdateAppliedNotice (#170)", () => {
     expect(out.text()).toBe("");
   });
 
+  // The stale-bin-dir fallback already routed around the problem: PATH runs
+  // the new binary, so the confirmation still belongs to the run that lands on
+  // it. An old process must not eat the marker on the strength of a warning.
+  test("a stale bin dir alone does NOT make the old version consume the marker", async () => {
+    const applied = {
+      from_version: version,
+      to_version: "99.99.99",
+      at: new Date().toISOString(),
+      landing: {
+        link_path: "/home/u/.local/bin/squirrel",
+        path_binary: "/home/u/.local/bin/squirrel",
+        path_target: "/home/u/.squirrel/releases/99.99.99/squirrel",
+        on_path: "same" as const,
+        stale_bin_dir: "/home/u/scratch/bin-beta",
+      },
+    };
+    updateSettings({ auto_update_applied: applied });
+
+    const out = captureStderr();
+    await printAutoUpdateAppliedNotice(
+      settingsWith({ auto_update_applied: applied })
+    );
+    out.spy.mockRestore();
+
+    expect(out.text()).toBe("");
+    const saved = loadUserSettings();
+    expect(saved.ok).toBe(true);
+    if (saved.ok) {
+      expect(saved.data.auto_update_applied?.to_version).toBe("99.99.99");
+    }
+  });
+
   test("silent in the process that applied the update (still the old version)", async () => {
     const out = captureStderr();
     await printAutoUpdateAppliedNotice(

@@ -1684,6 +1684,138 @@ describe("updater", () => {
       }
     });
 
+    // The snapshot handed to performUpdate predates the download. A
+    // `self install --bin-dir` finishing during it records a LIVE directory,
+    // and clearing that because the OLD value was dead is worse than #293.
+    test("a bin dir recorded DURING the download is used, and not cleared", async () => {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      captureTelemetry();
+
+      const deadBinDir = join(tempHome, "scratch", "bin-beta");
+      const liveBinDir = join(tempHome, "live", "bin");
+      mkdirSync(liveBinDir, { recursive: true });
+
+      spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v)
+      );
+      spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v, "squirrel")
+      );
+      spyOn(pathsModule, "getSymlinkPath").mockImplementation((dir?: string) =>
+        join(dir ?? join(tempHome, "bin"), "squirrel")
+      );
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest: { version: "9.9.9", binaries: {} } as ReleaseManifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      spyOn(releasesModule, "downloadBinary").mockImplementation(async () => {
+        // `self install --bin-dir <live>` lands while the bytes are in flight.
+        updateSettings({ install_bin_dir: liveBinDir });
+        return {
+          ok: true,
+          data: new TextEncoder().encode("bin").buffer as ArrayBuffer,
+        };
+      });
+
+      updateSettings({
+        auto_update: true,
+        install_bin_dir: deadBinDir,
+        pending_update_notification: {
+          from_version: "0.0.1",
+          to_version: "9.9.9",
+          release_url: null,
+        },
+      });
+
+      const installed = await runAutoUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+      });
+
+      expect(installed).toBe("9.9.9");
+      expect(existsSync(join(liveBinDir, "squirrel"))).toBe(true);
+      expect(existsSync(join(tempHome, "bin", "squirrel"))).toBe(false);
+
+      const saved = loadUserSettings();
+      expect(saved.ok).toBe(true);
+      if (saved.ok) {
+        expect(saved.data.install_bin_dir).toBe(liveBinDir);
+        expect(
+          saved.data.auto_update_applied?.landing?.stale_bin_dir ?? null
+        ).toBeNull();
+      }
+    });
+
+    // Falling back must never turn an update that used to succeed into a
+    // failure: updateSymlink would have recreated the recorded directory.
+    test("an unusable default falls back to recreating the recorded dir, and keeps the setting", async () => {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      captureTelemetry();
+
+      const deadBinDir = join(tempHome, "scratch", "bin-beta");
+      // A FILE where the default bin dir belongs: mkdirSync -> ENOTDIR/EEXIST.
+      writeFileSync(join(tempHome, "bin"), "not a directory");
+
+      spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v)
+      );
+      spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v, "squirrel")
+      );
+      spyOn(pathsModule, "getSymlinkPath").mockImplementation((dir?: string) =>
+        join(dir ?? join(tempHome, "bin"), "squirrel")
+      );
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest: { version: "9.9.9", binaries: {} } as ReleaseManifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      spyOn(releasesModule, "downloadBinary").mockResolvedValue({
+        ok: true,
+        data: new TextEncoder().encode("bin").buffer as ArrayBuffer,
+      });
+
+      updateSettings({
+        auto_update: true,
+        install_bin_dir: deadBinDir,
+        pending_update_notification: {
+          from_version: "0.0.1",
+          to_version: "9.9.9",
+          release_url: null,
+        },
+      });
+
+      const installed = await runAutoUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+      });
+
+      expect(installed).toBe("9.9.9");
+      expect(existsSync(join(deadBinDir, "squirrel"))).toBe(true);
+
+      const saved = loadUserSettings();
+      expect(saved.ok).toBe(true);
+      if (saved.ok) {
+        // The link went to the recorded directory after all, so it is still
+        // in use and must survive.
+        expect(saved.data.install_bin_dir).toBe(deadBinDir);
+        const landing = saved.data.auto_update_applied?.landing;
+        expect(landing?.stale_bin_dir ?? null).toBeNull();
+        expect(landing?.link_path).toBe(join(deadBinDir, "squirrel"));
+      }
+    });
+
     // A landing PATH agrees with must not bloat settings or make the next run
     // print anything beyond the ordinary "auto-updated" confirmation.
     test("a landing PATH agrees with records no landing at all", async () => {
