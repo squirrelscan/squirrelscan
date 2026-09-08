@@ -1752,6 +1752,65 @@ describe("updater", () => {
       }
     });
 
+    // The mirror of the case above: a bare `self install` during the download
+    // records null, meaning "the default". Falling back to the snapshot there
+    // would keep updating a custom directory the user just stopped using.
+    test("a bin dir CLEARED during the download means the default, not the snapshot", async () => {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      captureTelemetry();
+
+      // Live, not stale: only the concurrent write may move the destination.
+      const customBinDir = join(tempHome, "custom", "bin");
+      mkdirSync(customBinDir, { recursive: true });
+
+      spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v)
+      );
+      spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v, "squirrel")
+      );
+      spyOn(pathsModule, "getSymlinkPath").mockImplementation((dir?: string) =>
+        join(dir ?? join(tempHome, "bin"), "squirrel")
+      );
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest: { version: "9.9.9", binaries: {} } as ReleaseManifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      spyOn(releasesModule, "downloadBinary").mockImplementation(async () => {
+        updateSettings({ install_bin_dir: null });
+        return {
+          ok: true,
+          data: new TextEncoder().encode("bin").buffer as ArrayBuffer,
+        };
+      });
+
+      updateSettings({
+        auto_update: true,
+        install_bin_dir: customBinDir,
+        pending_update_notification: {
+          from_version: "0.0.1",
+          to_version: "9.9.9",
+          release_url: null,
+        },
+      });
+
+      expect(
+        await runAutoUpdate({
+          landingDeps: { which: () => null, isWindows: false },
+        })
+      ).toBe("9.9.9");
+
+      expect(existsSync(join(tempHome, "bin", "squirrel"))).toBe(true);
+      expect(existsSync(join(customBinDir, "squirrel"))).toBe(false);
+    });
+
     // Falling back must never turn an update that used to succeed into a
     // failure: updateSymlink would have recreated the recorded directory.
     test("an unusable default falls back to recreating the recorded dir, and keeps the setting", async () => {

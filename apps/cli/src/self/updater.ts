@@ -1164,11 +1164,13 @@ async function performUpdate(
   // take minutes, and `self install --bin-dir` (which the update lock does not
   // cover) may have recorded a live directory in the meantime. Clearing that
   // one because the OLD value was dead would be a worse bug than #293.
+  // A fresh explicit null means "the default", not "fall back to what the
+  // snapshot said" — only an unreadable re-read defers to the snapshot.
   const freshSettings = loadSettings();
   const recordedBinDir =
-    (freshSettings.ok ? freshSettings.data.install_bin_dir : null) ??
-    settings.install_bin_dir ??
-    null;
+    (freshSettings.ok
+      ? freshSettings.data.install_bin_dir
+      : settings.install_bin_dir) ?? null;
 
   // A recorded --bin-dir that has since been deleted (a scratch dir from a
   // test install, an unmounted volume) would otherwise have the update flip a
