@@ -373,6 +373,11 @@ reading a fresh measurement:
 `--refresh` turns it off along with the page cache. To turn off only the rule
 cache, set `SQUIRREL_RULE_CACHE=0`.
 
+While the rule cache is on, squirrelscan runs every rule on every page rather than
+running a template-shared rule once per template and reusing its verdict. That
+makes the first audit of a site slightly slower and every audit after it much
+faster, and it makes the report the one every rule actually computed.
+
 Cached results live in the project database and are removed with the audit they
 belong to, so [`squirrel self disk --prune`](/cli/self#disk) reclaims them along
 with everything else that audit is holding.

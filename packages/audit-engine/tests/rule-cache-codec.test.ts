@@ -59,7 +59,9 @@ describe("canonicalJson", () => {
     const forms = [NaN, Infinity, -Infinity].map((n) => canonicalJson({ limit: n }));
     expect(new Set(forms).size).toBe(3);
     expect(canonicalJson([])).not.toBe(canonicalJson(new Array(1)));
-    expect(canonicalJson([undefined])).toBe(canonicalJson(new Array(1)));
+    // A hole is observable (`0 in arr`), so it is not `undefined` either.
+    expect(canonicalJson([undefined])).not.toBe(canonicalJson(new Array(1)));
+    expect(canonicalJson({ x: -0 })).not.toBe(canonicalJson({ x: 0 }));
     expect(canonicalJson([1, 2])).not.toBe(canonicalJson([12]));
   });
 
@@ -164,6 +166,16 @@ describe("cache payload codec", () => {
     };
     const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
     expect(Object.hasOwn(back.details, "__proto__")).toBe(true);
+    expect(JSON.stringify(back)).toBe(JSON.stringify(value));
+  });
+
+  // `JSON.stringify(new Date(NaN))` is `null`, so a replay must give back an
+  // invalid Date and not the epoch.
+  test("round-trips an invalid Date as invalid", () => {
+    const value = { details: { when: new Date(NaN) } };
+    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    expect(back.details.when).toBeInstanceOf(Date);
+    expect(Number.isNaN(back.details.when.getTime())).toBe(true);
     expect(JSON.stringify(back)).toBe(JSON.stringify(value));
   });
 

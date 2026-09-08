@@ -210,7 +210,11 @@ export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): s
   if (t === "number") {
     // Distinct forms, not one "not finite" bucket: NaN, Infinity and -Infinity are
     // three different rule-option values and must not share a key.
-    if (Number.isFinite(value as number)) return JSON.stringify(value);
+    // `Object.is` distinguishes -0 from 0 and `JSON.stringify` does not, so the
+    // sign is spelled out rather than lost.
+    if (Number.isFinite(value as number)) {
+      return Object.is(value, -0) ? "-0" : JSON.stringify(value);
+    }
     return Number.isNaN(value as number) ? "nan" : (value as number) > 0 ? "inf" : "-inf";
   }
   if (t === "string" || t === "boolean") return JSON.stringify(value);
@@ -222,11 +226,13 @@ export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): s
   seen.add(value);
   try {
     if (Array.isArray(value)) {
-      // LENGTH-prefixed, and holes read as `undefined` rather than as nothing:
-      // `.map` skips holes, so `new Array(1)` and `[]` would otherwise both
-      // canonicalize to the same string.
+      // LENGTH-prefixed, and a HOLE is its own token: `.map` skips holes, so
+      // `new Array(1)` and `[]` would otherwise canonicalize the same, and a hole
+      // is observable (`0 in arr`) so it is not `undefined` either.
       const items: string[] = [];
-      for (let i = 0; i < value.length; i++) items.push(canonicalJson(value[i], seen));
+      for (let i = 0; i < value.length; i++) {
+        items.push(i in value ? canonicalJson(value[i], seen) : "h");
+      }
       return `[${value.length}|${items.join(",")}]`;
     }
     if (value instanceof Set) {
@@ -287,6 +293,13 @@ export interface RunContextInput {
    * granularity the cache has to invalidate on: a pass cached on 31 December must
    * not replay on 1 January. Year and not day, because a day would make every
    * re-audit after midnight cold for nothing.
+   *
+   * It is resolved once, before the pages run, so an audit that STRADDLES midnight
+   * on 31 December stores the new year's verdicts under the old year's key. Those
+   * rows are then unreachable — the next audit resolves the new year and misses
+   * every one of them — so the cost is one run's writes, once a year, and never a
+   * stale verdict served. The straddle itself is not new: a fresh audit crossing
+   * midnight already gives its earlier and later pages different verdicts.
    */
   readonly utcYear: number;
 }
@@ -412,7 +425,7 @@ interface TaggedEscape {
   $e: Record<string, unknown>;
 }
 interface TaggedDate {
-  $d: number;
+  $d: number | null;
 }
 
 function isTagged(value: object): boolean {
@@ -434,7 +447,12 @@ export function encodeCacheValue(value: unknown): unknown {
   // A Date reaches `JSON.stringify` as an ISO string on a fresh run; walked as a
   // plain object it has no own keys and would come back `{}`. No built-in rule
   // puts one in `check.details` today, but the field's type permits it.
-  if (value instanceof Date) return { $d: value.getTime() } satisfies TaggedDate;
+  // An INVALID date serializes to `null` through `JSON.stringify`, so `$d` carries
+  // null for it rather than a NaN that decodes to the epoch.
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return { $d: Number.isNaN(time) ? null : time } satisfies TaggedDate;
+  }
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) setOwn(out, k, encodeCacheValue(v));
   // A plain object whose own keys start with "$" would decode as a tag; wrap it.
@@ -457,7 +475,7 @@ export function decodeCacheValue(value: unknown): unknown {
   // without running the tag checks over it again — recursing into
   // decodeCacheValue here would read `{"$u": "text"}` as the undefined tag and
   // return undefined for the whole object.
-  if ("$d" in obj) return new Date(obj.$d as number);
+  if ("$d" in obj) return obj.$d === null ? new Date(NaN) : new Date(obj.$d as number);
   if ("$e" in obj) return decodePlainObject(obj.$e as Record<string, unknown>);
   return decodePlainObject(obj);
 }

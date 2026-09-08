@@ -25,11 +25,14 @@ import { Effect } from "effect";
 
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { createRunner } from "@squirrelscan/rules";
 import type { ContentStoreAdapter } from "@squirrelscan/crawler";
 import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 
 import type { Config } from "../src/adapter";
 import { generateReportFromStorage, runStreamingRules } from "../src/adapter";
+import { bindRuleCache } from "../src/rule-cache";
+import { streamPageRules } from "../src/streaming";
 import type { RuleCacheStore } from "../src/rule-cache";
 import { getGoldenBaselineConfig } from "./helpers/golden-baseline";
 
@@ -207,9 +210,12 @@ describe("per-page rule-result cache — replay parity", () => {
     const { dbPath, crawlId } = await buildCrawl("parity");
     const cache = memoryCacheStore();
 
-    const cold = await runOnce(dbPath, crawlId);
+    // The reference is a cold run WITH THE CACHE ENABLED and an empty store, not a
+    // run without one: enabling the cache turns template fan-out off (they do not
+    // compose — see streaming.ts), so a cache-off run is a different
+    // configuration and comparing against it would be comparing two changes.
+    const cold = await runOnce(dbPath, crawlId, { store: memoryCacheStore().store });
     expect(cold.replayedPages).toBe(0);
-    expect(cold.storedEntries).toBe(0);
 
     const warm1 = await runOnce(dbPath, crawlId, { store: cache.store });
     // First warm run: nothing to replay, everything stored.
@@ -256,15 +262,13 @@ describe("per-page rule-result cache — replay parity", () => {
     expect(second.replayedPages).toBe(first.freshPages - 1);
   }, 120_000);
 
-  // Codex's counterexample, and the reason a replayed page records into the
-  // template fan-out (#1951) instead of abstaining from it.
+  // The case that made the cache and template fan-out (#1951) mutually exclusive.
   //
-  // With abstention, WHICH page runs a template-scoped rule depends on what
-  // happens to be cached: on the audit after a change, the changed page is the
-  // only fresh one, so it becomes the cluster's representative and keeps its own
-  // verdict — where a fresh audit would have the FIRST page record and fan its
-  // verdict onto the changed one. The next fully-replayed audit then disagrees
-  // with a fresh audit of identical content, and the disagreement is persisted.
+  // A fanned verdict belongs to the page's CLUSTER, so no per-page key can capture
+  // what it depends on: change one page of a cluster and the OTHER pages' cached
+  // verdicts can be stale without anything about those pages changing. This runs
+  // that shape end to end and requires the fully-replayed audit to say what a
+  // fresh audit of the same content says.
   test("a fully-replayed audit matches a fresh one across a template cluster", async () => {
     const { dbPath, crawlId } = await buildCrawl("fanout-composition");
     const cache = memoryCacheStore();
@@ -304,8 +308,53 @@ describe("per-page rule-result cache — replay parity", () => {
     const fullyReplayed = await runOnce(dbPath, crawlId, { store: cache.store });
     expect(fullyReplayed.freshPages).toBe(0);
     // ...and it must say what a fresh audit of this same content says.
-    const fresh = await runOnce(dbPath, crawlId);
+    const fresh = await runOnce(dbPath, crawlId, { store: memoryCacheStore().store });
+    expect(fresh.replayedPages).toBe(0);
     expectSameSerialization(fullyReplayed.serialized, fresh.serialized);
+  }, 180_000);
+
+  // The mechanism, asserted directly rather than through an output difference.
+  //
+  // A fanned verdict belongs to the cluster, so the divergence it causes shows up
+  // only on a page whose CLUSTER-MATE changed — which a fixture cannot be relied
+  // on to produce, and a test that happens not to produce it passes while proving
+  // nothing. What can be pinned exactly is that the two features never run
+  // together: with a cache supplied, the fan-out does no work at all.
+  test("supplying a cache turns template fan-out off", async () => {
+    const { dbPath, crawlId } = await buildCrawl("fanout-exclusive");
+    const cache = memoryCacheStore();
+    await withStorage(dbPath, async (storage) => {
+      const runner = createRunner(getGoldenBaselineConfig());
+      const siteData = {
+        baseUrl: "http://synthetic.test",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      } as unknown as Parameters<typeof streamPageRules>[3];
+
+      const withoutCache = await run(
+        streamPageRules(storage, crawlId, runner, siteData, {
+          batchSize: 20,
+          templateFanout: true,
+        }),
+      );
+      // The fixture really does cluster, or the assertion below proves nothing.
+      expect(withoutCache.templateFanout.fannedRuleRuns).toBeGreaterThan(0);
+
+      const withCache = await run(
+        streamPageRules(storage, crawlId, runner, siteData, {
+          batchSize: 20,
+          templateFanout: true,
+          collectors: [],
+          ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
+        }),
+      );
+      expect(withCache.templateFanout.fannedRuleRuns).toBe(0);
+      expect(withCache.templateFanout.clusters).toBe(0);
+      // And the cache really was in play, so this is exclusivity and not an
+      // accidentally-disabled fan-out.
+      expect(withCache.ruleCache.storedEntries).toBeGreaterThan(0);
+    });
   }, 180_000);
 
   test("turning off applicability gating invalidates every entry", async () => {

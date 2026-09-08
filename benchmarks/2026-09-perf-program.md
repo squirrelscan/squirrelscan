@@ -1444,23 +1444,23 @@ Site-scope rules always run.
 Both arms are the SAME build. `SQUIRREL_RULE_CACHE=0` is the only difference,
 which is the point: an A/B across two builds is an A/B across two of everything.
 2,500 pages of the mixed synthetic estate, one pinned origin across each pair, a
-fresh content store per pair, load average 2.2 to 4.5 throughout.
+fresh content store per pair, load average 2.4 to 4.1 except where noted.
 
 | stage | wall | rules phase | report phase | crawl | project.db |
 |---|---|---|---|---|---|
-| cache off, cold | 170 s | 114 s | 19 s | 34 s | 258 MB |
-| cache off, warm | 140 s | 106 s | 18 s | 14 s | 514 MB |
-| cache on, cold | 161 s | 110 s | 17 s | 33 s | 290 MB |
-| **cache on, warm** | **46 s** | **13 s** | 18 s | 14 s | 579 MB |
+| cache off, cold | 178 s | 116 s | 22 s | 39 s | 258 MB |
+| cache off, warm | 143 s | 110 s | 18 s | 13 s | 514 MB |
+| cache on, cold | 177 s | 124 s | 19 s | 33 s | 291 MB |
+| **cache on, warm** | **44 s** | **12 s** | 18 s | 13 s | 581 MB |
 
-**The warm rules phase falls from 106 s to 13 s, and the warm run from 140 s to
-46 s.** All 2,500 pages replayed, which the report says and nothing else in it
+**The warm rules phase falls from 110 s to 12 s, and the warm run from 143 s to
+44 s.** All 2,500 pages replayed, which the report says and nothing else in it
 does — the findings are identical by construction.
 
 Read the rules-phase column rather than the wall, and compare WITHIN a pair. The
-cache-off rules phase came in at 131 s on a loaded evening and 106 s on a quiet
+cache-off rules phase came in at 131 s on a loaded evening and 110 s on a quiet
 one, which is most of the spread this table would otherwise be asked to explain;
-13 s against 106 s in the same pair is not inside it.
+12 s against 110 s in the same pair is not inside it.
 
 **Byte-identity holds at scale.** The cache-on cold and warm reports are
 identical, all 3,039,997 bytes of them, once `meta.timestamp` and the replay
@@ -1470,57 +1470,64 @@ evaluated, on the full default rule surface.
 Two things the warm row makes visible that were hidden behind the rules phase:
 
 - **Report reconstruction is now the largest phase of a re-audit** — 18 s of a
-  46 s run, against 13 s of rules. squirrelscan/repo#1920 was already open on it;
+  44 s run, against 12 s of rules. squirrelscan/repo#1920 was already open on it;
   it is now the thing to work.
-- **A warm crawl still costs 14 s** with nothing to fetch, which is frontier and
+- **A warm crawl still costs 13 s** with nothing to fetch, which is frontier and
   bookkeeping work rather than bytes.
+
+### The cache and template fan-out do not compose, and the cache wins
+
+Fan-out (above) and this cache are two ways of not running a rule, and enabling
+the cache turns fan-out OFF for that run. The reason is not performance:
+
+A fanned verdict belongs to the page's CLUSTER, so no per-page key can capture
+what it depends on. Cache two pages of one cluster, then change the FIRST one —
+the cluster's representative. It is fresh and records its new verdict; the second
+page replays the verdict it inherited from the representative's PREVIOUS run, and
+every fully-replayed audit after that repeats the stale value. A fresh audit gives
+it the new one. Nothing about the second page changed, so nothing about its key
+can notice. Making them compose means caching the cluster's verdict against its
+representative's identity, which is a whole-crawl property the streamed loop
+resolves as it goes — a design rather than a patch, and a follow-up.
+
+What that costs, in the cold row above: **the rules phase goes from 116 s to
+124 s, 6.9%**, which is fan-out's share of the fannable rules plus the cache's own
+writes. Cold wall time is unchanged (178 s against 177). Every audit after the
+first takes the 89%.
+
+It also changes the report. The cache-on cold report is 3,039,997 bytes against
+3,043,863 with fan-out on: turning fan-out off is the more accurate of the two,
+because every rule then really runs on every page rather than inheriting a
+cluster-mate's verdict. That difference is #275's open question about the
+chrome-only cluster key, now visible rather than argued.
 
 ### What it costs a cold run, and what that took to establish
 
-The cache-on cold arm comes in FASTER than cache-off, on both the wall (161 s to
-170) and the rules phase (110 s to 114), which it cannot actually be: a cold run
-with the cache on does strictly more work. **The cost is below what this box can
-resolve**, and the honest statement is that and not "free".
+At gzip's default level 6, four interleaved cold stages put the cache-on rules
+phase 9.4% above cache-off at the minimum of two repeats (127 s to 139 s) — one
+payload per page serialized and compressed on the run that gets nothing back for
+it. Dropping to level 1 moved the compression cost under the noise floor, and it
+is the right trade because these rows are retired with their crawl: the extra
+bytes live no longer than the audit does, while the cold run's cost is paid by
+every first-time user. What remains in the 6.9% above is mostly fan-out's absence.
 
-It was not always below it. At gzip's default level 6 the same comparison, run as
-four interleaved cold stages, put the cache-on rules phase 9.4% above cache-off
-at the minimum of two repeats (127 s to 139 s) — one payload per page serialized
-and compressed on the run that gets nothing back for it. Dropping to level 1 is
-what moved it under the noise floor, and it is the right trade here because these
-rows are retired with their crawl: the extra bytes live no longer than the audit
-does, while the cold run's cost is paid by every first-time user.
+Storage: `project.db` grows about 12.8% (258 to 291 MiB cold, 514 to 581 warm).
+The rows are retired with their crawl, so `squirrel self disk --prune` reclaims
+them with everything else that audit holds and the retention window bounds them,
+rather than a permanent second copy accumulating.
 
-Storage: `project.db` grows about 12.5% (258 to 290 MiB cold, 514 to 579 warm). The rows
-are retired with their crawl, so `squirrel self disk --prune` reclaims them with
-everything else that audit holds and the retention window bounds them, rather than
-a permanent second copy accumulating.
+### What two adversarial review rounds found that the gates did not
 
-### What an adversarial review found that the gates did not
+Thirteen findings across two `codex` passes, all fixed or accounted for. The four
+worth recording:
 
-Seven findings, all fixed. Two are worth recording because they are about
-composition rather than about this code:
-
-**A replayed page has to be able to represent its template cluster.** Fan-out
-(#279) runs a declared rule once per cluster and copies the verdict to the rest.
-The first design had replayed pages abstain from it entirely — they did not run
-the rules, so they had nothing to record. That makes WHICH page runs a
-template-scoped rule depend on what happens to be cached: on the audit after one
-page changes, the changed page is the only fresh one and keeps its own verdict,
-where a fresh audit would have the first page of the cluster fan its verdict onto
-it. The next fully-replayed audit then disagrees with a fresh audit of identical
-content, and the disagreement is persisted. Reproduced on the synthetic estate by
-adding a `<meta name="viewport">` to one page — none of the five things the chrome
-fingerprint reads — which moved three checks. The fix is that a replayed page
-records too, keyed on the `page_features.template_fp` its own run stored, which
-restores the fresh audit's election exactly.
-
-**A cache changes what the clock means.** `content/stale-copyright` reads
-`new Date().getUTCFullYear()` at execution and is the only page rule that reads a
-clock at all, so a pass cached on 31 December would replay on 1 January. The
-current UTC year is now part of the run context — year and not day, because a day
-would make every re-audit after midnight cold for nothing.
-
-### Two findings from building it
+**Fan-out composition, twice.** The first round found that a replayed page
+abstaining from fan-out changes which page is elected representative. The fix —
+letting a replayed page record, keyed on its stored `template_fp` — closed that
+direction and the second round showed the other one: when the REPRESENTATIVE is
+what changed, its cluster-mates' cached verdicts are stale and no per-page key can
+see it. That is what made the two features mutually exclusive. Both rounds
+reproduced their case; the first is now a regression test, mutation-checked.
 
 **`pages.content_hash` cannot be the key, and looks like it can.** It is a
 whitespace-NORMALIZED hash, so the incremental crawler can call a reformatted page
@@ -1528,7 +1535,12 @@ unchanged. Two pages that differ only in whitespace share it and parse to
 different word counts, inline-script lengths and `<pre>` text. Keying on it would
 have replayed one page's verdicts onto another's markup, and every gate would have
 stayed green, because no fixture contains that pair. The cache keys on a new
-exact-bytes hash instead, which the content store had already computed.
+exact-bytes hash, which the content store had already computed.
+
+**A cache changes what the clock means.** `content/stale-copyright` reads
+`new Date().getUTCFullYear()` at execution and is the only page rule that reads a
+clock at all, so a pass cached on 31 December would replay on 1 January. The
+current UTC year is now part of the run context.
 
 **Hashing the run context whole made the cache do nothing, silently.** The first
 implementation hashed the `SiteData` fields page rules read as whole objects. One
