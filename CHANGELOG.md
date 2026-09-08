@@ -23,6 +23,27 @@ by 40%. It also adds the disk tooling a project database needs once audits
 accumulate, and fixes the CLI minting API keys against the wrong organization
 for accounts with more than one.
 
+### By the numbers
+
+Every figure is from the checked-in record in
+`benchmarks/2026-09-perf-program.md`. Laptop rows are a cold `squirrel audit
+--coverage full`, heap sampled after a forced collection at exit.
+
+| | v0.0.91 | v0.0.92 |
+|---|---|---|
+| 2,500-page audit, wall time | 502 s | 177 s |
+| 2,500-page audit, retained heap | 3,902 MB | 996 MB |
+| 1,000-page audit, wall time | 194 s | 128 s |
+| 1,000-page audit, retained heap | 1,662 MB | 565 MB |
+| Largest local audit | 5,000 pages | 10,000 pages in 12 min, 5.4 GB peak RSS |
+| SQL statements compiled on a warm 120-page re-crawl | 1,482 | 48 |
+| Rules pass on a 1 MB script-heavy page | 274 ms | 165 ms |
+| Page-rule CPU on a templated site (25 template-scoped rules) | | 13% less |
+| Report assembly at 1,000 pages, peak memory | | 340 MB less |
+| Hosted publish merge carrying 60,000 prior findings | 330 MB | under 100 MB |
+| Hosted re-audit of an unchanged 150-page site | 115 pages rendered | 17 rendered, report byte-identical |
+| Project database after six audits of a 40-page site | 14.7 MB | 11.9 MB |
+
 ### Added
 
 - **`squirrel self disk` shows where `~/.squirrel` goes, and `--prune` gets it
