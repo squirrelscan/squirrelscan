@@ -743,14 +743,17 @@ behind as literal text no match contains: `\12` (a backreference to group 12,
 read as `\1` then `2`), `\k<x>`, and `\u{41}`, which is a code point only under
 the `u` flag and otherwise the letter `u` repeated 41 times.
 
-An adversarial review pass found three more of the same kind, all counterexamples
-rather than reproductions from the shipped tables: `.` was in the character class
+An adversarial review pass found five more of the same kind, all counterexamples
+rather than reproductions from the shipped tables. `.` was in the character class
 the group shortcut accepts as literal, so `/(abcd.efgh)/` proved a wildcard as
-itself; `[]` is an EMPTY class in JavaScript, not a literal bracket, so reading
-past its `]` in `/abcd[]|efgh/` hid the `|` and left one branch where there are
-two; and under the `u` flag the `i` flag folds beyond ASCII, so `/secret/iu`
-matches `ſecret`, which does not contain `secret`. Unicode-mode patterns are now
-declined whole.
+itself. An atom that proves nothing was dropping its quantifier, so
+`/abcd\d{1000}efgh/` handed `1000` to the scanner as four literal characters.
+`[]` is an EMPTY class in JavaScript, not a literal bracket, so reading past its
+`]` in `/abcd[]|efgh/` hid the `|` and left one branch where there are two. The
+`\p{` and `\u{` reads searched forward for a `}` that in legacy mode belongs to
+a character class. And under the `u` flag the `i` flag folds beyond ASCII, so
+`/secret/iu` matches `ſecret`, which does not contain `secret` — Unicode-mode
+patterns are now declined whole.
 
 A second review pass found two more of the same family, both legacy escapes
 whose length is not knowable from the source: `\c` is a control escape only
