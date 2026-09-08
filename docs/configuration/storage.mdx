@@ -1,0 +1,101 @@
+---
+title: "Storage Configuration"
+icon: "hard-drive"
+description: "Control how many audits a project keeps on disk"
+---
+
+The `[storage]` section controls how much of a project's audit history squirrelscan
+keeps locally.
+
+## Configuration
+
+```toml
+[storage]
+keep_audits = 3
+```
+
+## Options
+
+### `keep_audits`
+
+**Type:** `number` or `boolean`
+**Default:** `3`
+
+How many audits of this project stay fully renderable. After a successful audit,
+anything older than the newest `keep_audits` is retired: its per-check results
+are deleted and its report can no longer be opened.
+
+Every audit writes a fresh set of rows, so without a window a project grows by
+about one audit each time you run it. On a 1,000-page site that is roughly 95 MB
+per audit, forever. Three is the default because it covers
+`squirrel report --diff` against the previous run, and one before that as a
+fallback when the most recent audit is the odd one out.
+
+```toml
+[storage]
+keep_audits = 10   # keep more history
+keep_audits = 1    # keep only the audit that just ran
+keep_audits = 0    # turn retention off (also: false)
+keep_audits = false
+```
+
+Retention runs only after a **successful** audit, and a failed one does not
+count towards the window either. A run that ends `failed` or `blocked`, such as
+a site that is down or answers 403 to everything, neither deletes anything nor
+takes a place among the audits you are keeping. A week of downtime cannot fill
+the window with runs that learned nothing and then take the history you would
+use to find out when it broke.
+
+The first time an audit retires something, it says so on stderr:
+
+```text
+Retired 1 older audit and freed 95.2 MB inside project.db for the next audit; keep more with [storage] keep_audits (now 3)
+```
+
+The notice never goes to stdout, so it cannot get into `-f json` output.
+
+## What retiring an audit does and does not take
+
+A retired audit **stays listed**. `squirrel report --list` still shows it, marked
+`retired` with the date its data went, rather than the history quietly
+shrinking. What it can no longer do is open:
+
+```text
+Audit data was reclaimed on 2026-09-08: 06148d76-6c48-465a-bc16-deb44144350d
+```
+
+`report <id>`, `report --diff`, `report --regression-since` and `analyze` all
+refuse a retired audit that way. If you keep an older audit as a reference
+baseline, raise `keep_audits` or turn it off before it falls out of the window.
+
+**Re-auditing stays incremental.** Retiring never takes the newest page record
+for a url, the sub-resource sizes, or the links and images a cached page is
+reused with, so the next audit still answers every unchanged page from its
+conditional GET rather than refetching the site. Measured on a 40-page site over
+five audits, the audits after retirement fetched 0 of 40 pages.
+
+Smart audits are unaffected either way: carried findings are keyed by site, not
+by crawl.
+
+## Retention and reclaiming are different things
+
+Retention deletes rows. SQLite keeps the freed pages in the file and reuses them
+for the next audit, so the file **stops growing** rather than shrinking, and an
+audit does not pay to rewrite it. That is deliberate: at `keep_audits = 3` an
+audit retires one audit's worth of rows every time, and rebuilding the whole
+database that often would cost far more than the space it returns.
+
+To hand the space back to the filesystem, rebuild the file explicitly:
+
+```bash
+squirrel self disk                       # what every project is using
+squirrel self disk --prune --keep 3      # retire, then rebuild
+```
+
+See [`squirrel self disk`](/cli/self#disk) for the full command.
+
+## See also
+
+- [Configuration Overview](/configuration/index)
+- [`squirrel self disk`](/cli/self#disk) - report and reclaim disk usage
+- [Reports](/reports) - diffing and comparing audits

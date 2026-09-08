@@ -290,11 +290,15 @@ Totals
 Projects are listed largest first. The count in brackets is how many audits that
 project has recorded.
 
-**Every audit is kept.** Re-auditing a project writes a fresh set of rows and
-retires nothing, so a project grows by roughly one audit's worth each time. On a
-1,000-page site that is about 95 MB per audit, and most of it is the per-check
-results: around 204 rows per page, which with their indexes are about 70% of the
-file. A large site audited weekly will add most of a gigabyte a week.
+**The last 3 audits are kept.** A successful audit retires anything older, so a
+project settles at roughly the size of its window instead of growing by one
+audit every run. On a 1,000-page site an audit is about 95 MB, and most of it is
+the per-check results: around 204 rows per page, which with their indexes are
+about 70% of the file. Change the window, or turn retention off, with
+[`[storage] keep_audits`](/configuration/storage).
+
+Retiring frees that space **inside** the file for the next audit to reuse rather
+than returning it to the filesystem, which is what `--prune` below is for.
 
 The content store and the external-link cache are shared by every project rather
 than owned by one, so they are reported separately. A shared database that has
@@ -321,10 +325,31 @@ squirrel self disk --prune --keep 3 --dry-run
 squirrel self disk --prune --keep 3
 ```
 
-`--keep` is required and has no default. A retired audit's report can no longer
-be rendered, and `report --list`, `report --diff` and `report --regression-since`
-all reach back into that history, so how many audits to keep is your call rather
-than a number this command picks for you.
+`--keep` is required and has no default, and it is independent of
+[`[storage] keep_audits`](/configuration/storage): this command reclaims to the
+window you name here, on the projects it finds, and rebuilds each file. Use it
+to hand space back to the filesystem, to prune below the automatic window, or to
+clear a backlog on a project you have not audited since retention arrived.
+
+A retired audit's report can no longer be rendered, and `report --list`,
+`report --diff` and `report --regression-since` all reach back into that
+history, so how many audits to keep is your call rather than a number this
+command picks for you.
+
+A project whose old audits an audit already retired has nothing left to retire
+and is still holding the space those deletes freed, so the plan offers the
+rebuild on its own:
+
+```text
+Keeping the newest 3 audit(s) per project.
+
+acme-docs  412 MB  rebuilding to return 96.4 MB
+
+Nothing left to retire: 96.4 MB across 1 project(s) is already free inside the
+files and only a rebuild returns it.
+
+Rebuild? [y/N]
+```
 
 The plan is printed and confirmed before anything is deleted:
 

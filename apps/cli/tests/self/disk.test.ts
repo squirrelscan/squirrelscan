@@ -82,6 +82,48 @@ describe("collectDiskUsage", () => {
     );
   });
 
+  test("counts how many of a project's audits are already retired", () => {
+    // A project on the current schema, three audits, one of them reclaimed.
+    const dir = join(home, ".squirrel", "projects", "retired-some");
+    mkdirSync(dir, { recursive: true });
+    const db = new Database(join(dir, "project.db"), { create: true });
+    db.exec(
+      "CREATE TABLE crawls (id TEXT PRIMARY KEY, base_url TEXT, retired_at INTEGER)"
+    );
+    db.exec(
+      "CREATE TABLE rule_results (id INTEGER PRIMARY KEY, crawl_id TEXT)"
+    );
+    const insert = db.query("INSERT INTO crawls VALUES (?, ?, ?)");
+    insert.run("c0", "https://x.test", 1_700_000_000_000);
+    insert.run("c1", "https://x.test", null);
+    insert.run("c2", "https://x.test", null);
+    db.close();
+
+    const result = collectDiskUsage(roots);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const project = result.data.projects.find((p) => p.name === "retired-some");
+    expect(project?.crawls).toBe(3);
+    expect(project?.retiredCrawls).toBe(1);
+  });
+
+  test("a project older than the retired_at column is still fully reported", () => {
+    // The connection is read-only, so it cannot add the column. Not knowing the
+    // retired count must not turn the project into an unreadable one.
+    writeProject("pre-migration-25", 2, 10);
+
+    const result = collectDiskUsage(roots);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const project = result.data.projects.find(
+      (p) => p.name === "pre-migration-25"
+    );
+    expect(project?.unreadable).toBeUndefined();
+    expect(project?.crawls).toBe(2);
+    expect(project?.ruleResultRows).toBe(10);
+    expect(project?.retiredCrawls).toBe(0);
+  });
+
   test("a database it cannot read still contributes its size, and says why", () => {
     const dir = join(home, ".squirrel", "projects", "corrupt");
     mkdirSync(dir, { recursive: true });

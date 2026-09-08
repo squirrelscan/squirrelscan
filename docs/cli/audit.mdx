@@ -346,6 +346,20 @@ SquirrelScan caches page content locally. On subsequent audits:
 
 Use `--refresh` to bypass the cache entirely.
 
+## Audit history
+
+A successful audit retires the audits older than the newest 3 for that project,
+so re-auditing does not grow `project.db` without bound. Retired audits stay
+listed and can no longer be opened; the page cache the next audit reads is never
+part of what goes. The first time it happens the audit says so:
+
+```text
+Retired 1 older audit and freed 95.2 MB inside project.db for the next audit; keep more with [storage] keep_audits (now 3)
+```
+
+Change the window, or turn it off, with
+[`[storage] keep_audits`](/configuration/storage).
+
 ## Exit codes
 
 | Code | Meaning |
@@ -369,6 +383,9 @@ exclude = ["/admin/*"]
 [rules]
 enable = ["*"]
 disable = ["ai/*"]
+
+[storage]
+keep_audits = 3
 ```
 
 See [Configuration](/configuration) for all options.

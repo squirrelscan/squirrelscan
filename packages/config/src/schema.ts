@@ -130,6 +130,40 @@ export const OutputConfigSchema = z.object({
   path: z.string().optional(),
 });
 
+// How many audits a project keeps (#1912). A re-audit writes a whole new crawl
+// and, before this, retired nothing, so `project.db` grew by about one audit
+// every time — 95 MB per audit of a 1,000-page site, unbounded.
+//
+// Three is the smallest window that still answers the questions the history is
+// for: `report --diff` against the previous run, and one before that as a
+// fallback when the most recent audit is the anomalous one.
+export const DEFAULT_KEEP_AUDITS = 3;
+
+export const StorageConfigSchema = z.object({
+  /**
+   * Audits kept fully renderable per project; older ones are retired after a
+   * successful audit. `0` or `false` turns automatic retention off entirely and
+   * restores the old unbounded growth, which is a legitimate choice for anyone
+   * keeping a months-old audit as a reference.
+   *
+   * Accepts a boolean so `false` reads naturally in TOML; `true` means "the
+   * default window" rather than "keep everything", because a switch that turns
+   * a feature ON should not also change its size.
+   */
+  keep_audits: z
+    .union([
+      z.boolean(),
+      z
+        .number()
+        .int({ message: "keep_audits must be a whole number of audits" })
+        .min(0, { message: "keep_audits must be 0 or more" }),
+    ])
+    .transform((value) =>
+      typeof value === "boolean" ? (value ? DEFAULT_KEEP_AUDITS : 0) : value,
+    )
+    .default(DEFAULT_KEEP_AUDITS),
+});
+
 export const CloudConfigSchema = z.object({
   /** Master switch — no-op when not logged in. */
   enabled: z.boolean().default(true),
@@ -287,6 +321,7 @@ const defaultRules = RulesConfigSchema.parse({});
 const defaultPlugins = PluginsConfigSchema.parse({});
 const defaultExternalLinks = ExternalLinksConfigSchema.parse({});
 const defaultOutput = OutputConfigSchema.parse({});
+const defaultStorage = StorageConfigSchema.parse({});
 const defaultCloud = CloudConfigSchema.parse({});
 const defaultIntel = IntelConfigSchema.parse({});
 const defaultIntegrity = IntegrityConfigSchema.parse({});
@@ -302,6 +337,8 @@ export const ConfigSchema = z.object({
   plugins: PluginsConfigSchema.default(defaultPlugins),
   external_links: ExternalLinksConfigSchema.default(defaultExternalLinks),
   output: OutputConfigSchema.default(defaultOutput),
+  // Local disk retention (#1912) — how many audits a project keeps.
+  storage: StorageConfigSchema.default(defaultStorage),
   cloud: CloudConfigSchema.default(defaultCloud),
   // Threat-intel feature (#117) — opt-in, default disabled.
   intel: IntelConfigSchema.default(defaultIntel),
@@ -334,6 +371,7 @@ export type PluginManifestItem = z.infer<typeof PluginManifestItemSchema>;
 export type PluginsConfig = z.infer<typeof PluginsConfigSchema>;
 export type ExternalLinksConfig = z.infer<typeof ExternalLinksConfigSchema>;
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
+export type StorageConfig = z.infer<typeof StorageConfigSchema>;
 export type CloudConfig = z.infer<typeof CloudConfigSchema>;
 export type CloakingProbeConfig = z.infer<typeof CloakingProbeConfigSchema>;
 export type IntegrityConfig = z.infer<typeof IntegrityConfigSchema>;

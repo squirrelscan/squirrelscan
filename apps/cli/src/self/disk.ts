@@ -5,9 +5,11 @@
 // site: 95 MB after one audit, 189 MB after two, with `rule_results` and its two
 // indexes accounting for 69.6% of the file and `pages` for another 28.2%.
 //
-// There is currently no way for anyone to discover that, which is the first
-// thing to fix: a 10,000-page site audited weekly adds most of a gigabyte a
-// week and nothing says so. This reports; it does not delete.
+// A successful audit now retires the audits outside `[storage] keep_audits`
+// (#1912), so that growth has a ceiling — but the ceiling is still a multiple of
+// one audit, the window is configurable, and retired rows stay in the file until
+// something rebuilds it. This reports what is there; `--prune` below is the only
+// part of it that deletes.
 
 import { Database } from "bun:sqlite";
 import { existsSync, readdirSync, statSync, type Dirent } from "node:fs";
@@ -36,6 +38,12 @@ export interface ProjectDiskUsage {
    * per page per audit, and with its indexes about 70% of the file.
    */
   readonly ruleResultRows: number;
+  /**
+   * Crawls already retired, whose reports can no longer be opened. Counted
+   * because the difference between "7 audits" and "7 audits, 4 of them gone" is
+   * the whole point of keeping the rows.
+   */
+  readonly retiredCrawls: number;
   /** Set when the database could not be read; the size is still reported. */
   readonly unreadable?: string;
 }
@@ -100,10 +108,12 @@ function directoryBytes(dir: string, depth = 16): number {
 /** Crawl and rule-result counts, or the reason they could not be read. */
 function readProjectCounts(dbPath: string): {
   crawls: number;
+  retiredCrawls: number;
   ruleResultRows: number;
   unreadable?: string;
 } {
-  if (!existsSync(dbPath)) return { crawls: 0, ruleResultRows: 0 };
+  if (!existsSync(dbPath))
+    return { crawls: 0, retiredCrawls: 0, ruleResultRows: 0 };
   let db: Database | undefined;
   try {
     db = new Database(dbPath, { readonly: true });
@@ -113,8 +123,21 @@ function readProjectCounts(dbPath: string): {
     const rules = db.query("SELECT COUNT(*) AS c FROM rule_results").get() as {
       c: number;
     } | null;
+    // Its own try: `retired_at` arrived in migration 25 and this connection is
+    // read-only, so it cannot add the column to an older project. Not knowing
+    // how many are retired is not a reason to report the project as unreadable.
+    let retiredCrawls = 0;
+    try {
+      const retired = db
+        .query("SELECT COUNT(*) AS c FROM crawls WHERE retired_at IS NOT NULL")
+        .get() as { c: number } | null;
+      retiredCrawls = retired?.c ?? 0;
+    } catch {
+      retiredCrawls = 0;
+    }
     return {
       crawls: crawls?.c ?? 0,
+      retiredCrawls,
       ruleResultRows: rules?.c ?? 0,
     };
   } catch (error) {
@@ -123,6 +146,7 @@ function readProjectCounts(dbPath: string): {
     // than dropping the project from the table.
     return {
       crawls: 0,
+      retiredCrawls: 0,
       ruleResultRows: 0,
       unreadable: error instanceof Error ? error.message : String(error),
     };
@@ -244,11 +268,22 @@ export function formatBytes(bytes: number): string {
 
 // ── Reclaiming (#1912) ──────────────────────────────────────────────────────
 //
-// Explicit and user-driven. There is no automatic retention: retiring a crawl
-// makes its report unrenderable, and `report --list`, `--diff` and
-// `--regression-since <audit-id>` all reach back into that history, so how many
-// audits a project should keep is a product decision rather than a default this
-// code gets to pick. The window is a required argument here for that reason.
+// Explicit and user-driven, and separate from the automatic retention an audit
+// runs (`[storage] keep_audits`). This is the half that rebuilds the file, which
+// is the only way the space returns to the filesystem and far too expensive to
+// do per audit. It also reaches projects an audit has not touched since
+// retention arrived, and can prune below the automatic window.
+//
+// `--keep` stays required: retiring a crawl makes its report unrenderable, and
+// `report --list`, `--diff` and `--regression-since <audit-id>` all reach back
+// into that history, so a one-off destructive command does not get to pick the
+// number.
+
+/**
+ * Space an audit's retention pass already freed inside a file, below which
+ * rebuilding it is not worth offering. A few pages back is not a reclaim.
+ */
+const RECLAIM_FLOOR_BYTES = 1024 * 1024;
 
 /** What retiring would remove from one project. */
 export interface ProjectPrunePlan {
@@ -256,9 +291,20 @@ export interface ProjectPrunePlan {
   readonly path: string;
   /** Audits that would stop being renderable, oldest first. */
   readonly retiring: ReadonlyArray<{ id: string; startedAt: number }>;
-  /** Audits that stay fully renderable. */
+  /**
+   * Audits that stay fully renderable afterwards. Excludes the ones an earlier
+   * pass already retired, which are listed but cannot be opened.
+   */
   readonly keeping: number;
   readonly rows: number;
+  /**
+   * Space already free inside the file, which only a rebuild returns to the
+   * filesystem. Non-zero on its own is a reason to run: automatic retention
+   * deletes the rows but deliberately does not rewrite the file, so a project
+   * can have nothing left to retire and still be holding a quarter of itself
+   * in freed pages.
+   */
+  readonly reclaimableBytes: number;
   /** File size before, so the caller can report what was actually returned. */
   readonly bytesBefore: number;
 }
@@ -268,6 +314,11 @@ export interface ProjectPrunePlan {
  *
  * Reads only. The counts come from the same predicate the delete uses, because
  * a user confirms on these numbers.
+ *
+ * Returns a plan when there is something to retire OR something to reclaim.
+ * Those came to the same thing before automatic retention existed and no longer
+ * do: the common state now is an audit-retired project whose rows are already
+ * gone and whose file is still the size they made it.
  */
 export async function planProjectPrune(
   dbPath: string,
@@ -281,24 +332,50 @@ export async function planProjectPrune(
   try {
     await Effect.runPromise(storage.init());
     const crawls = await Effect.runPromise(storage.listCrawls());
-    // listCrawls is newest first; everything past the window retires.
-    const retiring = crawls.slice(Math.max(0, keep)).map((c) => ({
-      id: c.id,
-      startedAt: c.startedAt,
-    }));
-    if (retiring.length === 0) return null;
+    const stats = await Effect.runPromise(storage.databasePageStats());
+    const reclaimableBytes = stats.freelistPages * stats.pageSize;
+    // listCrawls is newest first; everything past the window retires, except
+    // what an audit already retired — re-retiring deletes nothing and would
+    // print an audit as going when it went days ago.
+    const retiring = crawls
+      .slice(Math.max(0, keep))
+      .filter((c) => c.retiredAt === undefined)
+      .map((c) => ({
+        id: c.id,
+        startedAt: c.startedAt,
+      }));
+    // Audits that can still be opened after this runs. Counting every crawl row
+    // would include the ones an earlier pass already retired and describe a
+    // history the user does not have: seven listed, four retired, "keeping 6".
+    const stillRenderable = crawls.filter(
+      (c) => c.retiredAt === undefined
+    ).length;
 
-    const preview = await Effect.runPromise(
-      storage.previewRetireCrawls(retiring.map((c) => c.id))
-    );
-    if (preview.totalRows === 0) return null;
+    const preview =
+      retiring.length > 0
+        ? await Effect.runPromise(
+            storage.previewRetireCrawls(retiring.map((c) => c.id))
+          )
+        : { totalRows: 0 };
+    // Row count is not the test for "is there anything to do". An audit outside
+    // the window with nothing deletable left in it is still retired by this —
+    // stamped, and refused by `report` afterwards — so a plan with no rows and
+    // an audit in it is a plan, and the caller has to describe it as one.
+    if (
+      retiring.length === 0 &&
+      preview.totalRows === 0 &&
+      reclaimableBytes < RECLAIM_FLOOR_BYTES
+    ) {
+      return null;
+    }
 
     return {
       name: dbPath,
       path: dbPath,
       retiring: [...retiring].reverse(),
-      keeping: crawls.length - retiring.length,
+      keeping: stillRenderable - retiring.length,
       rows: preview.totalRows,
+      reclaimableBytes,
       bytesBefore: dbFamilyBytes(dbPath),
     };
   } finally {

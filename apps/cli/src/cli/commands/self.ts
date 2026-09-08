@@ -383,7 +383,8 @@ async function runPrune(
 
   if (plans.length === 0) {
     console.log(
-      `Nothing to retire: every project holds at most ${keep} audit(s).`
+      `Nothing to retire or reclaim: every project holds at most ${keep} ` +
+        "audit(s), with no space waiting to be returned."
     );
     return;
   }
@@ -391,20 +392,38 @@ async function runPrune(
   const date = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   console.log(`Keeping the newest ${keep} audit(s) per project.\n`);
   let rows = 0;
+  let reclaimable = 0;
+  // What the user is confirming is whether AUDITS are retired, not whether rows
+  // are deleted. An audit outside the window with nothing deletable left in it
+  // is still stamped retired and still stops opening, so the count of audits is
+  // what decides the wording and the question. A project an audit already
+  // retired has neither, and is still holding the space those deletes freed:
+  // saying "retiring 0 audits" would read as a no-op when running it is the
+  // whole point.
+  let retiringAudits = 0;
   for (const { name, plan } of plans) {
     rows += plan.rows;
-    console.log(
-      `${name}  ${formatBytes(plan.bytesBefore)}  retiring ${plan.retiring.length} of ${
-        plan.retiring.length + plan.keeping
-      } audits`
-    );
+    reclaimable += plan.reclaimableBytes;
+    retiringAudits += plan.retiring.length;
+    const what =
+      plan.retiring.length > 0
+        ? `retiring ${plan.retiring.length} of ${
+            plan.retiring.length + plan.keeping
+          } audits`
+        : `rebuilding to return ${formatBytes(plan.reclaimableBytes)}`;
+    console.log(`${name}  ${formatBytes(plan.bytesBefore)}  ${what}`);
     for (const crawl of plan.retiring) {
       console.log(`    ${date(crawl.startedAt)}  ${crawl.id.slice(0, 8)}`);
     }
   }
   console.log(
-    `\n${rows.toLocaleString()} rows across ${plans.length} project(s). ` +
-      "Their reports stop being renderable; the audits stay listed."
+    retiringAudits > 0
+      ? `\n${retiringAudits} audit(s) and ${rows.toLocaleString()} rows across ` +
+          `${plans.length} project(s). Their reports stop being renderable; ` +
+          "the audits stay listed."
+      : `\nNothing left to retire: ${formatBytes(reclaimable)} across ` +
+          `${plans.length} project(s) is already free inside the files and ` +
+          "only a rebuild returns it."
   );
 
   if (args["dry-run"]) {
@@ -419,7 +438,10 @@ async function runPrune(
       output: process.stdout,
     });
     const answer = await new Promise<string>((resolve) => {
-      rl.question("\nRetire them? [y/N] ", resolve);
+      rl.question(
+        retiringAudits > 0 ? "\nRetire them? [y/N] " : "\nRebuild? [y/N] ",
+        resolve
+      );
     });
     rl.close();
     if (answer.trim().toLowerCase() !== "y") {
@@ -531,16 +553,23 @@ const selfDisk = defineCommand({
     console.log(`  ${formatBytes(usage.logsBytes).padStart(9)}  logs`);
     console.log(`  ${formatBytes(usage.totalBytes).padStart(9)}  total`);
 
-    // The number people are surprised by, said once, with the reason. A project
-    // keeps every audit it has ever run: nothing retires the previous crawl's
-    // rows, and `rule_results` is about 204 rows per page per audit.
+    // Said once, about the biggest project, with the reason. `rule_results` is
+    // about 204 rows per page per audit, so the audits a project is holding are
+    // most of what it costs. The window itself lives in each project's
+    // squirrel.toml rather than in the database, so this names the setting
+    // instead of claiming a number it cannot know from here.
     const repeated = usage.projects.filter((p) => p.crawls > 1);
     if (repeated.length > 0) {
       const worst = repeated[0]!;
+      const retired =
+        worst.retiredCrawls > 0
+          ? `, ${worst.retiredCrawls} already retired`
+          : "";
       console.log(
-        `\nEvery audit is kept: ${worst.name} holds ${worst.crawls} of them ` +
-          `(${worst.ruleResultRows.toLocaleString()} rule results). Re-auditing ` +
-          `a project grows it by about one audit each time.`
+        `\n${worst.name} holds ${worst.crawls} audits${retired} ` +
+          `(${worst.ruleResultRows.toLocaleString()} rule results). An audit ` +
+          `retires the ones outside [storage] keep_audits (default 3); this ` +
+          `command is what returns their space to the filesystem.`
       );
     }
   },

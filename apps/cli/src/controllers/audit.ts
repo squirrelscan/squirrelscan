@@ -24,6 +24,7 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 
+import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
 
 import {
@@ -45,6 +46,11 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
+import {
+  RetentionReclaimError,
+  auditMayRetire,
+  retainRecentAudits,
+} from "@/audit/retention";
 import { resolveRulesConfig } from "@/audit/rule-filter";
 import { runSmartAudits } from "@/audit/smart-audits";
 import {
@@ -197,6 +203,13 @@ export interface RunAuditOptions extends AuditOptions {
    * preserves legacy behaviour (treated as available) for non-CLI callers/tests.
    */
   cloudAvailable?: boolean;
+  /**
+   * Called when the post-audit retention pass retired something (#1912), so the
+   * CLI can say so. Not called when it retired nothing, and never on a failed
+   * audit. The controller does not print: the notice belongs on stderr, and
+   * only the command layer knows that.
+   */
+  onRetention?: (outcome: RetentionOutcome) => void;
 }
 
 /**
@@ -1554,6 +1567,16 @@ export async function runAudit(
       await Effect.runPromise(
         storage.updateCrawl(crawlId, { status: "analyzed" })
       );
+      // From here to the end of report reconstruction this crawl reads as a
+      // finished audit while its own process is still using it. `building` is
+      // what stops another audit of the same project retiring it in that window
+      // and turning a run that was going to succeed into "Audit data was
+      // reclaimed" (#1912). Replaced with the report's real status below.
+      await Effect.runPromise(
+        sqliteStorage
+          .setReportStatus(crawlId, "building")
+          .pipe(Effect.catchAll(() => Effect.void))
+      );
       phaseTimer.mark("rules");
 
       // ============================================
@@ -1815,6 +1838,66 @@ export async function runAudit(
       // map to telemetry.
       report.phaseTimingsMs = phaseTimer.timingsMs;
       logger.debug("phase timings", formatPhaseTimings(phaseTimer.timingsMs));
+
+      // ============================================
+      // STEP 4: RETENTION (#1912)
+      // ============================================
+      // Last, deliberately: the report is built, so nothing downstream reads
+      // the audits this retires.
+      //
+      // Only a SUCCESSFUL audit retires anything. A crawl that never got going
+      // returns above and never reaches here, but a run CAN reach here with a
+      // report whose own status is `failed` or `blocked` — a site that answered
+      // 403 to everything still produces a report object, and the command exits
+      // nonzero on it. Deleting good history on the strength of that is the
+      // worst thing this feature could do: a week of a site being down would
+      // quietly take the audits you would use to find out when it broke.
+      // What this run actually said, recorded on the crawl so LATER audits can
+      // tell a real audit from a run that learned nothing. Without it the guard
+      // below only protects the failing run itself: three good audits, two
+      // blocked ones and a recovery run would keep the two blocked runs and
+      // delete all three from before the outage.
+      await Effect.runPromise(
+        sqliteStorage
+          .setReportStatus(crawlId, report.status ?? "completed")
+          .pipe(Effect.catchAll(() => Effect.void))
+      );
+
+      // `auditMayRetire` is that rule, defined once next to the pass it gates.
+      if (auditMayRetire(report.status)) {
+        try {
+          const retention = await retainRecentAudits(sqliteStorage, {
+            keep: mergedConfig.storage.keep_audits,
+            currentCrawlId: crawlId,
+          });
+          if (retention) {
+            // Logged as well as reported, because not every caller has
+            // somewhere to put a notice — the MCP server's only channel out is
+            // the report itself. This leaves a trace of the deletion in every
+            // path.
+            logger.info(
+              `retired ${retention.retired} crawl(s) beyond keep_audits=${retention.keep}, freeing ${retention.freedBytes} bytes${retention.vacuumed ? " (database rebuilt)" : ""}`
+            );
+            options.onRetention?.(retention);
+          }
+        } catch (error) {
+          // Never fail a completed audit over housekeeping. The disk stays
+          // large, which is the old behaviour, and `self disk --prune` still
+          // works.
+          logger.warn(`Retention pass failed: ${(error as Error).message}`);
+          // A reclaim that fails AFTER the deletes committed still deleted
+          // reports. Announce that: the alternative is a user whose audits are
+          // gone and who was told nothing happened.
+          if (error instanceof RetentionReclaimError) {
+            options.onRetention?.(error.outcome);
+          }
+        }
+      } else {
+        logger.debug(
+          "retention skipped: audit status",
+          report.status ?? "unknown"
+        );
+      }
 
       onProgress({
         phase: "complete",

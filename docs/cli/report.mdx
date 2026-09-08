@@ -308,9 +308,12 @@ Filter reports by these categories:
 
 ## Retired audits
 
-An audit whose data was reclaimed by [`squirrel self disk --prune`](/cli/self#disk)
-can no longer be opened. `--list` still shows it, marked `retired` with the date
-its data went, so the history does not silently shrink:
+An audit whose data was reclaimed can no longer be opened. That happens two
+ways: automatically, when a successful audit retires everything older than
+[`[storage] keep_audits`](/configuration/storage) (the last 3 by default), or
+explicitly with [`squirrel self disk --prune`](/cli/self#disk). `--list` still
+shows it either way, marked `retired` with the date its data went, so the
+history does not silently shrink:
 
 ```text
 06148d76   8 Sep 2026, 10:49   1    retired     -
@@ -325,9 +328,12 @@ baseline all refuse:
 Audit data was reclaimed on 2026-09-08: 06148d76-6c48-465a-bc16-deb44144350d
 ```
 
-The refusal is the point. The crawl row and some of its pages survive a prune, so
-without it the report would rebuild from those and show an audit with no findings
-at all, which reads as a clean result rather than a missing one.
+The refusal is the point. The crawl row and some of its pages survive being
+retired, so without it the report would rebuild from those and show an audit with
+no findings at all, which reads as a clean result rather than a missing one.
+
+If you keep an older audit as a reference baseline, raise `keep_audits` before it
+falls out of the window.
 
 ## Exit codes
 

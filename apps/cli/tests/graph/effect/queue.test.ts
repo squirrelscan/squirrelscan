@@ -67,6 +67,9 @@ const mockConfig: Config = {
   output: {
     format: "console",
   },
+  storage: {
+    keep_audits: 3,
+  },
   cloud: {
     enabled: true,
     max_credits_per_audit: 200,

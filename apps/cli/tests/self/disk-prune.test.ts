@@ -36,7 +36,12 @@ const STATS = {
   avgLoadTimeMs: 0,
 };
 
-function page(url: string, fetchedAt: number, etag: string): PageRecord {
+function page(
+  url: string,
+  fetchedAt: number,
+  etag: string,
+  html = "<html></html>"
+): PageRecord {
   return {
     url,
     normalizedUrl: url,
@@ -50,7 +55,7 @@ function page(url: string, fetchedAt: number, etag: string): PageRecord {
     etag,
     lastModified: null,
     contentHash: etag,
-    html: "<html></html>",
+    html,
     parsedData: null,
     headers: {
       contentType: "text/html",
@@ -134,6 +139,110 @@ describe("planProjectPrune", () => {
       plan!.retiring[1]!.startedAt
     );
     expect(plan!.rows).toBeGreaterThan(0);
+  });
+
+  test("an already-retired project can still be rebuilt, and says so", async () => {
+    // The state automatic retention leaves behind: the rows for the audits
+    // outside the window are gone, and the file is still the size they made it.
+    // Sized so the freed space clears the 1 MB floor without depending on it —
+    // 40 pages of 32 KB per audit is over a megabyte an audit.
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    const html = "x".repeat(32 * 1024);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const id = await run(
+        store.createCrawl({
+          baseUrl: "https://e.test",
+          startedAt: 1_000 + i,
+          status: "completed",
+          config: {} as CrawlMetadata["config"],
+          stats: STATS,
+        } as Omit<CrawlMetadata, "id">)
+      );
+      ids.push(id);
+      for (let p = 0; p < 40; p++) {
+        const url = `https://e.test/p${p}`;
+        await run(store.upsertPage(id, page(url, 1_000 + i, `v${i}`, html)));
+      }
+    }
+    // Retire the oldest, as an audit's retention pass would: rows gone, file
+    // not rebuilt.
+    await run(store.retireCrawls([ids[0]!]));
+    const stats = await run(store.databasePageStats());
+    store.close?.();
+    expect(stats.freelistPages * stats.pageSize).toBeGreaterThan(1024 * 1024);
+
+    // Nothing beyond a window of 3 and nothing left to retire, but the space is
+    // real and only a rebuild returns it, so the plan has to offer that.
+    const plan = await planProjectPrune(dbPath, 3);
+    expect(plan).not.toBeNull();
+    expect(plan!.rows).toBe(0);
+    expect(plan!.retiring).toHaveLength(0);
+    expect(plan!.reclaimableBytes).toBeGreaterThan(1024 * 1024);
+
+    // And running it actually returns the space.
+    const result = await runProjectPrune(plan!);
+    expect(result.bytesAfter).toBeLessThan(result.bytesBefore);
+  });
+
+  test("audits an earlier pass already retired are not planned again", async () => {
+    await project(4);
+    await runProjectPrune((await planProjectPrune(dbPath, 2))!);
+    // The same window a second time: the two beyond it are already retired.
+    const again = await planProjectPrune(dbPath, 2);
+    expect(again?.retiring ?? []).toHaveLength(0);
+    expect(again?.rows ?? 0).toBe(0);
+  });
+
+  test("the kept count is audits you can still open, not rows in the table", async () => {
+    await project(5);
+    // Retire the three oldest, as an audit's retention or an earlier prune
+    // would. Five audits are still LISTED; two can be opened.
+    await runProjectPrune((await planProjectPrune(dbPath, 2))!);
+
+    const plan = await planProjectPrune(dbPath, 1);
+    expect(plan).not.toBeNull();
+    expect(plan!.retiring).toHaveLength(1);
+    // One left renderable afterwards, not four: counting the crawl rows would
+    // describe a history the user does not have.
+    expect(plan!.keeping).toBe(1);
+  });
+
+  test("an audit with nothing deletable left in it is still a retirement", async () => {
+    // A crawl outside the window whose derived rows are already gone is still
+    // stamped retired and still stops opening, so the plan has to carry it
+    // rather than report a rows-only no-op.
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    const ids: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      ids.push(
+        await run(
+          store.createCrawl({
+            baseUrl: "https://e.test",
+            startedAt: 1_000 + i,
+            status: "completed",
+            config: {} as CrawlMetadata["config"],
+            stats: STATS,
+          } as Omit<CrawlMetadata, "id">)
+        )
+      );
+    }
+    store.close?.();
+
+    const plan = await planProjectPrune(dbPath, 1);
+    expect(plan).not.toBeNull();
+    expect(plan!.rows).toBe(0);
+    expect(plan!.retiring).toHaveLength(1);
+
+    await runProjectPrune(plan!);
+    const after = new SQLiteStorage(dbPath);
+    await run(after.init());
+    const byId = new Map((await run(after.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(ids[0]!)?.retiredAt).toBeDefined();
+    expect(byId.get(ids[1]!)?.retiredAt).toBeUndefined();
+    after.close?.();
   });
 
   test("a missing database is not an error", async () => {

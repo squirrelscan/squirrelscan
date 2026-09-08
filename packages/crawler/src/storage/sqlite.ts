@@ -60,7 +60,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 25;
+export const SCHEMA_VERSION = 27;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -344,6 +344,36 @@ const MIGRATIONS: Record<number, string[]> = {
   // ALTER is idempotent (the runner swallows "duplicate column name"). Local
   // sqlite only — NOT a prod migration.
   25: [`ALTER TABLE crawls ADD COLUMN retired_at INTEGER`],
+  // Version 26: make the superseded-pages predicate a seek instead of a scan
+  // (squirrelscan/repo#1912, criterion 5). `pages` is keyed on
+  // (crawl_id, normalized_url), so nothing could serve a lookup by
+  // normalized_url ALONE — and both readers that need one are hot:
+  //
+  //  - `getCachedPage` runs it once per url on every incremental re-audit,
+  //  - the retention/prune delete runs it once per candidate page row, with a
+  //    correlated subquery, which is quadratic in the size of the table.
+  //
+  // Measured on a synthetic pages table, retiring one crawl of four (~8 KB of
+  // html per row), the delete alone: 4,000 rows 80 ms -> 9.5 ms; 10,000 rows
+  // 493 ms -> 29 ms; 40,000 rows 11,779 ms -> 61 ms. Automatic retention runs
+  // after every audit, so the 40,000-row figure is the one that matters: 194x,
+  // and the difference between bounded and the #1908 shape of defect.
+  //
+  // `fetched_at` is in the index so the recency comparison is covered too.
+  26: [
+    `CREATE INDEX IF NOT EXISTS idx_pages_url_recency ON pages(normalized_url, fetched_at)`,
+  ],
+  // Version 27: what the audit this crawl produced actually SAID
+  // (squirrelscan/repo#1912). `crawls.status` is the crawl's lifecycle, and it
+  // reads `analyzed` for a run whose report came out `failed` or `blocked` —
+  // a site that was down, or answered 403 to everything. Automatic retention
+  // needs to tell those apart from real audits, or a week of downtime fills the
+  // window and the next successful run deletes every audit from before the
+  // outage. Also carries the sentinel `building` between the analyzed
+  // transition and the report being reconstructed, which is the window in which
+  // another process could otherwise retire a crawl that is still being read.
+  // NULL for every crawl written before this. ADDITIVE; local sqlite only.
+  27: [`ALTER TABLE crawls ADD COLUMN report_status TEXT`],
 };
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
@@ -414,6 +444,11 @@ const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: st
 // it goes in the migration, like the five before it.
 const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "retired_at", type: "INTEGER" },
+  // Same reasoning one row down: a missing `report_status` reads as `undefined`
+  // rather than throwing, and undefined is treated as "an ordinary audit" — so
+  // a database that skipped migration 27 would quietly put failed runs back in
+  // the retention window instead of failing loudly.
+  { name: "report_status", type: "TEXT" },
 ];
 
 const SCHEMA = `
@@ -429,8 +464,18 @@ CREATE TABLE IF NOT EXISTS crawls (
   -- When "self disk --prune" reclaimed this audit's data (#1912). NULL until
   -- something retires it, which is every audit unless the user asks. No
   -- backticks in here: SCHEMA is a template literal and they would close it.
-  retired_at INTEGER
+  retired_at INTEGER,
+  -- What the audit this crawl produced said (#1912): completed, partial,
+  -- failed, blocked, or the sentinel "building" while its report is still being
+  -- reconstructed. Distinct from status, which is the crawl lifecycle and says
+  -- analyzed for all of them. NULL for crawls written before migration 27.
+  report_status TEXT
 );
+-- NO index on retired_at here. SCHEMA is exec'd BEFORE runMigrations(), and on a
+-- database written before migration 25 the crawls table exists WITHOUT the
+-- column, so a CREATE INDEX naming it fails at open, before the migration that
+-- would have added it can run, on every open, forever. It is created after the
+-- column reconcile instead; see indexesAfterMigrations(). Still no backticks.
 
 -- Pages
 CREATE TABLE IF NOT EXISTS pages (
@@ -465,6 +510,11 @@ CREATE TABLE IF NOT EXISTS pages (
 
 CREATE INDEX IF NOT EXISTS idx_pages_crawl ON pages(crawl_id);
 CREATE INDEX IF NOT EXISTS idx_pages_final_url ON pages(final_url);
+-- Lookups by normalized_url alone: getCachedPage's conditional-GET read, and
+-- the correlated "is there a newer row for this url" the retention delete runs
+-- per candidate page. The primary key leads with crawl_id, so neither could use
+-- it. See migration 26 for the numbers.
+CREATE INDEX IF NOT EXISTS idx_pages_url_recency ON pages(normalized_url, fetched_at);
 
 -- Frontier (URL queue)
 CREATE TABLE IF NOT EXISTS frontier (
@@ -1011,6 +1061,35 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("links", LINKS_ALTER_COLUMNS);
     this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
     this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
+    this.indexesAfterMigrations();
+  }
+
+  /**
+   * Indexes over columns an ALTER migration added, created once the column is
+   * certainly there.
+   *
+   * These cannot live in SCHEMA: it is exec'd before `runMigrations()`, so on a
+   * database written before the column existed the CREATE INDEX throws at open
+   * and the migration that would have fixed it never runs. And they cannot live
+   * in MIGRATIONS alone either, because a FRESH database is stamped at the
+   * current version and runs no migrations at all. After the reconcile is the
+   * one point where both are true.
+   */
+  private indexesAfterMigrations(): void {
+    const db = this.getDb();
+    // One entry per RETIRED audit rather than one per audit: retention asks
+    // "has anything here been retired" on every pass that deletes (#1912).
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_crawls_retired ON crawls(retired_at) WHERE retired_at IS NOT NULL`
+    );
+    // The complement, for the candidate query retention runs on every audit.
+    // Partial on the same column from the other side, so it holds one entry per
+    // audit still in play rather than one per audit ever run, and its order is
+    // the order that query asks for: no temp b-tree, and the walk is bounded by
+    // the window instead of by the history.
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_crawls_retention ON crawls(started_at) WHERE retired_at IS NULL`
+    );
   }
 
   /**
@@ -3326,6 +3405,170 @@ export class SQLiteStorage implements CrawlStorage {
   ] as const;
 
   /**
+   * The audits automatic retention is allowed to count and to retire (#1912),
+   * newest first. Everything excluded here is excluded from BOTH: it neither
+   * holds a slot in the window nor is deleted.
+   *
+   *  - Already retired: not one of the "last 3 you can open", and re-retiring
+   *    one would delete nothing at a cost. Dropping them also keeps the result
+   *    bounded by the window rather than by the number of audits the project
+   *    has ever run, which nothing ever removes.
+   *  - Running or paused: retiring one deletes the frontier out from under a
+   *    live crawl.
+   *  - `report_status` of `failed` or `blocked`: the run finished but learned
+   *    nothing about the site. Counting those would mean a week of downtime
+   *    fills the window and the first successful audit afterwards deletes every
+   *    audit from before the outage.
+   *  - `report_status` of `building`: this crawl is `analyzed` but its own
+   *    process is still reconstructing its report. Retiring it there is the one
+   *    way an audit that was going to succeed can be made to fail.
+   *
+   * NULL `report_status` is an ordinary audit: it predates migration 27.
+   *
+   * Only finished, renderable audits are here. A running crawl is excluded
+   * because retiring it would delete the frontier out from under a live audit,
+   * and a FAILED one because it is not a renderable audit: counting it toward
+   * "keep the last 3" would spend a slot of the window on a report nobody can
+   * open, and retiring it would delete rows from a crawl the user never got an
+   * answer from. `self disk --prune` still reaches them; this pass does not.
+   *
+   * The order is `started_at DESC, rowid DESC` rather than `listCrawls`'
+   * `started_at DESC` alone, because which audits fall outside the window has to
+   * be decided the same way every time. Two crawls stamped in the same
+   * millisecond tie, and SQLite's pick between tied rows is whatever the plan
+   * happens to produce — an index added later can flip it. `rowid` is insert
+   * order on this table, so DESC breaks the tie toward the newer row.
+   *
+   * Reads three small columns from `crawls`, which holds one row per audit, so
+   * this is bounded by the project's audit count rather than by its size.
+   */
+  listRetentionCandidates(): Effect.Effect<
+    Array<{ id: string; startedAt: number }>,
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const rows = db
+          .prepare(
+            `SELECT id, started_at FROM crawls
+             WHERE retired_at IS NULL
+               AND status IN ('completed', 'analyzed')
+               AND (report_status IS NULL
+                    OR report_status IN ('completed', 'partial'))
+             ORDER BY started_at DESC, rowid DESC`
+          )
+          .all() as Array<{ id: string; started_at: number }>;
+        return rows.map((row) => ({
+          id: row.id,
+          startedAt: row.started_at,
+        }));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Record what the audit this crawl produced said (#1912).
+   *
+   * `building` is stamped when the crawl reaches `analyzed`, before its report
+   * is reconstructed, and replaced with the report's own status once there is
+   * one. Automatic retention reads both: it does not count a `failed` or
+   * `blocked` run as one of the audits you are keeping, and it will not retire
+   * a crawl still marked `building`, which is the only signal that another
+   * process is in the middle of reading it.
+   */
+  setReportStatus(
+    crawlId: string,
+    reportStatus: string
+  ): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        this.getDb()
+          .prepare("UPDATE crawls SET report_status = ? WHERE id = ?")
+          .run(reportStatus, crawlId);
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
+  /**
+   * Whether anything in this project has ever been retired.
+   *
+   * One indexed-free but bounded existence check, asked only when a retention
+   * pass is about to delete something, so the notice can say "keep more with
+   * [storage] keep_audits" the first time and stop repeating it after.
+   */
+  hasRetiredCrawls(): Effect.Effect<boolean, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const row = this.getDb()
+          .prepare(
+            "SELECT 1 AS present FROM crawls WHERE retired_at IS NOT NULL LIMIT 1"
+          )
+          .get() as { present: number } | null;
+        return row != null;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Page accounting for the file behind this connection.
+   *
+   * `freelistPages * pageSize` is what deleting has already freed INSIDE the
+   * file: reused by the next audit's inserts, but not returned to the
+   * filesystem until something rewrites the file. That is the number a caller
+   * needs to decide whether a rewrite is worth it — see {@link vacuum} for why
+   * it must not be routine.
+   */
+  databasePageStats(): Effect.Effect<
+    { pageSize: number; pageCount: number; freelistPages: number },
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const read = (pragma: string): number => {
+          const row = db.prepare(`PRAGMA ${pragma}`).get() as Record<
+            string,
+            unknown
+          > | null;
+          const value = row ? Object.values(row)[0] : 0;
+          return typeof value === "number" ? value : 0;
+        };
+        return {
+          pageSize: read("page_size"),
+          pageCount: read("page_count"),
+          freelistPages: read("freelist_count"),
+        };
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Fold the write-ahead log back into the database file and truncate it.
+   *
+   * A bulk delete in WAL mode writes the freed pages to the `-wal` file, so
+   * without this a retention pass leaves the project MEASURABLY larger on disk
+   * than it started, having deleted rows. Cheap: the work is proportional to
+   * the log, which is being written either way. A checkpoint that cannot get
+   * its lock returns busy rather than failing, which is the right answer here —
+   * the next one will do it.
+   */
+  checkpointWal(): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        this.getDb().exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
+  /**
    * What {@link retireCrawls} would delete, without deleting it.
    *
    * Counted rather than estimated: this is what a user sees before confirming
@@ -3377,6 +3620,20 @@ export class SQLiteStorage implements CrawlStorage {
    * the crawler even though the crawl they belong to is being retired for a
    * different reason. A page whose ONLY row belongs to a retired crawl is kept:
    * it is still the freshest thing known about that url.
+   *
+   * The recency test is written as a ROW VALUE comparison rather than the
+   * `a > b OR (a = b AND c > d)` it expands to, because the two forms are
+   * equivalent to SQLite's optimiser only in one direction: under `OR` the
+   * subquery can seek to the url but must then walk every version of it, while
+   * the row value gives a range seek on the index's second column. The plans,
+   * on `idx_pages_url_recency`:
+   *
+   *   OR:        SEARCH newer USING COVERING INDEX (normalized_url=?)
+   *   row value: SEARCH newer USING COVERING INDEX (normalized_url=? AND fetched_at>?)
+   *
+   * `fetched_at` is NOT NULL and every row has a rowid, so the comparison can
+   * never meet a NULL and the two forms select the same rows — including the
+   * ties, which is the case the rowid half exists for.
    */
   private supersededPagesSql(select: string, placeholders: string): string {
     return `
@@ -3385,10 +3642,7 @@ export class SQLiteStorage implements CrawlStorage {
         AND EXISTS (
           SELECT 1 FROM pages newer
           WHERE newer.normalized_url = p.normalized_url
-            AND (
-              newer.fetched_at > p.fetched_at
-              OR (newer.fetched_at = p.fetched_at AND newer.rowid > p.rowid)
-            )
+            AND (newer.fetched_at, newer.rowid) > (p.fetched_at, p.rowid)
         )
     `;
   }
@@ -3456,6 +3710,79 @@ export class SQLiteStorage implements CrawlStorage {
         });
         run();
         return deleted;
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
+  /**
+   * Delete page rows of ALREADY-retired crawls that a newer row now supersedes.
+   *
+   * {@link retireCrawls} runs the same predicate once, at the moment it retires
+   * a crawl, and keeps any page whose row is then the freshest known record of
+   * its url — correctly, because that row is the next crawl's cache entry. But
+   * a LATER audit can crawl that url again and supersede it, and by then the
+   * crawl it belongs to is retired and nothing looks at it again. On a site
+   * whose url set moves between audits, one dead row per such url stays
+   * forever, which is a slow leak in the feature that exists to stop growth.
+   *
+   * Deliberately NOT part of `retireCrawls`: calling that on an already-retired
+   * crawl would re-stamp `retired_at`, moving the date a user is shown to the
+   * day of an unrelated audit.
+   *
+   * Scoped to the urls `crawlId` wrote. Those are the only rows whose status can
+   * have changed since the last pass. Rows superseded before this existed are
+   * collected the next time their url is crawled rather than swept eagerly,
+   * which is what keeps the cost proportional to the audit rather than to the
+   * project history.
+   *
+   * Same predicate, same guarantee: a row only goes when a newer row for the
+   * same url exists, so this can never take a cache entry the crawler reads.
+   */
+  collectSupersededPages(
+    crawlId: string
+  ): Effect.Effect<number, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        // Driven by the urls THIS crawl just wrote, not by the retired crawls.
+        // Both alternatives are unbounded in the wrong variable: written as a
+        // join SQLite drives the whole thing from `pages` and reads every row
+        // in the table, live crawls included, and a list of every retired crawl
+        // id costs one probe per audit the project has ever retired, forever.
+        // Scoping to this crawl's urls is also exactly the set that can have
+        // CHANGED, since a row only becomes superseded by an audit crawling its
+        // url again:
+        //
+        //   SEARCH p USING INDEX idx_pages_url_recency (normalized_url=?)
+        //   LIST SUBQUERY 1
+        //     SEARCH pages USING COVERING INDEX sqlite_autoindex_pages_1 (crawl_id=?)
+        //   CORRELATED SCALAR SUBQUERY 2
+        //     SEARCH newer USING COVERING INDEX idx_pages_url_recency (...)
+        //   CORRELATED SCALAR SUBQUERY 3
+        //     SEARCH c USING INDEX sqlite_autoindex_crawls_1 (id=?)
+        //
+        // so the work is this audit's page count times the few rows sharing a
+        // url, and nothing else.
+        const result = db
+          .prepare(
+            `DELETE FROM pages WHERE rowid IN (
+               SELECT p.rowid FROM pages p
+               WHERE p.normalized_url IN (
+                 SELECT normalized_url FROM pages WHERE crawl_id = ?
+               )
+               AND EXISTS (
+                 SELECT 1 FROM pages newer
+                 WHERE newer.normalized_url = p.normalized_url
+                   AND (newer.fetched_at, newer.rowid) > (p.fetched_at, p.rowid)
+               )
+               AND (
+                 SELECT retired_at FROM crawls c WHERE c.id = p.crawl_id
+               ) IS NOT NULL
+             )`
+          )
+          .run(crawlId);
+        return Number(result.changes ?? 0);
       },
       catch: (e) => StorageError.write(e),
     });

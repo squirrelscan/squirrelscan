@@ -37,6 +37,7 @@ import {
   generateXmlReport,
   generateLlmReport,
 } from "@/audit/report";
+import { formatRetentionNotice } from "@/audit/retention";
 import {
   filterResolvesToZeroCategories,
   isCategoryExcluded,
@@ -1597,6 +1598,12 @@ export const audit = defineCommand({
           // Render strategy when rendering is on: auto = HTTP-first hybrid,
           // all = render every page. Undefined → controller's coverage default.
           renderStrategy,
+          // Retention (#1912) deleted some of this project's audit history, so
+          // say so. stderr unconditionally: this is the one line that tells a
+          // user their older reports are gone, and putting it on stdout would
+          // corrupt `-f json` for the scripts that parse it.
+          onRetention: (outcome) =>
+            console.error(formatRetentionNotice(outcome)),
           configPath: getGlobalConfigPath(),
           onEvent: (event: CrawlerEvent) => {
             switch (event.type) {

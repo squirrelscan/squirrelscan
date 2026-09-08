@@ -16,6 +16,7 @@ squirrelscan works out of the box with sensible defaults. You only need configur
 - Fetches robots.txt for sitemap discovery, but doesn't enforce it (audits are owner-initiated)
 - Checks external links (cached 7 days)
 - Runs all rules (gap-analysis rules are opt-in)
+- Keeps the last 3 audits of a project; older ones are retired after a successful run
 - Cloud rules run when logged in, capped at 1000 credits per audit
 - Logged-in audits render pages in a cloud browser by default (one-time opt-in; `--http` to skip)
 - Console output format
@@ -147,6 +148,7 @@ Project configuration is stored in `squirrel.toml` using TOML format.
 | `[rules]` | Enable/disable audit rules | [Rules Configuration](/configuration/rules) |
 | `[external_links]` | External link checking | [External Links](/configuration/external-links) |
 | `[output]` | Default output format | [Output Settings](/configuration/output) |
+| `[storage]` | How many audits a project keeps on disk | [Storage Settings](/configuration/storage) |
 | `[cloud]` | Cloud features, spend limits, rendering | [Cloud Settings](/configuration/cloud) |
 | `[rule_options.*]` | Per-rule configuration | [Rule Options](/configuration/rule-options) |
 | `smart_audits` | Carry issues across partial re-audits (top-level boolean) | [Smart Audits](#smart-audits) |
@@ -216,6 +218,9 @@ cache_ttl_days = 7
 
 [output]
 format = "console"
+
+[storage]
+keep_audits = 3
 
 [rule_options]
 # Per-rule configuration

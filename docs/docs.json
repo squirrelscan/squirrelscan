@@ -628,6 +628,7 @@
               "configuration/rules",
               "configuration/external-links",
               "configuration/output",
+              "configuration/storage",
               "configuration/cloud",
               "configuration/rule-options",
               "configuration/examples"

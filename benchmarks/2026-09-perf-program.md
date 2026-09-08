@@ -655,7 +655,7 @@ after two, 215 MB after three. Where it goes, for two audits of that site:
 `squirrel self disk` reports this
 ([#256](https://github.com/squirrelscan/squirrelscan/pull/256)) and
 `--prune --keep N` reclaims it
-([#259](https://github.com/squirrelscan/squirrelscan/pull/259), still a draft).
+([#259](https://github.com/squirrelscan/squirrelscan/pull/259)).
 Measured on two audits of a 60-page site, keeping one:
 
 | measurement | before | after |
@@ -666,14 +666,130 @@ Measured on two audits of a 60-page site, keeping one:
 
 That last row is the one that matters: the reclaim keeps the newest page record
 per url, so an incremental re-audit still serves every page from its conditional
-GET rather than refetching the site. Retention is not automatic; how many audits
-to keep is squirrelscan/repo#1912.
+GET rather than refetching the site.
 
 A trap worth recording: `VACUUM` alone made the file BIGGER, 189 MB to 239 MB.
 In WAL mode the rewrite lands in the write-ahead log, so the main file shrinks
 while the `-wal` beside it grows by more than was saved. `PRAGMA
 wal_checkpoint(TRUNCATE)` after the vacuum, and measuring after the connection
 actually closes, is what makes the saving real.
+
+### Automatic retention: keeping the last three
+
+Retention is now on by default at three audits per project
+(`[storage] keep_audits`), which is what turns the growth above into a ceiling.
+Five audits of a 40-page fixture site into one project, both arms measured after
+`PRAGMA wal_checkpoint(TRUNCATE)` so the `-wal` is not hiding either result:
+
+| after 5 audits | `keep_audits = false` | `keep_audits = 3` |
+|---|---|---|
+| `project.db` family | 14.71 MB | 11.85 MB |
+| free inside the file | 0 | 2.82 MB (23.9%) |
+| `pages` rows | 200 | 120 |
+| `rule_results` rows | 40,445 | 24,267 |
+| audits listed | 5 | 5 (2 marked `retired`) |
+| pages fetched by audit 5 | 0 of 40 | 0 of 40 |
+
+The last row is the one worth checking, and it is checked on the audits that ran
+AFTER data was retired: retirement never takes the newest page record per url,
+so a re-audit still answers every page from its conditional GET. The first audit
+fetched 40 of 40 and every audit after it fetched 0.
+
+A sixth audit of the same site left the file at 11.86 MB — the same as the fifth,
+which is what a ceiling looks like. Three audits renderable, three listed as
+retired, 120 page rows throughout.
+
+The freed space stays inside the file on purpose. At a window of three, an audit
+retires one audit's worth of rows every time, and that is about a quarter of the
+file — so a share-based VACUUM threshold would rewrite the whole database after
+every single audit, forever. Left alone those pages are reused by the next
+audit's inserts and the file plateaus. The pass only rebuilds the file when more
+than one audit goes at once (retention switched on over a backlog, or the window
+lowered) AND the free space is over 200 MB or a quarter of the file.
+
+What the pass costs, on a synthetic project of four audits, load average ~3:
+
+| pages per audit | nothing to retire | one audit retired |
+|---|---|---|
+| 1,000 | 0.35 ms | 59 ms |
+| 2,500 | 0.41 ms | 281 ms |
+
+The common case is the first column: until a project has run more audits than
+the window keeps, the whole pass is one query over `crawls`, which holds one row
+per audit.
+
+### The index the retention pass needed, and the scan it was hiding
+
+`pages` is keyed `(crawl_id, normalized_url)`, so nothing could serve a lookup by
+`normalized_url` ALONE — and the predicate that decides which page rows a
+retirement may delete is exactly that, correlated, once per candidate row:
+
+```text
+SEARCH p USING INDEX idx_pages_crawl (crawl_id=?)
+CORRELATED SCALAR SUBQUERY 1
+SCAN newer                                   <- the whole pages table, per row
+```
+
+Quadratic in the size of the table, and #259 shipped it that way because a prune
+is something a user asks for once. Automatic retention runs it after every
+audit, which is criterion 5 of squirrelscan/repo#1912 — the pass must not
+reintroduce a per-audit full scan. Retiring one crawl of four, ~8 KB of html per
+row:
+
+| `pages` rows | `SCAN newer` | `idx_pages_url_recency` |
+|---|---|---|
+| 4,000 | 80 ms | 9.5 ms |
+| 10,000 | 493 ms | 29 ms |
+| 40,000 | 11,779 ms | 61 ms |
+
+Migration 26 adds `idx_pages_url_recency (normalized_url, fetched_at)`. The same
+index covers `getCachedPage`, which runs the same lookup once per url on every
+incremental re-audit and was also scanning the table.
+
+Two more plan defects came out of reviewing that, both invisible in the row
+counts and both the same shape:
+
+- The recency half of the predicate was `a > b OR (a = b AND c > d)`, which can
+  seek to the url and must then walk every version of it. Written as the row
+  value `(newer.fetched_at, newer.rowid) > (p.fetched_at, p.rowid)` — the same
+  rows, ties included, asserted against the old spelling rather than argued —
+  the plan becomes `normalized_url=? AND fetched_at>?`, a range seek.
+- The sweep that collects page rows of already-retired crawls reads `SCAN p`,
+  every row in `pages`, when it is written as a join in either direction. As
+  `crawl_id IN (SELECT id FROM crawls WHERE retired_at IS NOT NULL)` it seeks
+  `idx_pages_crawl` per retired crawl instead. A partial index on
+  `crawls(retired_at)` keeps the inner list off a table that only grows.
+
+The gates for all three are `EXPLAIN QUERY PLAN` assertions, because the index
+existing proves nothing if the planner does not choose it, and a timing on a
+loaded box proves nothing at all.
+
+The sweep is the one that took three attempts, and the lesson is that "bounded"
+has to name a variable. Driven by a join it was bounded by the size of `pages`.
+Driven by a list of every retired crawl id it was bounded by the number of
+audits the project had ever retired, which only grows. Driven by the urls the
+current crawl just wrote it is bounded by the audit, and that is also exactly
+the set that can have changed, since a page row only becomes superseded by an
+audit crawling its url again.
+
+Retention also needed to know what an audit SAID, not just that it finished.
+`crawls.status` reads `analyzed` for a run whose report came out `blocked`, so
+counting crawl rows meant three good audits, two days of a site being down and
+one recovery run would keep the two blocked runs and delete all three audits
+from before the outage. Migration 27 records the report's own status on the
+crawl, which also carries a `building` sentinel between the analyzed transition
+and the report being reconstructed: without it a second audit of the same
+project can retire a crawl whose own process is still reading it, and turn a run
+that was going to succeed into "Audit data was reclaimed".
+
+Adding an index can silently reorder ties, which is how a byte-identical output
+stops being byte-identical
+([#258's lesson](https://github.com/squirrelscan/squirrelscan/pull/258)). Both
+readers here specify their tie-break — `ORDER BY fetched_at DESC, rowid DESC` in
+one, `newer.rowid > p.rowid` in the other — so the result is the same under
+either plan, and there is a test that asserts it with the index present. The
+gate is the query PLAN rather than a timing, because a timing on a loaded box
+proves nothing and an index that exists but is not chosen proves less.
 
 ## Template clustering: 94.7% redundant on a real storefront, 6.5% if you measure it the obvious way
 
