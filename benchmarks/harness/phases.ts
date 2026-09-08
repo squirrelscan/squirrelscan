@@ -53,8 +53,16 @@ for (const dir of process.argv.slice(2)) {
 
   // phases from the trace log
   const tr = read(`${dir}/trace.log`);
-  const rules = num(/\[runPageRules:all\] duration=([\d.]+)ms/, tr) / 1000;
-  const site = num(/\[runSiteRules\] duration=([\d.]+)ms/, tr) / 1000;
+  // The streaming pipeline (#252) no longer emits these two spans, so a run on
+  // it has no rules attribution in the trace at all. Report that as "n/a" —
+  // printing 0s reads as "the rules phase was free", which is the opposite of
+  // true (it is most of the wall time on a large crawl).
+  const rulesMs = /\[runPageRules:all\] duration=([\d.]+)ms/.test(tr)
+    ? num(/\[runPageRules:all\] duration=([\d.]+)ms/, tr)
+    : null;
+  const siteMs = /\[runSiteRules\] duration=([\d.]+)ms/.test(tr)
+    ? num(/\[runSiteRules\] duration=([\d.]+)ms/, tr)
+    : null;
   const parseMs = (tr.match(/\[parsePageRecord\] duration=([\d.]+)ms/g) ?? [])
     .map((s) => Number(/([\d.]+)/.exec(s)![1]))
     .reduce((a, b) => a + b, 0);
@@ -70,8 +78,8 @@ for (const dir of process.argv.slice(2)) {
     pages ? (crawlSpan * 1000 / pages).toFixed(0) : "-",
     String(reqs.length),
     String(pageReqs.length),
-    rules.toFixed(0) + "s",
-    site.toFixed(0) + "s",
+    rulesMs === null ? "n/a" : (rulesMs / 1000).toFixed(0) + "s",
+    siteMs === null ? "n/a" : (siteMs / 1000).toFixed(0) + "s",
     (parseMs / 1000).toFixed(1) + "s",
     (maxrss / 1048576).toFixed(0) + "MB",
     dbBytes ? (dbBytes / 1048576).toFixed(0) + "MB" : "-",

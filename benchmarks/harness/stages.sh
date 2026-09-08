@@ -6,6 +6,11 @@
 # Usage: stages.sh <N> [N...]
 set -u
 HERE=${0:A:h}
+# One origin for the whole sweep. Without this each stage gets a fresh
+# OS-assigned port and the warm stage crawls a different site, so it re-fetches
+# everything and reports no reuse — see run-stage.sh's BENCH_PORT comment.
+export BENCH_PORT=${BENCH_PORT:-8920}
+
 for N in "$@"; do
   S=st$N$(date +%H%M%S)
   ST=$HERE/stores/st$N.db

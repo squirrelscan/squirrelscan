@@ -39,6 +39,19 @@ if (out) {
   (timer as unknown as { unref?: () => void }).unref?.();
 
   const flush = () => {
+    // Collect BEFORE the exit sample, or this is the heap at whatever moment the
+    // process happened to stop, not what the run retained. Without it two runs of
+    // the same 5,000-page workload reported 2,461 MB and 1,275 MB, and the number
+    // reads as a per-page retention slope it cannot support.
+    //
+    // This does cost wall time on a multi-GB heap, and `/usr/bin/time` measures
+    // until the process exits, so a stage's wall time now includes one forced
+    // collection. Rows recorded before this landed do not.
+    try {
+      (globalThis as { Bun?: { gc?: (sync: boolean) => void } }).Bun?.gc?.(true);
+    } catch {
+      /* not Bun, or gc unavailable: still take the sample */
+    }
     sample("exit");
     samples.push(JSON.stringify({ t: Date.now() - t0, tag: "peakRssInProc", rss: peakRss }));
     try {

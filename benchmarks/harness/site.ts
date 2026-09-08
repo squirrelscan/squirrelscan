@@ -23,7 +23,10 @@
  * Prints the chosen port on stdout, then serves until killed.
  */
 
-import { parseDocument } from "@squirrelscan/parser";
+// Relative into the package source, not the "@squirrelscan/parser" specifier:
+// `benchmarks/` is not a workspace member, so under Bun's isolated linker it has
+// no node_modules of its own and the bare specifier does not resolve.
+import { parseDocument } from "../../packages/parser/src/index.ts";
 const basePath = process.argv[2];
 const N = Number(process.argv[3] ?? 1000);
 const portArgIdx = process.argv.indexOf("--port");
@@ -284,6 +287,76 @@ if (reqLogPath) {
   });
 }
 
+// ── HTTP caching: a freshness window plus validators ────────────
+// A re-crawl can only reuse what the origin lets it reuse. The estate therefore
+// serves both halves of a real cache policy: a short freshness window with a
+// long stale-while-revalidate (so a second run minutes later is stale but still
+// serveable from store), and an ETag/Last-Modified pair (so a revalidation past
+// that window can come back 304). Overridable to measure a different policy.
+const CACHE_CONTROL =
+  process.env.BENCH_CACHE_CONTROL ?? "public, max-age=60, stale-while-revalidate=86400";
+
+// Last-Modified must be stable across a server RESTART (stages.sh restarts it
+// between the cold and warm stage, and a date that moved with the process would
+// make every warm revalidation a miss for harness reasons) but must MOVE when
+// the fixture's content moves, or a date-only revalidation returns 304 for a
+// body that changed. The salt is exactly "which fixture content is this", so
+// derive the date from it: same salt, same date; new salt, new date.
+const LAST_MODIFIED = (() => {
+  const base = Date.UTC(2026, 8, 1, 0, 0, 0); // 2026-09-01T00:00:00Z
+  let h = 2166136261 >>> 0; // FNV-1a over the salt
+  for (let i = 0; i < SALT.length; i++) {
+    h ^= SALT.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  // Spread over a day, at second granularity, which is all an HTTP-date carries.
+  return new Date(base + (h % 86400) * 1000).toUTCString();
+})();
+const LAST_MODIFIED_MS = Date.parse(LAST_MODIFIED);
+
+// path -> etag, so a revalidation can be answered without rendering the page.
+const etags = new Map<string, string>();
+
+function etagFor(key: string, body: string): string {
+  let tag = etags.get(key);
+  if (tag === undefined) {
+    tag = `"${Bun.hash(body).toString(16)}-${body.length.toString(16)}"`;
+    etags.set(key, tag);
+  }
+  return tag;
+}
+
+// An opaque entity-tag may itself contain commas, so If-None-Match cannot be
+// split on "," — `"foo,*,bar"` is ONE tag, and splitting it invents a wildcard
+// that matches every representation. Pull out the quoted tags instead.
+const ENTITY_TAG = /(W\/)?"[^"]*"/g;
+
+/** True when the request already holds this exact representation. */
+function clientHasIt(req: Request, tag: string): boolean {
+  const inm = req.headers.get("if-none-match");
+  if (inm !== null) {
+    // "*" is a wildcard only as the WHOLE field value, never inside a tag.
+    if (inm.trim() === "*") return true;
+    for (const m of inm.matchAll(ENTITY_TAG)) {
+      // Weak comparison: W/"x" and "x" match, which is what If-None-Match wants.
+      if (m[0].replace(/^W\//, "") === tag) return true;
+    }
+    // A present but non-matching If-None-Match wins outright; per RFC 9110 the
+    // If-Modified-Since below is only consulted when If-None-Match is absent.
+    return false;
+  }
+  const ims = req.headers.get("if-modified-since");
+  if (ims === null) return false;
+  // Date.parse is lenient enough to accept "2027", which would 304 a page that
+  // has no business being fresh. Only an IMF-fixdate counts; anything else is
+  // ignored, as an invalid conditional header must be.
+  if (!/^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/.test(ims.trim())) {
+    return false;
+  }
+  const since = Date.parse(ims);
+  return Number.isFinite(since) && since >= LAST_MODIFIED_MS;
+}
+
 const server = Bun.serve({
   port: wantPort,
   // generous: the crawler may open many sockets
@@ -293,12 +366,35 @@ const server = Bun.serve({
     const p = url.pathname;
     if (reqLogPath) {
       reqCount++;
-      reqLog.push(`${Date.now() - t0}\t${req.method}\t${p}\t${req.headers.get("accept") ?? ""}`);
+      // `inm` is what makes a warm stage auditable: a re-crawl that revalidates
+      // shows If-None-Match here, one that re-fetches blind shows a bare dash.
+      const inm = req.headers.get("if-none-match") ?? "-";
+      reqLog.push(
+        `${Date.now() - t0}\t${req.method}\t${p}\t${req.headers.get("accept") ?? ""}\t${inm}`,
+      );
     }
-    const html = (body: string) =>
-      new Response(body, {
-        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=600" },
+    const cacheHeaders = { "cache-control": CACHE_CONTROL, "last-modified": LAST_MODIFIED };
+    // Conditional requests only mean "you already have this" on a retrieval.
+    // Evaluating them on anything else answered POST + `If-None-Match: *` with a
+    // 304, which is nonsense for a method that is not asking for the body.
+    const conditional = req.method === "GET" || req.method === "HEAD";
+    // `build` is lazy so a revalidation we already have an etag for costs no render.
+    const html = (key: string, build: () => string) => {
+      const known = etags.get(key);
+      if (conditional && known !== undefined && clientHasIt(req, known)) {
+        return new Response(null, { status: 304, headers: { ...cacheHeaders, etag: known } });
+      }
+      // Render exactly once: the heavy template is ~1 MB, so building it twice
+      // to hash it would double the origin's cost per page.
+      const body = build();
+      const tag = etagFor(key, body);
+      if (conditional && clientHasIt(req, tag)) {
+        return new Response(null, { status: 304, headers: { ...cacheHeaders, etag: tag } });
+      }
+      return new Response(body, {
+        headers: { ...cacheHeaders, "content-type": "text/html; charset=utf-8", etag: tag },
       });
+    };
 
     if (p === "/robots.txt") {
       return new Response(`User-agent: *\nAllow: /\nSitemap: ${url.origin}/sitemap.xml\n`, {
@@ -324,19 +420,19 @@ const server = Bun.serve({
         { headers: { "content-type": "application/xml" } },
       );
     }
-    if (p === "/" || p === "/index.html") return html(seedPage());
+    if (p === "/" || p === "/index.html") return html("/", seedPage);
 
     const hub = p.match(/^\/hub\/(\d+)$/);
     if (hub) {
       const h = Number(hub[1]);
       if (h < 0 || h >= HUBS) return new Response("Not found", { status: 404 });
-      return html(hubPage(h));
+      return html(p, () => hubPage(h));
     }
     const m = p.match(/^\/p\/(\d+)$/);
     if (m) {
       const i = Number(m[1]);
       if (i < 0 || i >= N) return new Response("Not found", { status: 404 });
-      return html(render(i));
+      return html(p, () => render(i));
     }
     // images referenced by templates: tiny, real content-type, cheap
     if (/^\/img\/\d+\.jpg$/.test(p)) {

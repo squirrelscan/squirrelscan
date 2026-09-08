@@ -35,11 +35,32 @@ SALT=${BENCH_SALT:-}
 # would arrive as ONE argv entry and indexOf("--salt") would miss it. Build an array.
 SALT_ARGS=()
 [[ -n $SALT ]] && SALT_ARGS=(--salt $SALT)
-bun $HERE/site.ts $BASE_PAGE $PAGES $SALT_ARGS > $OUT/server.port 2> $OUT/server.err &
+# BENCH_PORT pins the origin across the stages of one pair. Without it every
+# stage gets a fresh OS-assigned port, so the "warm" stage crawls a DIFFERENT
+# origin (http://localhost:<new port>/p/1) and the incremental path has nothing
+# stored under those URLs to revalidate — it re-fetches all N pages and reports
+# no cache hits at all. A warm row measured that way is a second cold crawl.
+PORT_ARGS=()
+if [[ -n ${BENCH_PORT:-} ]]; then
+  # site.ts does Number(arg), which turns "", whitespace and "not-a-port" into 0
+  # or NaN and silently falls back to an OS-assigned port — the exact failure
+  # BENCH_PORT exists to prevent, and one that only shows up later as a warm
+  # stage that reused nothing. Refuse instead.
+  if [[ ! $BENCH_PORT =~ '^[0-9]+$' ]] || (( BENCH_PORT < 1 || BENCH_PORT > 65535 )); then
+    echo "BENCH_PORT must be an integer 1-65535, got '$BENCH_PORT'"; exit 1
+  fi
+  PORT_ARGS=(--port $BENCH_PORT)
+fi
+bun $HERE/site.ts $BASE_PAGE $PAGES $SALT_ARGS $PORT_ARGS > $OUT/server.port 2> $OUT/server.err &
 SRV=$!
 for i in {1..50}; do [[ -s $OUT/server.port ]] && break; sleep 0.2; done
 PORT=$(cat $OUT/server.port)
 if [[ -z $PORT ]]; then echo "SERVER FAILED"; cat $OUT/server.err; kill $SRV 2>/dev/null; exit 1; fi
+# The port the server actually bound, not the one we asked for: a mismatch means
+# the pair is measuring two different origins and the warm row would be a lie.
+if [[ -n ${BENCH_PORT:-} && $PORT != $BENCH_PORT ]]; then
+  echo "server bound $PORT, not the requested BENCH_PORT=$BENCH_PORT"; kill $SRV 2>/dev/null; exit 1
+fi
 echo "   server pid=$SRV port=$PORT"
 URL="http://localhost:$PORT"
 
