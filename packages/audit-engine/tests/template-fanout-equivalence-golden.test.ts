@@ -346,6 +346,53 @@ describe("what actually runs", () => {
     await run(storage.close());
   });
 
+  test("a rule that is also soft-404 gated is never fanned out at all", async () => {
+    // The two declarations contradict each other: the soft-404 gate is decided per
+    // page and the cluster key says nothing about it. The runner's gate ordering
+    // protects the RECIPIENT — a soft-404 member takes its own skip rather than a
+    // sibling's real verdict — but not the reverse: a soft-404 REPRESENTATIVE would
+    // cache its skip and hand it to healthy members, reporting "skipped: soft 404"
+    // for pages that are fine. No built-in declares both, and a named test in
+    // packages/rules keeps it that way, but a plugin registering one through
+    // `additionalNamespaces` only meets this at runtime.
+    const storage = await corpusStorage();
+    let ran = 0;
+    const gated: Rule = {
+      meta: {
+        id: "test/soft404-gated",
+        name: "Soft404 gated",
+        description: "declares both template scope and the soft-404 gate",
+        category: "core",
+        scope: "page",
+        severity: "info",
+        weight: 1,
+        verdictScope: "template",
+        skipOnSoft404: true,
+      },
+      run: () => {
+        ran++;
+        return { checks: [{ name: "gated", status: "pass" as const, message: "seen" }] };
+      },
+    };
+    const runner = new RuleRunner({
+      config: CONFIG,
+      additionalNamespaces: [{ name: "test", rules: [gated] }],
+    });
+
+    const result = await run(
+      streamPageRules(storage, CRAWL, runner, SITE_DATA, { templateFanout: true }),
+    );
+
+    // Declared "template" and still ran on every page — the contradiction costs
+    // speed, never a verdict copied onto a page nobody looked at.
+    expect(ran).toBe(CORPUS.length);
+    for (const url of result.pageUrls) {
+      expect(result.pageRuleResults.get(url)?.get("test/soft404-gated")).toHaveLength(1);
+    }
+
+    await run(storage.close());
+  });
+
   test("a singleton cluster runs its own rules, taking nothing from anyone", async () => {
     const storage = await corpusStorage();
     const counters = countingRules();
@@ -424,17 +471,36 @@ describe("a fanned finding names the page it is about", () => {
       buildStreamFindings(Object.fromEntries(r.ruleResultsMap), 1_000),
     );
 
+    // NOT sorted: each key is zipped back onto its own row below, so a sort
+    // here would pair a key with someone else's finding.
     const keyed = (rows: ReturnType<typeof buildStreamFindings>) =>
-      rows
-        .map((f) => `${f.normalizedUrl} ${f.ruleId} ${f.checkName} ${f.locator}`)
-        .sort();
-    // Identical (url, rule, check, locator) keys AND identical fingerprints. A
-    // fingerprint that keyed on the representative would make every re-audit
-    // resolve and re-open the whole cluster (#1880).
-    expect(keyed(withFanout!)).toEqual(keyed(without!));
-    expect(withFanout!.map((f) => f.fingerprint).sort()).toEqual(
-      without!.map((f) => f.fingerprint).sort(),
-    );
+      rows.map((f) => [f.normalizedUrl, f.ruleId, f.checkName, f.locator].join(" "));
+    // Compared BY the finding key, never as two independently sorted lists: the
+    // same values sitting on different rows compare equal when each list is sorted
+    // on its own. Each finding is checked against the one carrying the SAME
+    // (normalizedUrl, ruleId, checkName, locator), and the WHOLE row is compared —
+    // message, value and expected are what the fingerprint is computed from.
+    //
+    // WHAT THE KEY SET CATCHES AND WHAT THE FINGERPRINT CANNOT. The key comparison
+    // is the load-bearing one: a fanned finding stored against the representative's
+    // url shows up as a missing key here, and that is the failure #1880 cares about,
+    // because it would make every re-audit of an unchanged site resolve and re-open
+    // the whole cluster. The fingerprint comparison catches a value moved between
+    // DIFFERENT findings (verified by mutation), but it can never catch one swapped
+    // between members of one cluster — those fingerprints are legitimately equal,
+    // since the fingerprint is computed from status/message/value/expected and the
+    // classification's whole claim is that those do not vary across the cluster.
+    // No corpus can change that, so do not read this line as stronger than it is.
+    const fannedRows = new Map(keyed(withFanout!).map((k, i) => [k, withFanout![i]!]));
+    const plainRows = new Map(keyed(without!).map((k, i) => [k, without![i]!]));
+    expect(fannedRows.size).toBe(withFanout!.length); // no key collisions
+    expect([...fannedRows.keys()].sort()).toEqual([...plainRows.keys()].sort());
+    for (const [key, row] of plainRows) {
+      const other = fannedRows.get(key);
+      expect(other).toBeDefined();
+      expect(other!.fingerprint).toBe(row.fingerprint);
+      expect(other).toEqual(row);
+    }
 
     // And the fanned rule is genuinely represented per member here, not once.
     const forRule = withFanout!.filter((f) => f.ruleId === FANNED_RULE);
