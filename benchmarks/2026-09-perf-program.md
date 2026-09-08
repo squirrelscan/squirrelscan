@@ -245,7 +245,7 @@ Recorded here because #1028 needs the page count to be expressible from the CLI
 at all, and it was not. `squirrel audit --max-pages 10000` crawled 5,000 and
 reported `maxPages: 5000`, which is byte-identical to what a 5,000-page site
 reports ([#1909](https://github.com/squirrelscan/repo/issues/1909),
-[#263](https://github.com/squirrelscan/squirrelscan/pull/263)).
+[#264](https://github.com/squirrelscan/squirrelscan/pull/264)).
 
 No timings: nothing about this change affects how long anything takes, and there
 is no before/after to measure. What it changes is whether the number a
