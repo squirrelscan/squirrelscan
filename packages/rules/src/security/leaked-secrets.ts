@@ -1451,8 +1451,10 @@ export function scanContent(
   // Pass 1: Run all fast patterns (distinctive prefixes, O(n) safe)
   //
   // A pass over the content costs the same whether it finds anything or not, and
-  // on a 1 MB script-heavy page 64 of these 70 patterns cannot match at all. The
-  // gram index answers that for the price of one pass instead of seventy.
+  // on a 1 MB script-heavy page 34 of these 70 cannot match the body being
+  // scanned. The gram index answers that for the price of one pass instead of
+  // seventy. 18 of the 70 prove no literal at all — `[0-9]{8,10}:[a-zA-Z0-9_-]{35}`
+  // has nothing to prove — and those always run.
   for (const {
     name,
     pattern,

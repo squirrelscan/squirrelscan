@@ -2,17 +2,27 @@
 // without running it (#1864).
 //
 // The rules that hurt on a script-heavy page run a LIST of patterns over the same
-// megabyte: security/leaked-secrets runs 70, perf/js-libraries runs one set per
-// library. Each pass over 1 MB costs ~0.3 ms even when the regex engine is doing
-// nothing but a vectorised literal search, so the cost is the pass COUNT, not the
-// work each pass finds. Combining the patterns into one alternation makes it
-// WORSE (measured: 70 patterns as one alternation took 29 ms against 20 ms run
-// separately) — JSC does not build a trie for an alternation.
+// megabyte: security/leaked-secrets runs 70, perf/js-libraries runs 62 inline
+// signatures. Each pass costs the same whether it finds anything or not, so the
+// cost is the pass COUNT, not the work each pass finds.
+//
+// Merging the list into one alternation per flag group and using that as a gate
+// is much worse, not better, and the measurement is worth keeping because the
+// intuition points the other way. Over the 58 bodies of text on one real 1.1 MB
+// page (medians of seven):
+//
+//   every pattern, no prefilter                      38.9 ms
+//   this gram index, then the survivors              18.0 ms
+//   alternation gate, then every pattern on a hit    89.0 ms
+//
+// The gate loses twice: an alternation of 59 patterns gives up the per-pattern
+// literal-prefix search that makes each one fast on its own, and it still admits
+// the page (it matched 5 of the 58 bodies), so the 70 passes happen anyway.
 //
 // So: make one pass, record which 4-grams the text contains in a bitmap, and use
-// that to skip every pattern whose mandatory literal is provably absent. On the
-// drscholls fixture that skips 60 of 70 secret patterns and 14 of 17 keyword
-// scans for the price of a single pass.
+// that to skip every pattern whose mandatory literal is provably absent. On that
+// page it skips 34 of the 70 secret patterns and 17 of the 17 keyword scans per
+// body, for the price of a single pass (5.4 ms across all 58).
 //
 // Soundness is the whole point, since a false negative silently deletes a
 // finding. Two invariants carry it:
@@ -34,11 +44,12 @@ const BITS_PER_CHAR = 32;
  *  security/leaked-secrets, and a page can carry sixty of them. */
 const MIN_INDEXED_LENGTH = 256;
 
-/** The window width, and so the shortest literal that can be filtered at all.
- *  Indexing 3-grams as well was tried and reverted: it doubled the population of
- *  the table (and with it the false-positive rate for every OTHER literal) to buy
- *  one extra skip out of seventy. A shorter literal simply proves nothing and its
- *  pattern always runs. */
+/** The window width, and so the shortest literal that can be filtered at all: a
+ *  shorter literal proves nothing and its pattern always runs. Four is what a
+ *  20-bit window buys at 5 bits a character, and 20 bits is the widest table a
+ *  32-bit shift-and-xor hash addresses without the window leaking (see
+ *  WINDOW_MASK). Narrowing to 3 would admit `sk-`, `re_` and `AC`, at the cost of
+ *  a 15-bit window and a table that saturates on a megabyte. */
 const GRAM = 4;
 const MIN_LITERAL_LENGTH = GRAM;
 
@@ -92,9 +103,9 @@ const SHIFT = 5;
 const WINDOW_MASK = (1 << (GRAM * SHIFT)) - 1;
 
 /** Ceiling on the table: the widest a 20-bit window hash can address, 2^20 bits
- *  = 128 KB. A megabyte of minified JS sets about 25% of it, which is what
- *  decides how often a short literal survives on a collision rather than on
- *  being present. */
+ *  = 128 KB. A 1.1 MB serialised page sets 5.9% of it, and the population is
+ *  what decides how often a literal survives on a collision rather than on being
+ *  present. */
 const GRAM_BYTES = (WINDOW_MASK + 1) >> 3;
 
 /**

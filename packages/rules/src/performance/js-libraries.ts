@@ -306,10 +306,10 @@ function compareVersions(v1: string, v2: string): number {
 }
 
 // Every library's inline signatures run against every inline script AND the whole
-// HTML, so on a page with 800 KB of inline script this rule was making ~250 passes
-// over a megabyte to find nothing (#1864). The literals each signature must
-// contain are derived once here; a per-content gram index then skips the ones that
-// cannot match.
+// HTML: 62 signatures against the 58 bodies of text on one real 1.1 MB page is
+// 3,596 passes to find nothing (#1864). The literals each signature must contain
+// are derived once here; a per-content gram index then skips the ones that cannot
+// match.
 const PREFILTERED_LIBRARIES = libraryPatterns.map((lib) => ({
   ...lib,
   inlinePatterns: lib.inlinePatterns.map((pattern) => ({
