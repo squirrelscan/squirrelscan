@@ -22,7 +22,11 @@ import * as os from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ReleaseManifest, UserSettings } from "@/self/types";
+import type {
+  ReleaseManifest,
+  UpdateLanding,
+  UserSettings,
+} from "@/self/types";
 
 import * as pathsModule from "@/self/paths";
 import * as releasesModule from "@/self/releases";
@@ -34,6 +38,8 @@ import {
 } from "@/self/settings";
 import {
   applyPendingUpdateInForeground,
+  classifyBinDir,
+  classifyOnPath,
   finishInlineAutoUpdate,
   FOREGROUND_UPDATE_ENV,
   foregroundUpdateTarget,
@@ -44,6 +50,7 @@ import {
   runAutoUpdate,
   safeExit,
   startInlineAutoUpdate,
+  updateLandingWarnings,
 } from "@/self/updater";
 
 const originalEnv = { ...process.env };
@@ -1455,5 +1462,277 @@ describe("updater", () => {
         });
       }
     );
+  });
+
+  // #293: flipping a link the user's PATH never resolves is not an update.
+  // The verdict, the stale-bin-dir fallback, and the words both callers print.
+  describe("update landing (#293)", () => {
+    const LINK = "/home/u/.local/bin/squirrel";
+
+    describe("classifyOnPath", () => {
+      test("PATH resolving the flipped link is same", () => {
+        expect(
+          classifyOnPath("9.9.9", LINK, {
+            which: () => LINK,
+            realpath: (p) => p,
+            isWindows: false,
+          })
+        ).toEqual({
+          path_binary: LINK,
+          path_target: LINK,
+          on_path: "same",
+        });
+      });
+
+      test("another link onto the SAME release binary is still same", () => {
+        const installed = pathsModule.getBinaryPath("9.9.9");
+        expect(
+          classifyOnPath("9.9.9", LINK, {
+            which: () => "/opt/homebrew/bin/squirrel",
+            realpath: (p) =>
+              p === "/opt/homebrew/bin/squirrel" ? installed : p,
+            isWindows: false,
+          }).on_path
+        ).toBe("same");
+      });
+
+      test("an older squirrel earlier on PATH is different, and both paths are reported", () => {
+        const result = classifyOnPath("9.9.9", LINK, {
+          which: () => "/usr/local/bin/squirrel",
+          realpath: (p) =>
+            p === "/usr/local/bin/squirrel"
+              ? "/home/u/.squirrel/releases/0.0.81/squirrel"
+              : p,
+          isWindows: false,
+        });
+        expect(result).toEqual({
+          path_binary: "/usr/local/bin/squirrel",
+          path_target: "/home/u/.squirrel/releases/0.0.81/squirrel",
+          on_path: "different",
+        });
+      });
+
+      test("no squirrel on PATH at all is missing", () => {
+        expect(
+          classifyOnPath("9.9.9", LINK, {
+            which: () => null,
+            isWindows: false,
+          })
+        ).toEqual({ path_binary: null, path_target: null, on_path: "missing" });
+      });
+
+      // Windows installs a COPY at the bin path, so the release binary is never
+      // the PATH target there — the link is the honest comparand — and its
+      // paths are case-insensitive.
+      test("Windows matches the copy at the bin path, ignoring case", () => {
+        const win = "C:\\Users\\u\\.local\\bin\\squirrel.exe";
+        expect(
+          classifyOnPath("9.9.9", win, {
+            which: (command) =>
+              command === "squirrel.exe" ? win.toUpperCase() : null,
+            realpath: (p) => p,
+            isWindows: true,
+          }).on_path
+        ).toBe("same");
+      });
+    });
+
+    describe("classifyBinDir", () => {
+      const throwing = (code: string) => () => {
+        throw Object.assign(new Error(code), { code });
+      };
+
+      test("a live directory is present", () => {
+        expect(
+          classifyBinDir("/x", { stat: () => ({ isDirectory: () => true }) })
+        ).toBe("present");
+      });
+
+      test("a deleted directory is missing", () => {
+        expect(classifyBinDir("/x", { stat: throwing("ENOENT") })).toBe(
+          "missing"
+        );
+      });
+
+      test("a file where the bin dir should be is missing", () => {
+        expect(
+          classifyBinDir("/x", { stat: () => ({ isDirectory: () => false }) })
+        ).toBe("missing");
+      });
+
+      // The whole point of not using existsSync: an unreadable parent must not
+      // read as deleted, or a live install_bin_dir gets cleared.
+      test("an unreadable directory is unknown, never missing", () => {
+        expect(classifyBinDir("/x", { stat: throwing("EACCES") })).toBe(
+          "unknown"
+        );
+      });
+    });
+
+    describe("updateLandingWarnings", () => {
+      const landed: UpdateLanding = {
+        link_path: LINK,
+        path_binary: LINK,
+        path_target: LINK,
+        on_path: "same",
+        stale_bin_dir: null,
+      };
+
+      test("says nothing when PATH already runs the new binary", () => {
+        expect(updateLandingWarnings(landed)).toEqual([]);
+      });
+
+      test("a mismatch names both paths and both fixes", () => {
+        const text = updateLandingWarnings({
+          ...landed,
+          path_binary: "/usr/local/bin/squirrel",
+          path_target: "/home/u/.squirrel/releases/0.0.81/squirrel",
+          on_path: "different",
+        }).join("\n");
+
+        expect(text).toContain("/usr/local/bin/squirrel");
+        expect(text).toContain("/home/u/.squirrel/releases/0.0.81/squirrel");
+        expect(text).toContain(LINK);
+        expect(text).toContain("self install --bin-dir /usr/local/bin");
+        expect(text).toContain("/home/u/.local/bin ahead of it in PATH");
+      });
+
+      test("nothing on PATH points at the link's directory", () => {
+        const text = updateLandingWarnings({
+          ...landed,
+          path_binary: null,
+          path_target: null,
+          on_path: "missing",
+        }).join("\n");
+
+        expect(text).toContain(LINK);
+        expect(text).toContain("add /home/u/.local/bin to PATH");
+      });
+
+      test("a stale bin dir is reported even when PATH is fine", () => {
+        const lines = updateLandingWarnings({
+          ...landed,
+          stale_bin_dir: "/home/u/scratch/bin-beta",
+        });
+
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain("/home/u/scratch/bin-beta");
+        expect(lines[0]).toContain("cleared install_bin_dir");
+      });
+    });
+
+    // The exact shape of #293: settings point the updater at a scratch dir that
+    // no longer exists. The unattended path has to notice, link the default
+    // instead, forget the dead value, and leave the next run something to say.
+    test("a deleted install_bin_dir falls back to the default link and clears the setting", async () => {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      captureTelemetry();
+
+      const deadBinDir = join(tempHome, "scratch", "bin-beta");
+      spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v)
+      );
+      spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v, "squirrel")
+      );
+      spyOn(pathsModule, "getSymlinkPath").mockImplementation((dir?: string) =>
+        join(dir ?? join(tempHome, "bin"), "squirrel")
+      );
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest: { version: "9.9.9", binaries: {} } as ReleaseManifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      spyOn(releasesModule, "downloadBinary").mockResolvedValue({
+        ok: true,
+        data: new TextEncoder().encode("bin").buffer as ArrayBuffer,
+      });
+
+      updateSettings({
+        auto_update: true,
+        install_bin_dir: deadBinDir,
+        pending_update_notification: {
+          from_version: "0.0.1",
+          to_version: "9.9.9",
+          release_url: null,
+        },
+      });
+
+      const installed = await runAutoUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+      });
+
+      expect(installed).toBe("9.9.9");
+      expect(existsSync(join(tempHome, "bin", "squirrel"))).toBe(true);
+      expect(existsSync(join(deadBinDir, "squirrel"))).toBe(false);
+
+      const saved = loadUserSettings();
+      expect(saved.ok).toBe(true);
+      if (saved.ok) {
+        expect(saved.data.install_bin_dir ?? null).toBeNull();
+        const landing = saved.data.auto_update_applied?.landing;
+        expect(landing?.stale_bin_dir).toBe(deadBinDir);
+        expect(landing?.link_path).toBe(join(tempHome, "bin", "squirrel"));
+        // Nothing on PATH in this run, so the next one gets both warnings.
+        expect(landing?.on_path).toBe("missing");
+      }
+    });
+
+    // A landing PATH agrees with must not bloat settings or make the next run
+    // print anything beyond the ordinary "auto-updated" confirmation.
+    test("a landing PATH agrees with records no landing at all", async () => {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      captureTelemetry();
+
+      const linkPath = join(tempHome, "bin", "squirrel");
+      spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v)
+      );
+      spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v, "squirrel")
+      );
+      spyOn(pathsModule, "getSymlinkPath").mockReturnValue(linkPath);
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest: { version: "9.9.9", binaries: {} } as ReleaseManifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      spyOn(releasesModule, "downloadBinary").mockResolvedValue({
+        ok: true,
+        data: new TextEncoder().encode("bin").buffer as ArrayBuffer,
+      });
+
+      updateSettings({
+        auto_update: true,
+        pending_update_notification: {
+          from_version: "0.0.1",
+          to_version: "9.9.9",
+          release_url: null,
+        },
+      });
+
+      await runAutoUpdate({
+        landingDeps: { which: () => linkPath, isWindows: false },
+      });
+
+      const saved = loadUserSettings();
+      expect(saved.ok).toBe(true);
+      if (saved.ok) {
+        expect(saved.data.auto_update_applied?.to_version).toBe("9.9.9");
+        expect(saved.data.auto_update_applied?.landing).toBeUndefined();
+      }
+    });
   });
 });

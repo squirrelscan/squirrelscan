@@ -13,6 +13,8 @@ export type {
   DoctorReport,
   InstallResult,
   UpdateResult,
+  UpdateLanding,
+  OnPathStatus,
 } from "./types";
 
 // Path utilities
@@ -24,8 +26,11 @@ export {
   getSymlinkPath,
   detectPlatformArch,
   isBinInPath,
+  resolveSquirrelOnPath,
+  safeRealpath,
+  samePath,
 } from "./paths";
-export type { SquirrelPaths } from "./paths";
+export type { SquirrelPaths, PathBinary } from "./paths";
 
 // Settings management
 export {
@@ -58,4 +63,5 @@ export {
   checkOnly,
   installVersion,
   updateSymlink,
+  updateLandingWarnings,
 } from "./updater";

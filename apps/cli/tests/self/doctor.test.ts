@@ -111,3 +111,88 @@ describe("checkSettingsFile", () => {
     expect(check.fix).not.toContain("Delete");
   });
 });
+
+// #293: `self update` flips the link recorded at install time and reported
+// success on that alone, while the shell kept resolving an older binary
+// somewhere else. Doctor has to lay the three paths side by side.
+import { checkInstallLocation } from "../../src/self/doctor";
+import { getSymlinkPath } from "../../src/self/paths";
+
+describe("checkInstallLocation (#293)", () => {
+  const user = (binDir: string | null) => () =>
+    ok({ channel: "stable", install_bin_dir: binDir } as UserSettings);
+
+  test("PATH resolving the recorded link passes, and names version and paths", () => {
+    const link = "/home/u/.local/bin/squirrel";
+    const target = "/home/u/.squirrel/releases/0.0.92/squirrel";
+
+    const check = checkInstallLocation({
+      loadUser: user("/home/u/.local/bin"),
+      which: () => link,
+      realpath: (p) => (p === link ? target : p),
+      isWindows: false,
+    });
+
+    expect(check.status).toBe("pass");
+    expect(check.message).toContain("install_bin_dir: /home/u/.local/bin");
+    expect(check.message).toContain(`link ${link} -> v0.0.92`);
+    expect(check.message).toContain(`PATH: ${link} -> v0.0.92`);
+  });
+
+  test("an unrecorded bin dir reports 'default', not an empty value", () => {
+    const link = getSymlinkPath();
+    const check = checkInstallLocation({
+      loadUser: user(null),
+      which: () => link,
+      realpath: (p) => p,
+      isWindows: false,
+    });
+
+    expect(check.message).toContain("install_bin_dir: default");
+    expect(check.status).toBe("pass");
+  });
+
+  test("the exact #293 shape: updates land in a scratch dir, PATH runs an old release", () => {
+    const scratch = "/home/u/scratch/bin-beta";
+    const onPath = "/home/u/.local/bin/squirrel";
+
+    const check = checkInstallLocation({
+      loadUser: user(scratch),
+      which: () => onPath,
+      realpath: (p) =>
+        p === onPath ? "/home/u/.squirrel/releases/0.0.81/squirrel" : p,
+      isWindows: false,
+    });
+
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain(`install_bin_dir: ${scratch}`);
+    expect(check.message).toContain(`link ${scratch}/squirrel`);
+    expect(check.message).toContain(`PATH: ${onPath} -> v0.0.81`);
+    expect(check.fix).toContain("--bin-dir /home/u/.local/bin");
+  });
+
+  test("nothing on PATH warns with the link's directory to add", () => {
+    const check = checkInstallLocation({
+      loadUser: user("/home/u/.local/bin"),
+      which: () => null,
+      realpath: (p) => p,
+      isWindows: false,
+    });
+
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("no 'squirrel' found");
+    expect(check.fix).toBe("Add /home/u/.local/bin to PATH");
+  });
+
+  test("a recorded bin dir that can't be a link target warns instead of throwing", () => {
+    const check = checkInstallLocation({
+      loadUser: user("relative/bin"),
+      which: () => null,
+      realpath: (p) => p,
+      isWindows: false,
+    });
+
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("unusable");
+  });
+});

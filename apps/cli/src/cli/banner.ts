@@ -26,6 +26,7 @@ import { trackTelemetryEvent } from "@/self/telemetry";
 import {
   isAutoUpdateEligible,
   isAutoUpdateFallbackActive,
+  updateLandingWarnings,
 } from "@/self/updater";
 
 import { version } from "../../package.json";
@@ -183,8 +184,14 @@ export function printEndOfRunUpdateReminder(settings: UserSettings): void {
 
 /**
  * One-time notice after a background auto-update has taken effect.
- * Prints only when this process is already running the new version,
- * then clears the marker.
+ * Prints when this process is running the new version, then clears the marker.
+ *
+ * It also prints when it ISN'T — but only for an update the silent updater
+ * recorded as landing off the user's PATH (#293). That case is precisely the
+ * one where the new version can never arrive on its own: the old binary keeps
+ * being resolved, the marker keeps being deferred, and the user is told
+ * nothing while every later update repeats the trick. Nik ran v0.0.81 for five
+ * weeks that way. Warning is worth breaking the "new version only" rule for.
  */
 export async function printAutoUpdateAppliedNotice(
   settings: UserSettings
@@ -192,13 +199,27 @@ export async function printAutoUpdateAppliedNotice(
   const applied = settings.auto_update_applied;
   if (!applied) return;
 
-  // Still running the old binary (e.g. resolved before the symlink flip) —
-  // keep the marker for the run that actually lands on the new version.
-  if (applied.to_version !== version) return;
+  const onNewVersion = applied.to_version === version;
+  const warnings = applied.landing
+    ? updateLandingWarnings(applied.landing)
+    : [];
+
+  // Still running the old binary (e.g. resolved before the symlink flip) with
+  // nothing to warn about — keep the marker for the run that lands on the new
+  // version.
+  if (!onNewVersion && warnings.length === 0) return;
 
   if (settings.notifications) {
-    const msg = `✓ squirrel auto-updated v${applied.from_version} → v${applied.to_version}`;
-    console.error(useColor ? pc.green(msg) : msg);
+    if (onNewVersion) {
+      const msg = `✓ squirrel auto-updated v${applied.from_version} → v${applied.to_version}`;
+      console.error(useColor ? pc.green(msg) : msg);
+    } else {
+      const msg = `squirrel installed v${applied.to_version}, but this command is still v${version}.`;
+      console.error(useColor ? pc.yellow(msg) : msg);
+    }
+    for (const warning of warnings) {
+      console.error(useColor ? pc.yellow(warning) : warning);
+    }
   }
 
   const { updateSettings } = await import("@/self/settings");

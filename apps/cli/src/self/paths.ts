@@ -270,6 +270,77 @@ export function getUnmanagedUpdateHint(): string {
   return "re-install from https://install.squirrelscan.com";
 }
 
+/**
+ * realpathSync that degrades to the input instead of throwing. A dangling
+ * symlink (release directory pruned) and a path that simply isn't there both
+ * still have to be reportable — the caller is diagnosing exactly that.
+ */
+export function safeRealpath(
+  path: string,
+  realpath: (p: string) => string = realpathSync
+): string {
+  try {
+    return realpath(path);
+  } catch {
+    return path;
+  }
+}
+
+export interface PathBinary {
+  /** The entry PATH resolves, e.g. /usr/local/bin/squirrel. */
+  binary: string;
+  /** What that entry actually runs (symlinks followed). */
+  target: string;
+}
+
+export interface ResolveOnPathDeps {
+  which?: (command: string) => string | null;
+  realpath?: (path: string) => string;
+  isWindows?: boolean;
+}
+
+/**
+ * The `squirrel` the user's PATH would run, or null when PATH has none.
+ *
+ * `self update` flips the link recorded at install time, which is not
+ * necessarily the binary the user's shell resolves: a stale `install_bin_dir`,
+ * a second install earlier on PATH, or a bin dir that was never added to PATH
+ * all leave the update landing somewhere invisible while the CLI reports
+ * success (#293). Answering "what will actually run next time" needs the PATH
+ * lookup, not the recorded path.
+ */
+export function resolveSquirrelOnPath(
+  deps: ResolveOnPathDeps = {}
+): PathBinary | null {
+  const isWindows = deps.isWindows ?? platform() === "win32";
+  const which =
+    deps.which ??
+    ((command: string) =>
+      typeof Bun === "undefined" ? null : Bun.which(command));
+
+  let found: string | null = null;
+  try {
+    found = which("squirrel");
+    // Bun.which resolves PATHEXT itself, but ask for the explicit name too so
+    // a lookup that only matches the extension still finds the binary.
+    if (!found && isWindows) found = which("squirrel.exe");
+  } catch {
+    return null;
+  }
+  if (!found) return null;
+
+  return { binary: found, target: safeRealpath(found, deps.realpath) };
+}
+
+/**
+ * Path equality for comparing resolved binaries. Windows paths are compared
+ * case-insensitively; POSIX paths are not (two names differing only in case
+ * are two different files there).
+ */
+export function samePath(a: string, b: string, isWindows: boolean): boolean {
+  return isWindows ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
 export function isBinInPath(customBinDir?: string): boolean {
   const binDir = customBinDir ?? getSquirrelPaths().bin;
   const pathEnv = process.env.PATH ?? "";

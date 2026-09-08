@@ -12,7 +12,22 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]
+- A `## [Unreleased]` section collects merged changes that have not been cut into
+  a release yet; rename it to the version when the release goes out.
+
+## [Unreleased]
+
+### Fixed
+
+- `squirrel self update` now checks that the binary your PATH resolves is the one
+  it just installed, and says so when it isn't. It used to flip the symlink
+  recorded at install time and report success on that alone, so a stale
+  `install_bin_dir` (or a second `squirrel` earlier on PATH) left you running the
+  old version after every "Updated to vX". A recorded bin directory that no longer
+  exists is now dropped, and the update falls back to the default one. #293
+- `squirrel self doctor` gained an Install location check: the recorded
+  `install_bin_dir`, the link and the release version it points at, and the
+  `squirrel` your PATH actually resolves, with a warning when they disagree. #293
 
 ## v0.0.92
 
