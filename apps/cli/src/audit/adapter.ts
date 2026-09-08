@@ -10,6 +10,8 @@ import {
   setAdapterLogger,
   STREAM_BATCH_BYTES,
   type AdapterLogger,
+  type RuleCacheStats,
+  type RuleCacheStore,
   type StreamingRulePhase,
 } from "@squirrelscan/audit-engine";
 import {
@@ -828,8 +830,14 @@ export function runStreamingRules(
   opts?: {
     batchSize?: number;
     onPhase?: (phase: StreamingRulePhase, boundary: "start" | "end") => void;
+    /** Per-page rule-result cache (#1990); omitted → every page runs. */
+    ruleCache?: { store: RuleCacheStore; engineVersion: string };
   }
-): Effect.Effect<RuleExecutionResult, never, never> {
+): Effect.Effect<
+  RuleExecutionResult & { ruleCache: RuleCacheStats },
+  never,
+  never
+> {
   return runStreamingRulesCore(storage, crawlId, config, assets, scope, opts);
 }
 

@@ -1426,6 +1426,104 @@ gates count calls as well as compare values: a rule declaring
 `verdictScope: "template"` must run once per CLUSTER and an undeclared one once per
 PAGE, and the pass reports the invocations it removed.
 
+## Caching a page's rule results: the re-audit that was not faster
+
+The re-audit measurement above ends on a flat statement: a second audit of an
+unchanged 2,500-page estate fetched nothing and was not faster, because parse,
+page rules, the page-time collectors and report reconstruction re-run in full on
+every page whether or not that page changed. This is what caching that work
+instead of the bytes is worth
+([squirrelscan/repo#1990](https://github.com/squirrelscan/repo/issues/1990)).
+
+A page replays its stored rule results when every input those rules read is
+unchanged: the page's exact HTML bytes, its status, headers, redirect chain and
+response timings, the build that produced the results, and the enabled rules with
+their resolved options. A replayed page is never parsed and its rules never run.
+Site-scope rules always run.
+
+Both arms are the SAME build. `SQUIRREL_RULE_CACHE=0` is the only difference,
+which is the point: an A/B across two builds is an A/B across two of everything.
+2,500 pages of the mixed synthetic estate, one pinned origin across each pair, a
+fresh content store per pair, load average 3.5 to 4.3 throughout.
+
+| stage | wall | rules phase | report phase | crawl | project.db |
+|---|---|---|---|---|---|
+| cache off, cold | 186 s | 128 s | 22 s | 34 s | 258 MB |
+| cache off, warm | 171 s | 131 s | 23 s | 15 s | 516 MB |
+| cache on, cold | 186 s | 124 s | 17 s | 44 s | 291 MB |
+| **cache on, warm** | **44 s** | **12 s** | 19 s | 13 s | 579 MB |
+
+**The warm rules phase falls from 131 s to 12 s, and the warm run from 171 s to
+44 s.** All 2,500 pages replayed, which the report says and nothing else in it
+does — the findings are identical by construction.
+
+Read the rules-phase column rather than the wall. The rules phase is where the
+change is, it is 12 s against 131, and no plausible amount of box noise closes
+that; the wall carries the crawl and report phases, which this does not touch.
+
+**Byte-identity holds at scale.** The cache-on cold and warm reports are
+identical, all 3,044,401 bytes of them, once `meta.timestamp` and the replay
+disclosure itself are removed. That is 2,500 pages replayed against 2,500 pages
+evaluated, on the full default rule surface.
+
+Two things the warm row makes visible that were hidden behind the rules phase:
+
+- **Report reconstruction is now the largest phase of a re-audit** — 19 s of a
+  44 s run, against 12 s of rules. squirrelscan/repo#1920 was already open on it;
+  it is now the thing to work.
+- **A warm crawl still costs 13 s** with nothing to fetch, which is frontier and
+  bookkeeping work rather than bytes.
+
+### What it costs a cold run, and what that took to establish
+
+The cold arms come in at the same wall (186 s each) and the cache-on rules phase
+is 4 s FASTER than the cache-off one, which it cannot actually be: a cold run with
+the cache on does strictly more work. **The cost is below what this box can
+resolve**, and the honest statement is that and not "free".
+
+It was not always below it. At gzip's default level 6 the same comparison, run as
+four interleaved cold stages, put the cache-on rules phase 9.4% above cache-off
+at the minimum of two repeats (127 s to 139 s) — one payload per page serialized
+and compressed on the run that gets nothing back for it. Dropping to level 1 is
+what moved it under the noise floor, and it is the right trade here because these
+rows are retired with their crawl: the extra bytes live no longer than the audit
+does, while the cold run's cost is paid by every first-time user.
+
+Storage: `project.db` grows 12.8% (258 to 291 MiB cold, 516 to 579 warm). The rows
+are retired with their crawl, so `squirrel self disk --prune` reclaims them with
+everything else that audit holds and the retention window bounds them, rather than
+a permanent second copy accumulating.
+
+### Two findings from building it
+
+**`pages.content_hash` cannot be the key, and looks like it can.** It is a
+whitespace-NORMALIZED hash, so the incremental crawler can call a reformatted page
+unchanged. Two pages that differ only in whitespace share it and parse to
+different word counts, inline-script lengths and `<pre>` text. Keying on it would
+have replayed one page's verdicts onto another's markup, and every gate would have
+stayed green, because no fixture contains that pair. The cache keys on a new
+exact-bytes hash instead, which the content store had already computed.
+
+**Hashing the run context whole made the cache do nothing, silently.** The first
+implementation hashed the `SiteData` fields page rules read as whole objects. One
+of their fields is `cacheReason`: "cache-hit reason if reused from a prior crawl;
+null on a real fetch". Null on every cold run and set on every warm one, so the
+run context differed between exactly the two runs that are supposed to match,
+every page missed, and the feature reported success while saving nothing. The key
+now covers only the entry fields rules actually read, and a test proxies those
+entries to fail if a rule reads one outside the list. **A cache that stops hitting
+is indistinguishable from a cache that is working unless something counts the
+hits** — which is why the replayed-page count is in the report and asserted in the
+gates rather than inferred from a wall-clock delta.
+
+### Attributing the rules phase at all
+
+`phases.ts` printed `rules n/a` for every run on the streamed pipeline: it read
+the two v1 spans, which #252 stopped emitting. The CLI has computed the whole
+per-phase breakdown since #857 but only at debug level, so it now also writes one
+machine-readable line to the trace log — the flag whose entire job is timing
+attribution. Every rules-phase number in this section comes from it.
+
 ## Still open
 
 - Site rules were measured as quadratic in page count (4 s at 400 pages, 99 s

@@ -339,12 +339,43 @@ Changing scope-affecting config (`include`, `exclude`, `allow_query_params`, `dr
 
 ## Caching
 
-SquirrelScan caches page content locally. On subsequent audits:
+squirrelscan caches page content locally. On subsequent audits:
 
 - **304 Not Modified**: Uses cached content (fast)
 - **200 OK**: Fetches fresh content (slower)
 
 Use `--refresh` to bypass the cache entirely.
+
+### Rule results
+
+Skipping the fetch only saves the download. squirrelscan also caches the rule
+results for each page, so a re-audit of a page nothing has touched replays its
+findings instead of parsing the page and running its rules again. On a site that
+has not changed, this is most of the audit.
+
+A page replays only when every input its rules read is unchanged:
+
+- the page's exact HTML, byte for byte
+- its status, headers, redirect chain and response timings
+- the version of squirrel that produced the results
+- which rules are enabled, and the options they run with
+
+Change any of them and that page is audited again. Rules that read the whole site
+rather than one page always run.
+
+Every report says what happened, so you never have to guess whether you are
+reading a fresh measurement:
+
+```json
+"rulesCache": { "pagesReplayed": 2480, "pagesEvaluated": 20 }
+```
+
+`--refresh` turns it off along with the page cache. To turn off only the rule
+cache, set `SQUIRREL_RULE_CACHE=0`.
+
+Cached results live in the project database and are removed with the audit they
+belong to, so [`squirrel self disk --prune`](/cli/self#disk) reclaims them along
+with everything else that audit is holding.
 
 ## Audit history
 

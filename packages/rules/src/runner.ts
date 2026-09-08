@@ -17,6 +17,7 @@ import type {
   ParsedPage,
   Rule,
   RuleContext,
+  RuleMeta,
   RuleRunResult,
   SiteData,
 } from "./types";
@@ -198,6 +199,29 @@ export class RuleRunner {
   // Get list of enabled rules
   getEnabledRules(): Rule[] {
     return this.enabledRuleIds.map((id) => this.rules.get(id)!);
+  }
+
+  /**
+   * The enabled PAGE rules in execution order, each with the options it will
+   * actually run with (squirrelscan/repo#1990).
+   *
+   * This is what a per-page rule-result cache keys on, so it must be the resolved
+   * options and not the raw config: a rule's Zod defaults are part of its verdict,
+   * and a rules-package upgrade that changes a default has to invalidate cached
+   * results even when nobody edited squirrel.toml. Returned as an ARRAY because
+   * order is part of the identity — reordering the rule set reorders the flat
+   * per-page check list, which the report renders.
+   */
+  pageRuleSignature(): Array<{ id: string; options: Record<string, unknown> }> {
+    return this.getEnabledRules()
+      .filter((rule) => rule.meta.scope === "page")
+      .map((rule) => ({ id: rule.meta.id, options: getRuleOptions(rule, this.config) }));
+  }
+
+  /** `meta` for an enabled rule, or undefined. Lets a cached result be re-assembled
+   *  into a {@link RuleRunResult} with the LIVE meta rather than a stored copy. */
+  getRuleMeta(ruleId: string): RuleMeta | undefined {
+    return this.rules.get(ruleId)?.meta;
   }
 
   /**
