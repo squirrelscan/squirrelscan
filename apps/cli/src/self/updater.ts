@@ -1116,10 +1116,14 @@ export function updateLandingWarnings(landing: UpdateLanding): string[] {
     // npm owns would overwrite npm's wrapper, and the next `npm install -g`
     // would put it back. The wrapper prefers the DEFAULT managed link, so the
     // fix is to give it one, or to update the npm copy on its own terms.
+    // The PATH re-order leads because it is safe whatever that binary is: the
+    // thing on PATH can be a launcher script somebody else owns (npm's Windows
+    // .cmd shim, an `npm link`ed checkout), and re-installing over its
+    // directory would clobber it. --bin-dir stays available, conditionally.
     lines.push(
       landing.path_via
         ? `Fix: that is the npm wrapper (${landing.path_via}); run 'squirrel self install' so it finds the managed release, or 'npm install -g squirrelscan@latest'.`
-        : `Fix: squirrel self install --bin-dir ${dirname(landing.path_binary)}, or put ${linkDir} ahead of it in PATH.`
+        : `Fix: put ${linkDir} ahead of ${dirname(landing.path_binary)} in PATH. If ${dirname(landing.path_binary)} is where you want updates to land, re-install with: squirrel self install --bin-dir ${dirname(landing.path_binary)}`
     );
   } else if (landing.on_path === "missing") {
     lines.push(

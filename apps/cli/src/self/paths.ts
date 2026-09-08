@@ -307,12 +307,23 @@ export interface ResolveOnPathDeps {
 
 /**
  * True for the npm package's `bin/squirrel.js` wrapper (npm links it onto PATH
- * as `squirrel`). The `node_modules` test is the same one
- * getUnmanagedUpdateHint uses; `.js` is what separates the wrapper from the
- * binary the package bundles beside it.
+ * as `squirrel`).
+ *
+ * The full installed path is matched, not merely "a .js under node_modules":
+ * emulating this wrapper's dispatch means reporting the managed binary as what
+ * runs, so mistaking SOMEONE ELSE'S launcher for it would turn a real mismatch
+ * into a confident "same" and hide the very thing #293 is about. The
+ * `node_modules` half of the test is the same one getUnmanagedUpdateHint uses.
+ *
+ * Known misses, both erring toward an honest "different": npm on Windows
+ * installs a `squirrel.cmd` shim rather than a link to the .js, and `npm link`
+ * points at a checkout outside node_modules.
  */
 export function isNpmWrapper(path: string): boolean {
-  return path.includes(`${sep}node_modules${sep}`) && path.endsWith(".js");
+  return (
+    path.includes(`${sep}node_modules${sep}`) &&
+    path.endsWith(`${sep}squirrelscan${sep}bin${sep}squirrel.js`)
+  );
 }
 
 /**

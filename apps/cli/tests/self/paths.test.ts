@@ -330,6 +330,27 @@ describe("npm wrapper dispatch (#293)", () => {
     expect(isNpmWrapper(managed)).toBe(false);
   });
 
+  // Emulating the wrapper means REPORTING the managed binary as what runs, so
+  // mistaking another tool's launcher for it would turn a real mismatch into a
+  // confident "same" — the exact failure #293 is about.
+  test("does not claim someone else's launcher under node_modules", () => {
+    const foreign = "/opt/node_modules/other-cli/bin/cli.js";
+    expect(isNpmWrapper(foreign)).toBe(false);
+
+    const resolved = resolveSquirrelOnPath({
+      which: () => "/usr/bin/squirrel",
+      realpath: (p) => (p === "/usr/bin/squirrel" ? foreign : p),
+      exists: () => true,
+      isWindows: false,
+    });
+
+    expect(resolved).toEqual({
+      binary: "/usr/bin/squirrel",
+      target: foreign,
+      via: null,
+    });
+  });
+
   // Anti-drift: the list below is a copy of the wrapper's own, and a silent
   // divergence would make the CLI predict the wrong binary.
   test("the candidate list still matches npm/bin/squirrel.js", () => {

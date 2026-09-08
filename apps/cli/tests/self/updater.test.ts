@@ -1638,7 +1638,9 @@ describe("updater", () => {
         expect(text).toContain("/home/u/.squirrel/releases/0.0.81/squirrel");
         expect(text).toContain(LINK);
         expect(text).toContain("self install --bin-dir /usr/local/bin");
-        expect(text).toContain("/home/u/.local/bin ahead of it in PATH");
+        expect(text).toContain(
+          "put /home/u/.local/bin ahead of /usr/local/bin in PATH"
+        );
       });
 
       // `self install --bin-dir <npm's dir>` would overwrite npm's wrapper and

@@ -173,6 +173,9 @@ describe("checkInstallLocation (#293)", () => {
     expect(check.message).toContain(`install_bin_dir: ${scratch}`);
     expect(check.message).toContain(`link ${scratch}/squirrel`);
     expect(check.message).toContain(`PATH: ${onPath} -> v0.0.81`);
+    expect(check.fix).toContain(
+      "Put /home/u/scratch/bin-beta ahead of /home/u/.local/bin in PATH"
+    );
     expect(check.fix).toContain("--bin-dir /home/u/.local/bin");
   });
 

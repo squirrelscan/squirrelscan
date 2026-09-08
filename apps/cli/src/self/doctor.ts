@@ -311,9 +311,11 @@ export function checkInstallLocation(
       name,
       status: "warn",
       message: `${recordedNote}; ${linkNote}; ${pathNote} (updates land on the link, not on what you run)`,
+      // Same reasoning as updateLandingWarnings: the safe PATH re-order leads,
+      // because what PATH resolves may be a launcher owned by another tool.
       fix: onPath.via
         ? "Run 'squirrel self install' so the npm wrapper finds the managed release, or 'npm install -g squirrelscan@latest'"
-        : `squirrel self install --bin-dir ${dirname(onPath.binary)}, or put ${dirname(linkPath)} ahead of it in PATH`,
+        : `Put ${dirname(linkPath)} ahead of ${dirname(onPath.binary)} in PATH, or re-install with: squirrel self install --bin-dir ${dirname(onPath.binary)}`,
     };
   }
 
