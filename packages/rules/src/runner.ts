@@ -228,6 +228,7 @@ export class RuleRunner {
       const passed = ruleChecks.filter((c) => c.status === "pass").length;
       const failed = ruleChecks.filter((c) => c.status === "fail").length;
       const warned = ruleChecks.filter((c) => c.status === "warn").length;
+      const elapsedMs = performance.now() - ruleStart;
       logger.debug("rule", {
         ruleId: rule.meta.id,
         ...(scopeForLog ? { scope: scopeForLog } : { pageUrl: ctx.page.url }),
@@ -235,7 +236,12 @@ export class RuleRunner {
         passed,
         failed,
         warned,
-        durationMs: Math.round(performance.now() - ruleStart),
+        durationMs: Math.round(elapsedMs),
+        // Whole-ms rounding above sums to nonsense across hundreds of pages
+        // (a sub-ms rule sums to zero, a 1.4 ms rule sums 40% high), so the
+        // profiler also emits unrounded microseconds. Keep both: `durationMs`
+        // is what the older bench scripts read.
+        durationUs: Math.round(elapsedMs * 1000),
       });
       return { meta: rule.meta, checks: ruleChecks };
     };

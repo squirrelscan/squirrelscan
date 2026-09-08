@@ -19,6 +19,7 @@ import type { LeakedSecret } from "./security/leaked-secrets";
 import type { PageFingerprint } from "./integrity/fingerprint";
 import type { ParsedPage } from "./types";
 
+import { logger, profileRules } from "./logger";
 import { detectPageSignals } from "./integrity/signals";
 import { extractPageByteSignal } from "./performance/total-byte-weight";
 import { fingerprintPage } from "./integrity/fingerprint";
@@ -104,19 +105,51 @@ export function buildCollectedPageSignal(input: {
   // silent golden-only divergence between the collector and the legacy site pass.
   const signalCtx: PageSignalContext = { parsed, page: { url, finalUrl } };
 
-  const byteSignal = extractPageByteSignal(doc);
+  // The collector moved six site rules' per-page DOM work OUT of the site pass,
+  // which also moved it out of the per-rule profile: leaked-secrets' ~100 ms/page
+  // scan stopped showing up anywhere (#1864). Time each extractor under
+  // SQUIRREL_RULE_PROFILE and report it against the rule that owns it, so the
+  // profile still accounts for the page's whole rules-phase cost.
+  const timed = profileRules
+    ? <T>(ruleId: string, fn: () => T): T => {
+        const started = performance.now();
+        const out = fn();
+        const elapsedMs = performance.now() - started;
+        logger.debug("rule", {
+          ruleId,
+          scope: "collect",
+          pageUrl: url,
+          checks: 0,
+          passed: 0,
+          failed: 0,
+          warned: 0,
+          durationMs: Math.round(elapsedMs),
+          durationUs: Math.round(elapsedMs * 1000),
+        });
+        return out;
+      }
+    : <T>(_ruleId: string, fn: () => T): T => fn();
+
+  const byteSignal = timed("perf/total-byte-weight", () => extractPageByteSignal(doc));
 
   return {
     url,
-    secrets: scanPageForSecrets(doc, url),
+    secrets: timed("security/leaked-secrets", () => scanPageForSecrets(doc, url)),
     inlineCssLen: byteSignal.inlineCssLen,
     inlineJsLen: byteSignal.inlineJsLen,
     externalCssCount: byteSignal.externalCssCount,
     externalJsCount: byteSignal.externalJsCount,
     imageCount: byteSignal.imageCount,
-    fingerprint: input.fingerprint !== undefined ? input.fingerprint : fingerprintPage(parsed, url),
-    signals: [...detectPageSignals(signalCtx)],
-    scriptSrcs: pageScriptSrcs(doc),
-    subprocessorMatch: matchSubprocessorLink(doc, url),
+    // Only the branch that actually computes is timed: a caller that hands in a
+    // fingerprint (#1949) does no work here and should not be charged for one.
+    fingerprint:
+      input.fingerprint !== undefined
+        ? input.fingerprint
+        : timed("integrity/template-discontinuity", () => fingerprintPage(parsed, url)),
+    signals: timed("integrity/orphan-page", () => [...detectPageSignals(signalCtx)]),
+    scriptSrcs: timed("adblock/blocked-links", () => pageScriptSrcs(doc)),
+    subprocessorMatch: timed("legal/subprocessor-disclosure", () =>
+      matchSubprocessorLink(doc, url)
+    ),
   };
 }

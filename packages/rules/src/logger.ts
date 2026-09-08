@@ -3,7 +3,9 @@
 
 // Set SQUIRREL_RULE_PROFILE=1 to emit per-rule timings to stderr (used when
 // profiling the rules phase, e.g. via apps/cli/scripts/bench-audit.ts).
-const profileRules = !!process.env.SQUIRREL_RULE_PROFILE;
+/** True when SQUIRREL_RULE_PROFILE=1. Exported so a hot path can skip building
+ *  timings at all rather than paying for them and throwing them away. */
+export const profileRules = !!process.env.SQUIRREL_RULE_PROFILE;
 
 export const logger = {
   debug: (category: string, data?: Record<string, unknown>) => {
