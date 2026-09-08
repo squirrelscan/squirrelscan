@@ -5,7 +5,7 @@ license: See LICENSE file in repository root
 compatibility: Requires squirrel CLI installed and accessible in PATH (or guides the user to install it)
 metadata:
   author: squirrelscan
-  version: "1.2"
+  version: "1.3"
 allowed-tools: Bash(squirrel:*) Read
 ---
 
@@ -55,7 +55,7 @@ If `squirrel` is not found, ensure `~/.local/bin` is in PATH, or reinstall from 
 | `squirrel credits` | Cloud credit balance + feature pricing |
 | `squirrel mcp` | Run the local MCP server (stdio) |
 | `squirrel skills` | Install or update agent skills |
-| `squirrel self` | install / update / doctor / completion / version / settings / uninstall |
+| `squirrel self` | install / update / doctor / disk / completion / version / settings / uninstall |
 | `squirrel feedback` | Send feedback to the squirrelscan team |
 
 Every command supports `--help`.
@@ -193,7 +193,22 @@ squirrel self doctor       # health checks
 squirrel self update       # update the binary
 squirrel self completion   # shell completions
 squirrel skills update     # update installed agent skills
+squirrel self disk         # per-project and total ~/.squirrel disk use
 ```
+
+### Reclaiming disk space
+
+Every audit keeps its full history in the project database, so re-auditing the same site grows `~/.squirrel` by roughly one audit each run (a 1,000-page site is about 95 MB per audit). `squirrel self disk` shows where the space is. `--prune` retires the audits beyond the newest `--keep` and rebuilds the database so the space returns to the filesystem:
+
+```bash
+squirrel self disk --prune --keep 3 --dry-run   # list what would go, delete nothing
+squirrel self disk --prune --keep 3             # prints the plan, asks, then retires
+squirrel self disk --prune --keep 3 --project my-project --yes
+```
+
+- `--keep <n>` is required: a retired audit's report can no longer be rendered, and `report --list`, `--diff` and `--regression-since` reach into that history, so the window is the user's call. Ask before choosing it for them.
+- Retiring keeps everything the next audit reads (newest page record per URL, sub-resources, links, images), so an incremental re-crawl still gets its `ETag`s and does not refetch the site.
+- Audits never prune on their own. Requires squirrel 0.0.92 or later; on older versions run `squirrel self update` first.
 
 ## Troubleshooting
 
