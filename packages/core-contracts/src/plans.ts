@@ -12,28 +12,16 @@ export const SCHEDULE_FREQUENCIES: readonly ScheduledAuditFrequency[] = [
   "monthly",
 ];
 
-/**
- * #1274 (follow-up to #1020): explicit gate for Team's 5,000-page ladder
- * value actually taking effect. Team's `maxPagesPerAudit` below stays a fixed
- * 5,000 unconditionally — that's the plan's nominal/marketing ceiling, and
- * pricing.tsx always displays it. This flag is a SEPARATE, narrower switch
- * consulted only by hosted plan enforcement, which uses Pro's 2,000 ceiling
- * for Team instead of the raw 5,000 while this is
- * `false`.
- *
- * Why not just gate on `REPORT_LIMITS.maxPages` rising (#1020's original
- * design)? That constant is shared with unrelated schema/crawl-cap concerns
- * and could rise for a reason that has nothing to do with #1023 — this flag
- * makes the ACTUAL gate condition ("has #1023 stage 1, chunked/streaming
- * publish past the 20MB payload gate, landed?") explicit and greppable
- * instead of an implicit side effect. `planMaxPages()` still applies
- * `Math.min(raw, REPORT_LIMITS.maxPages)` as a hard backstop regardless of
- * this flag, so even a premature flip here can't dispatch a crawl the
- * publish pipeline can't ingest.
- *
- * Flip to `true` in the #1023/#1021 finish-line PR — not before.
- */
-export const TEAM_MAX_PAGES_UNLOCKED = false;
+// #1274's TEAM_MAX_PAGES_UNLOCKED flag is GONE (#1028). It existed to stop an
+// unrelated rise in `REPORT_LIMITS.maxPages` from silently unlocking Team's
+// ladder step before #1023 stage 1 (chunked/streaming publish past the 20MB
+// payload gate) had landed. That work has landed — the API ingests findings as
+// streamed NDJSON chunks — and the ceilings below were raised deliberately for
+// exactly that reason, so the gate has nothing left to gate. A constant that is
+// permanently `true` is not a safety net, it is an extra hop every reader of
+// `planMaxPages()` has to follow. `Math.min(raw, REPORT_LIMITS.maxPages)` in
+// planMaxPages() remains the single hard backstop: no plan can ever dispatch a
+// crawl the report pipeline cannot ingest.
 
 // maxWebsites is a HIDDEN abuse cap (100 for every plan) — pricing is purely
 // subscription + credits. Never surface website limits in UI or marketing.
@@ -62,7 +50,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // auth, which is evaluation, not a paid job.
     customHeaders: true,
     // #1020 ladder: matches Screaming Frog's free-tier crawl cap and today's
-    // `full` coverage preset ceiling.
+    // `full` coverage preset ceiling. Held at 500 through #1028's raise: free
+    // audits run on the 4 GiB container class, and a 10,000-page audit retains
+    // ~4.4 GB — the ceiling is a memory fact here, not a pricing choice.
     maxPagesPerAudit: 500,
     unlimitedCredits: false,
     selfServe: true,
@@ -93,7 +83,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
-    // #1020 ladder: today's cloud REPORT_LIMITS.maxPages ceiling.
+    // #1028 ladder: unchanged at 2,000. Pro is a single-seat plan for ordinary
+    // sites; Team is where the raised ceiling is the product.
     maxPagesPerAudit: 2000,
     unlimitedCredits: false,
     selfServe: true,
@@ -122,11 +113,11 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
-    // #1020 ladder: exceeds today's REPORT_LIMITS.maxPages (2,000) on purpose —
-    // Hosted plan enforcement clamps to that cap, so this only takes effect
-    // once the report/publish ingest ceiling is raised separately (see the
-    // maxPagesPerAudit doc comment on PlanDefinition in index.ts).
-    maxPagesPerAudit: 5000,
+    // #1028 ladder: Team is where large-site auditing lives. 10,000 is the
+    // measured ceiling of the paid standard-4 container class (#1869): a
+    // 10,000-page audit retains ~4.4 GB, which fits 8/12 GiB and does not fit
+    // free's 4 GiB. Equal to REPORT_LIMITS.maxPages, so nothing clamps it.
+    maxPagesPerAudit: 10000,
     unlimitedCredits: false,
     selfServe: true,
     perSeat: {
@@ -169,10 +160,12 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
-    // NOT subject to TEAM_MAX_PAGES_UNLOCKED — that flag gates Team's ladder
-    // step specifically (#1274). Enterprise carries its own allowance, still
-    // clamped at dispatch by `REPORT_LIMITS.maxPages` like every other plan.
-    maxPagesPerAudit: 5000,
+    // At least Team's ceiling, never below it (#1028) — a contracted plan that
+    // audited fewer pages than the tier under it would be a pricing bug. Kept
+    // as its own literal rather than a reference to Team's so a Team-tier
+    // change is a deliberate decision here too; still clamped at dispatch by
+    // `REPORT_LIMITS.maxPages` like every other plan.
+    maxPagesPerAudit: 10000,
     unlimitedCredits: true,
     selfServe: false,
   },

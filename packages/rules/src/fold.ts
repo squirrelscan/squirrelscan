@@ -158,6 +158,21 @@ export interface PublishSampleLimits {
   maxSourcePagesPerItem: number;
 }
 
+/**
+ * What {@link degradeAndRebuild} needs on top of the per-check sample caps.
+ *
+ * `maxPageStatusBytes` is OPTIONAL by design, and its absence is meaningful
+ * rather than a missing guard: it selects whether `pageStatuses` — sized by
+ * pages CRAWLED, so invisible to per-check sampling — is clipped too. A PRIMARY
+ * publish sample must leave it whole; only a DEGRADE pass, already clipping
+ * every finding's affected pages to fit the payload gate, may give it up. So
+ * `DEFAULT_PUBLISH_SAMPLE` omits it and `PUBLISH_DEGRADE_LIMITS` sets it.
+ */
+export interface PublishDegradeLimits extends PublishSampleLimits {
+  /** Byte budget for `pageStatuses`; omit to leave it whole. */
+  maxPageStatusBytes?: number;
+}
+
 /** Default publish sample: the primary caps applied on every publish (#1167). */
 export const DEFAULT_PUBLISH_SAMPLE: PublishSampleLimits = {
   maxPagesPerCheck: PUBLISH_LIMITS.maxPagesPerCheckPublish,
@@ -334,8 +349,9 @@ export function degradeAndRebuild<
   T extends {
     ruleResults?: Record<string, { checks?: CheckResult[] } | null | undefined> | null;
     siteChecks?: CheckResult[] | null;
+    pageStatuses?: { url: string; status: number }[] | null;
   },
->(report: T, limits: PublishSampleLimits): T {
+>(report: T, limits: PublishDegradeLimits): T {
   const ruleResults = report.ruleResults;
   if (ruleResults && typeof ruleResults === "object") {
     for (const rule of Object.values(ruleResults)) {
@@ -347,8 +363,65 @@ export function degradeAndRebuild<
   if (Array.isArray(report.siteChecks)) {
     report.siteChecks = sampleChecksForPublish(report.siteChecks, limits);
   }
+  if (limits.maxPageStatusBytes !== undefined) {
+    clipPageStatusesToBytes(report, limits.maxPageStatusBytes);
+  }
   return report;
 }
+
+/**
+ * Clip `pageStatuses` to a byte budget — the one part of a published report
+ * whose size tracks PAGES CRAWLED rather than findings found, and which the
+ * per-check sampling above therefore cannot shrink.
+ *
+ * It is a list of every non-2xx page, capped by COUNT at the crawl ceiling, so
+ * its worst case is `pages x REPORT_LIMITS.maxUrlLength`. At the 10,000-page
+ * ceiling (#1028) that is ~20MB against a 20MB gate on its own: the degrade pass
+ * would run, shrink nothing that mattered, and the publish would still fail.
+ *
+ * Clipping is safe in one direction only, which is the direction taken: the
+ * server uses these to STALE carried findings on pages that 404'd, so a shorter
+ * list stales fewer findings and they carry instead. Nothing resolves wrongly.
+ *
+ * A BYTE budget rather than an entry count because bytes are the actual
+ * constraint and entry size varies by three orders of magnitude between a
+ * `/a` and a 2048-character URL. Measured per entry in one pass, so a report
+ * with ordinary URLs keeps thousands of them and one with pathological URLs
+ * keeps few — both landing at the same size.
+ *
+ * `resolutionSignal` is deliberately NOT touched here even though it is the
+ * other crawl-scaled field. Its `crawledUrls` is the SCORING DENOMINATOR on the
+ * complete-store path (audit-engine reconstruct.ts counts clean pages as
+ * "crawled minus failing"), so shrinking it does not degrade the report, it
+ * silently understates the health score. A loud PAYLOAD_TOO_LARGE naming the
+ * page count is a better answer than a quietly wrong score. Reaching that
+ * needs ~10,000 pages whose URLs are all near the 2048-character maximum.
+ *
+ * Exported for direct testing; production callers reach it through
+ * {@link degradeAndRebuild}.
+ */
+export function clipPageStatusesToBytes<
+  T extends { pageStatuses?: { url: string; status: number }[] | null },
+>(report: T, maxBytes: number): T {
+  const statuses = report.pageStatuses;
+  if (!Array.isArray(statuses) || statuses.length === 0) return report;
+  const encoder = new TextEncoder();
+  let used = 2; // the enclosing "[]"
+  let kept = 0;
+  for (const entry of statuses) {
+    // +1 for the separating comma; the first entry over-counts by one byte,
+    // which only ever makes the result smaller than the budget.
+    const size = encoder.encode(JSON.stringify(entry)).length + 1;
+    if (used + size > maxBytes) break;
+    used += size;
+    kept++;
+  }
+  // Idempotent: a second pass over an already-clipped array measures the same
+  // entries and keeps the same count.
+  if (kept < statuses.length) report.pageStatuses = statuses.slice(0, kept);
+  return report;
+}
+
 
 export interface FoldLimits {
   /** Max checks per rule in the published report (REPORT_LIMITS.maxChecksPerRule). */

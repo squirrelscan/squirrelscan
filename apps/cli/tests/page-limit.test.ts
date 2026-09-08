@@ -15,9 +15,10 @@ import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 
 describe("resolvePageLimit", () => {
   test("clamps above the cap and records what was asked for", () => {
-    const limit = resolvePageLimit(10_000);
+    const requested = MAX_PAGES_CAP * 2;
+    const limit = resolvePageLimit(requested);
     expect(limit.effective).toBe(MAX_PAGES_CAP);
-    expect(limit.requested).toBe(10_000);
+    expect(limit.requested).toBe(requested);
     expect(limit.clamped).toBe(true);
   });
 
@@ -70,17 +71,20 @@ describe("pageLimitNotice", () => {
   });
 
   test("keeps the digits of a fractional request", () => {
-    // `(5000.0001).toLocaleString()` is "5,000", which would print "Requested
-    // 5,000 pages, capped at 5,000" — a notice that reads as its own bug.
+    // `(10000.0001).toLocaleString()` is "10,000", which would print "Requested
+    // 10,000 pages, capped at 10,000" — a notice that reads as its own bug.
+    // Written against the cap rather than a literal so it keeps testing the
+    // rounding hazard after the cap moves (#1028 raised it 5,000 → 10,000).
     const notice =
       pageLimitNotice(resolvePageLimit(MAX_PAGES_CAP + 0.0001)) ?? "";
-    expect(notice).toContain("5000.0001");
+    expect(notice).toContain(`${MAX_PAGES_CAP}.0001`);
   });
 
   test("names both numbers when the cap bound", () => {
-    const notice = pageLimitNotice(resolvePageLimit(10_000));
+    const requested = MAX_PAGES_CAP * 2;
+    const notice = pageLimitNotice(resolvePageLimit(requested));
     expect(notice).toBeTruthy();
-    expect(notice).toContain("10,000");
+    expect(notice).toContain(requested.toLocaleString("en-US"));
     expect(notice).toContain(MAX_PAGES_CAP.toLocaleString("en-US"));
   });
 
@@ -90,9 +94,10 @@ describe("pageLimitNotice", () => {
   });
 
   test("does not name the flag, because config reaches the same clamp", () => {
-    // `[crawler] max_pages = 9000` produces this notice too, and telling that
-    // user to change `--max-pages` would send them to the wrong place.
-    const notice = pageLimitNotice(resolvePageLimit(9_000)) ?? "";
+    // `[crawler] max_pages = <over the cap>` produces this notice too, and
+    // telling that user to change `--max-pages` would send them to the wrong
+    // place. Derived from the cap so the request stays over it as it moves.
+    const notice = pageLimitNotice(resolvePageLimit(MAX_PAGES_CAP + 1)) ?? "";
     expect(notice).not.toContain("--max-pages");
   });
 });

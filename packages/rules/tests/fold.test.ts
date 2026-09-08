@@ -6,7 +6,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { CHECK_DETAILS_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  CHECK_DETAILS_LIMITS,
+  MAX_PAGES_CAP,
+  REPORT_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
 
 import { clampItemId } from "@squirrelscan/core-contracts/clamp";
 
@@ -383,10 +387,15 @@ describe("unfoldAggregateCheck", () => {
 });
 
 describe("per-check pages cap (#918)", () => {
-  test("DEFAULT_FOLD_LIMITS.maxPagesPerCheck tracks REPORT_LIMITS, above the crawl ceiling", () => {
+  test("DEFAULT_FOLD_LIMITS.maxPagesPerCheck tracks REPORT_LIMITS and covers a full crawl", () => {
     expect(DEFAULT_FOLD_LIMITS.maxPagesPerCheck).toBe(REPORT_LIMITS.maxPagesPerCheck);
-    // Decoupled from + larger than the crawl-ceiling maxPages (#918).
-    expect(REPORT_LIMITS.maxPagesPerCheck).toBeGreaterThan(REPORT_LIMITS.maxPages);
+    // The point of #918's decoupling: a folded check can list every page of the
+    // largest crawl either surface can dispatch, so nothing is silently clipped.
+    // Asserted against BOTH ceilings rather than "strictly above maxPages" — the
+    // strict form only held while the cloud ceiling sat below the CLI's, and
+    // #1028 raised both to MAX_PAGES_CAP.
+    expect(REPORT_LIMITS.maxPagesPerCheck).toBe(MAX_PAGES_CAP);
+    expect(REPORT_LIMITS.maxPagesPerCheck).toBeGreaterThanOrEqual(REPORT_LIMITS.maxPages);
   });
 
   test("a >2000-page failure keeps every page (no clip at the old 2000 cap)", () => {

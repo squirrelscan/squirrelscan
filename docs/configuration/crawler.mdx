@@ -35,7 +35,7 @@ follow_redirects = true
 
 **Type:** `number`
 **Default:** `100`
-**Range:** `1` to `5000` (capped by CLI)
+**Range:** `1` to `10000` (capped by CLI)
 
 Maximum number of pages to crawl per audit. The literal config default is `100`, but when `max_pages` isn't explicitly set the effective budget follows the [coverage mode](/crawl): `quick` = 25, `surface` = 100, `full` = 500. The default coverage mode is auth-aware: any signed-in account (free or Pro) defaults to `surface`, only anonymous runs default to `quick` (see [Coverage Modes](/cli/audit#coverage-modes)).
 
@@ -60,7 +60,7 @@ squirrel audit https://example.com -m 100
 
 The resolution order is **`--max-pages` / `-m` > non-default `[crawler] max_pages` > coverage-mode default** (`quick` 25, `surface` 100, `full` 500).
 
-**Note:** The CLI enforces a hard cap (currently 5,000 pages) regardless of config or plan - local audits are free and unlimited, and this cap never changes based on your account. When a crawl stops because it hit the limit, the CLI prints a hint naming `--max-pages` and the cap; see [Hitting the page limit](/crawl#hitting-the-page-limit).
+**Note:** The CLI enforces a hard cap (currently 10,000 pages) regardless of config or plan - local audits are free and unlimited, and this cap never changes based on your account. When a crawl stops because it hit the limit, the CLI prints a hint naming `--max-pages` and the cap; see [Hitting the page limit](/crawl#hitting-the-page-limit).
 
 **Cloud audits are different:** an audit dispatched from the dashboard (on-demand or [scheduled](/cloud/scheduled-audits)) is capped per plan instead - see [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit).
 

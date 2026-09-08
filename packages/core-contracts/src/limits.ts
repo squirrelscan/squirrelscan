@@ -199,15 +199,29 @@ export const REPORT_LIMITS = {
   maxPayloadBytes: 20 * 1024 * 1024,
   // Report page-count ceiling for the CLOUD crawl config + sitemap arrays
   // (planMaxPages, cloud/custom-crawl caps all track this). Decoupled from the
-  // per-check pages cap below (#918): raising THIS would raise crawl cost.
-  maxPages: 2000,
+  // per-check pages cap below (#918): raising THIS raises crawl cost.
+  //
+  // 2,000 → 10,000 (#1028): the ceiling was set when a published report carried
+  // one entry per affected page, so payload grew with crawl size. #1167 made the
+  // publish payload FLAT in crawl size (PUBLISH_LIMITS.maxPagesPerCheckPublish
+  // samples each check to 100 pages) and #1023's chunked NDJSON findings ingest
+  // removed the single-body ceiling on findings, so the 20MB gate no longer
+  // scales with pages crawled. The binding constraint is now container MEMORY:
+  // a measured 10,000-page CLI audit peaked at 4,562 MB RSS / 4,425 MB heap
+  // (~0.39 MB retained per page, linear), which fits the standard-4 class paid
+  // plans run on (#1869) and does NOT fit free's 4 GiB — which is why the free
+  // plan's ladder value stays at 500 rather than tracking this.
+  maxPages: 10_000,
   // Max pages a single folded aggregate check may list (fold cap +
-  // checkResultSchema.pages). Set to MAX_PAGES_CAP so a CLI audit crawling up to
-  // the 5000-page ceiling keeps EVERY affected page in the published report
-  // instead of silently clipping past 2000 (#918). Larger than maxPages on
-  // purpose — the fold reduces N per-page checks to ONE aggregate, and the
-  // publish payload guard degrades to a signalled clip before the 20MB gate.
-  maxPagesPerCheck: 5000,
+  // checkResultSchema.pages). Set to MAX_PAGES_CAP so an audit crawling up to
+  // the crawl ceiling keeps EVERY affected page in the published report instead
+  // of silently clipping (#918) — the fold reduces N per-page checks to ONE
+  // aggregate, and the publish payload guard degrades to a signalled clip
+  // before the 20MB gate. Was strictly ABOVE maxPages while the cloud ceiling
+  // (2,000) sat below the CLI's (5,000); now that both ceilings are 10,000 it
+  // EQUALS maxPages, which is the same invariant ("covers a full crawl"), not
+  // a weakening of it.
+  maxPagesPerCheck: 10_000,
   maxChecksPerPage: 200,
   maxItemsPerCheck: 1000,
   maxUrlLength: 2048,
@@ -310,11 +324,19 @@ export const PUBLISH_LIMITS = {
 // dropped key, or a truncated hash set all fall back to pre-#1185 carry
 // behavior on the server — never to a wrong resolve.
 export const RESOLUTION_SIGNAL_LIMITS = {
-  // Full crawled-URL list cap — tracks the CLI crawl ceiling (MAX_PAGES_CAP).
-  maxCrawledUrls: 5_000,
+  // Full crawled-URL list cap — tracks the crawl ceiling (MAX_PAGES_CAP). These
+  // are raw URLs, not hashes, so this is the one axis of the signal that scales
+  // with crawl size: 10,000 typical URLs is ~0.8MB against the 20MB publish
+  // gate. The pathological case (every URL at maxUrlLength) is 20MB, but that
+  // was already 10MB at 5,000 — the ratio is what changed, not the class of
+  // risk. A crawl past this cap degrades safely: pages beyond it fall back to
+  // pre-#1185 carry behavior, never to a wrong resolve.
+  maxCrawledUrls: 10_000,
   // Per-check failing-hash cap — tracks REPORT_LIMITS.maxPagesPerCheck (the
   // fold's own page cap, past which the source list is already incomplete).
-  maxHashesPerCheck: 5_000,
+  // maxHashesTotal below is UNCHANGED, so the signal's total hash budget (and
+  // therefore its worst-case bytes) does not move with this.
+  maxHashesPerCheck: 10_000,
   // Per-MAP hash budget, enforced independently for `failing` and for
   // `notEvaluated` (both by the builder and by the publish schema's refines) —
   // so the schema-permitted worst case is ~200k hashes × ~11 bytes ≈ 2.2MB, not
@@ -336,6 +358,21 @@ export const PUBLISH_DEGRADE_LIMITS = {
   maxPagesPerCheck: 25,
   maxItems: 10,
   maxSourcePagesPerItem: 3,
+  // #1028: byte budget for `pageStatuses`, the one published field sized by
+  // PAGES CRAWLED rather than by findings and therefore invisible to the
+  // per-check caps above. It lists every non-2xx page, count-capped at the crawl
+  // ceiling, so at 10,000 pages of maxUrlLength URLs it is ~20MB on its own
+  // against a 20MB gate — the degrade pass would run, shrink nothing that
+  // mattered, and the publish would still fail. Clipping it only means fewer
+  // carried findings get staled (they carry instead), never a wrong resolve.
+  //
+  // 4MB is a fifth of the gate: generous for any real site (an ordinary URL is
+  // ~60 bytes, so this is tens of thousands of broken pages) while leaving the
+  // rest of the budget to the report. Bytes, not a count, because entry size
+  // varies by three orders of magnitude with URL length. See
+  // clipPageStatusesToBytes in the rules pkg, which also explains why
+  // `resolutionSignal` is left alone.
+  maxPageStatusBytes: 4 * 1024 * 1024,
 } as const;
 
 // ── Coverage Mode Page Limits ───────────────────────────────────
@@ -345,7 +382,17 @@ export const COVERAGE_PAGE_LIMITS = {
   full: 500,
 } as const satisfies Record<CoverageMode, number>;
 
-export const MAX_PAGES_CAP = 5_000;
+// Hard ceiling on a single crawl, applied by the CLI (resolvePageLimit) and by
+// every cloud dispatch path via REPORT_LIMITS.maxPages, which now equals it.
+// 5,000 → 10,000 (#1028): see the memory arithmetic on REPORT_LIMITS.maxPages.
+//
+// ROLLOUT: server before CLI. The API validates a publish against ITS OWN copy
+// of these constants, and rejects the whole payload rather than clamping it, so
+// a CLI binary built with this cap publishing to an API still on the old one
+// fails outright — for `pageStatuses` (was capped at the old maxPages) that
+// bites at 2,001 pages, well below the new ceiling. Deploy the hosted side
+// first, then cut the CLI release.
+export const MAX_PAGES_CAP = 10_000;
 
 // Upper bound for the CLI --concurrency / --per-host flags (#1068). Guards
 // against an absurd worker-pool size; mirrors MAX_PAGES_CAP's clamp posture.

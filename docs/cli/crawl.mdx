@@ -22,7 +22,7 @@ squirrel crawl <url> [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--max-pages` | `-m` | Maximum pages to crawl (hard cap 5,000) | coverage default (`quick` = 25) |
+| `--max-pages` | `-m` | Maximum pages to crawl (hard cap 10,000) | coverage default (`quick` = 25) |
 | `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
 | `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
 | `--coverage` | `-C` | Coverage mode: `quick`, `surface`, `full` | `quick` |
@@ -47,7 +47,7 @@ Unlike [`audit`](/cli/audit#coverage-modes), whose default coverage is auth-awar
 500 is `full` coverage's page budget, not the default.
 
 The page budget resolves as **`--max-pages` / `-m` > non-default `[crawler] max_pages` >
-coverage-mode default**, capped at 5,000 pages either way. Switch modes with
+coverage-mode default**, capped at 10,000 pages either way. Switch modes with
 `--coverage` (or `[crawler] coverage` in config), or override the budget directly
 with `--max-pages`. See [Crawling & Coverage](/crawl) for how each mode behaves.
 

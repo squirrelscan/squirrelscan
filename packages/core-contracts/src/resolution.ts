@@ -77,12 +77,14 @@ const FNV32_PRIME = 0x01000193;
  * — which is why the builder computes that complement over normalized URLs
  * rather than over hashes (see rules/src/resolution.ts).
  *
- * The accepted cost of 32 bits is over-carrying: at the 5,000-page crawl
- * ceiling the birthday odds of any collision are ~0.3%, and each one merely
- * keeps one finding open a cycle longer. If per-signal page counts ever grow
- * well past that ceiling, widen the hash rather than reasoning about the
- * collision rate — but note that changing it breaks producer/consumer parity,
- * so it needs the golden-value test updated and a server-before-CLI rollout.
+ * The accepted cost of 32 bits is over-carrying: at the 10,000-page crawl
+ * ceiling (#1028, was 5,000) the birthday odds of any collision in one signal
+ * are ~1.2% (they were ~0.3% at 5,000 — the rate is quadratic in page count),
+ * and each one merely keeps one finding open a cycle longer. That is still the
+ * right trade at this size: the cost of a collision is bounded and benign,
+ * while widening the hash breaks producer/consumer parity and needs the
+ * golden-value test updated plus a server-before-CLI rollout. Revisit if the
+ * ceiling moves again — at 50,000 pages the odds pass 25%.
  */
 export function resolutionUrlHash(normalizedUrl: string): string {
   const bytes = new TextEncoder().encode(normalizedUrl);

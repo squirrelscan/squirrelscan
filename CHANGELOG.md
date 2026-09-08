@@ -18,6 +18,18 @@ How it works:
 
 ### Changed
 
+- **A local audit crawls up to 10,000 pages.** The hard cap on `--max-pages`
+  and `[crawler] max_pages` was 5,000; it is now 10,000, on every plan, local
+  audits being free either way. A 10,000-page audit needs roughly 4.5 GB of
+  memory and takes about fifteen minutes on a laptop, so the cap is a real
+  ceiling rather than a formality: past it, split the audit by section with
+  `include` patterns. Cloud audits follow their plan instead, and Team's
+  ceiling rises to 10,000 with this release.
+
+  Publishing a report from a crawl this size needs an API that accepts it, so
+  update the CLI only after the hosted side has: an older server rejects a
+  publish carrying more than 2,000 page statuses or 5,000 crawled URLs.
+
 - **A local audit no longer holds the whole site in memory.** The CLI's
   post-crawl phases ran the resident pipeline: one parsed page plus its DOM per
   crawled page, held from the end of the crawl through the entire rules pass,

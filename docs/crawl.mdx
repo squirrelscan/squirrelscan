@@ -69,14 +69,14 @@ Every crawl stops once it reaches the **max pages** limit. That limit comes from
 2. **`[crawler] max_pages = N`** in your config, when set to a non-default value.
 3. **Coverage-mode default**: `quick` = 25, `surface` = 100, `full` = 500.
 
-A **hard cap of 5,000 pages** applies on top: any higher value is clamped down to 5,000.
+A **hard cap of 10,000 pages** applies on top: any higher value is clamped down to 10,000.
 
 When the limit is the reason a crawl stopped, the CLI says so and tells you how to scan more:
 
 ```bash
 squirrel audit https://example.com
 # ✓ Audited 100 pages in 42.3s
-# ⚠ Reached max pages (100). Raise with --max-pages <N> or [crawler] max_pages (cap 5000); use -C full for full coverage.
+# ⚠ Reached max pages (100). Raise with --max-pages <N> or [crawler] max_pages (cap 10000); use -C full for full coverage.
 ```
 
 To scan a larger site, raise the limit or switch to `full` coverage:
@@ -97,7 +97,7 @@ max_pages = 2000
 ```
 
 <Note>
-If you've already set the limit to 5,000 (the hard cap) and still hit it, split the audit by section using `include` patterns (e.g. `include = ["/blog/**"]`) and audit each section separately.
+If you've already set the limit to 10,000 (the hard cap) and still hit it, split the audit by section using `include` patterns (e.g. `include = ["/blog/**"]`) and audit each section separately.
 </Note>
 
 See [Crawler Settings → `max_pages`](/configuration/crawler#max-pages) for the full config reference.

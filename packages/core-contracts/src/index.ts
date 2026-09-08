@@ -1508,14 +1508,18 @@ export interface PlanDefinition {
    */
   scheduleFrequencies?: readonly ScheduledAuditFrequency[];
   /**
-   * Raw per-plan cloud-audit page ceiling (#1020 ladder: Free 500 / Pro
-   * 2,000 / Team 5,000). This is the plan's OWN allowance, not the effective
-   * runtime ceiling — hosted dispatch sites clamp it further to
-   * `REPORT_LIMITS.maxPages`, the report/publish ingest cap. Team's raw value
-   * exceeds that cap today on purpose: raising the cap later (separate
-   * engine/report-pipeline work) auto-unlocks Team with no plan-data change.
-   * Local CLI audits are UNAFFECTED — they use their own generous
-   * MAX_PAGES_CAP regardless of plan.
+   * Raw per-plan cloud-audit page ceiling (#1028 ladder: Free 500 / Pro 2,000 /
+   * Team 10,000 / Enterprise 10,000). This is the plan's OWN allowance, not the
+   * effective runtime ceiling — hosted dispatch sites clamp it further to
+   * `REPORT_LIMITS.maxPages`, the report/publish ingest cap. Every ladder value
+   * is at or under that cap today, so nothing is silently clamped; the
+   * `Math.min` in `planMaxPages()` stays as the backstop for the case where the
+   * ingest cap is lowered without the ladder following.
+   *
+   * The ladder is bounded by container MEMORY, not by pricing: a 10,000-page
+   * audit retains ~4.4 GB, which fits the paid standard-4 class (#1869) and not
+   * free's 4 GiB. Local CLI audits are UNAFFECTED — they use MAX_PAGES_CAP
+   * regardless of plan.
    */
   maxPagesPerAudit: number;
   /**

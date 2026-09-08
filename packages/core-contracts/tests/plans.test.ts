@@ -49,7 +49,10 @@ describe("plan definitions", () => {
     expect(plan.renderConcurrency).toBe(10);
     expect(plan.scheduledCrawls).toBe(true);
     expect(plan.customHeaders).toBe(true);
-    expect(plan.maxPagesPerAudit).toBe(5000);
+    expect(plan.maxPagesPerAudit).toBe(10000);
+    // #1028: a contracted plan must never audit fewer pages than the tier
+    // below it, whatever the two literals are set to.
+    expect(plan.maxPagesPerAudit).toBeGreaterThanOrEqual(PLANS.team.maxPagesPerAudit);
   });
 });
 

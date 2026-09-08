@@ -29,9 +29,11 @@ Audits triggered from the dashboard - on-demand ("Run now") and [scheduled](/clo
 |------|---------------------------|
 | Free | 500 |
 | Pro | 2,000 |
-| Team | 2,000 today, rising to 5,000 as report processing scales up |
+| Team | 10,000 |
 
-A crawl config above your plan's ceiling isn't an error - it's clamped automatically, the same way [`render_concurrency`](/configuration/cloud#render_concurrency) is. This limit is separate from the CLI's own crawl cap: `squirrel audit` run locally on your machine crawls up to **5,000 pages on every plan** - see [Crawl Limits](/configuration/crawler#max_pages).
+Free stays at 500 for a technical reason rather than a pricing one: free audits run on a smaller container, and a 10,000-page audit needs several gigabytes of memory to hold the crawl.
+
+A crawl config above your plan's ceiling isn't an error - it's clamped automatically, the same way [`render_concurrency`](/configuration/cloud#render_concurrency) is. This limit is separate from the CLI's own crawl cap: `squirrel audit` run locally on your machine crawls up to **10,000 pages on every plan** - see [Crawl Limits](/configuration/crawler#max_pages).
 
 If you're driving audits through the [REST API](/api/audits/create) or the [MCP server](/developers/mcp), a clamped run's response carries a `notice` field (`type: "page_limit_clamped"`, with the requested and applied page counts and an upgrade hint) so your integration or agent can surface it - the audit still runs normally either way.
 
