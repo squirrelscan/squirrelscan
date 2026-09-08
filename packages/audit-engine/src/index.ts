@@ -194,9 +194,18 @@ export { createSiteQuery } from "./site-query";
 export { extractPageFeatures, isAuditablePage } from "./page-features";
 export { isHtmlContentType } from "./adapter";
 
+// Template cluster key (#1949) — the equality reduction of `fingerprintPage`
+// stored on page_features.template_fp and grouped by SiteQuery.templateClusters().
+export { templateFingerprintKey } from "./template-key";
+
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";
-export type { PageSignalCollector, StreamPageRulesHooks, StreamPageRulesResult } from "./streaming";
+export type {
+  PageSignalCollector,
+  SharedPageSignals,
+  StreamPageRulesHooks,
+  StreamPageRulesResult,
+} from "./streaming";
 
 // Streamed pre-rules phase (#1860) — one batched walk that feeds the asset,
 // external-link, tech-detect, intel and cloud-prefetch collectors together.

@@ -15,8 +15,14 @@ const FNV_PRIME = 1099511628211n;
 const FNV_OFFSET = 14695981039346656037n;
 const MASK64 = (1n << 64n) - 1n;
 
-/** One 64-bit FNV-1a lane over `bytes`, seeded so lanes decorrelate. 16 hex. */
-function fnv1a64(bytes: Uint8Array, seed: bigint): string {
+/**
+ * One 64-bit FNV-1a lane over `bytes`, seeded so lanes decorrelate. 16 hex.
+ *
+ * Exported so the template cluster key (#1949) hashes with the SAME reviewed,
+ * parity-pinned primitive rather than a second hand-rolled one. Changing it
+ * changes both, which the pinned golden in `fingerprint-parity.test.ts` catches.
+ */
+export function fnv1a64(bytes: Uint8Array, seed: bigint): string {
   let h = (FNV_OFFSET ^ seed) & MASK64;
   for (let i = 0; i < bytes.length; i++) {
     h = (h ^ BigInt(bytes[i])) & MASK64;

@@ -243,7 +243,11 @@ describe("extractPageFeatures — field extraction", () => {
     expect(row.richResultTypes).toEqual(["Article"]); // canonical casing, unknown dropped
     expect(row.title).toBe("T"); // raw
     expect(row.transferBytes).toBe(1234); // page.sizeBytes
-    expect(row.templateFp).toBeNull(); // deferred
+    // This fixture's `parsed` is a cast literal with no `document`, so there is
+    // no chrome to fingerprint and the cluster key is null (#1949 populates it
+    // from `fingerprintPage`, which needs a document; see
+    // template-cluster-key-golden.test.ts for the populated cases).
+    expect(row.templateFp).toBeNull();
     expect(row.secretHits).toBeNull(); // deferred
   });
 

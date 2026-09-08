@@ -69,6 +69,15 @@ export function buildCollectedPageSignal(input: {
   url: string;
   finalUrl?: string;
   parsed: ParsedPage;
+  /**
+   * The page's already-computed chrome fingerprint, when the caller built one.
+   * The streamed loop needs the SAME fingerprint for `page_features`' template
+   * cluster key (#1949), and `fingerprintPage` is five `querySelectorAll` passes
+   * over the live DOM — computing it in both places would put a second DOM walk
+   * per page back into the pipeline #1913 exists to keep flat. Passing
+   * `undefined` (or omitting it) computes it here, as before.
+   */
+  fingerprint?: PageFingerprint | null;
 }): CollectedPageSignal {
   const { url, finalUrl, parsed } = input;
   const doc = parsed.document;
@@ -105,7 +114,7 @@ export function buildCollectedPageSignal(input: {
     externalCssCount: byteSignal.externalCssCount,
     externalJsCount: byteSignal.externalJsCount,
     imageCount: byteSignal.imageCount,
-    fingerprint: fingerprintPage(parsed, url),
+    fingerprint: input.fingerprint !== undefined ? input.fingerprint : fingerprintPage(parsed, url),
     signals: [...detectPageSignals(signalCtx)],
     scriptSrcs: pageScriptSrcs(doc),
     subprocessorMatch: matchSubprocessorLink(doc, url),

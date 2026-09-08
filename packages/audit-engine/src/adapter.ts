@@ -2396,10 +2396,19 @@ export function runStreamingRules(
     const collectedPages: CollectedPageSignal[] = [];
     const signalCollector: PageSignalCollector = {
       id: "site-dom-signals",
-      collect(page, parsed) {
+      collect(page, parsed, shared) {
         collectedPages.push(
           detachFromPage(
-            buildCollectedPageSignal({ url: page.normalizedUrl, finalUrl: page.finalUrl, parsed }),
+            // `shared.fingerprint` is the one the loop already built for
+            // page_features' cluster key (#1949) — reusing it keeps this pass at
+            // one DOM walk per page. detachFromPage clones it, so the signal this
+            // array retains does not hold the loop's copy or its page.
+            buildCollectedPageSignal({
+              url: page.normalizedUrl,
+              finalUrl: page.finalUrl,
+              parsed,
+              fingerprint: shared.fingerprint,
+            }),
             "collected-signal",
           ),
         );

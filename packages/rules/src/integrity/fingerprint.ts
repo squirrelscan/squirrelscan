@@ -23,6 +23,31 @@ export interface PageFingerprint {
 
 const CSS_VAR_RE = /--[a-z0-9-]+\s*:/gi;
 
+/**
+ * DOM walks performed by `fingerprintPage` in this process.
+ *
+ * A test seam, mirroring `detachCounts` in audit-engine, and it exists because
+ * nothing about the OUTPUT can prove the walk was paid once. Walking the same
+ * document twice returns an equal fingerprint and an identical cluster key, so
+ * every value assertion still passes when a caller quietly stops sharing the one
+ * the streamed loop built (#1949) and puts a second five-`querySelectorAll` pass
+ * per page back into the pipeline #1913 exists to keep flat. Only the count
+ * distinguishes them.
+ *
+ * Counted after the no-document early return, so it is walks, not calls.
+ */
+let fingerprintWalks = 0;
+
+/** Walks since the last reset. See {@link fingerprintPage}. */
+export function fingerprintWalkCount(): number {
+  return fingerprintWalks;
+}
+
+/** Test seam: the count is process-wide, so a test asserting on it starts here. */
+export function resetFingerprintWalkCount(): void {
+  fingerprintWalks = 0;
+}
+
 /** Build a template fingerprint for one parsed page. */
 export function fingerprintPage(
   parsed: ParsedPage,
@@ -30,6 +55,7 @@ export function fingerprintPage(
 ): PageFingerprint | null {
   const doc = parsed.document;
   if (!doc) return null;
+  fingerprintWalks++;
 
   const assetHosts = new Set<string>();
   const stylesheetHrefs = new Set<string>();

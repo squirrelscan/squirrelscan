@@ -19,12 +19,13 @@
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
 
-import { extractSiteChromeSignal } from "@squirrelscan/rules";
+import { extractSiteChromeSignal, fingerprintPage } from "@squirrelscan/rules";
 
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
-import type { ParsedPage } from "@squirrelscan/rules";
+import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
 
 import { buildHeadersMap, isHtmlContentType } from "./adapter";
+import { templateFingerprintKey } from "./template-key";
 
 /**
  * Whether a crawled page enters the audit the way v1 `runRulesOnStorage` decides:
@@ -80,13 +81,25 @@ function metaRobotsNoindex(robots: string | null): boolean {
  * the stored scalar is byte-identical to the legacy rule computing it inline.
  *
  * `transfer_bytes` is populated from `PageRecord.sizeBytes` (the page document
- * body size). `template_fp` and `secret_hits` are left null — see the PR notes:
- * their would-be consumers (template-discontinuity's fuzzy similarity,
- * leaked-secrets' masked-list output) can't be reproduced from an equality
- * fingerprint / a bare count, and the leaked-secret scanner is not yet a shared
- * export. Populating them is deferred until a rule can dual-path on them.
+ * body size).
+ *
+ * `template_fp` is the chrome-fingerprint equality key (#1949) — see
+ * {@link templateFingerprintKey} for why it is a hash and not the fingerprint,
+ * and why `template-discontinuity`'s fuzzy comparison is unaffected. Pass
+ * `opts.fingerprint` when the caller has ALREADY built the page's
+ * `PageFingerprint` (the streamed loop has, for `buildCollectedPageSignal`);
+ * omitting it computes one here, which costs a second DOM walk. It is deliberately
+ * NOT `null`-by-default on the plain 2-arg call: a caller that forgot to thread it
+ * would silently reproduce the dead column this replaces.
+ *
+ * `secret_hits` is still null: leaked-secrets' output is a masked list that a bare
+ * count can't reproduce, and its scanner is not yet a shared export.
  */
-export function extractPageFeatures(page: PageRecord, parsed: ParsedPage): PageFeatureRow {
+export function extractPageFeatures(
+  page: PageRecord,
+  parsed: ParsedPage,
+  opts?: { fingerprint?: PageFingerprint | null }
+): PageFeatureRow {
   const headers = buildHeadersMap(page);
   // meta+header indexability only; the robots.txt reason is site-level and is
   // appended by the rules from ctx.site.robotsTxt at run time.
@@ -122,7 +135,11 @@ export function extractPageFeatures(page: PageRecord, parsed: ParsedPage): PageF
     visibleDate:
       parsed.visibleDatePublished != null || parsed.visibleDateModified != null,
     transferBytes: page.sizeBytes ?? null,
-    templateFp: null,
+    templateFp: templateFingerprintKey(
+      opts?.fingerprint !== undefined
+        ? opts.fingerprint
+        : fingerprintPage(parsed, page.normalizedUrl)
+    ),
     secretHits: null,
     metaNoindex: metaRobotsNoindex(parsed.meta.robots),
     indexableReasons: indexability.reasons,

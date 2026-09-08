@@ -25,6 +25,19 @@ export {
   extractSiteChromeSignal,
   type SiteChromeSignal,
 } from "./social/asset-divergence";
+// Per-page chrome fingerprint. `template-discontinuity` consumes it by fuzzy
+// similarity; audit-engine reduces the SAME object to page_features' equality
+// cluster key (#1949) and hands it to `buildCollectedPageSignal`, so one DOM
+// walk per page feeds both.
+export {
+  buildBaseline,
+  fingerprintPage,
+  fingerprintWalkCount,
+  resetFingerprintWalkCount,
+  similarityToBaseline,
+  type PageFingerprint,
+  type SiteBaseline,
+} from "./integrity/fingerprint";
 
 // Domain re-exports
 export * as content from "./content";

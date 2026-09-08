@@ -21,9 +21,9 @@ import { Effect } from "effect";
 
 import type { PageRecord } from "@squirrelscan/core-contracts";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
-import type { RuleRunResult, SiteData, PageData, ParsedPage } from "@squirrelscan/rules";
+import type { PageFingerprint, RuleRunResult, SiteData, PageData, ParsedPage } from "@squirrelscan/rules";
 import type { RuleRunner } from "@squirrelscan/rules";
-import { mergeRuleRunResult } from "@squirrelscan/rules";
+import { fingerprintPage, mergeRuleRunResult } from "@squirrelscan/rules";
 
 import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./adapter";
 import { collectDroppedBatch } from "./batch-gc";
@@ -36,16 +36,33 @@ import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
 export const STREAM_PAGE_BATCH = 200;
 
 /**
+ * Per-page values the loop computed for `page_features` and hands to collectors so
+ * they are built ONCE per page rather than once per consumer (#1949).
+ */
+export interface SharedPageSignals {
+  /**
+   * `fingerprintPage(parsed, normalizedUrl)` — five `querySelectorAll` passes over
+   * the live DOM. Both `page_features.template_fp` (as an equality key) and the
+   * collected signal `template-discontinuity` aggregates (as a fuzzy comparand)
+   * need it, and computing it twice would put a second per-page DOM walk back into
+   * the pipeline #1913 exists to keep flat. `null` when the page has no document.
+   */
+  readonly fingerprint: PageFingerprint | null;
+}
+
+/**
  * A per-page collector invoked with the LIVE parsed page during the stream, right
  * next to extractPageFeatures. E-E ships zero registered collectors; E-E2 registers
  * one per DOM-scanning site rule (leaked-secrets, total-byte-weight,
  * template-discontinuity, orphan-page, adblock, subprocessor-disclosure) so their
  * per-page signal is captured with the DOM live and the site pass no longer needs
- * to re-materialize DOMs. The collector MUST NOT retain the DOM past its call.
+ * to re-materialize DOMs. The collector MUST NOT retain the DOM past its call, and
+ * must not retain `shared` either — its fingerprint holds page-HTML slices, so a
+ * collector that keeps it keeps the page (#1860); `detachFromPage` first.
  */
 export interface PageSignalCollector {
   readonly id: string;
-  collect(page: PageRecord, parsed: ParsedPage): void;
+  collect(page: PageRecord, parsed: ParsedPage, shared: SharedPageSignals): void;
 }
 
 export interface StreamPageRulesHooks {
@@ -269,11 +286,20 @@ export function streamPageRules(
         // page_features + E-E2 collectors, DOM still live. The early
         // `!isAuditablePage(page)` continue above already guarantees this page is
         // auditable, so no second gate is needed here.
+        //
+        // ONE fingerprint per page, two consumers: `page_features.template_fp`
+        // reduces it to an equality cluster key (#1949) and the collected signal
+        // keeps it whole for `template-discontinuity`'s fuzzy comparison. Built
+        // here rather than inside either consumer so the loop still walks each DOM
+        // exactly once.
+        const shared: SharedPageSignals = {
+          fingerprint: fingerprintPage(parsed, pageUrl),
+        };
         yield* storage
-          .upsertPageFeatures(crawlId, extractPageFeatures(page, parsed))
+          .upsertPageFeatures(crawlId, extractPageFeatures(page, parsed, shared))
           .pipe(Effect.catchAll(() => Effect.void));
         extractedCount++;
-        for (const c of collectors) c.collect(page, parsed);
+        for (const c of collectors) c.collect(page, parsed, shared);
 
         // Drop this page's DOM before moving on — the residency bound.
         parsed.document = null;
