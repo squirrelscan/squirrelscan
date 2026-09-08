@@ -764,6 +764,19 @@ The gates for all three are `EXPLAIN QUERY PLAN` assertions, because the index
 existing proves nothing if the planner does not choose it, and a timing on a
 loaded box proves nothing at all.
 
+`pages` is the hottest write table in a crawl, so the index has to pay for
+itself there too. 2,000 page inserts of 8 KB of html each, one statement per
+page as the crawler writes them, median of three alternating runs:
+
+| | without | with `idx_pages_url_recency` |
+|---|---|---|
+| insert 2,000 pages | 329.4 ms | 325.6 ms |
+| file after checkpoint | 17,752,064 B | 17,911,808 B |
+
+The time difference is noise in the wrong direction, and the file is 0.9%
+larger. Set against a read it takes from a full table scan to a seek on every
+incremental re-audit, that is not a trade-off.
+
 What the migrations cost the people who already have data: a real 100 MB
 `project.db` recorded at version 24, holding one crawl of 1,000 pages and
 203,687 rule results, opened at version 27 in **69 ms**. That includes adding
