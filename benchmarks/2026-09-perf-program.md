@@ -356,6 +356,74 @@ directives, and to pay nothing on this class until the per-request variation is
 characterised. That is what squirrelscan/repo#1899 acceptance criterion 1 was
 asking, and it is now answered: the body differs, the normalizer does not.
 
+### The control: an origin that does send freshness directives
+
+The drscholls pair could not tell a broken feature from an unsuitable origin, so
+the same measurement was repeated against a site chosen for the opposite
+property: our own marketing site, which serves `cache-control: public,
+max-age=60, s-maxage=600, stale-while-revalidate=86400` on every page. It has 64
+urls in its sitemap and the crawl reaches the 150-page cap through link
+discovery. Same settings as the pair above, 22 minutes apart, on the code that
+charges adoption rather than lookup (squirrelscan/repo#1941,
+squirrelscan/repo#1942).
+
+| | first run | second run |
+|---|---|---|
+| crawl | 742 s | 520 s |
+| pages fetched | 150 | 114 |
+| pages reused | 0 | 36 |
+| `[reuse]` tally | 0 reused | `max-age=6 stale-while-revalidate=30` |
+| `render` debits | 150 | 114 |
+| `render_cached` debits | 0 | 12 |
+| credits | 350 | 302 |
+| health score | 69 | 69 |
+| pages reported | 131 | 131 |
+| errors / warnings | 154 / 1,198 | 154 / 1,210 |
+
+Unlike the drscholls pair these two are comparable: both based on the apex, both
+took `/terms` first, and their first frontier reading was 111 pending against
+106.
+
+**Reuse works, and the double charge is gone.** 114 renders plus 36 adopted
+pages is exactly the 150 pages crawled, and no url carries both a `render` and a
+`render_cached` debit — the overlap between the two debit sets is zero, against
+37 urls double-charged in the run above.
+
+**The 302 is not a saving, it is a shortfall.** `render_cached` is priced at 2
+credits, the same as `render`, on purpose: caching never discounts the customer
+price, the saving is our render cost. A fully settled second run therefore costs
+what the first run cost, to the credit — 50 + 114x2 + 36x2 = 350. It billed 302
+because settlement stopped after 12 of the 36 adopted pages. So the number to
+hold this feature to is "the re-run does not cost MORE, and no page is billed
+twice", never "the re-run is cheaper".
+
+Two silent truncations sit behind that, one on each side of the cache:
+
+- **Settlement runs out of time.** `/v1/services/crawl-cache/adopted` does a
+  full R2 read of the stored page and a credit write per url, sequentially. The
+  ledger rows land 2.5 s apart, so a 25-url batch needs about a minute against
+  a 30 s client bound. 12 charges landed and the run recorded `[reuse] adoption
+  report failed after 36 adopted pages`. The idempotency key is stable, so the
+  12 stayed put and nothing was billed twice. At the per-url cost this run
+  showed, a batch of more than about a dozen urls cannot finish inside the
+  bound; whether that cost is typical is not something one pair can say. Sizing
+  the batch alone only moves the cliff either way — the per-url work has to stop
+  reading the whole page body to decide a charge (squirrelscan/repo#1969).
+- **The upload drops chunks without saying so.** The second run found 36 usable
+  pages in a cache the first run had been handed 150 for, and the pages it did
+  find it reused. The uploader returns nothing and never inspects its response,
+  and the shared post helper folds a non-ok, a throw and a 10 s abort alike into
+  `null`, so a lost chunk emits no event anywhere. The bucket agrees: of 18 urls
+  the second run re-fetched, 17 are missing from `crawl-reuse/` after two
+  150-page runs that each ran the upload pass, while both sampled adopted pages
+  are present. That points at what reaches the bucket rather than at the reuse
+  decision, and it is the first thing to rule out before reading the 36 of 150
+  as a freshness ceiling (squirrelscan/repo#1970).
+
+The crawl times are cloud-side and a single pair cannot separate 742 s to 520 s
+from container variance, but the mechanism is at least present here: 36 fewer
+fetch-and-render round trips.
+
 ## Fixed along the way
 
 - Seed-redirect probe sent no user agent; a WAF's 403 was read as "no
