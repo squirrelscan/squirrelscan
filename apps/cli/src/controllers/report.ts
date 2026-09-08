@@ -100,6 +100,10 @@ interface SlimJsonReport {
     };
     timestamp: string;
     totalPages: number;
+    /** Page cap in force (#1909); absent in slim JSON written before it. */
+    maxPages?: number;
+    /** Requested cap, present only when it was clamped (#1909). */
+    requestedMaxPages?: number;
   };
   // Audit validity (#801): absent in slim JSON written before #801 ⇒ completed.
   status?: AuditStatus;
@@ -221,6 +225,23 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
       : {}),
     timestamp: report.meta.timestamp,
     totalPages: report.meta.totalPages,
+    // Rebuild the scan scope the slim JSON flattened into `meta` (#1909).
+    // Without this, re-rendering a saved report loses both page limits and a
+    // clamped run reads exactly like an unclamped one — which is the bug this
+    // change exists to fix, reappearing one round trip later.
+    ...(report.meta.maxPages !== undefined
+      ? {
+          scanScope: {
+            origin: "cli" as const,
+            maxPages: report.meta.maxPages,
+            ...(report.meta.requestedMaxPages !== undefined
+              ? { requestedMaxPages: report.meta.requestedMaxPages }
+              : {}),
+            pagesCrawled: report.meta.totalPages,
+            capped: report.meta.totalPages >= report.meta.maxPages,
+          },
+        }
+      : {}),
     passed: report.summary.passed,
     warnings: report.summary.warnings,
     failed: report.summary.failed,

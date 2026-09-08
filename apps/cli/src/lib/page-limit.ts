@@ -1,8 +1,8 @@
 // Resolving a requested page count against the hard cap, and saying so (#1909).
 //
-// `MAX_PAGES_CAP` was applied with a bare `Math.min` in three places — the
-// `audit` command, the `crawl` command and the audit controller — and none of
-// them said anything. `squirrel audit --max-pages 10000` crawled 5,000 and
+// `MAX_PAGES_CAP` was applied with a bare `Math.min` in five places — the
+// `audit` and `crawl` commands, the audit controller and twice in the crawl
+// controller — and none of them said anything. `squirrel audit --max-pages 10000` crawled 5,000 and
 // reported `maxPages: 5000`, which is indistinguishable from a 5,000-page site.
 // The neighbouring notice in cli/format.ts fires when a crawl REACHES the cap,
 // so a request for 10,000 against a 4,000-page site was clamped and never
@@ -26,7 +26,7 @@ export interface PageLimit {
  * Resolve a requested page count against the cap.
  *
  * `effective` is exactly `Math.min(requested, MAX_PAGES_CAP)`, which is what the
- * three call sites did before this existed, so the ceiling behaves identically
+ * five call sites did before this existed, so the ceiling behaves identically
  * for every input including the strange ones. An earlier version of this
  * returned non-finite and non-positive requests UNTOUCHED, on the reasoning
  * that the commands reject them with their own message — but `[crawler]
@@ -57,9 +57,15 @@ export function pageLimitNotice(limit: PageLimit): string | null {
   if (!limit.clamped) return null;
   // `Infinity.toLocaleString()` is "∞", which reads as a rendering fault rather
   // than as what the user typed.
-  const asked = Number.isFinite(limit.requested)
-    ? `${limit.requested.toLocaleString("en-US")} pages`
-    : "unlimited pages";
+  // A fractional request is degenerate but reachable through config, and
+  // `(5000.0001).toLocaleString()` is "5,000" — which would print "Requested
+  // 5,000 pages, capped at 5,000" and read as a bug in the notice rather than
+  // in the config. Non-integers keep their digits.
+  const asked = !Number.isFinite(limit.requested)
+    ? "unlimited pages"
+    : Number.isInteger(limit.requested)
+      ? `${limit.requested.toLocaleString("en-US")} pages`
+      : `${limit.requested} pages`;
   return (
     `⚠ Requested ${asked}, capped at ${limit.effective.toLocaleString("en-US")}. ` +
     `This is the hard limit; split the audit by section (e.g. [crawler] include) to scan more.`

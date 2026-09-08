@@ -1901,7 +1901,7 @@ export function mergeOptionsToConfig(
     }),
     crawler: {
       ...config.crawler,
-      // Same clamp as the commands, through the same helper so the three cannot
+      // Same clamp as the commands, through the same helper so the five cannot
       // drift (#1909). Callers that reach the controller directly — the MCP
       // audit tool, programmatic use — get the cap applied here; they see it in
       // the report's `scanScope` rather than on stderr.

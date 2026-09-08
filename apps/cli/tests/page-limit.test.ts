@@ -10,6 +10,7 @@
 import { MAX_PAGES_CAP } from "@squirrelscan/core-contracts/limits";
 import { describe, expect, test } from "bun:test";
 
+import { loadReport } from "@/controllers/report";
 import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 
 describe("resolvePageLimit", () => {
@@ -48,9 +49,10 @@ describe("resolvePageLimit", () => {
   });
 
   test("leaves the strange inputs exactly where Math.min left them", () => {
-    // Not this change's job to fix: `crawl` does no flag validation at all, so
-    // its NaN and zero behaviour is pre-existing, and quietly turning either
-    // into 5,000 here would be a new bug wearing a fix's clothes.
+    // Not this change's job to fix: `crawl` validates concurrency but not
+    // max-pages, so its NaN and zero behaviour is pre-existing, and quietly
+    // turning either into 5,000 here would be a new bug wearing a fix's
+    // clothes.
     expect(Number.isNaN(resolvePageLimit(Number.NaN).effective)).toBe(true);
     expect(resolvePageLimit(Number.NaN).clamped).toBe(false);
     expect(resolvePageLimit(0).effective).toBe(0);
@@ -65,6 +67,14 @@ describe("pageLimitNotice", () => {
       pageLimitNotice(resolvePageLimit(Number.POSITIVE_INFINITY)) ?? "";
     expect(notice).toContain("unlimited pages");
     expect(notice).not.toContain("∞");
+  });
+
+  test("keeps the digits of a fractional request", () => {
+    // `(5000.0001).toLocaleString()` is "5,000", which would print "Requested
+    // 5,000 pages, capped at 5,000" — a notice that reads as its own bug.
+    const notice =
+      pageLimitNotice(resolvePageLimit(MAX_PAGES_CAP + 0.0001)) ?? "";
+    expect(notice).toContain("5000.0001");
   });
 
   test("names both numbers when the cap bound", () => {
@@ -84,5 +94,57 @@ describe("pageLimitNotice", () => {
     // user to change `--max-pages` would send them to the wrong place.
     const notice = pageLimitNotice(resolvePageLimit(9_000)) ?? "";
     expect(notice).not.toContain("--max-pages");
+  });
+});
+
+describe("the limits survive a saved report", () => {
+  // The whole point is that a clamped run reads differently from an unclamped
+  // one. A first version of this change lost both limits the moment the slim
+  // JSON was read back, so `squirrel report` on a saved file showed exactly
+  // what it showed before the fix — the bug returning one round trip later.
+  const slim = (meta: Record<string, unknown>) => ({
+    meta: {
+      version: "0.0.0",
+      baseUrl: "http://example.test",
+      timestamp: new Date(0).toISOString(),
+      totalPages: 6,
+      ...meta,
+    },
+    score: { overall: 90, categories: {} },
+    summary: { passed: 1, warnings: 0, failed: 0 },
+    issues: [],
+  });
+
+  async function reload(meta: Record<string, unknown>) {
+    const path = `${import.meta.dir}/.tmp-page-limit-${Math.random().toString(36).slice(2)}.json`;
+    await Bun.write(path, JSON.stringify(slim(meta)));
+    try {
+      return loadReport(path);
+    } finally {
+      await Bun.file(path).delete();
+    }
+  }
+
+  test("a clamped run reloads with both limits", async () => {
+    const loaded = await reload({ maxPages: 5000, requestedMaxPages: 10_000 });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.data.scanScope?.maxPages).toBe(5000);
+    expect(loaded.data.scanScope?.requestedMaxPages).toBe(10_000);
+  });
+
+  test("an unclamped run reloads without a requested limit", async () => {
+    const loaded = await reload({ maxPages: 3 });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.data.scanScope?.maxPages).toBe(3);
+    expect(loaded.data.scanScope?.requestedMaxPages).toBeUndefined();
+  });
+
+  test("a report written before this change reloads without a scope", async () => {
+    const loaded = await reload({});
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.data.scanScope).toBeUndefined();
   });
 });

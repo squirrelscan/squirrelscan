@@ -247,8 +247,8 @@ reported `maxPages: 5000`, which is byte-identical to what a 5,000-page site
 reports ([#1909](https://github.com/squirrelscan/repo/issues/1909),
 [#264](https://github.com/squirrelscan/squirrelscan/pull/264)).
 
-No timings: nothing about this change affects how long anything takes, and there
-is no before/after to measure. What it changes is whether the number a
+No timings: there is no intended crawl-performance change here and no
+before/after to measure. What it changes is whether the number a
 measurement was taken at is knowable afterwards, which is what every other row
 in this file depends on.
 
