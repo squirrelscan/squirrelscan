@@ -2457,6 +2457,7 @@ export function runStreamingRules(
               (config.rules as { ignore_applicability?: boolean } | undefined)
                 ?.ignore_applicability === true,
             utcYear: new Date().getUTCFullYear(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         );
         if ("hash" in ctxHash) ruleCache = bindRuleCache(ruleCacheOpts.store, ctxHash.hash);

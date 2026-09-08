@@ -1518,8 +1518,8 @@ rather than a permanent second copy accumulating.
 
 ### What two adversarial review rounds found that the gates did not
 
-Thirteen findings across two `codex` passes, all fixed or accounted for. The four
-worth recording:
+Sixteen findings across three `codex` passes, all fixed. The third pass returned
+nothing above P2. The four worth recording:
 
 **Fan-out composition, twice.** The first round found that a replayed page
 abstaining from fan-out changes which page is elected representative. The fix —
@@ -1537,10 +1537,14 @@ have replayed one page's verdicts onto another's markup, and every gate would ha
 stayed green, because no fixture contains that pair. The cache keys on a new
 exact-bytes hash, which the content store had already computed.
 
-**A cache changes what the clock means.** `content/stale-copyright` reads
-`new Date().getUTCFullYear()` at execution and is the only page rule that reads a
-clock at all, so a pass cached on 31 December would replay on 1 January. The
-current UTC year is now part of the run context.
+**A cache changes what the clock and the calendar mean.**
+`content/stale-copyright` reads `new Date().getUTCFullYear()` at execution, so a
+pass cached on 31 December would replay on 1 January; the current UTC year is now
+part of the run context, and replay stops for the rest of any run that crosses the
+boundary while it is going. `content/date-agreement` resolves a bare schema date
+through `Date.parse`, which reads it in LOCAL time, so the same page yields a
+different year under `UTC` and under `Australia/Sydney`; the runtime time zone is
+in the key too. Neither was reachable by reasoning about the page.
 
 **Hashing the run context whole made the cache do nothing, silently.** The first
 implementation hashed the `SiteData` fields page rules read as whole objects. One

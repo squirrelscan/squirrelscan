@@ -194,6 +194,7 @@ describe("run context", () => {
     cloudResults: undefined,
     ignoreApplicability: false,
     utcYear: 2026,
+    timeZone: "UTC",
   };
   const hashOf = async (over: Partial<typeof base>) => {
     const out = await computeRunContextHash({ ...base, ...over });
@@ -215,6 +216,13 @@ describe("run context", () => {
   // verdict without touching the rule list or any rule's options.
   test("moves with the applicability escape hatch", async () => {
     expect(await hashOf({ ignoreApplicability: true })).not.toBe(await hashOf({}));
+  });
+
+  // `content/date-agreement` resolves a bare schema date through `Date.parse`,
+  // which reads it in LOCAL time, so the same page yields a different year in a
+  // different zone.
+  test("moves with the runtime time zone", async () => {
+    expect(await hashOf({ timeZone: "Australia/Sydney" })).not.toBe(await hashOf({}));
   });
 
   test("moves with the build, the rule list and a rule's options", async () => {

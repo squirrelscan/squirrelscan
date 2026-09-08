@@ -61,10 +61,14 @@
 //    `SiteData`, down to the individual script and resource entries, and fails on
 //    any read outside the declared sets.
 //
-// TEMPLATE FAN-OUT (#1951) COMPOSES, by abstention: a replayed page neither takes
-// a cluster verdict nor becomes a representative, because it did not run the
-// rules. A cluster whose representative replayed simply elects the next fresh
-// member, and #1951's own parity gate is what says the two are the same verdict.
+// TEMPLATE FAN-OUT (#1951) DOES NOT COMPOSE WITH THIS, and the cache wins: a run
+// with a cache does not build a fan-out at all (see streaming.ts). A fanned
+// verdict belongs to the page's CLUSTER, so no per-page key can capture what it
+// depends on — change a cluster's representative and its members' cached verdicts
+// are stale with nothing about those members having changed. Two designs were
+// tried and rejected before this one; the reasoning is in streaming.ts, and making
+// them compose means caching the cluster's verdict against its representative's
+// identity, which is a whole-crawl property rather than a per-page one.
 
 import type { CheckResult, PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
@@ -302,6 +306,15 @@ export interface RunContextInput {
    * midnight already gives its earlier and later pages different verdicts.
    */
   readonly utcYear: number;
+  /**
+   * The runtime's IANA time zone. `content/date-agreement` resolves a schema date
+   * through `Date.parse`, which reads a bare "01/01/2026 00:30:00" in LOCAL time,
+   * so the same page yields a different year under `UTC` and under
+   * `Australia/Sydney`. A laptop that moved, or a CI runner that does not match the
+   * machine that filled the cache, is otherwise an unchanged key over a changed
+   * answer.
+   */
+  readonly timeZone: string;
 }
 
 /**
@@ -323,6 +336,7 @@ export async function computeRunContextHash(
       input.cloudResults ?? null,
       input.ignoreApplicability,
       input.utcYear,
+      input.timeZone,
     ]);
     // A cache that quietly stops hitting looks exactly like a cache that is
     // working, so the one question worth answering cheaply is "which ingredient
@@ -341,6 +355,7 @@ export async function computeRunContextHash(
         ["cloudResults", input.cloudResults ?? null],
         ["ignoreApplicability", input.ignoreApplicability],
         ["utcYear", input.utcYear],
+        ["timeZone", input.timeZone],
       ];
       for (const [name, value] of parts) {
         const digest = (await sha256Hex(canonicalJson(value))).slice(0, 16);
@@ -601,9 +616,18 @@ export function emptyRuleCacheStats(disabledReason?: RuleCacheDisabledReason): R
  * half-written or older-format row costs a page's rules and never a wrong report.
  */
 export function bindRuleCache(store: RuleCacheStore, runContextHash: string): StreamRuleCache {
+  // The year the run context was hashed under. A long audit can cross UTC New
+  // Year while it runs, and `content/stale-copyright` reads the clock itself: a
+  // page replayed after midnight would serve last year's verdict while a fresh
+  // evaluation of it warns. Rather than freeze a year the rule cannot be told
+  // about, replay simply stops for the rest of the run once the year moves — those
+  // pages are audited normally, which is always a correct answer.
+  const boundYear = new Date().getUTCFullYear();
   return {
     keyFor: (page, soft404Confirmation) =>
-      computePageCacheKey(runContextHash, page, soft404Confirmation),
+      new Date().getUTCFullYear() === boundYear
+        ? computePageCacheKey(runContextHash, page, soft404Confirmation)
+        : Promise.resolve(null),
     async load(keys) {
       const raw = await store.load(keys);
       const out = new Map<string, PageRuleCacheEntry>();
