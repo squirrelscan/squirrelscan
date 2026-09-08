@@ -403,6 +403,31 @@ describe("mandatoryLiterals extraction", () => {
     expect(failures).toEqual([]);
   });
 
+  // An escape read as shorter than it is leaves its own tail behind as "literal
+  // text", and that text is exactly what no match contains. All three of these
+  // denied a real match.
+  test("an escape whose length is misread does not invent a literal", () => {
+    const cases: Array<[RegExp, string]> = [
+      // `\12` is a backreference to group 12, not `\1` followed by the digit 2.
+      [/(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)wxyz\12abcd/, "abcdefghijklwxyzlabcd"],
+      // `\k<x>` is a named backreference, not `\k` followed by `<x>`.
+      [/(?<x>zz)wxyz\k<x>abcd/, "zzwxyzzzabcd"],
+      // Without the `u` flag `\u{41}` is the letter `u` repeated 41 times, not
+      // the code point 0x41 — and the two readings share no characters, so
+      // neither may be claimed.
+      [/wxyz\u{41}abcd/, `wxyz${"u".repeat(41)}abcd`],
+    ];
+    const failures: string[] = [];
+    for (const [pattern, subject] of cases) {
+      if (!pattern.test(subject)) {
+        failures.push(`${pattern.source}: fixture does not match`);
+        continue;
+      }
+      if (!admits(pattern, subject)) failures.push(`${pattern.source}: filter REJECTED a real match`);
+    }
+    expect(failures).toEqual([]);
+  });
+
   test("an unproven pattern is always run", () => {
     const index = buildGramIndex("z".repeat(9000))!;
     expect(mayMatch(index, mandatoryLiterals(/[0-9]{8,10}:[a-zA-Z0-9_-]{35}/))).toBe(true);

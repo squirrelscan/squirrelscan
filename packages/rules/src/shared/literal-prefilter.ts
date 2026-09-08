@@ -219,14 +219,13 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
   const n = src[i + 1];
   if (n === undefined) return { char: null, end: i + 1 };
   if (n === "u") {
+    // `\u{...}` is a code point only under the `u` flag; without it the same
+    // source is the letter `u` repeated. The two readings share no characters,
+    // so neither is claimed: skip past the brace and end the run. (The four-hex
+    // form below is a code point either way.)
     if (src[i + 2] === "{") {
       const close = src.indexOf("}", i + 3);
-      if (close === -1) return { char: null, end: i + 2 };
-      const code = Number.parseInt(src.slice(i + 3, close), 16);
-      return {
-        char: Number.isNaN(code) || code > 0x10ffff ? null : String.fromCodePoint(code),
-        end: close + 1,
-      };
+      return { char: null, end: close === -1 ? i + 2 : close + 1 };
     }
     const hex = src.slice(i + 2, i + 6);
     if (!/^[0-9a-fA-F]{4}$/.test(hex)) return { char: null, end: i + 2 };
@@ -249,6 +248,20 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
   if (n === "p" || n === "P") {
     const close = src.indexOf("}", i + 2);
     return { char: null, end: close === -1 ? i + 2 : close + 1 };
+  }
+  // `\k<name>` is a named backreference, and stopping after `\k` would leave
+  // `<name>` behind as literal text the match never contains.
+  if (n === "k" && src[i + 2] === "<") {
+    const close = src.indexOf(">", i + 3);
+    return { char: null, end: close === -1 ? i + 2 : close + 1 };
+  }
+  // A backreference or octal escape runs to the end of its digits. Consuming
+  // only two characters leaves `\12`'s `2` behind as literal text, and what
+  // group 12 matched is not the digit 2.
+  if (n >= "0" && n <= "9") {
+    let end = i + 2;
+    while (end < src.length && src[end]! >= "0" && src[end]! <= "9") end += 1;
+    return { char: null, end };
   }
   return { char: null, end: i + 2 };
 }
