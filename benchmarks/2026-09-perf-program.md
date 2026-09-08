@@ -437,6 +437,67 @@ The crawl times are cloud-side and a single pair cannot separate 742 s to 520 s
 from container variance, but the mechanism is at least present here: 36 fewer
 fetch-and-render round trips.
 
+### The same pair again, after the repairs
+
+Every fix above shipped, and the pair was repeated on the same site to see
+whether the numbers moved: 150 pages, coverage full, render on, 45 minutes
+apart, on a container image carrying all of them. Two runs, both landing on the
+same total.
+
+| | run 1 | run 2 |
+|---|---|---|
+| pages crawled | 150 | 150 |
+| pages reused | 36 | 134 |
+| `render` debits | 115 rows, 230 credits | 17 rows, 34 credits |
+| `render_cached` debits | **1 row**, 35 units, 70 credits | **3 rows**, 133 units, 266 credits |
+| settled | 35 of 35 | 133 of 133 |
+| ledger total | **350** | **350** |
+| health | 72 | 72 |
+| pages / errors / warnings reported | 139 / 162 / 1,351 | 139 / 162 / 1,351 |
+
+**Settlement is the headline.** 133 adopted pages settled in three debits, one
+per chunk, where the same operation previously charged 12 of 36 individually and
+then timed out. The `render_cached` row count is the whole change: one debit
+carrying 133 units instead of 133 debits.
+
+**Both runs cost exactly 350 credits**, which is the arithmetic a fully settled
+run has to produce: 50 base, then two credits for each of the 150 pages, whether
+each page was rendered or served from cache. Run 2 rendered 17 and reused 133,
+and 17 + 133 = 150. No page was billed twice, and none escaped billing. The
+earlier pair's 302 was a settlement shortfall, and it is gone.
+
+**The two reports are identical** — same page count, same 162 errors, same 1,351
+warnings, same health — while run 2 rendered 17 pages instead of 115. That is
+the property reuse is actually for, and the one that was never true before:
+adopting a stored body produced the same audit as fetching it.
+
+Reuse jumping from 36 to 134 is the render-mode gate working rather than the
+cache warming. The store also held raw bodies written by unrelated render-off
+audits of the same site, and those were refused to both of these runs and
+re-fetched, exactly as intended. A rendering audit that adopts a raw body
+analyses unrendered markup while reporting otherwise, and is billed *less* for
+it, so every signal points the wrong way (squirrelscan/repo#1984).
+
+**One thing did not come clean.** Both runs logged the same line:
+
+```
+[reuse] upload failed 1 of 6 chunks (133 of 150 pages stored)
+```
+
+Same count, same 17 pages, both times. Against the previous state of `0 of 91`
+that is most of the distance, but it is a repeatable single-chunk failure rather
+than a transient, and there is no `gave up` clause, so neither the
+consecutive-failure breaker nor the wall-clock budget was involved. Those 17
+pages are never stored, so every later audit re-renders them: in run 2 the pages
+billed as `render` were exactly that set. Their sizes are unremarkable, around
+105 KB against a 94 KB crawl average, so the obvious explanation does not hold
+up (squirrelscan/repo#2000).
+
+Note the denominator here means what it says. At 150 pages the upload finishes
+inside its minute, so `150` is the crawl. In the 2,000-page run recorded further
+down it is not: there the budget expired and the figure describes only what was
+attempted.
+
 ## Fixed along the way
 
 - Seed-redirect probe sent no user agent; a WAF's 403 was read as "no
