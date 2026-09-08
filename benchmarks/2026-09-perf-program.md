@@ -1032,9 +1032,69 @@ single-POST path that a CLI publish still uses. It is enough to say the two
 rationales for the 2,000 ceiling were not observed to bind at the ceiling, and
 not enough to say what happens above it. What the run does surface is a different
 limit: `cloud_prefetch` spent its entire 600 s budget and was abandoned, so a
-third of the wall clock bought no enrichment (squirrelscan/repo#1995). That is
-the phase to fix before the ceiling moves, because its budget is a flat
-wall-clock cap while its work scales with the crawl.
+third of the wall clock bought no enrichment (squirrelscan/repo#1995). The
+second audit of the same estate, in the next section, shows that cost is paid
+once per site rather than on every run — but it is paid on the audit that forms
+someone's first impression of a large site, and it discards work already charged
+for.
+
+### The same hosted audit, twice
+
+The estate was audited again 72 minutes later, identically configured. The pair
+is not an A/B on anything but memory, for reasons below, but the spread between
+two runs of the same workload is itself the most useful thing in it.
+
+| | first run | second run |
+|---|---|---|
+| crawl, 2,000 pages | 4 m 08 s | 5 m 31 s |
+| `cloud_prefetch` | 10 m 00 s, abandoned at budget | 15.5 s |
+| rules | 562.8 s | 181.3 s |
+| publish, findings | 329.4 s, 40,148 | 73.6 s, 44,858 |
+| peak container RSS | 1,493 MiB | 1,481 MiB |
+| credits | 50 | 50 |
+| wall | 30 m 16 s | 11 m 42 s |
+
+**Peak memory reproduces to within 1%. Nothing else does.** Rules moved 3x and
+publish 4.5x between two runs of the same 2,000 pages. Whatever is being
+measured in those two phases, a single observation of it is not worth much — and
+the publish leg, which moved most, is the one with no instrumentation at all
+(squirrelscan/repo#1997).
+
+**The prefetch difference is a cold-start effect.** The first run exhausted its
+600 s budget and was abandoned; the second completed in 15.5 s and charged no
+`ai_parse` or `authority_signals` at all, because the results were already
+computed upstream. So the cost recorded above is what a site pays the first time
+it is audited, not every time (squirrelscan/repo#1995).
+
+That also makes the two runs incomparable on findings: the first ran without
+cloud enrichment because its prefetch was abandoned, so it reported 25,580
+issues and health 73 against the second's 27,075 and 71.
+
+**Crawl reuse was off for the first run** — the kill switch was armed at the time
+— so the reuse store started empty and the second run reused nothing. What the
+second run did do is fill the store, and that is the first look at the upload
+path since it was repaired:
+
+```
+[reuse] upload failed 1 of 22 chunks (230 of 247 pages stored), gave up after 60s
+```
+
+Twenty-one of 22 chunks landed, against a previous state where all three of
+three failed and nothing was stored.
+
+The denominator is the more interesting number, and it is not an eligibility
+figure. `gave up after 60s` is the uploader's `time-budget` arm, and its own
+doc comment says that when it fires the counts describe what was **attempted**,
+not the crawl. So 247 is how many pages the uploader got through in
+`CRAWL_CACHE_UPLOAD_BUDGET_MS` of 60 s; the other ~1,753 pages were never
+attempted. **230 of 2,000 pages became reusable, about 12%**, and since the
+budget is a fixed minute, that fraction falls as the crawl grows — at the
+10,000-page ceiling the same minute would cover proportionally less again.
+
+For scale, the upload managed about 4 pages per second against a crawl that
+fetched 2,000 pages in four minutes, so preserving a page is roughly an order of
+magnitude slower than fetching it. That gap seems worth understanding before the
+budget is simply raised (squirrelscan/repo#1999).
 
 ### Three harness defects found while doing this
 
