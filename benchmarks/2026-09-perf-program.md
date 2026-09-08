@@ -653,8 +653,9 @@ every member:
 | gymshark.com | 89 of 198 |
 | openelectricity.org.au | 142 of 198 |
 
-85 are constant on both. Only 26 are declared safe to fan out
-([#269](https://github.com/squirrelscan/squirrelscan/pull/269)): the rest are
+85 are constant on both. Only 26 were declared safe to fan out
+([#269](https://github.com/squirrelscan/squirrelscan/pull/269)), and #279 later
+demoted one of those to page scope, leaving 25: the rest are
 constant on those two crawls and page-scoped anyway, because the cluster key
 constrains no response header, the page url is per-page by construction, and a
 rule scanning the whole document can see body content. `perf/compression` is the
@@ -1136,6 +1137,98 @@ The phase table's `rules` and `site` columns read trace spans the resident
 pipeline used to emit. The streaming pipeline (#252) emits neither, so both had
 been printing `0s`, which reads as "the rules phase was free" when it is most of
 the wall time. They print `n/a` now.
+
+## Running a rule once per template: 13% of the page-rule pass, not 96%
+
+The clustering measurement above says 96.5% of gymshark's page-rule time is spent
+on pages that are not the first of their chrome cluster. That is the ceiling if
+every rule could be run once per template. 25 of 198 page rules are declared safe
+to fan out, and this is what those 25 are worth
+([#279](https://github.com/squirrelscan/squirrelscan/pull/279)).
+
+The measurement is of the streamed page-rule pass alone (`streamPageRules`), which
+is sync CPU over stored HTML and reaches no network. Each arm runs in its own
+child process, the arms are interleaved, and both the median and the minimum of
+the repeats are reported. **CPU time, minimum of the repeats, is the number to
+read.** Wall time on a shared box is mostly a measurement of what else is running
+on it: an earlier pair of seven repeats swung 66 to 101 s on the same arm, and
+with three repeats the median is one sample, so a single bad sample moved the same
+comparison from 9.3% to 5.4%. Load average 2.2 to 3.8 throughout the runs below.
+
+| corpus | pages | clusters | cpu off | cpu on | delta (min) | delta (median) |
+|---|---|---|---|---|---|---|
+| gymshark.com (real) | 247 | 13 | 233.6 ms/page | 203.5 ms/page | **12.9%** | 10.8% |
+| drscholls-shaped synthetic | 150 | 1 | 114.4 ms/page | 94.2 ms/page | **17.6%** | 16.8% |
+
+The synthetic corpus is the ceiling case for these 25 rules and not a site: all
+150 pages are one template, so 149 of 150 inherit every declared verdict. It buys
+17.6%, against the real storefront's 12.9%. **The saving is a property of the
+declared set, not of how redundant the corpus is**, and anyone reading 96.5% as
+the expected win will be disappointed by design. Reaching further means declaring
+more rules, which is a soundness decision rather than a code change.
+
+Rule invocations on gymshark fall from 48,906 to 43,056: each of the 25 declared
+rules goes from 247 calls to 13. Where the time was, from a profiled run (summed
+`durationUs`, never `durationMs` — the latter rounds to whole milliseconds and a
+page rule's thousands of sub-millisecond samples sum to nonsense):
+
+| rule | ms over 247 pages | ms over 13 |
+|---|---|---|
+| `perf/js-libraries` | 1795.3 | 74.4 |
+| `analytics/consent-mode` | 1447.1 | 56.2 |
+| `analytics/gtm-present` | 1015.8 | 38.8 |
+| `a11y/focus-visible` | 338.6 | 13.1 |
+| `core/favicon` | 277.7 | 11.5 |
+| `security/third-party-cookies` | 240.9 | 9.8 |
+| `local/geo-meta` | 234.5 | 9.3 |
+| `perf/legacy-js` | 228.0 | 9.3 |
+| the other 17 | 735.3 | 33.2 |
+| **total** | **6313.2** | **255.6** |
+
+The 6,058 ms those rule bodies give up accounts for 93% of the 6,531 ms of CPU
+that same profiled run moved, so the attribution and the delta agree. Three of
+those rules are most of it, and all three scan the page's whole HTML.
+
+### One rule was demoted rather than fanned
+
+`core/charset` came out of #269 declared "template" and is constant in every
+cluster of every corpus in every gate. It is page-scoped anyway, because its
+verdict can come from the `Content-Type` RESPONSE HEADER, which the cluster key
+constrains in no way: two pages of one template, one served
+`text/html; charset=utf-8` and the other bare `text/html`, give `pass` and `fail`.
+Every page of all three corpora declares its charset in a `<meta>` tag, so the
+header branch is never reached and no measurement over them could see it.
+
+That is the general shape of the residual risk, tracked as
+[#275](https://github.com/squirrelscan/squirrelscan/issues/275): the cluster key
+is chrome, so a constructed pair can share it and still differ in a declared
+rule's inputs. Two things are not left to the declaration — the fan-out groups by
+page ORIGIN as well as by template (`security/sri` compares it), and a rule
+reading a response header is disqualified outright.
+
+### Byte-identity
+
+The claim is that the output is indistinguishable from running every rule on every
+page, and it is checked three ways rather than asserted:
+
+- `template-fanout-equivalence-golden.test.ts` compares the fanned pass against a
+  resident loop that runs everything on everything, over an authored corpus with
+  three real multi-page clusters and two singletons, on the complete per-page check
+  lists, the per-rule results and the folded tallies.
+- `apps/cli/scripts/template-fanout-bench.ts --verify` does the same comparison
+  against a real crawl, because a CI fixture only ever proves something about the
+  pages it contains. Byte-identical on gymshark.com, openelectricity.org.au and the
+  150-page synthetic.
+- `packages/rules/tests/template-verdict-page-independence.test.ts` runs each
+  declaring rule on the same HTML under two urls that share only scheme and host.
+  Copying a verdict onto another page is only sound if it carries nothing about the
+  page it ran on, and the fan-out deliberately does not rewrite urls inside a copied
+  check: the normalisation that would have to be inverted is not injective.
+
+Equal output is also exactly what a feature that does nothing produces, so the
+gates count calls as well as compare values: a rule declaring
+`verdictScope: "template"` must run once per CLUSTER and an undeclared one once per
+PAGE, and the pass reports the invocations it removed.
 
 ## Still open
 
