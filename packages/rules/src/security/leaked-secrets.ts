@@ -7,6 +7,13 @@ import {
   SECRET_KEY_LOOKBEHIND_SIZE,
 } from "@squirrelscan/utils/constants";
 
+import {
+  buildGramIndex,
+  mayContain,
+  mayMatch,
+  withPrefilter,
+} from "../shared/literal-prefilter";
+
 // Secret detection patterns with service names
 // Sources: secrets-patterns-db, secret-regex-list, gitleaks patterns
 
@@ -60,7 +67,9 @@ type ContextPattern = {
 // secret key and the three generic assignments — carry `keyAnchored` instead,
 // a much narrower check: the key they matched part-way through must not be a
 // digest key. `cache-api-key` is a cache key however it ends.
-const FAST_PATTERNS: FastPattern[] = [
+// Exported for tests/literal-prefilter.test.ts, which proves that the mandatory
+// literals derived from every one of these really are mandatory.
+export const FAST_PATTERNS: FastPattern[] = [
   // AI/ML Services
   {
     name: "OpenAI API Key",
@@ -500,7 +509,8 @@ const FAST_PATTERNS: FastPattern[] = [
 // Context patterns - generic patterns that need keyword presence check first
 // These previously used (?=.*keyword) lookaheads which caused O(n²) backtracking
 // Now we check for keyword via fast includes() before running the regex
-const CONTEXT_PATTERNS: ContextPattern[] = [
+// Exported alongside FAST_PATTERNS for the prefilter soundness test.
+export const CONTEXT_PATTERNS: ContextPattern[] = [
   // AI/ML Services (need context)
   {
     name: "Cohere API Key",
@@ -1372,6 +1382,10 @@ export function createSeenValues(contentLength: number): SeenValues {
   return { has: (value) => values.has(value), add, overlaps };
 }
 
+// The mandatory literals are derived from each pattern's SOURCE, so they are
+// computed once at module load rather than per page.
+const PREFILTERED_FAST_PATTERNS = withPrefilter(FAST_PATTERNS);
+
 export function scanContent(
   content: string,
   location: "html" | "inline-script" | "external-script",
@@ -1384,6 +1398,12 @@ export function scanContent(
   // AIza key the public-by-design tier reported — is a duplicate, not a new
   // finding. Specific patterns run first, so first classification wins.
   const seenValues = createSeenValues(content.length);
+
+  // One pass over the content that lets both passes below skip every pattern
+  // whose mandatory literals it does not contain (#1864). Null on short content,
+  // where the index would cost more than the scans it saves, and then nothing is
+  // skipped and behaviour is exactly as it was.
+  const gramIndex = buildGramIndex(content);
 
   // Helper to process regex matches on given text
   const processMatches = (
@@ -1429,13 +1449,19 @@ export function scanContent(
   };
 
   // Pass 1: Run all fast patterns (distinctive prefixes, O(n) safe)
+  //
+  // A pass over the content costs the same whether it finds anything or not, and
+  // on a 1 MB script-heavy page 64 of these 70 patterns cannot match at all. The
+  // gram index answers that for the price of one pass instead of seventy.
   for (const {
     name,
     pattern,
     confidence,
     publicByDesign,
     keyAnchored,
-  } of FAST_PATTERNS) {
+    literals,
+  } of PREFILTERED_FAST_PATTERNS) {
+    if (!mayMatch(gramIndex, literals)) continue;
     processMatches(
       content,
       name,
@@ -1449,8 +1475,14 @@ export function scanContent(
   // Pass 2: Run context patterns only on windows around keyword occurrences
   // This avoids scanning the entire content with generic patterns like /[a-f0-9]{32}/
   // Additional filtering: require assignment context and filter code identifiers
-  const contentLower = content.toLowerCase();
+  //
+  // The lowercase copy exists only to locate the keywords, so it is built the
+  // first time a keyword survives the index: on a page where none does, the pass
+  // costs nothing and the megabyte-sized allocation never happens.
+  let contentLower: string | null = null;
   for (const { name, keyword, pattern, confidence } of CONTEXT_PATTERNS) {
+    if (gramIndex && !mayContain(gramIndex, keyword)) continue;
+    contentLower ??= content.toLowerCase();
     // Extract small windows around each keyword occurrence
     const windows = extractKeywordWindows(content, contentLower, keyword);
     if (windows.length === 0) continue;

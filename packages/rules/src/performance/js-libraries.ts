@@ -3,6 +3,14 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import {
+  buildGramIndex,
+  mandatoryLiterals,
+  mayMatch,
+  type GramIndex,
+  type MandatoryLiterals,
+} from "../shared/literal-prefilter";
+
 // Known library detection patterns
 interface LibraryPattern {
   name: string;
@@ -297,6 +305,25 @@ function compareVersions(v1: string, v2: string): number {
   return 0;
 }
 
+// Every library's inline signatures run against every inline script AND the whole
+// HTML, so on a page with 800 KB of inline script this rule was making ~250 passes
+// over a megabyte to find nothing (#1864). The literals each signature must
+// contain are derived once here; a per-content gram index then skips the ones that
+// cannot match.
+const PREFILTERED_LIBRARIES = libraryPatterns.map((lib) => ({
+  ...lib,
+  inlinePatterns: lib.inlinePatterns.map((pattern) => ({
+    pattern,
+    literals: mandatoryLiterals(pattern) as MandatoryLiterals,
+  })),
+}));
+
+/** Exported for tests/literal-prefilter.test.ts, which proves the derived
+ *  literals really are mandatory for every one of these. */
+export const LIBRARY_INLINE_PATTERNS: readonly RegExp[] = libraryPatterns.flatMap(
+  (lib) => lib.inlinePatterns
+);
+
 export const jsLibrariesRule: Rule = {
   meta: {
     id: "perf/js-libraries",
@@ -358,8 +385,13 @@ export const jsLibrariesRule: Rule = {
     // Check HTML for runtime markers (framework signatures in DOM)
     const htmlContent = html;
 
+    // One pass per distinct body of text, reused by every library below. Short
+    // scripts index to null and are simply scanned, as before.
+    const inlineIndexes: Array<GramIndex | null> = inlineScripts.map((c) => buildGramIndex(c));
+    const htmlIndex = buildGramIndex(htmlContent);
+
     // Check for libraries
-    for (const lib of libraryPatterns) {
+    for (const lib of PREFILTERED_LIBRARIES) {
       let detected = false;
       let detectedVersion: string | undefined;
       let detectionSource: string | undefined;
@@ -386,8 +418,11 @@ export const jsLibrariesRule: Rule = {
 
       // Check inline/bundled scripts for library signatures
       if (!detected && lib.inlinePatterns.length > 0) {
-        for (const content of inlineScripts) {
-          for (const pattern of lib.inlinePatterns) {
+        for (let si = 0; si < inlineScripts.length; si++) {
+          const content = inlineScripts[si]!;
+          const contentIndex = inlineIndexes[si] ?? null;
+          for (const { pattern, literals } of lib.inlinePatterns) {
+            if (!mayMatch(contentIndex, literals)) continue;
             if (pattern.test(content)) {
               detected = true;
               detectionSource = "inline code";
@@ -408,7 +443,8 @@ export const jsLibrariesRule: Rule = {
 
       // Check HTML for framework signatures (e.g., ng-version attribute)
       if (!detected && lib.inlinePatterns.length > 0) {
-        for (const pattern of lib.inlinePatterns) {
+        for (const { pattern, literals } of lib.inlinePatterns) {
+          if (!mayMatch(htmlIndex, literals)) continue;
           if (pattern.test(htmlContent)) {
             detected = true;
             detectionSource = "HTML markers";
