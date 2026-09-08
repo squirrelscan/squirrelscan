@@ -23,11 +23,13 @@ describe("sha256Hex", () => {
   // wrapper's byte handling does — a TextEncoder or hex-padding slip would give a
   // stable but wrong digest, which no round-trip test can see.
   test("matches the published vectors", async () => {
+    // The published SHA-256 vectors for "" and "abc". The entropy detector cannot
+    // tell a digest from a credential, and these are neither secret nor ours.
     expect(await sha256Hex("")).toBe(
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", // pragma: allowlist secret
     );
     expect(await sha256Hex("abc")).toBe(
-      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", // pragma: allowlist secret
     );
   });
 
