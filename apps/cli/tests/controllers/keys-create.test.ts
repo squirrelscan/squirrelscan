@@ -246,11 +246,11 @@ describe("createApiKey with more than one org", () => {
     // org the old code silently picked.
     {
       id: "org_new",
-      slug: "squirrelscan-e2e",
-      name: "squirrelscan e2e (internal)",
+      slug: "acme-ci",
+      name: "Acme CI (internal)",
       role: "owner",
     },
-    { id: "org_old", slug: "nikz", name: "Nik Cubrilovic", role: "owner" },
+    { id: "org_old", slug: "acme", name: "Acme Inc", role: "owner" },
   ];
 
   function stubMultiOrg(): { minted: string[] } {
@@ -301,12 +301,12 @@ describe("createApiKey with more than one org", () => {
   test("--org <slug> mints against THAT org, not the first of the list", async () => {
     const { minted } = stubMultiOrg();
 
-    const result = await createApiKey({ org: "nikz" });
+    const result = await createApiKey({ org: "acme" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(minted).toEqual(["org_old"]);
     expect(result.data.orgId).toBe("org_old");
-    expect(result.data.orgSlug).toBe("nikz");
+    expect(result.data.orgSlug).toBe("acme");
   });
 
   test("--org <id> works too", async () => {
@@ -320,7 +320,7 @@ describe("createApiKey with more than one org", () => {
   test("an org the user is not a member of never reaches the API", async () => {
     const { minted } = stubMultiOrg();
 
-    const result = await createApiKey({ org: "acme" });
+    const result = await createApiKey({ org: "nope-inc" });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("ORG_NOT_FOUND");
     expect(minted).toEqual([]);

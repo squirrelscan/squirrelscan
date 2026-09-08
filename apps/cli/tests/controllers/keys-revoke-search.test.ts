@@ -50,11 +50,11 @@ const originalEnv = { ...process.env };
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 
 const ORGS = [
-  { id: "org_a", slug: "nikz", name: "Nik Cubrilovic", role: "owner" },
+  { id: "org_a", slug: "acme", name: "Acme Inc", role: "owner" },
   {
     id: "org_b",
-    slug: "squirrelscan-e2e",
-    name: "squirrelscan e2e (internal)",
+    slug: "acme-ci",
+    name: "Acme CI (internal)",
     role: "member",
   },
 ];
@@ -143,7 +143,7 @@ describe("findKeyToRevoke", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("INCOMPLETE_SEARCH");
-      expect(result.error.message).toContain("squirrelscan-e2e");
+      expect(result.error.message).toContain("acme-ci");
       expect(result.error.message).toContain("--org");
     }
   });
@@ -160,7 +160,7 @@ describe("findKeyToRevoke", () => {
   test("--org restores prefix matching by making the search complete again", async () => {
     stubFetch({ org_a: [apiKey("key_a", "sq_shared111")] });
 
-    const result = await findKeyToRevoke("sq_shared", { org: "nikz" });
+    const result = await findKeyToRevoke("sq_shared", { org: "acme" });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.data.key.id).toBe("key_a");
   });
@@ -172,7 +172,7 @@ describe("findKeyToRevoke", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("KEY_NOT_FOUND");
-      expect(result.error.message).toContain("squirrelscan-e2e");
+      expect(result.error.message).toContain("acme-ci");
     }
   });
 

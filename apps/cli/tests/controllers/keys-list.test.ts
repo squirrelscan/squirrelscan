@@ -51,11 +51,11 @@ const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const ORGS = [
   {
     id: "org_new",
-    slug: "squirrelscan-e2e",
-    name: "squirrelscan e2e (internal)",
+    slug: "acme-ci",
+    name: "Acme CI (internal)",
     role: "owner",
   },
-  { id: "org_old", slug: "nikz", name: "Nik Cubrilovic", role: "member" },
+  { id: "org_old", slug: "acme", name: "Acme Inc", role: "member" },
 ];
 
 function apiKey(id: string, prefix: string): Record<string, unknown> {
@@ -128,8 +128,8 @@ function stubFetch(byOrg: Record<string, unknown[] | number>): {
 describe("listApiKeys", () => {
   test("lists every org the user belongs to, each keyed to its org", async () => {
     const { listed } = stubFetch({
-      org_new: [apiKey("key_e2e", "sq_eee")],
-      org_old: [apiKey("key_nikz", "sq_nnn")],
+      org_new: [apiKey("key_ci", "sq_eee")],
+      org_old: [apiKey("key_acme", "sq_nnn")],
     });
 
     const result = await listApiKeys();
@@ -137,27 +137,27 @@ describe("listApiKeys", () => {
     if (!result.ok) return;
     expect(listed.sort()).toEqual(["org_new", "org_old"]);
     expect(result.data.orgs.map((entry) => entry.org.slug)).toEqual([
-      "squirrelscan-e2e",
-      "nikz",
+      "acme-ci",
+      "acme",
     ]);
-    expect(result.data.orgs[1].keys[0].id).toBe("key_nikz");
+    expect(result.data.orgs[1].keys[0].id).toBe("key_acme");
   });
 
   test("--org narrows to one org and skips the others entirely", async () => {
-    const { listed } = stubFetch({ org_old: [apiKey("key_nikz", "sq_nnn")] });
+    const { listed } = stubFetch({ org_old: [apiKey("key_acme", "sq_nnn")] });
 
-    const result = await listApiKeys({ org: "nikz" });
+    const result = await listApiKeys({ org: "acme" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(listed).toEqual(["org_old"]);
     expect(result.data.orgs).toHaveLength(1);
-    expect(result.data.orgs[0].org.slug).toBe("nikz");
+    expect(result.data.orgs[0].org.slug).toBe("acme");
   });
 
   test("an unknown --org is refused before any key request", async () => {
     const { listed } = stubFetch({});
 
-    const result = await listApiKeys({ org: "acme" });
+    const result = await listApiKeys({ org: "nope-inc" });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("ORG_NOT_FOUND");
     expect(listed).toEqual([]);
@@ -165,7 +165,7 @@ describe("listApiKeys", () => {
 
   test("an org the user cannot read (403 for a plain member) is reported, not fatal", async () => {
     stubFetch({
-      org_new: [apiKey("key_e2e", "sq_eee")],
+      org_new: [apiKey("key_ci", "sq_eee")],
       org_old: 403,
     });
 
@@ -186,7 +186,7 @@ describe("listApiKeys", () => {
   });
 
   test("an org with no keys comes back as an empty group, not an omission", async () => {
-    stubFetch({ org_new: [], org_old: [apiKey("key_nikz", "sq_nnn")] });
+    stubFetch({ org_new: [], org_old: [apiKey("key_acme", "sq_nnn")] });
 
     const result = await listApiKeys();
     expect(result.ok).toBe(true);
@@ -242,14 +242,14 @@ describe("keys list --json partial failures", () => {
     const stderr = errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
     // stdout stays parseable JSON — the warning must not corrupt it.
     expect(JSON.parse(stdout)).toEqual([]);
-    expect(stderr).toContain("nikz");
+    expect(stderr).toContain("acme");
     expect(stderr).toContain("Insufficient permissions");
   });
 
   test("a fully readable account writes nothing to stderr", async () => {
     stubFetch({
-      org_new: [apiKey("key_e2e", "sq_eee")],
-      org_old: [apiKey("key_nikz", "sq_nnn")],
+      org_new: [apiKey("key_ci", "sq_eee")],
+      org_old: [apiKey("key_acme", "sq_nnn")],
     });
 
     await runList({ json: true });
@@ -261,8 +261,8 @@ describe("keys list --json partial failures", () => {
 
   test("each key in the JSON array carries its org", async () => {
     stubFetch({
-      org_new: [apiKey("key_e2e", "sq_eee")],
-      org_old: [apiKey("key_nikz", "sq_nnn")],
+      org_new: [apiKey("key_ci", "sq_eee")],
+      org_old: [apiKey("key_acme", "sq_nnn")],
     });
 
     await runList({ json: true });
@@ -270,10 +270,7 @@ describe("keys list --json partial failures", () => {
     const rows = JSON.parse(
       logSpy.mock.calls.map((call) => call.join(" ")).join("\n")
     ) as Array<{ id: string; orgSlug: string; orgId: string }>;
-    expect(rows.map((row) => row.orgSlug)).toEqual([
-      "squirrelscan-e2e",
-      "nikz",
-    ]);
+    expect(rows.map((row) => row.orgSlug)).toEqual(["acme-ci", "acme"]);
     expect(rows[1].orgId).toBe("org_old");
   });
 });

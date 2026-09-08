@@ -18,14 +18,14 @@ import {
 
 const ORG_A: CliOrg = {
   id: "org_a",
-  slug: "nikz",
-  name: "Nik Cubrilovic",
+  slug: "acme",
+  name: "Acme Inc",
   role: "owner",
 };
 const ORG_B: CliOrg = {
   id: "org_b",
-  slug: "squirrelscan-e2e",
-  name: "squirrelscan e2e (internal)",
+  slug: "acme-ci",
+  name: "Acme CI (internal)",
   role: "owner",
 };
 
@@ -155,8 +155,8 @@ describe("resolveKeyMatch", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("AMBIGUOUS_PREFIX");
-      expect(result.error.message).toContain("nikz");
-      expect(result.error.message).toContain("squirrelscan-e2e");
+      expect(result.error.message).toContain("acme");
+      expect(result.error.message).toContain("acme-ci");
       expect(result.error.message).toContain("--org");
     }
   });
@@ -170,7 +170,7 @@ describe("resolveKeyMatch", () => {
       "key_b"
     );
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.org.slug).toBe("squirrelscan-e2e");
+    if (result.ok) expect(result.data.org.slug).toBe("acme-ci");
   });
 });
 

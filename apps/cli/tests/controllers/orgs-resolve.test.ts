@@ -55,22 +55,22 @@ const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 
-// The real shapes, from a read-only prod call on a two-org account: the
-// membership list is newest-first, so the org created LAST leads it while the
-// active org (where credits are spent) is the older one.
-const E2E_ORG = {
-  id: "01M12TN7TBB3HK450HNCB9X30D",
-  slug: "squirrelscan-e2e",
-  name: "squirrelscan e2e (internal)",
+// Shaped like the real payload of a two-org account: the membership list is
+// newest-first, so the org created LAST leads it while the active org (where
+// credits are spent) is the older one.
+const ACME_CI_ORG = {
+  id: "01ACME000000000000000000CI",
+  slug: "acme-ci",
+  name: "Acme CI (internal)",
   role: "owner",
 };
-const NIKZ_ORG = {
-  id: "org_user_39CqDBQC4HdqR7nKxhTuVIz7i5x",
-  slug: "nikz",
-  name: "Nik Cubrilovic",
+const ACME_ORG = {
+  id: "org_user_acme00000000000000000000000",
+  slug: "acme",
+  name: "Acme Inc",
   role: "owner",
 };
-const ORGS = [E2E_ORG, NIKZ_ORG];
+const ORGS = [ACME_CI_ORG, ACME_ORG];
 
 beforeEach(() => {
   process.env = { ...originalEnv };
@@ -131,16 +131,13 @@ describe("listOrgs", () => {
     const result = await listOrgs();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.map((o) => o.slug)).toEqual([
-      "squirrelscan-e2e",
-      "nikz",
-    ]);
-    expect(result.data[1].id).toBe(NIKZ_ORG.id);
+    expect(result.data.map((o) => o.slug)).toEqual(["acme-ci", "acme"]);
+    expect(result.data[1].id).toBe(ACME_ORG.id);
     expect(result.data[1].role).toBe("owner");
   });
 
   test("drops rows with no id rather than building /organizations/undefined/...", async () => {
-    stubFetch({ organizations: [{ slug: "ghost" }, NIKZ_ORG] });
+    stubFetch({ organizations: [{ slug: "ghost" }, ACME_ORG] });
     const result = await listOrgs();
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.data).toHaveLength(1);
@@ -163,40 +160,40 @@ describe("listOrgs", () => {
 
 describe("matchOrg", () => {
   const orgs = [
-    { ...E2E_ORG, name: E2E_ORG.name as string | null },
-    { ...NIKZ_ORG, name: NIKZ_ORG.name as string | null },
+    { ...ACME_CI_ORG, name: ACME_CI_ORG.name as string | null },
+    { ...ACME_ORG, name: ACME_ORG.name as string | null },
   ];
 
   test("matches an exact slug", () => {
-    const result = matchOrg(orgs, "nikz");
+    const result = matchOrg(orgs, "acme");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.id).toBe(NIKZ_ORG.id);
+    if (result.ok) expect(result.data.id).toBe(ACME_ORG.id);
   });
 
   test("matches an exact id", () => {
-    const result = matchOrg(orgs, E2E_ORG.id);
+    const result = matchOrg(orgs, ACME_CI_ORG.id);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.slug).toBe("squirrelscan-e2e");
+    if (result.ok) expect(result.data.slug).toBe("acme-ci");
   });
 
   test("slug matching is case-insensitive (slugs are lowercased server-side)", () => {
-    const result = matchOrg(orgs, "NikZ");
+    const result = matchOrg(orgs, "AcMe");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.slug).toBe("nikz");
+    if (result.ok) expect(result.data.slug).toBe("acme");
   });
 
   test("does NOT prefix-match — a partial slug is refused, not guessed", () => {
-    const result = matchOrg(orgs, "nik");
+    const result = matchOrg(orgs, "acm");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("ORG_NOT_FOUND");
   });
 
   test("an unknown org lists the real ones so the next attempt can succeed", () => {
-    const result = matchOrg(orgs, "acme");
+    const result = matchOrg(orgs, "nope-inc");
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.message).toContain("nikz");
-      expect(result.error.message).toContain("squirrelscan-e2e");
+      expect(result.error.message).toContain("acme");
+      expect(result.error.message).toContain("acme-ci");
     }
   });
 
@@ -209,10 +206,10 @@ describe("matchOrg", () => {
 
 describe("fetchActiveOrgContext", () => {
   test("resolves the active org to its membership row", async () => {
-    stubFetch({ activeOrgId: NIKZ_ORG.id });
+    stubFetch({ activeOrgId: ACME_ORG.id });
     const context = await fetchActiveOrgContext();
-    expect(context?.activeOrgId).toBe(NIKZ_ORG.id);
-    expect(context?.active?.slug).toBe("nikz");
+    expect(context?.activeOrgId).toBe(ACME_ORG.id);
+    expect(context?.active?.slug).toBe("acme");
     expect(context?.orgs).toHaveLength(2);
   });
 
@@ -231,36 +228,36 @@ describe("fetchActiveOrgContext", () => {
 
 describe("resolveKeyOrg", () => {
   test("a single-org account needs no --org", async () => {
-    const counters = stubFetch({ organizations: [NIKZ_ORG] });
+    const counters = stubFetch({ organizations: [ACME_ORG] });
     const result = await resolveKeyOrg();
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.slug).toBe("nikz");
+    if (result.ok) expect(result.data.slug).toBe("acme");
     // The sole-org path must not pay for the heavy hydrate call.
     expect(counters.hydrateCalls).toBe(0);
   });
 
   test("REFUSES to pick when the account has two orgs (#1971)", async () => {
-    stubFetch({ activeOrgId: NIKZ_ORG.id });
+    stubFetch({ activeOrgId: ACME_ORG.id });
     const result = await resolveKeyOrg();
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("ORG_REQUIRED");
       // The old behaviour would have silently used this one (first, newest).
-      expect(result.error.message).toContain("squirrelscan-e2e");
-      expect(result.error.message).toContain("nikz");
+      expect(result.error.message).toContain("acme-ci");
+      expect(result.error.message).toContain("acme");
       expect(result.error.message).toContain("--org");
     }
   });
 
   test("the refusal marks which org audits already spend from", async () => {
-    stubFetch({ activeOrgId: NIKZ_ORG.id });
+    stubFetch({ activeOrgId: ACME_ORG.id });
     const result = await resolveKeyOrg();
     expect(result.ok).toBe(false);
     if (!result.ok) {
       const activeLine = result.error.message
         .split("\n")
         .find((l) => l.includes("[active]"));
-      expect(activeLine).toContain("nikz");
+      expect(activeLine).toContain("acme");
     }
   });
 
@@ -270,16 +267,16 @@ describe("resolveKeyOrg", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("ORG_REQUIRED");
-      expect(result.error.message).toContain("nikz");
+      expect(result.error.message).toContain("acme");
       expect(result.error.message).not.toContain("[active]");
     }
   });
 
   test("an explicit --org is honoured over the list order", async () => {
     stubFetch();
-    const result = await resolveKeyOrg("nikz");
+    const result = await resolveKeyOrg("acme");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.id).toBe(NIKZ_ORG.id);
+    if (result.ok) expect(result.data.id).toBe(ACME_ORG.id);
   });
 
   test("an explicit --org that is not a membership is refused, not sent", async () => {
@@ -292,22 +289,22 @@ describe("resolveKeyOrg", () => {
 
 describe("formatting helpers", () => {
   test("describeOrg pairs slug with name", () => {
-    expect(describeOrg({ ...NIKZ_ORG })).toBe("nikz (Nik Cubrilovic)");
+    expect(describeOrg({ ...ACME_ORG })).toBe("acme (Acme Inc)");
   });
 
   test("describeOrg falls back to the id when there is no slug", () => {
-    expect(describeOrg({ ...NIKZ_ORG, slug: "", name: null })).toBe(
-      NIKZ_ORG.id
+    expect(describeOrg({ ...ACME_ORG, slug: "", name: null })).toBe(
+      ACME_ORG.id
     );
   });
 
   test("formatOrgChoices prints the id of every org", () => {
     const text = formatOrgChoices(
-      [{ ...NIKZ_ORG }, { ...E2E_ORG }],
-      E2E_ORG.id
+      [{ ...ACME_ORG }, { ...ACME_CI_ORG }],
+      ACME_CI_ORG.id
     );
-    expect(text).toContain(`id: ${NIKZ_ORG.id}`);
-    expect(text).toContain(`id: ${E2E_ORG.id}`);
+    expect(text).toContain(`id: ${ACME_ORG.id}`);
+    expect(text).toContain(`id: ${ACME_CI_ORG.id}`);
     expect(text).toContain("[active]");
   });
 });

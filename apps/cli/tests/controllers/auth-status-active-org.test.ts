@@ -21,11 +21,11 @@ const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const ORGS = [
   {
     id: "org_new",
-    slug: "squirrelscan-e2e",
-    name: "squirrelscan e2e (internal)",
+    slug: "acme-ci",
+    name: "Acme CI (internal)",
     role: "owner",
   },
-  { id: "org_old", slug: "nikz", name: "Nik Cubrilovic", role: "owner" },
+  { id: "org_old", slug: "acme", name: "Acme Inc", role: "owner" },
 ];
 
 let server: ReturnType<typeof Bun.serve> | null = null;
@@ -117,8 +117,8 @@ describe("auth status on a login session", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.org?.id).toBe("org_old");
-    expect(result.data.org?.slug).toBe("nikz");
-    expect(result.data.org?.name).toBe("Nik Cubrilovic");
+    expect(result.data.org?.slug).toBe("acme");
+    expect(result.data.org?.name).toBe("Acme Inc");
     // The org the old `keys create` would have used.
     expect(result.data.org?.id).not.toBe("org_new");
   });
@@ -137,7 +137,7 @@ describe("auth status on a login session", () => {
     const result = await runAuthStatus();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.org?.slug).toBe("nikz");
+    expect(result.data.org?.slug).toBe("acme");
     expect(result.data.orgCount).toBe(1);
   });
 
@@ -181,13 +181,13 @@ describe("auth status on a login session", () => {
       () => ok({ ...settingsModule.DEFAULT_SETTINGS, auth: null })
     );
     const counters = serve();
-    process.env[API_KEY_ENV] = "sqcli_envsuppliedloginsession";
+    process.env[API_KEY_ENV] = "sqcli_envsuppliedloginsession"; // pragma: allowlist secret
 
     const result = await runAuthStatus();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.source).toBe("env");
-    expect(result.data.org?.slug).toBe("nikz");
+    expect(result.data.org?.slug).toBe("acme");
     expect(counters.hydrateCalls).toBe(1);
   });
 
