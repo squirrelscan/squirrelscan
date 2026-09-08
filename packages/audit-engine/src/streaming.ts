@@ -327,6 +327,7 @@ export function streamPageRules(
             crawlId,
             storage,
             collectors,
+            fanout,
             pageResults,
             pageRuleResults,
             ruleResultsMap,
@@ -501,7 +502,9 @@ export function streamPageRules(
           // adds no residency — the implementation is what decides when to
           // serialize them.
           ruleCache.putFresh(cacheKey, page, {
-            ruleResults: [...result.ruleResults].map(([ruleId, rr]) => [ruleId, rr.checks] as const),
+            ruleResults: [...result.ruleResults].map(
+              ([ruleId, rr]) => [ruleId, stripOwnPageUrl(rr.checks, pageUrl)] as const,
+            ),
             features,
             signals,
           });
@@ -579,6 +582,25 @@ export function streamPageRules(
 }
 
 /**
+ * A page's checks with its OWN `pageUrl` stamp removed, for storage (#1990).
+ *
+ * The loop stamps `pageUrl` only where a rule left it unset, so a rule that set
+ * its own — pointing at a DIFFERENT page — must keep it. Stripping only the value
+ * equal to this page's url preserves that distinction exactly, and it is what lets
+ * a replayed page be recorded as a template-cluster representative: what the
+ * fan-out caches has to be page-identity-free, exactly as on the fresh path.
+ *
+ * Returns new check objects; the run's own copies keep their stamp.
+ */
+function stripOwnPageUrl(checks: readonly CheckResultLike[], pageUrl: string): CheckResultLike[] {
+  return checks.map((check) => {
+    if (check.pageUrl !== pageUrl) return check;
+    const { pageUrl: _own, ...rest } = check;
+    return rest as CheckResultLike;
+  });
+}
+
+/**
  * Put one page's CACHED rules-phase output back into the stream, in the place the
  * fresh path would have filled (#1990).
  *
@@ -604,6 +626,7 @@ function replayPage(
   crawlId: string,
   storage: SQLiteStorage,
   collectors: readonly PageSignalCollector[],
+  fanout: ReturnType<typeof createTemplateFanout> | null,
   pageResults: Map<string, CheckResultLike[]>,
   pageRuleResults: Map<string, Map<string, CheckResultLike[]>>,
   ruleResultsMap: Map<string, RuleRunResult>,
@@ -612,6 +635,29 @@ function replayPage(
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
     const pageUrl = page.normalizedUrl;
+
+    // Assemble the per-rule results FIRST, still page-identity-free (the stored
+    // checks have this page's own `pageUrl` stripped), so the fan-out sees exactly
+    // what the fresh path hands it.
+    const byRule = new Map<string, RuleRunResult>();
+    for (const [ruleId, checks] of entry.ruleResults) {
+      const meta = runner.getRuleMeta(ruleId);
+      if (meta) byRule.set(ruleId, { meta, checks });
+    }
+
+    // A REPLAYED page must be able to represent its cluster (#1990 x #1951).
+    // Otherwise which page runs a template-scoped rule depends on what happens to
+    // be cached, and a fully-replayed audit can differ from a fresh one on a
+    // cluster whose first member replayed: the fresh audit fans the first page's
+    // verdict onto the rest, the replaying one lets the second page compute its
+    // own. Recording here restores the fresh audit's election exactly, because the
+    // cluster key comes from the STORED `page_features.template_fp` — the same key
+    // this page's live fingerprint produced when it ran.
+    const clusterKey = fanout
+      ? fanoutClusterKey(entry.features.templateFp, pageUrl)
+      : null;
+    fanout?.record(clusterKey, byRule);
+
     const flat: CheckResultLike[] = [];
     const ruleChecksForPage = new Map<string, CheckResultLike[]>();
     for (const [ruleId, checks] of entry.ruleResults) {
@@ -623,10 +669,7 @@ function replayPage(
     }
     pageResults.set(pageUrl, flat);
     pageRuleResults.set(pageUrl, ruleChecksForPage);
-    for (const [ruleId, checks] of entry.ruleResults) {
-      const meta = runner.getRuleMeta(ruleId);
-      if (!meta) continue;
-      const rr: RuleRunResult = { meta, checks };
+    for (const [ruleId, rr] of byRule) {
       mergeRuleRunResult(ruleResultsMap, ruleId, rr);
       foldRuleResultIntoTallies(tallies, ruleId, rr);
     }

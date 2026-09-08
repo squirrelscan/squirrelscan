@@ -1444,41 +1444,42 @@ Site-scope rules always run.
 Both arms are the SAME build. `SQUIRREL_RULE_CACHE=0` is the only difference,
 which is the point: an A/B across two builds is an A/B across two of everything.
 2,500 pages of the mixed synthetic estate, one pinned origin across each pair, a
-fresh content store per pair, load average 3.5 to 4.3 throughout.
+fresh content store per pair, load average 2.2 to 4.5 throughout.
 
 | stage | wall | rules phase | report phase | crawl | project.db |
 |---|---|---|---|---|---|
-| cache off, cold | 186 s | 128 s | 22 s | 34 s | 258 MB |
-| cache off, warm | 171 s | 131 s | 23 s | 15 s | 516 MB |
-| cache on, cold | 186 s | 124 s | 17 s | 44 s | 291 MB |
-| **cache on, warm** | **44 s** | **12 s** | 19 s | 13 s | 579 MB |
+| cache off, cold | 170 s | 114 s | 19 s | 34 s | 258 MB |
+| cache off, warm | 140 s | 106 s | 18 s | 14 s | 514 MB |
+| cache on, cold | 161 s | 110 s | 17 s | 33 s | 290 MB |
+| **cache on, warm** | **46 s** | **13 s** | 18 s | 14 s | 579 MB |
 
-**The warm rules phase falls from 131 s to 12 s, and the warm run from 171 s to
-44 s.** All 2,500 pages replayed, which the report says and nothing else in it
+**The warm rules phase falls from 106 s to 13 s, and the warm run from 140 s to
+46 s.** All 2,500 pages replayed, which the report says and nothing else in it
 does — the findings are identical by construction.
 
-Read the rules-phase column rather than the wall. The rules phase is where the
-change is, it is 12 s against 131, and no plausible amount of box noise closes
-that; the wall carries the crawl and report phases, which this does not touch.
+Read the rules-phase column rather than the wall, and compare WITHIN a pair. The
+cache-off rules phase came in at 131 s on a loaded evening and 106 s on a quiet
+one, which is most of the spread this table would otherwise be asked to explain;
+13 s against 106 s in the same pair is not inside it.
 
 **Byte-identity holds at scale.** The cache-on cold and warm reports are
-identical, all 3,044,401 bytes of them, once `meta.timestamp` and the replay
+identical, all 3,039,997 bytes of them, once `meta.timestamp` and the replay
 disclosure itself are removed. That is 2,500 pages replayed against 2,500 pages
 evaluated, on the full default rule surface.
 
 Two things the warm row makes visible that were hidden behind the rules phase:
 
-- **Report reconstruction is now the largest phase of a re-audit** — 19 s of a
-  44 s run, against 12 s of rules. squirrelscan/repo#1920 was already open on it;
+- **Report reconstruction is now the largest phase of a re-audit** — 18 s of a
+  46 s run, against 13 s of rules. squirrelscan/repo#1920 was already open on it;
   it is now the thing to work.
-- **A warm crawl still costs 13 s** with nothing to fetch, which is frontier and
+- **A warm crawl still costs 14 s** with nothing to fetch, which is frontier and
   bookkeeping work rather than bytes.
 
 ### What it costs a cold run, and what that took to establish
 
-The cold arms come in at the same wall (186 s each) and the cache-on rules phase
-is 4 s FASTER than the cache-off one, which it cannot actually be: a cold run with
-the cache on does strictly more work. **The cost is below what this box can
+The cache-on cold arm comes in FASTER than cache-off, on both the wall (161 s to
+170) and the rules phase (110 s to 114), which it cannot actually be: a cold run
+with the cache on does strictly more work. **The cost is below what this box can
 resolve**, and the honest statement is that and not "free".
 
 It was not always below it. At gzip's default level 6 the same comparison, run as
@@ -1489,10 +1490,35 @@ what moved it under the noise floor, and it is the right trade here because thes
 rows are retired with their crawl: the extra bytes live no longer than the audit
 does, while the cold run's cost is paid by every first-time user.
 
-Storage: `project.db` grows 12.8% (258 to 291 MiB cold, 516 to 579 warm). The rows
+Storage: `project.db` grows about 12.5% (258 to 290 MiB cold, 514 to 579 warm). The rows
 are retired with their crawl, so `squirrel self disk --prune` reclaims them with
 everything else that audit holds and the retention window bounds them, rather than
 a permanent second copy accumulating.
+
+### What an adversarial review found that the gates did not
+
+Seven findings, all fixed. Two are worth recording because they are about
+composition rather than about this code:
+
+**A replayed page has to be able to represent its template cluster.** Fan-out
+(#279) runs a declared rule once per cluster and copies the verdict to the rest.
+The first design had replayed pages abstain from it entirely — they did not run
+the rules, so they had nothing to record. That makes WHICH page runs a
+template-scoped rule depend on what happens to be cached: on the audit after one
+page changes, the changed page is the only fresh one and keeps its own verdict,
+where a fresh audit would have the first page of the cluster fan its verdict onto
+it. The next fully-replayed audit then disagrees with a fresh audit of identical
+content, and the disagreement is persisted. Reproduced on the synthetic estate by
+adding a `<meta name="viewport">` to one page — none of the five things the chrome
+fingerprint reads — which moved three checks. The fix is that a replayed page
+records too, keyed on the `page_features.template_fp` its own run stored, which
+restores the fresh audit's election exactly.
+
+**A cache changes what the clock means.** `content/stale-copyright` reads
+`new Date().getUTCFullYear()` at execution and is the only page rule that reads a
+clock at all, so a pass cached on 31 December would replay on 1 January. The
+current UTC year is now part of the run context — year and not day, because a day
+would make every re-audit after midnight cold for nothing.
 
 ### Two findings from building it
 

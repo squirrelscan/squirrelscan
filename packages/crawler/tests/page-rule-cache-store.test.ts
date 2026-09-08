@@ -131,23 +131,34 @@ describe("page_rule_cache storage", () => {
   // sharing a key hold the same bytes. Pinning "newest" would be pinning SQLite's
   // tie-break on two rows written in the same millisecond, which is the index
   // plan's choice and not the query's.
-  test("a key held by two crawls resolves to one payload", async () => {
+  // Every retained audit holds a row for an unchanged page, so a lookup that
+  // returned them all would decompress (pages x retained audits) payloads per
+  // audit — work that grows with history rather than with the crawl. The SQL
+  // picks one row per key, so the result size is the assertion.
+  //
+  // WHICH row is deliberately not asserted: the key covers every input that
+  // determines the payload, so rows sharing a key hold the same bytes, and
+  // pinning "newest" would be pinning SQLite's tie-break on rows written in the
+  // same millisecond.
+  test("a key held by many crawls resolves to exactly one payload", async () => {
     await withStorage(async (storage, firstCrawl) => {
       const payload = '{"gen":"identical-by-construction"}';
-      await run(
-        storage.savePageRuleCacheBatch(firstCrawl, [
-          { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
-        ])
-      );
-      const secondCrawl = await run(storage.createCrawl(crawlMeta(2_000)));
-      await run(
-        storage.savePageRuleCacheBatch(secondCrawl, [
-          { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
-        ])
-      );
-      const loaded = await run(storage.loadPageRuleCache(["k1"]));
-      expect(loaded.size).toBe(1);
+      const crawls = [firstCrawl];
+      for (let i = 0; i < 9; i++) {
+        crawls.push(await run(storage.createCrawl(crawlMeta(2_000 + i))));
+      }
+      for (const crawlId of crawls) {
+        await run(
+          storage.savePageRuleCacheBatch(crawlId, [
+            { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
+            { normalizedUrl: "http://x.test/b", cacheKey: "k2", payload },
+          ])
+        );
+      }
+      const loaded = await run(storage.loadPageRuleCache(["k1", "k2"]));
+      expect(loaded.size).toBe(2);
       expect(loaded.get("k1")).toBe(payload);
+      expect(loaded.get("k2")).toBe(payload);
     });
   });
 

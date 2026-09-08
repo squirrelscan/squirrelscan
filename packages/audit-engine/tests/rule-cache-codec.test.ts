@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   canonicalJson,
+  computeRunContextHash,
   decodeCacheValue,
   decodePageRuleCacheEntry,
   encodeCacheValue,
@@ -49,6 +50,17 @@ describe("canonicalJson", () => {
   test("keeps Set and Map iteration order, which is observable", () => {
     expect(canonicalJson(new Set(["a", "b"]))).not.toBe(canonicalJson(new Set(["b", "a"])));
     expect(canonicalJson(new Map([["a", 1]]))).not.toBe(canonicalJson({ a: 1 }));
+  });
+
+  // Three inputs that a single "not finite" token would have merged, and two
+  // arrays that a hole-skipping `.map` would have. A rule option distinguishing
+  // any of these pairs would otherwise change behaviour under an unchanged key.
+  test("does not merge distinct numbers or array shapes", () => {
+    const forms = [NaN, Infinity, -Infinity].map((n) => canonicalJson({ limit: n }));
+    expect(new Set(forms).size).toBe(3);
+    expect(canonicalJson([])).not.toBe(canonicalJson(new Array(1)));
+    expect(canonicalJson([undefined])).toBe(canonicalJson(new Array(1)));
+    expect(canonicalJson([1, 2])).not.toBe(canonicalJson([12]));
   });
 
   // The reason this throws rather than degrading: a run context holding a live
@@ -134,8 +146,82 @@ describe("cache payload codec", () => {
     expect(signal.fingerprint.assetHosts).toBeInstanceOf(Set);
   });
 
+  // `JSON.stringify` renders a Date as an ISO string on a fresh run; walked as a
+  // plain object it has no own keys and would come back `{}`. `check.details` is
+  // `Record<string, unknown>`, so a rule may put one there.
+  test("round-trips a Date, which a plain-object walk would empty", () => {
+    const value = { details: { when: new Date("2026-01-01T00:00:00.000Z") } };
+    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    expect(back.details.when).toBeInstanceOf(Date);
+    expect(JSON.stringify(back)).toBe(JSON.stringify(value));
+  });
+
+  // `JSON.parse` makes `__proto__` an ordinary own key, but `out[k] = v` routes it
+  // to the prototype setter and it disappears.
+  test("keeps an own __proto__ key through the round-trip", () => {
+    const value = JSON.parse('{"details":{"__proto__":"kept","other":1}}') as {
+      details: Record<string, unknown>;
+    };
+    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    expect(Object.hasOwn(back.details, "__proto__")).toBe(true);
+    expect(JSON.stringify(back)).toBe(JSON.stringify(value));
+  });
+
   test("an unreadable payload is a miss, not a throw", () => {
     expect(decodePageRuleCacheEntry("{not json")).toBeNull();
     expect(decodePageRuleCacheEntry(JSON.stringify({ nothing: true }))).toBeNull();
+  });
+});
+
+describe("run context", () => {
+  const base = {
+    engineVersion: "0.0.91",
+    pageRules: [{ id: "core/meta-title", options: { max_length: 75 } }],
+    siteData: { baseUrl: "http://x.test", pages: [], robotsTxt: null, sitemaps: null } as never,
+    siteMetadata: undefined,
+    cloudResults: undefined,
+    ignoreApplicability: false,
+    utcYear: 2026,
+  };
+  const hashOf = async (over: Partial<typeof base>) => {
+    const out = await computeRunContextHash({ ...base, ...over });
+    if (!("hash" in out)) throw new Error(`disabled: ${out.disabled}`);
+    return out.hash;
+  };
+
+  test("is stable for the same inputs", async () => {
+    expect(await hashOf({})).toBe(await hashOf({}));
+  });
+
+  // `content/stale-copyright` reads `new Date().getUTCFullYear()` at execution, so
+  // a pass cached on 31 December must not replay on 1 January.
+  test("moves with the UTC year", async () => {
+    expect(await hashOf({ utcYear: 2027 })).not.toBe(await hashOf({}));
+  });
+
+  // The escape hatch changes a gated rule from a `skipped` check to its real
+  // verdict without touching the rule list or any rule's options.
+  test("moves with the applicability escape hatch", async () => {
+    expect(await hashOf({ ignoreApplicability: true })).not.toBe(await hashOf({}));
+  });
+
+  test("moves with the build, the rule list and a rule's options", async () => {
+    expect(await hashOf({ engineVersion: "0.0.92" })).not.toBe(await hashOf({}));
+    expect(await hashOf({ pageRules: [] })).not.toBe(await hashOf({}));
+    expect(
+      await hashOf({ pageRules: [{ id: "core/meta-title", options: { max_length: 12 } }] }),
+    ).not.toBe(await hashOf({}));
+  });
+
+  // Fail CLOSED: a run context holding something that is not plain data must not
+  // hash to a value it shares with a different one.
+  test("refuses to hash a live handle", async () => {
+    class IntelHandle {
+      lookupUrl() {
+        return null;
+      }
+    }
+    const out = await computeRunContextHash({ ...base, siteMetadata: new IntelHandle() });
+    expect(out).toEqual({ disabled: "unhashable-run-context" });
   });
 });

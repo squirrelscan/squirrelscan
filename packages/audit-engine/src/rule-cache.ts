@@ -207,7 +207,12 @@ export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): s
   if (value === undefined) return "u";
   if (value === null) return "null";
   const t = typeof value;
-  if (t === "number") return Number.isFinite(value as number) ? JSON.stringify(value) : "nf";
+  if (t === "number") {
+    // Distinct forms, not one "not finite" bucket: NaN, Infinity and -Infinity are
+    // three different rule-option values and must not share a key.
+    if (Number.isFinite(value as number)) return JSON.stringify(value);
+    return Number.isNaN(value as number) ? "nan" : (value as number) > 0 ? "inf" : "-inf";
+  }
   if (t === "string" || t === "boolean") return JSON.stringify(value);
   if (t === "bigint") return `bi:${(value as bigint).toString()}`;
   if (t === "function" || t === "symbol") {
@@ -217,7 +222,12 @@ export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): s
   seen.add(value);
   try {
     if (Array.isArray(value)) {
-      return `[${value.map((v) => canonicalJson(v, seen)).join(",")}]`;
+      // LENGTH-prefixed, and holes read as `undefined` rather than as nothing:
+      // `.map` skips holes, so `new Array(1)` and `[]` would otherwise both
+      // canonicalize to the same string.
+      const items: string[] = [];
+      for (let i = 0; i < value.length; i++) items.push(canonicalJson(value[i], seen));
+      return `[${value.length}|${items.join(",")}]`;
     }
     if (value instanceof Set) {
       // Insertion order preserved: it is observable through iteration, so two Sets
@@ -264,6 +274,21 @@ export interface RunContextInput {
   readonly siteMetadata: unknown;
   /** `RunnerScope.cloudResults` — plain `Map<service, Map<key, envelope>>`. */
   readonly cloudResults: unknown;
+  /**
+   * `rules.ignore_applicability` — the escape hatch that makes every enabled rule
+   * run regardless of the Stage-0 profile. It changes a rule's output from a
+   * `skipped` check to its real verdict WITHOUT changing the rule list or any
+   * rule's options, so it has to be here or flipping it replays the skips.
+   */
+  readonly ignoreApplicability: boolean;
+  /**
+   * The current UTC year. `content/stale-copyright` is the only PAGE rule that
+   * reads a clock (`new Date().getUTCFullYear()`), so this is the exact
+   * granularity the cache has to invalidate on: a pass cached on 31 December must
+   * not replay on 1 January. Year and not day, because a day would make every
+   * re-audit after midnight cold for nothing.
+   */
+  readonly utcYear: number;
 }
 
 /**
@@ -283,6 +308,8 @@ export async function computeRunContextHash(
       projection,
       input.siteMetadata ?? null,
       input.cloudResults ?? null,
+      input.ignoreApplicability,
+      input.utcYear,
     ]);
     // A cache that quietly stops hitting looks exactly like a cache that is
     // working, so the one question worth answering cheaply is "which ingredient
@@ -299,6 +326,8 @@ export async function computeRunContextHash(
         ["resourceSizes", projection.resourceSizes],
         ["siteMetadata", input.siteMetadata ?? null],
         ["cloudResults", input.cloudResults ?? null],
+        ["ignoreApplicability", input.ignoreApplicability],
+        ["utcYear", input.utcYear],
       ];
       for (const [name, value] of parts) {
         const digest = (await sha256Hex(canonicalJson(value))).slice(0, 16);
@@ -329,6 +358,18 @@ export async function computePageCacheKey(
     RULE_CACHE_FORMAT,
     runContextHash,
     page.htmlHash,
+    // The NORMALIZED hash too, because `extractPageFeatures` copies it verbatim
+    // into `page_features.content_hash`, where the duplicate-content grouping
+    // reads it. Implied by the exact hash for anything the crawler wrote, but a
+    // record whose normalized hash was written independently is not the crawler's
+    // to imply.
+    page.contentHash,
+    // The stored parse, which `buildSiteContext` PREFERS over re-extracting from
+    // the HTML. For a crawler-written record it is a pure function of the HTML and
+    // the parser, both already covered — but a record whose parsed data was
+    // repaired or imported separately would otherwise replay the old parse's
+    // verdicts under an unchanged key.
+    page.parsedData,
     page.url,
     page.normalizedUrl,
     page.finalUrl,
@@ -370,6 +411,9 @@ interface TaggedUndefined {
 interface TaggedEscape {
   $e: Record<string, unknown>;
 }
+interface TaggedDate {
+  $d: number;
+}
 
 function isTagged(value: object): boolean {
   for (const key of Object.keys(value)) if (key.startsWith("$")) return true;
@@ -387,8 +431,12 @@ export function encodeCacheValue(value: unknown): unknown {
       $m: [...value].map(([k, v]) => [encodeCacheValue(k), encodeCacheValue(v)]),
     } satisfies TaggedMap;
   }
+  // A Date reaches `JSON.stringify` as an ISO string on a fresh run; walked as a
+  // plain object it has no own keys and would come back `{}`. No built-in rule
+  // puts one in `check.details` today, but the field's type permits it.
+  if (value instanceof Date) return { $d: value.getTime() } satisfies TaggedDate;
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) out[k] = encodeCacheValue(v);
+  for (const [k, v] of Object.entries(value)) setOwn(out, k, encodeCacheValue(v));
   // A plain object whose own keys start with "$" would decode as a tag; wrap it.
   return isTagged(out) ? ({ $e: out } satisfies TaggedEscape) : out;
 }
@@ -409,14 +457,32 @@ export function decodeCacheValue(value: unknown): unknown {
   // without running the tag checks over it again — recursing into
   // decodeCacheValue here would read `{"$u": "text"}` as the undefined tag and
   // return undefined for the whole object.
+  if ("$d" in obj) return new Date(obj.$d as number);
   if ("$e" in obj) return decodePlainObject(obj.$e as Record<string, unknown>);
   return decodePlainObject(obj);
 }
 
 function decodePlainObject(obj: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) out[k] = decodeCacheValue(v);
+  for (const [k, v] of Object.entries(obj)) setOwn(out, k, decodeCacheValue(v));
   return out;
+}
+
+/**
+ * Assign an OWN property, even when the key is `__proto__`.
+ *
+ * `JSON.parse` produces `__proto__` as an ordinary own key, but `out[k] = v`
+ * routes it to the prototype setter and the key vanishes. A rule is free to put
+ * one in `check.details`, and losing it would make the replayed report differ from
+ * the fresh one in a way no round-trip written with `=` can see.
+ */
+function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
 }
 
 /** Serialize one entry for storage. */

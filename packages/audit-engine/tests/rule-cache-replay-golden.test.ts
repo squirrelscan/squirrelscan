@@ -256,6 +256,76 @@ describe("per-page rule-result cache — replay parity", () => {
     expect(second.replayedPages).toBe(first.freshPages - 1);
   }, 120_000);
 
+  // Codex's counterexample, and the reason a replayed page records into the
+  // template fan-out (#1951) instead of abstaining from it.
+  //
+  // With abstention, WHICH page runs a template-scoped rule depends on what
+  // happens to be cached: on the audit after a change, the changed page is the
+  // only fresh one, so it becomes the cluster's representative and keeps its own
+  // verdict — where a fresh audit would have the FIRST page record and fan its
+  // verdict onto the changed one. The next fully-replayed audit then disagrees
+  // with a fresh audit of identical content, and the disagreement is persisted.
+  test("a fully-replayed audit matches a fresh one across a template cluster", async () => {
+    const { dbPath, crawlId } = await buildCrawl("fanout-composition");
+    const cache = memoryCacheStore();
+
+    // Populate: no synthetic page carries a viewport meta, so `mobile/viewport`
+    // (verdictScope: "template") fails uniformly across every cluster.
+    await runOnce(dbPath, crawlId, { store: cache.store });
+
+    // Give ONE page a viewport, and not the first one in crawl order — the
+    // divergence needs a page that a fresh audit would never elect. The meta is
+    // none of the five things the chrome fingerprint reads, so the page stays in
+    // its cluster, which is what makes this a fan-out question at all.
+    await withStorage(dbPath, async (storage) => {
+      const pages = await run(storage.getPages(crawlId));
+      // The LAST auditable page: with three templates over sixty pages every
+      // cluster has many members, so this one is never the first of its own.
+      const auditable = pages.filter((p) => p.html && p.status === 200);
+      expect(auditable.length).toBeGreaterThan(10);
+      const target = auditable[auditable.length - 1]!;
+      await run(
+        storage.upsertPage(crawlId, {
+          ...target,
+          html: target.html!.replace(
+            "<head>",
+            '<head>\n<meta name="viewport" content="width=device-width, initial-scale=1">',
+          ),
+        }),
+      );
+    });
+
+    // The audit right after the change: one fresh page, the rest replayed.
+    const afterChange = await runOnce(dbPath, crawlId, { store: cache.store });
+    expect(afterChange.freshPages).toBe(1);
+    expect(afterChange.replayedPages).toBeGreaterThan(0);
+
+    // Now nothing has changed, so everything replays...
+    const fullyReplayed = await runOnce(dbPath, crawlId, { store: cache.store });
+    expect(fullyReplayed.freshPages).toBe(0);
+    // ...and it must say what a fresh audit of this same content says.
+    const fresh = await runOnce(dbPath, crawlId);
+    expectSameSerialization(fullyReplayed.serialized, fresh.serialized);
+  }, 180_000);
+
+  test("turning off applicability gating invalidates every entry", async () => {
+    const { dbPath, crawlId } = await buildCrawl("invalidate-applicability");
+    const cache = memoryCacheStore();
+    const base = getGoldenBaselineConfig();
+    const first = await runOnce(dbPath, crawlId, { store: cache.store, config: base });
+
+    // `ignore_applicability` changes a gated rule's output from a `skipped` check
+    // to its real verdict without touching the rule list or any rule's options,
+    // so nothing else in the key moves with it.
+    const forced = {
+      ...base,
+      rules: { ...base.rules, ignore_applicability: true },
+    } as unknown as Config;
+    const second = await runOnce(dbPath, crawlId, { store: cache.store, config: forced });
+    expect(second.replayedPages).toBe(0);
+    expect(second.freshPages).toBe(first.freshPages);
+  }, 120_000);
+
   test("a new engine version invalidates every entry", async () => {
     const { dbPath, crawlId } = await buildCrawl("invalidate-version");
     const cache = memoryCacheStore();

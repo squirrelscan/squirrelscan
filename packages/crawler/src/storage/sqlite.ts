@@ -3117,20 +3117,26 @@ export class SQLiteStorage implements CrawlStorage {
         for (let i = 0; i < cacheKeys.length; i += CHUNK) {
           const chunk = cacheKeys.slice(i, i + CHUNK);
           const placeholders = chunk.map(() => "?").join(",");
+          // ONE row per key, chosen in SQL. Every retained audit holds a row for
+          // an unchanged page, so selecting them all and letting the last write
+          // win would decompress (pages x retained audits) payloads per audit —
+          // work that grows with history rather than with the crawl, which is
+          // exactly what a per-page cache must not do (#1908).
+          //
+          // `max(created_at)` with bare columns is SQLite's documented
+          // min/max-aggregate case: the other columns come from the row holding
+          // the maximum. Rows tie when two audits land in the same millisecond and
+          // SQLite may then return either — harmless HERE and only here, because
+          // the key covers every input that determines the payload, so two rows
+          // sharing a key hold the same bytes.
           const rows = db
             .query(
-              `SELECT cache_key, payload, created_at FROM page_rule_cache
+              `SELECT cache_key, payload, max(created_at) AS newest
+               FROM page_rule_cache
                WHERE cache_key IN (${placeholders})
-               ORDER BY created_at ASC`
+               GROUP BY cache_key`
             )
             .all(...chunk) as Array<{ cache_key: string; payload: Uint8Array<ArrayBuffer> }>;
-          // Several crawls can hold a row for one key; ORDER BY created_at ASC
-          // plus overwrite prefers the newest, whose crawl is furthest from being
-          // retired. It is a preference and not a guarantee — rows written in the
-          // same millisecond tie, and SQLite resolves a tie by the index plan
-          // rather than by the query. That is harmless HERE and only here: the key
-          // covers every input that determines the payload, so two rows sharing a
-          // key hold the same bytes and are interchangeable.
           for (const row of rows) {
             out.set(row.cache_key, Buffer.from(Bun.gunzipSync(row.payload)).toString("utf8"));
           }

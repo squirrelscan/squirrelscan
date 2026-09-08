@@ -2450,6 +2450,13 @@ export function runStreamingRules(
             siteData: siteDataForPageRules,
             siteMetadata: effectiveScope?.siteMetadata,
             cloudResults: effectiveScope?.cloudResults,
+            // Read through the runner's own view of config (`RulesConfig`), which
+            // is where the escape hatch is declared; the engine's `Config` type
+            // predates it and does not carry it.
+            ignoreApplicability:
+              (config.rules as { ignore_applicability?: boolean } | undefined)
+                ?.ignore_applicability === true,
+            utcYear: new Date().getUTCFullYear(),
           }),
         );
         if ("hash" in ctxHash) ruleCache = bindRuleCache(ruleCacheOpts.store, ctxHash.hash);
