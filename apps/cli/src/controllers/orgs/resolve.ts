@@ -25,7 +25,7 @@ import { cliApi } from "@/lib/api-client";
 /** An org the signed-in user is a member of, as the CLI renders it. */
 export interface CliOrg {
   id: string;
-  /** URL slug (`nikz`). Stable, human-typeable — the preferred `--org` value. */
+  /** URL slug (`acme`). Stable, human-typeable — the preferred `--org` value. */
   slug: string;
   name: string | null;
   /** This user's role in the org (`owner` / `admin` / `member`). */
@@ -203,7 +203,7 @@ export function matchOrg(orgs: CliOrg[], selector: string): Result<CliOrg> {
   );
 }
 
-/** `nikz (Nik Cubrilovic)`, or just the slug/id when there is no name. */
+/** `acme (Acme Inc)`, or just the slug/id when there is no name. */
 export function describeOrg(org: CliOrg): string {
   const label = org.slug || org.id;
   return org.name && org.name !== label ? `${label} (${org.name})` : label;

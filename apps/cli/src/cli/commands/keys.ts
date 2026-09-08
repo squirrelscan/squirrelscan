@@ -19,8 +19,8 @@ import { safeExit } from "@/self/updater";
 
 import { fmt } from "../format";
 
-/** `nikz (Nik Cubrilovic) - <id>`: the slug and id AC #1971 asks every org
- * mention to carry, so a key is never attributed to an org by name alone. */
+/** `acme (Acme Inc) <id>`: the slug AND id on every org mention, so a key is
+ * never attributed to an org by name alone (#1971). */
 function orgLine(slug: string, name: string | null, id: string): string {
   const label = slug || id;
   const named = name && name !== label ? `${label} (${name})` : label;

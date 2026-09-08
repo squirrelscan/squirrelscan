@@ -64,7 +64,7 @@ export function flattenOrgKeys(orgs: OrgKeys[]): OrgKeyRef[] {
   );
 }
 
-/** `nikz` — how an org is named inside a revoke error message. */
+/** `acme` — how an org is named inside a revoke error message. */
 function orgLabel(org: CliOrg): string {
   return org.slug || org.id;
 }
