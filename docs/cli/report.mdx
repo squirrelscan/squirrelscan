@@ -306,6 +306,29 @@ Filter reports by these categories:
 - `eeat` - E-E-A-T signals
 - `blocking` - Ad-blocker & privacy-filter impact (`adblock` still accepted)
 
+## Retired audits
+
+An audit whose data was reclaimed by [`squirrel self disk --prune`](/cli/self#disk)
+can no longer be opened. `--list` still shows it, marked `retired` with the date
+its data went, so the history does not silently shrink:
+
+```text
+06148d76   8 Sep 2026, 10:49   1    retired     -
+  https://example.com
+  data reclaimed on 2026-09-08; this audit can no longer be opened
+```
+
+Opening it, using it with `--diff`, or naming it as a `--regression-since`
+baseline all refuse:
+
+```text
+Audit data was reclaimed on 2026-09-08: 06148d76-6c48-465a-bc16-deb44144350d
+```
+
+The refusal is the point. The crawl row and some of its pages survive a prune, so
+without it the report would rebuild from those and show an audit with no findings
+at all, which reads as a clean result rather than a missing one.
+
 ## Exit codes
 
 | Code | Meaning |

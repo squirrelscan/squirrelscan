@@ -355,6 +355,17 @@ sub-resource records, the links and images (a reused page copies those forward
 from whichever crawl last saw them), and the `crawls` row itself, so the audit is
 still listed.
 
+A retired audit is marked as such and says when its data went:
+
+```text
+06148d76   8 Sep 2026, 10:49   1    retired     -
+  https://example.com
+  data reclaimed on 2026-09-08; this audit can no longer be opened
+```
+
+Opening it, diffing against it, or using it as a `--regression-since` baseline
+all refuse with the same sentence rather than rendering an empty report.
+
 Measured on two audits of a 60-page site: 11.5 MB to 5.7 MB, and the next audit
 still reported every page unchanged rather than refetching it.
 

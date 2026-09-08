@@ -60,7 +60,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 24;
+export const SCHEMA_VERSION = 25;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -335,6 +335,15 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE links ADD COLUMN rate_limited INTEGER`,
     `ALTER TABLE sitemap_url_statuses ADD COLUMN rate_limited INTEGER`,
   ],
+  // Version 25: when an audit's data was reclaimed (squirrelscan/repo#1912).
+  // `self disk --prune` deletes a crawl's derived rows and leaves the `crawls`
+  // row, so without this the audit still reads as `completed` and the report
+  // path rebuilds a CONFIDENT EMPTY report from whatever pages survive — worse
+  // than the disk it saved. Stamped by `retireCrawls`; NULL for every audit that
+  // has not been reclaimed, which is all of them until someone prunes. ADDITIVE;
+  // ALTER is idempotent (the runner swallows "duplicate column name"). Local
+  // sqlite only — NOT a prod migration.
+  25: [`ALTER TABLE crawls ADD COLUMN retired_at INTEGER`],
 };
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
@@ -395,6 +404,16 @@ const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: st
   { name: "rate_limited", type: "INTEGER" },
 ];
 
+// Same guard for `crawls`. Migration 25 added `retired_at`; a DB stamped past 25
+// by a build that numbered its own migration 25 would skip it forever, and then
+// every `listCrawls` SELECT throws "no such column: retired_at" — which fails
+// `report`, `report --list` and the prune itself, not just the new field. Four
+// tables have now been bitten by exactly this, so the column goes on the list at
+// the same time it goes in the migration.
+const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "retired_at", type: "INTEGER" },
+];
+
 const SCHEMA = `
 -- Crawl sessions
 CREATE TABLE IF NOT EXISTS crawls (
@@ -404,7 +423,11 @@ CREATE TABLE IF NOT EXISTS crawls (
   completed_at INTEGER,
   status TEXT NOT NULL,
   config TEXT NOT NULL,
-  stats TEXT NOT NULL
+  stats TEXT NOT NULL,
+  -- When "self disk --prune" reclaimed this audit's data (#1912). NULL until
+  -- something retires it, which is every audit unless the user asks. No
+  -- backticks in here: SCHEMA is a template literal and they would close it.
+  retired_at INTEGER
 );
 
 -- Pages
@@ -985,6 +1008,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("robots_txt", ROBOTS_TXT_ALTER_COLUMNS);
     this.reconcileColumns("links", LINKS_ALTER_COLUMNS);
     this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
+    this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
   }
 
   /**
@@ -999,7 +1023,13 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   private reconcileColumns(
-    table: "pages" | "sitemaps" | "robots_txt" | "links" | "sitemap_url_statuses",
+    table:
+      | "pages"
+      | "sitemaps"
+      | "robots_txt"
+      | "links"
+      | "sitemap_url_statuses"
+      | "crawls",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -1228,6 +1258,7 @@ export class SQLiteStorage implements CrawlStorage {
       startedAt: row.started_at as number,
       completedAt: (row.completed_at as number | null) ?? undefined,
       status: row.status as CrawlMetadata["status"],
+      retiredAt: (row.retired_at as number | null) ?? undefined,
       config: this.safeJsonParse(
         row.config as string,
         {} as CrawlMetadata["config"]
@@ -3363,12 +3394,17 @@ export class SQLiteStorage implements CrawlStorage {
   /**
    * Retire the derived output of the named crawls (#1912).
    *
-   * Their reports stop being renderable; the crawl rows remain. Everything the
-   * NEXT crawl reads is preserved — see RETIREABLE_TABLES for what is excluded
+   * Their reports stop being renderable and they are stamped `retired_at`, which
+   * is what lets `report` say so instead of rebuilding an empty one; the crawl
+   * rows remain, so the audits are still listed. Everything the NEXT crawl reads
+   * is preserved — see RETIREABLE_TABLES for what is excluded
    * and why. One transaction, so a crash cannot leave a half-retired crawl that
    * renders a partial report.
    */
-  retireCrawls(crawlIds: string[]): Effect.Effect<number, StorageError, never> {
+  retireCrawls(
+    crawlIds: string[],
+    retiredAt: number = Date.now()
+  ): Effect.Effect<number, StorageError, never> {
     // Never a crawl that is still being written. A prune racing a live audit
     // would delete the frontier out from under it and leave a half-written run.
     // Checked HERE rather than only in the caller so the guard cannot be
@@ -3408,6 +3444,13 @@ export class SQLiteStorage implements CrawlStorage {
             )
             .run(...crawlIds);
           deleted += Number(pageResult.changes ?? 0);
+          // Stamp INSIDE the transaction, so a crash can never leave a crawl
+          // whose data is gone but which still reads as renderable. That state
+          // is worse than either end of it: the report path would rebuild a
+          // confident empty report from the pages that survive.
+          db.prepare(
+            `UPDATE crawls SET retired_at = ? WHERE id IN (${placeholders})`
+          ).run(retiredAt, ...crawlIds);
         });
         run();
         return deleted;

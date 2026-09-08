@@ -23,6 +23,7 @@ import {
   deriveAuditStatusFromPages,
 } from "@/audit/scoring";
 import { tagCarriedCheck } from "@/audit/smart-audits";
+import { retiredAuditReason } from "@/reports/retired";
 import { OTHER_CATEGORY } from "@/rules/categories";
 import { normalizeUrl } from "@/utils/url";
 
@@ -155,6 +156,17 @@ export function reconstructReport(
     const crawl = yield* storage.getCrawl(crawlId);
     if (!crawl) {
       return yield* Effect.fail(new Error(`Crawl not found: ${crawlId}`));
+    }
+
+    // `self disk --prune` reclaimed this audit's rule results (#1912). The pages
+    // and the crawl row survive, so without this the walk below would assemble a
+    // confident report with no findings at all — a wrong answer rather than a
+    // missing one. Refused here, at the bottom of every render path, so a caller
+    // that forgets the gate above still cannot produce one.
+    if (crawl.retiredAt !== undefined) {
+      return yield* Effect.fail(
+        new Error(`Audit ${retiredAuditReason(crawl.retiredAt)}: ${crawlId}`)
+      );
     }
 
     // 2. The crawl's pages are read in batches further down, not here (#1913).

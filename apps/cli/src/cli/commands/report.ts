@@ -87,6 +87,8 @@ function printAuditList(
       url: string;
       visibility: string;
     };
+    /** Set once `self disk --prune` reclaimed this audit's data (#1912). */
+    retiredAt?: number;
   }>
 ): void {
   if (audits.length === 0) {
@@ -111,15 +113,24 @@ function printAuditList(
     const pages = audit.stats.pagesTotal.toString();
     const id = audit.id.slice(0, 8);
     const published = audit.published?.visibility ?? "-";
+    // A reclaimed audit is still listed — that is the point of keeping the crawl
+    // row — but it cannot be opened, so the status column says so rather than
+    // leaving the user to find out by trying.
+    const status = audit.retiredAt === undefined ? audit.status : "retired";
 
     console.log(
       id.padEnd(11) +
         date.padEnd(22) +
         pages.padEnd(8) +
-        audit.status.padEnd(12) +
+        status.padEnd(12) +
         published
     );
     console.log(`  ${audit.baseUrl}`);
+    if (audit.retiredAt !== undefined) {
+      console.log(
+        `  data reclaimed on ${new Date(audit.retiredAt).toISOString().slice(0, 10)}; this audit can no longer be opened`
+      );
+    }
     if (audit.published) {
       console.log(`  → ${audit.published.url}`);
     }

@@ -255,6 +255,15 @@ export interface CrawlMetadata {
   status: CrawlStatus;
   config: CrawlerConfigSnapshot;
   stats: CrawlStats;
+  /**
+   * When `squirrel self disk --prune` reclaimed this audit's derived data
+   * (#1912). Absent for every audit that has not been reclaimed.
+   *
+   * The audit is still listed, and its crawl row and page cache remain, but its
+   * report can no longer be rebuilt: the rule results it was assembled from are
+   * gone. Read this before rendering, diffing or using it as a baseline.
+   */
+  retiredAt?: number;
 }
 
 export interface CrawlerConfigSnapshot {

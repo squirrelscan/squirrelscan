@@ -221,6 +221,40 @@ describe("retireCrawls", () => {
     void recent;
   });
 
+  test("stamps retired_at on the crawls it retires, and only those", async () => {
+    const { store, old, recent } = await twoCrawls();
+    const at = 1_700_000_000_000;
+    await run(store.retireCrawls([old], at));
+
+    const byId = new Map(
+      (await run(store.listCrawls())).map((c) => [c.id, c])
+    );
+    // The stamp is what lets `report` say "reclaimed on <date>" instead of
+    // rebuilding an empty report from the pages that survive.
+    expect(byId.get(old)?.retiredAt).toBe(at);
+    expect(byId.get(recent)?.retiredAt).toBeUndefined();
+  });
+
+  test("the stamp lands in the same transaction as the deletes", async () => {
+    // A crawl whose rows are gone but which still reads as renderable is the
+    // one state worse than either end, so the two must not be separable.
+    const { store, old } = await twoCrawls();
+    await run(store.retireCrawls([old]));
+
+    const crawl = (await run(store.listCrawls())).find((c) => c.id === old);
+    expect(crawl?.retiredAt).toBeGreaterThan(0);
+    expect((await run(store.getRuleResultsByPage(old))).size).toBe(0);
+  });
+
+  test("an untouched crawl has no stamp", async () => {
+    const { store, old, recent } = await twoCrawls();
+    for (const c of await run(store.listCrawls())) {
+      expect(c.retiredAt).toBeUndefined();
+    }
+    void old;
+    void recent;
+  });
+
   test("vacuum runs and leaves the data intact", async () => {
     const { store, old, recent } = await twoCrawls();
     await run(store.retireCrawls([old]));
