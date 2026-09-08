@@ -351,7 +351,9 @@ Use `--refresh` to bypass the cache entirely.
 A successful audit retires the audits older than the newest 3 for that project,
 so re-auditing does not grow `project.db` without bound. Retired audits stay
 listed and can no longer be opened; the page cache the next audit reads is never
-part of what goes. The first time it happens the audit says so:
+part of what goes. A run that ends `failed` or `blocked` neither retires
+anything nor counts towards the window. The audit says so on stderr whenever it
+retires something:
 
 ```text
 Retired 1 older audit and freed 95.2 MB inside project.db for the next audit; keep more with [storage] keep_audits (now 3)

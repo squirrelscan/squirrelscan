@@ -46,10 +46,12 @@ takes a place among the audits you are keeping. A week of downtime cannot fill
 the window with runs that learned nothing and then take the history you would
 use to find out when it broke.
 
-The first time an audit retires something, it says so on stderr:
+An audit says so whenever it retires something, on stderr. The pointer to this
+setting appears the first time a project retires anything and not afterwards:
 
 ```text
 Retired 1 older audit and freed 95.2 MB inside project.db for the next audit; keep more with [storage] keep_audits (now 3)
+Retired 1 older audit and freed 95.2 MB inside project.db for the next audit
 ```
 
 The notice never goes to stdout, so it cannot get into `-f json` output.
