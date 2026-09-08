@@ -158,7 +158,10 @@ export async function fetchActiveOrgId(
  */
 function toCliOrgs(rows: OrganizationsResponse["organizations"]): CliOrg[] {
   const orgs: CliOrg[] = [];
-  for (const raw of rows ?? []) {
+  // Array-guarded, not just null-guarded: a malformed body (a number, say)
+  // would make `for...of` throw, and in `listOrgs` that throw is uncaught.
+  if (!Array.isArray(rows)) return orgs;
+  for (const raw of rows) {
     if (!raw?.id) continue;
     orgs.push({
       id: raw.id,

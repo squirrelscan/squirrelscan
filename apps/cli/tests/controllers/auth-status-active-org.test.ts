@@ -173,6 +173,37 @@ describe("auth status on a login session", () => {
     expect(result.data.orgCount).toBeUndefined();
   });
 
+  test("a sqcli_ login token supplied through the env var still gets the org", async () => {
+    // The lookup keys on the TOKEN TYPE, not on where it was stored: an env-
+    // supplied login token authenticates at whoami exactly like a stored one.
+    settingsSpy?.mockRestore();
+    settingsSpy = spyOn(settingsModule, "loadUserSettings").mockImplementation(
+      () => ok({ ...settingsModule.DEFAULT_SETTINGS, auth: null })
+    );
+    const counters = serve();
+    process.env[API_KEY_ENV] = "sqcli_envsuppliedloginsession";
+
+    const result = await runAuthStatus();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.source).toBe("env");
+    expect(result.data.org?.slug).toBe("nikz");
+    expect(counters.hydrateCalls).toBe(1);
+  });
+
+  test("an sq_ API key does NOT trigger the org lookup", async () => {
+    // The org routes reject API keys, so the call would only ever 401.
+    settingsSpy?.mockRestore();
+    settingsSpy = spyOn(settingsModule, "loadUserSettings").mockImplementation(
+      () => ok({ ...settingsModule.DEFAULT_SETTINGS, auth: null })
+    );
+    const counters = serve();
+    process.env[API_KEY_ENV] = "sq_anorgapikeyanorgapikeyanorg"; // pragma: allowlist secret
+
+    await runAuthStatus();
+    expect(counters.hydrateCalls).toBe(0);
+  });
+
   test("the org lookup runs once per status call", async () => {
     const counters = serve();
 

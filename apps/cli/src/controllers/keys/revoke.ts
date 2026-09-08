@@ -33,6 +33,16 @@ export interface OrgKeyRef {
   key: OrgApiKeySummary;
 }
 
+/**
+ * A resolved key plus HOW it was resolved. The distinction is load-bearing when
+ * a listing came back incomplete: a key id is globally unique, so an exact-id
+ * hit is sound no matter which orgs failed to list, while a prefix is only
+ * unique relative to the keys actually seen.
+ */
+export interface OrgKeyMatch extends OrgKeyRef {
+  matchedBy: "id" | "prefix";
+}
+
 export interface RevokedKey {
   id: string;
   name: string | null;
@@ -63,14 +73,14 @@ function orgLabel(org: CliOrg): string {
 export function resolveKeyMatch(
   refs: OrgKeyRef[],
   idOrPrefix: string
-): Result<OrgKeyRef> {
+): Result<OrgKeyMatch> {
   const active = refs.filter((ref) => !ref.key.revokedAt);
 
   const byId = active.find((ref) => ref.key.id === idOrPrefix);
-  if (byId) return ok(byId);
+  if (byId) return ok({ ...byId, matchedBy: "id" });
 
   const matches = active.filter((ref) => ref.key.prefix.startsWith(idOrPrefix));
-  if (matches.length === 1) return ok(matches[0]);
+  if (matches.length === 1) return ok({ ...matches[0], matchedBy: "prefix" });
   if (matches.length === 0) {
     return err(
       commandError("KEY_NOT_FOUND", `No active key matches "${idOrPrefix}".`)
@@ -98,7 +108,7 @@ export interface FindKeyOptions {
 export async function findKeyToRevoke(
   idOrPrefix: string,
   options: FindKeyOptions = {}
-): Promise<Result<OrgKeyRef>> {
+): Promise<Result<OrgKeyMatch>> {
   const credential = resolveCredential();
   if (!credential || credential.source !== "login") {
     return err(
@@ -115,19 +125,39 @@ export async function findKeyToRevoke(
   if (!listResult.ok) return listResult;
   const { orgs } = listResult.data;
 
-  const matchResult = resolveKeyMatch(flattenOrgKeys(orgs), idOrPrefix);
-  if (matchResult.ok) return matchResult;
-
-  // A key hiding in an org whose listing 403'd would otherwise read as "no such
-  // key" — say so instead of sending the user hunting for a key that is there.
   const unreadable = orgs.filter((entry) => entry.error);
-  if (matchResult.error.code === "KEY_NOT_FOUND" && unreadable.length > 0) {
+  const missing =
+    unreadable.length > 0
+      ? unreadable.map((entry) => orgLabel(entry.org)).join(", ")
+      : null;
+
+  const matchResult = resolveKeyMatch(flattenOrgKeys(orgs), idOrPrefix);
+
+  if (matchResult.ok) {
+    // FAIL CLOSED on an incomplete search. A prefix is only unique among the
+    // keys we could actually read, so if any org's listing failed, a "unique"
+    // prefix may be shadowing the key the user meant in the org we could not
+    // see — and revoking is destructive. An exact id is globally unique, so it
+    // stays sound.
+    if (missing && matchResult.data.matchedBy === "prefix") {
+      return err(
+        commandError(
+          "INCOMPLETE_SEARCH",
+          `Cannot safely match "${idOrPrefix}" by prefix: keys could not be read for ${missing}, so another key there may also match. Re-run with the full key id, or with --org to search one organization.`
+        )
+      );
+    }
+    return matchResult;
+  }
+
+  // A key hiding in an org whose listing failed would otherwise read as "no
+  // such key" — say so instead of sending the user hunting for a key that is
+  // there.
+  if (matchResult.error.code === "KEY_NOT_FOUND" && missing) {
     return err(
       commandError(
         matchResult.error.code,
-        `${matchResult.error.message} Note: keys could not be read for ${unreadable
-          .map((entry) => orgLabel(entry.org))
-          .join(", ")}.`
+        `${matchResult.error.message} Note: keys could not be read for ${missing}.`
       )
     );
   }

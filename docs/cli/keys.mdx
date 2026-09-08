@@ -68,11 +68,8 @@ squirrel keys create --name "CI" --org acme --scopes audits:write,audits:read,cr
   Scopes: audits:write, audits:read, credits:read
   Expires: never
 
-Save this token now (it will not be shown again):
-  sq_ab12cd34ef56gh78ij90kl12mn34op56
-
-Ready to copy:
-  export SQUIRRELSCAN_API_KEY=sq_ab12cd34ef56gh78ij90kl12mn34op56
+Save this key now (it will not be shown again):
+  export SQUIRRELSCAN_API_KEY='sq_ab12cd34ef56gh78ij90kl12mn34op56'
 ```
 
 ### `--shell`
@@ -147,11 +144,13 @@ acme-ci Acme CI (internal)  org_7pL3mR
   (no keys)
 ```
 
-With `--json`, each key carries `orgId`, `orgSlug`, and `orgName`.
+With `--json`, stdout is a flat array in which each key carries `orgId`,
+`orgSlug`, and `orgName`.
 
 Listing keys needs the **owner** or **admin** role in that org. An org where you
 are a plain member is listed with the reason its keys could not be read, rather
-than failing the whole command.
+than failing the whole command. Under `--json` that reason is written to
+**stderr** as a `Warning:` line, so the array on stdout is never silently short.
 
 ---
 
@@ -189,6 +188,10 @@ The prefix is searched across every org you belong to, so you don't need to know
 which org a key lives in. A prefix that matches more than one active key errors
 instead of guessing: use a longer prefix, the full id, or `--org` to narrow the
 search.
+
+If any org's keys could not be read, a prefix match is refused rather than
+resolved against a partial search: a key in the org that failed to list could
+match the same prefix. A full key id is unique account-wide and still works.
 
 ## Related
 

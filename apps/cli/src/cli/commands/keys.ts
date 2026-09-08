@@ -236,6 +236,18 @@ const keysList = defineCommand({
 
     const { orgs } = result.data;
 
+    // An org whose keys could not be read (a plain member hits 403) makes the
+    // listing INCOMPLETE. Text mode shows that inline; JSON mode must not
+    // return a silently short array, so the warning goes to stderr where it
+    // cannot corrupt the parsed payload on stdout.
+    for (const entry of orgs) {
+      if (entry.error && args.json) {
+        console.error(
+          `Warning: keys for ${entry.org.slug || entry.org.id} were not included: ${entry.error}`
+        );
+      }
+    }
+
     if (args.json) {
       // Flat array of keys, each stamped with its org — the shape a script
       // wants when the whole point is telling two orgs' keys apart.

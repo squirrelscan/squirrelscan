@@ -174,6 +174,16 @@ describe("resolveKeyMatch", () => {
   });
 });
 
+describe("resolveKeyMatch match provenance", () => {
+  test("reports whether the hit came from an id or a prefix", () => {
+    const pair = refs(ORG_A, [{ id: "key_1", prefix: "sq_aaa111" }]);
+    const byId = resolveKeyMatch(pair, "key_1");
+    expect(byId.ok && byId.data.matchedBy).toBe("id");
+    const byPrefix = resolveKeyMatch(pair, "sq_aaa");
+    expect(byPrefix.ok && byPrefix.data.matchedBy).toBe("prefix");
+  });
+});
+
 describe("flattenOrgKeys", () => {
   test("pairs every key with its own org and skips orgs that could not be read", () => {
     const flat = flattenOrgKeys([

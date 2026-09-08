@@ -236,19 +236,30 @@ Authenticated as you@example.com
   Source: logged-in session
   Org: acme (Acme Inc)
   Org id: org_2xK9vQ
-  Active org of 2. Cloud runs spend this org's credits; pass --org to target another.
+  Active org of 2. Cloud runs spend this org's credits; switch orgs in the dashboard.
   Device: macbook-pro
   Expires: Feb 2, 2027
   Credits: 950
 ```
 
-`Org` shows the slug (what `--org` takes, and what your dashboard URL uses);
-`Org id` shows the id that appears on credit ledger rows. The count line appears
-only when you belong to more than one org. Resolving the org needs the API, so
-the org lines are omitted when it can't be reached: `status` still reports your
-identity.
+`Org` shows the slug (also what your dashboard URL uses); `Org id` shows the id
+that appears on credit ledger rows. The count line appears only when you belong
+to more than one org. Resolving the org needs the API, so the org lines are
+omitted when it can't be reached: `status` still reports your identity.
+
+The active org is **server state**, set by the org switcher in the dashboard.
+There is no CLI flag that retargets an audit's spend: `--org` selects an org for
+[`squirrel keys`](/cli/keys) only. To bill a run to a different org, switch orgs
+in the dashboard, or use an API key minted for that org.
 
 With an API key via `SQUIRRELSCAN_API_KEY` (note the `Source` line and the scopes):
+
+<Note>
+The identity endpoint this command calls accepts only the login token issued by
+`squirrel auth login`, so an `sq_` **org API key** currently reports that it
+cannot be verified here rather than the output below. The key itself is fine:
+check it against `squirrel credits` or an audit instead.
+</Note>
 
 ```text
 Authenticated as ci@acme.com

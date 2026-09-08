@@ -159,7 +159,7 @@ export async function runAuthStatus(): Promise<Result<StatusResult>> {
     const isApiKeyAuth =
       data.authSource === "api-key" || data.apiKey !== undefined;
 
-    const orgFields = await resolveOrgFields(credential.source, data.org);
+    const orgFields = await resolveOrgFields(credential.token, data.org);
 
     return ok({
       source: credential.source,
@@ -226,10 +226,14 @@ export async function runAuthStatus(): Promise<Result<StatusResult>> {
  * Best-effort: an unreachable API drops the org lines, never the command.
  */
 async function resolveOrgFields(
-  source: CredentialSource,
+  token: string,
   whoamiOrg: WhoamiResponse["org"]
 ): Promise<Pick<StatusResult, "org" | "orgCount">> {
-  if (source === "login") {
+  // Keyed on the TOKEN TYPE, not on where the token was stored. A `sqcli_`
+  // login token supplied through the env var authenticates here exactly like
+  // one loaded from settings.json, and the org routes accept it just the same —
+  // gating on `source === "login"` would drop the org lines for it.
+  if (!isApiKey(token)) {
     const context = await fetchActiveOrgContext(STATUS_REQUEST_TIMEOUT_MS);
     if (context) {
       return {

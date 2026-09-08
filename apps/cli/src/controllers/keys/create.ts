@@ -142,7 +142,7 @@ export async function createApiKey(
     status,
     data,
   } = await cliApi.request<CreateApiKeyRawResponse>(
-    `/v1/organizations/${org.id}/api-keys`,
+    `/v1/organizations/${encodeURIComponent(org.id)}/api-keys`,
     {
       method: "POST",
       auth: "required",

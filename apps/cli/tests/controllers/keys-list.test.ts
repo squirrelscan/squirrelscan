@@ -5,6 +5,8 @@
 // Network is a global fetch stub; the login session is a spyOn of
 // loadUserSettings, NOT mock.module — see keys-create.test.ts for why.
 
+import type { ArgsDef, CommandContext } from "citty";
+
 import {
   afterAll,
   afterEach,
@@ -38,6 +40,7 @@ afterAll(() => {
 });
 
 const { listApiKeys } = await import("@/controllers/keys/list");
+const { keys: keysCommand } = await import("@/cli/commands/keys");
 const { API_TOKEN_ENV_VAR, LEGACY_API_TOKEN_ENV_VAR } =
   await import("@/self/credentials");
 
@@ -199,5 +202,78 @@ describe("listApiKeys", () => {
     const result = await listApiKeys();
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("LOGIN_REQUIRED");
+  });
+});
+
+// The command layer, not the controller: `--json` prints a flat array on
+// stdout, and an org whose keys could not be read must NOT vanish from it
+// silently. A successfully empty org plus a failed one would otherwise render
+// as `[]` with no signal at all that half the account was never searched.
+describe("keys list --json partial failures", () => {
+  let logSpy: ReturnType<typeof spyOn<Console, "log">>;
+  let errorSpy: ReturnType<typeof spyOn<Console, "error">>;
+
+  beforeEach(() => {
+    logSpy = spyOn(console, "log").mockImplementation(() => {});
+    errorSpy = spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  async function runList(args: Record<string, unknown>): Promise<void> {
+    const list = (
+      keysCommand.subCommands as Record<
+        string,
+        { run?: (context: CommandContext<ArgsDef>) => unknown }
+      >
+    ).list!;
+    await list.run?.({ args } as unknown as CommandContext<ArgsDef>);
+  }
+
+  test("warns on stderr for every org whose keys could not be read", async () => {
+    stubFetch({ org_new: [], org_old: 403 });
+
+    await runList({ json: true });
+
+    const stdout = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    const stderr = errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    // stdout stays parseable JSON — the warning must not corrupt it.
+    expect(JSON.parse(stdout)).toEqual([]);
+    expect(stderr).toContain("nikz");
+    expect(stderr).toContain("Insufficient permissions");
+  });
+
+  test("a fully readable account writes nothing to stderr", async () => {
+    stubFetch({
+      org_new: [apiKey("key_e2e", "sq_eee")],
+      org_old: [apiKey("key_nikz", "sq_nnn")],
+    });
+
+    await runList({ json: true });
+
+    const stdout = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(JSON.parse(stdout)).toHaveLength(2);
+    expect(errorSpy.mock.calls).toHaveLength(0);
+  });
+
+  test("each key in the JSON array carries its org", async () => {
+    stubFetch({
+      org_new: [apiKey("key_e2e", "sq_eee")],
+      org_old: [apiKey("key_nikz", "sq_nnn")],
+    });
+
+    await runList({ json: true });
+
+    const rows = JSON.parse(
+      logSpy.mock.calls.map((call) => call.join(" ")).join("\n")
+    ) as Array<{ id: string; orgSlug: string; orgId: string }>;
+    expect(rows.map((row) => row.orgSlug)).toEqual([
+      "squirrelscan-e2e",
+      "nikz",
+    ]);
+    expect(rows[1].orgId).toBe("org_old");
   });
 });

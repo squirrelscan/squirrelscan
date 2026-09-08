@@ -165,9 +165,12 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
     );
     console.log(`  Org id: ${org.id}`);
     if (orgCount !== undefined && orgCount > 1) {
+      // Deliberately NOT "pass --org": no audit/report command takes an org.
+      // The active org is server state, changed in the dashboard switcher.
+      // `--org` selects an org for `keys` only.
       console.log(
         fmt.dim(
-          `  Active org of ${orgCount}. Cloud runs spend this org's credits; pass --org to target another.`
+          `  Active org of ${orgCount}. Cloud runs spend this org's credits; switch orgs in the dashboard.`
         )
       );
     }
