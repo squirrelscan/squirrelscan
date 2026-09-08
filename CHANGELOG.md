@@ -14,9 +14,90 @@ How it works:
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
 - A `## [Unreleased]
 
-## [Unreleased]
+## v0.0.92
+
+A release about running again. v0.0.91 made a big audit fit in memory; this
+one makes the second audit of the same site cheaper than the first, lets a
+local audit crawl 10,000 pages, and cuts the rules pass on script-heavy pages
+by 40%. It also adds the disk tooling a project database needs once audits
+accumulate, and fixes the CLI minting API keys against the wrong organization
+for accounts with more than one.
+
+### Added
+
+- **`squirrel self disk` shows where `~/.squirrel` goes, and `--prune` gets it
+  back.** Every audit keeps its full history in the project database, so a
+  re-audited site grows by roughly one audit per run (about 95 MB per audit of
+  a 1,000-page site). `squirrel self disk` lists per-project and total usage.
+  `squirrel self disk --prune --keep N` retires the audits beyond the newest N,
+  prints the plan, asks, and then rebuilds the database so the space returns
+  to the filesystem. `--keep` is required: a retired audit can no longer be
+  rendered, and `report --list`, `--diff` and `--regression-since` reach into
+  that history, so the window is your call. Retiring keeps everything the next
+  audit reads (the newest page record per URL, sub-resources, links, images),
+  so an incremental re-crawl still gets its `ETag`s. A retired audit stays
+  listed, marked with the date its data was reclaimed, and `report`, `--diff`,
+  `--regression-since` and `analyze` refuse it instead of rendering an empty
+  report.
+
+- **`squirrel keys` takes `--org`, and `auth whoami` says which org you are.**
+  On an account with more than one organization, `keys create` minted against
+  the newest one rather than the active one, silently. It now takes
+  `--org <slug|id>`, lists the organizations and refuses when there is more
+  than one and no `--org`, and `keys list` and `keys revoke` are scoped the
+  same way. `auth status` and `auth whoami` print the active organization.
+
+- **The audit says when `--max-pages` was clamped.** Asking for more pages than
+  the cap allows used to run at the cap and say nothing. The audit now prints
+  the requested and effective limits, and the JSON and LLM reports carry both,
+  so a clamped audit is distinguishable from a complete one.
+
+- **Template-aware rules.** Pages of one site share their chrome (header,
+  navigation, footer, script stack) far more than their structure: a real
+  storefront's 247 pages fall into 13 chrome clusters. Every page now carries
+  a template cluster key, and page rules whose verdict depends only on the
+  chrome (viewport, doctype, favicon, consent mode, tag manager, font and
+  script delivery, subresource integrity, and others) run once per cluster
+  with the verdict fanned out to the cluster's other members, with findings
+  byte-identical to running them on every page. About 13% less rule CPU on
+  that storefront. `SQUIRREL_TEMPLATE_FANOUT=0` turns it off.
+
+- **The crawl says when its base is the wrong host of a pair.** When the seed
+  redirects between the apex and `www` and the probe is refused, the crawl
+  used to pin itself to the wrong host and drop every link as cross-domain,
+  producing a one-page audit. The probe now sends a real user agent, recovers
+  the base from the links it sees, and warns when the two disagree.
 
 ### Changed
+
+- **The rules pass on script-heavy pages is 40% cheaper.** On a page carrying
+  800 KB of inline script the rules phase cost 274 ms per page; it is now 165.
+  The secret scan and keyword scans skip any pattern whose mandatory literals
+  are provably absent from the page, the skip-link rule stops serializing the
+  whole body once per heading, and two script rules stop counting with regular
+  expressions that built arrays to read their length. Findings are unchanged.
+
+- **The report reads a crawl's checks once, not twice.** Assembling the report
+  loaded every rule result twice; it now loads them once and reuses the rows,
+  which is about 340 MB less peak memory at 1,000 pages. The report also stops
+  building per-page fields (response headers, image lists, structured data)
+  that no output format or renderer ever read.
+
+- **A warm re-crawl compiles seven statements, not thousands.** The storage
+  layer prepared its per-page statements on every call; they are cached now,
+  which takes a re-crawl of an unchanged site from about twelve compilations
+  per page to well under one.
+
+- **Hosted audits stream the carried side of the publish merge.** Finalizing a
+  hosted re-audit held every previously open finding in memory at once, about
+  5 KB each, so a site carrying 60,000 open findings needed 330 MB inside a
+  128 MB worker. Prior findings now stream from a cursor and the report's
+  carried side is a bounded per-rule sample with exact counts, which brings
+  that case under 100 MB with the same scores.
+
+- **A page fingerprint survives a Shopify cache regeneration.** Shopify rewrites
+  request ids and shuffles app-block order between two fetches of the same
+  page, which made every page look changed. The fingerprint now ignores those.
 
 - **A local audit crawls up to 10,000 pages.** The hard cap on `--max-pages`
   and `[crawler] max_pages` was 5,000; it is now 10,000, on every plan, local
@@ -46,6 +127,15 @@ How it works:
   the budget below roughly a dozen pages' worth is counterproductive: the same
   crawl becomes several times as many read-parse-collect cycles and peaks
   higher, not lower.
+
+- **A 429 is reported as a rate limit, not a broken link.** The link rules used
+  to count a rate-limited response as broken; it now needs the status lead-in
+  like every other status.
+
+- **Crawl bookkeeping fixes.** The frontier's page-exists check always answered
+  yes; the content-store prune check answers from a covering index instead of
+  a full scan on every stored page; the container's cloud-prefetch payloads no
+  longer hold their pages alive after use.
 
 ## v0.0.91
 
