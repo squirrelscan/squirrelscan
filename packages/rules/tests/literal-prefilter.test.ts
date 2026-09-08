@@ -265,10 +265,16 @@ describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
   test("every generated match is admitted by the prefilter", () => {
     const failures: string[] = [];
     let checked = 0;
+    let shapes = 0;
     for (const { label, pattern } of ALL_PATTERNS) {
       const probe = new RegExp(pattern.source, pattern.flags.replace("g", ""));
+      // 400 samples rather than 60, because the point of generating is to reach
+      // the branches an extractor might drop, and a pattern with four
+      // alternatives times three optional groups has more shapes than 60 draws
+      // will cover. Distinct shapes per pattern are counted, not just draws.
+      const seen = new Set<string>();
       let admittedAny = false;
-      for (let n = 0; n < 60; n++) {
+      for (let n = 0; n < 400; n++) {
         let sample: string;
         try {
           sample = generate(pattern.source);
@@ -278,6 +284,7 @@ describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
         }
         // Only samples the pattern really matches say anything about soundness.
         if (!probe.test(sample)) continue;
+        seen.add(sample.length > 40 ? sample.slice(0, 40) : sample);
         admittedAny = true;
         checked += 1;
         if (!admits(pattern, sample)) {
@@ -286,10 +293,13 @@ describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
         }
       }
       if (!admittedAny) failures.push(`${label}: generator produced no matching sample`);
+      shapes += seen.size;
     }
     expect(failures).toEqual([]);
     // Guard against the loop silently doing nothing.
-    expect(checked).toBeGreaterThan(ALL_PATTERNS.length * 10);
+    expect(checked).toBeGreaterThan(ALL_PATTERNS.length * 80);
+    // A draw count says the loop ran; a DISTINCT-shape count says it explored.
+    expect(shapes).toBeGreaterThan(ALL_PATTERNS.length * 8);
   });
 });
 
