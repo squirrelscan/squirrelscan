@@ -1016,6 +1016,7 @@ export interface LandingDeps {
   which?: (command: string) => string | null;
   realpath?: (path: string) => string;
   stat?: (path: string) => { isDirectory(): boolean };
+  exists?: (path: string) => boolean;
   isWindows?: boolean;
 }
 
@@ -1053,11 +1054,21 @@ export function classifyOnPath(
   version: string,
   linkPath: string,
   deps: LandingDeps = {}
-): Pick<UpdateLanding, "path_binary" | "path_target" | "on_path"> {
+): Pick<UpdateLanding, "path_binary" | "path_target" | "path_via" | "on_path"> {
   const isWindows = deps.isWindows ?? platform() === "win32";
-  const resolved = resolveSquirrelOnPath({ ...deps, isWindows });
+  const resolved = resolveSquirrelOnPath({
+    which: deps.which,
+    realpath: deps.realpath,
+    exists: deps.exists,
+    isWindows,
+  });
   if (!resolved) {
-    return { path_binary: null, path_target: null, on_path: "missing" };
+    return {
+      path_binary: null,
+      path_target: null,
+      path_via: null,
+      on_path: "missing",
+    };
   }
 
   const installed = safeRealpath(getBinaryPath(version), deps.realpath);
@@ -1069,6 +1080,7 @@ export function classifyOnPath(
   return {
     path_binary: resolved.binary,
     path_target: resolved.target,
+    path_via: resolved.via,
     on_path: same ? "same" : "different",
   };
 }
@@ -1092,14 +1104,22 @@ export function updateLandingWarnings(landing: UpdateLanding): string[] {
   const linkDir = dirname(landing.link_path);
 
   if (landing.on_path === "different" && landing.path_binary) {
-    const via =
+    const runs =
       landing.path_target && landing.path_target !== landing.path_binary
         ? ` (${landing.path_target})`
         : "";
     lines.push(
-      `Warning: 'squirrel' on your PATH is ${landing.path_binary}${via}, not the ${landing.link_path} this update changed. ` +
-        "That command keeps running the old version.",
-      `Fix: squirrel self install --bin-dir ${dirname(landing.path_binary)}, or put ${linkDir} ahead of it in PATH.`
+      `Warning: 'squirrel' on your PATH is ${landing.path_binary}${runs}, not the ${landing.link_path} this update changed. ` +
+        "That command keeps running the old version."
+    );
+    // Telling an npm user to point `self install --bin-dir` at the directory
+    // npm owns would overwrite npm's wrapper, and the next `npm install -g`
+    // would put it back. The wrapper prefers the DEFAULT managed link, so the
+    // fix is to give it one, or to update the npm copy on its own terms.
+    lines.push(
+      landing.path_via
+        ? `Fix: that is the npm wrapper (${landing.path_via}); run 'squirrel self install' so it finds the managed release, or 'npm install -g squirrelscan@latest'.`
+        : `Fix: squirrel self install --bin-dir ${dirname(landing.path_binary)}, or put ${linkDir} ahead of it in PATH.`
     );
   } else if (landing.on_path === "missing") {
     lines.push(

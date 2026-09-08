@@ -1,4 +1,4 @@
-import { realpathSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, parse, sep } from "node:path";
 
@@ -289,14 +289,64 @@ export function safeRealpath(
 export interface PathBinary {
   /** The entry PATH resolves, e.g. /usr/local/bin/squirrel. */
   binary: string;
-  /** What that entry actually runs (symlinks followed). */
+  /** What that entry actually runs, symlinks and the npm wrapper followed. */
   target: string;
+  /**
+   * The npm wrapper script standing between the two, when PATH resolves to an
+   * `npm install -g squirrelscan`. null for a direct binary.
+   */
+  via: string | null;
 }
 
 export interface ResolveOnPathDeps {
   which?: (command: string) => string | null;
   realpath?: (path: string) => string;
+  exists?: (path: string) => boolean;
   isWindows?: boolean;
+}
+
+/**
+ * True for the npm package's `bin/squirrel.js` wrapper (npm links it onto PATH
+ * as `squirrel`). The `node_modules` test is the same one
+ * getUnmanagedUpdateHint uses; `.js` is what separates the wrapper from the
+ * binary the package bundles beside it.
+ */
+export function isNpmWrapper(path: string): boolean {
+  return path.includes(`${sep}node_modules${sep}`) && path.endsWith(".js");
+}
+
+/**
+ * The binaries npm/bin/squirrel.js tries, in its order, ending with the copy
+ * bundled in the package.
+ *
+ * MIRRORS that file deliberately: a wrapper on PATH runs the FIRST of these
+ * that exists, so "will my next squirrel be the version I just installed?"
+ * cannot be answered without walking the same list. The managed default bin
+ * path leads it, which is why an ordinary npm install DOES pick up
+ * `self update` and must not be warned about. tests/self/paths.test.ts asserts
+ * this list still matches the wrapper.
+ */
+export function npmWrapperCandidates(
+  wrapperPath: string,
+  isWindows: boolean
+): string[] {
+  const home = homedir();
+  const bundled = join(
+    dirname(wrapperPath),
+    `squirrel${isWindows ? ".exe" : ""}`
+  );
+  return isWindows
+    ? [
+        join(home, "AppData", "Local", "squirrel", "bin", "squirrel.exe"),
+        join(home, ".local", "bin", "squirrel.exe"),
+        bundled,
+      ]
+    : [
+        join(home, ".local", "bin", "squirrel"),
+        "/usr/local/bin/squirrel",
+        "/opt/homebrew/bin/squirrel",
+        bundled,
+      ];
 }
 
 /**
@@ -308,6 +358,12 @@ export interface ResolveOnPathDeps {
  * all leave the update landing somewhere invisible while the CLI reports
  * success (#293). Answering "what will actually run next time" needs the PATH
  * lookup, not the recorded path.
+ *
+ * An npm install puts a WRAPPER on PATH, not a binary, so the lookup follows
+ * its dispatch too: the wrapper runs the first of npmWrapperCandidates that
+ * exists, which is normally the managed link `self update` just flipped.
+ * Stopping at the wrapper would report every npm user as running something
+ * else and warn them after every single update.
  */
 export function resolveSquirrelOnPath(
   deps: ResolveOnPathDeps = {}
@@ -329,7 +385,25 @@ export function resolveSquirrelOnPath(
   }
   if (!found) return null;
 
-  return { binary: found, target: safeRealpath(found, deps.realpath) };
+  const resolved = safeRealpath(found, deps.realpath);
+  if (!isNpmWrapper(resolved)) {
+    return { binary: found, target: resolved, via: null };
+  }
+
+  // existsSync, matching the wrapper: it FOLLOWS symlinks, so a link whose
+  // release directory was pruned is skipped there and must be skipped here.
+  const exists = deps.exists ?? existsSync;
+  for (const candidate of npmWrapperCandidates(resolved, isWindows)) {
+    if (!exists(candidate)) continue;
+    return {
+      binary: found,
+      target: safeRealpath(candidate, deps.realpath),
+      via: resolved,
+    };
+  }
+
+  // No candidate exists: the wrapper would print its "binary not found" error.
+  return { binary: found, target: resolved, via: resolved };
 }
 
 /**

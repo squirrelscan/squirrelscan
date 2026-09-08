@@ -285,7 +285,12 @@ export function checkInstallLocation(
   // rather than printing the same path twice and implying it is fine.
   const linkNote = `link ${linkPath} -> ${describeBinary(linkTarget, exists(linkTarget))}`;
 
-  const onPath = resolveSquirrelOnPath({ ...deps, isWindows });
+  const onPath = resolveSquirrelOnPath({
+    which: deps.which,
+    realpath: deps.realpath,
+    exists: deps.exists,
+    isWindows,
+  });
   if (!onPath) {
     return {
       name,
@@ -295,14 +300,20 @@ export function checkInstallLocation(
     };
   }
 
-  const pathNote = `PATH: ${onPath.binary} -> ${describeBinary(onPath.target, exists(onPath.target))}`;
+  // The npm wrapper is not the binary: it dispatches to the first managed
+  // location that exists, so say so rather than reporting a .js file as what
+  // the user runs.
+  const viaNote = onPath.via ? " -> npm wrapper" : "";
+  const pathNote = `PATH: ${onPath.binary}${viaNote} -> ${describeBinary(onPath.target, exists(onPath.target))}`;
 
   if (!samePath(onPath.target, linkTarget, isWindows)) {
     return {
       name,
       status: "warn",
       message: `${recordedNote}; ${linkNote}; ${pathNote} (updates land on the link, not on what you run)`,
-      fix: `squirrel self install --bin-dir ${dirname(onPath.binary)}, or put ${dirname(linkPath)} ahead of it in PATH`,
+      fix: onPath.via
+        ? "Run 'squirrel self install' so the npm wrapper finds the managed release, or 'npm install -g squirrelscan@latest'"
+        : `squirrel self install --bin-dir ${dirname(onPath.binary)}, or put ${dirname(linkPath)} ahead of it in PATH`,
     };
   }
 

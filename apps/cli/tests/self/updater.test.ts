@@ -1480,6 +1480,7 @@ describe("updater", () => {
         ).toEqual({
           path_binary: LINK,
           path_target: LINK,
+          path_via: null,
           on_path: "same",
         });
       });
@@ -1508,6 +1509,7 @@ describe("updater", () => {
         expect(result).toEqual({
           path_binary: "/usr/local/bin/squirrel",
           path_target: "/home/u/.squirrel/releases/0.0.81/squirrel",
+          path_via: null,
           on_path: "different",
         });
       });
@@ -1518,7 +1520,12 @@ describe("updater", () => {
             which: () => null,
             isWindows: false,
           })
-        ).toEqual({ path_binary: null, path_target: null, on_path: "missing" });
+        ).toEqual({
+          path_binary: null,
+          path_target: null,
+          path_via: null,
+          on_path: "missing",
+        });
       });
 
       // Windows installs a COPY at the bin path, so the release binary is never
@@ -1534,6 +1541,42 @@ describe("updater", () => {
             isWindows: true,
           }).on_path
         ).toBe("same");
+      });
+
+      // npm puts a WRAPPER on PATH, and it dispatches to the managed link
+      // first. Reporting the .js as "something else" would warn every npm user
+      // after every update.
+      test("an npm wrapper that dispatches to the flipped link is same", () => {
+        const wrapper = "/usr/lib/node_modules/squirrelscan/bin/squirrel.js";
+        // The wrapper's first candidate is the DEFAULT managed link, built
+        // from the real home, so that is the link this update flipped.
+        const managed = join(os.homedir(), ".local", "bin", "squirrel");
+        const result = classifyOnPath("9.9.9", managed, {
+          which: () => "/usr/bin/squirrel",
+          realpath: (p) => (p === "/usr/bin/squirrel" ? wrapper : p),
+          exists: (p) => p === managed,
+          isWindows: false,
+        });
+
+        expect(result.on_path).toBe("same");
+        expect(result.path_binary).toBe("/usr/bin/squirrel");
+        expect(result.path_target).toBe(managed);
+        expect(result.path_via).toBe(wrapper);
+      });
+
+      test("an npm wrapper that falls through to the bundled binary is different", () => {
+        const wrapper = "/usr/lib/node_modules/squirrelscan/bin/squirrel.js";
+        const bundled = "/usr/lib/node_modules/squirrelscan/bin/squirrel";
+        const result = classifyOnPath("9.9.9", LINK, {
+          which: () => "/usr/bin/squirrel",
+          realpath: (p) => (p === "/usr/bin/squirrel" ? wrapper : p),
+          exists: (p) => p === bundled,
+          isWindows: false,
+        });
+
+        expect(result.on_path).toBe("different");
+        expect(result.path_target).toBe(bundled);
+        expect(result.path_via).toBe(wrapper);
       });
     });
 
@@ -1574,6 +1617,7 @@ describe("updater", () => {
         link_path: LINK,
         path_binary: LINK,
         path_target: LINK,
+        path_via: null,
         on_path: "same",
         stale_bin_dir: null,
       };
@@ -1595,6 +1639,24 @@ describe("updater", () => {
         expect(text).toContain(LINK);
         expect(text).toContain("self install --bin-dir /usr/local/bin");
         expect(text).toContain("/home/u/.local/bin ahead of it in PATH");
+      });
+
+      // `self install --bin-dir <npm's dir>` would overwrite npm's wrapper and
+      // be undone by the next `npm install -g`, so the npm case gets its own
+      // advice.
+      test("the npm wrapper gets npm advice, never --bin-dir into node_modules", () => {
+        const text = updateLandingWarnings({
+          ...landed,
+          path_binary: "/usr/bin/squirrel",
+          path_target: "/usr/lib/node_modules/squirrelscan/bin/squirrel",
+          path_via: "/usr/lib/node_modules/squirrelscan/bin/squirrel.js",
+          on_path: "different",
+        }).join("\n");
+
+        expect(text).toContain("npm wrapper");
+        expect(text).toContain("squirrel self install");
+        expect(text).toContain("npm install -g squirrelscan@latest");
+        expect(text).not.toContain("--bin-dir");
       });
 
       test("nothing on PATH points at the link's directory", () => {

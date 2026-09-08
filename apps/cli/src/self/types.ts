@@ -28,8 +28,13 @@ export const UpdateLandingSchema = z.object({
   link_path: z.string(),
   /** The `squirrel` PATH resolves, or null when PATH has none. */
   path_binary: z.string().nullable(),
-  /** What that PATH entry actually runs, symlinks followed. */
+  /** What that PATH entry actually runs, symlinks and the wrapper followed. */
   path_target: z.string().nullable(),
+  /**
+   * The npm wrapper script between the two, when PATH resolves to an
+   * `npm install -g squirrelscan`. Absent/null for a direct binary.
+   */
+  path_via: z.string().nullable().optional(),
   /** "different"/"missing" ⇒ the update is invisible to the user's shell. */
   on_path: z.enum(["same", "different", "missing"]),
   /**
