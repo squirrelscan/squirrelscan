@@ -40,16 +40,6 @@ for accounts with more than one.
   `--regression-since` and `analyze` refuse it instead of rendering an empty
   report.
 
-- **Audits retire themselves: the project keeps the newest 3 by default.**
-  After every successful audit the CLI retires the audits beyond the newest
-  three, so a re-audited site's database plateaus instead of growing by one
-  audit per run (11.9 MB after six audits of a 40-page site, against 14.7 MB
-  unbounded). Set `keep_audits` under `[storage]` in `squirrel.toml` to keep
-  more, or `0` to keep everything. One line on stderr says when something was
-  retired. Only successful audits count toward the window, and a crawl that is
-  still building its report is never touched. `squirrel self disk --prune` now
-  offers the rebuild on its own when retention has already done the retiring.
-
 - **`squirrel keys` takes `--org`, and `auth whoami` says which org you are.**
   On an account with more than one organization, `keys create` minted against
   the newest one rather than the active one, silently. It now takes
@@ -77,8 +67,6 @@ for accounts with more than one.
   used to pin itself to the wrong host and drop every link as cross-domain,
   producing a one-page audit. The probe now sends a real user agent, recovers
   the base from the links it sees, and warns when the two disagree.
-
-### Added
 
 - **A project keeps its last 3 audits.** Re-auditing wrote a whole new crawl and
   retired nothing, so `project.db` grew by about one audit every time: roughly
