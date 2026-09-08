@@ -1512,9 +1512,16 @@ bytes live no longer than the audit does, while the cold run's cost is paid by
 every first-time user. What remains in the 6.9% above is mostly fan-out's absence.
 
 Storage: `project.db` grows about 12.8% (258 to 291 MiB cold, 514 to 581 warm).
-The rows are retired with their crawl, so `squirrel self disk --prune` reclaims
-them with everything else that audit holds and the retention window bounds them,
-rather than a permanent second copy accumulating.
+The rows are retired with their crawl, so the automatic retention window bounds
+them rather than letting a permanent second copy accumulate. Verified against the
+window that landed the same evening: five audits of a 40-page project leave two
+crawls retired and cache rows under exactly the three that remain (120 rows for
+3 x 40 pages), while every audit after the first still replays all 40. That is
+what the carry-forward is for — an entry is copied into each new crawl, so
+retiring the crawl that produced it never makes the next audit cold.
+
+The table above was measured just before that window landed; retention adds tens
+of milliseconds to an audit, against a 44-second warm run.
 
 ### What two adversarial review rounds found that the gates did not
 
