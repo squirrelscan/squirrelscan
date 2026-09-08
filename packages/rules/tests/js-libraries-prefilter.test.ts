@@ -28,8 +28,11 @@ function detected(script: string): string[] {
     site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
     options: {},
   } as unknown as RuleContext;
+  // The whole item, not just its id: the label carries WHERE the library was
+  // detected ("inline code" against "HTML markers"), and a prefilter that skips
+  // the inline pass but not the HTML one changes that without changing the id.
   const check = jsLibrariesRule.run(ctx).checks.find((c) => c.name === "js-libraries-detected");
-  return (check?.items ?? []).map((i) => i.id).sort();
+  return (check?.items ?? []).map((i) => JSON.stringify(i)).sort();
 }
 
 // One inline signature per library, taken from the shipped `inlinePatterns`.
@@ -62,10 +65,10 @@ describe("perf/js-libraries: the inline prefilter never loses a detection", () =
       for (const lead of LEAD_INS) {
         const bare = detected(`${SHORT_PAD}${lead}${token}`);
         // A signature that does not detect unpadded proves nothing about padding.
-        expect(bare).toContain(name);
+        expect(bare.join(" ")).toContain(`"${name}"`);
         const padded = detected(`${PAD}${lead}${token}\n${PAD}`);
-        for (const id of bare) {
-          if (!padded.includes(id)) lost.push(`${name} after ${JSON.stringify(lead)}: lost ${id}`);
+        for (const item of bare) {
+          if (!padded.includes(item)) lost.push(`${name} after ${JSON.stringify(lead)}: ${item}`);
         }
       }
     }
@@ -85,5 +88,6 @@ describe("perf/js-libraries: the inline prefilter never loses a detection", () =
     } as unknown as RuleContext;
     const check = jsLibrariesRule.run(ctx).checks.find((c) => c.name === "js-libraries-detected");
     expect((check?.items ?? []).map((i) => i.id)).toContain("Angular v17.1.0");
+    expect((check?.items ?? []).find((i) => i.id === "Angular v17.1.0")?.label).toBe("HTML markers");
   });
 });

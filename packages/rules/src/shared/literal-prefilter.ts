@@ -221,12 +221,11 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
   if (n === "u") {
     // `\u{...}` is a code point only under the `u` flag; without it the same
     // source is the letter `u` repeated. The two readings share no characters,
-    // so neither is claimed: skip past the brace and end the run. (The four-hex
-    // form below is a code point either way.)
-    if (src[i + 2] === "{") {
-      const close = src.indexOf("}", i + 3);
-      return { char: null, end: close === -1 ? i + 2 : close + 1 };
-    }
+    // so neither is claimed. Consume only `\u` and let the main loop meet the
+    // brace: SEARCHING for the closing `}` is what lands inside somebody else's
+    // structure, since in legacy mode `\u{[abcd}efgh]` has its `}` inside a
+    // character class and skipping to it leaves `efgh]` behind as literal text.
+    if (src[i + 2] === "{") return { char: null, end: i + 2 };
     const hex = src.slice(i + 2, i + 6);
     if (!/^[0-9a-fA-F]{4}$/.test(hex)) return { char: null, end: i + 2 };
     return { char: String.fromCharCode(Number.parseInt(hex, 16)), end: i + 6 };
@@ -245,10 +244,10 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
   if (LITERAL_ESCAPE.has(n)) return { char: n, end: i + 2 };
   // \d \w \s \D \W \S \b \B \p{..} \1 … — a class or an assertion, not a
   // character. Everything but the two-character form is skipped wholesale.
-  if (n === "p" || n === "P") {
-    const close = src.indexOf("}", i + 2);
-    return { char: null, end: close === -1 ? i + 2 : close + 1 };
-  }
+  // `\p{...}` is a property escape only under the `u` flag; in legacy mode it is
+  // the letter `p` and the brace belongs to whatever follows. Consume two
+  // characters either way, for the same reason as `\u{` above.
+  if (n === "p" || n === "P") return { char: null, end: i + 2 };
   // `\k<name>` is a named backreference, and stopping after `\k` would leave
   // `<name>` behind as literal text the match never contains.
   if (n === "k" && src[i + 2] === "<") {
@@ -351,7 +350,15 @@ function matchingParen(src: string, open: number): number {
   return -1;
 }
 
-/** Index of the `]` closing the class that opens at `open`, or -1. */
+/**
+ * Index of the `]` closing the class that opens at `open`, or -1.
+ *
+ * JavaScript has no Perl `[]]`: `[]` is an EMPTY class that matches nothing and
+ * ends at its first `]`. Treating that `]` as literal walks the scan past the
+ * class and into whatever follows — `/abcd[]|efgh/` then looks like one branch
+ * rather than two, and `abcd` gets proved for a pattern that matches `efgh`.
+ * `[^]` is the one case where the first `]` is not at `open + 1`.
+ */
 function closeClass(src: string, open: number): number {
   for (let i = open + 1; i < src.length; i++) {
     const c = src[i];
@@ -359,8 +366,7 @@ function closeClass(src: string, open: number): number {
       i += 1;
       continue;
     }
-    if (c === "]" && i > open + 1) return i;
-    if (c === "]" && i === open + 1) continue; // `[]]` — a literal ]
+    if (c === "]") return i;
   }
   return -1;
 }
@@ -423,6 +429,13 @@ function cross(variants: string[], suffixes: string[]): string[] | null {
  * the pattern running exactly as it does today.
  */
 export function mandatoryLiterals(pattern: RegExp): MandatoryLiterals {
+  // Unicode mode changes both halves of the reasoning below and is declined
+  // whole. Under `u`/`v` the `i` flag uses simple case folding, so `/secret/iu`
+  // matches `ſecret` and `/mark/iu` matches `marK` — neither subject contains
+  // the ASCII literal, and the index only folds ASCII. `v` additionally nests
+  // character classes, which the class scanner does not parse. Every pattern the
+  // rules ship today is legacy; one that is not simply runs unfiltered.
+  if (pattern.unicode || pattern.unicodeSets) return [];
   const out: string[][] = [];
   extractInto(pattern.source, out, 0);
   return out;
@@ -499,8 +512,13 @@ function extractInto(source: string, out: string[][], depth: number): void {
       const esc = readEscape(source, i);
       const lit = esc.char;
       if (lit === null || !isAscii(lit)) {
+        // The atom proves nothing, but its QUANTIFIER still has to be consumed:
+        // leaving `\d{1000}` half-read hands `1000` to the main loop as four
+        // literal characters, and a match of `abcd\d{1000}efgh` contains no
+        // `1000` at all.
+        const unprovableQ = readQuantifier(source, esc.end);
         flush();
-        i = esc.end;
+        i = unprovableQ ? unprovableQ.end : esc.end;
         continue;
       }
       const q = readQuantifier(source, esc.end);
@@ -535,7 +553,11 @@ function extractInto(source: string, out: string[][], depth: number): void {
       const body = groupBody(source.slice(i + 1, close));
       const alts = body === null ? null : splitAlternatives(body);
       const pureLiterals =
-        alts && alts.every((a) => a.length > 0 && /^[A-Za-z0-9_@#/:.\-]+$/.test(a)) ? alts : null;
+        // Every character here must mean ITSELF. `.` is a wildcard, so
+        // `/(abcd.efgh)/` proved `abcd.efgh` and denied `abcdXefgh`, which it
+        // matches. Groups holding anything else fall through to extractInto,
+        // which reads the regex properly.
+        alts && alts.every((a) => a.length > 0 && /^[A-Za-z0-9_@#/:\-]+$/.test(a)) ? alts : null;
       if (pureLiterals) {
         append(pureLiterals, q);
       } else {
@@ -557,8 +579,13 @@ function extractInto(source: string, out: string[][], depth: number): void {
     }
 
     if (META.has(c)) {
+      // A `{n,m}` that reaches here quantifies something already flushed, so its
+      // digits are not literal text to be collected. Skipping the whole brace
+      // costs precision in the one case where it really is literal (`^{2}abc`
+      // matches `{2}abc` in legacy mode) and never invents a literal.
+      const braceQ = c === "{" ? readQuantifier(source, i) : null;
       flush();
-      i += 1;
+      i = braceQ ? braceQ.end : i + 1;
       continue;
     }
 

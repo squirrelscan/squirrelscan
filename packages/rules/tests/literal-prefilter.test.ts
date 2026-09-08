@@ -28,10 +28,16 @@ import { LIBRARY_INLINE_PATTERNS } from "../src/performance/js-libraries";
 // and alternation. Anything else throws, which fails the test loudly rather than
 // quietly generating a string that does not exercise the pattern.
 
+// `seed * 1103515245` runs past 2^53 and loses its low bits as a double, so the
+// masked result was nearly periodic: every one of 60 Redis samples took the same
+// alternative and every Generic Secret Assignment sample chose `secret`, never
+// `password`. A generator that only ever walks one branch cannot notice an
+// extractor that only ever proves one branch. `Math.imul` keeps the arithmetic
+// exact, and the returned bits come off the top, where an LCG is not periodic.
 let seed = 0x2f6e2b1;
 function rnd(n: number): number {
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  return seed % n;
+  seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+  return (seed >>> 16) % n;
 }
 const SAFE = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -345,6 +351,19 @@ describe("mandatoryLiterals extraction", () => {
     [/mongodb(\+srv)?:\/\/[^\s"'<>]+/i, [["mongodb"]]],
     // a top-level alternation yields one any-of set
     [/redis(s)?:\/\//i, [["redis://", "rediss://"]]],
+    // EVERY branch has to be in the any-of set. An extractor that kept only the
+    // first would prove `alpha`, which two thirds of the matches do not contain,
+    // and the generative test alone does not reliably reach the later branches.
+    [/alpha|bravo|charlie/, [["alpha", "bravo", "charlie"]]],
+    [/(?:alpha|bravo|charlie)wxyz/, [["alphawxyz", "bravowxyz", "charliewxyz"]]],
+    // The shipped Generic Secret Assignment alternation proves NOTHING, because
+    // `pwd` is below the four-character floor and one unprovable branch sinks
+    // the set. Pinned because narrowing this alternation to its first branch is
+    // a plausible "improvement" that deletes every `password = "…"` finding.
+    [
+      /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][^'"]{8,}['"]/gi,
+      [],
+    ],
     // an optional single-character class expands into variants
     [/apikeys?[_-]?value/i, [["apikeyvalue", "apikey_value", "apikey-value", "apikeysvalue", "apikeys_value", "apikeys-value"]]],
     // a `+` keeps its own character but ends the run after it
@@ -424,6 +443,45 @@ describe("mandatoryLiterals extraction", () => {
         continue;
       }
       if (!admits(pattern, subject)) failures.push(`${pattern.source}: filter REJECTED a real match`);
+    }
+    expect(failures).toEqual([]);
+  });
+
+  // Five more shapes where the extractor read the regex as something other than
+  // what the engine reads. Each pair is a pattern and a subject it really
+  // matches; each was denied before.
+  test("regex syntax the extractor does not model is declined, not guessed", () => {
+    const KELVIN = String.fromCharCode(0x212a);
+    const LONG_S = String.fromCharCode(0x017f);
+    const cases: Array<[RegExp, string]> = [
+      // `.` is a wildcard, so a group holding one is not a run of literals.
+      [/(abcd.efgh)/, "abcdXefgh"],
+      // An atom that proves nothing still owns its quantifier: `{1000}` is not
+      // four literal characters.
+      [/abcd\d{1000}efgh/, `abcd${"2".repeat(1000)}efgh`],
+      [/abcd\w{1000}efgh/, `abcd${"q".repeat(1000)}efgh`],
+      // JavaScript has no Perl `[]]`: `[]` is an empty class, and reading past
+      // it hides the `|` that makes this two branches.
+      [/abcd[]|efgh/, "efgh"],
+      // In legacy mode `\p` and `\u{` are identity escapes and the `}` searched
+      // for belongs to a character class, not to them.
+      [/\p{[abcd}efgh]/, "p{a"],
+      [/\u{[abcd}efgh]/, "u{a"],
+      // Under `u`, `i` folds beyond ASCII: these match subjects that do not
+      // contain the ASCII literal at all.
+      [/secret/iu, `${LONG_S}ecret`],
+      [/mark/iu, `mar${KELVIN}`],
+    ];
+    const failures: string[] = [];
+    for (const [pattern, subject] of cases) {
+      const probe = new RegExp(pattern.source, pattern.flags.replace("g", ""));
+      if (!probe.test(subject)) {
+        failures.push(`/${pattern.source}/${pattern.flags}: fixture does not match`);
+        continue;
+      }
+      if (!admits(pattern, subject)) {
+        failures.push(`/${pattern.source}/${pattern.flags}: filter REJECTED a real match`);
+      }
     }
     expect(failures).toEqual([]);
   });

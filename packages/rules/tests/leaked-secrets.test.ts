@@ -393,16 +393,25 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
   ];
   const fixtures = ['"', "'"].flatMap(fixturesQuotedWith);
 
-  test("every fixture found unpadded is still found inside 70 KB of bundle", () => {
+  // WHOLE findings, not just their values: a prefilter that skipped the pattern
+  // which classifies a value would let a broader pattern claim it instead, and
+  // the type, confidence, publicByDesign flag and location would all change
+  // while the value stayed the same.
+  test("every finding made unpadded is still made, unchanged, inside 70 KB of bundle", () => {
     const lost: string[] = [];
     for (const fixture of fixtures) {
-      const bare = scanContent(fixture, "inline-script").map((f) => f.value);
+      const bare = scanContent(fixture, "inline-script");
       expect(bare.length).toBeGreaterThan(0); // a vacuous fixture proves nothing
-      const padded = new Set(
-        scanContent(`${PAD}\n;\n${fixture}\n;\n${PAD}`, "inline-script").map((f) => f.value)
+      const padded = scanContent(`${PAD}\n;\n${fixture}\n;\n${PAD}`, "inline-script").map((f) =>
+        JSON.stringify(f)
       );
-      for (const value of bare) {
-        if (!padded.has(value)) lost.push(`${fixture.slice(0, 48)} → lost ${value.slice(0, 24)}`);
+      for (const finding of bare) {
+        if (!padded.includes(JSON.stringify(finding))) {
+          const near = padded.find((p) => p.includes(finding.value));
+          lost.push(
+            `${fixture.slice(0, 40)} → ${JSON.stringify(finding)} became ${near ?? "nothing"}`
+          );
+        }
       }
     }
     expect(lost).toEqual([]);
