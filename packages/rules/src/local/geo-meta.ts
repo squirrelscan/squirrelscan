@@ -11,6 +11,7 @@ export const geoMetaRule: Rule = {
       "Geo meta tags help indicate your business location for local search. Add: geo.region (country-state code), geo.placename (city name), geo.position (latitude;longitude), and ICBM meta tag. These supplement LocalBusiness schema. Most useful for location-specific landing pages.",
     category: "local",
     scope: "page",
+    verdictScope: "template",
     severity: "info",
     weight: 2,
     // Geo meta tags only help real-world local businesses. Skip with a visible

@@ -11,6 +11,7 @@ export const horizontalScrollRule: Rule = {
       "Horizontal scrolling on mobile is a poor user experience and fails Google's mobile-friendly test. Common causes: fixed-width elements, images without max-width, wide tables. Use max-width: 100% on images, responsive tables, and avoid fixed pixel widths. Test on mobile devices.",
     category: "mobile",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

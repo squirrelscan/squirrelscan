@@ -99,6 +99,7 @@ export const unminifiedCssRule: Rule = {
       "Minify CSS to reduce file size and improve load times. Use build tools like cssnano, clean-css, or PostCSS with cssnano plugin. Most bundlers (Webpack, Vite, esbuild) can minify CSS automatically in production mode. Minification removes whitespace, comments, and optimizes syntax.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 4,
     optionsSchema,

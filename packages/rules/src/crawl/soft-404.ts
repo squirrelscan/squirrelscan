@@ -33,6 +33,7 @@ export const soft404Rule: Rule = {
       "A soft 404 is a page that shows 'not found' / error content but returns a success (2xx) status instead of a real 404 or 410. Search engines waste crawl budget on these and may index them as thin or duplicate content. Return a proper 404 (or 410 for permanently removed URLs) for missing pages, or restore the real content if the URL should resolve. If the URL is valid, remove the error-shell markup and the 'page not found' title/heading.",
     category: "crawl",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
     // MUST NOT set skipOnSoft404 — this rule exists to report soft-404 pages.

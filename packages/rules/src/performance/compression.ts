@@ -11,6 +11,7 @@ export const compressionRule: Rule = {
       "Enable Gzip or Brotli compression on your server to reduce transfer sizes by 60-90%. Most web servers support this via configuration. For nginx: 'gzip on;' For Apache: 'AddOutputFilterByType DEFLATE text/html'. Brotli provides better compression than Gzip for text content.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
   },

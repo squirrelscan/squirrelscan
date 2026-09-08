@@ -11,6 +11,7 @@ export const emptyHeadingRule: Rule = {
       "Headings (h1-h6) must have text content for screen readers to announce. Empty headings create confusing navigation. Either add text content, use aria-label, or remove the empty heading element.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

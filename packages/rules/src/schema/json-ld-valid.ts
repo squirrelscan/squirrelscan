@@ -11,6 +11,7 @@ export const jsonLdValidRule: Rule = {
       "JSON-LD structured data helps search engines understand your content and can unlock rich results. Validate against schema.org rules (headline, author, datePublished for articles, name/url for organizations, etc.) and keep the JSON well-formed. Use squirrelscan's built-in schema validator to expose the exact missing property path before verifying on Google's Rich Results Test, and ensure each required field points to a canonical resource.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

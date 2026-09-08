@@ -11,6 +11,7 @@ export const videoThumbnailRule: Rule = {
       "Video poster images improve perceived performance and user experience. For HTML5 video, use the poster attribute. For embedded videos, thumbnailUrl in VideoObject schema. Thumbnails should be high quality, relevant to content, and properly sized (recommend 1280x720 or higher).",
     category: "video",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

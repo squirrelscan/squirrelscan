@@ -15,6 +15,7 @@ export const deadEndPages: Rule = {
       "Add navigation links or related content links to help users continue browsing. Internal links improve user experience and help search engines discover content.",
     category: "links",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 3,
     optionsSchema: z.object({

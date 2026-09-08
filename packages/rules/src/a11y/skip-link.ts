@@ -12,6 +12,7 @@ export const skipLinkRule: Rule = {
       "Skip links allow keyboard users to bypass repetitive navigation and jump directly to main content. Add a hidden link at the very beginning of your page: <a href='#main-content' class='skip-link'>Skip to main content</a>. Style it to become visible on focus. Ensure the target (#main-content) has tabindex='-1' if it's not naturally focusable. Alternative: use landmark roles like <main> which screen readers can navigate to directly.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

@@ -14,6 +14,7 @@ export const slugKeywordsRule: Rule = {
       "URLs should contain keywords that describe the page content. Good: /blue-running-shoes. Bad: /product-12345 or /p?id=abc. Include primary keywords in the URL path, but avoid keyword stuffing. URLs should be readable by humans and give users an idea of page content before clicking. Dynamic parameters don't provide SEO value.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

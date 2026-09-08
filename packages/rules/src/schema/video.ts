@@ -14,6 +14,7 @@ export const videoSchemaRule: Rule = {
       "VideoObject schema enables video rich results and carousels. Required: name, description, thumbnailUrl, uploadDate. Recommended: duration (ISO 8601), contentUrl, embedUrl. For video courses, use Course with hasCourseInstance. Ensure thumbnailUrl is high quality (min 160x90, max 1920x1080).",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

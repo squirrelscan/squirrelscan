@@ -74,6 +74,7 @@ export const staleCopyrightRule: Rule = {
       "A footer copyright year behind the current year is the most common 'this site is abandoned' signal a visitor sees, and it costs nothing to fix. Render the year dynamically from the server or build step rather than hardcoding it, or use a range whose end year updates ('2019-2026'). If the date is a deliberate legal assertion tied to a fixed publication, move it out of site chrome and into the page body so it reads as a statement about that content rather than about the site.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     // Warning, never error: a stale year is a trust smell, not a defect — the page
     // works. Weight stays low so one templated footer repeated across every page
     // cannot dominate the content category score.

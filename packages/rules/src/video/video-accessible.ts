@@ -11,6 +11,7 @@ export const videoAccessibleRule: Rule = {
       "Videos need captions for deaf/hard-of-hearing users and transcripts for SEO. Use <track> elements for captions. Provide text transcripts on the page. Auto-generated captions should be reviewed for accuracy. Captions also help when audio can't be played. Required by WCAG 2.1 Level A.",
     category: "video",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

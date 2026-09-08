@@ -232,6 +232,7 @@ export const htmlLangValidRule: Rule = {
       "The lang attribute on <html> should be a valid BCP 47 language tag. Use two-letter ISO 639-1 codes like 'en' for English, 'es' for Spanish, 'fr' for French. You can add region subtags like 'en-US' or 'en-GB'. This helps screen readers use correct pronunciation.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

@@ -30,6 +30,7 @@ export const ariaTooltipNameRule: Rule = {
       "Tooltip elements with role='tooltip' must have accessible content. The tooltip content serves as its accessible name. Ensure tooltips have text content or use aria-label for icon-based tooltips.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

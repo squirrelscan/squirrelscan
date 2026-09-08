@@ -11,6 +11,7 @@ export const ariaHiddenBodyRule: Rule = {
       "Never set aria-hidden='true' on the <body> element. This makes the entire page invisible to assistive technology. If you need to hide content when a modal is open, add aria-hidden to sibling elements of the modal, not to body.",
     category: "a11y",
     scope: "page",
+    verdictScope: "template",
     severity: "error",
     weight: 10,
   },

@@ -74,3 +74,67 @@ export function templateFingerprintKey(fp: PageFingerprint | null): string | nul
   if (!fp) return null;
   return fnv1a64(new TextEncoder().encode(canonicalize(fp)), 0n);
 }
+
+/**
+ * The comparison #1951's fan-out has to satisfy: everything a fanned-out verdict
+ * would ASSERT about a page it never ran on, reduced to a comparable string.
+ *
+ * The whole check is included — `message`, `value`, `expected`, `items` and
+ * `details` — not just name and status. An earlier version compared
+ * `(name, status, message)` only, and two pages with different `<meta refresh>`
+ * destinations, or different insecure form targets, compared EQUAL: the evidence
+ * that distinguishes them lives in `items` and `details`, which is exactly what a
+ * report renders. A comparison that drops it approves fan-out of the wrong
+ * evidence.
+ *
+ * Only the page's own identity is normalised away: `pageUrl`, and any occurrence
+ * of the page's url or path inside a string, become `<page>`. Those are per-page
+ * by construction and #1951 restamps them onto the member being asserted about.
+ * A resource url that merely LIVES on the page (a CDN script, a form action) is
+ * left alone, because it is evidence, not identity.
+ *
+ * Object keys are emitted in sorted order, so two structurally equal payloads
+ * built in different orders compare equal.
+ */
+export function templateVerdictKey(
+  checks: ReadonlyArray<Record<string, unknown>>,
+  pageUrl: string,
+): string {
+  let path = pageUrl;
+  try {
+    const u = new URL(pageUrl);
+    path = u.pathname + u.search;
+  } catch {
+    /* not absolute; the full string is the only handle */
+  }
+  // Longest first, so scrubbing the path does not leave a fragment of the url.
+  const identities = [...new Set([pageUrl, pageUrl.replace(/\/$/, ""), path])]
+    .filter((v) => v.length > 1)
+    .sort((a, b) => b.length - a.length);
+
+  const scrubString = (text: string): string => {
+    let out = text;
+    for (const id of identities) out = out.split(id).join("<page>");
+    return out;
+  };
+
+  const canon = (value: unknown): unknown => {
+    if (typeof value === "string") return scrubString(value);
+    if (Array.isArray(value)) return value.map(canon);
+    if (value && typeof value === "object") {
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+        // The page's own url as a FIELD is identity, not evidence.
+        if (key === "pageUrl") continue;
+        const v = (value as Record<string, unknown>)[key];
+        if (v !== undefined) out[key] = canon(v);
+      }
+      return out;
+    }
+    return value;
+  };
+
+  const rows = checks.map((c) => JSON.stringify(canon(c)));
+  rows.sort();
+  return JSON.stringify(rows);
+}

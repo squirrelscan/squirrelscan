@@ -11,6 +11,7 @@ export const reviewSchemaRule: Rule = {
       "Review schema enables star ratings in search results. AggregateRating needs ratingValue, bestRating (default 5), ratingCount or reviewCount. Individual Review needs author, reviewRating, datePublished. Reviews must be for specific items (Product, LocalBusiness, etc.), not the overall site. Self-reviews violate guidelines.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

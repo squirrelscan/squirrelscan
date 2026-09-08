@@ -216,6 +216,7 @@ export const validLangRule: Rule = {
       "All lang attributes should use valid BCP 47 language tags. This includes lang attributes on any element, not just <html>. Use lang to mark up content in a different language from the page default.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

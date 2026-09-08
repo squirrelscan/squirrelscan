@@ -83,6 +83,7 @@ export const lazyAboveFoldRule: Rule = {
       "Don't use loading='lazy' on images that appear above the fold (visible without scrolling). Lazy loading these images delays LCP because the browser waits for layout before fetching. For hero images and LCP candidates: 1) Remove loading='lazy'. 2) Add fetchpriority='high'. 3) Consider preloading with <link rel='preload' as='image'>. Only use lazy loading for below-fold images.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

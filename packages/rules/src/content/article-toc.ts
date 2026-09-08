@@ -19,6 +19,7 @@ export const articleTocRule: Rule = {
       "Add a table of contents with links to each section. Mark it up with ItemList schema containing ListItem elements with position, name, and url (fragment identifier) properties.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
     optionsSchema,

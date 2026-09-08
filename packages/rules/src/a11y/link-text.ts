@@ -170,6 +170,7 @@ export const linkTextRule: Rule = {
       "Link text should describe the destination, not generic phrases like 'click here'. Screen reader users often navigate by links, hearing them out of context. Good: 'View our pricing plans'. Bad: 'Click here'. For icon-only links, add aria-label: <a href='/search' aria-label='Search'><svg>...</svg></a>. Empty links are especially problematic - add text or aria-label.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

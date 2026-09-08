@@ -34,6 +34,7 @@ export const ariaTreeitemNameRule: Rule = {
       "Treeitem elements must have accessible names. Add text content, aria-label, or aria-labelledby. The text content within the treeitem typically serves as its name.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

@@ -21,6 +21,7 @@ export const duplicateIdActiveRule: Rule = {
       "Duplicate IDs on focusable elements (links, buttons, inputs) break keyboard navigation and label associations. Browsers only recognize the first element with a given ID, so labels, focus management, and ARIA references will target the wrong element. Ensure every focusable element with an id attribute has a unique value.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

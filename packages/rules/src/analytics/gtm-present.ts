@@ -11,6 +11,7 @@ export const gtmPresentRule: Rule = {
       "Analytics tracking helps understand user behavior and measure SEO success. Use Google Tag Manager (GTM) to manage all tags centrally. GTM should be in the <head> with a noscript fallback in <body>. Alternatives: Google Analytics 4 directly, Plausible, Fathom, or Matomo. Ensure tracking complies with privacy laws.",
     category: "analytics",
     scope: "page",
+    verdictScope: "template",
     severity: "info",
     weight: 3,
   },

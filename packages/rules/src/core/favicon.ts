@@ -11,6 +11,7 @@ export const faviconRule: Rule = {
       "Favicons help with brand recognition and UX. Include multiple formats: <link rel='icon' href='/favicon.ico'> for legacy, <link rel='icon' type='image/svg+xml' href='/favicon.svg'> for modern browsers, and <link rel='apple-touch-icon' href='/apple-touch-icon.png'> for iOS. 32x32px for .ico, 180x180px for Apple touch icon.",
     category: "core",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 3,
   },

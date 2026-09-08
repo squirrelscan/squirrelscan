@@ -11,6 +11,7 @@ export const ogUrlMatchRule: Rule = {
       "og:url should match your canonical URL. Mismatches can cause social share stats to be fragmented across different URLs. Use the same URL normalization (https, www, trailing slash) as your canonical tag. Facebook uses og:url for share counting and deduplication.",
     category: "social",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 3,
   },

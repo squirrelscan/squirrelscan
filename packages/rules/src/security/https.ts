@@ -11,6 +11,7 @@ export const httpsRule: Rule = {
       "HTTPS encrypts data between users and your server, protecting sensitive information. It's a ranking signal and required for many modern browser features. Migrate to HTTPS by obtaining an SSL certificate (free from Let's Encrypt). Update internal links to use https://. Set up 301 redirects from HTTP to HTTPS. Update your canonical URLs and sitemap. Check for mixed content warnings after migration.",
     category: "security",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

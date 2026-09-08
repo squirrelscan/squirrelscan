@@ -13,6 +13,7 @@ export const productSchemaRule: Rule = {
       "Product schema enables rich results in search. Required: name, image. For offers, include price, priceCurrency, availability. Add reviews with AggregateRating for star ratings. Include brand, sku, gtin for product identification. Ensure price and availability are accurate and updated.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
   },

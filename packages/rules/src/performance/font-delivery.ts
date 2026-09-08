@@ -36,6 +36,7 @@ export const fontDeliveryRule: Rule = {
       "A <link rel='stylesheet'> to a hosted font service (e.g. fonts.googleapis.com) blocks rendering and adds a cross-origin round-trip before any text can paint. Make font delivery non-blocking: 1) Self-host the font files and the @font-face CSS to remove the third-party request entirely. 2) If you keep the hosted CSS, preconnect to the font host and load the stylesheet asynchronously (media='print' onload=\"this.media='all'\"). 3) Use font-display: swap so fallback text shows immediately. 4) Subset the font to the characters you actually use to cut bytes.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 5,
   },

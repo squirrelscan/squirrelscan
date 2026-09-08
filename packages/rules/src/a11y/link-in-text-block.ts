@@ -12,6 +12,7 @@ export const linkInTextBlockRule: Rule = {
       "Links within text blocks must be distinguishable by more than just color (for color-blind users). Use underlines, bold, borders, or other visual indicators. Exception: Links can rely on color alone if the contrast ratio between link and surrounding text is at least 3:1 and you provide additional cues on hover/focus.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

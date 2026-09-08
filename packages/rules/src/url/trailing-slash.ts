@@ -11,6 +11,7 @@ export const trailingSlashRule: Rule = {
       "Be consistent with trailing slashes across your site. /page and /page/ are technically different URLs. Pick one convention and stick to it. Configure your server to redirect one to the other. Most sites use trailing slashes for directories and no trailing slash for files. Use canonical tags to specify the preferred version.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

@@ -11,6 +11,7 @@ export const svgInlineRule: Rule = {
       "Large inline SVGs increase HTML size and block rendering. Move SVGs >4KB to external files and reference with <img> or CSS background. Inline small, critical SVGs (icons, logos) only. Use SVGO to optimize. Consider SVG sprites for icon sets. Inline SVGs can't be cached separately from HTML.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

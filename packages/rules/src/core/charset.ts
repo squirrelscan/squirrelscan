@@ -13,6 +13,7 @@ export const charsetRule: Rule = {
       'Add <meta charset="UTF-8"> as the first element in your <head> section. This tells browsers how to interpret the text on your page. UTF-8 is the standard encoding that supports all languages and special characters. Placing it first ensures browsers know the encoding before parsing any other content.',
     category: "core",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 5,
   },

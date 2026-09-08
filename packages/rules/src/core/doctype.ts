@@ -19,6 +19,7 @@ export const doctypeRule: Rule = {
       "Add <!DOCTYPE html> at the very start of your HTML document, before the <html> tag. This declaration tells browsers to render the page in standards mode rather than quirks mode, ensuring consistent rendering across browsers. Without a proper doctype, browsers may render the page inconsistently.",
     category: "core",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 5,
   },

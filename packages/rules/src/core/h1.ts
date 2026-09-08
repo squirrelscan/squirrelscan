@@ -11,6 +11,7 @@ export const h1Rule: Rule = {
       "Each page should have exactly one H1 tag that clearly describes the main topic. The H1 is the primary heading users and search engines see, and it should align with the page title while being more detailed. If missing, add an H1 at the top of your main content. If you have multiple H1s, demote extras to H2 or lower. Ensure the H1 is descriptive and contains relevant keywords naturally.",
     category: "core",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

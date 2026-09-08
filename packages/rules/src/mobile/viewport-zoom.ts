@@ -11,6 +11,7 @@ export const viewportZoomRule: Rule = {
       "Never disable user zoom with maximum-scale=1, user-scalable=no, or user-scalable=0. Users with visual impairments need to zoom. This is an accessibility violation (WCAG 1.4.4). It also harms usability for all users. Remove these properties from your viewport meta tag.",
     category: "mobile",
     scope: "page",
+    verdictScope: "template",
     severity: "error",
     weight: 7,
   },

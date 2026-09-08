@@ -11,6 +11,7 @@ export const duplicateIdAriaRule: Rule = {
       "IDs referenced by ARIA attributes (aria-labelledby, aria-describedby, aria-controls, etc.) must be unique on the page. Duplicate IDs cause assistive technology to potentially reference the wrong element. Rename duplicate IDs to be unique.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

@@ -11,6 +11,7 @@ export const formFieldMultipleLabelsRule: Rule = {
       "Form inputs should have only one associated label. Multiple labels can confuse assistive technology. If you need multiple text descriptions, use aria-describedby for supplementary text instead of multiple labels.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

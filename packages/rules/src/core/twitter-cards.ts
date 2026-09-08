@@ -11,6 +11,7 @@ export const twitterCardsRule: Rule = {
       "Twitter Cards enhance how links appear in tweets. The twitter:card meta tag specifies the card type (summary, summary_large_image, player, or app). Add twitter:card, twitter:title, twitter:description, and twitter:image tags. For large images, use summary_large_image with images at least 800x418 pixels. Validate using Twitter's Card Validator tool.",
     category: "core",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

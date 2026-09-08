@@ -13,6 +13,7 @@ export const urlParametersRule: Rule = {
       "Excessive URL parameters can cause crawl budget waste and duplicate content. Each parameter combination creates a unique URL. Use parameter handling in Google Search Console to tell Google how to handle parameters. Consider using path segments instead of parameters for important content. Filter/sort parameters should be handled with canonical tags or robots meta.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

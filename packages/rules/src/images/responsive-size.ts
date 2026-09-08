@@ -21,6 +21,7 @@ export const responsiveSizeRule: Rule = {
       "Serve images at appropriate sizes for their display dimensions. Oversized images waste bandwidth and slow page load. Undersized images look blurry on high-DPI displays. Use srcset to serve different sizes for different screens. For responsive images, serve 1x, 2x, and optionally 3x versions. Image CDNs can automatically resize images on-the-fly.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
     optionsSchema,

@@ -11,6 +11,7 @@ export const hreflangRule: Rule = {
       "Hreflang tags tell search engines about language and regional variations of pages, preventing duplicate content issues and ensuring users see the right version. Add hreflang link tags for each language/region version of a page. Include x-default for the fallback. Every page referenced should link back to all variants (bidirectional). Use correct ISO language and country codes.",
     category: "i18n",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

@@ -11,6 +11,7 @@ export const videoSchemaPresenceRule: Rule = {
       "Add VideoObject schema to pages with video content for rich results. Required: name, description, thumbnailUrl, uploadDate. Recommended: duration, contentUrl, embedUrl. Schema enables video carousels and previews in search results. Test with Google's Rich Results Test.",
     category: "video",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

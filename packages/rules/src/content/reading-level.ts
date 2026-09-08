@@ -12,6 +12,7 @@ export const readingLevelRule: Rule = {
       "Content should match your target audience's reading level. For general audiences, aim for 6th-8th grade level (60-70 Flesch score). Use shorter sentences and simpler words. Break up long paragraphs. Use bullet points and headings. Technical content may have lower readability scores, which is acceptable for expert audiences.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

@@ -13,6 +13,7 @@ export const metaRefreshRule: Rule = {
       "Avoid using <meta http-equiv='refresh'> for redirects or auto-refresh. They can disorient users, especially those using screen readers. Use server-side redirects (301/302) instead. If content must refresh, provide a user control and warn users beforehand.",
     category: "a11y",
     scope: "page",
+    verdictScope: "template",
     severity: "error",
     weight: 7,
   },

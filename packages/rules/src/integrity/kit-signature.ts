@@ -38,6 +38,7 @@ export const kitSignatureRule: Rule = {
       "A page matching a known kit signature is a strong indicator your site is compromised: an injected, often token-gated standalone page that impersonates a brand's login/booking surface to harvest credentials. Remove the page and any unexpected files, rotate credentials, audit server access logs, and review for a web-shell or injected loader. Signatures are high-precision (they require multiple corroborating strings), so a match is not a casual false positive.",
     category: "integrity",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 9,
   },

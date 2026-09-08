@@ -13,6 +13,7 @@ export const altTextRule: Rule = {
       'Alt text describes images for screen readers and displays when images fail to load. It is essential for accessibility and helps with image search SEO. Add descriptive alt text to every image that carries information, keeping it concise (under 125 characters) and free of keyword stuffing. An image that is purely decorative should carry an empty alt attribute (alt="") instead: that is the correct markup for "skip me" and this rule accepts it. Only an image with no alt attribute at all is reported here.',
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

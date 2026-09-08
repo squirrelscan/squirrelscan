@@ -11,6 +11,7 @@ export const consentModeRule: Rule = {
       "Google Consent Mode v2 is required for Google Ads in the EU/EEA (March 2024). It allows Google tags to adjust behavior based on user consent. Implement with gtag('consent', 'default', {...}) before loading Google tags. Set ad_storage, analytics_storage, ad_user_data, and ad_personalization. Update on user consent.",
     category: "analytics",
     scope: "page",
+    verdictScope: "template",
     severity: "info",
     weight: 4,
   },

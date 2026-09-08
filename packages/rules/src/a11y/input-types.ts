@@ -100,6 +100,7 @@ export const inputTypesRule: Rule = {
       "Use the input type that matches the data: type='email', type='tel', type='url' and type='number' each summon the right mobile keyboard and bring free browser validation with them, while type='text' gives users the full QWERTY keyboard and no help at all. Never use type='number' for a digit string such as a postal code, phone number or card number: it strips leading zeros, adds a spinner, and silently discards anything that is not a valid float. If you need a numeric keypad without those side effects, keep type='text' and add inputmode='numeric'. On forms with several fields, set enterkeyhint='next' on each field and enterkeyhint='send' or 'done' on the last one so the mobile return key says what it does. Only add novalidate when your own JavaScript takes over validation: on a form that still declares required or pattern and ships no replacement, it removes the browser's error messages and hands users nothing back.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

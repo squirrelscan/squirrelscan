@@ -11,6 +11,7 @@ export const robotsMetaRule: Rule = {
       'The robots meta tag controls how search engines index and follow links on a page. Common directives include noindex, nofollow, noarchive, and nosnippet. If your page has noindex, it won\'t appear in search results. Review whether this is intentional. For pages that should be indexed, remove the noindex directive or change to "index, follow". Be careful with nofollow as it prevents link equity from flowing to linked pages.',
     category: "core",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

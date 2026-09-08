@@ -11,6 +11,7 @@ export const landmarkRegionsRule: Rule = {
       "Landmark regions help screen reader users navigate page structure. Use semantic HTML5 elements: <main> for primary content, <nav> for navigation, <header> for page header, <footer> for footer, <aside> for sidebars, and <section>/<article> for content sections. Alternatively, use ARIA roles: role='main', role='navigation', etc. Each page should have exactly one <main> element.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

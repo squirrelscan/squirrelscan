@@ -20,6 +20,7 @@ export const obfuscatedScriptRule: Rule = {
       "A large, high-entropy inline script using eval/packers or anti-tamper strings is rarely something a legitimate site ships inline. If you did not add it, treat the page as compromised: identify the file serving it, remove the injected script, scan for dropped PHP/JS, and rotate credentials. Legitimate heavy JS should be served as an external, source-mapped bundle, not an obfuscated inline blob.",
     category: "integrity",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 8,
   },

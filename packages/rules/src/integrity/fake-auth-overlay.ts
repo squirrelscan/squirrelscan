@@ -20,6 +20,7 @@ export const fakeAuthOverlayRule: Rule = {
       "A full-viewport, fixed, high-z-index iframe that covers the page, or a 'Sign in with Google/Microsoft' control whose target is not the brand's real domain, is a credential-harvesting overlay. If you did not build it, your site is likely compromised: remove the overlay markup/script, audit recently modified files, and rotate credentials. Legitimate sign-in always targets the provider's own host (accounts.google.com, login.microsoftonline.com).",
     category: "integrity",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 8,
   },

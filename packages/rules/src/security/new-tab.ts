@@ -12,6 +12,7 @@ export const newTabRule: Rule = {
       'External links with target="_blank" should include rel="noopener noreferrer". noopener prevents the opened page from accessing window.opener (tab-nabbing attacks). noreferrer prevents leaking the referrer URL to the destination site (privacy). Modern browsers default noopener for target="_blank", but explicit attributes ensure compatibility.',
     category: "security",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

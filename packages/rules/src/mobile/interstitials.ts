@@ -11,6 +11,7 @@ export const interstitialsRule: Rule = {
       "Google penalizes intrusive interstitials that cover main content on mobile. Avoid: popups that cover the content immediately on page load, standalone interstitials before the main content, above-the-fold layouts that look like interstitials. Allowed: age verification, cookie consent (small), login walls for paywalled content.",
     category: "mobile",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

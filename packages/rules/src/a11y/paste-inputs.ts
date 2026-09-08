@@ -11,6 +11,7 @@ export const pasteInputsRule: Rule = {
       "Remove any JavaScript that prevents pasting in form inputs. Blocking paste forces users to manually type passwords, email addresses, or other data, which increases errors and frustrates users with password managers. Users with motor impairments may rely on paste functionality. Remove onpaste='return false', event.preventDefault() on paste events, and similar anti-paste code.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

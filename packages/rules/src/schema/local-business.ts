@@ -73,6 +73,7 @@ export const localBusinessSchemaRule: Rule = {
       "LocalBusiness schema helps your business appear in local search and Google Maps. Required: name, plus either a full PostalAddress (streetAddress, addressLocality, postalCode) for a storefront, or areaServed for a service-area business (SAB) with no public storefront: Google supports omitting the address when areaServed is declared. Include telephone, openingHours (use OpeningHoursSpecification for complex hours), geo coordinates, and priceRange. Match data with your Google Business Profile.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
     // LocalBusiness schema only applies to real-world local businesses. Skip with

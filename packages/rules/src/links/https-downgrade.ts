@@ -11,6 +11,7 @@ export const httpsDowngradeRule: Rule = {
       "Links from HTTPS to HTTP pages create security warnings and break the trust chain. Users may see 'not secure' warnings. Update all links to use HTTPS. If the target site doesn't support HTTPS, consider if you really need to link there. For internal links, ensure your entire site uses HTTPS.",
     category: "links",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

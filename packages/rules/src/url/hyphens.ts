@@ -11,6 +11,7 @@ export const urlHyphensRule: Rule = {
       "Use hyphens (-) to separate words in URLs, not underscores (_). Google treats hyphens as word separators but treats underscores as word joiners. 'blue-shoes' = 'blue' + 'shoes', but 'blue_shoes' = 'blueshoes'. This affects keyword matching and SEO. Replace underscores with hyphens and set up redirects from old URLs.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

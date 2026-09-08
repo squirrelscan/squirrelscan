@@ -49,6 +49,7 @@ export const duplicateJsRule: Rule = {
       "Remove duplicate JavaScript library loads to reduce page weight and avoid conflicts. Check for the same library loaded from different CDNs or versions. Use a single source for each dependency. Consider using a module bundler to deduplicate shared dependencies.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 5,
   },

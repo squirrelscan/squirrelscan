@@ -11,6 +11,7 @@ export const metaInBodyRule: Rule = {
       "Move all meta tags from <body> to <head>. Meta tags in the body are ignored by browsers and search engines. Common offenders: meta description, viewport, robots, and Open Graph tags. This is often caused by incorrect HTML structure or dynamic rendering issues.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

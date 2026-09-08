@@ -20,6 +20,7 @@ export const keywordStuffingRule: Rule = {
       "Keyword stuffing is repeating words unnaturally to manipulate rankings. Search engines penalize this practice. Write naturally for users first. Use keywords where they fit naturally. Aim for 1-2% keyword density at most. Use synonyms and related terms instead of repeating the exact same phrase. Focus on providing value, not gaming algorithms.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
     optionsSchema,

@@ -11,6 +11,7 @@ export const filenameQualityRule: Rule = {
       "Use descriptive, keyword-rich filenames for images instead of generic names like IMG_001.jpg or DSC1234.png. Good: 'red-running-shoes-nike.jpg'. Bad: 'IMG_20231015.jpg'. Filenames contribute to image SEO and help search engines understand image content. Use hyphens to separate words.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
   },

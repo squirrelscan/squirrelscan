@@ -58,6 +58,7 @@ export const telMailtoRule: Rule = {
       "Tel links should use format: tel:+1234567890 (E.164 format preferred, no spaces/dashes). Mailto links should have valid email format: mailto:user@example.com. You can add subject and body parameters: mailto:user@example.com?subject=Hi&body=Hello. Invalid formats may not work on all devices. Ensure the displayed text matches the href — a mismatched phone number or email misleads users and may dial/email the wrong contact.",
     category: "links",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
   },

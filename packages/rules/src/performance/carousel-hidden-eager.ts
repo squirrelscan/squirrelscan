@@ -26,6 +26,7 @@ export const carouselHiddenEagerRule: Rule = {
       "Images inside inactive/hidden carousel slides are still downloaded when loaded eagerly, wasting bandwidth and competing with above-fold resources: hiding a slide with display:none or aria-hidden does not stop the fetch. Add loading='lazy' to images in off-screen carousel slides so the browser defers them until the slide is shown. Keep the first (visible) slide eager so it is not delayed.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

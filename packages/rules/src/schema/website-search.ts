@@ -11,6 +11,7 @@ export const websiteSearchSchemaRule: Rule = {
       "WebSite schema with SearchAction enables the sitelinks searchbox in Google results. Add to your homepage: WebSite with url, potentialAction (SearchAction with target URL using {search_term_string} placeholder, and query-input). This lets users search your site directly from Google results.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

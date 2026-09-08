@@ -21,6 +21,7 @@ export const fontLoadingRule: Rule = {
       "Optimize font loading to prevent FOIT (Flash of Invisible Text) and FOUT (Flash of Unstyled Text): 1) Use font-display: swap in @font-face to show fallback text immediately. 2) Preconnect to font CDNs with <link rel='preconnect'>. 3) Use WOFF2 format for best compression. 4) Self-host fonts when possible for faster loading. 5) Limit font families and weights to reduce downloads.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 5,
   },

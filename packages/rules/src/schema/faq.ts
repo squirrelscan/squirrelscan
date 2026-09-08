@@ -11,6 +11,7 @@ export const faqSchemaRule: Rule = {
       "FAQPage schema enables FAQ rich results in search. Structure: FAQPage with mainEntity array of Question items. Each Question needs name (question text) and acceptedAnswer (Answer with text). FAQ content must be visible on the page. Don't use for single Q&A or forums - those have different schema types.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

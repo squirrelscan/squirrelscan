@@ -28,6 +28,7 @@ export const articleLinksRule: Rule = {
       "Add relevant internal links to other pages on your site and cite authoritative external sources. Short articles (<800 words) need at least 1 of each, medium (800-1500) need 2 of each, long (>1500) need 3 internal and 2 external.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema,

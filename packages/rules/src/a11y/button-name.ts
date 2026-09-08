@@ -50,6 +50,7 @@ export const buttonNameRule: Rule = {
       "Buttons must have accessible names. Options: 1) Add text content inside the button. 2) Use aria-label for icon buttons. 3) Use aria-labelledby to reference visible text. 4) Use title attribute (less preferred). For <input type='button'>, use the value attribute.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

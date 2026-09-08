@@ -512,6 +512,7 @@ export const placeholderTextRule: Rule = {
       "Each family points at a different break in the publishing pipeline. Lorem ipsum and theme boilerplate mean a page was published before its copy was written: replace the text, and add the affected fields to whatever check gates publishing. Unrendered template syntax means the templating engine never ran over that string, usually because the value was interpolated into an already-escaped fragment or the template was served as static HTML: render it server-side, or delete the stale copy. A visible undefined, NaN, null or [object Object] means the value was missing and the code concatenated it into the copy anyway: guard the field at the point of render rather than in CSS. TODO and FIXME markers mean a draft shipped: finish or remove the note, since search engines and readers see it exactly as written.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
     skipOnSoft404: true,

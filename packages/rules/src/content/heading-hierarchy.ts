@@ -11,6 +11,7 @@ export const headingHierarchyRule: Rule = {
       "Proper heading structure (H1 → H2 → H3) helps users and search engines understand your content organization. Skipping levels (H1 → H3) creates confusion. Use headings in sequential order without skipping levels. Each section should use the next heading level down. Think of headings as an outline—they should make sense when read alone. Avoid empty headings or using headings purely for styling.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

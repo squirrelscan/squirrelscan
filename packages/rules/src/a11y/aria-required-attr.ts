@@ -14,6 +14,7 @@ export const ariaRequiredAttrRule: Rule = {
       "Some ARIA roles require specific attributes to be present. For example, role='checkbox' requires aria-checked, role='slider' requires aria-valuenow. Add the missing required attributes with appropriate values.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

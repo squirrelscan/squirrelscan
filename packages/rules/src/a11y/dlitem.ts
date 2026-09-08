@@ -11,6 +11,7 @@ export const dlitemRule: Rule = {
       "The <dt> and <dd> elements must be contained within a <dl> (definition list). Move orphaned dt/dd elements inside a <dl> container.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

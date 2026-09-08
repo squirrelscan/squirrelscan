@@ -57,6 +57,7 @@ export const cookieFlagsRule: Rule = {
       "Cookies set by your server should carry the flags appropriate to their purpose. Secure stops a cookie from ever being sent over plain HTTP, so it can't be intercepted on a downgraded connection. HttpOnly stops client-side JavaScript from reading it, closing off a common XSS cookie-theft path — omit it only for cookies your own frontend genuinely needs to read. SameSite=Lax or SameSite=Strict blocks the cookie from being sent on cross-site requests, mitigating CSRF; if you need SameSite=None for a legitimate cross-site use case (e.g. an embedded widget), it must be paired with Secure or browsers will reject the cookie outright.",
     category: "security",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

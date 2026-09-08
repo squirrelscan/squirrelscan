@@ -11,6 +11,7 @@ export const browserRequiredRule: Rule = {
       "For complete performance analysis, run browser-based tools like Lighthouse, WebPageTest, or Chrome DevTools. These tools measure actual runtime metrics that cannot be determined through static HTML analysis alone.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "info",
     weight: 1,
   },

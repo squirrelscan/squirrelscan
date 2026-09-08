@@ -11,6 +11,7 @@ export const mixedContentRule: Rule = {
       "Mixed content occurs when an HTTPS page loads resources over HTTP, breaking the security chain. Browsers may block these resources. Update all resource URLs to use HTTPS or protocol-relative URLs (//example.com). Check images, scripts, stylesheets, fonts, and iframes. Use Content-Security-Policy: upgrade-insecure-requests to automatically upgrade HTTP to HTTPS.",
     category: "security",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

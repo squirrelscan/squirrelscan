@@ -11,6 +11,7 @@ export const indexabilityCheck: Rule = {
       "If this page should be indexed by search engines, remove 'noindex' from robots meta tag or X-Robots-Tag header. If the page is intentionally blocked (e.g., admin pages, thank-you pages), this is expected behavior.",
     category: "crawl",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
   },

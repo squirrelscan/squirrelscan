@@ -12,6 +12,7 @@ export const brokenHtmlRule: Rule = {
       "Valid HTML helps search engines parse and understand your content. Common issues: unclosed tags, nested elements incorrectly, invalid attributes. Use an HTML validator to find issues. Modern browsers are forgiving, but search engine parsers may not be. Clean HTML also improves accessibility and maintainability.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

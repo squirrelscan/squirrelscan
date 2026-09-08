@@ -11,6 +11,7 @@ export const tapTargetsRule: Rule = {
       "Touch targets (buttons, links) should be at least 44x44 CSS pixels with 8px spacing between them. This ensures users can tap accurately on mobile. Google's mobile-friendly test checks this. Use padding to increase tap area without changing visual size. Pay special attention to navigation links and form inputs.",
     category: "mobile",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

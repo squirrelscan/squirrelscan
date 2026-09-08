@@ -22,6 +22,7 @@ export const animatedContentRule: Rule = {
       "Convert large animated GIFs to video formats (MP4, WebM) for 50-90% smaller files. Use <video autoplay loop muted playsinline> for GIF-like behavior. Tools: ffmpeg, gif2webm, or Cloudinary can automate conversion. Modern video codecs are far more efficient than GIF for animation.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema,

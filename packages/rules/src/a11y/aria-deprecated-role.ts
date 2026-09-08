@@ -31,6 +31,7 @@ export const ariaDeprecatedRoleRule: Rule = {
       "Avoid deprecated or abstract ARIA roles. Use the recommended alternatives. Abstract roles are never meant to be used directly - they're base types that other roles extend. Replace with specific, concrete roles.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 6,
   },

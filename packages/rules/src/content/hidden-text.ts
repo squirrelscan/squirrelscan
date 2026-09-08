@@ -1100,6 +1100,7 @@ export const hiddenTextRule: Rule = {
       "Google's spam policies treat text or links that are visible to crawlers but hidden from visitors as deceptive, and pages doing it can lose rankings or be removed from search entirely. Delete the hidden block, or make it genuinely visible to users. If the content is only meant for screen readers, use the standard visually-hidden pattern (a 1x1 clipped box, or a class named sr-only / visually-hidden) so it is recognisable as an accessibility affordance. If it is interactive UI that starts collapsed, mark it up as such with aria-hidden, the hidden attribute or a role like tabpanel or dialog, so its hidden state reads as intentional. Never place keywords or links behind display:none, opacity:0, a zero font size, an off-screen offset or same-on-same colour in order to reach a crawler.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     // Warning by default: the check escalates itself to a failure once hidden
     // LINKS are involved, which is the stronger spam signal.
     severity: "warning",

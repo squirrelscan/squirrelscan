@@ -16,6 +16,7 @@ export const authoritySignalsRule: Rule = {
       "Pages that demonstrate who wrote them and what their claims rest on earn more trust from readers, search engines, and AI assistants. Add a visible author byline (with credentials where relevant), cite sources for factual claims, and link out to authoritative references.",
     category: "eeat",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 3,
     // Assessing authorship/citations on a soft-404 error page is meaningless —

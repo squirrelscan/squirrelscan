@@ -11,6 +11,7 @@ export const http2Rule: Rule = {
       "HTTP/2 enables multiplexing, header compression, and server push for faster page loads. Most modern web servers and CDNs support HTTP/2 out of the box. Requires HTTPS. Check your server/CDN documentation to enable it. HTTP/3 (QUIC) provides even better performance.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

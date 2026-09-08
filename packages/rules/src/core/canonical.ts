@@ -11,6 +11,7 @@ export const canonicalRule: Rule = {
       'Canonical URLs tell search engines which version of a page is the "master" copy, preventing duplicate content issues. Every page should specify a canonical URL, typically pointing to itself. Add a <link rel="canonical" href="..."> tag in the head section. Use absolute URLs and ensure consistency (with or without trailing slash, www vs non-www). For paginated content, point to the main page or use rel="prev/next".',
     category: "core",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
   },

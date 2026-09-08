@@ -11,6 +11,7 @@ export const authorInfoRule: Rule = {
       "Author information supports E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness). Use Person schema to mark up authors with name, url, and credentials. Link to author bio pages. Display author names visibly on content. For YMYL topics (health, finance), include author qualifications. Consider using rel='author' links.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

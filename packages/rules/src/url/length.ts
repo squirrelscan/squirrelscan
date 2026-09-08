@@ -14,6 +14,7 @@ export const urlLengthRule: Rule = {
       "Shorter URLs are easier to read, share, and may rank better. Keep URLs under 75 characters when possible. URLs over 100 characters can be truncated in search results and social shares. Remove unnecessary parameters, stop words, and path segments. Use descriptive but concise slugs. Long URLs often indicate poor site architecture.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

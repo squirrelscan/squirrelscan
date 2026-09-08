@@ -11,6 +11,7 @@ export const ogImageSizeRule: Rule = {
       "og:image should be at least 1200x630 pixels for optimal display on Facebook and LinkedIn. Smaller images may appear cropped or low quality. Use 1.91:1 aspect ratio. Keep file size under 8MB. Test with Facebook Sharing Debugger. Consider creating dedicated social images for key pages.",
     category: "social",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

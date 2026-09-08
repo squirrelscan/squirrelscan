@@ -48,6 +48,7 @@ export const lcpFetchpriorityRule: Rule = {
       "The Largest Contentful Paint image should be discovered and fetched as early as possible. When the hero image is loaded eagerly but left at default priority, the browser races it against other resources and LCP suffers. Add fetchpriority='high' to the LCP <img> so the browser prioritises it, or preload it with <link rel='preload' as='image' href='...' fetchpriority='high'>. Either signal is enough; you do not need both. Only apply this to the single above-fold LCP image, never to below-fold images.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     // Low weight on purpose: lcp-hints (weight 7) already penalizes the
     // no-preload case, so this rule adds the fetchpriority nudge without

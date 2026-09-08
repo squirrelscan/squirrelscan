@@ -13,6 +13,7 @@ export const preconnectRule: Rule = {
       "Preconnect establishes early connections to important third-party origins, saving time on DNS lookup, TCP handshake, and TLS negotiation. Add <link rel='preconnect' href='https://example.com'> for CDNs and critical third-party services. Use crossorigin attribute for CORS resources like fonts. Limit preconnects to 2-4 most critical origins to avoid connection congestion.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "info",
     weight: 4,
   },

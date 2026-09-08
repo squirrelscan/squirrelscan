@@ -24,6 +24,7 @@ export const contentWithoutJsRule: Rule = {
       "Many AI agents and crawlers read your raw HTML without executing JavaScript, so content injected client-side is invisible to them. Server-render or pre-render your primary content (SSR/SSG), or ship it in the initial HTML, so it's present before JS runs. This is a recommendation, not a penalty — interactive enhancements can stay client-side; only the core content an agent needs to understand the page should be in the raw HTML.",
     category: "ax",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
     // On a soft-404, raw and rendered are both the error shell — the raw-vs-JS

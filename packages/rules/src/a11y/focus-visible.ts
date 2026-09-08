@@ -11,6 +11,7 @@ export const focusVisibleRule: Rule = {
       "Keyboard users need visible focus indicators to know where they are on the page. Never use outline: none without providing an alternative focus style. Modern approach: use :focus-visible to show focus only for keyboard users, not mouse clicks. Ensure focus indicators have at least 3:1 contrast. Test by tabbing through your page - can you always see where focus is?",
     category: "a11y",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 5,
   },

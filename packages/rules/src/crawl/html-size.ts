@@ -29,6 +29,7 @@ export const htmlSizeRule: Rule = {
       "Googlebot truncates HTML documents at 2MB—content beyond that limit is silently ignored during indexing. Move inline styles and scripts to external files, defer non-critical content, lazy-load below-the-fold sections, and remove unnecessary markup. Keep critical SEO content (title, meta, headings, main body) near the top of the document so it's indexed even if truncation occurs.",
     category: "crawl",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 5,
     optionsSchema,

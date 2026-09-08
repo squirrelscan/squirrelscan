@@ -31,6 +31,7 @@ Fixes for slow TTFB:
 - Use edge computing (Cloudflare Workers, Vercel Edge)`,
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 7,
     optionsSchema,

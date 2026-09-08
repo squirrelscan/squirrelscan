@@ -61,6 +61,7 @@ export const contentQualityRule: Rule = {
       "Content quality affects both user engagement and search rankings. High-quality content is clear, well-structured, informative, and free of errors. Review flagged pages for clarity and depth. Ensure content provides genuine value to readers. Check for grammar and spelling errors. Break up long paragraphs, use subheadings, and include relevant examples. Consider whether the content fully answers user questions.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
     disabled: true,

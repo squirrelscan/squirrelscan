@@ -55,6 +55,7 @@ HTTP: Link: <https://example.com/page>; rel="canonical"
 Best practice: Use HTML canonical tag only. Only add Link header if unable to modify HTML (e.g., PDF files).`,
     category: "core",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 7,
   },

@@ -13,6 +13,7 @@ export const tabindexRule: Rule = {
       "Avoid positive tabindex values (1, 2, 3...) as they override natural tab order and confuse keyboard users. Use tabindex='0' to add elements to tab order, tabindex='-1' to make elements focusable via JavaScript only. Rely on natural document order for tab sequence.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

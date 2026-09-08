@@ -49,6 +49,58 @@ export type RuleScope = "page" | "site";
 export type RuleSeverity = "error" | "warning" | "info";
 
 /**
+ * Whether a page rule's verdict is a property of the page's TEMPLATE or of the
+ * PAGE itself (#1950).
+ *
+ * "template" is a claim that every page sharing a template cluster key
+ * (`page_features.template_fp`, #1949) gets the same verdict from this rule, so
+ * the rule may be run once per cluster and its verdict fanned out to the members
+ * (#1951). "page" means it must run on every page.
+ *
+ * It lives on `meta`, next to `scope` and `severity`, because it is a property of
+ * the rule's INPUTS and it goes stale the moment those change: a rule that reads
+ * only the head today and starts reading the body next month stops being
+ * template-scoped, and the person making that change is looking at this file, not
+ * at a registry somewhere else.
+ *
+ * WHEN A RULE MAY DECLARE "template". Only when its verdict is determined by
+ * markup the TEMPLATE emits into every member: the document head, the chrome
+ * landmarks, and the page's asset graph — the stylesheet hrefs, script and asset
+ * hosts, body classes and CSS custom properties the cluster key already pins.
+ *
+ * Three input classes are NOT that, and disqualify a rule however stable it looks
+ * on real crawls:
+ *
+ *  - **Response headers.** The cluster key constrains none of them. Two pages of
+ *    one template routinely differ in `Cache-Control`, `Set-Cookie` or
+ *    `SourceMap`, so `perf/cache-headers`, `security/cookie-flags` and
+ *    `perf/source-maps` are page-scoped. `perf/compression` is the sharpest case:
+ *    its verdict is stable but its MESSAGE interpolates the page's byte count.
+ *  - **The page url.** Per-page by construction; `url/*` and `security/https`
+ *    read nothing else.
+ *  - **Anything inside the page's main content** — body text, images, links,
+ *    headings, per-page meta, JSON-LD. That is what template siblings differ in by
+ *    definition, so a rule scanning the whole document for a pattern that can
+ *    appear in body content (`security/mixed-content`, `security/form-https`,
+ *    `legal/terms-of-service`, most `a11y/aria-*`) stays page-scoped even where
+ *    two real corpora agree.
+ *
+ * A detection-only rule that emits NOTHING when a page is clean is also
+ * page-scoped: fanning out its silence claims a page nobody looked at is clean,
+ * and for `integrity/*` and `security/*` that is the expensive direction to be
+ * wrong in.
+ *
+ * A declaration is a claim, not a proof, and it has two falsifiers.
+ * `template-fanout-parity-golden.test.ts` runs in CI over an authored corpus with
+ * real multi-page clusters; `apps/cli/scripts/template-rule-invariance.ts --check`
+ * runs against a real crawl, and its result over gymshark.com and
+ * openelectricity.org.au is recorded in
+ * `packages/rules/tests/fixtures/template-invariance-measured.json`, which
+ * `rule-verdict-scope.test.ts` asserts every declaration against.
+ */
+export type VerdictScope = "template" | "page";
+
+/**
  * Run-time applicability declaration. A rule with `appliesWhen` is GATED by the
  * Stage-0 site-metadata profile: when the resolved metadata does not match, the
  * runner emits ONE visible `skipped` check and skips `run()` (see
@@ -100,6 +152,30 @@ export interface RuleMeta {
    * must always run (the `crawl/soft-404` rule itself must NOT set it).
    */
   skipOnSoft404?: boolean;
+  /**
+   * Page rules only: see {@link VerdictScope}. REQUIRED on every page rule, and
+   * enforced by `rule-verdict-scope.test.ts` rather than by the type, so that a
+   * rule added without it fails a named test instead of turning every rule file
+   * into a discriminated union.
+   *
+   * Optional in the type and unset on site rules, so read it ONLY through
+   * {@link mayFanOutAcrossTemplate}, which requires an explicit "template".
+   * Absent must never mean fannable: the whole point of the field is that an
+   * unclassified rule keeps running per page.
+   */
+  verdictScope?: VerdictScope;
+}
+
+/**
+ * Whether this rule may be run once per template cluster and its verdict fanned
+ * out to the cluster's other members (#1951).
+ *
+ * The ONLY reader of `meta.verdictScope`, and it is deliberately closed: a site
+ * rule, and a page rule that has not declared, both answer false. Fan-out is a
+ * claim about pages the rule never ran on, so silence has to mean "no".
+ */
+export function mayFanOutAcrossTemplate(meta: RuleMeta): boolean {
+  return meta.scope === "page" && meta.verdictScope === "template";
 }
 
 // Generate docs URL for a rule

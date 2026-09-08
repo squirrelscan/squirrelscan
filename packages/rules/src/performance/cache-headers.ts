@@ -21,6 +21,7 @@ export const cacheHeadersRule: Rule = {
       "Use Cache-Control headers to enable browser caching. For static assets (CSS, JS, images), set long max-age (1 year) with immutable when using hashed filenames. For HTML, use shorter max-age or no-cache with revalidation. Example: 'Cache-Control: public, max-age=31536000, immutable' for versioned assets.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema,

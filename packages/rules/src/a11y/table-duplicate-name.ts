@@ -35,6 +35,7 @@ export const tableDuplicateNameRule: Rule = {
       "When a page has multiple data tables, each should have a unique accessible name to help users distinguish between them. Use <caption>, aria-label, or aria-labelledby with unique text for each table.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 3,
   },

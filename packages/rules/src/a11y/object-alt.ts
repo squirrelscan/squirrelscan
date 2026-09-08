@@ -11,6 +11,7 @@ export const objectAltRule: Rule = {
       "Object elements need alternative content for when the embedded content can't be displayed or for assistive technology. Add content between <object> tags as fallback, or use aria-label/aria-labelledby.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
   },

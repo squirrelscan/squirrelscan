@@ -11,6 +11,7 @@ export const listitemRule: Rule = {
       "The <li> element must be contained within a <ul>, <ol>, or <menu> element. Orphaned list items lose their semantic meaning. Wrap them in an appropriate list container.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

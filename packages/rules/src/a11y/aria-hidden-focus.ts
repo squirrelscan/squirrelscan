@@ -57,6 +57,7 @@ export const ariaHiddenFocusRule: Rule = {
       "Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden or make children non-focusable with tabindex='-1'.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

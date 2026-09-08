@@ -37,6 +37,7 @@ export const ariaProgressbarNameRule: Rule = {
       "Progressbar elements must have accessible names to describe what process is being tracked. Add aria-label, aria-labelledby, or an associated <label>. Example: <progress aria-label='Upload progress' value='50' max='100'>50%</progress>",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

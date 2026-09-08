@@ -11,6 +11,7 @@ export const freshnessRule: Rule = {
       "Date signals help search engines understand content freshness. Use Article schema with datePublished and dateModified. Show visible publication dates on content. Update dates when making significant changes. For evergreen content, periodic updates with new dateModified signal relevance. The Last-Modified HTTP header also helps crawlers.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

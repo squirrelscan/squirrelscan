@@ -21,6 +21,7 @@ export const seoDoorwayRule: Rule = {
       "Off-topic, thin, keyword-stuffed affiliate posts injected into a site are a parasite-SEO compromise: they hijack the domain's authority to rank spam. If you did not publish this content, treat the site as compromised: remove the injected posts, audit your CMS for unauthorized authors/plugins, and check server logs. Google penalizes doorway pages, so leaving them up risks ranking damage.",
     category: "integrity",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
   },

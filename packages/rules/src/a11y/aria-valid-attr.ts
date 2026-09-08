@@ -13,6 +13,7 @@ export const ariaValidAttrRule: Rule = {
       "Use only valid ARIA attribute names as defined in the WAI-ARIA specification. Common typos include 'aria-labeledby' (should be 'aria-labelledby'), 'aria-role' (should be 'role'), and 'aria-description' vs 'aria-describedby'. Consult MDN or the WAI-ARIA spec for the complete list of valid attributes.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

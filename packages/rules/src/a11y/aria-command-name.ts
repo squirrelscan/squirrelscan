@@ -45,6 +45,7 @@ export const ariaCommandNameRule: Rule = {
       "Command elements (buttons, links, menu items) must have accessible names. Add text content, aria-label, aria-labelledby, or title attribute. For icon-only buttons, use aria-label to describe the action (e.g., aria-label='Close').",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

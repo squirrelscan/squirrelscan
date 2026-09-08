@@ -196,7 +196,7 @@ export { isHtmlContentType } from "./adapter";
 
 // Template cluster key (#1949) — the equality reduction of `fingerprintPage`
 // stored on page_features.template_fp and grouped by SiteQuery.templateClusters().
-export { templateFingerprintKey } from "./template-key";
+export { templateFingerprintKey, templateVerdictKey } from "./template-key";
 
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";

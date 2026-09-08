@@ -24,6 +24,7 @@ export const tokenWeightRule: Rule = {
       "Strip or externalize inline <script>/<style> blocks, avoid deeply nested wrapper divs and long utility-class strings on content-bearing elements, and serve lean server-rendered markup rather than a client framework's verbose hydration output — especially on content pages. Consider Markdown content negotiation, which sidesteps the ratio problem by removing HTML markup from the response entirely.",
     category: "ax",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 2,
     // A soft-404 error shell's token/ratio numbers describe the error template,

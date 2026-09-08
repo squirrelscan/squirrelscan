@@ -11,6 +11,7 @@ export const fontSizeRule: Rule = {
       "Body text should be at least 16px for readability without zooming. Smaller fonts strain eyes on mobile. Use relative units (rem, em) for scalability. Test on actual devices. Google's mobile-friendly test flags font sizes under 12px. Line height should be at least 1.5 for readability.",
     category: "mobile",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

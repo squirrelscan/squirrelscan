@@ -11,6 +11,7 @@ export const figureFigcaptionRule: Rule = {
       "Use <figure> and <figcaption> for images with captions. This provides semantic meaning and accessibility benefits. Screen readers announce figcaption as the image caption. Good for SEO as captions often contain keywords. Example: <figure><img src='...' alt='...'><figcaption>Description</figcaption></figure>.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
   },

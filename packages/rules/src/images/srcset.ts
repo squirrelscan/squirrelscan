@@ -11,6 +11,7 @@ export const srcsetRule: Rule = {
       "Use srcset and sizes attributes to serve appropriately sized images for each viewport. This reduces bandwidth on mobile and improves LCP. Example: srcset='img-320.jpg 320w, img-640.jpg 640w, img-1280.jpg 1280w' sizes='(max-width: 640px) 100vw, 50vw'. Use <picture> element for art direction.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

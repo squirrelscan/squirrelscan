@@ -68,6 +68,7 @@ Fixes for large DOMs:
 - Paginate large content sections`,
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
     optionsSchema,

@@ -147,6 +147,7 @@ export const ariaValidAttrValueRule: Rule = {
       "Ensure ARIA attribute values match the expected type. Boolean attributes should be 'true' or 'false'. Enumerated attributes like aria-current have specific allowed values. Numeric attributes like aria-level must be numbers. Check the WAI-ARIA specification for valid values.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

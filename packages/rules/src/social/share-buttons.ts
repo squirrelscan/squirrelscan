@@ -11,6 +11,7 @@ export const shareButtonsRule: Rule = {
       "Social share buttons encourage content sharing and can drive traffic. Place them prominently on blog posts, articles, and shareable content. Include major platforms: Facebook, Twitter/X, LinkedIn. Consider sticky share bars for long content. Avoid too many buttons - 3-4 is optimal.",
     category: "social",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
   },

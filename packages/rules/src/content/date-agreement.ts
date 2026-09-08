@@ -476,6 +476,7 @@ export const dateAgreementRule: Rule = {
       "A page states its date more than once - the visible byline, schema.org datePublished/dateModified, a year in the URL or title, the sitemap lastmod, the Last-Modified header - and readers and crawlers do not all read the same one. When they disagree, at least one is wrong, and presence checks cannot tell you which: they pass as soon as any single signal exists. Drive every date on the page from ONE content timestamp. If the visible byline disagrees with the schema, fix whichever renders from the wrong field (a common cause is the template printing a build-time or hardcoded value while the schema prints the CMS field). If the schema carries dates the reader never sees, render the date in the article header - Google asks for a visible date on dated content, and a date only crawlers can see is not one. Check the schema date is attached to the node describing the page (Article/BlogPosting/WebPage): a datePublished on a sitewide SoftwareApplication or Organization node is that entity's own date and says nothing about this page.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema,

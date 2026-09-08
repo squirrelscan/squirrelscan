@@ -166,6 +166,7 @@ export const ratingScopeRule: Rule = {
       "AggregateRating must describe the thing THIS page is about, and the rating has to be visible to the reader in the page content. A single sitewide rating emitted by a template lands on pages that cannot be rated — privacy policies, terms, blog posts — where it is a self-serving rating of the site rather than markup about the page. Google treats invisible or off-topic rating markup as a structured-data policy violation and issues manual actions for it, which costs the whole site its rich results, not just this page. Move the rating onto the pages whose subject it actually describes (the LocalBusiness on the homepage or location pages, the Product on its product page) and make sure the same rating is on screen.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
     // A soft-404 page serves the site template (rating block included) for a URL

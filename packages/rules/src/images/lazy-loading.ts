@@ -11,6 +11,7 @@ export const lazyLoadingRule: Rule = {
       "Use loading='lazy' on images below the fold to defer loading until needed. This improves initial page load and saves bandwidth. Native lazy loading is supported by all modern browsers. Don't lazy load above-fold images (especially LCP candidates). Consider loading='eager' for critical images.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

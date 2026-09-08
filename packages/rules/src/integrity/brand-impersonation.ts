@@ -24,6 +24,7 @@ export const brandImpersonationRule: Rule = {
       "A page presenting a third-party brand's sign-in or booking surface whose credential target is NOT that brand's legitimate host is a classic phishing-kit pattern. If you did not create this page, your site is likely compromised: look for recently added files, unexpected pages not in your CMS, and injected PHP/JS. Remove the page, rotate credentials, and review server access logs. A legitimate integration must link to the brand's real domain (e.g. accounts.google.com, calendly.com).",
     category: "integrity",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 8,
   },

@@ -11,6 +11,7 @@ export const tdHeadersAttrRule: Rule = {
       "When using the headers attribute on <td> elements to associate cells with headers, ensure each id in the headers attribute matches an existing <th> element's id in the same table.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 6,
   },

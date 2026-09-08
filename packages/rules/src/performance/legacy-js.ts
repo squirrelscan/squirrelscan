@@ -47,6 +47,7 @@ export const legacyJsRule: Rule = {
       "Consider removing legacy polyfills if you don't need to support old browsers. Use differential serving (module/nomodule) to send modern code to modern browsers. Update Babel/TypeScript target to ES2020+ if your audience uses modern browsers. Check browserslist configuration.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "info",
     weight: 3,
   },

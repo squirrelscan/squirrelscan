@@ -49,6 +49,7 @@ export const stopWordsRule: Rule = {
       "Stop words (a, an, the, of, etc.) add length without SEO value. While not harmful, removing them makes URLs shorter and more focused. 'best-running-shoes' is better than 'the-best-running-shoes-for-you'. However, keep stop words if removing them makes the URL confusing or grammatically awkward.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
   },

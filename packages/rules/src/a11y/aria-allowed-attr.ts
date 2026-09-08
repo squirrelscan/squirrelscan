@@ -30,6 +30,7 @@ export const ariaAllowedAttrRule: Rule = {
       "Some ARIA attributes are not appropriate for certain roles or elements. For example, role='presentation' should not have aria-label since it removes semantic meaning. Remove conflicting attributes or reconsider the element's role.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
   },

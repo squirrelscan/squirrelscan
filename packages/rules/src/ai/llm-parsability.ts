@@ -15,6 +15,7 @@ export const llmParsabilityRule: Rule = {
       "This rule evaluates how well LLMs can understand and extract information from your content, which affects AI-powered search and assistants. Improve parsability by using clear structure, explicit topic sentences, and well-organized sections. Avoid ambiguous pronouns and ensure context is clear. Use semantic HTML and structured data. Clear, well-written content for humans typically scores well for LLM parsability too.",
     category: "ax",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
     cloud: { service: "ai-parse", unit: "page", creditFeature: "ai_parse" },

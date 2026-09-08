@@ -29,6 +29,7 @@ export const socialProfilesRule: Rule = {
       "Link to your social media profiles from your website. Include in footer or about page. Use Organization schema with sameAs property to list all official social profiles. This helps Google's Knowledge Panel and verifies your brand across platforms. Ensure links open in new tabs.",
     category: "social",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
     // A linked social presence matters for brand / commerce / publisher sites;

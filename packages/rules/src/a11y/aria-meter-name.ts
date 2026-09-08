@@ -37,6 +37,7 @@ export const ariaMeterNameRule: Rule = {
       "Meter elements must have accessible names to describe what they're measuring. Add aria-label, aria-labelledby, or an associated <label>. Example: <meter aria-label='Battery level' value='0.8'>80%</meter>",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

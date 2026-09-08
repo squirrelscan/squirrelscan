@@ -11,6 +11,7 @@ export const inputImageAltRule: Rule = {
       "Image inputs (input type='image') are submit buttons that use an image. They must have alt text describing the button's action. Example: <input type='image' src='submit.png' alt='Submit form'>",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

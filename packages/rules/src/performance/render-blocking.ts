@@ -13,6 +13,7 @@ export const renderBlockingRule: Rule = {
       "Render-blocking resources delay First Contentful Paint (FCP) and LCP. Fix by: 1) Inline critical CSS for above-fold content. 2) Load non-critical CSS with media='print' onload='this.media=all'. 3) Add async or defer to non-critical scripts. 4) Move scripts to end of body when possible. 5) Use <link rel='preload'> for critical resources. Consider tools like Critical to extract critical CSS.",
     category: "perf",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 6,
   },

@@ -41,6 +41,7 @@ export const selectNameRule: Rule = {
       "Select elements need accessible labels. Use <label for='selectId'>Label</label>, wrap in <label>, or use aria-label/aria-labelledby.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 8,
   },

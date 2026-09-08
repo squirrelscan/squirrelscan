@@ -11,6 +11,7 @@ export const termsOfServiceRule: Rule = {
       "Terms of Service (ToS) protect your business by defining user rights and limitations. Link to ToS from your footer on every page. Essential for: e-commerce sites, SaaS products, user-generated content platforms, and membership sites. Include sections on: usage rules, liability limits, dispute resolution, and termination.",
     category: "legal",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
     // A soft-404 error page has no footer/links — don't report a missing ToS

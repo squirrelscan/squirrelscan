@@ -11,6 +11,7 @@ export const nofollowInternalRule: Rule = {
       "Nofollow on internal links wastes PageRank and is generally bad practice. Internal links should flow link equity freely throughout your site. Remove nofollow from internal links unless you have a specific reason (e.g., user-generated content links). Use nofollow for external links you don't endorse.",
     category: "links",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

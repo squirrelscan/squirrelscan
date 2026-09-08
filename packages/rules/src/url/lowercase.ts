@@ -11,6 +11,7 @@ export const urlLowercaseRule: Rule = {
       "URLs should be lowercase to prevent duplicate content issues. Most servers treat /Page and /page as different URLs, creating duplicates. Always use lowercase URLs and redirect uppercase variants. Configure your server or CMS to auto-lowercase URLs. This also improves URL consistency and readability.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

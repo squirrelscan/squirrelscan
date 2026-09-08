@@ -73,6 +73,7 @@ export const thirdPartyCookiesRule: Rule = {
       "Third-party cookies are being phased out by browsers. Review resources from external domains that may set cookies for tracking. Consider using first-party analytics solutions, server-side tracking, or privacy-focused alternatives. Ensure compliance with GDPR/CCPA by providing cookie consent and disclosing third-party services in your privacy policy.",
     category: "security",
     scope: "page",
+    verdictScope: "template",
     severity: "info",
     weight: 3,
   },

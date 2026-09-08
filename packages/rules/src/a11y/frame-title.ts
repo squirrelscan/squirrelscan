@@ -11,6 +11,7 @@ export const frameTitleRule: Rule = {
       "All iframes must have a title attribute describing their content. This helps screen reader users understand what the iframe contains. Example: <iframe src='video.html' title='Product demo video'>",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "error",
     weight: 7,
   },

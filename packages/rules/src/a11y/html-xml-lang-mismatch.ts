@@ -12,6 +12,7 @@ export const htmlXmlLangMismatchRule: Rule = {
       "If both lang and xml:lang are present on the <html> element, they must have the same base language. Mismatches can cause screen readers to announce content in the wrong language. Typically, you only need lang for HTML5 documents.",
     category: "a11y",
     scope: "page",
+    verdictScope: "template",
     severity: "error",
     weight: 6,
   },

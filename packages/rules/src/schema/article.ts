@@ -44,6 +44,7 @@ export const articleSchemaRule: Rule = {
       "Article schema helps search engines understand news and blog content. Required: headline, author (Person with name), datePublished. Recommended: dateModified, image (ImageObject), publisher (Organization). Use Article for general content, NewsArticle for news, BlogPosting for blogs. Ensure author links to real author pages.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

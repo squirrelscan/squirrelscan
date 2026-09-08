@@ -11,6 +11,7 @@ export const invalidLinksRule: Rule = {
       "Invalid links (malformed URLs, javascript: links, or broken references) harm user experience and can indicate code issues. Fix or remove invalid links. Replace javascript:void(0) with proper href values or button elements. Ensure all links have valid URL formats. Check for typos in URLs and verify links work correctly. Remove empty href attributes.",
     category: "links",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 2,
   },

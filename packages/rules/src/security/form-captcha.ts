@@ -389,6 +389,7 @@ export const formCaptchaRule: Rule = {
       "Add CAPTCHA protection (reCAPTCHA, Cloudflare Turnstile, hCaptcha, FormShield, etc.) to public-facing forms to prevent spam and bot submissions. Contact forms, comment forms, newsletter signups, and registration forms are common targets for automated abuse. Modern solutions like Turnstile and FormShield offer invisible protection with minimal user friction.",
     category: "security",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

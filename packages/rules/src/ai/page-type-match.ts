@@ -33,6 +33,7 @@ export const pageTypeMatchRule: Rule = {
       "A mismatch between what a page IS (as an AI or search engine reads it) and what its structured data declares confuses rich-result eligibility and AI answers. Either fix the JSON-LD @type to describe the page truthfully, or restructure the page content so its primary purpose is unambiguous.",
     category: "ax",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 3,
     cloud: { service: "ai-parse", unit: "page", creditFeature: "ai_parse" },

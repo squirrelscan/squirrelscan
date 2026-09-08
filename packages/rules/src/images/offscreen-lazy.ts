@@ -20,6 +20,7 @@ export const offscreenLazyRule: Rule = {
       "Add loading='lazy' to images below the fold to defer loading until needed. This reduces initial page load time and saves bandwidth. Exception: Don't lazy-load LCP image or above-the-fold content. Use loading='eager' for critical images.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
     optionsSchema,

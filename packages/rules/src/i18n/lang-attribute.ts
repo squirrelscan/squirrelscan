@@ -11,6 +11,7 @@ export const langAttributeRule: Rule = {
       'The lang attribute on the html element declares the page\'s language, helping browsers, screen readers, and search engines process content correctly. Add lang="xx" to your html tag using a valid ISO 639-1 code (e.g., "en", "es", "fr"). For regional variants, use lang="en-US" or "en-GB". This improves accessibility and helps search engines serve your content to the right audience.',
     category: "i18n",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

@@ -77,6 +77,7 @@ export const noaiSignalsRule: Rule = {
       "noai and noimageai are an informal convention some AI companies said they'd honor for text and image use; nosnippet and max-snippet:0 are long-standing snippet-control directives that AI-search answer engines treat as 'don't quote this page verbatim.' To keep a page out of AI answers and snippets, declare it explicitly, e.g. `<meta name=\"robots\" content=\"noai, noimageai, nosnippet\">` or the same via an X-Robots-Tag header. Remember noai/noimageai are advisory with no enforcement — use robots.txt crawler blocks (see ax/ai-crawlers) as the enforcement layer and these tags as the declared-intent layer on top.",
     category: "ax",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 1,
   },

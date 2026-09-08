@@ -110,6 +110,7 @@ export const mojibakeRule: Rule = {
       'Mojibake means the bytes and the declared encoding disagree. Fix the declaration first: serve `<meta charset="utf-8">` as the first thing in the head, and send `Content-Type: text/html; charset=utf-8`. If the declaration is already utf-8, the source itself was double-encoded, usually by a CMS migration that read utf-8 bytes as latin1 and re-encoded them. Re-import the affected content from the original source rather than search-and-replacing the visible symptoms, because the same corruption is usually present in fields you cannot see, such as meta descriptions and alt text.',
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

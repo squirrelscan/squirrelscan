@@ -21,6 +21,7 @@ export const internalLinksRule: Rule = {
       "Internal links help users navigate your site and distribute page authority. Each page should have at least one internal link pointing to it (not counting navigation). Add contextual internal links from related content. Use descriptive anchor text that indicates what the linked page is about. Avoid orphan pages (no internal links) and ensure important pages receive more internal links. Review your site structure to create logical content clusters.",
     category: "links",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema,

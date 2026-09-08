@@ -78,6 +78,7 @@ export const aspectMismatchRule: Rule = {
       "When an image's width/height attributes describe one aspect ratio but CSS forces a different one (via an explicit width+height in px, or an aspect-ratio property), the image is stretched or squished. Fix the mismatch: set width/height attributes to the image's true aspect ratio, and let CSS size it with `height: auto` (or match the ratio). If cropping is intended, add `object-fit: cover` so the image fills the box without distortion.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema,

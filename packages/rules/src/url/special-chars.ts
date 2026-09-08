@@ -11,6 +11,7 @@ export const specialCharsRule: Rule = {
       "Avoid special characters in URL paths. Characters like %, &, #, ?, = have special meanings and can cause issues. Spaces should be avoided (they become %20). Use only lowercase letters, numbers, and hyphens. Special characters can break links when copied, cause encoding issues, and look unprofessional. URL-encode if unavoidable.",
     category: "url",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 4,
   },

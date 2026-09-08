@@ -67,6 +67,7 @@ export const sriRule: Rule = {
       'Cross-origin scripts and stylesheets can be tampered with in transit or at the source (a compromised CDN or third-party host), and the browser has no way to detect it without help. Add an integrity attribute with a sha256/sha384/sha512 hash of the expected file, plus crossorigin="anonymous": <script src="..." integrity="sha384-..." crossorigin="anonymous"></script>. Most CDNs (jsDelivr, cdnjs, unpkg) publish the hash alongside the URL. This only works for pinned/versioned assets — scripts that update themselves server-side (analytics, payment SDKs, CAPTCHAs) intentionally don\'t support it.',
     category: "security",
     scope: "page",
+    verdictScope: "template",
     severity: "warning",
     weight: 5,
   },

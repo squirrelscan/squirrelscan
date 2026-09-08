@@ -11,6 +11,7 @@ export const modernFormatRule: Rule = {
       "Modern formats (WebP, AVIF) offer 25-50% better compression than JPEG/PNG with similar quality. Use <picture> with WebP/AVIF sources and fallbacks. Most browsers support WebP (97%+). AVIF offers even better compression but lower support (~92%). Convert images with tools like cwebp, squoosh, or sharp.",
     category: "images",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },

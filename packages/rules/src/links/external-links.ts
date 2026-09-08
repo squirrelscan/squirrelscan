@@ -11,6 +11,7 @@ export const externalLinksRule: Rule = {
       "External links provide additional resources for users and signal content relevance to search engines. They're normal and healthy for most content pages. This check is informational—external links aren't inherently problematic. Ensure external links go to reputable sources and open in new tabs when appropriate. Use rel=\"nofollow\" for untrusted or paid links. Avoid excessive external links that distract from your content.",
     category: "links",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 2,
   },

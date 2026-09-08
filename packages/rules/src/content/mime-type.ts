@@ -48,6 +48,7 @@ export const mimeTypeRule: Rule = {
       "Incorrect MIME types break resource loading and waste crawl budget. Common issues include .js files served as text/html, images without image/* type, CSS without text/css. Fix server configuration to serve correct Content-Type headers. For Apache use .htaccess, for nginx use mime.types config.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

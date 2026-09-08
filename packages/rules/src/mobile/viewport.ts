@@ -11,6 +11,7 @@ export const viewportRule: Rule = {
       "The viewport meta tag is essential for responsive design. Use: <meta name='viewport' content='width=device-width, initial-scale=1'>. This ensures proper scaling on mobile devices. Without it, mobile browsers render at desktop width and zoom out. Required for mobile-first indexing.",
     category: "mobile",
     scope: "page",
+    verdictScope: "template",
     severity: "error",
     weight: 8,
   },

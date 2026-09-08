@@ -20,6 +20,7 @@ export const organizationSchemaRule: Rule = {
       "Organization schema helps Google understand your brand and may show a knowledge panel. Required: name, url, logo. Add contactPoint for customer service info, sameAs for social profiles (LinkedIn, Twitter, etc.). Place on homepage or about page. For local businesses, use LocalBusiness instead.",
     category: "schema",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 4,
   },

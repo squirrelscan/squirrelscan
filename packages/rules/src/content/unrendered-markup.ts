@@ -502,6 +502,7 @@ export const unrenderedMarkupRule: Rule = {
       'Something rendered a value as plain text that was authored as markup. Find the field, not the page: a CMS that stores markdown and a template that prints it without a markdown-to-HTML pass produces literal `**bold**` and `[text](url)` everywhere that field appears, and fixing one page leaves the rest broken. Visible `<p>` or `<a href` means the opposite mistake: HTML was escaped twice, usually by escaping a value that a templating engine (Jinja, Twig, Blade, JSX) had already escaped, so remove the manual escape rather than marking the value safe. Visible `&nbsp;` or `&amp;` means the entity itself was encoded a second time on the way in, which is normally an import or a rich-text editor round-trip, so re-import the affected content. If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.',
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
     skipOnSoft404: true,

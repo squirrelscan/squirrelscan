@@ -587,6 +587,7 @@ export const devLeakageRule: Rule = {
       "A URL that was correct in development shipped to production. Find where it is stored, not just the page it appears on: a link or image pointing at localhost, a private address, or a preview deployment is usually a hard-coded value in a template, a CMS field written while working locally, or a base-URL environment variable that never got a production value, so the same URL is on every page that renders that component. Replace the origin with a relative path where the target is on this site, which is what makes the link correct in every environment at once. For a staging or preview host, point the link at the production equivalent and check whether the staging site is publicly indexable while you are there. For an `http://` link back to your own site, make it relative or `https://`, since the redirect it currently costs every visitor is avoidable.",
     category: "content",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 6,
     skipOnSoft404: true,

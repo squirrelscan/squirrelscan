@@ -17,6 +17,7 @@ This is almost always unintentional. Remove unless you specifically need to hide
 Note: max-snippet:N where N > 0 is fine (sets snippet character limit).`,
     category: "core",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 7,
   },

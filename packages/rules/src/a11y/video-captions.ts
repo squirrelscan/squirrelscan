@@ -11,6 +11,7 @@ export const videoCaptionsRule: Rule = {
       "All video content needs captions for deaf/hard-of-hearing users (WCAG 1.2.2). Add <track kind='captions' src='captions.vtt' srclang='en'> to video elements. For embedded videos (YouTube, Vimeo), enable captions in the embed settings. Also provide a text transcript for complex content. Auto-generated captions should be reviewed for accuracy.",
     category: "a11y",
     scope: "page",
+    verdictScope: "page",
     severity: "warning",
     weight: 5,
   },

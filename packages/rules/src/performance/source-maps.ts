@@ -14,6 +14,7 @@ export const sourceMapsRule: Rule = {
       "Source maps help debug minified code but can expose source code if publicly accessible. For production: 1) Either remove source maps entirely, 2) Restrict access via server config, or 3) Use 'hidden' source maps uploaded only to error tracking services. Exposed source maps can reveal business logic and security implementations to attackers.",
     category: "perf",
     scope: "page",
+    verdictScope: "page",
     severity: "info",
     weight: 3,
   },
