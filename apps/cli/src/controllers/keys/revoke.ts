@@ -1,10 +1,22 @@
 // `squirrel keys revoke <prefix-or-id>` — resolve a key by id or prefix match
-// against the org's key list, then DELETE /v1/organizations/:id/api-keys/:keyId
-// (organizations.ts:921, soft-revoke, login-session only). Confirmation is the
+// against the user's key list, then DELETE /v1/organizations/:id/api-keys/:keyId
+// (organizations.ts, soft-revoke, login-session only). Confirmation is the
 // command layer's job (cli/commands/keys.ts) — this controller just resolves
 // + revokes.
+//
+// Resolution spans EVERY org the user belongs to (#1971), because a prefix is
+// all the user has and they should not have to know which org a key lives in to
+// revoke it. The org travels with the match so the DELETE always goes to the
+// org that actually owns the key. A prefix matching keys in two orgs is
+// ambiguous and refused, naming both.
 
-import { listApiKeys, type OrgApiKeySummary } from "@/controllers/keys/list";
+import type { CliOrg } from "@/controllers/orgs/resolve";
+
+import {
+  listApiKeys,
+  type OrgApiKeySummary,
+  type OrgKeys,
+} from "@/controllers/keys/list";
 import {
   type Result,
   ok,
@@ -14,6 +26,12 @@ import {
 } from "@/controllers/types";
 import { cliApi } from "@/lib/api-client";
 import { resolveCredential } from "@/self/credentials";
+
+/** One key together with the org that owns it. */
+export interface OrgKeyRef {
+  org: CliOrg;
+  key: OrgApiKeySummary;
+}
 
 export interface RevokedKey {
   id: string;
@@ -29,36 +47,58 @@ interface RevokeApiKeyRawResponse {
   error?: string | { code?: string; message?: string };
 }
 
+/** Flatten a per-org listing into the (org, key) pairs resolution runs over. */
+export function flattenOrgKeys(orgs: OrgKeys[]): OrgKeyRef[] {
+  return orgs.flatMap((entry) =>
+    entry.keys.map((key) => ({ org: entry.org, key }))
+  );
+}
+
+/** `nikz` — how an org is named inside a revoke error message. */
+function orgLabel(org: CliOrg): string {
+  return org.slug || org.id;
+}
+
 /** Resolve a key by exact id, or a prefix that uniquely matches one ACTIVE key. */
 export function resolveKeyMatch(
-  keys: OrgApiKeySummary[],
+  refs: OrgKeyRef[],
   idOrPrefix: string
-): Result<OrgApiKeySummary> {
-  const active = keys.filter((k) => !k.revokedAt);
+): Result<OrgKeyRef> {
+  const active = refs.filter((ref) => !ref.key.revokedAt);
 
-  const byId = active.find((k) => k.id === idOrPrefix);
+  const byId = active.find((ref) => ref.key.id === idOrPrefix);
   if (byId) return ok(byId);
 
-  const matches = active.filter((k) => k.prefix.startsWith(idOrPrefix));
+  const matches = active.filter((ref) => ref.key.prefix.startsWith(idOrPrefix));
   if (matches.length === 1) return ok(matches[0]);
   if (matches.length === 0) {
     return err(
       commandError("KEY_NOT_FOUND", `No active key matches "${idOrPrefix}".`)
     );
   }
+
+  const orgs = Array.from(new Set(matches.map((ref) => orgLabel(ref.org))));
+  const where =
+    orgs.length > 1 ? ` across organizations ${orgs.join(", ")}` : "";
   return err(
     commandError(
       "AMBIGUOUS_PREFIX",
-      `"${idOrPrefix}" matches ${matches.length} active keys. Use a longer prefix or the full id.`
+      `"${idOrPrefix}" matches ${matches.length} active keys${where}. Use a longer prefix or the full id${orgs.length > 1 ? ", and --org to narrow the search" : ""}.`
     )
   );
+}
+
+export interface FindKeyOptions {
+  /** Org slug or id to search. Omitted = every org the user is a member of. */
+  org?: string;
 }
 
 /** Look up the key a prefix/id resolves to, WITHOUT revoking it — used by the
  * command layer to show what it's about to revoke before confirming. */
 export async function findKeyToRevoke(
-  idOrPrefix: string
-): Promise<Result<{ orgId: string; key: OrgApiKeySummary }>> {
+  idOrPrefix: string,
+  options: FindKeyOptions = {}
+): Promise<Result<OrgKeyRef>> {
   const credential = resolveCredential();
   if (!credential || credential.source !== "login") {
     return err(
@@ -69,14 +109,29 @@ export async function findKeyToRevoke(
     );
   }
 
-  const listResult = await listApiKeys();
+  const listResult = await listApiKeys(
+    options.org !== undefined ? { org: options.org } : {}
+  );
   if (!listResult.ok) return listResult;
-  const { orgId, keys } = listResult.data;
+  const { orgs } = listResult.data;
 
-  const matchResult = resolveKeyMatch(keys, idOrPrefix);
-  if (!matchResult.ok) return matchResult;
+  const matchResult = resolveKeyMatch(flattenOrgKeys(orgs), idOrPrefix);
+  if (matchResult.ok) return matchResult;
 
-  return ok({ orgId, key: matchResult.data });
+  // A key hiding in an org whose listing 403'd would otherwise read as "no such
+  // key" — say so instead of sending the user hunting for a key that is there.
+  const unreadable = orgs.filter((entry) => entry.error);
+  if (matchResult.error.code === "KEY_NOT_FOUND" && unreadable.length > 0) {
+    return err(
+      commandError(
+        matchResult.error.code,
+        `${matchResult.error.message} Note: keys could not be read for ${unreadable
+          .map((entry) => orgLabel(entry.org))
+          .join(", ")}.`
+      )
+    );
+  }
+  return matchResult;
 }
 
 export async function revokeApiKey(
@@ -88,7 +143,7 @@ export async function revokeApiKey(
     status,
     data,
   } = await cliApi.request<RevokeApiKeyRawResponse>(
-    `/v1/organizations/${orgId}/api-keys/${key.id}`,
+    `/v1/organizations/${encodeURIComponent(orgId)}/api-keys/${encodeURIComponent(key.id)}`,
     { method: "DELETE", auth: "required" }
   );
 

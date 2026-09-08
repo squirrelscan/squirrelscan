@@ -124,7 +124,8 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
     return safeExit(1);
   }
 
-  const { source, user, token, apiKey, org, shadowedLoginEmail } = result.data;
+  const { source, user, token, apiKey, org, orgCount, shadowedLoginEmail } =
+    result.data;
 
   if (jsonOutput) {
     console.log(
@@ -139,6 +140,7 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
         },
         ...(apiKey ? { apiKey } : {}),
         ...(org ? { org } : {}),
+        ...(orgCount !== undefined ? { orgCount } : {}),
       })
     );
     return;
@@ -155,7 +157,20 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
   }
   console.log(`  Source: ${sourceLabel}`);
   if (org) {
-    console.log(`  Org: ${org.name ?? org.id}`);
+    // Slug AND id, both (#1971): the slug is what `--org` takes and what the
+    // dashboard URL shows, the id is what appears on a credit ledger row.
+    const label = org.slug ?? org.id;
+    console.log(
+      `  Org: ${org.name && org.name !== label ? `${label} (${org.name})` : label}`
+    );
+    console.log(`  Org id: ${org.id}`);
+    if (orgCount !== undefined && orgCount > 1) {
+      console.log(
+        fmt.dim(
+          `  Active org of ${orgCount}. Cloud runs spend this org's credits; pass --org to target another.`
+        )
+      );
+    }
   }
   if (apiKey) {
     if (apiKey.name) console.log(`  Key: ${apiKey.name}`);

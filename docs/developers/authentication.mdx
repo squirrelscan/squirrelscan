@@ -122,6 +122,11 @@ create or revoke them. Treat a key like a password: never commit it; store it
 in your CI provider's secret store.
 </Note>
 
+If your account belongs to more than one organization, name the one you mean:
+`squirrel keys create --org <slug|id>`. Without it the CLI lists your
+organizations and stops rather than minting against one you did not choose. See
+[`squirrel keys`](/cli/keys#keys-belong-to-one-organization).
+
 ## Headless auth with `SQUIRRELSCAN_API_KEY`
 
 For CI and headless agents, set the `SQUIRRELSCAN_API_KEY` environment variable

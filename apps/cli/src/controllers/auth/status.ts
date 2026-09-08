@@ -10,6 +10,7 @@ import {
 } from "@squirrelscan/core-contracts/api-keys";
 
 import { STATUS_REQUEST_TIMEOUT_MS } from "@/constants";
+import { fetchActiveOrgContext } from "@/controllers/orgs/resolve";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { cliApi } from "@/lib/api-client";
 import {
@@ -44,11 +45,20 @@ interface StatusResult {
     scopes: ApiKeyScope[];
     keyEnv: string | null;
   };
-  /** Org binding, when the whoami response carries it (API keys). */
+  /**
+   * The org this credential acts for: the key's org binding for an API key, and
+   * for a login session the server's `users.activeOrgId` — the org an audit's
+   * credits are actually spent from (#1971). Absent when it could not be
+   * resolved (offline, or an API without the field).
+   */
   org?: {
     id: string;
+    slug: string | null;
     name: string | null;
   };
+  /** How many orgs the account belongs to, when known. >1 means `keys create`
+   *  and any org-scoped command needs `--org`. */
+  orgCount?: number;
 }
 
 interface WhoamiResponse {
@@ -149,6 +159,8 @@ export async function runAuthStatus(): Promise<Result<StatusResult>> {
     const isApiKeyAuth =
       data.authSource === "api-key" || data.apiKey !== undefined;
 
+    const orgFields = await resolveOrgFields(credential.source, data.org);
+
     return ok({
       source: credential.source,
       ...(shadowedLoginEmail ? { shadowedLoginEmail } : {}),
@@ -171,9 +183,7 @@ export async function runAuthStatus(): Promise<Result<StatusResult>> {
             },
           }
         : {}),
-      ...(data.org
-        ? { org: { id: data.org.id, name: data.org.name ?? null } }
-        : {}),
+      ...orgFields,
     });
   } catch {
     // Network/timeout failure. For an env token we cannot confirm validity and
@@ -202,6 +212,49 @@ export async function runAuthStatus(): Promise<Result<StatusResult>> {
       },
     });
   }
+}
+
+/**
+ * The org lines for `auth status`.
+ *
+ * `/v1/auth/whoami` does not resolve an org for a LOGIN session (it runs under
+ * `cliTokenAuth` alone, with no orgContext), so the CLI has to ask separately —
+ * and it MUST be the server's active org, not "the first org you belong to":
+ * those two disagree for a multi-org account, which is how a key got minted
+ * against one org while audits spent another's credits (#1971).
+ *
+ * Best-effort: an unreachable API drops the org lines, never the command.
+ */
+async function resolveOrgFields(
+  source: CredentialSource,
+  whoamiOrg: WhoamiResponse["org"]
+): Promise<Pick<StatusResult, "org" | "orgCount">> {
+  if (source === "login") {
+    const context = await fetchActiveOrgContext(STATUS_REQUEST_TIMEOUT_MS);
+    if (context) {
+      return {
+        ...(context.active
+          ? {
+              org: {
+                id: context.active.id,
+                slug: context.active.slug || null,
+                name: context.active.name,
+              },
+            }
+          : // Active org id with no matching membership row: still name the id
+            // rather than print nothing, since that id is what gets charged.
+            context.activeOrgId
+            ? { org: { id: context.activeOrgId, slug: null, name: null } }
+            : {}),
+        ...(context.orgs.length ? { orgCount: context.orgs.length } : {}),
+      };
+    }
+  }
+
+  // API-key credentials carry their org binding on the whoami response itself.
+  return whoamiOrg
+    ? { org: { id: whoamiOrg.id, slug: null, name: whoamiOrg.name ?? null } }
+    : {};
 }
 
 /** Email of the logged-in session (for shadow warnings). */

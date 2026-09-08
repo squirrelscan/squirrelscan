@@ -10,7 +10,7 @@ import {
 } from "@squirrelscan/core-contracts/api-keys";
 import { hostname } from "node:os";
 
-import { resolveLoginOrg } from "@/controllers/keys/org";
+import { resolveKeyOrg } from "@/controllers/orgs/resolve";
 import {
   type Result,
   ok,
@@ -27,6 +27,13 @@ import {
 
 export interface CreateKeyOptions {
   name?: string;
+  /**
+   * Org slug or id to mint against. Omitted is only safe when the account has
+   * exactly one org — with more, `resolveKeyOrg` refuses rather than guess
+   * (#1971: the old code took the FIRST org of a newest-first list and minted a
+   * live key against an org the user never chose).
+   */
+  org?: string;
   /** Raw scope strings (validated here — server validates too, defense in depth). */
   scopes?: string[];
   /** Days from now until expiry; omitted = never (matches the API default). */
@@ -42,6 +49,7 @@ export interface CreatedKey {
   keyEnv: string;
   expiresAt: string | null;
   orgId: string;
+  orgSlug: string;
   orgName: string | null;
 }
 
@@ -114,7 +122,7 @@ export async function createApiKey(
     );
   }
 
-  const orgResult = await resolveLoginOrg();
+  const orgResult = await resolveKeyOrg(options.org);
   if (!orgResult.ok) return orgResult;
   const org = orgResult.data;
 
@@ -169,6 +177,7 @@ export async function createApiKey(
     keyEnv: data.keyEnv ?? "",
     expiresAt: data.expiresAt ?? null,
     orgId: org.id,
+    orgSlug: org.slug,
     orgName: org.name ?? null,
   });
 }

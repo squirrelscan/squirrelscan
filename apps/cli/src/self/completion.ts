@@ -155,15 +155,15 @@ _squirrel_completions() {
           return 0
           ;;
         create)
-          COMPREPLY=( $(compgen -W "--name --scopes --expires-days --shell --json" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "--name --org --scopes --expires-days --shell --json" -- "\${cur}") )
           return 0
           ;;
         list)
-          COMPREPLY=( $(compgen -W "--json" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "--org --json" -- "\${cur}") )
           return 0
           ;;
         revoke)
-          COMPREPLY=( $(compgen -W "--force --json" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "--org --force --json" -- "\${cur}") )
           return 0
           ;;
       esac
@@ -411,17 +411,21 @@ _squirrel() {
             create)
               _arguments \\
                 '--name[Key name]:name' \\
+                '--org[Organization slug or id to mint for]:org' \\
                 '--scopes[Comma-separated scopes]:scopes' \\
                 '--expires-days[Days until expiry]:days' \\
                 '--shell[Append the export line to your shell rc file]' \\
                 '--json[Output as JSON]'
               ;;
             list)
-              _arguments '--json[Output as JSON]'
+              _arguments \\
+                '--org[Only show keys for this organization slug or id]:org' \\
+                '--json[Output as JSON]'
               ;;
             revoke)
               _arguments \\
                 '1:key prefix or id:' \\
+                '--org[Only search this organization slug or id]:org' \\
                 '--force[Skip confirmation prompt]' \\
                 '--json[Output as JSON]'
               ;;
@@ -561,6 +565,8 @@ complete -c squirrel -n "__fish_seen_subcommand_from keys; and not __fish_seen_s
 
 # Keys create options
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create" -l name -d "Key name"
+complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create" -l org -d "Organization slug or id to mint for"
+complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from list revoke" -l org -d "Organization slug or id to limit to"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create" -l scopes -d "Comma-separated scopes"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create" -l expires-days -d "Days until expiry"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create" -l shell -d "Append the export line to your shell rc file"

@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import { audit } from "@/cli/commands/audit";
 import { credits } from "@/cli/commands/credits";
+import { keys } from "@/cli/commands/keys";
 import { report } from "@/cli/commands/report";
 import { skills } from "@/cli/commands/skills";
 import { OUTPUT_FORMATS } from "@/constants";
@@ -119,6 +120,44 @@ function formatListIn(shell: Shell, block: string): string[] {
   return match![1]!.split(" ");
 }
 
+// `keys` is a SUBcommand group, so its flags live one level deeper than the
+// top-level blocks above. The bash/zsh arms end at the next top-level command
+// arm; fish is line-filtered.
+const KEYS_REGION_END: Partial<Record<Shell, string>> = {
+  bash: "    audit)",
+  zsh: "        audit)",
+};
+
+/** The completion text for one `keys <sub>` arm. */
+function keysSubBlock(shell: Shell, text: string, sub: string): string {
+  if (shell === "fish") {
+    const lines = text
+      .split("\n")
+      .filter(
+        (l) =>
+          l.includes("__fish_seen_subcommand_from keys;") &&
+          new RegExp(
+            `__fish_seen_subcommand_from (?:[a-z-]+ )*${sub}(?![a-z-])`
+          ).test(l.replace("__fish_seen_subcommand_from keys;", ""))
+      );
+    expect(lines.length).toBeGreaterThan(0);
+    return lines.join("\n");
+  }
+  const regionStart = text.indexOf("keys)");
+  expect(regionStart).toBeGreaterThan(-1);
+  const regionEnd = text.indexOf(KEYS_REGION_END[shell]!, regionStart);
+  expect(regionEnd).toBeGreaterThan(regionStart);
+  const region = text.slice(regionStart, regionEnd);
+
+  const start = region.indexOf(`${sub})`);
+  expect(start).toBeGreaterThan(-1);
+  const end = region.indexOf(";;", start);
+  expect(end).toBeGreaterThan(start);
+  return region.slice(start, end);
+}
+
+const keysSubCommands = keys.subCommands as Record<string, { args?: unknown }>;
+
 describe.each(shells)("%s completion", (shell) => {
   const text = script(shell);
 
@@ -176,6 +215,28 @@ describe.each(shells)("%s completion", (shell) => {
         ...creditsDef.flags,
         ...ALLOWED_EXTRAS.credits!,
       ]);
+      for (const offered of longFlagsIn(shell, block)) {
+        expect(allowed).toContain(offered);
+      }
+    });
+  });
+
+  // #1971: `keys create --org` is the flag that stops a multi-org account
+  // minting a live credential against an org it never chose — invisible in the
+  // shell is most of the way to invisible entirely.
+  describe.each(["create", "list", "revoke"] as const)("keys %s", (sub) => {
+    const def = commandFlags(keysSubCommands[sub]!);
+    const block = keysSubBlock(shell, script(shell), sub);
+
+    test("every citty flag is offered", () => {
+      expect(def.flags).toContain("org");
+      for (const flag of def.flags) {
+        expectOffersFlag(shell, block, flag);
+      }
+    });
+
+    test("every offered flag exists on the citty def", () => {
+      const allowed = new Set(def.flags);
       for (const offered of longFlagsIn(shell, block)) {
         expect(allowed).toContain(offered);
       }

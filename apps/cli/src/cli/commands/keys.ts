@@ -19,6 +19,14 @@ import { safeExit } from "@/self/updater";
 
 import { fmt } from "../format";
 
+/** `nikz (Nik Cubrilovic) - <id>`: the slug and id AC #1971 asks every org
+ * mention to carry, so a key is never attributed to an org by name alone. */
+function orgLine(slug: string, name: string | null, id: string): string {
+  const label = slug || id;
+  const named = name && name !== label ? `${label} (${name})` : label;
+  return `${fmt.bold(named)} ${fmt.dim(id)}`;
+}
+
 const keysCreate = defineCommand({
   meta: {
     name: "create",
@@ -29,6 +37,11 @@ const keysCreate = defineCommand({
     name: {
       type: "string",
       description: "Key name (default: cli-<hostname>-<yyyymmdd>)",
+    },
+    org: {
+      type: "string",
+      description:
+        "Organization slug or id to mint for (required when you belong to more than one)",
     },
     scopes: {
       type: "string",
@@ -78,6 +91,7 @@ const keysCreate = defineCommand({
 
     const result = await createApiKey({
       name: args.name,
+      org: args.org,
       scopes: args.scopes
         ? args.scopes
             .split(",")
@@ -100,8 +114,9 @@ const keysCreate = defineCommand({
     }
 
     console.log(
-      `\n${fmt.green("✓")} Created API key ${fmt.bold(key.name)} (${key.prefix}…) for ${key.orgName ?? key.orgId}`
+      `\n${fmt.green("✓")} Created API key ${fmt.bold(key.name)} (${key.prefix}…)`
     );
+    console.log(`  Org: ${orgLine(key.orgSlug, key.orgName, key.orgId)}`);
     console.log(`  Scopes: ${key.scopes.join(", ")}`);
     console.log(
       `  Expires: ${key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : "never"}`
@@ -197,6 +212,11 @@ const keysList = defineCommand({
     description: "List org API keys (requires a login session)",
   },
   args: {
+    org: {
+      type: "string",
+      description:
+        "Only show keys for this organization slug or id (default: every org you belong to)",
+    },
     json: {
       type: "boolean",
       description: "Output as JSON",
@@ -205,47 +225,75 @@ const keysList = defineCommand({
   async run({ args }) {
     warnIfSessionUnreadable();
     const { listApiKeys } = await import("@/controllers/keys/list");
-    const result = await listApiKeys();
+    const result = await listApiKeys(
+      args.org !== undefined ? { org: args.org } : {}
+    );
 
     if (!result.ok) {
       console.error(`Error: ${result.error.message}`);
       return safeExit(1);
     }
 
-    const { keys } = result.data;
+    const { orgs } = result.data;
 
     if (args.json) {
-      console.log(JSON.stringify(keys));
+      // Flat array of keys, each stamped with its org — the shape a script
+      // wants when the whole point is telling two orgs' keys apart.
+      console.log(
+        JSON.stringify(
+          orgs.flatMap((entry) =>
+            entry.keys.map((key) => ({
+              ...key,
+              orgId: entry.org.id,
+              orgSlug: entry.org.slug,
+              orgName: entry.org.name,
+            }))
+          )
+        )
+      );
       return;
     }
 
-    if (keys.length === 0) {
+    if (orgs.every((entry) => entry.keys.length === 0 && !entry.error)) {
       console.log("No API keys yet. Create one with `squirrel keys create`.");
       return;
     }
 
-    for (const key of keys) {
-      const status = key.revokedAt
-        ? fmt.dim("revoked")
-        : key.expiresAt && new Date(key.expiresAt) < new Date()
-          ? fmt.yellow("expired")
-          : fmt.green("active");
+    for (const entry of orgs) {
       console.log(
-        `${key.prefix}…  ${fmt.bold(key.name ?? "(unnamed)")}  ${status}`
+        `${fmt.bold(entry.org.slug || entry.org.id)}${entry.org.name ? ` ${fmt.dim(entry.org.name)}` : ""}  ${fmt.dim(entry.org.id)}`
       );
-      console.log(
-        `  Scopes: ${key.scopes.length ? key.scopes.join(", ") : fmt.dim("(none)")}`
-      );
-      console.log(
-        `  Created: ${new Date(key.createdAt).toLocaleDateString()}` +
-          (key.lastUsedAt
-            ? `  Last used: ${new Date(key.lastUsedAt).toLocaleDateString()}`
-            : "")
-      );
-      if (key.expiresAt) {
+      if (entry.error) {
+        console.log(`  ${fmt.yellow(entry.error)}\n`);
+        continue;
+      }
+      if (entry.keys.length === 0) {
+        console.log(`  ${fmt.dim("(no keys)")}\n`);
+        continue;
+      }
+      for (const key of entry.keys) {
+        const status = key.revokedAt
+          ? fmt.dim("revoked")
+          : key.expiresAt && new Date(key.expiresAt) < new Date()
+            ? fmt.yellow("expired")
+            : fmt.green("active");
         console.log(
-          `  Expires: ${new Date(key.expiresAt).toLocaleDateString()}`
+          `  ${key.prefix}…  ${fmt.bold(key.name ?? "(unnamed)")}  ${status}`
         );
+        console.log(
+          `    Scopes: ${key.scopes.length ? key.scopes.join(", ") : fmt.dim("(none)")}`
+        );
+        console.log(
+          `    Created: ${new Date(key.createdAt).toLocaleDateString()}` +
+            (key.lastUsedAt
+              ? `  Last used: ${new Date(key.lastUsedAt).toLocaleDateString()}`
+              : "")
+        );
+        if (key.expiresAt) {
+          console.log(
+            `    Expires: ${new Date(key.expiresAt).toLocaleDateString()}`
+          );
+        }
       }
       console.log("");
     }
@@ -264,6 +312,11 @@ const keysRevoke = defineCommand({
       description: "Key prefix (from `squirrel keys list`) or full id",
       required: true,
     },
+    org: {
+      type: "string",
+      description:
+        "Only search this organization slug or id (default: every org you belong to)",
+    },
     force: {
       type: "boolean",
       description: "Skip confirmation prompt",
@@ -278,17 +331,22 @@ const keysRevoke = defineCommand({
     const { findKeyToRevoke, revokeApiKey } =
       await import("@/controllers/keys/revoke");
 
-    const found = await findKeyToRevoke(String(args.id));
+    const found = await findKeyToRevoke(
+      String(args.id),
+      args.org !== undefined ? { org: args.org } : {}
+    );
     if (!found.ok) {
       console.error(`Error: ${found.error.message}`);
       return safeExit(1);
     }
 
-    const { orgId, key } = found.data;
+    const { org, key } = found.data;
 
     if (!args.force) {
+      // Name the org in the confirmation: with several orgs in play, the key
+      // name alone does not tell you whose credential you are about to kill.
       console.log(
-        `About to revoke ${fmt.bold(key.name ?? key.prefix)} (${key.prefix}…).`
+        `About to revoke ${fmt.bold(key.name ?? key.prefix)} (${key.prefix}…) from ${orgLine(org.slug, org.name, org.id)}.`
       );
       const answer = await promptForInput("Continue? [y/N] ");
       if (answer.trim().toLowerCase() !== "y") {
@@ -297,18 +355,25 @@ const keysRevoke = defineCommand({
       }
     }
 
-    const result = await revokeApiKey(orgId, key);
+    const result = await revokeApiKey(org.id, key);
     if (!result.ok) {
       console.error(`Error: ${result.error.message}`);
       return safeExit(1);
     }
 
     if (args.json) {
-      console.log(JSON.stringify(result.data));
+      console.log(
+        JSON.stringify({
+          ...result.data,
+          orgId: org.id,
+          orgSlug: org.slug,
+          orgName: org.name,
+        })
+      );
       return;
     }
     console.log(
-      `✓ Revoked ${result.data.name ?? result.data.prefix} (${result.data.prefix}…)`
+      `✓ Revoked ${result.data.name ?? result.data.prefix} (${result.data.prefix}…) from ${org.slug || org.id}`
     );
   },
 });

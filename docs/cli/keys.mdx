@@ -12,6 +12,21 @@ API key. This is intentional: an API key can never mint another API key, so
 there's no privilege-escalation loop.
 </Note>
 
+## Keys belong to one organization
+
+A key is minted for exactly one org and spends that org's credits. If your
+account belongs to more than one org, `create` will not choose for you: it lists
+your orgs and stops until you pass `--org`. Run [`squirrel auth
+whoami`](/cli/auth#whoami) to see which org your cloud runs currently act for.
+
+```bash
+squirrel keys create --org nikz
+```
+
+`--org` takes an org **slug** (the name in your dashboard URL) or its **id**. It
+is an exact match, never a prefix, so a typo is refused rather than resolved to
+the wrong org.
+
 ## Subcommands
 
 - [create](#create) - Mint a new key
@@ -35,6 +50,7 @@ squirrel keys create [options]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--name` | Key name | `cli-<hostname>-<yyyymmdd>` |
+| `--org` | Organization slug or id to mint for | your only org (required if you have more than one) |
 | `--scopes` | Comma-separated [scopes](/developers/authentication#scopes) | full access |
 | `--expires-days` | Days until expiry | never |
 | `--shell` | Offer to append the export line to your shell rc file | off |
@@ -43,11 +59,12 @@ squirrel keys create [options]
 ### Example
 
 ```bash
-squirrel keys create --name "CI" --scopes audits:write,audits:read,credits:read
+squirrel keys create --name "CI" --org acme --scopes audits:write,audits:read,credits:read
 ```
 
 ```text
-✓ Created API key CI (sq_ab12cd…) for Acme Inc
+✓ Created API key CI (sq_ab12cd…)
+  Org: acme (Acme Inc) org_2xK9vQ
   Scopes: audits:write, audits:read, credits:read
   Expires: never
 
@@ -74,11 +91,32 @@ Append this line? [y/N]
 
 zsh prefers `~/.zshenv` (sourced for every invocation, not just interactive shells) when it exists, falling back to `~/.zshrc`. Requires an interactive terminal: in CI or a non-TTY shell, copy the printed export line manually instead.
 
+### More than one organization
+
+Without `--org`, a multi-org account gets the list and no key:
+
+```bash
+squirrel keys create
+```
+
+```text
+Error: You belong to 2 organizations, so this command will not pick one for you. Re-run with --org <slug|id>.
+Organizations:
+  acme  Acme Inc [active]
+    id: org_2xK9vQ
+  acme-ci  Acme CI (internal)
+    id: org_7pL3mR
+```
+
+`[active]` marks the org your cloud audits already spend from. Nothing is minted
+on this path.
+
 ---
 
 ## list
 
-List API keys for your org.
+List API keys, grouped by organization. Every org you belong to is listed, so a
+key is never shown without the org it spends from.
 
 ### Usage
 
@@ -90,6 +128,7 @@ squirrel keys list [options]
 
 | Option | Description |
 |--------|-------------|
+| `--org` | Only show keys for this org slug or id |
 | `--json` | Output as JSON |
 
 ### Example
@@ -99,10 +138,20 @@ squirrel keys list
 ```
 
 ```text
-sq_ab12cd…  CI  active
-  Scopes: audits:write, audits:read, credits:read
-  Created: Jun 1, 2026  Last used: Jul 3, 2026
+acme Acme Inc  org_2xK9vQ
+  sq_ab12cd…  CI  active
+    Scopes: audits:write, audits:read, credits:read
+    Created: Jun 1, 2026  Last used: Jul 3, 2026
+
+acme-ci Acme CI (internal)  org_7pL3mR
+  (no keys)
 ```
+
+With `--json`, each key carries `orgId`, `orgSlug`, and `orgName`.
+
+Listing keys needs the **owner** or **admin** role in that org. An org where you
+are a plain member is listed with the reason its keys could not be read, rather
+than failing the whole command.
 
 ---
 
@@ -120,6 +169,7 @@ squirrel keys revoke <prefix-or-id> [options]
 
 | Option | Description |
 |--------|-------------|
+| `--org` | Only search this org slug or id |
 | `--force` | Skip the confirmation prompt |
 | `--json` | Output as JSON |
 
@@ -130,12 +180,15 @@ squirrel keys revoke sq_ab12cd
 ```
 
 ```text
-About to revoke CI (sq_ab12cd…).
+About to revoke CI (sq_ab12cd…) from acme (Acme Inc) org_2xK9vQ.
 Continue? [y/N] y
-✓ Revoked CI (sq_ab12cd…)
+✓ Revoked CI (sq_ab12cd…) from acme
 ```
 
-A prefix that matches more than one active key errors instead of guessing. Use a longer prefix or the full id.
+The prefix is searched across every org you belong to, so you don't need to know
+which org a key lives in. A prefix that matches more than one active key errors
+instead of guessing: use a longer prefix, the full id, or `--org` to narrow the
+search.
 
 ## Related
 
