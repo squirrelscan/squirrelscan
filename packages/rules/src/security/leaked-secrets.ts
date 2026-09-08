@@ -1479,9 +1479,16 @@ export function scanContent(
   // The lowercase copy exists only to locate the keywords, so it is built the
   // first time a keyword survives the index: on a page where none does, the pass
   // costs nothing and the megabyte-sized allocation never happens.
+  //
+  // The index folds ASCII case, which over-approximates `content` but NOT
+  // `content.toLowerCase()` — the keyword is looked for in the latter. Two
+  // characters lowercase into ASCII the content does not itself contain, and on
+  // a page carrying either of them the keyword tier runs unfiltered rather than
+  // risk skipping a keyword the lowercased copy really has.
   let contentLower: string | null = null;
+  const keywordFilter = gramIndex && !gramIndex.lowercaseAddsAscii ? gramIndex : null;
   for (const { name, keyword, pattern, confidence } of CONTEXT_PATTERNS) {
-    if (gramIndex && !mayContain(gramIndex, keyword)) continue;
+    if (keywordFilter && !mayContain(keywordFilter, keyword)) continue;
     contentLower ??= content.toLowerCase();
     // Extract small windows around each keyword occurrence
     const windows = extractKeywordWindows(content, contentLower, keyword);

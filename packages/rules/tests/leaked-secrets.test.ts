@@ -411,6 +411,28 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
   test("the pad on its own is not a credential", () => {
     expect(scanContent(PAD, "inline-script")).toEqual([]);
   });
+
+  // The context tier looks its keyword up in `content.toLowerCase()`, while the
+  // index folds ASCII case and leaves everything else alone. Two characters in
+  // Unicode lowercase INTO ASCII: U+212A KELVIN SIGN → "k" and U+0130 → "i" plus
+  // a combining dot. On a page carrying one, a keyword can be in the lowercased
+  // copy and absent from the index, and filtering on the index alone drops the
+  // finding.
+  test("a keyword that only exists after lowercasing is not filtered away", () => {
+    const KELVIN = String.fromCharCode(0x212a);
+    const UUID = "550e8400-e29b-41d4-a716-446655440000"; // pragma: allowlist secret
+    const pad = "var q=1;".repeat(60);
+    const ascii = `${pad}\npostmark_server_token = "${UUID}";\n${pad}`; // pragma: allowlist secret
+    // `postmar` + KELVIN lowercases to exactly `postmark`.
+    const folded = `${pad}\npostmar${KELVIN}_server_token = "${UUID}";\n${pad}`; // pragma: allowlist secret
+
+    expect(folded.toLowerCase().includes("postmark")).toBe(true);
+    expect(folded.includes("postmark")).toBe(false);
+
+    const expected = scanContent(ascii, "inline-script").map((f) => f.value);
+    expect(expected).toContain(UUID);
+    expect(scanContent(folded, "inline-script").map((f) => f.value)).toEqual(expected);
+  });
 });
 
 describe("classifyKeyContext", () => {

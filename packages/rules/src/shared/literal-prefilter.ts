@@ -53,7 +53,27 @@ const MAX_VARIANTS = 32;
 export interface GramIndex {
   readonly bits: Uint8Array;
   readonly mask: number;
+  /**
+   * True when the text contains a character whose `toLowerCase()` INTRODUCES an
+   * ASCII character that the text itself does not have.
+   *
+   * The index folds ASCII case and nothing else, which is a sound
+   * over-approximation of the text — but not of `text.toLowerCase()`. A caller
+   * that searches a lowercased copy (security/leaked-secrets locates its context
+   * keywords that way) can find a keyword the index will swear is absent:
+   * `LINKEDIN` lowercases to `linkedin`, and the index, which leaves
+   * U+212A alone, has no `linkedin` in it. Exactly two characters do this in the
+   * whole of Unicode, so the flag costs one comparison per non-ASCII character
+   * and lets such a caller fall back instead of being silently wrong.
+   */
+  readonly lowercaseAddsAscii: boolean;
 }
+
+// U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE lowercases to "i" + U+0307, and
+// U+212A KELVIN SIGN lowercases to "k". Enumerated over every code point, they
+// are the only two whose lowercase introduces an ASCII character.
+const LOWERCASE_ADDS_ASCII_I = 0x0130;
+const LOWERCASE_ADDS_ASCII_K = 0x212a;
 
 // Each character contributes 5 bits of the window hash, so the window is exactly
 // GRAM * SHIFT = 20 bits wide and `WINDOW_MASK` is what drops the character that
@@ -95,9 +115,14 @@ export function buildGramIndex(text: string): GramIndex | null {
   const mask = bytes * 8 - 1;
   const bits = new Uint8Array(bytes);
   let h = 0;
+  let lowercaseAddsAscii = false;
   for (let i = 0; i < text.length; i++) {
     let c = text.charCodeAt(i);
-    if (c >= 65 && c <= 90) c += 32; // fold ASCII case
+    if (c >= 65 && c <= 90) {
+      c += 32; // fold ASCII case
+    } else if (c > 0x7f && (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K)) {
+      lowercaseAddsAscii = true;
+    }
     // Four characters of 5 bits each fill the window exactly, so the fifth
     // character back falls off the top. WINDOW_MASK, not `mask`, is what makes
     // it fall off: see the note on WINDOW_MASK.
@@ -107,7 +132,7 @@ export function buildGramIndex(text: string): GramIndex | null {
       bits[slot >> 3]! |= 1 << (slot & 7);
     }
   }
-  return { bits, mask };
+  return { bits, mask, lowercaseAddsAscii };
 }
 
 /**
