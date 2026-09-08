@@ -206,6 +206,9 @@ function isAscii(s: string): boolean {
   return true;
 }
 
+/** `end` sentinel: this escape's length is not knowable, so stop reading here. */
+const UNPARSEABLE = -1;
+
 /**
  * The escape starting at `src[i] === "\\"`: the single character it denotes, or
  * null when it denotes a CLASS (`\\d`, `\\w`, `\\b`) rather than a character.
@@ -235,7 +238,15 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
     if (!/^[0-9a-fA-F]{2}$/.test(hex)) return { char: null, end: i + 2 };
     return { char: String.fromCharCode(Number.parseInt(hex, 16)), end: i + 4 };
   }
-  if (n === "c") return { char: null, end: i + 3 };
+  // `\cX` is a control character only when X is an ASCII letter. Otherwise
+  // Annex B reads `\c` as the two literal characters `\` and `c`, and consuming
+  // three steps over whatever follows: `/\c[abcd]/` matches `\ca`, and eating
+  // the `[` left `abcd]` behind as literal text no match contains.
+  if (n === "c") {
+    const x = src[i + 2];
+    const isControlLetter = x !== undefined && ((x >= "a" && x <= "z") || (x >= "A" && x <= "Z"));
+    return { char: null, end: isControlLetter ? i + 3 : i + 2 };
+  }
   if (n === "n") return { char: "\n", end: i + 2 };
   if (n === "t") return { char: "\t", end: i + 2 };
   if (n === "r") return { char: "\r", end: i + 2 };
@@ -248,12 +259,14 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
   // the letter `p` and the brace belongs to whatever follows. Consume two
   // characters either way, for the same reason as `\u{` above.
   if (n === "p" || n === "P") return { char: null, end: i + 2 };
-  // `\k<name>` is a named backreference, and stopping after `\k` would leave
-  // `<name>` behind as literal text the match never contains.
-  if (n === "k" && src[i + 2] === "<") {
-    const close = src.indexOf(">", i + 3);
-    return { char: null, end: close === -1 ? i + 2 : close + 1 };
-  }
+  // `\k<name>` is a named backreference ONLY when the pattern declares a named
+  // group; otherwise `\k` is a legacy identity escape and `<name>` is literal
+  // text. The two readings consume different lengths, and either guess steps
+  // over real structure: stopping after `\k` leaves `<name>` behind as literal
+  // text a backreference never contains, and searching for the `>` walks into a
+  // character class in `/\k<[abcd>efgh]/`, which matches `k<a`. Neither is
+  // knowable from the source alone, so give up on the rest of this branch.
+  if (n === "k" && src[i + 2] === "<") return { char: null, end: UNPARSEABLE };
   // A backreference or octal escape runs to the end of its digits. Consuming
   // only two characters leaves `\12`'s `2` behind as literal text, and what
   // group 12 matched is not the digit 2.
@@ -510,6 +523,10 @@ function extractInto(source: string, out: string[][], depth: number): void {
     // escape
     if (c === "\\") {
       const esc = readEscape(source, i);
+      if (esc.end === UNPARSEABLE) {
+        flush();
+        break;
+      }
       const lit = esc.char;
       if (lit === null || !isAscii(lit)) {
         // The atom proves nothing, but its QUANTIFIER still has to be consumed:

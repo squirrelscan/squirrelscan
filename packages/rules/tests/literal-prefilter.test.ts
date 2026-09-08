@@ -475,6 +475,17 @@ describe("mandatoryLiterals extraction", () => {
       // contain the ASCII literal at all.
       [/secret/iu, `${LONG_S}ecret`],
       [/mark/iu, `mar${KELVIN}`],
+      // `\c` is a control escape only before an ASCII letter; otherwise it is
+      // the two literal characters `\` and `c`, and eating three walks into the
+      // class.
+      [/\c[abcd]/, "\\ca"],
+      // `\k<…>` is a named backreference only when the pattern declares a named
+      // group. Here it does not, so the `>` searched for is inside a class.
+      [/\k<[abcd>efgh]/, "k<a"],
+      // The readings that ARE determinate must still be read: `\cA` is U+0001,
+      // not the letter A, and a real named backreference is not literal text.
+      [/wxyz\cAabcd/, `wxyz${String.fromCharCode(1)}abcd`],
+      [/(?<x>zz)wxyz\k<x>abcd/, "zzwxyzzzabcd"],
     ];
     const failures: string[] = [];
     for (const [pattern, subject] of cases) {
