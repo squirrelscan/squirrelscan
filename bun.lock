@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.92",
+      "version": "0.0.94",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -39,7 +39,7 @@
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
         "robots-parser": "^3.0.1",
-        "smol-toml": "^1.6.1",
+        "smol-toml": "^1.8.0",
         "ts-edge": "^1.0.4",
         "user-agents": "^1.1.675",
         "uuidv7": "^1.2.1",
@@ -274,6 +274,7 @@
     "mermaid": "11.16.1",
     "qs": "^6.16.0",
     "sharp": "^0.35.4",
+    "smol-toml": "^1.8.0",
     "svgo": "^4.1.0",
   },
   "packages": {
@@ -2525,7 +2526,7 @@
 
     "sisteransi": ["sisteransi@1.0.5", "", {}, "sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg=="],
 
-    "smol-toml": ["smol-toml@1.7.0", "", {}, "sha512-aqVvWoyO21L23mb+drl4RmMXbf6N7FdHjAhTRA9ZBL7apWBgfWC16KjrASI+1p9GAroljyMHj6fK67i0UiTNvQ=="],
+    "smol-toml": ["smol-toml@1.8.0", "", {}, "sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ=="],
 
     "source-map": ["source-map@0.7.6", "", {}, "sha512-i5uvt8C3ikiWeNZSVZNWcfZPItFQOsYTUAOkcUPGd8DqDy1uOUikjt5dG+uRlwyvR108Fb9DOd4GvXfT0N2/uQ=="],
 
