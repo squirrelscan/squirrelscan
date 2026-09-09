@@ -1,6 +1,7 @@
 // Unit tests for content-addressable storage
 // Tests gzip compression, deduplication, LRU eviction, and cross-audit caching
 
+import { Database } from "bun:sqlite";
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -89,6 +90,62 @@ describe("Content Store", () => {
       expect(hash).toBe(hashContent(url));
       expect(store.getString(hash)).toBe(js);
       expect(store.getString(hashContent(js))).toBeNull();
+    });
+
+    test("putForKey replaces the content under an existing key", () => {
+      const url = "https://cdn.example.com/app.js";
+      const hash = store.putForKey(url, "v1", "application/javascript");
+      // Backdate so a refreshed created_at is distinguishable within one ms.
+      const aged = Date.now() - 100_000;
+      new Database(dbPath)
+        .prepare("UPDATE content SET created_at = ? WHERE hash = ?")
+        .run(aged, hash);
+
+      store.putForKey(url, "v2 is longer", "application/javascript");
+      const second = store.getMeta(hash);
+      expect(store.getString(hash)).toBe("v2 is longer");
+      expect(second?.originalSize).toBe("v2 is longer".length);
+      expect(second?.createdAt).toBeGreaterThan(aged);
+      expect(second?.accessCount).toBe(2);
+    });
+
+    test("put keeps the first row for content-addressed re-inserts", () => {
+      const js = "console.log(1)";
+      const hash = store.put(js, "application/javascript");
+      const aged = Date.now() - 100_000;
+      new Database(dbPath)
+        .prepare("UPDATE content SET created_at = ? WHERE hash = ?")
+        .run(aged, hash);
+      store.put(js, "application/javascript");
+      expect(store.getMeta(hash)?.createdAt).toBe(aged);
+      expect(store.getMeta(hash)?.accessCount).toBe(2);
+    });
+
+    test("a keyed replacement that grows the store still triggers pruning", () => {
+      const small = new ContentStore(join(testDir, "small.db"), 4_000);
+      try {
+        // Incompressible bodies so the compressed size tracks the input size.
+        const noise = (n: number) =>
+          Array.from({ length: n }, () =>
+            Math.random().toString(36).slice(2, 4)
+          ).join("");
+        for (let i = 0; i < 4; i++) {
+          small.putForKey(
+            `https://cdn.example.com/${i}.js`,
+            noise(400),
+            "application/javascript"
+          );
+        }
+        expect(small.getStats().totalBytes).toBeLessThanOrEqual(4_000);
+        small.putForKey(
+          "https://cdn.example.com/0.js",
+          noise(3_000),
+          "application/javascript"
+        );
+        expect(small.getStats().totalBytes).toBeLessThanOrEqual(4_000);
+      } finally {
+        small.close();
+      }
     });
 
     test("should return null for non-existent hash", () => {

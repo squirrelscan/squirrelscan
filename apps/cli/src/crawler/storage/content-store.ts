@@ -112,24 +112,31 @@ export class ContentStore {
    * Deduplication is automatic - if hash exists, just updates access time.
    */
   put(content: string | Buffer, contentType: ContentType): string {
-    return this.putAtHash(hashContent(content), content, contentType);
+    return this.putAtHash(hashContent(content), content, contentType, false);
   }
 
   /**
    * Store content under the SHA-256 hash of a caller-defined cache key.
+   *
+   * Unlike put(), the key says nothing about the content, so an existing row
+   * is REPLACED (content, sizes and created_at), not merely touched: a
+   * URL-keyed cache that kept the first body forever would never see a
+   * deploy. created_at therefore means "when this key was last refreshed",
+   * which is what a max-age check on the read side needs.
    */
   putForKey(
     key: string | Buffer,
     content: string | Buffer,
     contentType: ContentType
   ): string {
-    return this.putAtHash(hashContent(key), content, contentType);
+    return this.putAtHash(hashContent(key), content, contentType, true);
   }
 
   private putAtHash(
     hash: string,
     content: string | Buffer,
-    contentType: ContentType
+    contentType: ContentType,
+    replace: boolean
   ): string {
     const db = this.getDb();
     const now = Date.now();
@@ -139,15 +146,18 @@ export class ContentStore {
       .prepare("SELECT hash FROM content WHERE hash = ?")
       .get(hash) as { hash: string } | undefined;
 
-    if (existing) {
-      // Update access time and count
+    if (existing && !replace) {
+      // Content-addressed: same hash is the same bytes, just touch it.
       db.prepare(
         "UPDATE content SET last_accessed = ?, access_count = access_count + 1 WHERE hash = ?"
       ).run(now, hash);
       return hash;
     }
 
-    // Compress and store
+    // Compress and store. One UPSERT covers both the fresh insert and the
+    // keyed replacement: a prune in another process can delete the row between
+    // the SELECT above and this write, and a plain UPDATE would then report
+    // success while storing nothing.
     const buffer = typeof content === "string" ? Buffer.from(content) : content;
     const compressed = gzipSync(buffer, { level: 6 }); // Balance speed/size
     const originalSize = buffer.length;
@@ -155,7 +165,15 @@ export class ContentStore {
 
     db.prepare(
       `INSERT INTO content (hash, content, content_type, original_size, compressed_size, created_at, last_accessed, access_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+       ON CONFLICT(hash) DO UPDATE SET
+         content = excluded.content,
+         content_type = excluded.content_type,
+         original_size = excluded.original_size,
+         compressed_size = excluded.compressed_size,
+         created_at = excluded.created_at,
+         last_accessed = excluded.last_accessed,
+         access_count = content.access_count + 1`
     ).run(
       hash,
       compressed,
