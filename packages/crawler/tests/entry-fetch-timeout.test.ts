@@ -17,6 +17,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
 import type { DocumentFetcher } from "@squirrelscan/fetchers";
+import type { AuditFailureDetail } from "@squirrelscan/core-contracts";
 import { auditFailureReasonText } from "@squirrelscan/core-contracts/failure-reason";
 
 import { createCrawler, entryRetryTimeoutMs } from "../src/core/crawler";
@@ -110,7 +111,7 @@ function abortingFetcher(): DocumentFetcher & { calls: number } {
 interface CrawlOutcome {
   pages: string[];
   warnings: Array<{ code: string; message: string }>;
-  rootFailure: { code: string; detail?: string; host?: string } | undefined;
+  rootFailure: AuditFailureDetail | undefined;
   reason: string | undefined;
 }
 
@@ -155,16 +156,16 @@ describe("an abort from a document fetcher is a timeout, not an unknown failure 
     expect(result._tag).toBe("Left");
     if (result._tag !== "Left") return;
     expect(result.left.type).toBe("timeout");
-    expect(result.left.message).toBe("page fetch via cloud-render gave up after 12000ms");
+    expect(result.left.message).toBe("page fetch via cloud-render was aborted (deadline 12000ms)");
 
     // …and the reason line built from it is the timeout sentence with that
     // detail, classified as `timeout`, never the sentence the run shipped.
     const detail = crawlErrorToFailureDetail(result.left);
     expect(detail.code).toBe("timeout");
-    expect(detail.detail).toBe("page fetch via cloud-render gave up after 12000ms");
+    expect(detail.detail).toBe("page fetch via cloud-render was aborted (deadline 12000ms)");
     const reason = auditFailureReasonText(detail);
     expect(reason).toBe(
-      "No response from example.com within the request timeout: page fetch via cloud-render gave up after 12000ms",
+      "No response from example.com within the request timeout: page fetch via cloud-render was aborted (deadline 12000ms)",
     );
     expect(reason).not.toContain("The operation was aborted");
   });
@@ -248,8 +249,9 @@ describe("the entry URL gets a second, relaxed-deadline fetch before the audit i
     expect(out.rootFailure?.code).toBe("timeout");
     expect(out.rootFailure?.host).toBe("localhost");
     expect(out.reason).toContain("within the request timeout");
-    expect(out.reason).toContain(`gave up after ${TIMEOUT_MS}ms`);
-    expect(out.reason).toContain(`gave up after ${entryRetryTimeoutMs(TIMEOUT_MS)}ms`);
+    expect(out.reason).toContain(
+      `entry page failed at ${TIMEOUT_MS}ms via cloud-render, then a ${entryRetryTimeoutMs(TIMEOUT_MS)}ms plain retry timed out`,
+    );
     expect(out.reason).not.toContain("The operation was aborted");
   }, 30_000);
 });

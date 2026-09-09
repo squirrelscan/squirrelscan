@@ -114,16 +114,18 @@ export class CrawlError extends Error {
 }
 
 /**
- * An abort is a deadline firing, in every runtime spelling: Bun's native
- * `DOMException` ("The operation was aborted."), Node's `AbortError`, and the
- * cloud fetcher's own ("Cloud render aborted"). Read off `name` first — the
- * message is the part that varies — and off the message only as a fallback for
- * an error whose name a wrapper rewrote.
+ * An abort is a deadline firing — ours, or the fetcher's own shorter one — in
+ * every runtime spelling: Bun's native `DOMException` ("The operation was
+ * aborted."), Node's `AbortError`, and the cloud fetcher's own ("Cloud render
+ * aborted"). A fiber interrupt also arrives this way, but Effect discards the
+ * result of an interrupted `tryPromise`, so that case never reaches a report.
  */
 function isAbortError(error: unknown): boolean {
-  const err = error as { name?: unknown; message?: unknown } | null;
-  if (err?.name === "AbortError") return true;
-  return typeof err?.message === "string" && /\baborted\b/i.test(err.message);
+  // `name` only. A message match ("connection aborted by peer") would turn a
+  // transport failure into a claimed deadline, and the fetchers this path
+  // sees all set the name: Bun's DOMException, Node's AbortError, and the
+  // cloud fetcher's own `abortError()`.
+  return (error as { name?: unknown } | null)?.name === "AbortError";
 }
 
 /** Hostname of a URL, for a failure reason. Never the path/query. */
@@ -500,6 +502,14 @@ export interface FetchOptions {
   headers?: Record<string, string>;
   fetcher?: DocumentFetcher;
   /**
+   * Outer attempts `fetchPageWithRetry` may make for a retryable transport
+   * failure. Unset, the path decides (one through a document fetcher, three
+   * standard). The entry URL's second-chance fetch sets 1 (#1699): it already
+   * IS the retry, and three more at a doubled deadline would run past the
+   * per-URL watchdog.
+   */
+  attempts?: number;
+  /**
    * Structured logging hook for TLS/status-0 failures and standard-fetch
    * fallbacks. Defaults to a no-op so the package stays silent unless the
    * consumer (CLI/crawler) wires a logger. Lets these failures be observed
@@ -766,10 +776,12 @@ function fetchWithDocumentFetcher(
         // the raw runtime text made a zero-page cloud audit say "No pages were
         // crawled from <site>: The operation was aborted." with reason code
         // `unknown`, when the truthful reason is a timeout naming the step.
+        // "deadline", not "after": the fetcher may have cut itself off ahead
+        // of the deadline it was handed, and the sentence must stay true.
         if (isAbortError(error)) {
           return CrawlError.timeout(
             url,
-            `page fetch via ${options.fetcher!.id} gave up after ${options.timeoutMs}ms`,
+            `page fetch via ${options.fetcher!.id} was aborted (deadline ${options.timeoutMs}ms)`,
           );
         }
         return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
@@ -1221,7 +1233,7 @@ export function fetchPageWithRetry(
   // minutes, not a burst. Collapsing it would mean threading "which layer
   // produced this error" through the fallback, which buys little for a
   // combination that needs a TLS-broken AND throttling origin.
-  const maxAttempts = options.fetcher ? 1 : 3;
+  const maxAttempts = options.attempts ?? (options.fetcher ? 1 : 3);
   const attemptOnce = withRetry(fetchPage(url, options), {
     ...defaultRetryPolicy,
     maxAttempts,

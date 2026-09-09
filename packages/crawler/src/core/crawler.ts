@@ -131,11 +131,17 @@ interface EntryRetry {
  * that path gets a single attempt (see fetchPageWithRetry) where the standard
  * one already retries. A refusal (403/429), a TLS failure (which has its own
  * fallback) or a parse error is an answer, not a slow one.
+ *
+ * `watchdogRemainingMs` is what the per-URL watchdog has left for this entry:
+ * the retry is one deadline inside that window, never a reason to blow it —
+ * a watchdog interrupt would record "watchdog timeout" and lose the reason
+ * this retry exists to produce.
  */
 function entryRetryFor(
   entry: { source: FrontierSource },
   error: CrawlError,
   config: { timeoutMs: number; documentFetcher?: unknown },
+  watchdogRemainingMs: number,
 ): EntryRetry | undefined {
   if (entry.source !== "seed") return undefined;
   const slow =
@@ -147,6 +153,8 @@ function entryRetryFor(
       config.documentFetcher !== undefined);
   if (!slow) return undefined;
   const timeoutMs = entryRetryTimeoutMs(config.timeoutMs);
+  // A second's slack for the failure bookkeeping after the deadline fires.
+  if (watchdogRemainingMs < timeoutMs + 1_000) return undefined;
   return {
     timeoutMs,
     message:
@@ -157,21 +165,21 @@ function entryRetryFor(
 
 /**
  * The error a zero-page crawl reports when the entry retry failed too. A
- * second timeout folds both deadlines into one sentence so the reason line
- * says what was tried; any other class (DNS, a refusal) is the newer, more
- * specific answer and stands on its own.
+ * second timeout is summarised from the two DEADLINES, numbers first, so both
+ * survive the reason line's 120-character detail cap (core-contracts
+ * MAX_DETAIL_LENGTH) whatever the first attempt's message or fetcher id was;
+ * any other class (DNS, a refusal) is the newer, more specific answer and
+ * stands on its own.
  */
 function entryRetryFailure(
   second: CrawlError,
-  first: CrawlError,
-  retryTimeoutMs: number,
+  attempt: { timeoutMs: number; fetcherId?: string; retryTimeoutMs: number },
 ): CrawlError {
   if (second.type !== "timeout") return second;
-  // Short on purpose: the reason line's detail is capped at 120 characters
-  // (core-contracts MAX_DETAIL_LENGTH), and both deadlines have to survive it.
+  const via = attempt.fetcherId ? ` via ${attempt.fetcherId}` : "";
   return CrawlError.timeout(
     second.url,
-    `${first.message}; a plain retry gave up after ${retryTimeoutMs}ms`,
+    `entry page failed at ${attempt.timeoutMs}ms${via}, then a ${attempt.retryTimeoutMs}ms plain retry timed out`,
   );
 }
 
@@ -1213,7 +1221,12 @@ export function createCrawler(
           // stored yet is the condition, so a crawl that already has a corpus
           // never pays this.
           if (fetchResult._tag === "Left" && pagesCommitted === 0) {
-            const retry = entryRetryFor(entry, fetchResult.left, config);
+            const retry = entryRetryFor(
+              entry,
+              fetchResult.left,
+              config,
+              urlWatchdogMs(config.timeoutMs) - (Date.now() - startedAt),
+            );
             if (retry) {
               logger.warn("entry page fetch timed out", retry.message);
               yield* emit({
@@ -1227,13 +1240,22 @@ export function createCrawler(
                   ...fetchOptions,
                   fetcher: undefined,
                   timeoutMs: retry.timeoutMs,
+                  // One attempt: this IS the retry, and the standard path's
+                  // three would run past the per-URL watchdog.
+                  attempts: 1,
                   storedSourceHash: undefined,
                 }),
               );
               fetchResult =
                 second._tag === "Right"
                   ? second
-                  : Either.left(entryRetryFailure(second.left, fetchResult.left, retry.timeoutMs));
+                  : Either.left(
+                      entryRetryFailure(second.left, {
+                        timeoutMs: config.timeoutMs,
+                        fetcherId: config.documentFetcher?.id,
+                        retryTimeoutMs: retry.timeoutMs,
+                      }),
+                    );
             }
           }
 
