@@ -37,7 +37,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "robots-parser": "^3.0.1",
-    "smol-toml": "^1.6.1",
+    "smol-toml": "^1.8.0",
     "ts-edge": "^1.0.4",
     "user-agents": "^1.1.675",
     "uuidv7": "^1.2.1",

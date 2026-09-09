@@ -133,7 +133,7 @@ runtime dependency closure of `apps/cli`.
 | `side-channel-map@1.0.1` | MIT | [source](https://github.com/ljharb/side-channel-map) |
 | `side-channel-weakmap@1.0.2` | MIT | [source](https://github.com/ljharb/side-channel-weakmap) |
 | `side-channel@1.1.1` | MIT | [source](https://github.com/ljharb/side-channel) |
-| `smol-toml@1.7.0` | BSD-3-Clause | [source](github:squirrelchat/smol-toml) |
+| `smol-toml@1.8.0` | BSD-3-Clause | [source](github:squirrelchat/smol-toml) |
 | `statuses@2.0.2` | MIT | [source](https://github.com/jshttp/statuses) |
 | `strnum@2.4.1` | MIT | [source](https://github.com/NaturalIntelligence/strnum) |
 | `tinycolor2@1.6.0` | MIT | [source](https://github.com/bgrins/TinyColor) |
@@ -212,7 +212,7 @@ Packages: `ip-address@10.2.0`
 
 ### LICENSE (036546fdfb34)
 
-Packages: `smol-toml@1.7.0`
+Packages: `smol-toml@1.8.0`
 
     Copyright (c) Squirrel Chat et al., All rights reserved.
 
