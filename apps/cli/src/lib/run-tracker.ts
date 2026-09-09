@@ -37,6 +37,9 @@ const REGISTER_TIMEOUT_MS = 12_000;
 // past a very fast audit.
 const REGISTER_RETRY_TIMEOUT_MS = 8_000;
 const PATCH_TIMEOUT_MS = 10_000;
+const FINALIZE_MAX_ATTEMPTS = 3;
+const FINALIZE_RETRY_BASE_DELAY_MS = 100;
+const FINALIZE_RETRY_MAX_DELAY_MS = 500;
 // Progress is the most frequent signal (throttled to ≤1/s at the call site) and
 // the least important — keep its timeout short so a slow tick never piles up.
 const PROGRESS_TIMEOUT_MS = 3_000;
@@ -379,7 +382,7 @@ export function stopRunHeartbeat(): void {
   }
 }
 
-/** Close the run out at the end (after publish). Fire-and-forget. */
+/** Close the run out at the end (after publish). Best-effort and never throws. */
 export async function finalizeRun(
   runId: string,
   input: FinalizeRunInput,
@@ -409,12 +412,36 @@ export async function finalizeRun(
     body.config = { phaseTimingsMs: input.phaseTimingsMs };
   }
 
-  await cliApi.send(runPath(runId, "", base), {
-    method: "PATCH",
-    auth: "required",
-    timeoutMs: PATCH_TIMEOUT_MS,
-    body,
-  });
+  for (let attempt = 1; attempt <= FINALIZE_MAX_ATTEMPTS; attempt++) {
+    const result = await cliApi.request(runPath(runId, "", base), {
+      method: "PATCH",
+      auth: "required",
+      timeoutMs: PATCH_TIMEOUT_MS,
+      body,
+    });
+    if (result.ok) return;
+
+    const retryable =
+      result.status === 0 || (result.status >= 500 && result.status <= 599);
+    if (!retryable || attempt === FINALIZE_MAX_ATTEMPTS) {
+      logger.debug("run-tracker: finalize failed", {
+        status: result.status,
+        attempts: attempt,
+      });
+      return;
+    }
+
+    const delayMs = Math.min(
+      FINALIZE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+      FINALIZE_RETRY_MAX_DELAY_MS
+    );
+    logger.debug("run-tracker: finalize transient failure, retrying", {
+      status: result.status,
+      attempt,
+      delayMs,
+    });
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
 }
 
 /**

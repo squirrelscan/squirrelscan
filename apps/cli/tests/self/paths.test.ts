@@ -305,3 +305,132 @@ describe("findLocalSettingsPath", () => {
     }
   );
 });
+
+// #293 / npm: PATH usually resolves the npm WRAPPER, not a binary. It runs the
+// first of its hardcoded locations that exists, so the CLI has to follow the
+// same dispatch before deciding an update is invisible.
+import { readFileSync } from "node:fs";
+
+import {
+  isNpmWrapper,
+  npmWrapperCandidates,
+  resolveSquirrelOnPath,
+} from "../../src/self/paths";
+
+describe("npm wrapper dispatch (#293)", () => {
+  const wrapper = "/opt/homebrew/lib/node_modules/squirrelscan/bin/squirrel.js";
+  const managed = join(homedir(), ".local", "bin", "squirrel");
+  const release = join(homedir(), ".squirrel", "releases", "9.9.9", "squirrel");
+
+  test("recognises the wrapper, not the binary bundled beside it", () => {
+    expect(isNpmWrapper(wrapper)).toBe(true);
+    expect(
+      isNpmWrapper("/opt/homebrew/lib/node_modules/squirrelscan/bin/squirrel")
+    ).toBe(false);
+    expect(isNpmWrapper(managed)).toBe(false);
+  });
+
+  // Emulating the wrapper means REPORTING the managed binary as what runs, so
+  // mistaking another tool's launcher for it would turn a real mismatch into a
+  // confident "same" — the exact failure #293 is about.
+  test("does not claim someone else's launcher under node_modules", () => {
+    const foreign = "/opt/node_modules/other-cli/bin/cli.js";
+    expect(isNpmWrapper(foreign)).toBe(false);
+
+    const resolved = resolveSquirrelOnPath({
+      which: () => "/usr/bin/squirrel",
+      realpath: (p) => (p === "/usr/bin/squirrel" ? foreign : p),
+      exists: () => true,
+      isWindows: false,
+    });
+
+    expect(resolved).toEqual({
+      binary: "/usr/bin/squirrel",
+      target: foreign,
+      via: null,
+    });
+  });
+
+  // Anti-drift: the list below is a copy of the wrapper's own, and a silent
+  // divergence would make the CLI predict the wrong binary.
+  test("the candidate list still matches npm/bin/squirrel.js", () => {
+    const source = readFileSync(
+      join(
+        import.meta.dir,
+        "..",
+        "..",
+        "..",
+        "..",
+        "npm",
+        "bin",
+        "squirrel.js"
+      ),
+      "utf-8"
+    );
+    for (const fragment of [
+      'path.join(homeDir, ".local", "bin", "squirrel")',
+      '"/usr/local/bin/squirrel"',
+      '"/opt/homebrew/bin/squirrel"',
+      'path.join(homeDir, "AppData", "Local", "squirrel", "bin", "squirrel.exe")',
+    ]) {
+      expect(source).toContain(fragment);
+    }
+    // A regex, not a string: the bundled path is a template literal in the
+    // wrapper and a string copy of it trips no-template-curly-in-string.
+    expect(source).toMatch(/path\.join\(__dirname, `squirrel\$\{ext\}`\)/);
+
+    expect(npmWrapperCandidates(wrapper, false)).toEqual([
+      managed,
+      "/usr/local/bin/squirrel",
+      "/opt/homebrew/bin/squirrel",
+      "/opt/homebrew/lib/node_modules/squirrelscan/bin/squirrel",
+    ]);
+  });
+
+  test("an ordinary npm install resolves THROUGH the wrapper to the managed release", () => {
+    const resolved = resolveSquirrelOnPath({
+      which: () => "/opt/homebrew/bin/squirrel",
+      realpath: (p) =>
+        p === "/opt/homebrew/bin/squirrel"
+          ? wrapper
+          : p === managed
+            ? release
+            : p,
+      exists: (p) => p === managed,
+      isWindows: false,
+    });
+
+    expect(resolved).toEqual({
+      binary: "/opt/homebrew/bin/squirrel",
+      target: release,
+      via: wrapper,
+    });
+  });
+
+  // existsSync FOLLOWS symlinks, in the wrapper and here: a managed link whose
+  // release directory was pruned is skipped by both.
+  test("a dangling managed link falls through to the bundled binary", () => {
+    const bundled = "/opt/homebrew/lib/node_modules/squirrelscan/bin/squirrel";
+    const resolved = resolveSquirrelOnPath({
+      which: () => "/opt/homebrew/bin/squirrel",
+      realpath: (p) => (p === "/opt/homebrew/bin/squirrel" ? wrapper : p),
+      exists: (p) => p === bundled,
+      isWindows: false,
+    });
+
+    expect(resolved?.target).toBe(bundled);
+    expect(resolved?.via).toBe(wrapper);
+  });
+
+  test("a wrapper with nothing to dispatch to reports itself", () => {
+    const resolved = resolveSquirrelOnPath({
+      which: () => "/opt/homebrew/bin/squirrel",
+      realpath: (p) => (p === "/opt/homebrew/bin/squirrel" ? wrapper : p),
+      exists: () => false,
+      isWindows: false,
+    });
+
+    expect(resolved?.target).toBe(wrapper);
+    expect(resolved?.via).toBe(wrapper);
+  });
+});

@@ -12,7 +12,22 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]
+- A `## [Unreleased]` section collects merged changes that have not been cut into
+  a release yet; rename it to the version when the release goes out.
+
+## [Unreleased]
+
+### Fixed
+
+- `squirrel self update` now checks that the binary your PATH resolves is the one
+  it just installed, and says so when it isn't. It used to flip the symlink
+  recorded at install time and report success on that alone, so a stale
+  `install_bin_dir` (or a second `squirrel` earlier on PATH) left you running the
+  old version after every "Updated to vX". A recorded bin directory that no longer
+  exists is now dropped, and the update falls back to the default one. #293
+- `squirrel self doctor` gained an Install location check: the recorded
+  `install_bin_dir`, the link and the release version it points at, and the
+  `squirrel` your PATH actually resolves, with a warning when they disagree. #293
 
 ## v0.0.92
 
@@ -39,7 +54,7 @@ Every figure is from the checked-in record in
 | SQL statements compiled on a warm 120-page re-crawl | 1,482 | 48 |
 | Rules pass on a 1 MB script-heavy page | 274 ms | 165 ms |
 | Page-rule CPU on a templated site (25 template-scoped rules) | | 13% less |
-| Report assembly at 1,000 pages, peak memory | | 340 MB less |
+| Report assembly at 1,000 pages, peak memory | | about 150 MB less |
 | Hosted publish merge carrying 60,000 prior findings | 330 MB | under 100 MB |
 | Hosted re-audit of an unchanged 150-page site | 115 pages rendered | 17 rendered, report byte-identical |
 | Project database after six audits of a 40-page site | 14.7 MB | 11.9 MB |
@@ -115,7 +130,7 @@ Every figure is from the checked-in record in
 
 - **The report reads a crawl's checks once, not twice.** Assembling the report
   loaded every rule result twice; it now loads them once and reuses the rows,
-  which is about 340 MB less peak memory at 1,000 pages. The report also stops
+  which is about 150 MB less peak memory at 1,000 pages. The report also stops
   building per-page fields (response headers, image lists, structured data)
   that no output format or renderer ever read.
 
@@ -137,8 +152,8 @@ Every figure is from the checked-in record in
 
 - **A local audit crawls up to 10,000 pages.** The hard cap on `--max-pages`
   and `[crawler] max_pages` was 5,000; it is now 10,000, on every plan, local
-  audits being free either way. A 10,000-page audit needs roughly 4.5 GB of
-  memory and takes about fifteen minutes on a laptop, so the cap is a real
+  audits being free either way. A 10,000-page audit peaks at about 5.4 GB of
+  memory and takes about twelve minutes on a laptop, so the cap is a real
   ceiling rather than a formality: past it, split the audit by section with
   `include` patterns. Cloud audits follow their plan instead, and Team's
   ceiling rises to 10,000 with this release.

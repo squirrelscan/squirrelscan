@@ -13,6 +13,40 @@ export const AuthSchema = z
 
 export type AuthState = z.infer<typeof AuthSchema>;
 
+/**
+ * Where an update actually landed, and whether the user's PATH agrees.
+ *
+ * `self update` flips the link recorded at install time and used to report
+ * success on that alone. When the recorded directory isn't what the shell
+ * resolves — a stale `install_bin_dir`, a second install earlier on PATH, a
+ * bin dir never added to PATH — the user keeps running the old binary and the
+ * CLI says nothing (#293). Recorded in settings by the silent updater so the
+ * next run can warn, and returned to the interactive one so it can warn now.
+ */
+export const UpdateLandingSchema = z.object({
+  /** The symlink (a copy on Windows) this update flipped. */
+  link_path: z.string(),
+  /** The `squirrel` PATH resolves, or null when PATH has none. */
+  path_binary: z.string().nullable(),
+  /** What that PATH entry actually runs, symlinks and the wrapper followed. */
+  path_target: z.string().nullable(),
+  /**
+   * The npm wrapper script between the two, when PATH resolves to an
+   * `npm install -g squirrelscan`. Absent/null for a direct binary.
+   */
+  path_via: z.string().nullable().optional(),
+  /** "different"/"missing" ⇒ the update is invisible to the user's shell. */
+  on_path: z.enum(["same", "different", "missing"]),
+  /**
+   * A recorded `install_bin_dir` that no longer exists. The update fell back
+   * to the default bin dir and cleared the setting.
+   */
+  stale_bin_dir: z.string().nullable(),
+});
+
+export type UpdateLanding = z.infer<typeof UpdateLandingSchema>;
+export type OnPathStatus = UpdateLanding["on_path"];
+
 // Background update-check cadence bounds (hours), the single source of truth
 // for both the Zod schema below and the write-path validation in settings.ts.
 // Floor keeps shared-IP runs under GitHub's 60/hr rate limit (2 calls/check);
@@ -68,6 +102,9 @@ export const UserSettingsSchema = z.object({
       from_version: z.string(),
       to_version: z.string(),
       at: z.string(),
+      // Only set when the install landed somewhere the user's PATH won't run,
+      // so the next run can say so out loud (#293). Absent = nothing to warn.
+      landing: UpdateLandingSchema.optional(),
     })
     .nullable()
     .optional(),
@@ -240,4 +277,6 @@ export interface UpdateResult {
   from_version: string;
   to_version: string | null;
   release_url: string | null;
+  /** Absent when nothing was installed. */
+  landing?: UpdateLanding;
 }

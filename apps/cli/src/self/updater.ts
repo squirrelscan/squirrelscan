@@ -17,7 +17,12 @@ import { AUTO_UPDATE_FALLBACK_THRESHOLD } from "@/constants";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { logger } from "@/utils/logger";
 
-import type { ReleaseManifest, UpdateResult, UserSettings } from "./types";
+import type {
+  ReleaseManifest,
+  UpdateLanding,
+  UpdateResult,
+  UserSettings,
+} from "./types";
 
 import { version } from "../../package.json";
 import { updateSuppressedReason } from "./install-meta";
@@ -31,6 +36,9 @@ import {
   isValidReleaseVersion,
   isManagedInstall,
   detectPlatformArch,
+  resolveSquirrelOnPath,
+  safeRealpath,
+  samePath,
 } from "./paths";
 import { checkForUpdates, downloadBinary } from "./releases";
 import {
@@ -889,6 +897,8 @@ export async function runAutoUpdate(options?: {
    * (which is doing the work) never counts toward the #1085 fallback box.
    */
   onStart?: () => void;
+  /** Test seam for the PATH/bin-dir landing check. */
+  landingDeps?: LandingDeps;
 }): Promise<string | null> {
   const settingsResult = loadSettings();
   if (!settingsResult.ok) return null;
@@ -965,11 +975,17 @@ export async function runAutoUpdate(options?: {
       return null;
     }
 
+    // A silent update can't warn at the time it runs, so the landing rides in
+    // the marker and the next run prints it (#293). Recorded only when there
+    // is something to say; otherwise the marker keeps its old shape.
+    const landing = applyResult.data;
+    const warned = updateLandingWarnings(landing).length > 0;
     updateSettings({
       auto_update_applied: {
         from_version: version,
         to_version: manifest.version,
         at: new Date().toISOString(),
+        ...(warned ? { landing } : {}),
       },
     });
     trackTelemetryEvent("update_auto", settings);
@@ -993,15 +1009,150 @@ export async function runAutoUpdate(options?: {
 }
 
 /**
+ * Injectable filesystem/PATH seams for the landing check. Production callers
+ * omit them; tests drive every branch without a real install on PATH.
+ */
+export interface LandingDeps {
+  which?: (command: string) => string | null;
+  realpath?: (path: string) => string;
+  stat?: (path: string) => { isDirectory(): boolean };
+  exists?: (path: string) => boolean;
+  isWindows?: boolean;
+}
+
+/**
+ * Does the recorded `install_bin_dir` still exist?
+ *
+ * "unknown" is deliberate: existsSync reports an unreadable directory
+ * (EACCES on a parent) exactly like a deleted one, and treating that as
+ * deleted would clear a perfectly good setting and start flipping a link the
+ * user never asked for. Only ENOENT/ENOTDIR — the directory is provably gone
+ * — counts as missing.
+ */
+export function classifyBinDir(
+  dir: string,
+  deps: LandingDeps = {}
+): "present" | "missing" | "unknown" {
+  const stat = deps.stat ?? statSync;
+  try {
+    return stat(dir).isDirectory() ? "present" : "missing";
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return "missing";
+    return "unknown";
+  }
+}
+
+/**
+ * Compare the binary the user's PATH resolves with the one this update put in
+ * place. Both comparands matter: on POSIX the flipped link resolves to the
+ * release binary, while on Windows `self install` lands a COPY at the bin path
+ * (link-binary.ts), so the release binary and the thing on PATH are two
+ * different files even when the install is perfect.
+ */
+export function classifyOnPath(
+  version: string,
+  linkPath: string,
+  deps: LandingDeps = {}
+): Pick<UpdateLanding, "path_binary" | "path_target" | "path_via" | "on_path"> {
+  const isWindows = deps.isWindows ?? platform() === "win32";
+  const resolved = resolveSquirrelOnPath({
+    which: deps.which,
+    realpath: deps.realpath,
+    exists: deps.exists,
+    isWindows,
+  });
+  if (!resolved) {
+    return {
+      path_binary: null,
+      path_target: null,
+      path_via: null,
+      on_path: "missing",
+    };
+  }
+
+  const installed = safeRealpath(getBinaryPath(version), deps.realpath);
+  const link = safeRealpath(linkPath, deps.realpath);
+  const same =
+    samePath(resolved.target, installed, isWindows) ||
+    samePath(resolved.target, link, isWindows);
+
+  return {
+    path_binary: resolved.binary,
+    path_target: resolved.target,
+    path_via: resolved.via,
+    on_path: same ? "same" : "different",
+  };
+}
+
+/**
+ * Warnings for an update that landed somewhere the user's shell won't run.
+ * Empty when PATH and the flipped link agree — the overwhelmingly common case.
+ * Shared so the interactive update and the next-run notice after a silent one
+ * can never describe the same situation differently.
+ */
+export function updateLandingWarnings(landing: UpdateLanding): string[] {
+  const lines: string[] = [];
+
+  if (landing.stale_bin_dir) {
+    lines.push(
+      `Warning: the recorded install directory ${landing.stale_bin_dir} no longer exists. ` +
+        `Linked ${landing.link_path} instead and cleared install_bin_dir.`
+    );
+  }
+
+  const linkDir = dirname(landing.link_path);
+
+  if (landing.on_path === "different" && landing.path_binary) {
+    const runs =
+      landing.path_target && landing.path_target !== landing.path_binary
+        ? ` (${landing.path_target})`
+        : "";
+    lines.push(
+      `Warning: 'squirrel' on your PATH is ${landing.path_binary}${runs}, not the ${landing.link_path} this update changed. ` +
+        "That command keeps running the old version."
+    );
+    // Telling an npm user to point `self install --bin-dir` at the directory
+    // npm owns would overwrite npm's wrapper, and the next `npm install -g`
+    // would put it back. The wrapper prefers the DEFAULT managed link, so the
+    // fix is to give it one, or to update the npm copy on its own terms.
+    // The PATH re-order leads because it is safe whatever that binary is: the
+    // thing on PATH can be a launcher script somebody else owns (npm's Windows
+    // .cmd shim, an `npm link`ed checkout), and re-installing over its
+    // directory would clobber it. --bin-dir stays available, conditionally.
+    lines.push(
+      landing.path_via
+        ? `Fix: that is the npm wrapper (${landing.path_via}); run 'squirrel self install' so it finds the managed release, or 'npm install -g squirrelscan@latest'.`
+        : `Fix: put ${linkDir} ahead of ${dirname(landing.path_binary)} in PATH. If ${dirname(landing.path_binary)} is where you want updates to land, re-install with: squirrel self install --bin-dir ${dirname(landing.path_binary)}`
+    );
+  } else if (landing.on_path === "missing") {
+    lines.push(
+      `Warning: no 'squirrel' on your PATH. The update landed at ${landing.link_path}.`,
+      `Fix: add ${linkDir} to PATH.`
+    );
+  }
+
+  return lines;
+}
+
+/**
  * Download, verify, install, and flip the symlink for a release.
  * Shared by interactive and silent updates. Clears the pending
  * notification state on success.
+ *
+ * Returns where the update landed (#293) — installing is not the same as
+ * being the binary the user's next `squirrel` will run, and every caller has
+ * to be able to say so.
  */
 async function performUpdate(
   manifest: ReleaseManifest,
   settings: UserSettings,
-  options?: { signal?: AbortSignal; abortIfDismissed?: boolean }
-): Promise<Result<void>> {
+  options?: {
+    signal?: AbortSignal;
+    abortIfDismissed?: boolean;
+    landingDeps?: LandingDeps;
+  }
+): Promise<Result<UpdateLanding>> {
   const platformArch = detectPlatformArch();
   const downloadResult = await downloadBinary(manifest, platformArch, {
     signal: options?.signal,
@@ -1031,11 +1182,77 @@ async function performUpdate(
   );
   if (!installResult.ok) return installResult;
 
-  const symlinkResult = updateSymlink(
-    manifest.version,
-    settings.install_bin_dir ?? undefined
-  );
-  if (!symlinkResult.ok) return symlinkResult;
+  const landingDeps = options?.landingDeps ?? {};
+
+  // Re-read rather than trust the snapshot: it predates a download that can
+  // take minutes, and `self install --bin-dir` (which the update lock does not
+  // cover) may have recorded a live directory in the meantime. Clearing that
+  // one because the OLD value was dead would be a worse bug than #293.
+  // A fresh explicit null means "the default", not "fall back to what the
+  // snapshot said" — only an unreadable re-read defers to the snapshot.
+  const freshSettings = loadSettings();
+  const recordedBinDir =
+    (freshSettings.ok
+      ? freshSettings.data.install_bin_dir
+      : settings.install_bin_dir) ?? null;
+
+  // A recorded --bin-dir that has since been deleted (a scratch dir from a
+  // test install, an unmounted volume) would otherwise have the update flip a
+  // link nobody can run, forever, in silence. Prefer the default bin dir when
+  // that happens — but only when the recorded one is provably gone.
+  const recordedIsStale =
+    recordedBinDir !== null &&
+    classifyBinDir(recordedBinDir, landingDeps) === "missing";
+
+  // Destinations in order of preference. The recorded directory stays as a
+  // last resort even when it is stale: updateSymlink would recreate it, which
+  // is what happened before this change, and falling back must never turn an
+  // update that used to succeed into a failure (an unwritable or obstructed
+  // default). The PATH check below still tells the user where it went.
+  const destinations: Array<string | undefined> = recordedIsStale
+    ? [undefined, recordedBinDir ?? undefined]
+    : [recordedBinDir ?? undefined];
+
+  let linked: { path: string; binDir: string | undefined } | null = null;
+  let failure: Result<UpdateLanding> | null = null;
+  for (const destination of destinations) {
+    let candidate: string;
+    try {
+      candidate = getSymlinkPath(destination);
+    } catch (error) {
+      failure = err(
+        commandError(
+          "INVALID_BIN_DIR",
+          `Invalid bin directory: ${(error as Error).message}`
+        )
+      );
+      continue;
+    }
+    const attempt = updateSymlink(manifest.version, destination);
+    if (attempt.ok) {
+      linked = { path: candidate, binDir: destination };
+      break;
+    }
+    failure = attempt;
+  }
+  if (!linked) {
+    return (
+      failure ?? err(commandError("SYMLINK_FAILED", "Failed to update symlink"))
+    );
+  }
+
+  // Only a fallback that actually took effect makes the recorded value stale;
+  // if the link went to the recorded directory after all, the setting is still
+  // in use and must not be cleared.
+  const staleBinDir =
+    recordedIsStale && linked.binDir === undefined ? recordedBinDir : null;
+  const linkPath = linked.path;
+
+  const landing: UpdateLanding = {
+    link_path: linkPath,
+    stale_bin_dir: staleBinDir,
+    ...classifyOnPath(manifest.version, linkPath, landingDeps),
+  };
 
   const saved = updateSettings({
     last_update_check: new Date().toISOString(),
@@ -1045,10 +1262,13 @@ async function performUpdate(
     // The install landed — clear the failed-attempt counter so the loud
     // fallback box never shows for a version that actually updated (#1085).
     auto_update_attempts: null,
+    // Spread, never a bare `install_bin_dir: undefined`: updateSettings merges
+    // by spread, so the explicit key would erase a live value.
+    ...(staleBinDir === null ? {} : { install_bin_dir: null }),
   });
   if (!saved.ok) return saved;
 
-  return ok(undefined);
+  return ok(landing);
 }
 
 /**
@@ -1057,6 +1277,8 @@ async function performUpdate(
 export async function runInteractiveUpdate(options?: {
   /** Update even when the running binary isn't the managed install */
   force?: boolean;
+  /** Test seam for the PATH/bin-dir landing check. */
+  landingDeps?: LandingDeps;
 }): Promise<Result<UpdateResult>> {
   const settingsResult = loadSettings();
   if (!settingsResult.ok) return settingsResult;
@@ -1109,14 +1331,25 @@ export async function runInteractiveUpdate(options?: {
     console.log(`Downloading v${manifest.version}...`);
     console.log("Installing...");
 
-    const applyResult = await performUpdate(manifest, settings);
+    const applyResult = await performUpdate(manifest, settings, {
+      landingDeps: options?.landingDeps,
+    });
     if (!applyResult.ok) return applyResult;
+
+    // Say where it went, always: "Updated to vX" on its own was true and
+    // useless on the machines where the link isn't what PATH runs (#293).
+    const landing = applyResult.data;
+    console.log(`Linked: ${landing.link_path}`);
+    for (const warning of updateLandingWarnings(landing)) {
+      console.warn(warning);
+    }
 
     return ok({
       updated: true,
       from_version: version,
       to_version: manifest.version,
       release_url,
+      landing,
     });
   } finally {
     releaseUpdateLock();

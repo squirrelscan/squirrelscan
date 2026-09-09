@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
   createRunFinalizer,
@@ -12,6 +12,7 @@ import {
   startRunHeartbeat,
   stopRunHeartbeat,
 } from "@/lib/run-tracker";
+import { logger } from "@/utils/logger";
 
 // run-tracker resolves a credential from SQUIRREL_API_TOKEN (env path of
 // resolveCredential) and calls global fetch. We swap both per test and restore
@@ -533,18 +534,63 @@ describe("markRunning / finalizeRun", () => {
     });
   });
 
-  test("finalizeRun never throws on a network error", async () => {
+  test("finalizeRun retries transport and 5xx failures, then succeeds", async () => {
+    let calls = 0;
     globalThis.fetch = (async () => {
-      throw new Error("down");
+      calls++;
+      if (calls === 1) throw new Error("down");
+      return new Response("{}", { status: calls === 2 ? 503 : 200 });
     }) as unknown as typeof fetch;
+
     await expect(
       finalizeRun("run_1", {
-        status: "failed",
+        status: "completed",
         completedAt: "t",
-        completionReason: "error",
-        error: "boom",
       })
     ).resolves.toBeUndefined();
+    expect(calls).toBe(3);
+  });
+
+  test("finalizeRun stops after bounded retry exhaustion and logs it", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response("{}", { status: 503 });
+    }) as unknown as typeof fetch;
+    const debugSpy = spyOn(logger, "debug").mockImplementation(() => {});
+
+    try {
+      await expect(
+        finalizeRun("run_1", {
+          status: "failed",
+          completedAt: "t",
+          completionReason: "error",
+          error: "boom",
+        })
+      ).resolves.toBeUndefined();
+      expect(calls).toBe(3);
+      expect(debugSpy).toHaveBeenCalledWith(
+        "run-tracker: finalize failed",
+        expect.objectContaining({ status: 503, attempts: 3 })
+      );
+    } finally {
+      debugSpy.mockRestore();
+    }
+  });
+
+  test("finalizeRun does not retry a non-transient 4xx", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response("{}", { status: 409 });
+    }) as unknown as typeof fetch;
+
+    await finalizeRun("run_1", {
+      status: "failed",
+      completedAt: "t",
+      completionReason: "error",
+    });
+    expect(calls).toBe(1);
   });
 });
 

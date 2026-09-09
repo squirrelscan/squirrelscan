@@ -1,4 +1,4 @@
-import { realpathSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, parse, sep } from "node:path";
 
@@ -268,6 +268,162 @@ export function getUnmanagedUpdateHint(): string {
     return "npm install -g squirrelscan@latest";
   }
   return "re-install from https://install.squirrelscan.com";
+}
+
+/**
+ * realpathSync that degrades to the input instead of throwing. A dangling
+ * symlink (release directory pruned) and a path that simply isn't there both
+ * still have to be reportable — the caller is diagnosing exactly that.
+ */
+export function safeRealpath(
+  path: string,
+  realpath: (p: string) => string = realpathSync
+): string {
+  try {
+    return realpath(path);
+  } catch {
+    return path;
+  }
+}
+
+export interface PathBinary {
+  /** The entry PATH resolves, e.g. /usr/local/bin/squirrel. */
+  binary: string;
+  /** What that entry actually runs, symlinks and the npm wrapper followed. */
+  target: string;
+  /**
+   * The npm wrapper script standing between the two, when PATH resolves to an
+   * `npm install -g squirrelscan`. null for a direct binary.
+   */
+  via: string | null;
+}
+
+export interface ResolveOnPathDeps {
+  which?: (command: string) => string | null;
+  realpath?: (path: string) => string;
+  exists?: (path: string) => boolean;
+  isWindows?: boolean;
+}
+
+/**
+ * True for the npm package's `bin/squirrel.js` wrapper (npm links it onto PATH
+ * as `squirrel`).
+ *
+ * The full installed path is matched, not merely "a .js under node_modules":
+ * emulating this wrapper's dispatch means reporting the managed binary as what
+ * runs, so mistaking SOMEONE ELSE'S launcher for it would turn a real mismatch
+ * into a confident "same" and hide the very thing #293 is about. The
+ * `node_modules` half of the test is the same one getUnmanagedUpdateHint uses.
+ *
+ * Known misses, both erring toward an honest "different": npm on Windows
+ * installs a `squirrel.cmd` shim rather than a link to the .js, and `npm link`
+ * points at a checkout outside node_modules.
+ */
+export function isNpmWrapper(path: string): boolean {
+  return (
+    path.includes(`${sep}node_modules${sep}`) &&
+    path.endsWith(`${sep}squirrelscan${sep}bin${sep}squirrel.js`)
+  );
+}
+
+/**
+ * The binaries npm/bin/squirrel.js tries, in its order, ending with the copy
+ * bundled in the package.
+ *
+ * MIRRORS that file deliberately: a wrapper on PATH runs the FIRST of these
+ * that exists, so "will my next squirrel be the version I just installed?"
+ * cannot be answered without walking the same list. The managed default bin
+ * path leads it, which is why an ordinary npm install DOES pick up
+ * `self update` and must not be warned about. tests/self/paths.test.ts asserts
+ * this list still matches the wrapper.
+ */
+export function npmWrapperCandidates(
+  wrapperPath: string,
+  isWindows: boolean
+): string[] {
+  const home = homedir();
+  const bundled = join(
+    dirname(wrapperPath),
+    `squirrel${isWindows ? ".exe" : ""}`
+  );
+  return isWindows
+    ? [
+        join(home, "AppData", "Local", "squirrel", "bin", "squirrel.exe"),
+        join(home, ".local", "bin", "squirrel.exe"),
+        bundled,
+      ]
+    : [
+        join(home, ".local", "bin", "squirrel"),
+        "/usr/local/bin/squirrel",
+        "/opt/homebrew/bin/squirrel",
+        bundled,
+      ];
+}
+
+/**
+ * The `squirrel` the user's PATH would run, or null when PATH has none.
+ *
+ * `self update` flips the link recorded at install time, which is not
+ * necessarily the binary the user's shell resolves: a stale `install_bin_dir`,
+ * a second install earlier on PATH, or a bin dir that was never added to PATH
+ * all leave the update landing somewhere invisible while the CLI reports
+ * success (#293). Answering "what will actually run next time" needs the PATH
+ * lookup, not the recorded path.
+ *
+ * An npm install puts a WRAPPER on PATH, not a binary, so the lookup follows
+ * its dispatch too: the wrapper runs the first of npmWrapperCandidates that
+ * exists, which is normally the managed link `self update` just flipped.
+ * Stopping at the wrapper would report every npm user as running something
+ * else and warn them after every single update.
+ */
+export function resolveSquirrelOnPath(
+  deps: ResolveOnPathDeps = {}
+): PathBinary | null {
+  const isWindows = deps.isWindows ?? platform() === "win32";
+  const which =
+    deps.which ??
+    ((command: string) =>
+      typeof Bun === "undefined" ? null : Bun.which(command));
+
+  let found: string | null = null;
+  try {
+    found = which("squirrel");
+    // Bun.which resolves PATHEXT itself, but ask for the explicit name too so
+    // a lookup that only matches the extension still finds the binary.
+    if (!found && isWindows) found = which("squirrel.exe");
+  } catch {
+    return null;
+  }
+  if (!found) return null;
+
+  const resolved = safeRealpath(found, deps.realpath);
+  if (!isNpmWrapper(resolved)) {
+    return { binary: found, target: resolved, via: null };
+  }
+
+  // existsSync, matching the wrapper: it FOLLOWS symlinks, so a link whose
+  // release directory was pruned is skipped there and must be skipped here.
+  const exists = deps.exists ?? existsSync;
+  for (const candidate of npmWrapperCandidates(resolved, isWindows)) {
+    if (!exists(candidate)) continue;
+    return {
+      binary: found,
+      target: safeRealpath(candidate, deps.realpath),
+      via: resolved,
+    };
+  }
+
+  // No candidate exists: the wrapper would print its "binary not found" error.
+  return { binary: found, target: resolved, via: resolved };
+}
+
+/**
+ * Path equality for comparing resolved binaries. Windows paths are compared
+ * case-insensitively; POSIX paths are not (two names differing only in case
+ * are two different files there).
+ */
+export function samePath(a: string, b: string, isWindows: boolean): boolean {
+  return isWindows ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 export function isBinInPath(customBinDir?: string): boolean {

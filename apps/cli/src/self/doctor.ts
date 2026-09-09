@@ -7,7 +7,7 @@ import {
   readlinkSync,
 } from "node:fs";
 import { platform } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import { type Result, ok } from "@/controllers/types";
 
@@ -24,6 +24,10 @@ import {
   getLogsPath,
   getUnmanagedUpdateHint,
   isManagedInstall,
+  isValidReleaseVersion,
+  resolveSquirrelOnPath,
+  safeRealpath,
+  samePath,
 } from "./paths";
 import {
   loadSettings,
@@ -38,6 +42,7 @@ export function runDoctorChecks(): Result<DoctorReport> {
   checks.push(checkSymlink());
   checks.push(checkBinaryExecutable());
   checks.push(checkPathEnv());
+  checks.push(checkInstallLocation());
   checks.push(checkReleasesDir());
   checks.push(checkUpdateStatus());
   checks.push(checkLogging());
@@ -218,6 +223,106 @@ function checkPathEnv(): DoctorCheck {
     name: "PATH",
     status: "pass",
     message: "bin directory in PATH",
+  };
+}
+
+/** Release version owning a binary at <releases>/<version>/squirrel, if any. */
+function releaseVersionOf(binaryPath: string): string | null {
+  const candidate = basename(dirname(binaryPath));
+  return isValidReleaseVersion(candidate) ? candidate : null;
+}
+
+/** "v0.0.92" for a managed release binary, the path otherwise. */
+function describeBinary(target: string, present: boolean): string {
+  if (!present) return `${target} (missing)`;
+  const releaseVersion = releaseVersionOf(target);
+  return releaseVersion ? `v${releaseVersion}` : target;
+}
+
+/**
+ * The one check that answers "will my next `squirrel` be the version I just
+ * installed?" — the question `self update` used to answer by assumption.
+ *
+ * Reports the three paths that have to agree: the recorded install_bin_dir
+ * (the link `self update` flips), that link's target version, and what PATH
+ * actually resolves. #293: they disagreed on Nik's machine for five weeks and
+ * nothing in the CLI said so.
+ *
+ * deps injectable for tests only — production callers omit.
+ */
+export function checkInstallLocation(
+  deps: {
+    loadUser?: typeof loadUserSettings;
+    which?: (command: string) => string | null;
+    realpath?: (path: string) => string;
+    exists?: (path: string) => boolean;
+    isWindows?: boolean;
+  } = {}
+): DoctorCheck {
+  const name = "Install location";
+  const settings = (deps.loadUser ?? loadUserSettings)();
+  const recorded = settings.ok ? (settings.data.install_bin_dir ?? null) : null;
+  const recordedNote = recorded
+    ? `install_bin_dir: ${recorded}`
+    : "install_bin_dir: default";
+
+  let linkPath: string;
+  try {
+    linkPath = getSymlinkPath(recorded ?? undefined);
+  } catch (error) {
+    return {
+      name,
+      status: "warn",
+      message: `${recordedNote} is unusable: ${(error as Error).message}`,
+      fix: "Re-run 'squirrel self install' to record a valid bin directory",
+    };
+  }
+
+  const isWindows = deps.isWindows ?? platform() === "win32";
+  const exists = deps.exists ?? existsSync;
+  const linkTarget = safeRealpath(linkPath, deps.realpath);
+  // A link whose release dir was pruned resolves to itself, so say "missing"
+  // rather than printing the same path twice and implying it is fine.
+  const linkNote = `link ${linkPath} -> ${describeBinary(linkTarget, exists(linkTarget))}`;
+
+  const onPath = resolveSquirrelOnPath({
+    which: deps.which,
+    realpath: deps.realpath,
+    exists: deps.exists,
+    isWindows,
+  });
+  if (!onPath) {
+    return {
+      name,
+      status: "warn",
+      message: `${recordedNote}; ${linkNote}; PATH: no 'squirrel' found`,
+      fix: `Add ${dirname(linkPath)} to PATH`,
+    };
+  }
+
+  // The npm wrapper is not the binary: it dispatches to the first managed
+  // location that exists, so say so rather than reporting a .js file as what
+  // the user runs.
+  const viaNote = onPath.via ? " -> npm wrapper" : "";
+  const pathNote = `PATH: ${onPath.binary}${viaNote} -> ${describeBinary(onPath.target, exists(onPath.target))}`;
+
+  if (!samePath(onPath.target, linkTarget, isWindows)) {
+    return {
+      name,
+      status: "warn",
+      message: `${recordedNote}; ${linkNote}; ${pathNote} (updates land on the link, not on what you run)`,
+      // Same reasoning as updateLandingWarnings: the safe PATH re-order leads,
+      // because what PATH resolves may be a launcher owned by another tool.
+      fix: onPath.via
+        ? "Run 'squirrel self install' so the npm wrapper finds the managed release, or 'npm install -g squirrelscan@latest'"
+        : `Put ${dirname(linkPath)} ahead of ${dirname(onPath.binary)} in PATH, or re-install with: squirrel self install --bin-dir ${dirname(onPath.binary)}`,
+    };
+  }
+
+  return {
+    name,
+    status: "pass",
+    message: `${recordedNote}; ${linkNote}; ${pathNote}`,
   };
 }
 
