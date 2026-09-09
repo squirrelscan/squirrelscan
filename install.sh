@@ -1034,7 +1034,12 @@ download_and_install() {
   # (#1538). PIPESTATUS[0] is the binary's code, not tee's.
   local self_install_log="$tmpdir/self-install.log"
   set +e
-  "$tmpdir/squirrel" self install --bin-dir "$bin_dir" 2>&1 | tee "$self_install_log"
+  # Stamp the install channel for the CLI's one-time install registration
+  # (self/install-meta.ts honors SQUIRREL_INSTALL_SOURCE; without it the
+  # managed-dir binary self-reports as the ambiguous "binary"). A caller's own
+  # value wins so wrappers (CI, package managers) can name themselves.
+  SQUIRREL_INSTALL_SOURCE="${SQUIRREL_INSTALL_SOURCE:-install.sh}" \
+    "$tmpdir/squirrel" self install --bin-dir "$bin_dir" 2>&1 | tee "$self_install_log"
   local rc=${PIPESTATUS[0]}
   set -e
   if [ "$rc" -ne 0 ]; then

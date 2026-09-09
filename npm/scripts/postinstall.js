@@ -221,6 +221,13 @@ async function main() {
   const result = spawnSync(binaryPath, ["self", "install"], {
     stdio: "inherit",
     windowsHide: true,
+    env: {
+      ...process.env,
+      // Stamp the install channel for the one-time install registration —
+      // the managed-dir binary would otherwise self-report as "binary",
+      // masking npm. A caller's own value wins.
+      SQUIRREL_INSTALL_SOURCE: process.env.SQUIRREL_INSTALL_SOURCE || "npm",
+    },
   });
 
   // Don't fail npm install if self install fails - binary still works via wrapper fallback
