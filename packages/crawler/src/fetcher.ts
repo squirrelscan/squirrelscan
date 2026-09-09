@@ -32,6 +32,9 @@ import { detectWafChallengePage } from "@squirrelscan/utils/waf";
 
 export type CrawlErrorType = "timeout" | "network" | "parse" | "blocked" | "rate_limit" | "tls";
 
+/** The generic timeout sentence; a `timeout` error carrying anything else is naming its deadline. */
+const TIMEOUT_MESSAGE = "Crawl request timed out";
+
 export class CrawlError extends Error {
   constructor(
     readonly url: string,
@@ -64,8 +67,13 @@ export class CrawlError extends Error {
     this.name = "CrawlError";
   }
 
-  static timeout(url: string): CrawlError {
-    return new CrawlError(url, "timeout", "Crawl request timed out");
+  /**
+   * `message` names WHICH request gave up and at what deadline when the caller
+   * knows (#1699: "page fetch via cloud-render gave up after 12000ms"); the
+   * default is the generic sentence every per-request deadline has always used.
+   */
+  static timeout(url: string, message: string = TIMEOUT_MESSAGE): CrawlError {
+    return new CrawlError(url, "timeout", message);
   }
 
   static network(
@@ -105,6 +113,19 @@ export class CrawlError extends Error {
   }
 }
 
+/**
+ * An abort is a deadline firing, in every runtime spelling: Bun's native
+ * `DOMException` ("The operation was aborted."), Node's `AbortError`, and the
+ * cloud fetcher's own ("Cloud render aborted"). Read off `name` first — the
+ * message is the part that varies — and off the message only as a fallback for
+ * an error whose name a wrapper rewrote.
+ */
+function isAbortError(error: unknown): boolean {
+  const err = error as { name?: unknown; message?: unknown } | null;
+  if (err?.name === "AbortError") return true;
+  return typeof err?.message === "string" && /\baborted\b/i.test(err.message);
+}
+
 /** Hostname of a URL, for a failure reason. Never the path/query. */
 function failureHost(url: string): string | undefined {
   try {
@@ -136,7 +157,13 @@ export function crawlErrorToFailureDetail(
 
   switch (error.type) {
     case "timeout":
-      return auditFailureDetail({ ...base, code: "timeout" });
+      // A timeout that names its step and deadline (#1699) keeps that as the
+      // detail; the generic sentence adds nothing to the reason line.
+      return auditFailureDetail({
+        ...base,
+        code: "timeout",
+        ...(message !== TIMEOUT_MESSAGE ? { detail: message } : {}),
+      });
     case "tls":
       // `CrawlError.tls` prefixes the runtime message; drop the prefix so the
       // reason sentence does not say "TLS" twice.
@@ -732,10 +759,21 @@ function fetchWithDocumentFetcher(
           signal,
           storedSourceHash: options.storedSourceHash,
         }),
-      catch: (error) =>
-        isTlsError(error)
-          ? CrawlError.tls(url, (error as Error).message)
-          : CrawlError.network(url, (error as Error).message),
+      catch: (error) => {
+        if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
+        // #1699: an abort is the fetcher's deadline (or ours) firing — the
+        // same class the standard path reports. Mapping it to `network` with
+        // the raw runtime text made a zero-page cloud audit say "No pages were
+        // crawled from <site>: The operation was aborted." with reason code
+        // `unknown`, when the truthful reason is a timeout naming the step.
+        if (isAbortError(error)) {
+          return CrawlError.timeout(
+            url,
+            `page fetch via ${options.fetcher!.id} gave up after ${options.timeoutMs}ms`,
+          );
+        }
+        return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
+      },
     });
 
     // status === 0 from the impersonation fetcher means the request never
