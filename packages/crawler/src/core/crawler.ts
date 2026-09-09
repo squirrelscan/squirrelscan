@@ -1214,7 +1214,7 @@ export function createCrawler(
           // with link discovery gated on the seed) and its fetch times out,
           // the run ends with zero pages — on an origin the same crawl has just
           // fetched robots.txt and a sitemap from. That first attempt ran under
-          // the crawl's per-request deadline (12s in the cloud) and, through a
+          // the crawl's per-request deadline (30s in the cloud, #2026) and, through a
           // document fetcher, got exactly one try (see fetchPageWithRetry). So
           // before giving the audit up, fetch the entry once more the plain
           // way with a relaxed deadline. Pages, not just the seed: nothing
