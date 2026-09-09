@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.94
+
+A one-line follow-up to v0.0.93 for the cloud audits that still ended before
+their first page: the quick crawl phase now waits for the entry page's retry.
+
 ### Fixed
 
 - A quick cloud audit's crawl phase now holds the entry page's worst case. The
