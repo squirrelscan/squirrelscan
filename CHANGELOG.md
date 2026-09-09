@@ -19,6 +19,14 @@ How it works:
 
 ### Fixed
 
+- A cloud audit of a site whose sitemap points at another domain no longer fails
+  with "No pages were crawled from <site>: The operation was aborted." when the
+  entry page's first fetch hits its deadline. The entry URL now gets one more
+  plain fetch with a doubled deadline before the audit is given up (a `warning`
+  event says so), an abort from a document fetcher classifies as a timeout that
+  names the fetcher and the deadline instead of `unknown` with the runtime's
+  text, and a crawl whose preamble budget runs out records a warning naming the
+  budget. squirrelscan/repo#1699
 - `squirrel self update` now checks that the binary your PATH resolves is the one
   it just installed, and says so when it isn't. It used to flip the symlink
   recorded at install time and report success on that alone, so a stale

@@ -32,6 +32,9 @@ import { detectWafChallengePage } from "@squirrelscan/utils/waf";
 
 export type CrawlErrorType = "timeout" | "network" | "parse" | "blocked" | "rate_limit" | "tls";
 
+/** The generic timeout sentence; a `timeout` error carrying anything else is naming its deadline. */
+const TIMEOUT_MESSAGE = "Crawl request timed out";
+
 export class CrawlError extends Error {
   constructor(
     readonly url: string,
@@ -64,8 +67,13 @@ export class CrawlError extends Error {
     this.name = "CrawlError";
   }
 
-  static timeout(url: string): CrawlError {
-    return new CrawlError(url, "timeout", "Crawl request timed out");
+  /**
+   * `message` names WHICH request gave up and at what deadline when the caller
+   * knows (#1699: "page fetch via cloud-render gave up after 12000ms"); the
+   * default is the generic sentence every per-request deadline has always used.
+   */
+  static timeout(url: string, message: string = TIMEOUT_MESSAGE): CrawlError {
+    return new CrawlError(url, "timeout", message);
   }
 
   static network(
@@ -105,6 +113,21 @@ export class CrawlError extends Error {
   }
 }
 
+/**
+ * An abort is a deadline firing — ours, or the fetcher's own shorter one — in
+ * every runtime spelling: Bun's native `DOMException` ("The operation was
+ * aborted."), Node's `AbortError`, and the cloud fetcher's own ("Cloud render
+ * aborted"). A fiber interrupt also arrives this way, but Effect discards the
+ * result of an interrupted `tryPromise`, so that case never reaches a report.
+ */
+function isAbortError(error: unknown): boolean {
+  // `name` only. A message match ("connection aborted by peer") would turn a
+  // transport failure into a claimed deadline, and the fetchers this path
+  // sees all set the name: Bun's DOMException, Node's AbortError, and the
+  // cloud fetcher's own `abortError()`.
+  return (error as { name?: unknown } | null)?.name === "AbortError";
+}
+
 /** Hostname of a URL, for a failure reason. Never the path/query. */
 function failureHost(url: string): string | undefined {
   try {
@@ -136,7 +159,13 @@ export function crawlErrorToFailureDetail(
 
   switch (error.type) {
     case "timeout":
-      return auditFailureDetail({ ...base, code: "timeout" });
+      // A timeout that names its step and deadline (#1699) keeps that as the
+      // detail; the generic sentence adds nothing to the reason line.
+      return auditFailureDetail({
+        ...base,
+        code: "timeout",
+        ...(message !== TIMEOUT_MESSAGE ? { detail: message } : {}),
+      });
     case "tls":
       // `CrawlError.tls` prefixes the runtime message; drop the prefix so the
       // reason sentence does not say "TLS" twice.
@@ -473,6 +502,14 @@ export interface FetchOptions {
   headers?: Record<string, string>;
   fetcher?: DocumentFetcher;
   /**
+   * Outer attempts `fetchPageWithRetry` may make for a retryable transport
+   * failure. Unset, the path decides (one through a document fetcher, three
+   * standard). The entry URL's second-chance fetch sets 1 (#1699): it already
+   * IS the retry, and three more at a doubled deadline would run past the
+   * per-URL watchdog.
+   */
+  attempts?: number;
+  /**
    * Structured logging hook for TLS/status-0 failures and standard-fetch
    * fallbacks. Defaults to a no-op so the package stays silent unless the
    * consumer (CLI/crawler) wires a logger. Lets these failures be observed
@@ -732,10 +769,23 @@ function fetchWithDocumentFetcher(
           signal,
           storedSourceHash: options.storedSourceHash,
         }),
-      catch: (error) =>
-        isTlsError(error)
-          ? CrawlError.tls(url, (error as Error).message)
-          : CrawlError.network(url, (error as Error).message),
+      catch: (error) => {
+        if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
+        // #1699: an abort is the fetcher's deadline (or ours) firing — the
+        // same class the standard path reports. Mapping it to `network` with
+        // the raw runtime text made a zero-page cloud audit say "No pages were
+        // crawled from <site>: The operation was aborted." with reason code
+        // `unknown`, when the truthful reason is a timeout naming the step.
+        // "deadline", not "after": the fetcher may have cut itself off ahead
+        // of the deadline it was handed, and the sentence must stay true.
+        if (isAbortError(error)) {
+          return CrawlError.timeout(
+            url,
+            `page fetch via ${options.fetcher!.id} was aborted (deadline ${options.timeoutMs}ms)`,
+          );
+        }
+        return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
+      },
     });
 
     // status === 0 from the impersonation fetcher means the request never
@@ -1183,7 +1233,7 @@ export function fetchPageWithRetry(
   // minutes, not a burst. Collapsing it would mean threading "which layer
   // produced this error" through the fallback, which buys little for a
   // combination that needs a TLS-broken AND throttling origin.
-  const maxAttempts = options.fetcher ? 1 : 3;
+  const maxAttempts = options.attempts ?? (options.fetcher ? 1 : 3);
   const attemptOnce = withRetry(fetchPage(url, options), {
     ...defaultRetryPolicy,
     maxAttempts,

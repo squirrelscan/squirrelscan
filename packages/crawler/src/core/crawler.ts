@@ -1,7 +1,7 @@
 // Main crawler implementation
 // Decoupled from AuditContext, uses storage layer and emits events
 
-import { Effect, Stream, PubSub, Duration, Deferred } from "effect";
+import { Effect, Stream, PubSub, Duration, Deferred, Either } from "effect";
 
 import type {
   AuditFailureDetail,
@@ -21,7 +21,7 @@ import { DEFAULT_MAX_DOCUMENT_BODY_BYTES, readBodyCapped } from "@squirrelscan/u
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
-import { createPhaseBudget, withRequestDeadline } from "../deadline";
+import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget } from "../deadline";
 import {
   computeSitemapUrlCap,
@@ -56,8 +56,10 @@ import type {
 import { createHostBackoff, type HostBackoffRegistry } from "../host-backoff";
 import {
   crawlErrorToFailureDetail,
+  CrawlError,
   fetchPageWithRetry,
   type CrawlFetcher,
+  type FetchOptions,
   type RateLimitControl,
 } from "../fetcher";
 import { normalizeUrl, isInScope, isOffSiteFinalUrl, resolveSeedRedirect } from "../frontier";
@@ -103,6 +105,82 @@ const PATTERN_SAMPLE_LIMIT = 1;
  */
 function failureSourceFor(source: FrontierSource): AuditFailureSource {
   return source === "seed" ? "entry" : "sitemap";
+}
+
+/**
+ * The relaxed deadline the entry URL gets on its second try (#1699): twice the
+ * crawl's per-request timeout. Two, not more, because it sits inside the same
+ * crawl-phase budget as everything else; a deadline that let one page eat the
+ * phase would trade a zero-page audit for a wedged one.
+ */
+export function entryRetryTimeoutMs(timeoutMs: number): number {
+  return Math.max(1, timeoutMs) * 2;
+}
+
+interface EntryRetry {
+  /** Deadline for the second attempt. */
+  timeoutMs: number;
+  /** Warning text naming the first attempt's failure and the second's deadline. */
+  message: string;
+}
+
+/**
+ * Whether a failed fetch of `entry` earns the one plain-fetch retry (#1699),
+ * and with what deadline. Only the seed, and only a failure that a longer wait
+ * could change: a timeout, or a transport failure from a document fetcher —
+ * that path gets a single attempt (see fetchPageWithRetry) where the standard
+ * one already retries. A refusal (403/429), a TLS failure (which has its own
+ * fallback) or a parse error is an answer, not a slow one.
+ *
+ * `watchdogRemainingMs` is what the per-URL watchdog has left for this entry:
+ * the retry is one deadline inside that window, never a reason to blow it —
+ * a watchdog interrupt would record "watchdog timeout" and lose the reason
+ * this retry exists to produce.
+ */
+function entryRetryFor(
+  entry: { source: FrontierSource },
+  error: CrawlError,
+  config: { timeoutMs: number; documentFetcher?: unknown },
+  watchdogRemainingMs: number,
+): EntryRetry | undefined {
+  if (entry.source !== "seed") return undefined;
+  const slow =
+    error.type === "timeout" ||
+    // A transport failure with no status: the origin never answered. One that
+    // carries a status (a 5xx) did answer, and a longer wait changes nothing.
+    (error.type === "network" &&
+      error.status === undefined &&
+      config.documentFetcher !== undefined);
+  if (!slow) return undefined;
+  const timeoutMs = entryRetryTimeoutMs(config.timeoutMs);
+  // A second's slack for the failure bookkeeping after the deadline fires.
+  if (watchdogRemainingMs < timeoutMs + 1_000) return undefined;
+  return {
+    timeoutMs,
+    message:
+      `the entry page ${error.url} failed on its first fetch (${error.message}); ` +
+      `nothing has been stored yet, so retrying it once with a plain fetch and a ${timeoutMs}ms deadline`,
+  };
+}
+
+/**
+ * The error a zero-page crawl reports when the entry retry failed too. A
+ * second timeout is summarised from the two DEADLINES, numbers first, so both
+ * survive the reason line's 120-character detail cap (core-contracts
+ * MAX_DETAIL_LENGTH) whatever the first attempt's message or fetcher id was;
+ * any other class (DNS, a refusal) is the newer, more specific answer and
+ * stands on its own.
+ */
+function entryRetryFailure(
+  second: CrawlError,
+  attempt: { timeoutMs: number; fetcherId?: string; retryTimeoutMs: number },
+): CrawlError {
+  if (second.type !== "timeout") return second;
+  const via = attempt.fetcherId ? ` via ${attempt.fetcherId}` : "";
+  return CrawlError.timeout(
+    second.url,
+    `entry page failed at ${attempt.timeoutMs}ms${via}, then a ${attempt.retryTimeoutMs}ms plain retry timed out`,
+  );
 }
 
 /**
@@ -1108,29 +1186,78 @@ export function createCrawler(
           });
 
           // Fetch page
-          const fetchResult = yield* Effect.either(
-            fetchPage(entry.normalizedUrl, {
-              userAgent: config.userAgent,
-              timeoutMs: config.timeoutMs,
-              followRedirects: config.followRedirects,
-              // Custom headers first; conditional (If-None-Match / If-Modified-Since) wins on collision.
-              headers: { ...config.headers, ...conditionalHeaders },
-              fetcher: config.documentFetcher,
-              // Stored normalized-source hash so the render-all gate can reuse the
-              // cached render when the origin rolls its validators (#839). Its
-              // presence also tells the gate a stored page exists, so it probes
-              // even when the cached entry had no etag/Last-Modified.
-              storedSourceHash: cachedPage?.sourceHash ?? undefined,
-              // Forward TLS/status-0 failures + standard-fetch fallbacks to the
-              // consumer's hook (CLI/cloud) — the single visibility sink, so
-              // events aren't double-logged. (page:failed events also carry the
-              // TLS-prefixed message for failed pages.)
-              onTlsEvent: config.onTlsEvent,
-              // Crawl-wide backoff (#1829): a rate-limit response here pauses
-              // every other worker aimed at this host, not just this fetch.
-              rateLimit: rateLimitControlFor(host, entry, startedAt),
-            }),
-          );
+          const fetchOptions: FetchOptions = {
+            userAgent: config.userAgent,
+            timeoutMs: config.timeoutMs,
+            followRedirects: config.followRedirects,
+            // Custom headers first; conditional (If-None-Match / If-Modified-Since) wins on collision.
+            headers: { ...config.headers, ...conditionalHeaders },
+            fetcher: config.documentFetcher,
+            // Stored normalized-source hash so the render-all gate can reuse the
+            // cached render when the origin rolls its validators (#839). Its
+            // presence also tells the gate a stored page exists, so it probes
+            // even when the cached entry had no etag/Last-Modified.
+            storedSourceHash: cachedPage?.sourceHash ?? undefined,
+            // Forward TLS/status-0 failures + standard-fetch fallbacks to the
+            // consumer's hook (CLI/cloud) — the single visibility sink, so
+            // events aren't double-logged. (page:failed events also carry the
+            // TLS-prefixed message for failed pages.)
+            onTlsEvent: config.onTlsEvent,
+            // Crawl-wide backoff (#1829): a rate-limit response here pauses
+            // every other worker aimed at this host, not just this fetch.
+            rateLimit: rateLimitControlFor(host, entry, startedAt),
+          };
+          let fetchResult = yield* Effect.either(fetchPage(entry.normalizedUrl, fetchOptions));
+
+          // #1699: the entry URL is the whole audit. When it is the only thing
+          // in the frontier (a sitemap that points at another host, quick mode
+          // with link discovery gated on the seed) and its fetch times out,
+          // the run ends with zero pages — on an origin the same crawl has just
+          // fetched robots.txt and a sitemap from. That first attempt ran under
+          // the crawl's per-request deadline (12s in the cloud) and, through a
+          // document fetcher, got exactly one try (see fetchPageWithRetry). So
+          // before giving the audit up, fetch the entry once more the plain
+          // way with a relaxed deadline. Pages, not just the seed: nothing
+          // stored yet is the condition, so a crawl that already has a corpus
+          // never pays this.
+          if (fetchResult._tag === "Left" && pagesCommitted === 0) {
+            const retry = entryRetryFor(
+              entry,
+              fetchResult.left,
+              config,
+              urlWatchdogMs(config.timeoutMs) - (Date.now() - startedAt),
+            );
+            if (retry) {
+              logger.warn("entry page fetch timed out", retry.message);
+              yield* emit({
+                type: "warning",
+                code: "entry-fetch-retried",
+                message: retry.message,
+                timestamp: Date.now(),
+              });
+              const second = yield* Effect.either(
+                fetchPage(entry.normalizedUrl, {
+                  ...fetchOptions,
+                  fetcher: undefined,
+                  timeoutMs: retry.timeoutMs,
+                  // One attempt: this IS the retry, and the standard path's
+                  // three would run past the per-URL watchdog.
+                  attempts: 1,
+                  storedSourceHash: undefined,
+                }),
+              );
+              fetchResult =
+                second._tag === "Right"
+                  ? second
+                  : Either.left(
+                      entryRetryFailure(second.left, {
+                        timeoutMs: config.timeoutMs,
+                        fetcherId: config.documentFetcher?.id,
+                        retryTimeoutMs: retry.timeoutMs,
+                      }),
+                    );
+            }
+          }
 
           if (fetchResult._tag === "Left") {
             const error = fetchResult.left;
@@ -2377,6 +2504,24 @@ export function createCrawler(
 
         const rsl = yield* fetchRslLicensing(baseUrl, config.userAgent, config.headers, preamble);
         yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
+
+        // The budget running out is not a failure of the crawl — every probe
+        // above degrades to its not-attempted shape and the crawl goes on —
+        // but it is the one fact that explains a report whose AX probes are
+        // all "unknown", so say it once, here, where it is knowable (#1699).
+        if (budgetRemainingMs(preamble) <= 0) {
+          const message =
+            `the ${preambleBudgetMs(config.timeoutMs)}ms preamble budget ran out before every ` +
+            `root probe (robots, llms, markdown, well-known, agent access, RSL) had answered; ` +
+            `the rest were skipped and the crawl is going ahead with what it has`;
+          logger.warn("preamble budget exhausted", message);
+          yield* emit({
+            type: "warning",
+            code: "preamble-budget-exhausted",
+            message,
+            timestamp: Date.now(),
+          });
+        }
 
         // Discover and fetch sitemaps (from robots.txt and common locations)
         // Cap sitemap ingestion relative to the crawl budget — huge sites

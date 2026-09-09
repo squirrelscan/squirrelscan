@@ -807,7 +807,21 @@ export type CrawlerEvent =
  * probe cannot see an apex→www redirect the whole audit describes the wrong
  * host. The page fetch is the first evidence that contradicts it.
  */
-export type CrawlWarningCode = "seed-base-mismatch";
+export type CrawlWarningCode =
+  | "seed-base-mismatch"
+  /**
+   * The entry URL's fetch timed out before any page was stored, and the crawl
+   * is retrying it once through a plain fetch with a relaxed deadline
+   * (squirrelscan/repo#1699). The message names both deadlines.
+   */
+  | "entry-fetch-retried"
+  /**
+   * The crawl preamble's wall-clock budget ran out, so the root probes that
+   * had not started were skipped and the crawl went ahead with what it had
+   * (squirrelscan/repo#1699). Their records carry the not-attempted marker,
+   * never a confirmed absence.
+   */
+  | "preamble-budget-exhausted";
 
 export interface AuditLifecycleEvent {
   type:
