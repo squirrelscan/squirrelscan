@@ -364,3 +364,48 @@ describe("through the crawler: a wedged render never costs the page (#2026)", ()
     }
   }, 15_000);
 });
+
+describe("codex review follow-ups (#2026)", () => {
+  test("the headroom timer counts from acceptance: a coalescing window longer than the render's share cannot eat the fallback's slice", async () => {
+    const origin = serveOrigin(20);
+    const fetcher = createCloudDocumentFetcher(neverReturningClient(), {
+      ...fastPolling,
+      // Buffer for longer than outer - headroom; the race must still start on time.
+      batchWindowMs: OUTER_MS - HEADROOM_MS + 100,
+      fallback: createFetchDocumentFetcher(),
+      timeoutMs: 10_000,
+    });
+    const startedAt = Date.now();
+    const resp = await fetcher.fetch({
+      url: origin.url,
+      timeoutMs: OUTER_MS,
+      signal: AbortSignal.timeout(OUTER_MS),
+    });
+    expect(resp.fetcherMethod).toBe("fetch");
+    expect(Date.now() - startedAt).toBeLessThan(OUTER_MS);
+  });
+
+  test("the poll loop stops as soon as the last racing waiter settles, instead of polling on to the deadline", async () => {
+    let polls = 0;
+    const client = {
+      render: async () => ({ jobId: "job-1", status: "queued" as const, charged: 2 }),
+      renderResult: async (jobId: string) => {
+        polls++;
+        return { jobId, status: "running" as const };
+      },
+    } as unknown as CloudServicesClient;
+    const fallback = fallbackFetcher({ delayMs: 30 });
+    const fetcher = createCloudDocumentFetcher(client, {
+      ...fastPolling,
+      pollIntervalMs: 200,
+      fallback: fallback.fetcher,
+      timeoutMs: 5_000,
+    });
+    const resp = await fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS });
+    expect(resp.body).toBe("fallback");
+    const after = polls;
+    await Bun.sleep(300);
+    // At most one poll already in flight can still land after settlement.
+    expect(polls).toBeLessThanOrEqual(after + 1);
+  });
+});
