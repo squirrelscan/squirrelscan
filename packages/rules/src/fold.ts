@@ -182,9 +182,10 @@ export const DEFAULT_PUBLISH_SAMPLE: PublishSampleLimits = {
 
 /**
  * Sample every check in an array for publish (#1167): clip `pages[]` to a fixed
- * cap (stamping `details.pagesTruncated` = the pre-clip count so the server's
- * `collectCheckTruncations` surfaces the cut AND the smart-audits merge treats the
- * page list as a SAMPLE), clip `items[]` (rolling the drop into
+ * cap (stamping `details.pagesTruncated` = the pre-clip count, which is the
+ * AUTHORITATIVE affected-page total the server reads back and the marker that
+ * makes the smart-audits merge treat the page list as a SAMPLE), clip `items[]`
+ * (rolling the drop into
  * `details.additional`), and per kept item clamp its id/label to the medium-string
  * cap + dedupe/clip its `sourcePages`. Pages kept are the FIRST-N (post-fold dedupe
  * order — deterministic + stable across repeat audits, so the publish content hash
@@ -711,8 +712,14 @@ const PAGES_PAYLOAD_HEADROOM = 6 * 1024 * 1024;
  * which rejects the ENTIRE publish, strictly worse than a clip. This degrades
  * gracefully: clip the largest `pages[]` arrays largest-first until the estimated
  * pages bytes fit the budget, stamping `details.pagesTruncated` (the pre-clip
- * count) so the server's `collectCheckTruncations` surfaces the cut as the
- * existing #817 signal instead of a silent drop.
+ * count) so the true affected-page total survives the drop.
+ *
+ * NOT server-alerted: `collectCheckTruncations` deliberately ignores
+ * `checks[].pages` (#2048) — it cannot tell this backstop apart from the #1167
+ * sampling that clips every large crawl, so alerting on it made the #817 signal
+ * fire on "big site published" and buried the real clamps. Post-#1167 this
+ * backstop should never engage anyway (see the call site in the CLI's publish
+ * controller): sampling already bounds each `pages[]` at 100 entries.
  *
  * Budget covers pages bytes only — the caller/default sizes it below
  * maxPayloadBytes with headroom for the rest of the report (items, summary,
