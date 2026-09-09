@@ -146,10 +146,51 @@ export const BROWSER_QUEUE = {
 } as const;
 
 // ── Cloud Crawler ───────────────────────────────────────────────
+// The cloud runner's per-page fetch deadline (`config.crawler.timeout_ms` in
+// the container; worker-agent resolves it from SQUIRREL_CRAWLER_TIMEOUT_MS
+// clamped to [min, max]). It is the OUTER deadline of one page fetch through
+// the cloud document fetcher, and the fetcher splits it (squirrelscan/repo#2026):
+//
+//   render gets `outer - fallbackHeadroomMs` to itself, then the plain-HTTP
+//   fallback starts and races it for the last `fallbackHeadroomMs`, whichever
+//   lands first serving the page. The fallback is therefore guaranteed its
+//   headroom INSIDE the outer deadline, so any outer deadline still yields a
+//   page whenever plain HTTP can fetch it in that time, and a render that
+//   finishes late but inside the deadline is still used (it was charged on
+//   submit). The headroom is clamped to half the outer so render always keeps
+//   at least half. At the defaults: render 18s alone, then 12s racing.
+//
+// 12s → 30s (squirrelscan/repo#2026, the class fix under #1699): 12s was the
+// tightest per-request bound in the system and, on its own, decided the audit
+// for a far-away origin (nuxt.daigo.ru: ~1s TTFB from a dev box, slower from
+// the container's egress) whose frontier was the seed alone. 30s is what the
+// CLI's plain path and the crawler default already give a page. Rationale
+// against the run budget: this is a CEILING only a stalled page pays, the
+// crawl-phase budget (AUDIT_RUNTIME.crawlPhaseTimeoutByCoverageMs) still
+// bounds the run, and the tail a stalled site can add is concurrency × 30s.
+//
+// THREE windows derive from it in packages/crawler, so raising it moves them:
+//   - preamble budget  = min(45s, 3 × T)  → 45s (was 36s); the sequential root
+//     probes (robots, llms, markdown, well-known, agent access, RSL) share it.
+//   - sitemap walk window = min(20s, 3 × T) → 20s (unchanged, already capped);
+//     the walk's hard stop (60s) does not derive from T.
+//   - entry fetch: the seed's first attempt is one outer deadline through the
+//     document fetcher (render + fallback as above); when that times out with
+//     nothing stored, the plain retry from #1699 gets 2 × T → 60s (was 24s).
+//   Also the per-URL watchdog, max(120s, 6 × T) → 180s (was 120s).
+// Worst case on a quick run (130s crawl phase) with every stage at its bound:
+// 45 + 20 + 30 = 95s before the entry retry, which the crawl-phase stop can
+// then cut short. The old numbers summed to 36 + 20 + 45 (the render batch
+// budget) + 12 = 113s with NO retry inside the phase, so this is not a
+// regression on that path, and a healthy origin never approaches any of it.
 export const CLOUD_CRAWLER = {
-  defaultTimeoutMs: 12_000,
+  defaultTimeoutMs: 30_000,
   minTimeoutMs: 3_000,
-  maxTimeoutMs: 30_000,
+  maxTimeoutMs: 60_000,
+  // Reserved for the plain-HTTP fallback inside the outer deadline (see above).
+  // 12s = what the WHOLE page fetch used to get, so the fallback never has less
+  // than it had before the raise.
+  fallbackHeadroomMs: 12_000,
 } as const;
 
 // ── Crawler Worker (DO) ─────────────────────────────────────────

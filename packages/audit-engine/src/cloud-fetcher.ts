@@ -18,6 +18,21 @@
 // 3 consecutive 5xx/transport failures) the fetcher flips PERMANENTLY to the
 // provided plain-HTTP fallback fetcher (announcing via onFallback once); a
 // one-off render failure/timeout falls back for that url only.
+//
+// DEADLINE STRUCTURE (squirrelscan/repo#2026): each request's `timeoutMs` is the
+// OUTER deadline of the whole fetch, render and fallback included. Render has
+// `outer - headroom` to itself; at that point, if nothing has landed, the plain
+// fallback starts with the remaining `headroom` and RACES the render, and
+// whichever settles first serves the page. So the fallback is guaranteed its
+// headroom inside any outer deadline (before this, the render machinery ran
+// under a 45s batch budget of its own and a caller enforcing a shorter deadline
+// aborted the waiter before the fallback ever dispatched), and a render that
+// lands late but inside the deadline is still used rather than discarded — it
+// was charged on submit. The in-flight render job is never cancelled: its
+// result lands in the server's render cache either way. A caller abort (the
+// crawler's watchdog / stop) still rejects without a fallback, but no longer
+// cancels the SUBMIT: the server debits on submit, so the submit runs to its
+// own bound and the debit is recorded whether or not anyone still wants the page.
 
 import type {
   RenderChargeLine,
@@ -25,7 +40,7 @@ import type {
   RenderResultItem,
 } from "@squirrelscan/core-contracts";
 import { CREDIT_COSTS } from "@squirrelscan/core-contracts/credits";
-import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { CLOUD_CRAWLER, SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   type DocumentFetcher,
   type FetchRequest,
@@ -57,8 +72,19 @@ export interface CloudFetcherOptions {
   batchWindowMs?: number;
   /** Max urls per batched job (default `SERVICE_LIMITS.renderBatchUrls`). */
   maxBatchUrls?: number;
-  /** Per-batch budget: submit + poll until this elapses (default 45s). */
+  /**
+   * Per-batch poll budget (default 45s), and the outer per-fetch deadline for a
+   * request that carries no `timeoutMs` of its own. A batch polls until every
+   * url is settled or `max(this, the batch's largest outer deadline)` elapses.
+   */
   timeoutMs?: number;
+  /**
+   * Time reserved for the plain-HTTP fallback INSIDE each request's outer
+   * deadline (default `CLOUD_CRAWLER.fallbackHeadroomMs`, clamped to half the
+   * outer): render has the rest to itself, then the fallback starts and races
+   * it. See the deadline-structure note at the top of the file.
+   */
+  fallbackHeadroomMs?: number;
   /** Called ONCE when the fetcher permanently switches to the fallback. */
   onFallback?: (reason: string) => void;
   /**
@@ -115,7 +141,22 @@ interface Waiter {
    * sweeps skip an already-handled waiter instead of double-fetching.
    */
   dispatched: boolean;
+  /**
+   * The fallback was started by the headroom timer while the render is still
+   * in flight, and the two are racing: a good render item may still resolve
+   * this waiter, and no second fallback may start for it. Cleared once a
+   * render item settles it. Only ever true together with `dispatched`.
+   */
+  racing: boolean;
+  /** When `fetch()` accepted the request; the outer deadline counts from here. */
+  enqueuedAt: number;
+  /** Outer deadline for the whole fetch (render + fallback), in ms. */
+  outerMs: number;
+  /** Headroom timer that starts the racing fallback at `outer - headroom`. */
+  raceTimer?: ReturnType<typeof setTimeout>;
   onAbort?: () => void;
+  /** Batch hook run once the waiter settles, so the poll loop can retire. */
+  onSettled?: () => void;
 }
 
 function abortError(): Error {
@@ -280,6 +321,7 @@ export function createCloudDocumentFetcher(
   const batchWindowMs = opts.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS;
   const maxBatchUrls = Math.max(1, opts.maxBatchUrls ?? SERVICE_LIMITS.renderBatchUrls);
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const fallbackHeadroomMs = opts.fallbackHeadroomMs ?? CLOUD_CRAWLER.fallbackHeadroomMs;
 
   let fallbackActive = false;
   let consecutiveServerFailures = 0;
@@ -302,27 +344,46 @@ export function createCloudDocumentFetcher(
       w.req.signal.removeEventListener("abort", w.onAbort);
     }
     w.onAbort = undefined;
+    if (w.raceTimer !== undefined) {
+      clearTimeout(w.raceTimer);
+      w.raceTimer = undefined;
+    }
+  }
+
+  /** What is left of a waiter's outer deadline, never below 1ms. */
+  function remainingOuterMs(w: Waiter): number {
+    return Math.max(1, w.enqueuedAt + w.outerMs - Date.now());
+  }
+
+  /** Headroom the fallback is guaranteed inside this waiter's outer deadline. */
+  function headroomFor(w: Waiter): number {
+    return Math.max(1, Math.min(fallbackHeadroomMs, Math.floor(w.outerMs / 2)));
   }
 
   function resolveWaiter(w: Waiter, resp: FetchResponse): void {
     if (w.settled) return;
     w.settled = true;
+    w.racing = false;
     detach(w);
     w.resolve(resp);
+    w.onSettled?.();
   }
 
   function rejectWaiter(w: Waiter, err: unknown): void {
     if (w.settled) return;
     w.settled = true;
+    w.racing = false;
     detach(w);
     w.reject(err);
+    w.onSettled?.();
   }
 
   // Claim a waiter for terminal handling exactly once. Returns false if another
-  // poll or fallback path already resolved it or started its fallback fetch, so
-  // callers skip it — this makes re-sent `completed` items (#992) and overlapping
-  // fallback sweeps idempotent (no double-fetch, no double-settle). Synchronous:
-  // no await between the check and the set, so within a demux pass it can't race.
+  // poll or fallback path already resolved it or started its fallback fetch
+  // (racing included: that fallback is the one and only), so callers skip it —
+  // this makes re-sent `completed` items (#992) and overlapping fallback sweeps
+  // idempotent (no double-fetch, no double-settle). Synchronous: no await
+  // between the check and the set, so within a demux pass it can't race.
   function claim(w: Waiter): boolean {
     if (w.settled || w.dispatched) return false;
     w.dispatched = true;
@@ -333,6 +394,9 @@ export function createCloudDocumentFetcher(
   // rejects (so its fiber unwinds and releases its host slot) rather than
   // starting a fallback fetch that would just abort too. `fallbackReason` tags
   // why we fell back (e.g. "render-block") so the report can surface it (#512).
+  // The fallback gets what is LEFT of the outer deadline, never the request's
+  // full timeout again: render + fallback fit inside one deadline (#2026). The
+  // headroom timer guarantees that remainder is at least the headroom.
   async function fallbackWaiter(w: Waiter, fallbackReason?: string): Promise<void> {
     if (w.settled) return;
     if (w.req.signal?.aborted) {
@@ -340,11 +404,39 @@ export function createCloudDocumentFetcher(
       return;
     }
     try {
-      const resp = await opts.fallback.fetch(w.req);
+      const resp = await opts.fallback.fetch({ ...w.req, timeoutMs: remainingOuterMs(w) });
       resolveWaiter(w, fallbackReason ? { ...resp, fallbackReason } : resp);
     } catch (err) {
+      // A racing fallback that fails FAST (refused, DNS) while the render is
+      // still in flight must not throw the render away: hold the failure until
+      // the outer deadline, and let a render item that lands first win. The
+      // caller's own abort still rejects at once through onAbort.
+      if (w.racing && !w.settled && !w.req.signal?.aborted) {
+        w.raceTimer = setTimeout(() => {
+          w.raceTimer = undefined;
+          rejectWaiter(w, err);
+        }, remainingOuterMs(w));
+        return;
+      }
       rejectWaiter(w, err);
     }
+  }
+
+  // Arm the headroom timer: at `outer - headroom`, a waiter the render has not
+  // settled starts its fallback and keeps racing the render (#2026). Fires
+  // during a slow submit too — the fallback must not wait on the cloud.
+  function armRace(w: Waiter): void {
+    if (w.settled || w.dispatched || w.raceTimer !== undefined) return;
+    const startAt = w.enqueuedAt + w.outerMs - headroomFor(w);
+    w.raceTimer = setTimeout(
+      () => {
+        w.raceTimer = undefined;
+        if (!claim(w)) return;
+        w.racing = true;
+        void fallbackWaiter(w);
+      },
+      Math.max(0, startAt - Date.now()),
+    );
   }
 
   function settleAllViaFallback(waiters: Waiter[]): Promise<void[]> {
@@ -391,11 +483,16 @@ export function createCloudDocumentFetcher(
         if (fallbackUnmatched && claim(w)) void fallbackWaiter(w);
         continue;
       }
-      if (!claim(w)) continue;
+      // A racing waiter (#2026) is already dispatched — its fallback is in
+      // flight — but a GOOD render item still wins it (paid work, inside the
+      // deadline). A bad item changes nothing: the running fallback covers it,
+      // and a second one must not start.
+      const racing = w.racing && !w.settled;
+      if (!racing && !claim(w)) continue;
       if (item.error) {
         // Per-url render error (truthy string) → fall back for this url only.
         // `error: null`/absent is not an error and falls through to success.
-        void fallbackWaiter(w);
+        if (!racing) void fallbackWaiter(w);
       } else if (isRenderBlocked(item)) {
         // #490: headless/CF egress was blocked (401/403/429/503 or WAF
         // challenge). Retry from the local egress via plain HTTP before
@@ -408,7 +505,7 @@ export function createCloudDocumentFetcher(
         } catch {
           /* ignore */
         }
-        void fallbackWaiter(w, "render-block");
+        if (!racing) void fallbackWaiter(w, "render-block");
       } else if (item.html !== undefined) {
         resolveWaiter(
           w,
@@ -420,7 +517,7 @@ export function createCloudDocumentFetcher(
         );
       } else {
         // Succeeded but no HTML and not a known block — fall back to be safe.
-        void fallbackWaiter(w);
+        if (!racing) void fallbackWaiter(w);
       }
     }
   }
@@ -470,17 +567,26 @@ export function createCloudDocumentFetcher(
     // delivery a waiter can settle before its batch finishes; the old
     // all-aborted counter never counted those, so if the remaining urls then
     // aborted it would never reach zero and the detached loop would zombie-poll
-    // to the deadline (#992 R-001).
-    const allRetired = () => active.every((w) => w.settled || w.dispatched);
+    // to the deadline (#992 R-001). A RACING waiter is not retired (#2026): its
+    // fallback is in flight but a render item can still win it, so the loop
+    // keeps polling for it until one of the two settles it.
+    const allRetired = () =>
+      active.every((w) => w.settled || (w.dispatched && !w.racing));
 
     // Shared cancellation: a single url's watchdog rejects just that waiter and
-    // keeps the rest of the batch rendering; the cloud job is aborted only once
-    // nothing live remains — which wakes a sleeping poll loop to unwind.
+    // keeps the rest of the batch rendering; the cloud POLLING is abandoned only
+    // once nothing live remains — which wakes a sleeping poll loop to unwind.
     const batchAbort = new AbortController();
+    // Whether the batch was retired by its CALLERS aborting every url (a crawl
+    // stop / watchdog) rather than by its urls settling. Only the former makes
+    // a cloud error not a cloud failure for the breaker.
+    let callerRetired = false;
     for (const w of active) {
+      // rejectWaiter runs onSettled, which retires the batch once nothing live
+      // remains; the hook is installed below, before the submit.
       const onAbort = () => {
         rejectWaiter(w, abortError());
-        if (allRetired()) batchAbort.abort();
+        if (allRetired()) callerRetired = true;
       };
       w.onAbort = onAbort;
       w.req.signal?.addEventListener("abort", onAbort, { once: true });
@@ -488,27 +594,45 @@ export function createCloudDocumentFetcher(
 
     const urls = active.map((w) => w.req.url);
     const startedAt = Date.now();
-    const deadline = startedAt + timeoutMs;
+    // The batch lives as long as its slowest url's outer deadline, floored at
+    // the batch budget (#2026): a racing waiter needs the poll loop alive until
+    // its own deadline, not until a budget that knows nothing about it.
+    const batchBudgetMs = Math.max(timeoutMs, ...active.map((w) => w.outerMs));
+    const deadline = startedAt + batchBudgetMs;
     // Per-page render budget; the server clamps to BROWSER_QUEUE bounds.
     const reqTimeoutMs = Math.max(0, ...active.map((w) => w.req.timeoutMs ?? 0)) || undefined;
+
+    // A waiter settling by any path (a racing fallback landing during a poll
+    // sleep, say) must retire the batch the same way an abort does: wake the
+    // sleep and stop polling once nothing live remains, instead of one more
+    // renderResult round trip for nobody.
+    for (const w of active) {
+      w.onSettled = () => {
+        if (allRetired()) batchAbort.abort();
+      };
+    }
 
     let job: RenderJobResponse;
     try {
       // Resolve the run id at submit time (a CLI resolver may only now have the
       // async-registered id). #1134
       const runId = typeof opts.runId === "function" ? opts.runId() : opts.runId;
+      // The submit is bounded by the batch budget, NOT by the callers' aborts:
+      // the server debits on submit, so cancelling it mid-flight would leave a
+      // debit nobody records (#2026). Aborted waiters are already rejected and
+      // wait for nothing; the charge below still lands in the accounting.
       job = await client.render(
         { urls, timeoutMs: reqTimeoutMs, ...(runId ? { runId } : {}) },
-        { signal: batchAbort.signal },
+        { signal: AbortSignal.timeout(batchBudgetMs) },
       );
     } catch (error) {
       // Nothing was debited — free the preflight reservation.
       reservedCredits -= reserved;
-      // batchAbort fires only when EVERY url aborted (caller cancellation) — the
-      // resulting transport error is not a cloud failure, so skip classification
-      // (mirrors the legacy `if (req.signal.aborted) throw` guard). Waiters are
-      // already rejected by their abort listeners.
-      if (!batchAbort.signal.aborted) classifyCloudError(error);
+      // Every url aborted by its caller (crawl cancellation) — a failure of the
+      // submit is then not a cloud failure, so skip classification (mirrors the
+      // legacy `if (req.signal.aborted) throw` guard). Waiters are already
+      // rejected by their abort listeners.
+      if (!callerRetired) classifyCloudError(error);
       await settleAllViaFallback(active);
       return;
     }
@@ -537,8 +661,20 @@ export function createCloudDocumentFetcher(
     try {
       while (Date.now() < deadline) {
         if (batchAbort.signal.aborted) throw new RenderJobError("Cloud render aborted");
+        // Every url may already be retired (a race settled the last one while
+        // the submit was in flight) — nothing left to poll for.
+        if (allRetired()) return;
         await sleep(Math.min(pollDelay, Math.max(1, deadline - Date.now())), batchAbort.signal);
-        const result = await client.renderResult(job.jobId, { signal: batchAbort.signal });
+        // The sleep may have been woken by the last live waiter settling.
+        if (allRetired()) return;
+        // Bounded by the batch deadline as well as retirement, so a poll that
+        // hangs cannot outlive the batch it belongs to.
+        const result = await client.renderResult(job.jobId, {
+          signal: AbortSignal.any([
+            batchAbort.signal,
+            AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+          ]),
+        });
         if (result.status === "done") {
           // Full round-trip success → the cloud is healthy; clear the
           // transport-failure streak (only `done` resets, per legacy parity).
@@ -569,10 +705,12 @@ export function createCloudDocumentFetcher(
         if (allRetired()) return;
         pollDelay = Math.min(pollDelay * POLL_BACKOFF_FACTOR, pollIntervalMs);
       }
-      throw new RenderJobError(`Cloud render timed out after ${timeoutMs}ms`);
+      throw new RenderJobError(`Cloud render timed out after ${batchBudgetMs}ms`);
     } catch (error) {
       // Caller cancellation (all urls aborted) is not a cloud failure — see above.
-      if (!batchAbort.signal.aborted) classifyCloudError(error);
+      // (A batch retired by settlement throws RenderJobError here, which leaves
+      // the breaker untouched by construction.)
+      if (!callerRetired) classifyCloudError(error);
       await settleAllViaFallback(active);
     }
   }
@@ -606,6 +744,12 @@ export function createCloudDocumentFetcher(
   }
 
   function enqueue(w: Waiter): void {
+    // The outer deadline counts from acceptance, so the headroom timer is armed
+    // here, not at batch start: the coalescing window and a slow submit are
+    // both time the fallback's guaranteed slice must not lose. A waiter whose
+    // race fires while still buffered is submitted with its batch regardless
+    // (a render may still win it); demux and the fallback sweeps skip it.
+    armRace(w);
     pending.push(w);
     if (pending.length >= maxBatchUrls) {
       flushOneBatch();
@@ -626,7 +770,18 @@ export function createCloudDocumentFetcher(
       // Interrupted before we even buffer it → unwind now (no submit/fallback).
       if (req.signal?.aborted) return Promise.reject(abortError());
       return new Promise<FetchResponse>((resolve, reject) => {
-        enqueue({ req, resolve, reject, settled: false, dispatched: false });
+        enqueue({
+          req,
+          resolve,
+          reject,
+          settled: false,
+          dispatched: false,
+          racing: false,
+          enqueuedAt: Date.now(),
+          // The request's own timeout is the outer deadline of the whole fetch;
+          // a request without one gets the batch budget (#2026).
+          outerMs: Math.max(1, req.timeoutMs ?? timeoutMs),
+        });
       });
     },
   };

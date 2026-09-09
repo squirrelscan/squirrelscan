@@ -19,6 +19,16 @@ How it works:
 
 ### Fixed
 
+- Cloud rendering now reserves time for its plain-HTTP fallback inside each
+  page's fetch deadline: the render has the deadline minus 12 seconds to
+  itself, then the plain fetch starts and races it, and whichever lands first
+  serves the page. A render that finishes late but inside the deadline is still
+  used, and a crawl stop mid-submit no longer leaves the server's render debit
+  unrecorded. The cloud runner's per-page deadline rises from 12 to 30 seconds
+  (the CLI's default) so a far-away origin no longer decides the audit; the
+  preamble budget, sitemap walk window and entry-page retry that derive from
+  it are documented next to the constant. squirrelscan/repo#2026
+
 - A cloud audit of a site whose sitemap points at another domain no longer fails
   with "No pages were crawled from <site>: The operation was aborted." when the
   entry page's first fetch hits its deadline. The entry URL now gets one more
