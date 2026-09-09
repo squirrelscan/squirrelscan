@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/cli.ts",
-    "build": "bun build src/cli.ts --compile --outfile build/squirrelscan",
+    "build": "bun build src/cli.ts --compile --splitting --outfile build/squirrelscan",
     "test": "bun test",
     "typecheck": "tsgo --noEmit",
     "lint": "oxlint -c oxlint.config.mjs src/ tests/",

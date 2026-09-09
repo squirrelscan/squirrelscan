@@ -441,6 +441,204 @@ self_install_kill_guidance() {
     https://github.com/${REPO}/releases"
 }
 
+# --- By-hand install after a killed self install ---------------------------
+# `self install` does trivial file work: copy the binary under
+# ~/.squirrel/releases/<version>/, symlink it from bin_dir, record the bin dir
+# in settings.json. When the kernel kills the binary before it gets to that
+# work, do it here in bash, which costs nothing, then check the binary can
+# actually run. A machine that cannot run `squirrel --version` gets a distinct
+# step, a memory figure, and the concrete state of the install (#2023).
+VERIFY_BINARY_STEP="verify_binary"
+VERIFY_BINARY_KILLED_STEP="verify_binary_killed"
+
+verify_binary_step_for_code() {
+  local code="$1" kill_code
+  for kill_code in $SELF_INSTALL_KILL_CODES; do
+    if [ "$code" = "$kill_code" ]; then
+      printf '%s' "$VERIFY_BINARY_KILLED_STEP"
+      return 0
+    fi
+  done
+  printf '%s' "$VERIFY_BINARY_STEP"
+}
+
+# The CLI reads settings from $HOME/.squirrel (apps/cli/src/self/paths.ts).
+squirrel_home_dir() {
+  printf '%s/.squirrel' "$HOME"
+}
+
+# True when a value can be dropped into a JSON string verbatim: printable
+# ASCII with no quote or backslash. Anything else is left unrecorded rather
+# than mangled — a wrong install_bin_dir sends every later `self update` to
+# the wrong link (#293), a missing one falls back to the default.
+is_plain_json_string() {
+  # [:print:] under LC_ALL=C is exactly ASCII 0x20-0x7E (bash 3.2 does not
+  # take a quoted space inside a bracket range, so no ' '-~ here).
+  case "$(LC_ALL=C printf '%s' "$1" | LC_ALL=C tr -d '[:print:]')" in
+    ?*) return 1 ;;
+  esac
+  case "$1" in
+    *'"'*|*'\'*|'') return 1 ;;
+  esac
+  return 0
+}
+
+# Record install_bin_dir in settings.json the way `self install` does, so a
+# later `self update` flips the link this installer created. Merges into an
+# existing file (jq when available, a keyed substitution otherwise) and writes
+# a fresh one when absent: the CLI parses settings as a partial, so a file
+# holding only install_bin_dir is valid. Never fatal: prints a warning and
+# returns 0, the install itself is already in place.
+record_install_bin_dir() {
+  local settings="$1" bin_dir="$2" tmp content
+  if ! is_plain_json_string "$bin_dir"; then
+    warn "Not recording the bin directory in $settings (unusual characters in the path)"
+    return 0
+  fi
+  tmp="$settings.tmp.$$"
+  if [ ! -f "$settings" ]; then
+    mkdir -p "$(dirname "$settings")" 2>/dev/null || true
+    if printf '{\n  "install_bin_dir": "%s"\n}\n' "$bin_dir" >"$tmp" 2>/dev/null \
+        && chmod 600 "$tmp" 2>/dev/null && mv -f "$tmp" "$settings" 2>/dev/null; then
+      return 0
+    fi
+    rm -f "$tmp" 2>/dev/null
+    warn "Could not write $settings; run 'squirrel self install --bin-dir $bin_dir' later"
+    return 0
+  fi
+  if [ "${USE_JQ:-false}" = true ]; then
+    if jq --arg d "$bin_dir" '.install_bin_dir = $d' "$settings" >"$tmp" 2>/dev/null \
+        && [ -s "$tmp" ] && chmod 600 "$tmp" 2>/dev/null && mv -f "$tmp" "$settings" 2>/dev/null; then
+      return 0
+    fi
+    rm -f "$tmp" 2>/dev/null
+  fi
+  # No jq (or jq failed). Two shapes are handled by hand, neither through
+  # pattern replacement (bash's ${var/../..} and sed both give `&` and `\` in
+  # the path a meaning, and bash 3.2 mangles a `{` in the replacement): a
+  # missing key is inserted after the opening brace, and a `null` value is
+  # filled in. Anything else already recorded is left exactly as it is.
+  content=$(cat "$settings" 2>/dev/null) || content=""
+  local lead rest before after trimmed body
+  lead="${content%%'{'*}"
+  if [ "$lead" = "$content" ] || [ -n "${lead//[[:space:]]/}" ]; then
+    warn "Could not update $settings; run 'squirrel self install --bin-dir $bin_dir' later"
+    return 0
+  fi
+  rest="${content#*'{'}"
+  case "$content" in
+    *'"install_bin_dir"'*)
+      before="${content%%'"install_bin_dir"'*}"
+      after="${content#*'"install_bin_dir"'}"
+      trimmed="${after#"${after%%[![:space:]]*}"}"
+      if [ "${trimmed:0:1}" != ":" ]; then
+        warn "Could not update $settings; run 'squirrel self install --bin-dir $bin_dir' later"
+        return 0
+      fi
+      trimmed="${trimmed#:}"
+      trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+      if [ "${trimmed:0:4}" != "null" ]; then
+        # A directory is already recorded. It is very likely this one (the
+        # installer picks the same directory every time); if not, say so.
+        if [ "$bin_dir" != "$HOME/.local/bin" ]; then
+          warn "$settings already records an install directory; if it is not $bin_dir, run 'squirrel self install --bin-dir $bin_dir'"
+        fi
+        return 0
+      fi
+      content="${before}\"install_bin_dir\": \"${bin_dir}\"${trimmed#null}" ;;
+    *)
+      body="${rest#"${rest%%[![:space:]]*}"}"
+      if [ "${body:0:1}" = "}" ]; then
+        # An empty object: no trailing comma.
+        content="${lead}{
+  \"install_bin_dir\": \"${bin_dir}\"
+${rest}"
+      else
+        content="${lead}{
+  \"install_bin_dir\": \"${bin_dir}\",${rest}"
+      fi ;;
+  esac
+  if printf '%s\n' "$content" >"$tmp" 2>/dev/null && chmod 600 "$tmp" 2>/dev/null \
+      && mv -f "$tmp" "$settings" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp" 2>/dev/null
+  warn "Could not update $settings; run 'squirrel self install --bin-dir $bin_dir' later"
+  return 0
+}
+
+# Lay the release out exactly as `self install` would. Prints the installed
+# binary path on success. Failure (a mkdir/cp/ln error) returns non-zero with
+# the reason on stderr; the caller decides how to report it.
+place_release_by_hand() {
+  local binary="$1" version="$2" bin_dir="$3"
+  local home release_dir target link
+  home=$(squirrel_home_dir)
+  release_dir="$home/releases/${version#v}"
+  target="$release_dir/squirrel"
+  link="$bin_dir/squirrel"
+
+  mkdir -p "$release_dir" "$bin_dir" || return 1
+  # Copy to a sibling and rename over: a reader never sees a half-written binary.
+  cp "$binary" "$target.tmp.$$" && chmod 755 "$target.tmp.$$" && mv -f "$target.tmp.$$" "$target" || {
+    rm -f "$target.tmp.$$" 2>/dev/null
+    return 1
+  }
+  # rm acts on the link itself, so a live, dangling or plain-file occupant all
+  # go the same way (the existsSync trap from #132 applies to `-e` too).
+  rm -f "$link" 2>/dev/null || true
+  ln -s "$target" "$link" || return 1
+  record_install_bin_dir "$home/settings.json" "$bin_dir"
+  printf '%s' "$target"
+}
+
+# What to tell a user whose binary is installed but will not run. Everything
+# the user needs is stated as a path or a command: nothing here says "retry".
+binary_unrunnable_guidance() {
+  local code="$1" target="$2" link="$3" mib="" out=""
+  mib=$( (available_memory_mib) 2>/dev/null || true)
+  out="  squirrel is installed, but this machine could not run it:
+    Binary: ${target}
+    Link:   ${link}
+  Nothing needs downloading again: once the machine can run it, use it as is.
+"
+  if [ "$code" = 137 ]; then
+    out="${out}
+  The system killed it (SIGKILL), which on a small VPS or a memory-capped
+  container is almost always the out-of-memory killer."
+    if [ -n "$mib" ]; then
+      out="${out}
+  Memory available right now: ${mib} MB"
+    fi
+    out="${out}
+
+  Give the machine more memory, then run: squirrel --version
+    Add 1GB of swap (usually the quickest fix on a VPS):
+      sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
+      sudo mkswap /swapfile && sudo swapon /swapfile
+    Or resize the machine, or raise the container memory limit, to 1GB or more."
+    if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+      out="${out}
+  On macOS, endpoint security (Santa, an MDM policy) kills binaries it has not
+  approved the same way: check its log and allow ${target}."
+    fi
+  elif [ "$code" = 143 ]; then
+    out="${out}
+  Something outside the installer stopped it (SIGTERM): a timeout wrapper, a
+  process supervisor or a cancelled job. Run it again outside that limit:
+    squirrel --version"
+  else
+    out="${out}
+  Run it yourself to see the failure:
+    ${link} --version"
+  fi
+  out="${out}
+
+  Cannot change this machine? Audits also run from the cloud dashboard, with
+  no binary at all: https://app.squirrelscan.com"
+  printf '%s' "$out"
+}
+
 # Single EXIT trap: cleans the temp dir and reports genuine failures. Replaces
 # the per-call tmpdir trap (a second `trap ... EXIT` would clobber this one).
 report_on_exit() {
@@ -847,13 +1045,53 @@ download_and_install() {
     LAST_ERROR_CODE="$rc"
     # A signal death is not a self-install bug: the binary never got to fail on
     # its own terms. Move it to its own step so it reports, and fingerprints,
-    # apart from real failures, and say what to actually do about it (#1654).
+    # apart from real failures (#1654), then finish the install by hand: the
+    # file work needs no memory, and a binary that only died mid-install can
+    # still run (#2023).
     CURRENT_STEP=$(self_install_step_for_code "$rc")
     if [ "$CURRENT_STEP" = "$SELF_INSTALL_KILLED_STEP" ]; then
-      error "$(self_install_kill_headline "$rc")" "$(self_install_kill_guidance "$rc")"
+      install_by_hand_and_verify "$tmpdir/squirrel" "$version" "$bin_dir" "$rc"
+      return 0
     fi
     error "Self install failed with exit code $rc"
   fi
+}
+
+# Recovery path for a signal-killed self install: place the files from bash,
+# then prove the binary runs. Reports under self_install_killed when even the
+# file work fails, and under verify_binary / verify_binary_killed when the
+# files are in place but the binary will not execute.
+install_by_hand_and_verify() {
+  local binary="$1" version="$2" bin_dir="$3" kill_rc="$4"
+  local target link
+
+  warn "$(self_install_kill_headline "$kill_rc")"
+  log "Finishing the install by hand..."
+  if ! target=$(place_release_by_hand "$binary" "$version" "$bin_dir"); then
+    LAST_ERROR_CODE="$kill_rc"
+    error "$(self_install_kill_headline "$kill_rc")" "$(self_install_kill_guidance "$kill_rc")"
+  fi
+  link="$bin_dir/squirrel"
+  info "Binary: $target"
+  info "Link:   $link"
+
+  CURRENT_STEP="$VERIFY_BINARY_STEP"
+  log "Checking the installed binary runs..."
+  local verify_log="$TMPDIR_TO_CLEAN/verify.log"
+  set +e
+  "$link" --version 2>&1 | tee "$verify_log"
+  local rc=${PIPESTATUS[0]}
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    LAST_ERROR_OUTPUT=$(tail -n 40 "$verify_log" 2>/dev/null || true)
+    LAST_ERROR_CODE="$rc"
+    CURRENT_STEP=$(verify_binary_step_for_code "$rc")
+    error "squirrel is installed at $target but cannot run on this machine (exit $rc)" \
+      "$(binary_unrunnable_guidance "$rc" "$target" "$link")"
+  fi
+  info "Installed by hand after self install was killed (exit $kill_rc); the binary runs."
+  echo "  If 'squirrel audit' is killed the same way, the machine needs more memory:" >&2
+  echo "    sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile" >&2
 }
 
 # Detect user's shell and config file

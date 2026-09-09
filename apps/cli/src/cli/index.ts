@@ -1,37 +1,24 @@
 // SquirrelScan CLI main entry
+//
+// Startup is split into a light path and a full path. The light path
+// (`--version`, `--help`, `self install|update|uninstall`, `self disk`, `mcp`,
+// `--offline`) evaluates citty, settings and the logger only; everything else
+// (the updater, telemetry, install registration, the banner, the config
+// loader, every subcommand) is a dynamic import bundled as its own chunk
+// (`bun build --compile --splitting`), so it is neither parsed nor evaluated
+// until a run actually needs it. Before this, every invocation paid for the
+// audit engine and every rule package up front: `squirrel self install` sat
+// at ~140 MB resident and was OOM-killed (exit 137) at the last step of
+// install.sh on memory-capped machines (#2023).
 
 import { defineCommand, runMain } from "citty";
 
 import type { UserSettings } from "@/self/types";
 
-import { printAutoUpdateAppliedNotice } from "@/cli/banner";
-import { setGlobalConfigPath } from "@/config";
-import { registerInstall } from "@/self/register-install";
 import { loadSettings } from "@/self/settings";
-import { showTelemetryNotice } from "@/self/telemetry";
-import {
-  applyPendingUpdateInForeground,
-  finishInlineAutoUpdate,
-  foregroundUpdateTarget,
-  runBackgroundUpdateCheck,
-} from "@/self/updater";
-import { rotateLogsIfNeeded } from "@/utils/log-rotation";
 import { setLogLevel } from "@/utils/logger";
 
 import { version } from "../../package.json";
-import { analyze } from "./commands/analyze";
-import { audit } from "./commands/audit";
-import { auth } from "./commands/auth";
-import { config } from "./commands/config";
-import { crawl } from "./commands/crawl";
-import { credits } from "./commands/credits";
-import { feedback } from "./commands/feedback";
-import { init } from "./commands/init";
-import { keys } from "./commands/keys";
-import { mcp } from "./commands/mcp";
-import { report } from "./commands/report";
-import { self } from "./commands/self";
-import { skills } from "./commands/skills";
 
 const main = defineCommand({
   meta: {
@@ -46,23 +33,35 @@ const main = defineCommand({
       description: "Path to config file",
     },
   },
-  setup({ args }) {
-    setGlobalConfigPath(args["config-file"]);
+  async setup({ args }) {
+    // The config loader is only evaluated when a path is given: with no flag
+    // the global stays at its initial undefined, which is what
+    // setGlobalConfigPath(undefined) would have set.
+    const configFile = args["config-file"];
+    if (configFile) {
+      const { setGlobalConfigPath } = await import("@/config");
+      setGlobalConfigPath(configFile);
+    }
   },
+  // Every subcommand is resolved lazily: citty only loads the one it runs
+  // (all of them for --help). A static import graph evaluated the audit
+  // engine and every rule package on EVERY invocation, which put the
+  // resident set of `squirrel self install` at ~140 MB and got the installer
+  // OOM-killed (exit 137) on memory-capped machines (#2023).
   subCommands: {
-    audit,
-    auth,
-    crawl,
-    credits,
-    analyze,
-    init,
-    config,
-    report,
-    feedback,
-    keys,
-    mcp,
-    self,
-    skills,
+    audit: () => import("./commands/audit").then((m) => m.audit),
+    auth: () => import("./commands/auth").then((m) => m.auth),
+    crawl: () => import("./commands/crawl").then((m) => m.crawl),
+    credits: () => import("./commands/credits").then((m) => m.credits),
+    analyze: () => import("./commands/analyze").then((m) => m.analyze),
+    init: () => import("./commands/init").then((m) => m.init),
+    config: () => import("./commands/config").then((m) => m.config),
+    report: () => import("./commands/report").then((m) => m.report),
+    feedback: () => import("./commands/feedback").then((m) => m.feedback),
+    keys: () => import("./commands/keys").then((m) => m.keys),
+    mcp: () => import("./commands/mcp").then((m) => m.mcp),
+    self: () => import("./commands/self").then((m) => m.self),
+    skills: () => import("./commands/skills").then((m) => m.skills),
   },
 });
 
@@ -74,27 +73,22 @@ export function run(): void {
   }
 
   const effectiveSettings = settings.ok ? settings.data : undefined;
-  const withBackgroundTasks = shouldRunBackgroundTasks(process.argv.slice(2));
 
-  // An update a previous run already discovered is applied BEFORE the command,
-  // and the original argv re-executed on the new binary, so a fresh run always
-  // gets the newest version the CLI knows about (#170). The decision is
-  // synchronous and settings-only: with nothing pending — the overwhelmingly
-  // common case — this is a null check and startup is byte-for-byte the old
-  // path, no await and no network.
-  if (
-    withBackgroundTasks &&
-    effectiveSettings &&
-    foregroundUpdateTarget(effectiveSettings)
-  ) {
-    void applyPendingUpdateInForeground(effectiveSettings)
-      // Failure-safe: a broken update must never break the user's command.
-      .catch(() => {})
-      .then(() => startCommand(effectiveSettings, withBackgroundTasks));
+  if (!shouldRunBackgroundTasks(process.argv.slice(2))) {
+    // Light path: nothing but the command. No updater, no telemetry, no
+    // registration, so none of their modules are loaded.
+    void runMain(main);
     return;
   }
 
-  startCommand(effectiveSettings, withBackgroundTasks);
+  // Failure-safe: the extras must never break the user's command. The
+  // rejection handler covers the LOAD only (a two-argument then, so a throw
+  // inside runWithStartupExtras cannot run the command a second time); the
+  // command itself reports its own errors through runMain.
+  void import("./startup").then(
+    ({ runWithStartupExtras }) => runWithStartupExtras(main, effectiveSettings),
+    () => void runMain(main)
+  );
 }
 
 /**
@@ -129,36 +123,4 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
     args[0] === "mcp";
 
   return !isSimpleCommand && !args.includes("--offline");
-}
-
-function startCommand(
-  settings: UserSettings | undefined,
-  withBackgroundTasks: boolean
-): void {
-  if (withBackgroundTasks) {
-    // Non-blocking background tasks
-    if (settings) showTelemetryNotice(settings);
-    runBackgroundUpdateCheck(settings);
-    registerInstall(settings);
-    rotateLogsIfNeeded().catch(() => {}); // Best effort, silent fail
-  }
-
-  // The one-time "✓ auto-updated" confirmation belongs to the RUN, not to any
-  // one command: an update applied before `squirrel config` must be announced
-  // by `squirrel config` (#170). Gated synchronously on the marker so the
-  // ordinary run stays free of the await. printAutoUpdateAppliedNotice itself
-  // only prints when this process IS the new version, and clears the marker.
-  if (withBackgroundTasks && settings?.auto_update_applied) {
-    void printAutoUpdateAppliedNotice(settings)
-      .catch(() => {})
-      .then(runCommand);
-    return;
-  }
-  runCommand();
-}
-
-function runCommand(): void {
-  // After the command settles, bound any in-process (Windows) auto-update so
-  // a still-downloading binary can't hold the CLI open indefinitely (#1074).
-  void runMain(main).finally(() => void finishInlineAutoUpdate());
 }

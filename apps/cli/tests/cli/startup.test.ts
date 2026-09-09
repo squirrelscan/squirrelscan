@@ -52,3 +52,66 @@ describe("shouldRunBackgroundTasks (#170)", () => {
     expect(shouldRunBackgroundTasks(["self", "doctor"])).toBe(true);
   });
 });
+
+// #2023: every invocation used to evaluate the whole CLI graph (the audit
+// engine and every rule package included) before citty had even parsed argv,
+// which put `squirrel self install` at ~140 MB resident and got it OOM-killed
+// at the last step of install.sh. The entry now loads subcommands and the
+// startup extras on demand, and the standalone build splits them into chunks
+// that are neither parsed nor evaluated until imported. Both halves are
+// source-level contracts: a static import quietly puts the module back on the
+// hot path, and a build without --splitting still parses every chunk up front.
+describe("light startup path (#2023)", () => {
+  const entry = new URL("../../src/cli/index.ts", import.meta.url);
+  const entrySource = () => Bun.file(entry).text();
+
+  test("the entry imports no command statically", async () => {
+    const source = await entrySource();
+    const staticImports = source
+      .split("\n")
+      .filter((line) => /^import\b/.test(line) || line.startsWith('} from "'))
+      .join("\n");
+    expect(staticImports).not.toMatch(/from "\.\/commands\//);
+    expect(staticImports).not.toMatch(/from "@\/cli\/commands\//);
+    // The extras (updater, telemetry, registration, banner, config) ride on
+    // ./startup, which is only imported when shouldRunBackgroundTasks says so.
+    expect(staticImports).not.toMatch(
+      /@\/self\/updater|@\/self\/telemetry|@\/self\/register-install|@\/cli\/banner|@\/config"/
+    );
+    expect(source).toContain('import("./startup")');
+  });
+
+  test("every subcommand is a lazy resolver", async () => {
+    const source = await entrySource();
+    for (const name of [
+      "audit",
+      "auth",
+      "crawl",
+      "credits",
+      "analyze",
+      "init",
+      "config",
+      "report",
+      "feedback",
+      "keys",
+      "mcp",
+      "self",
+      "skills",
+    ]) {
+      expect(source).toContain(`${name}: () => import("./commands/${name}")`);
+    }
+  });
+
+  test("the standalone build splits chunks", async () => {
+    const pkg = (await Bun.file(
+      new URL("../../package.json", import.meta.url)
+    ).json()) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts.build).toContain("--compile --splitting");
+    const makefile = await Bun.file(
+      new URL("../../../../Makefile", import.meta.url)
+    ).text();
+    expect(makefile).toContain("--compile --splitting --minify");
+  });
+});
