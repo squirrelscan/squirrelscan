@@ -39,6 +39,17 @@ export interface ScriptFetcherOptions {
   pageCount?: number; // For dynamic script limit calculation
 }
 
+/**
+ * How long a fetched script is replayed from ~/.squirrel/content-store.db
+ * before it is fetched again. The script cache is keyed by URL (#182), and the
+ * store is shared across every audit on the machine, so without a ceiling a
+ * script at a stable URL (app.js, not app.[hash].js) would never be re-read:
+ * a site could ship a new bundle and every later audit would still grade the
+ * old one. One day is long enough to make a re-audit of the same site cheap
+ * and short enough that a deploy shows up by the next day's run.
+ */
+export const SCRIPT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 const DEFAULT_OPTIONS: ScriptFetcherOptions = {
   concurrency: SCRIPT_FETCH_LIMITS.FETCH_CONCURRENCY,
   timeoutMs: SCRIPT_FETCH_LIMITS.FETCH_TIMEOUT_MS,
@@ -259,8 +270,12 @@ function fetchSingleScript(
     const store = getGlobalContentStore();
     const cacheKey = hashContent(url);
 
-    // Check cache first
-    const cached = store.getString(cacheKey);
+    // Check cache first. A hit older than SCRIPT_CACHE_MAX_AGE_MS is treated
+    // as a miss and refreshed below (putForKey overwrites in place).
+    const meta = store.getMeta(cacheKey);
+    const fresh =
+      meta !== null && Date.now() - meta.createdAt <= SCRIPT_CACHE_MAX_AGE_MS;
+    const cached = fresh ? store.getString(cacheKey) : null;
     if (cached !== null) {
       const sizeBytes = new TextEncoder().encode(cached).length;
       return {

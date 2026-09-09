@@ -5,14 +5,22 @@
 // has a content-store cache the engine fork lacks — a cache hit never touches
 // the network, so it must report the encoding as unknown rather than as absent.
 
+import { Database } from "bun:sqlite";
 import { afterAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { fetchScriptContents } from "@/crawler/script-fetcher";
-import { closeGlobalContentStore } from "@/crawler/storage/content-store";
+import {
+  SCRIPT_CACHE_MAX_AGE_MS,
+  fetchScriptContents,
+} from "@/crawler/script-fetcher";
+import {
+  closeGlobalContentStore,
+  getGlobalContentStore,
+  hashContent,
+} from "@/crawler/storage/content-store";
 
 const BODY = `console.log(${JSON.stringify("x".repeat(2000))});`;
 const GZIPPED = Bun.gzipSync(new TextEncoder().encode(BODY));
@@ -95,5 +103,35 @@ describe("CLI script fetcher content-encoding (#9)", () => {
     expect(second?.fromCache).toBe(true);
     expect(second?.contentEncoding).toBeUndefined();
     expect(cacheRouteRequests).toBe(1);
+  });
+
+  // The store is shared by every audit on the machine and keyed by URL, so a
+  // stable URL would otherwise be replayed forever (#182 follow-up).
+  test("a cached script older than the max age is fetched again", async () => {
+    const url = `${base}/cache.js`;
+    const before = cacheRouteRequests;
+    const store = getGlobalContentStore();
+    const key = hashContent(url);
+    expect(store.getMeta(key)).not.toBeNull();
+
+    // Age the row past the ceiling with the same content still in place.
+    store.putForKey(url, "stale body", "application/javascript");
+    const db = new Database(store.getPath());
+    db.prepare("UPDATE content SET created_at = ? WHERE hash = ?").run(
+      Date.now() - SCRIPT_CACHE_MAX_AGE_MS - 1000,
+      key
+    );
+    db.close();
+
+    const [refreshed] = await Effect.runPromise(fetchScriptContents([url]));
+    expect(refreshed?.fromCache).not.toBe(true);
+    expect(refreshed?.content).toBe(BODY);
+    expect(cacheRouteRequests).toBe(before + 1);
+
+    // The refresh overwrote the stale row, so the next read is a fresh hit.
+    expect(store.getString(key)).toBe(BODY);
+    const [again] = await Effect.runPromise(fetchScriptContents([url]));
+    expect(again?.fromCache).toBe(true);
+    expect(cacheRouteRequests).toBe(before + 1);
   });
 });
