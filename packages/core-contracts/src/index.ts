@@ -356,6 +356,28 @@ export interface AuditReport {
    */
   scanScope?: ScanScope;
   /**
+   * Rule-result cache disclosure (#1990): how much of this audit's rules phase was
+   * REPLAYED from a previous audit rather than evaluated now.
+   *
+   * An agent reading a report has to be able to tell a replay from a fresh
+   * evaluation — the findings are identical by construction, so nothing else in
+   * the report distinguishes them (#1981). LOCAL ONLY: `slimForPublish` strips it,
+   * because it describes how this machine produced the report and not the site.
+   * REPORT-ONLY — never feeds `healthScore`.
+   */
+  rulesCache?: {
+    /** Pages that skipped parse + page rules and replayed stored verdicts. */
+    pagesReplayed: number;
+    /** Pages whose rules ran this audit. */
+    pagesEvaluated: number;
+    /**
+     * Present when the cache was available but deliberately not used, e.g.
+     * `refresh-requested` for `--refresh` or `threat-intel-enabled`. Absent when
+     * the cache was in use, whether or not anything actually hit.
+     */
+    disabledReason?: string;
+  };
+  /**
    * Smart audits CLOUD (#195): compact per-page HTTP status for THIS run, used
    * by the server-side finding merge at publish. `pages[]` is dropped on publish
    * (renderers use `ruleResults`), so this is the only signal the API has to tell

@@ -36,6 +36,12 @@ import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage } from "./detach";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
 import type { PageRuleLoopHooks } from "./page-rule-executor";
+import {
+  emptyRuleCacheStats,
+  type PageRuleCacheEntry,
+  type RuleCacheStats,
+  type StreamRuleCache,
+} from "./rule-cache";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
 import { templateFingerprintKey } from "./template-key";
 import {
@@ -75,7 +81,21 @@ export interface SharedPageSignals {
  */
 export interface PageSignalCollector {
   readonly id: string;
-  collect(page: PageRecord, parsed: ParsedPage, shared: SharedPageSignals): void;
+  /**
+   * Returns the value this page contributed, so the rule-result cache (#1990) can
+   * store it and {@link PageSignalCollector.replay} can re-contribute it on a
+   * later run without the DOM. Return `undefined` to say "not cacheable" — a
+   * collector that does blocks replay for every page, which is the safe default
+   * for one whose contribution cannot be reproduced from data alone.
+   */
+  collect(page: PageRecord, parsed: ParsedPage, shared: SharedPageSignals): unknown;
+  /**
+   * Re-contribute a snapshot a previous run's `collect` returned, at the same
+   * point in the stream, so the collected order is the crawl order either way.
+   * Absent => this collector cannot replay, and no page is replayed while it is
+   * registered.
+   */
+  replay?(page: PageRecord, snapshot: unknown): void;
 }
 
 export interface StreamPageRulesHooks {
@@ -115,6 +135,13 @@ export interface StreamPageRulesResult {
    * output it produced by running everything anyway.
    */
   templateFanout: TemplateFanoutStats;
+  /**
+   * What the per-page rule-result cache did (#1990). All zeros when no cache was
+   * supplied. `replayedPages` is the number of pages that were never parsed and
+   * whose rules never ran — the measure that distinguishes a working cache from
+   * one whose byte-identical output it produced by running everything anyway.
+   */
+  ruleCache: RuleCacheStats;
 }
 
 // Re-used shape; avoids pulling the CheckResult symbol name-collision into scope.
@@ -181,6 +208,14 @@ export function streamPageRules(
     templateFanout?: boolean;
     /** Test/bench seam: cap the cached clusters (see DEFAULT_MAX_CLUSTERS). */
     templateFanoutMaxClusters?: number;
+    /**
+     * Per-page rule-result cache (#1990). Supplied → a page whose key matches a
+     * stored entry is NOT parsed and its rules do NOT run; its stored verdicts,
+     * `page_features` row and collector signals are replayed in its place, and
+     * every page's entry (replayed ones included) is handed back for this crawl to
+     * store. Omitted → every page runs, byte-identically to before.
+     */
+    ruleCache?: StreamRuleCache;
   }
 ): Effect.Effect<StreamPageRulesResult, never, never> {
   return Effect.gen(function* () {
@@ -194,9 +229,37 @@ export function streamPageRules(
     const heartbeatEvery = Math.max(1, opts?.pageLoopHooks?.heartbeatEveryPages ?? 1);
     const onLoopProgress = opts?.pageLoopHooks?.onProgress;
     let lastYieldAt = Date.now();
-    // #1951. Built per pass, so its cache and its counters belong to this run.
+
+    // #1990. A cache is only usable if EVERY registered collector can replay: a
+    // page that skipped its parse cannot re-run one that has no `replay`, and
+    // silently dropping its contribution would change the site pass's input.
+    const ruleCache =
+      opts?.ruleCache && collectors.every((c) => typeof c.replay === "function")
+        ? opts.ruleCache
+        : undefined;
+    const ruleCacheStats = emptyRuleCacheStats();
+
+    // TEMPLATE FAN-OUT AND THE RULE CACHE ARE MUTUALLY EXCLUSIVE, and the cache
+    // wins (#1990 x #1951). They are two ways of not running a rule, and they do
+    // not compose:
+    //
+    // A fanned verdict is a property of the page's CLUSTER, not of the page, so no
+    // per-page key can capture what it depends on. Cache A and B of one cluster,
+    // then change A — the cluster's representative. A is fresh and records its new
+    // verdict; B replays the OLD verdict it inherited from A's previous run, and a
+    // fully-replayed audit after that reports B's stale value forever. A fresh
+    // audit of the same content gives B the new one. Keying B on its own inputs
+    // cannot see this, because nothing about B changed.
+    //
+    // Fixing it properly means caching the CLUSTER's verdict against its
+    // representative's identity, which is a whole-crawl property the streamed loop
+    // resolves as it goes. That is a design, not a patch.
+    //
+    // The trade this makes: a COLD audit gives up fan-out's 13% of the page-rule
+    // pass; every audit after it takes the cache's ~88%. `SQUIRREL_RULE_CACHE=0`
+    // gets fan-out back, and the cloud is unaffected — it passes no cache.
     const fanout =
-      (opts?.templateFanout ?? templateFanoutEnabled())
+      !ruleCache && (opts?.templateFanout ?? templateFanoutEnabled())
         ? createTemplateFanout(runner, { maxClusters: opts?.templateFanoutMaxClusters })
         : null;
 
@@ -221,15 +284,91 @@ export function streamPageRules(
       if (batch.length === 0) break;
 
       const batchStart = Date.now();
-      // Parse the whole batch (≤ batchSize DOMs live at the peak here).
-      const parsedBatch = yield* buildSiteContext(batch);
-      peakLiveDocs = Math.max(peakLiveDocs, parsedBatch.filter((p) => p.parsed?.document).length);
 
-      for (const { page, parsed } of parsedBatch) {
+      // #1990: decide what can be REPLAYED before anything is parsed — that is the
+      // whole saving. Keys are built from the stored page record alone (exact HTML
+      // hash + the fields the rules read + the run context), so resolving them
+      // costs no DOM, and a hit means this batch never materializes one.
+      const replayByUrl = new Map<string, PageRuleCacheEntry>();
+      const keyByUrl = new Map<string, string>();
+      if (ruleCache) {
+        const cache = ruleCache;
+        const keys = yield* Effect.promise(async () => {
+          const wanted: string[] = [];
+          for (const page of batch) {
+            // A page outside the universe never ran rules, so it can have no
+            // entry; skip the key work rather than looking up a certain miss.
+            const inUniverse = universe
+              ? universe.has(page.normalizedUrl)
+              : isAuditablePage(page);
+            if (!inUniverse) continue;
+            const key = await cache.keyFor(page, soft404?.get(page.normalizedUrl));
+            if (key) {
+              keyByUrl.set(page.normalizedUrl, key);
+              wanted.push(key);
+            }
+          }
+          return wanted;
+        });
+        const loaded = yield* Effect.promise(() => cache.load(keys));
+        for (const [url, key] of keyByUrl) {
+          const entry = loaded.get(key);
+          // An entry missing a registered collector's snapshot is a MISS, not a
+          // replay with a hole in it: `replay(page, undefined)` would push an
+          // undefined signal into the site pass's input and change its answer
+          // silently. The engine version in the key already makes this unreachable
+          // today, since the collector set is code — this is what keeps it
+          // unreachable when it stops being.
+          if (!entry) continue;
+          if (collectors.every((c) => c.id in entry.signals)) replayByUrl.set(url, entry);
+        }
+      }
+
+      // Parse only what has to be parsed (≤ batchSize DOMs live at the peak).
+      const toParse =
+        replayByUrl.size === 0 ? batch : batch.filter((p) => !replayByUrl.has(p.normalizedUrl));
+      const parsedBatch = yield* buildSiteContext(toParse);
+      peakLiveDocs = Math.max(peakLiveDocs, parsedBatch.filter((p) => p.parsed?.document).length);
+      const parsedByUrl = new Map(parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed]));
+
+      for (const page of batch) {
         // Per-page interruption checkpoint, matching SerialPageRuleExecutor's.
         // Checking only per batch would let a `rulesPhaseTimeoutMs` breach run a
         // whole batch of heavy pages to completion before it took effect.
         opts?.signal?.throwIfAborted();
+
+        const replayEntry = replayByUrl.get(page.normalizedUrl);
+        if (replayEntry) {
+          yield* replayPage(
+            page,
+            replayEntry,
+            runner,
+            crawlId,
+            storage,
+            collectors,
+            pageResults,
+            pageRuleResults,
+            ruleResultsMap,
+            tallies,
+            pageUrls,
+          );
+          extractedCount++;
+          ruleCacheStats.replayedPages++;
+          ruleCache?.carryForward(keyByUrl.get(page.normalizedUrl)!, page);
+          ruleCacheStats.storedEntries++;
+          pagesDone++;
+          if (onLoopProgress && pagesDone % heartbeatEvery === 0) {
+            onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
+          }
+          if (yieldEveryMs != null && yieldEveryMs > 0 && Date.now() - lastYieldAt >= yieldEveryMs) {
+            yield* Effect.promise(() => yieldToEventLoop());
+            lastYieldAt = Date.now();
+            opts?.signal?.throwIfAborted();
+          }
+          continue;
+        }
+
+        const parsed = parsedByUrl.get(page.normalizedUrl);
         if (!parsed) continue; // non-HTML / failed parse — v1 skips these too
         // WAF-challenge pages are excluded from page-level scoring (v1 parity).
         // With a `pageUniverse` that set is v1's own, so WAF *and* rate-limited
@@ -357,11 +496,36 @@ export function streamPageRules(
         // `!isAuditablePage(page)` continue above already guarantees this page is
         // auditable, so no second gate is needed here. `shared` was built before
         // the rules ran (see above); it is the same object either way.
+        const features = extractPageFeatures(page, parsed, shared);
         yield* storage
-          .upsertPageFeatures(crawlId, extractPageFeatures(page, parsed, shared))
+          .upsertPageFeatures(crawlId, features)
           .pipe(Effect.catchAll(() => Effect.void));
         extractedCount++;
-        for (const c of collectors) c.collect(page, parsed, shared);
+        const signals: Record<string, unknown> = {};
+        let signalsCacheable = true;
+        for (const c of collectors) {
+          const snapshot = c.collect(page, parsed, shared);
+          // `undefined` is a collector saying its contribution cannot be
+          // reproduced from data; the page is then scored normally and simply
+          // never cached, rather than cached with a hole in it.
+          if (snapshot === undefined) signalsCacheable = false;
+          else signals[c.id] = snapshot;
+        }
+        ruleCacheStats.freshPages++;
+        const cacheKey = keyByUrl.get(pageUrl);
+        if (ruleCache && cacheKey && signalsCacheable) {
+          // The checks stored are the ones whose `pageUrl` was just stamped, so a
+          // replay's own stamping loop is a no-op and the two paths agree. They
+          // are the SAME objects the run already retains, so recording them here
+          // adds no residency — the implementation is what decides when to
+          // serialize them.
+          ruleCache.putFresh(cacheKey, page, {
+            ruleResults: [...result.ruleResults].map(([ruleId, rr]) => [ruleId, rr.checks] as const),
+            features,
+            signals,
+          });
+          ruleCacheStats.storedEntries++;
+        }
 
         // Drop this page's DOM before moving on — the residency bound.
         parsed.document = null;
@@ -392,6 +556,10 @@ export function streamPageRules(
       // rather than the collector's timing (see batch-gc.ts).
       collectDroppedBatch();
 
+      // Bound what an implementation that buffers cache writes is holding to one
+      // batch of them (#1990).
+      if (ruleCache?.flush) yield* Effect.promise(() => ruleCache.flush!());
+
       batchIndex++;
       opts?.hooks?.onBatch?.({
         batchIndex,
@@ -408,6 +576,7 @@ export function streamPageRules(
     if (onLoopProgress && (pagesDone === 0 || pagesDone % heartbeatEvery !== 0)) {
       onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
     }
+    if (ruleCache?.flush) yield* Effect.promise(() => ruleCache.flush!());
 
     return {
       pageResults,
@@ -423,6 +592,73 @@ export function streamPageRules(
         fannedRuleRuns: 0,
         pagesOverCap: 0,
       },
+      ruleCache: ruleCacheStats,
     };
+  });
+}
+
+/**
+ * Put one page's CACHED rules-phase output back into the stream, in the place the
+ * fresh path would have filled (#1990).
+ *
+ * Everything the fresh path contributes has to be contributed here, in the same
+ * order, or the report stops being byte-identical: the flat check list, the
+ * per-rule map, the merged `ruleResultsMap`, the folded tallies, the page url in
+ * `pageUrls`, the `page_features` row and every collector's per-page signal. The
+ * flat list is REBUILT from the per-rule entries rather than stored twice — the
+ * runner produces it by concatenating each rule's checks in enabled-rule order,
+ * and the stored entries are in that order.
+ *
+ * `meta` comes from the LIVE registry, never from the cache: a stored copy could
+ * drift from the running rules package, and the key already guarantees the version
+ * matches. A rule id the runner no longer knows means the entry belongs to a
+ * different rule set than the key claims, so the page is left unscored by the
+ * caller's standards — which cannot happen, because the rule id list is part of
+ * the key.
+ */
+function replayPage(
+  page: PageRecord,
+  entry: PageRuleCacheEntry,
+  runner: RuleRunner,
+  crawlId: string,
+  storage: SQLiteStorage,
+  collectors: readonly PageSignalCollector[],
+  pageResults: Map<string, CheckResultLike[]>,
+  pageRuleResults: Map<string, Map<string, CheckResultLike[]>>,
+  ruleResultsMap: Map<string, RuleRunResult>,
+  tallies: Map<string, RuleTally>,
+  pageUrls: string[],
+): Effect.Effect<void, never, never> {
+  return Effect.gen(function* () {
+    const pageUrl = page.normalizedUrl;
+
+    // `meta` comes from the LIVE registry, never from the cache.
+    const byRule = new Map<string, RuleRunResult>();
+    for (const [ruleId, checks] of entry.ruleResults) {
+      const meta = runner.getRuleMeta(ruleId);
+      if (meta) byRule.set(ruleId, { meta, checks });
+    }
+
+    const flat: CheckResultLike[] = [];
+    const ruleChecksForPage = new Map<string, CheckResultLike[]>();
+    for (const [ruleId, checks] of entry.ruleResults) {
+      for (const check of checks) {
+        if (!check.pageUrl) check.pageUrl = pageUrl;
+        flat.push(check);
+      }
+      ruleChecksForPage.set(ruleId, checks);
+    }
+    pageResults.set(pageUrl, flat);
+    pageRuleResults.set(pageUrl, ruleChecksForPage);
+    for (const [ruleId, rr] of byRule) {
+      mergeRuleRunResult(ruleResultsMap, ruleId, rr);
+      foldRuleResultIntoTallies(tallies, ruleId, rr);
+    }
+    pageUrls.push(pageUrl);
+
+    yield* storage
+      .upsertPageFeatures(crawlId, entry.features)
+      .pipe(Effect.catchAll(() => Effect.void));
+    for (const c of collectors) c.replay!(page, entry.signals[c.id]);
   });
 }

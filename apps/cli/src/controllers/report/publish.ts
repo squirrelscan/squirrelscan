@@ -646,6 +646,11 @@ export function slimForPublish(
   return {
     ...report,
     pages: [], // Drop all page-level data — renderers use ruleResults only
+    // #1990 provenance describes how THIS machine produced the report (what
+    // replayed from its local cache), not the site. It has no meaning to a reader
+    // of the hosted report and no place in the publish schema, so it is dropped
+    // here rather than left to ride along on the spread above.
+    rulesCache: undefined,
     generatorVersion: version, // stamp the CLI version for the report footer
     lockedRules: computeLockedRules(report), // cloud/Pro checks not run → upsell
     ...(pageStatuses.length > 0 ? { pageStatuses } : {}),

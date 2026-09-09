@@ -211,6 +211,26 @@ export type { TemplateFanout, TemplateFanoutStats } from "./template-fanout";
 
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";
+// Per-page rule-result cache (#1990).
+export {
+  bindRuleCache,
+  canonicalJson,
+  computePageCacheKey,
+  computeRunContextHash,
+  decodePageRuleCacheEntry,
+  emptyRuleCacheStats,
+  encodePageRuleCacheEntry,
+  PAGE_RULE_SITE_FIELDS,
+  RULE_CACHE_FORMAT,
+  sha256Hex,
+} from "./rule-cache";
+export type {
+  PageRuleCacheEntry,
+  RuleCacheDisabledReason,
+  RuleCacheStats,
+  RuleCacheStore,
+  StreamRuleCache,
+} from "./rule-cache";
 export type {
   PageSignalCollector,
   SharedPageSignals,

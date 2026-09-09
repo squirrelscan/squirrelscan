@@ -373,6 +373,20 @@ export interface PageRecord {
    * unchanged. Absent on records written before #839 and on pages never probed.
    */
   sourceHash?: string | null;
+
+  /**
+   * sha256 of the page's EXACT stored HTML bytes (#1990), or null when the write
+   * path could not produce one.
+   *
+   * Deliberately NOT {@link contentHash}, which is whitespace-NORMALIZED
+   * (`computeNormalizedContentHash`) so the incremental crawler can call a
+   * reformatted page unchanged. Two pages that differ only in whitespace share a
+   * `contentHash` and parse to different word counts, inline-script lengths and
+   * `<pre>` text — so keying a rule-result cache on it would replay one page's
+   * verdicts onto another's markup. This field is the exact identity that key
+   * needs; a null simply means the page does not participate in the cache.
+   */
+  htmlHash?: string | null;
 }
 
 // ============================================

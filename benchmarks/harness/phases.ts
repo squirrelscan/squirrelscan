@@ -22,7 +22,7 @@ rows.push([
   "reqs",
   "pageReqs",
   "rules",
-  "site",
+  "report",
   "parse",
   "peakRSS",
   "db",
@@ -53,16 +53,34 @@ for (const dir of process.argv.slice(2)) {
 
   // phases from the trace log
   const tr = read(`${dir}/trace.log`);
-  // The streaming pipeline (#252) no longer emits these two spans, so a run on
-  // it has no rules attribution in the trace at all. Report that as "n/a" —
+  // The streaming pipeline (#252) stopped emitting the two v1 spans, so a run on
+  // it had no rules attribution in the trace at all and this printed "n/a" —
   // printing 0s reads as "the rules phase was free", which is the opposite of
-  // true (it is most of the wall time on a large crawl).
-  const rulesMs = /\[runPageRules:all\] duration=([\d.]+)ms/.test(tr)
-    ? num(/\[runPageRules:all\] duration=([\d.]+)ms/, tr)
-    : null;
-  const siteMs = /\[runSiteRules\] duration=([\d.]+)ms/.test(tr)
-    ? num(/\[runSiteRules\] duration=([\d.]+)ms/, tr)
-    : null;
+  // true (it is most of the wall time on a large crawl). #1990 put the CLI's own
+  // per-phase breakdown into the trace, so the columns are real again. The
+  // "report" column is the CLI's report phase, not the v1 site-rule span.
+  // #1990: the CLI now emits its whole per-phase breakdown (#857's PhaseTimer)
+  // under --trace as one JSON line, so the streamed pipeline can be attributed at
+  // all. Prefer it; fall back to the v1 spans for a trace from an older build.
+  const phaseLine = /\[phase timings\] (\{.*\})/.exec(tr)?.[1];
+  let phases: Record<string, number> | null = null;
+  if (phaseLine) {
+    try {
+      phases = JSON.parse(phaseLine) as Record<string, number>;
+    } catch {
+      phases = null;
+    }
+  }
+  const rulesMs =
+    phases?.rules ??
+    (/\[runPageRules:all\] duration=([\d.]+)ms/.test(tr)
+      ? num(/\[runPageRules:all\] duration=([\d.]+)ms/, tr)
+      : null);
+  const siteMs =
+    phases?.report ??
+    (/\[runSiteRules\] duration=([\d.]+)ms/.test(tr)
+      ? num(/\[runSiteRules\] duration=([\d.]+)ms/, tr)
+      : null);
   const parseMs = (tr.match(/\[parsePageRecord\] duration=([\d.]+)ms/g) ?? [])
     .map((s) => Number(/([\d.]+)/.exec(s)![1]))
     .reduce((a, b) => a + b, 0);

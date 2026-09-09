@@ -60,7 +60,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 27;
+export const SCHEMA_VERSION = 28;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -374,6 +374,26 @@ const MIGRATIONS: Record<number, string[]> = {
   // another process could otherwise retire a crawl that is still being read.
   // NULL for every crawl written before this. ADDITIVE; local sqlite only.
   27: [`ALTER TABLE crawls ADD COLUMN report_status TEXT`],
+  // Version 28: the per-page rule-result cache (squirrelscan/repo#1990) and the
+  // exact-bytes HTML hash its key is built on. `pages.content_hash` is
+  // whitespace-normalized, so it cannot serve as that key — see
+  // `PageRecord.htmlHash`. ADDITIVE; both statements are idempotent, and
+  // `html_hash` is also in PAGES_ALTER_COLUMNS so a version-collision cannot
+  // leave it missing.
+  28: [
+    `ALTER TABLE pages ADD COLUMN html_hash TEXT`,
+    `CREATE TABLE IF NOT EXISTS page_rule_cache (
+      crawl_id TEXT NOT NULL,
+      normalized_url TEXT NOT NULL,
+      cache_key TEXT NOT NULL,
+      payload BLOB NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (crawl_id, normalized_url),
+      FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_page_rule_cache_key
+      ON page_rule_cache(cache_key, created_at DESC)`,
+  ],
 };
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
@@ -397,6 +417,7 @@ const PAGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "fetcher_id", type: "TEXT" },
   { name: "fallback_reason", type: "TEXT" },
   { name: "source_hash", type: "TEXT" },
+  { name: "html_hash", type: "TEXT" },
 ];
 
 // Same guard for `sitemaps`. Migration 21 added is_news_sitemap; a DB stamped
@@ -504,6 +525,7 @@ CREATE TABLE IF NOT EXISTS pages (
   fetcher_id TEXT,
   fallback_reason TEXT,
   source_hash TEXT,
+  html_hash TEXT,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -857,6 +879,33 @@ CREATE TABLE IF NOT EXISTS page_features (
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
 
+-- Per-page rule-result cache (#1990): what the streamed page-rule loop produced
+-- for one page, so a later audit whose inputs are unchanged can replay it instead
+-- of re-parsing the page and re-running its rules. One row per page per crawl,
+-- retired with the crawl by retireCrawls: the newest audit always holds a
+-- complete copy, so pruning older audits never makes the next one cold.
+CREATE TABLE IF NOT EXISTS page_rule_cache (
+  crawl_id TEXT NOT NULL,
+  normalized_url TEXT NOT NULL,
+  -- The full input tuple, hashed: exact HTML bytes, every page field the rules
+  -- read, and the run context (rules version, rule selection + options, the
+  -- three SiteData fields page rules touch). Sufficient on its own to identify
+  -- an entry, because the page's own url is one of the hashed inputs.
+  cache_key TEXT NOT NULL,
+  -- gzipped JSON of the encoded entry. Gzip because the uncompressed per-page
+  -- checks are ~30 KB and this table would otherwise add a quarter to project.db.
+  payload BLOB NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (crawl_id, normalized_url),
+  FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+);
+
+-- The lookup: newest entry for a key, across crawls. created_at DESC is in the
+-- index so a hit is a single index seek and never a scan of a url's history
+-- (#1908 — nothing here may grow a per-audit full scan).
+CREATE INDEX IF NOT EXISTS idx_page_rule_cache_key
+  ON page_rule_cache(cache_key, created_at DESC);
+
 -- Duplicate-title / -description / -content grouping (GROUP BY hash within a crawl).
 CREATE INDEX IF NOT EXISTS idx_page_features_title_hash
   ON page_features(crawl_id, title_hash);
@@ -871,6 +920,20 @@ CREATE INDEX IF NOT EXISTS idx_page_features_template
 CREATE INDEX IF NOT EXISTS idx_page_features_type
   ON page_features(crawl_id, page_type, normalized_url);
 `;
+
+// gzip a payload into a buffer bun:sqlite will bind as a BLOB. Wrapped so the
+// `Uint8Array<ArrayBufferLike>` bun's gzipSync returns is narrowed once, here,
+// rather than at every call site.
+//
+// LEVEL 1, not the default 6. This runs once per page on every COLD audit, which
+// is the run that gets nothing back from the cache, so its cost is the one paid
+// by a first-time user. Level 1 is several times faster and the rows are retired
+// with their crawl, so the extra bytes live no longer than the audit does — the
+// wrong end of the trade to optimise.
+function gzipped(payload: string): Uint8Array<ArrayBuffer> {
+  const out = Bun.gzipSync(Buffer.from(payload), { level: 1 });
+  return new Uint8Array(out.buffer as ArrayBuffer, out.byteOffset, out.byteLength);
+}
 
 const SQLITE_BUSY_TIMEOUT_MS = 15000;
 
@@ -1371,9 +1434,21 @@ export class SQLiteStorage implements CrawlStorage {
         // When not available (cloud), store HTML inline in the DB.
         let htmlToStore: string | null = page.html;
         let contentHashToStore = page.contentHash;
+        // The EXACT-bytes hash of the HTML (#1990), distinct from
+        // `content_hash`, which is whitespace-NORMALIZED so the incremental
+        // crawler can call a reformatted page unchanged. Written only on the
+        // content-store path, where it costs nothing: the store is
+        // content-addressed by `sha256(bytes)`, so `put` has already computed
+        // it. Without a store (the cloud, which inlines HTML in the DB and has
+        // no project.db to cache into) it stays NULL rather than paying a second
+        // hash over every page on the path #1862 made memory-critical — a NULL
+        // means "this page does not participate in the rule-result cache", which
+        // is the safe answer, never a wrong one.
+        let exactHtmlHash: string | null = null;
         if (page.html && this.contentStore) {
           const htmlHash = this.contentStore.put(page.html, "text/html");
           contentHashToStore = htmlHash;
+          exactHtmlHash = htmlHash;
           htmlToStore = null; // HTML is in content-store, not local DB
         }
 
@@ -1385,8 +1460,8 @@ export class SQLiteStorage implements CrawlStorage {
             crawl_id, url, normalized_url, final_url, depth, parent_url,
             redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at,
             etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers,
-            fetcher_id, fallback_reason, source_hash
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fetcher_id, fallback_reason, source_hash, html_hash
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -1413,7 +1488,8 @@ export class SQLiteStorage implements CrawlStorage {
           page.requestHeaders ? JSON.stringify(page.requestHeaders) : null,
           page.fetcherId ?? null,
           page.fallbackReason ?? null,
-          page.sourceHash ?? null
+          page.sourceHash ?? null,
+          exactHtmlHash
         );
       },
       catch: (e) => StorageError.write(e),
@@ -1660,6 +1736,7 @@ export class SQLiteStorage implements CrawlStorage {
       fetcherId: (row.fetcher_id as string | null) ?? undefined,
       fallbackReason: (row.fallback_reason as string | null) ?? undefined,
       sourceHash: (row.source_hash as string | null) ?? null,
+      htmlHash: (row.html_hash as string | null) ?? null,
     };
   }
 
@@ -3017,6 +3094,138 @@ export class SQLiteStorage implements CrawlStorage {
   /**
    * Batch save rule results for multiple pages in a single transaction
    */
+  /**
+   * Newest cached page-rule payload for each of `cacheKeys` (#1990).
+   *
+   * The key already encodes the page's url and every input its rules read, so a
+   * hit is exact and a miss is silent. Read across crawls: a warm audit looks up
+   * what the PREVIOUS audit stored. Chunked because SQLite caps bound parameters
+   * (default 32k) and a page batch could otherwise exceed it on a large crawl.
+   *
+   * Returns the payload as the JSON text that was stored; decoding it is the
+   * engine's business, not storage's.
+   */
+  loadPageRuleCache(
+    cacheKeys: readonly string[]
+  ): Effect.Effect<Map<string, string>, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const out = new Map<string, string>();
+        if (cacheKeys.length === 0) return out;
+        const db = this.getDb();
+        const CHUNK = 400;
+        for (let i = 0; i < cacheKeys.length; i += CHUNK) {
+          const chunk = cacheKeys.slice(i, i + CHUNK);
+          const placeholders = chunk.map(() => "?").join(",");
+          // ONE row per key, chosen in SQL. Every retained audit holds a row for
+          // an unchanged page, so selecting them all and letting the last write
+          // win would decompress (pages x retained audits) payloads per audit —
+          // work that grows with history rather than with the crawl, which is
+          // exactly what a per-page cache must not do (#1908).
+          //
+          // `max(created_at)` with bare columns is SQLite's documented
+          // min/max-aggregate case: the other columns come from the row holding
+          // the maximum. Rows tie when two audits land in the same millisecond and
+          // SQLite may then return either — harmless HERE and only here, because
+          // the key covers every input that determines the payload, so two rows
+          // sharing a key hold the same bytes.
+          const rows = db
+            .query(
+              `SELECT cache_key, payload, max(created_at) AS newest
+               FROM page_rule_cache
+               WHERE cache_key IN (${placeholders})
+               GROUP BY cache_key`
+            )
+            .all(...chunk) as Array<{ cache_key: string; payload: Uint8Array<ArrayBuffer> }>;
+          for (const row of rows) {
+            out.set(row.cache_key, Buffer.from(Bun.gunzipSync(row.payload)).toString("utf8"));
+          }
+        }
+        return out;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Write this crawl's page-rule cache entries (#1990), gzipped, in one
+   * transaction.
+   *
+   * Called with EVERY page the audit scored, replayed pages included — that
+   * carry-forward is what lets `retireCrawls` delete an older crawl's rows
+   * without making the next audit cold.
+   */
+  savePageRuleCacheBatch(
+    crawlId: string,
+    entries: ReadonlyArray<{ normalizedUrl: string; cacheKey: string; payload: string }>
+  ): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        if (entries.length === 0) return;
+        const db = this.getDb();
+        const stmt = db.prepare(`
+          INSERT OR REPLACE INTO page_rule_cache (
+            crawl_id, normalized_url, cache_key, payload, created_at
+          ) VALUES (?, ?, ?, ?, ?)
+        `);
+        const now = Date.now();
+        const transaction = db.transaction(() => {
+          for (const entry of entries) {
+            stmt.run(
+              crawlId,
+              entry.normalizedUrl,
+              entry.cacheKey,
+              gzipped(entry.payload),
+              now
+            );
+          }
+        });
+        transaction();
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
+  /**
+   * Copy existing cache entries into this crawl, by key (#1990).
+   *
+   * A replayed page's stored bytes are already exactly right, so this is a pure
+   * SQL row copy: no decode, no re-encode, no re-compress. Doing it the other way
+   * would put a full serialize + gzip of every page back on the warm run, which is
+   * the run the whole feature exists to make cheap.
+   *
+   * Silently skips a key with no row — the only way that happens is the entry
+   * being retired between the read and the write, and a missing carry-forward
+   * costs the NEXT audit a page's rules, never this one's correctness.
+   */
+  carryForwardPageRuleCache(
+    crawlId: string,
+    entries: ReadonlyArray<{ normalizedUrl: string; cacheKey: string }>
+  ): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        if (entries.length === 0) return;
+        const db = this.getDb();
+        const stmt = db.prepare(`
+          INSERT OR REPLACE INTO page_rule_cache (
+            crawl_id, normalized_url, cache_key, payload, created_at
+          )
+          SELECT ?, ?, cache_key, payload, ?
+          FROM page_rule_cache WHERE cache_key = ?
+          ORDER BY created_at DESC LIMIT 1
+        `);
+        const now = Date.now();
+        const transaction = db.transaction(() => {
+          for (const entry of entries) {
+            stmt.run(crawlId, entry.normalizedUrl, now, entry.cacheKey);
+          }
+        });
+        transaction();
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
   saveRuleResultsBatch(
     crawlId: string,
     pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>
@@ -3391,6 +3600,11 @@ export class SQLiteStorage implements CrawlStorage {
    */
   private static readonly RETIREABLE_TABLES = [
     "rule_results",
+    // Safe to retire even though the NEXT audit reads it (#1990), unlike `links`
+    // and `images` below: every audit writes a row for every page it scored,
+    // replayed pages included, so the newest crawl always holds a complete cache
+    // and retiring an older one costs nothing. Recomputable by definition.
+    "page_rule_cache",
     "sitemap_urls",
     "sitemaps",
     "sitemap_url_statuses",

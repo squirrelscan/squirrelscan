@@ -51,6 +51,10 @@ import {
   auditMayRetire,
   retainRecentAudits,
 } from "@/audit/retention";
+import {
+  createProjectRuleCacheStore,
+  ruleCacheEnabled,
+} from "@/audit/rule-cache-store";
 import { resolveRulesConfig } from "@/audit/rule-filter";
 import { runSmartAudits } from "@/audit/smart-audits";
 import {
@@ -96,6 +100,8 @@ import {
   parseUserUrl,
 } from "@/utils/url";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
+
+import { version as cliVersion } from "../../package.json";
 
 /**
  * Fields that affect crawl scope - changes require fresh crawl_id
@@ -1478,6 +1484,17 @@ export async function runAudit(
       phaseTimer.enter("rules");
       logger.debug("step 2.5: analyzing", crawlId);
 
+      // Per-page rule-result cache (#1990). A page whose inputs are unchanged
+      // since a previous audit skips its parse AND its rules; `--refresh` is the
+      // documented way to force everything to run, so it turns the cache off
+      // rather than merely forcing a re-fetch. `cliVersion` is in the key, so a
+      // `squirrel self update` invalidates every entry — rule CODE can change
+      // without any rule id or option changing.
+      const ruleCacheStore =
+        options.refresh || !ruleCacheEnabled()
+          ? undefined
+          : createProjectRuleCacheStore(sqliteStorage, crawlId);
+
       // Thread cloud results + the resolved Stage-0 profile into the rules phase
       // per audit run — no process-global singleton. The metadata drives
       // `appliesWhen` rule gating; undefined = run as today.
@@ -1490,7 +1507,15 @@ export async function runAudit(
           cloudResults: cloudResult?.store,
           siteMetadata: cloudResult?.siteMetadata ?? undefined,
         },
-        { batchSize: streamBatchSize, onPhase: streamPhaseMemoryLogger() }
+        {
+          batchSize: streamBatchSize,
+          onPhase: streamPhaseMemoryLogger(),
+          ...(ruleCacheStore
+            ? {
+                ruleCache: { store: ruleCacheStore, engineVersion: cliVersion },
+              }
+            : {}),
+        }
       );
       const rulesPhaseTimeoutMs = options.rulesPhaseTimeoutMs;
       let ruleResults: Effect.Effect.Success<typeof rulesEffect>;
@@ -1659,6 +1684,22 @@ export async function runAudit(
           capped: report.pages.length >= scopeMaxPages,
         };
       }
+
+      // Rule-result cache disclosure (#1990). REPORT-ONLY, and stripped on
+      // publish: it says how this run was produced, not what the site is like.
+      // Recorded even when nothing replayed, so "0 replayed" is a statement
+      // rather than a silence an agent has to interpret.
+      report.rulesCache = {
+        pagesReplayed: ruleResults.ruleCache.replayedPages,
+        pagesEvaluated: ruleResults.ruleCache.freshPages,
+        ...(ruleResults.ruleCache.disabledReason
+          ? { disabledReason: ruleResults.ruleCache.disabledReason }
+          : options.refresh
+            ? { disabledReason: "refresh-requested" }
+            : ruleCacheStore
+              ? {}
+              : { disabledReason: "disabled-by-env" }),
+      };
 
       // Report-only technologies section (never affects the health score).
       // Cloud tech-detect (credited, cross-scan diff) wins; otherwise fall back to
@@ -1840,6 +1881,12 @@ export async function runAudit(
       // map to telemetry.
       report.phaseTimingsMs = phaseTimer.timingsMs;
       logger.debug("phase timings", formatPhaseTimings(phaseTimer.timingsMs));
+      // Also under --trace, the flag whose whole job is timing attribution. The
+      // streamed pipeline stopped emitting the two v1 rule spans, so a trace of a
+      // modern audit could not say what the rules phase cost, and the benchmark
+      // harness printed "rules n/a". One machine-readable line at the end of the
+      // run, and `phaseTimingsMs` in the report is unchanged.
+      logger.trace("phase timings", phaseTimer.timingsMs);
 
       // ============================================
       // STEP 4: RETENTION (#1912)
