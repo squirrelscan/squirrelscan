@@ -547,6 +547,18 @@ export interface AuditReport {
     pagesCrawled: number;
     capped: boolean;
   };
+  /**
+   * Rule-result cache disclosure (#1990): how many pages replayed a previous
+   * audit's rule results instead of being evaluated now. The findings are
+   * identical by construction, so nothing else in the report tells an agent
+   * which happened (#1981). LOCAL ONLY — stripped by `slimForPublish`.
+   * REPORT-ONLY. Mirrors core-contracts `AuditReport`.
+   */
+  rulesCache?: {
+    pagesReplayed: number;
+    pagesEvaluated: number;
+    disabledReason?: string;
+  };
   /** Generator (`squirrel` CLI) version, stamped at publish for the report footer. */
   generatorVersion?: string;
   /**

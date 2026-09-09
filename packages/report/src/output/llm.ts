@@ -220,6 +220,17 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     );
   }
 
+  // Rule-result cache disclosure (#1990). An agent asking "is this a fresh
+  // reading of my site?" cannot tell from the findings — a replay is identical by
+  // construction — so the answer has to be stated (#1981).
+  if (report.rulesCache) {
+    const rc = report.rulesCache;
+    const why = rc.disabledReason ? ` disabled-reason="${rc.disabledReason}"` : "";
+    lines.push(
+      `<rules-cache pages-replayed="${rc.pagesReplayed}" pages-evaluated="${rc.pagesEvaluated}"${why}/>`,
+    );
+  }
+
   // Editor's summary — report-only exec narrative for the agent (does not affect the score).
   const es = editorSummaryView(report.editorSummary);
   if (es) {

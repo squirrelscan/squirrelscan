@@ -203,6 +203,11 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
         ? { requestedMaxPages: report.scanScope.requestedMaxPages }
         : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
+      // #1990: how much of this audit's rules phase was replayed from a previous
+      // audit rather than evaluated now. A replay and a fresh evaluation produce
+      // identical findings by construction, so this is the only thing in the
+      // report that distinguishes them (#1981).
+      ...(report.rulesCache ? { rulesCache: report.rulesCache } : {}),
     },
     status: report.status ?? "completed",
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
