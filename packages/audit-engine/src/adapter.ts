@@ -106,6 +106,14 @@ import {
   type PageSignalCollector,
   type StreamPageRulesHooks,
 } from "./streaming";
+import {
+  bindRuleCache,
+  computeRunContextHash,
+  type RuleCacheDisabledReason,
+  type RuleCacheStats,
+  type RuleCacheStore,
+  type StreamRuleCache,
+} from "./rule-cache";
 import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage, detachParsedPage } from "./detach";
 import { resolveCloakingProbes } from "./cloaking-probe";
@@ -2311,6 +2319,12 @@ export interface StreamingRuleExecutionResult extends RuleExecutionResult {
    * explicitly so a caller sizing a large crawl reads the right number.
    */
   peakLiveDocsPageStream: number;
+  /**
+   * What the per-page rule-result cache did this run (#1990). Zeros with no
+   * `disabledReason` mean no cache was supplied (the cloud); zeros WITH one mean a
+   * cache was supplied and deliberately not used.
+   */
+  ruleCache: RuleCacheStats;
 }
 
 /**
@@ -2358,6 +2372,22 @@ export function runStreamingRules(
      * the equivalence test set it explicitly to run both arms in one process.
      */
     templateFanout?: boolean;
+    /**
+     * Per-page rule-result cache (#1990). A store here turns on replay: a page
+     * whose inputs are unchanged since a previous audit skips its parse and its
+     * rules. Omitted → every page runs, exactly as before, which is what the
+     * cloud does (it has no project.db to cache into).
+     */
+    ruleCache?: {
+      /** Where entries live. The CLI backs this with `project.db`. */
+      store: RuleCacheStore;
+      /**
+       * The build identity of the rules that produced (and will consume) the
+       * entries — the CLI's release version. Part of the key, so upgrading the
+       * binary invalidates every entry even when no rule id or option changed.
+       */
+      engineVersion: string;
+    };
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
@@ -2399,25 +2429,69 @@ export function runStreamingRules(
     // signal (leaked-secrets, byte weight, template fingerprint + integrity signals,
     // script srcs, sub-processor links) while each DOM is live (#1021 E-E2), so the
     // site pass reads `ctx.collectedSignals` instead of re-materializing every DOM.
+    // #1990: the run context — every input a page rule can read that is not the
+    // page itself. Resolved AFTER the site-fetch phase because two of its
+    // ingredients (`scripts`, `resourceSizes`) come from it, and before the page
+    // loop because every key depends on it. Threat intel is a hard OFF rather than
+    // an ingredient: its verdicts come from feeds behind a memoized handle with no
+    // exact identity to hash, so an unchanged key would not mean an unchanged
+    // answer. See rule-cache.ts.
+    let ruleCache: StreamRuleCache | undefined;
+    let ruleCacheDisabled: RuleCacheDisabledReason | undefined;
+    const ruleCacheOpts = opts?.ruleCache;
+    if (ruleCacheOpts) {
+      if (effectiveScope?.intel) {
+        ruleCacheDisabled = "threat-intel-enabled";
+      } else {
+        const ctxHash = yield* Effect.promise(() =>
+          computeRunContextHash({
+            engineVersion: ruleCacheOpts.engineVersion,
+            pageRules: runner.pageRuleSignature(),
+            siteData: siteDataForPageRules,
+            siteMetadata: effectiveScope?.siteMetadata,
+            cloudResults: effectiveScope?.cloudResults,
+            // Read through the runner's own view of config (`RulesConfig`), which
+            // is where the escape hatch is declared; the engine's `Config` type
+            // predates it and does not carry it.
+            ignoreApplicability:
+              (config.rules as { ignore_applicability?: boolean } | undefined)
+                ?.ignore_applicability === true,
+            utcYear: new Date().getUTCFullYear(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        );
+        if ("hash" in ctxHash) ruleCache = bindRuleCache(ruleCacheOpts.store, ctxHash.hash);
+        else ruleCacheDisabled = ctxHash.disabled;
+      }
+    }
+
     const collectedPages: CollectedPageSignal[] = [];
     const signalCollector: PageSignalCollector = {
       id: "site-dom-signals",
       collect(page, parsed, shared) {
-        collectedPages.push(
-          detachFromPage(
-            // `shared.fingerprint` is the one the loop already built for
-            // page_features' cluster key (#1949) — reusing it keeps this pass at
-            // one DOM walk per page. detachFromPage clones it, so the signal this
-            // array retains does not hold the loop's copy or its page.
-            buildCollectedPageSignal({
-              url: page.normalizedUrl,
-              finalUrl: page.finalUrl,
-              parsed,
-              fingerprint: shared.fingerprint,
-            }),
-            "collected-signal",
-          ),
+        const signal = detachFromPage(
+          // `shared.fingerprint` is the one the loop already built for
+          // page_features' cluster key (#1949) — reusing it keeps this pass at
+          // one DOM walk per page. detachFromPage clones it, so the signal this
+          // array retains does not hold the loop's copy or its page.
+          buildCollectedPageSignal({
+            url: page.normalizedUrl,
+            finalUrl: page.finalUrl,
+            parsed,
+            fingerprint: shared.fingerprint,
+          }),
+          "collected-signal",
         );
+        collectedPages.push(signal);
+        // The value the rule cache stores for this page. It is already detached
+        // and holds no DOM, so it is exactly what a replay needs (#1990).
+        return signal;
+      },
+      // A replayed page contributes at the same point in the stream, so
+      // `collectedPages` stays in crawl order whether a page ran or replayed —
+      // which matters because the site rules aggregate over that order.
+      replay(_page, snapshot) {
+        collectedPages.push(snapshot as CollectedPageSignal);
       },
     };
     const streamed = yield* phase("page-rules", () =>
@@ -2434,6 +2508,7 @@ export function runStreamingRules(
       totalPages: pageDataMap.size,
       pageLoopHooks: opts?.pageLoopHooks,
       templateFanout: opts?.templateFanout,
+      ruleCache,
       }),
     );
     const collectedSignals: CollectedSiteSignals = { pages: collectedPages };
@@ -2503,6 +2578,9 @@ export function runStreamingRules(
       sitemapUrlStatuses: assets.sitemapUrlStatuses,
       tallies,
       peakLiveDocsPageStream: streamed.peakLiveDocs,
+      ruleCache: ruleCacheDisabled
+        ? { ...streamed.ruleCache, disabledReason: ruleCacheDisabled }
+        : streamed.ruleCache,
     };
   });
 }
