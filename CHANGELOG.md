@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- A quick cloud audit's crawl phase now holds the entry page's worst case. The
+  130 s phase ended before the entry retry added in v0.0.93 could report, so a
+  slow origin still failed with "no pages collected". Quick runs get a 210 s
+  crawl phase and a 330 s runtime (the post-crawl slice is unchanged); surface
+  and full are untouched. squirrelscan/repo#1699 squirrelscan/repo#2026
+
 ## v0.0.93
 
 A release for the audits that never started. Two cloud fixes stop a slow or

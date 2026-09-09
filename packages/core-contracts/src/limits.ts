@@ -11,14 +11,25 @@ import type { CoverageMode } from "./index";
 // quick raised 170s→240s / 90s→130s (#578): ~20+ page Wix sites finished at
 // ~174s on a cold cache and tipped the old 170s cap; 240s gives headroom without
 // unbounding the budget.
+// quick raised again 240s→330s / 130s→210s (squirrelscan/repo#1699, #2026):
+// the crawl phase must be able to hold the ENTRY page's worst case before the
+// first page can exist, or a slow origin fails with "no pages collected" before
+// the entry retry from #304 ever reports. That worst case, all bounds from
+// CLOUD_CRAWLER below: preamble 45s + sitemap walk 20s + entry outer deadline
+// 30s + plain entry retry 60s = 155s, plus one page round at the outer deadline
+// (30s) so a stored entry page is followed by at least one more fetch, plus
+// margin: 210s. The 130s phase ended at 95s of preamble + entry and cut the 60s
+// retry short every time (nuxt.daigo.ru, verified 2026-09-09 on v0.0.93). The
+// runtime moves by the same 80s so the post-crawl slice (rules, prefetch,
+// publish) keeps its 110s and both invariants above hold.
 export const AUDIT_RUNTIME = {
   timeoutByCoverageMs: {
-    quick: 240_000,
+    quick: 330_000,
     surface: 900_000,
     full: 2_400_000,
   } satisfies Record<CoverageMode, number>,
   crawlPhaseTimeoutByCoverageMs: {
-    quick: 130_000,
+    quick: 210_000,
     surface: 540_000,
     full: 1_800_000,
   } satisfies Record<CoverageMode, number>,
