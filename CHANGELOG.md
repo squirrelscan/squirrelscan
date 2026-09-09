@@ -17,6 +17,28 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.93
+
+A release for the audits that never started. Two cloud fixes stop a slow or
+oddly-shaped origin from ending an audit before its first page (one site had
+failed every attempt since August), the CLI starts on a third of the memory so
+`install.sh` no longer dies at the last step on capped machines, and a
+re-audit of an unchanged site replays its rule results instead of re-running
+them. Plus three contributed fixes from the community. We are convinced this is
+the fastest way to crawl and audit a site, and it is now also the most patient
+one.
+
+### Changed
+
+- **A re-audit of an unchanged site replays its rule results.** A page whose
+  inputs its rules read are all unchanged is neither parsed nor rule-checked
+  again; its stored results are replayed. On a 2,500-page site the warm rules
+  phase falls from 110 s to 12 s and the warm audit from 143 s to 44 s, with
+  the report byte-identical to a cold run. Site-scope rules always run. When
+  the cache is on, template fan-out (#279) is off for that run, which costs the
+  cold rules phase about 7%; set `SQUIRREL_RULE_CACHE=0` to disable the cache.
+  Figures are in `benchmarks/2026-09-perf-program.md`. squirrelscan/repo#1990
+
 ### Fixed
 
 - Cloud rendering now reserves time for its plain-HTTP fallback inside each
@@ -60,6 +82,22 @@ How it works:
 - `squirrel self doctor` gained an Install location check: the recorded
   `install_bin_dir`, the link and the release version it points at, and the
   `squirrel` your PATH actually resolves, with a warning when they disagree. #293
+
+- The script fetch cache is reachable again. It stored a script under the hash
+  of its content but looked it up by the hash of its URL, so every audit
+  re-downloaded every script. Both sides now key by URL, a cached script older
+  than a day is fetched again, and a refresh replaces the stale row instead of
+  keeping the first body forever. Thanks to @WilliamK112 for the fix. #182 #206
+  #303
+
+- The CLI's end-of-run report to the cloud is retried on transport errors and
+  5xx responses, three attempts with a short backoff, so a completed audit is
+  no longer left "running" on the dashboard until the reaper finds it. Thanks
+  to @WilliamK112. #178 #208
+
+- `install.ps1` enables TLS 1.2 before its first network call, so Windows
+  PowerShell 5.1 with legacy protocol defaults can download the release. Thanks
+  to @WilliamK112. #166 #207
 
 ## v0.0.92
 
