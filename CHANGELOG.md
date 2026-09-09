@@ -37,6 +37,20 @@ How it works:
   names the fetcher and the deadline instead of `unknown` with the runtime's
   text, and a crawl whose preamble budget runs out records a warning naming the
   budget. squirrelscan/repo#1699
+
+- `squirrel` starts light. Every invocation used to evaluate the whole CLI
+  (the audit engine and every rule package included) before parsing a single
+  argument, which put `squirrel self install` at about 140 MB resident and got
+  it killed (exit 137) at the last step of `install.sh` on memory-capped
+  machines. Subcommands and the startup extras now load on demand, and the
+  standalone binary is built with `--splitting`, so `self install` and
+  `--version` peak at about 43 MB. Commands that need the engine load it when
+  they run. #2023
+- `install.sh` finishes the install itself when `self install` is killed by a
+  signal (the file work needs no memory), then checks that the binary runs. A
+  binary that will not run is reported under its own step with the binary and
+  link paths, a memory figure, the swap recipe, and the cloud dashboard as the
+  no-binary alternative, instead of "retry". #2023
 - `squirrel self update` now checks that the binary your PATH resolves is the one
   it just installed, and says so when it isn't. It used to flip the symlink
   recorded at install time and report success on that alone, so a stale

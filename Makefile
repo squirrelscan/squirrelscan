@@ -43,7 +43,7 @@ build-all: ci
 			linux-x64-musl) target="linux-x64-musl-baseline";; \
 			windows-x64) target="windows-x64-baseline";; \
 		esac; \
-		(cd $(APP_DIR) && bun build src/cli.ts --compile --minify \
+		(cd $(APP_DIR) && bun build src/cli.ts --compile --splitting --minify \
 			--target=bun-$$target \
 			--outfile=build/squirrel-$(VERSION)-$$platform$$ext); \
 	done

@@ -1572,6 +1572,54 @@ the two v1 spans, which #252 stopped emitting. The CLI has computed the whole
 per-phase breakdown since #857 but only at debug level, so it now also writes one
 machine-readable line to the trace log — the flag whose entire job is timing
 attribution. Every rules-phase number in this section comes from it.
+## CLI startup: `self install` killed at the last step of install.sh
+
+Every invocation evaluated the whole CLI graph (the audit engine and every
+rule package) before citty had parsed a single argument, so `squirrel self
+install` cost as much as the engine and was OOM-killed (exit 137) at the last
+step of `install.sh` on memory-capped machines: one darwin/arm64 user retried
+eight times in 3.5 hours (squirrelscan/repo#2023). Fixed by loading
+subcommands and the startup extras on demand and building the standalone
+binary with `--splitting`, so a chunk is neither parsed nor evaluated until
+imported. Measured 2026-09-09, load average 2.4 on the laptop; the container
+rows are counts, not times.
+
+Peak resident set, `/usr/bin/time -l` on macOS arm64, scratch `HOME`:
+
+| command | shipped v0.0.92 | before (this tree, unsplit) | after |
+|---|---|---|---|
+| `squirrel self install --bin-dir <dir>` | 105 MB | 134 MB | 43 MB |
+| `squirrel --version` | | 136 MB | 44 MB |
+| `squirrel mcp --help` | | | 45 MB |
+| `squirrel self doctor` | | | 94 MB |
+| `squirrel audit --help` (loads the engine) | | | 155 MB |
+
+Where the memory went, measured by compiling one-import probes (bun's own
+floor is 21 MB): the statically imported startup graph (banner, config loader,
+updater, telemetry, registration) evaluated to 50 MB, and the bundled-but-never
+-imported command modules cost a further 60 MB just to be parsed, which is the
+part only `--splitting` removes. `--bytecode` was tried and fails to generate
+for this bundle on Bun 1.3.14.
+
+Linux arm64 container (`docker run --memory=N --memory-swap=N`, Debian
+bookworm), `self install` passes out of 3 runs per cap. The cgroup peak
+includes the page cache of the 100 MB binary copy, so the cap that passes sits
+above the resident set:
+
+| cap | shipped v0.0.92 | after (`--splitting`) |
+|---|---|---|
+| 40 MB | 0/3 | 3/3 |
+| 64 MB | 0/3 | 3/3 |
+| 72 MB | 0/3 | 3/3 |
+| 80 MB | 1/3 | 3/3 |
+| 96 MB | 2/3 | 3/3 |
+| 112 MB | 2/3 | 3/3 |
+| 128 MB | 3/3 | 3/3 |
+
+`install.sh` also finishes the install itself when `self install` is
+signal-killed (the file work needs no memory) and then runs the installed
+binary once; a binary that will not run reports under `verify_binary_killed`
+with the paths already in place instead of "retry".
 
 ## Still open
 

@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -632,8 +643,13 @@ describe("self install killed by a signal", () => {
     // The branch itself sits below the sourceable preamble, so pin the wiring.
     expect(shellInstaller).toContain('CURRENT_STEP=$(self_install_step_for_code "$rc")');
     expect(shellInstaller).toContain('if [ "$CURRENT_STEP" = "$SELF_INSTALL_KILLED_STEP" ]; then');
+    // #2023: a killed self install is finished by hand; the headline and the
+    // memory guidance still reach the user when even the file work fails.
     expect(shellInstaller).toContain(
-      'error "$(self_install_kill_headline "$rc")" "$(self_install_kill_guidance "$rc")"',
+      'install_by_hand_and_verify "$tmpdir/squirrel" "$version" "$bin_dir" "$rc"',
+    );
+    expect(shellInstaller).toContain(
+      'error "$(self_install_kill_headline "$kill_rc")" "$(self_install_kill_guidance "$kill_rc")"',
     );
     // Unchanged fallback for every non-signal failure.
     expect(shellInstaller).toContain('error "Self install failed with exit code $rc"');
@@ -808,6 +824,197 @@ describe("install.sh curl transport hardening", () => {
       expect(stderr).not.toContain("is unknown");
       // 2 is curl's "failed to initialize", which is what a bad option exits.
       expect(code).not.toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15_000);
+});
+
+// A self install killed by a signal now finishes by hand: install.sh lays the
+// release out itself (the binary never got to its trivial file work), then
+// proves the installed binary runs. A binary that will not run reports under
+// its own step with the paths already in place (#2023).
+describe("by-hand install after a killed self install (#2023)", () => {
+  const scratch = () => {
+    const dir = mkdtempSync(join(tmpdir(), "install-by-hand-"));
+    return { dir, home: join(dir, "home"), bin: join(dir, "bin"), tmp: join(dir, "tmp") };
+  };
+  const fakeBinary = (dir: string, name: string, body: string) => {
+    const path = join(dir, name);
+    writeFileSync(path, `#!/bin/bash\n${body}\n`);
+    chmodSync(path, 0o755);
+    return path;
+  };
+  const versionOnly = 'if [ "$1" = "--version" ]; then echo "9.9.9"; exit 0; fi\nkill -9 $$';
+  const alwaysKilled = "kill -9 $$";
+
+  test("kill codes map to verify_binary_killed, everything else to verify_binary", async () => {
+    const { stdout } = await runWithCurlShim(
+      'for c in 137 143 0 1 126; do printf "%s=%s\\n" "$c" "$(verify_binary_step_for_code "$c")"; done',
+      { cut: "preamble" },
+    );
+    expect(stdout.trim().split("\n")).toEqual([
+      "137=verify_binary_killed",
+      "143=verify_binary_killed",
+      "0=verify_binary",
+      "1=verify_binary",
+      "126=verify_binary",
+    ]);
+  });
+
+  test("place_release_by_hand lays the release out the way self install does", async () => {
+    const { dir, home, bin } = scratch();
+    try {
+      mkdirSync(bin, { recursive: true });
+      // A dangling link is what an upgrade over a pruned release leaves behind
+      // (#132): it must be replaced, not tripped over.
+      symlinkSync(join(dir, "gone"), join(bin, "squirrel"));
+      const binary = fakeBinary(dir, "downloaded", versionOnly);
+      const { stdout, code } = await runWithCurlShim(
+        `place_release_by_hand "${binary}" v9.9.9 "${bin}"`,
+        { cut: "preamble", env: { HOME: home } },
+      );
+      expect(code).toBe(0);
+      const target = join(home, ".squirrel", "releases", "9.9.9", "squirrel");
+      expect(stdout).toBe(target);
+      expect(statSync(target).mode & 0o755).toBe(0o755);
+      expect(readlinkSync(join(bin, "squirrel"))).toBe(target);
+      const settings = JSON.parse(readFileSync(join(home, ".squirrel", "settings.json"), "utf8"));
+      expect(settings).toEqual({ install_bin_dir: bin });
+      expect(statSync(join(home, ".squirrel", "settings.json")).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["without jq, value replaced", "false", '{\n  "channel": "beta",\n  "install_bin_dir": null\n}\n'],
+    ["without jq, key inserted", "false", '{\n  "channel": "beta",\n  "telemetry": false\n}\n'],
+    ["without jq, one-line file", "false", '{"channel":"beta","install_bin_dir":null}'],
+    ["with jq", "true", '{"channel":"beta","install_bin_dir":"/old"}'],
+  ])("record_install_bin_dir keeps existing settings (%s)", async (_name, useJq, existing) => {
+    if (useJq === "true" && !Bun.which("jq")) return;
+    const { dir, home } = scratch();
+    // `&`, `#` and `$` are the characters a sed or ${var/../..} replacement
+    // would give a meaning to (codex review); the recorded path must be verbatim.
+    const bin = join(dir, "a&b#c$x");
+    try {
+      mkdirSync(join(home, ".squirrel"), { recursive: true });
+      const settingsPath = join(home, ".squirrel", "settings.json");
+      writeFileSync(settingsPath, existing);
+      // Single-quoted for bash: the path carries a `$`.
+      const { code, stderr } = await runWithCurlShim(
+        `record_install_bin_dir "${settingsPath}" '${bin}'`,
+        { cut: "preamble", env: { HOME: home, USE_JQ: useJq } },
+      );
+      expect(code).toBe(0);
+      expect(stderr).not.toContain("Warning");
+      const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+      expect(settings.channel).toBe("beta");
+      expect(settings.install_bin_dir).toBe(bin);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("without jq, an empty object gains the key with no trailing comma", async () => {
+    const { dir, home, bin } = scratch();
+    try {
+      mkdirSync(join(home, ".squirrel"), { recursive: true });
+      const settingsPath = join(home, ".squirrel", "settings.json");
+      writeFileSync(settingsPath, "{}\n");
+      const { code } = await runWithCurlShim(`record_install_bin_dir "${settingsPath}" "${bin}"`, {
+        cut: "preamble",
+        env: { HOME: home, USE_JQ: "false" },
+      });
+      expect(code).toBe(0);
+      expect(JSON.parse(readFileSync(settingsPath, "utf8"))).toEqual({ install_bin_dir: bin });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("without jq, a recorded directory is left byte-for-byte alone", async () => {
+    const { dir, home, bin } = scratch();
+    try {
+      mkdirSync(join(home, ".squirrel"), { recursive: true });
+      const settingsPath = join(home, ".squirrel", "settings.json");
+      // An escaped quote inside the value is what a naive regex stops at.
+      const existing = '{"install_bin_dir":"/old\\"name","telemetry":false}';
+      writeFileSync(settingsPath, existing);
+      const { code, stderr } = await runWithCurlShim(
+        `record_install_bin_dir "${settingsPath}" "${bin}"`,
+        { cut: "preamble", env: { HOME: home, USE_JQ: "false" } },
+      );
+      expect(code).toBe(0);
+      expect(stderr).toContain("already records an install directory");
+      expect(readFileSync(settingsPath, "utf8")).toBe(existing);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a path that cannot be a plain JSON string is left unrecorded, not mangled", async () => {
+    const { dir, home } = scratch();
+    try {
+      const settingsPath = join(home, ".squirrel", "settings.json");
+      const { code, stderr } = await runWithCurlShim(
+        `record_install_bin_dir "${settingsPath}" '${join(dir, 'we"ird')}'`,
+        { cut: "preamble", env: { HOME: home } },
+      );
+      expect(code).toBe(0);
+      expect(stderr).toContain("Not recording");
+      expect(existsSync(settingsPath)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a binary that runs after the kill completes the install", async () => {
+    const { dir, home, bin, tmp } = scratch();
+    try {
+      mkdirSync(tmp, { recursive: true });
+      const binary = fakeBinary(dir, "downloaded", versionOnly);
+      const { code, stdout, stderr, calls } = await runWithCurlShim(
+        `TMPDIR_TO_CLEAN="${tmp}"; install_by_hand_and_verify "${binary}" v9.9.9 "${bin}" 137`,
+        { env: { HOME: home } },
+      );
+      expect(code).toBe(0);
+      expect(stdout).toContain("9.9.9");
+      expect(stderr).toContain("killed by the system (exit 137, SIGKILL)");
+      expect(stderr).toContain("Installed by hand");
+      expect(readlinkSync(join(bin, "squirrel"))).toBe(
+        join(home, ".squirrel", "releases", "9.9.9", "squirrel"),
+      );
+      // A completed install is not a failure: nothing is reported.
+      expect(calls).toHaveLength(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a binary that cannot run reports under verify_binary_killed with the paths in place", async () => {
+    const { dir, home, bin, tmp } = scratch();
+    try {
+      mkdirSync(tmp, { recursive: true });
+      const binary = fakeBinary(dir, "downloaded", alwaysKilled);
+      const { code, stderr, calls } = await runWithCurlShim(
+        `TMPDIR_TO_CLEAN="${tmp}"; install_by_hand_and_verify "${binary}" v9.9.9 "${bin}" 137`,
+        { env: { HOME: home, NO_TELEMETRY: undefined }, settleMs: 5000 },
+      );
+      expect(code).toBe(1);
+      const target = join(home, ".squirrel", "releases", "9.9.9", "squirrel");
+      // The files ARE installed; the message says where, and what to do that
+      // is not "retry".
+      expect(existsSync(target)).toBe(true);
+      expect(stderr).toContain(`Binary: ${target}`);
+      expect(stderr).toContain("squirrel --version");
+      expect(stderr).toContain("https://app.squirrelscan.com");
+      expect(stderr).not.toContain("Re-run this installer");
+      expect(calls).toHaveLength(1);
+      const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+      expect(report.step).toBe("verify_binary_killed");
+      expect(report.exit_code).toBe(137);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
