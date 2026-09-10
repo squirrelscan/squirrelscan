@@ -1,11 +1,56 @@
 ---
-title: "Page Type Match"
-description: "Checks that the page's AI-classified type agrees with its declared structured data"
+title: "Page type mismatch: when schema disagrees with the page"
+description: "A page that reads as a listing but declares Product schema. squirrel compares the classified type against the declared JSON-LD."
 ---
 
 <Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge** (shared with [LLM Parsability](/rules/ai/llm-parsability) - both read the same analysis). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
 
-Checks that the page's AI-classified type agrees with its declared structured data.
+## What a page type mismatch is
+
+Structured data is a claim about what a page is. A `Product` node says this page is about one product. A `ContactPage` node says this page is how to get in touch. When the content says something different, a consumer has two answers and no way to choose.
+
+The usual causes are a template applied to the wrong route and a page whose purpose drifted after the markup was written, such as a product page that became a category listing. The fix is either the markup or the page, depending on which one is telling the truth.
+
+## What squirrel checks
+
+The rule runs on every crawled page. Classification is a cloud service, so the check needs a logged-in audit. It maps ten JSON-LD types to the classifications the service produces:
+
+| Declared `@type` | Expected page type |
+|---|---|
+| `Article`, `BlogPosting`, `NewsArticle`, `TechArticle` | `article` |
+| `Product` | `product` |
+| `ContactPage` | `contact` |
+| `AboutPage` | `about` |
+| `CollectionPage` | `category` |
+| `ItemList` | `listing` |
+| `FAQPage` | `docs` |
+
+It emits one check:
+
+- `page-type-match`, skipped with the message `Page type classification skipped` when the analysis was not available for the audit, or `No classification returned for this page` when the service ran but produced nothing for this URL.
+- `page-type-match`, passing with the message `Classified as "listing" (no page-type structured data to compare)` when the page declares none of the ten types.
+- `page-type-match`, passing with the message `Page type "product" matches declared Product schema` when the classification agrees.
+- `page-type-match`, warning with the message `Page reads as "listing" but declares Product structured data` when it disagrees.
+
+The comparison uses the first declared type that appears in the table, in the order the page's parsed schema types come back. A disagreement is reported only when the classifier's confidence is at least 0.7; below that the check passes, because a low-confidence reading is not evidence against the markup.
+
+## How to fix it
+
+Decide which one is wrong. If the page really is a listing, declare it as one:
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "name": "Pour-over equipment"
+}
+</script>
+```
+
+If the markup is right and the page has drifted, the fix is in the content rather than the JSON-LD. A product page that mostly lists other products reads as a listing because that is what it is.
+
+The common false positive is a hybrid page, such as a product page that carries a long buying guide underneath. The classifier reads the dominant purpose, and the answer depends on which half is larger.
 
 | | |
 |---|---|
@@ -15,18 +60,6 @@ Checks that the page's AI-classified type agrees with its declared structured da
 | **Severity** | warning |
 | **Weight** | 3/10 |
 | **Default** | Enabled |
-
-## What it checks
-
-The cloud service classifies what each page *is* - the way an AI assistant or search engine reads it (article, product, contact, docs, ...). The rule then compares that classification against the page's declared JSON-LD `@type`:
-
-- **No page-type structured data declared** - passes, reporting the classification for reference.
-- **Classification matches the declared type** (or the classifier isn't confident) - passes.
-- **Page reads as one type but declares another** - warns, e.g. *"Page reads as `product` but declares Article structured data"*.
-
-## Solution
-
-A mismatch between what a page is and what its structured data declares confuses rich-result eligibility and AI answers. Either fix the JSON-LD `@type` to describe the page truthfully, or restructure the page content so its primary purpose is unambiguous.
 
 ## Enable / disable
 
@@ -43,3 +76,31 @@ disable = ["ai/page-type-match"]
 [rules]
 disable = ["ai/*"]
 ```
+
+## Related rules
+
+- [ai/llm-parsability](/rules/ai/llm-parsability): the other finding from the same analysis.
+- [schema/coverage-outlier](/rules/schema/coverage-outlier): pages missing the markup the rest of their page type carries.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes validation at all.
+- [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict): rich-result markup on a page that is blocked from indexing.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [Generative engine optimization](https://squirrelscan.com/learn/generative-engine-optimization) for how an agent works through a report.
+
+## References
+
+- [Introduction to structured data markup, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data)
+- [CollectionPage, schema.org](https://schema.org/CollectionPage)
+- [ItemList, schema.org](https://schema.org/ItemList)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each mismatch names the classified type and the declared one. Cloud audits run the analysis.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

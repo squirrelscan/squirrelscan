@@ -1,9 +1,45 @@
 ---
-title: "Review Schema"
-description: "Validates Review and AggregateRating schema"
+title: "AggregateRating: ratingValue, ratingCount and review checks"
+description: "Rating markup missing ratingValue or a review count, and Review nodes with no author or reviewRating. squirrel checks both shapes."
 ---
 
-Validates Review and AggregateRating schema
+## What AggregateRating is
+
+`AggregateRating` is the schema.org type for a summary of many ratings of one thing: `ratingValue` holds the average, `ratingCount` or `reviewCount` holds how many it is drawn from, and `bestRating` holds the top of the scale, defaulting to 5. It attaches to the thing being rated, usually a `Product` or a `LocalBusiness`.
+
+A single `Review` is the other half. Google's review snippet guidance asks for an `author` and a `reviewRating`, recommends `datePublished`, and expects the review to be about a specific item rather than the site as a whole. Its structured data policies require the rating to be visible to readers on the same page.
+
+## What squirrel checks
+
+The rule reads every `script[type="application/ld+json"]` on the page and inspects each script's root object, or the entries of a root array. It does not walk nested nodes and does not flatten `@graph`. From those top-level nodes it collects an `aggregateRating` property, a node whose `@type` is exactly `AggregateRating`, a `review` property, and any node whose `@type` is exactly `Review`. It emits one to three checks:
+
+- `review-schema`: reports at info status with the message `No Review or AggregateRating schema found` when neither is present. No further checks run.
+- `aggregate-rating`: warns with the message `AggregateRating missing ratingValue` when `ratingValue` is falsy. Only when it is present does the count get checked, warning with `AggregateRating missing ratingCount/reviewCount` when neither `ratingCount` nor `reviewCount` is present. With both it passes with `AggregateRating: 4.7/5 (218 reviews)`, filling in the value and the count.
+- `individual-reviews`: warns with the message `N review(s) missing author or rating` for entries lacking `author` or `reviewRating`, and passes with `N valid review(s) found` for those that have both. Both can appear on the same page.
+
+The pass message prints the scale as `/5` regardless of what `bestRating` says, so a rating on a 10-point scale is still rendered as out of 5. When several nodes carry an `aggregateRating`, the last one wins. An `AggregateRating` that a generator has wrapped in an array is unwrapped and the first object entry is used. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Ceramic pour-over dripper",
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.7",
+    "ratingCount": "218",
+    "bestRating": "5"
+  }
+}
+</script>
+```
+
+Attach the rating to the thing it rates, not to the page or the site, and print the same numbers in the page content where a reader can see them.
+
+The common false positive is a rating rendered by a third-party widget such as Trustpilot or Yotpo. The numbers arrive after load, so a raw-HTML crawl sees markup with no matching visible text. That case is handled by [schema/rating-scope](/rules/schema/rating-scope), which recognises the widgets, rather than by this rule.
 
 | | |
 |---|---|
@@ -12,10 +48,6 @@ Validates Review and AggregateRating schema
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Review schema enables star ratings in search results. AggregateRating needs ratingValue, bestRating (default 5), ratingCount or reviewCount. Individual Review needs author, reviewRating, datePublished. Reviews must be for specific items (Product, LocalBusiness, etc.), not the overall site. Self-reviews violate guidelines.
 
 ## Enable / disable
 
@@ -40,3 +72,31 @@ disable = ["schema/*"]
 enable = ["schema/review"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/rating-scope](/rules/schema/rating-scope): whether the rating is visible on the page and about that page's subject.
+- [schema/product](/rules/schema/product): the product node a rating usually attaches to.
+- [schema/local-business](/rules/schema/local-business): the other common carrier of an aggregate rating.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Review snippet structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/review-snippet)
+- [General structured data guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+- [AggregateRating, schema.org](https://schema.org/AggregateRating)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each rated page shows the value and count it declared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

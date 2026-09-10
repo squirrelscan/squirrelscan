@@ -1,40 +1,43 @@
 ---
-title: "NAP Consistency"
-description: "Checks for consistent Name, Address, Phone across site"
+title: "NAP consistency: same name, address and phone everywhere"
+description: "One phone number or address written several ways across a site. squirrel finds the site norm and lists every page that disagrees with it."
 ---
 
-Checks for consistent Name, Address, Phone across site
+## What NAP consistency is
 
-## What it checks
+NAP is the name, address and phone number a business publishes. Anything that reads those values off the page and compares them as strings, from a directory importer to an agent filling a contact form, sees `(415) 555-0142` in the header and `+1 415 555 0142` in the footer as two different values. `Suite 400` against `Ste. 400` in an address is the same problem.
 
-The rule reads each page's **declared** contact details: `tel:` and `mailto:` links, and the `telephone` / `address` fields of your `LocalBusiness` or `Organization` JSON-LD. It never guesses phone numbers or addresses out of body text, so order numbers and dates are never mistaken for a NAP.
+One written form per value removes the ambiguity. It matters for a business with a physical location or a service area, and not at all for a product site with no address to publish. A genuine multi-location business has several correct numbers by design, which is why this rule needs a clear majority before it calls anything a deviation.
 
-| Check | What it means |
-|---|---|
-| `local-business-schema` | Whether the site declares `LocalBusiness` or `Organization` schema. |
-| `contact-info` | Your contact page carries a `tel:` or `mailto:` link. |
-| `phone-consistency` | The primary phone number, compared across every page that declares one. |
-| `address-consistency` | The primary postal address, compared across every page that declares one. |
+## What squirrel checks
 
-### How drift is graded
+The rule runs once per crawl, over every page, and emits up to four checks. Three always appear; `contact-info` appears only when it passes. It reads each page's first phone number as that page's primary contact number, so a branch list further down the page does not make the site look inconsistent.
 
-`phone-consistency` and `address-consistency` compare the **first** phone or address each page declares, which is the number a directory or an agent treats as your primary contact. A footer listing extra branch numbers does not count against you.
+- `local-business-schema`: passes when any page carries a JSON-LD node whose `@type` is `LocalBusiness`, `Organization`, `Restaurant` or `Store`, with the message `LocalBusiness/Organization schema found`. The value is the business name taken from the first `LocalBusiness` or `Organization` node, and is absent when the markup does not name one. Otherwise it reports at info status with the message `No LocalBusiness schema found` and the value `Add schema if this is a local business`.
+- `contact-info`: passes with the message `Contact page has contact information` when the first crawled URL whose path contains `/contact`, matched case-insensitively, carries a `tel:` or `mailto:` link. The check is emitted only on that pass, so it never appears as a failure.
+- `phone-consistency`: judges the primary phone number across the crawl. A different number on some pages fails with the message `N page(s) show a different phone number to the site norm "..."`. One number written several ways warns with the message `The same phone number is formatted N different ways across M pages`. Agreement with no format drift passes with `The same phone number is used consistently across N pages`.
+- `address-consistency`: the same outcomes for the postal address. Both checks share one message builder, so every message below is the phone wording with `postal address` substituted for `phone number`.
 
-- **Pass**: one value, rendered the same way everywhere.
-- **Warn**: one value, rendered several ways. `+1 (555) 123-4567` and `555.123.4567` are the same number, and `123 Main St` and `123 Main Street` are the same address, but directories and agents cite them as written, which splits your citations.
-- **Fail**: some pages present a genuinely different primary number or address. That is a real NAP conflict, not a formatting nit.
+Both consistency checks skip rather than guess when the evidence is thin. Fewer than 10 pages declaring the signal skips with `Only N page(s) declare a phone number; 10 needed to judge consistency`. No page declaring it skips with `No phone number declared on any page`. When the most common value appears on less than 70% of the samples, the site is treated as genuinely varied and the check skips with `No dominant phone number across N pages (the most common appears on X%), so the site is too varied to judge`. A crawl with no pages emits a single `nap-consistency` check, skipped, with `No pages available for analysis`.
 
-### When it stays quiet
+Reported items and example URLs are both capped at 10, so a large site with a widespread problem lists a sample rather than every page. The whole rule is skipped, with the reason shown in the report, when the site profile says the site is not a local business.
 
-Cross-page comparison only runs when it can say something meaningful:
+## How to fix it
 
-- **Fewer than 10 pages declare the signal**: skipped. Three pages carrying a phone number cannot support a site-wide consistency claim.
-- **No dominant value (under 70% agreement)**: skipped. A multi-location business or a franchise directory is legitimately varied, and no page is a deviant.
-- **The site is not a local business**: the whole rule is skipped, because `appliesWhen` gates it on the detected site profile.
+Render the contact block from one source and include it in the layout, so every page emits the same bytes:
 
-### Fixing it
+```html
+<address>
+  Acme Coffee<br />
+  1 Market Street, Suite 400<br />
+  San Francisco, CA 94105<br />
+  <a href="tel:+14155550142">(415) 555-0142</a>
+</address>
+```
 
-Pick one rendering of your name, address, and phone, and use that exact string everywhere: the footer, the contact page, and your `LocalBusiness` JSON-LD. Then use the same string on Google Business Profile and every directory listing.
+Pick one written form for the phone number and one for the address, then use it in the header, the footer, the contact page and the `LocalBusiness` JSON-LD. The `tel:` href should stay in E.164 form even when the visible text is formatted for readers.
+
+The common false positive is a multi-location business whose pages each show their own branch number. The 70% agreement floor is there to skip that case, but a site where one location dominates the page count can still see the smaller branches reported as deviations. Check the listed pages before changing anything.
 
 | | |
 |---|---|
@@ -43,10 +46,6 @@ Pick one rendering of your name, address, and phone, and use that exact string e
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-NAP consistency is critical for local SEO. Your business name, address, and phone number should be identical everywhere - on your site and across all listings. Use schema.org LocalBusiness markup. Avoid abbreviations inconsistencies (St. vs Street). Include NAP in footer for site-wide visibility.
 
 ## Enable / disable
 
@@ -71,3 +70,31 @@ disable = ["local/*"]
 enable = ["local/nap-consistency"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/local-business](/rules/schema/local-business): whether the LocalBusiness JSON-LD carries the required address and phone fields.
+- [eeat/physical-address](/rules/eeat/physical-address): a postal address readers can see, which this rule expects to find.
+- [eeat/contact-page](/rules/eeat/contact-page): whether a contact page exists and offers more than one way to get in touch.
+- [links/tel-mailto](/rules/links/tel-mailto): `tel:` and `mailto:` links whose href disagrees with the number or address shown to the reader.
+
+Local SEO findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+- [LocalBusiness, schema.org](https://schema.org/LocalBusiness)
+- [PostalAddress, schema.org](https://schema.org/PostalAddress)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Local SEO section of the report. Each deviating value is listed with the pages that carry it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Local SEO section looks like on a real site.
+  </Card>
+</CardGroup>

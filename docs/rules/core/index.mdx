@@ -3,52 +3,54 @@ title: "Core SEO"
 description: "Essential meta tags and page structure for search engines"
 ---
 
-Essential meta tags and page structure for search engines
+Core SEO rules cover the declarations every page makes about itself: the title and description a search result is built from, the canonical URL that consolidates duplicates, the doctype and charset the browser needs before it parses anything, the H1, the favicon, and the robots directives that decide whether the page appears at all. Most run per page; two compare titles and canonical form across the whole crawl.
+
+See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Canonical Form Drift" icon="triangle-exclamation" href="/rules/core/canonical-form-drift">
-    Finds canonical URLs that disagree in form (www, scheme, trailing slash, tracking params) across the site
+  <Card title="Canonicals in two forms: www, scheme and trailing slash" icon="triangle-exclamation" href="/rules/core/canonical-form-drift">
+    Half the site canonicalising to www and half to the apex domain. squirrel compares four form axes across the crawl.
   </Card>
-  <Card title="Canonical Header Validation" icon="triangle-exclamation" href="/rules/core/canonical-header">
-    Detects mismatch between HTML canonical tag and Link header
+  <Card title="Link rel=canonical header vs the HTML tag: the mismatch" icon="triangle-exclamation" href="/rules/core/canonical-header">
+    A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares.
   </Card>
-  <Card title="Canonical URL" icon="triangle-exclamation" href="/rules/core/canonical">
-    Validates canonical URL presence and format
+  <Card title="rel=canonical: presence, absolute form and self-reference" icon="triangle-exclamation" href="/rules/core/canonical">
+    A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page.
   </Card>
-  <Card title="Charset" icon="triangle-exclamation" href="/rules/core/charset">
-    Checks for proper character encoding declaration
+  <Card title="meta charset UTF-8: where it goes and what squirrel checks" icon="triangle-exclamation" href="/rules/core/charset">
+    A page with no charset declaration, one that is not UTF-8, or a meta charset that is not first in head. squirrel checks all three sources.
   </Card>
-  <Card title="Doctype" icon="triangle-exclamation" href="/rules/core/doctype">
-    Checks for valid HTML5 doctype declaration
+  <Card title="Doctype must be declared first: what it means and the fix" icon="triangle-exclamation" href="/rules/core/doctype">
+    A page with no doctype, an old one, or a doctype that is not the first thing in the document. squirrel reads the raw response.
   </Card>
-  <Card title="Favicon" icon="triangle-exclamation" href="/rules/core/favicon">
-    Checks for favicon presence
+  <Card title="No favicon found: the link rel icon tags squirrel looks for" icon="triangle-exclamation" href="/rules/core/favicon">
+    A page with no icon link at all, or only one format. squirrel reads the rel and the file extension on every link.
   </Card>
-  <Card title="H1 Tag" icon="circle-exclamation" href="/rules/core/h1">
-    Validates H1 tag presence and uniqueness
+  <Card title="Missing or multiple H1: what squirrel expects on a page" icon="circle-exclamation" href="/rules/core/h1">
+    A page with no H1, more than one, or an empty one. squirrel checks the heading on every crawled page.
   </Card>
-  <Card title="Meta Description" icon="circle-exclamation" href="/rules/core/meta-description">
-    Validates meta description presence and length
+  <Card title="Meta description length: the 120 to 160 character range" icon="circle-exclamation" href="/rules/core/meta-description">
+    A page with no meta description, or one outside 120 to 160 characters. squirrel measures it on every crawled page.
   </Card>
-  <Card title="Meta Title" icon="circle-exclamation" href="/rules/core/meta-title">
-    Validates page title presence and length
+  <Card title="Title tag length: the 30 to 75 character range squirrel uses" icon="circle-exclamation" href="/rules/core/meta-title">
+    A page with no title element, or one outside 30 to 75 characters. squirrel measures the title on every crawled page.
   </Card>
-  <Card title="Nosnippet Directive" icon="triangle-exclamation" href="/rules/core/nosnippet">
-    Detects pages preventing search engine snippets
+  <Card title="nosnippet and max-snippet:0: pages with no search snippet" icon="triangle-exclamation" href="/rules/core/nosnippet">
+    A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page.
   </Card>
-  <Card title="Open Graph Tags" icon="triangle-exclamation" href="/rules/core/og-tags">
-    Validates Open Graph meta tags for social sharing
+  <Card title="Missing og:image: the Open Graph tags squirrel checks" icon="triangle-exclamation" href="/rules/core/og-tags">
+    A page missing og:title, og:description or og:image, so shares render without a preview. squirrel checks four tags per page.
   </Card>
-  <Card title="Robots Meta" icon="triangle-exclamation" href="/rules/core/robots-meta">
-    Checks robots meta tag for indexing directives
+  <Card title="noindex in a robots meta tag: what squirrel reports per page" icon="triangle-exclamation" href="/rules/core/robots-meta">
+    A page declaring noindex or nofollow in its robots meta. squirrel reads the tag on every crawled page and names which directive it found.
   </Card>
-  <Card title="Title Uniqueness" icon="triangle-exclamation" href="/rules/core/title-unique">
-    Checks that page titles are unique across the site
+  <Card title="Duplicate page titles: the site-wide uniqueness check" icon="triangle-exclamation" href="/rules/core/title-unique">
+    Two or more pages sharing a title after case and whitespace are normalised. squirrel groups them and lists every URL.
   </Card>
-  <Card title="Twitter Cards" icon="circle-info" href="/rules/core/twitter-cards">
-    Validates Twitter Card meta tags
+  <Card title="twitter:card: the card types and the Open Graph fallback" icon="circle-info" href="/rules/core/twitter-cards">
+    A page with no twitter:card, an unrecognised type, or a large-image card with no image. squirrel checks the type and the fallback.
   </Card>
 </CardGroup>
 

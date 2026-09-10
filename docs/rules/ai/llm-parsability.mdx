@@ -1,15 +1,47 @@
 ---
-title: "LLM Parsability"
-description: "What LLM parsability means: how reliably a language model can extract a page's facts, and how squirrelscan scores it from 0 to 100 per page."
+title: "LLM parsability score: what it measures and how to raise it"
+description: "A page a language model reads badly, scored under 70 out of 100. squirrel scores every crawled page and names the ones below the mark."
 ---
 
 <Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge** (shared with [Page Type Match](/rules/ai/page-type-match) - both read the same analysis). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
 
-Analyzes how well LLMs can parse and understand the content
+## What LLM parsability is
 
-## What LLM parsability means
+LLM parsability is how reliably a language model reads a page and comes away with the right facts: what the page is about, what it claims, and what the reader is meant to do next. A page scores badly when its real content is tangled with navigation text, banners and layout strings, when sections have no headings to anchor them, or when pronouns and references point at things the model has to guess.
 
-LLM parsability is how reliably a language model can read a page and come away with the right facts: what the page is about, what it claims, and what the reader is meant to do next. It is not the same thing as human readability, and it is not a search ranking factor. It matters because AI search answers, chat assistants, and coding agents quote the pages they parsed cleanly and quietly skip the ones where the real content is tangled up with navigation, banners, and layout text. squirrelscan scores each page from 0 to 100 with a cloud model and treats 70 as the pass mark, on the scale below.
+It is not human readability and it is not a search ranking factor. It matters because assistants and answer engines quote what they parsed cleanly. Content written clearly for a person usually scores well without any separate work.
+
+## What squirrel checks
+
+The rule runs on every crawled page. Scoring is a cloud service, so the check needs a logged-in audit. It emits one check:
+
+- `llm-parsability`, skipped with the message `LLM parsability analysis skipped` when the analysis was not available for the audit, with the skip reason naming why.
+- `llm-parsability`, passing with the message `LLM parsability score: 84/100` at a score of 70 or above.
+- `llm-parsability`, warning with the message `LLM parsability could be improved: 55/100` at a score from 40 to 69.
+- `llm-parsability`, failing with the message `Poor LLM parsability: 21/100` at a score below 40.
+
+The score is rounded to a whole number and the expected value shown in the report is `>= 70`. An audit where the analysis ran but returned nothing scores 0, which reads as a failure rather than a skip.
+
+| Score | Status |
+|-------|--------|
+| 70 to 100 | Pass |
+| 40 to 69 | Warning |
+| 0 to 39 | Fail |
+
+## How to fix it
+
+Put the content in semantic elements so the model can tell it apart from the furniture:
+
+```html
+<main>
+  <h1>Configuring the build cache</h1>
+  <p>The build cache stores compiled output between runs...</p>
+</main>
+```
+
+Give every section a heading that names what is in it, open each section with a sentence that states its point, and replace pronouns whose referent is more than a sentence away with the noun itself.
+
+The common false positive is a page that is mostly a table, a form or a diagram. There is little prose for the model to parse and the score reflects that, but there may be nothing worth changing.
 
 | | |
 |---|---|
@@ -19,27 +51,6 @@ LLM parsability is how reliably a language model can read a page and come away w
 | **Severity** | info |
 | **Weight** | 3/10 |
 | **Default** | Enabled |
-
-## Solution
-
-This rule evaluates how well LLMs can understand and extract information from your content, which affects AI-powered search and assistants. Improve parsability by using clear structure, explicit topic sentences, and well-organized sections. Avoid ambiguous pronouns and ensure context is clear. Use semantic HTML and structured data. Clear, well-written content for humans typically scores well for LLM parsability too.
-
-## Scoring
-
-The rule scores content from 0-100 based on:
-
-- Clear semantic structure (headings, paragraphs, lists)
-- Logical content flow
-- Absence of layout text/navigation mixed with content
-- Clean text without excessive special characters
-- Well-defined sections and topics
-- Machine-readable formatting
-
-| Score | Status | Meaning |
-|-------|--------|---------|
-| 70-100 | Pass | Good LLM parsability |
-| 40-69 | Warning | Could be improved |
-| 0-39 | Fail | Poor parsability |
 
 ## Enable / disable
 
@@ -56,3 +67,30 @@ disable = ["ai/llm-parsability"]
 [rules]
 disable = ["ai/*"]
 ```
+
+## Related rules
+
+- [ai/page-type-match](/rules/ai/page-type-match): the other finding from the same analysis, comparing what the page reads as against what it declares.
+- [ax/content-without-js](/rules/ax/content-without-js): content the model never saw because it needs JavaScript.
+- [ax/token-weight](/rules/ax/token-weight): how much of the page a model pays for that is not content.
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): the heading structure this score depends on.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [Generative engine optimization](https://squirrelscan.com/learn/generative-engine-optimization) for how an agent works through a report.
+
+## References
+
+- [Heading elements, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements)
+- [The main element, HTML Standard](https://html.spec.whatwg.org/multipage/grouping-content.html#the-main-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Every page below the pass mark is listed with its score. Cloud audits run the analysis.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

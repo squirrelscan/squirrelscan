@@ -1,9 +1,35 @@
 ---
-title: "Carousel Hidden Eager Images"
-description: "Flags eagerly-loaded images inside hidden carousel slides"
+title: "Hidden carousel slides still download: eager images inside"
+description: "Images in inactive carousel slides loaded eagerly, so the browser fetches them anyway. squirrel walks up eight ancestors to find them."
 ---
 
-Flags eagerly-loaded images inside hidden carousel slides, which waste bandwidth by downloading off-screen slides up front.
+## Why a hidden slide still downloads
+
+`display: none` and `aria-hidden` change what is painted and what is announced. Neither stops a fetch. An `<img>` inside slide four of a carousel is requested as soon as the parser reaches it, competing for bandwidth with the image on slide one that the visitor can see.
+
+`loading="lazy"` is what defers it. The browser holds the request until the element comes within its loading distance of the viewport, which for an off-screen slide usually means when the slide is shown. The first slide should stay eager, because deferring the visible one delays the paint that matters.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check:
+
+- `carousel-hidden-eager`: warns with the message `N eagerly-loaded image(s) inside hidden carousel slides`, listing up to ten `src` values and recording any further count in the details. Otherwise it passes with `No eager images in hidden carousel slides`.
+
+An image is flagged only when all of this holds: it is not `loading="lazy"`, it has a `src` that is not a `data:` URI, and within eight ancestor levels there is both a carousel container and a hidden element. The carousel signal is a class name matching a known library, meaning `swiper`, `splide`, `glide__`, `glide--`, `slick`, `flickity`, `embla__`, `keen-slider`, `owl-carousel` or `tns-`, or the whole word `carousel` or `slideshow`. Bare `slide` and `slider` are deliberately excluded because they match unrelated interface code.
+
+Hidden means `aria-hidden="true"`, a `hidden` attribute, or an inline style containing `display:none` or `visibility:hidden`. A class that hides an element through an external stylesheet is not detected, so the rule only sees the inline case. A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+```html
+<div class="swiper-slide" aria-hidden="true">
+  <img src="/slide-4.jpg" loading="lazy" width="1200" height="630" alt="" />
+</div>
+```
+
+Add `loading="lazy"` to every slide except the first. Most carousel libraries have an option that does this for you, which is more reliable than marking them by hand.
+
+The limit worth knowing is a slide hidden by a class rather than an inline style, which this rule cannot see and so does not report. The finding is a floor rather than a total, and there is no common false positive in the other direction.
 
 | | |
 |---|---|
@@ -12,21 +38,6 @@ Flags eagerly-loaded images inside hidden carousel slides, which waste bandwidth
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## What it detects
-
-An `<img>` is flagged when **all** of the following hold:
-
-- It is **eager**: no `loading="lazy"` attribute (lazy images are handled by the lazy-loading rules instead, so the two never flag the same image).
-- It has a real `src` (data URIs are skipped).
-- It sits inside a **carousel slide**: an ancestor whose class matches a known slider framework (Swiper, Splide, Glide, Slick, keen-slider, Embla, Flickity, Owl) or contains `carousel`/`slider`/`slide`.
-- That slide (or an ancestor) is **hidden** via `aria-hidden="true"`, the `hidden` attribute, or an inline `display:none` / `visibility:hidden`.
-
-Hiding a slide does not stop the browser from fetching its eager images, so all slides download at load time and compete with above-fold resources.
-
-## Solution
-
-Add `loading="lazy"` to images in off-screen carousel slides so the browser defers them until the slide is shown. Keep the first (visible) slide's image eager so it is not delayed. Many carousel libraries offer a built-in lazy-load option that swaps `src` in as slides become active.
 
 ## Enable / disable
 
@@ -51,3 +62,30 @@ disable = ["perf/*"]
 enable = ["perf/carousel-hidden-eager"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/lazy-above-fold](/rules/perf/lazy-above-fold): the opposite error, a visible image deferred.
+- [images/offscreen-lazy](/rules/images/offscreen-lazy): below-fold images that should be lazy and are not.
+- [images/lazy-loading](/rules/images/lazy-loading): lazy loading on the below-fold images, where it belongs.
+- [perf/lcp-hints](/rules/perf/lcp-hints): the visible image these fetches are competing with.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Lazy loading, MDN](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Lazy_loading)
+- [The img element, HTML Standard](https://html.spec.whatwg.org/multipage/embedded-content.html#the-img-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every eager image in a hidden slide is listed by URL. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

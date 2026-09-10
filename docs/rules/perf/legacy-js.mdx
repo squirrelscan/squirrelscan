@@ -1,9 +1,39 @@
 ---
-title: "Legacy JavaScript"
-description: "Detects ES5 polyfills and legacy JavaScript code"
+title: "core-js and Babel helpers: legacy JavaScript in a bundle"
+description: "Polyfill bundles and ES5 transpilation helpers shipped to browsers that do not need them. squirrel reads script URLs and inline code."
 ---
 
-Detects ES5 polyfills and legacy JavaScript code
+## What legacy JavaScript is
+
+A polyfill implements a feature the browser lacks. A transpiler rewrites modern syntax into older syntax that more browsers understand. Both were necessary when a meaningful share of traffic ran browsers without `Promise` or arrow functions. That share is now small, and the code is still shipped by default in many build configurations.
+
+The cost is bytes and parse time for every visitor, including the majority whose browser needed none of it. The lever is the build target: a `browserslist` that names modern browsers makes the transpiler and the polyfill injector emit far less.
+
+## What squirrel checks
+
+The rule runs on every crawled page and looks at three things. It emits one to three checks:
+
+- `legacy-polyfills`: warns with the message `N legacy polyfill(s) detected`, listing each by name. It matches eleven patterns in `<script src>` URLs: `core-js`, `regenerator-runtime`, `babel-polyfill`, `polyfill.io`, `es5-shim`, `es6-shim`, `promise-polyfill`, `fetch-polyfill`, `whatwg-fetch`, `@babel/runtime` and `tslib`.
+- `es5-code-patterns`: reports at info status with the message `N ES5 transpilation pattern(s) found`, listing up to five. It scans inline scripts of 500 characters or more, skipping any whose type mentions `json`, for nine signatures including `_classCallCheck`, `_createClass`, `_inherits`, `_typeof`, `__esModule`, `__spreadArray`, `__awaiter` and `__generator`.
+- `differential-serving`: passes with the message `Uses module/nomodule differential serving` when the page has both a `script[type="module"]` and a `nomodule` script.
+- `es-modules`: passes with the message `N ES module script(s) detected` when there are module scripts but no `nomodule` counterpart.
+- `legacy-js`: reports at info status with the message `No legacy JavaScript patterns detected` when there are no polyfills, no ES5 patterns and no module scripts.
+
+Every result here is a warning at most, and the rule's severity is info. A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+Set the build target to the browsers the site supports:
+
+```json
+{
+  "browserslist": ["> 0.5%", "last 2 versions", "not dead"]
+}
+```
+
+Babel and the bundlers read that list, and a modern target removes most of the helpers and nearly all of the polyfills. TypeScript has its own `target` compiler option, which controls the same thing for its helpers. Where a specific feature still needs one, importing that polyfill alone is far smaller than a whole `core-js` bundle.
+
+The common false positive is `tslib`. It is TypeScript's helper library rather than a polyfill, and importing it is usually the smaller option, because the alternative is inlining the same helpers into every file that needs them.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Detects ES5 polyfills and legacy JavaScript code
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Consider removing legacy polyfills if you don't need to support old browsers. Use differential serving (module/nomodule) to send modern code to modern browsers. Update Babel/TypeScript target to ES2020+ if your audience uses modern browsers. Check browserslist configuration.
 
 ## Enable / disable
 
@@ -40,3 +66,30 @@ disable = ["perf/*"]
 enable = ["perf/legacy-js"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/js-file-size](/rules/perf/js-file-size): the size those polyfills add to.
+- [perf/duplicate-js](/rules/perf/duplicate-js): the same library shipped more than once.
+- [perf/unminified-js](/rules/perf/unminified-js): the other sign of a build that did not run in production mode.
+- [perf/js-libraries](/rules/perf/js-libraries): which libraries the page loads and at what version.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [The script element, HTML Standard](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element)
+- [JavaScript modules, MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each polyfill and transpilation pattern is listed by name. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

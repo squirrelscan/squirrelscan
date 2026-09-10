@@ -1,9 +1,34 @@
 ---
-title: "Rating Scope"
-description: "Finds AggregateRating markup that is not about the page it sits on, or that no reader can see"
+title: "AggregateRating on the wrong page: visible and on-topic"
+description: "A sitewide star rating stamped on privacy, terms and blog pages, or one no reader can see. squirrel flags both as policy risks."
 ---
 
-Finds AggregateRating markup that is not about the page it sits on, or that no reader can see
+## What rating scope is
+
+A rating in structured data makes two claims: that this rating is about the thing this page is about, and that a reader can see the same rating in the page content. Google's structured data guidelines require both. Markup a reader cannot verify, or markup that rates the site on a page that cannot be rated, is a policy violation rather than a validation error, and the risk is a manual action against the site's rich results rather than a lost snippet on one page.
+
+The usual cause is a template. A review badge added to a shared layout emits the same `AggregateRating` on every page, including the privacy policy, the terms page and every blog post. [schema/review](/rules/schema/review) checks the shape of that markup and passes it, because the shape is fine. This rule asks the two questions the shape check cannot.
+
+## What squirrel checks
+
+The rule walks the page's flattened JSON-LD to a depth of 6. An `aggregateRating` property is attributed to the node that holds it, typed or not, and only the first object in an array-wrapped value is read. A standalone `AggregateRating` node is attributed to the nearest enclosing typed node. A page with no rating emits nothing. Otherwise it emits one or two checks:
+
+- `rating-visible`: passes with the message `AggregateRating backed by a third-party review widget on the page` when the page loads a known review platform such as Trustpilot, Yotpo, Judge.me or Feefo, or carries one of their placeholder containers. It passes with `AggregateRating has a rating visible on the page` when the page's text carries a star glyph, a phrase like `4.9 / 5`, `4.9 out of 5`, `4.9 stars`, `rated 4.9` or `218 reviews`, or the decimal rating value with either a dot or a comma as the separator. The text it searches is the extracted page content plus every `alt`, `aria-label` and `title` attribute. Otherwise it warns with `<rating> on <entity> is not visible anywhere on <page> — a rating readers cannot see is a structured-data policy violation and risks a manual action, not just a lost rich result`, where `<rating>` is `AggregateRating 4.7 from 218 reviews`, `<entity>` is `LocalBusiness "Acme"` and `<page>` is `this privacy policy page`.
+- `rating-subject`: emitted only on a page classified as a privacy policy, a terms page or an article. It passes with the message `AggregateRating on this <page kind> page rates the page's own subject` when nothing on the page is out of scope, where `<page kind>` is `privacy policy`, `terms` or `article`. Otherwise it warns with `AggregateRating on <entity> is not the subject of this <page kind> page — sitewide rating markup on a page that cannot be rated is a structured-data policy violation and risks a manual action, not just a lost rich result`.
+
+The rule is deliberately hard to trip. A review widget clears the visibility check outright, because a client-side badge is legitimately absent from crawled HTML. A whole-number rating such as `5` printed in the page text does not clear it on its own, since the digit is too common to be evidence; a decimal such as `4.7` does. On an article page only a carrier that represents the site itself is reported: every LocalBusiness subtype plus `Organization`, `Corporation`, `OnlineBusiness`, `OnlineStore`, `NGO`, `EducationalOrganization`, `GovernmentOrganization`, `PerformingGroup`, `SportsOrganization`, `Brand`, `WebSite` and `WebPage`. An article that reviews a `Product` keeps its rating. On privacy and terms pages every rating is reported, because those pages have no rateable subject at all. Entities listed per check are capped at 10, and the rule is skipped on a page detected as a soft 404.
+
+## How to fix it
+
+```html
+<div class="reviews">
+  <p>Rated 4.7 out of 5 from 218 reviews</p>
+</div>
+```
+
+Move the rating markup onto the pages whose subject it describes, which is the `LocalBusiness` on the homepage and location pages, or the `Product` on its own product page, and print the same numbers where a reader can see them.
+
+The common false positive is a rating phrased in wording the visibility patterns do not cover, such as a rating rendered only as a bar chart with no numbers in text. The check errs towards passing, but a design with no readable rating anywhere is worth changing regardless of what the report says.
 
 | | |
 |---|---|
@@ -12,62 +37,6 @@ Finds AggregateRating markup that is not about the page it sits on, or that no r
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## How it works
-
-[Review Schema](/rules/schema/review) checks the *shape* of `AggregateRating`: does it have a
-`ratingValue`, does it have a `ratingCount` or `reviewCount`. A single sitewide rating block
-emitted by a template satisfies all of that on every page of the site — including the privacy
-policy, the terms page and every blog post. This rule asks the two questions the shape check
-cannot:
-
-1. **Can a reader see a rating on this page at all?** Google requires the rating to be visible in
-   the page content. Rating markup that exists only in the JSON-LD is a structured-data policy
-   violation, not a validation error, and it is the classic cause of a manual action.
-2. **Is the rated entity the subject of this page?** A `LocalBusiness` rating attached to a
-   privacy policy, a terms page or a blog post is a rating of the site, not of the page carrying
-   it.
-
-Repetition on its own is deliberately **not** the signal. On a legitimate local-business site the
-review badge really is on screen on most pages, and the rating really is about the business the
-page is about — a rule that fired on "AggregateRating appears on many pages" would flag every one
-of them. What is reported is the relationship between the rating and the page it sits on.
-
-The rule stays quiet unless it has grounds to speak:
-
-- A page with no `AggregateRating` produces no output at all.
-- A rating visible anywhere in the rendered page text clears the visibility check — a star badge
-  (`★★★★★ 4.9`), "4.9 out of 5", "18 reviews", a decimal rating printed in the copy, or the same
-  wording in `alt` / `aria-label` / `title` text.
-- A third-party review widget (Trustpilot, Yotpo, Judge.me, Elfsight and friends) renders its
-  badge client-side, so the rating is legitimately absent from a raw-HTML crawl. Its presence
-  clears the visibility check rather than accusing the page.
-- The subject check runs only on page types where a rating cannot be about the page: privacy
-  policies, terms pages and articles or blog posts. Everything else — homepages, location pages,
-  product pages, category pages — is left alone.
-- On an article the subject check reports only a rating attached to the site's own business or
-  organization entity. An article that reviews a `Product` legitimately carries that product's
-  rating.
-
-Each finding names the page type and the rated entity, so it reads as "this `LocalBusiness` rating
-is on your privacy policy", not as a missing field.
-
-## Solution
-
-`AggregateRating` must describe the thing **this** page is about, and the rating has to be visible
-to the reader in the page content. A single sitewide rating emitted by a template lands on pages
-that cannot be rated, where it becomes a self-serving rating of the site rather than markup about
-the page.
-
-Google treats invisible or off-topic rating markup as a structured-data policy violation and
-issues manual actions for it, which costs the whole site its rich results — not just the page that
-was flagged.
-
-- Move the rating onto the pages whose subject it actually describes: the `LocalBusiness` on the
-  homepage and location pages, the `Product` on its own product page.
-- Drop the rating block from templates that render legal pages and blog posts.
-- Where a page keeps the markup, make sure the same rating is on screen for readers, with the same
-  value the markup claims.
 
 ## Enable / disable
 
@@ -92,3 +61,31 @@ disable = ["schema/*"]
 enable = ["schema/rating-scope"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/review](/rules/schema/review): the shape of the same markup, which this rule leaves alone.
+- [schema/local-business](/rules/schema/local-business): the business node a sitewide rating usually hangs off.
+- [schema/product](/rules/schema/product): the page type where a rating is normally in scope.
+- [content/hidden-text](/rules/content/hidden-text): text and links hidden from readers but left visible to search engines.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [General structured data guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+- [Review snippet structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/review-snippet)
+- [AggregateRating, schema.org](https://schema.org/AggregateRating)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each flagged page names the rated entity and the page type. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

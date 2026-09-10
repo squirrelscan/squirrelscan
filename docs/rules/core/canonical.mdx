@@ -1,9 +1,35 @@
 ---
-title: "Canonical URL"
-description: "Validates canonical URL presence and format"
+title: "rel=canonical: presence, absolute form and self-reference"
+description: "A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page."
 ---
 
-Validates canonical URL presence and format
+## What rel=canonical does
+
+`<link rel="canonical">` names the URL a page wants search engines to treat as its address. When the same content is reachable at several URLs, through parameters, a trailing slash, or both `www` and the apex domain, the canonical is what consolidates the signals onto one of them.
+
+It is a hint rather than an instruction, and search engines can pick a different URL when the evidence disagrees with the declaration. The common case is a self-referential canonical: every page names itself, which costs nothing and makes the parameterised copies point somewhere real. A relative reference is valid HTML, and Google recommends an absolute URL because a relative one is easy to resolve against the wrong base.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the parsed canonical value. It emits one check named `canonical`:
+
+- Warning with the message `Missing canonical URL` and a null value when there is no canonical.
+- Failing with the message `Canonical URL should be absolute` and the expectation `Absolute URL starting with https://` when the value does not begin with `http`.
+- Failing with the message `Invalid canonical URL format` when the value begins with `http` but does not parse as a URL.
+- At info status with the message `Canonical points to different URL` when it parses and does not match the page's own URL exactly.
+- Passing with the message `Self-referential canonical present` when it matches.
+
+The comparison is between the two full URLs after parsing, so a difference in trailing slash, in scheme, or in query string is enough to make it a different URL. That result is informational rather than a warning, because pointing elsewhere is often correct.
+
+## How to fix it
+
+```html
+<link rel="canonical" href="https://example.com/guides/build-cache" />
+```
+
+Emit it from the router's own knowledge of the route, so it is absolute, uses one scheme and one host, and matches whatever form the rest of the site uses.
+
+The common false positive is a filtered or sorted view that canonicalises to the unfiltered page, which is correct and reports as pointing to a different URL. That result is informational, not a defect. A paginated listing whose pages canonicalise to themselves passes normally.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Validates canonical URL presence and format
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Canonical URLs tell search engines which version of a page is the "master" copy, preventing duplicate content issues. Every page should specify a canonical URL, typically pointing to itself. Add a `<link rel="canonical" href="...">` tag in the head section. Use absolute URLs and ensure consistency (with or without trailing slash, www vs non-www). For paginated content, point to the main page or use rel="prev/next".
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["core/*"]
 enable = ["core/canonical"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/canonical-header](/rules/core/canonical-header): the same declaration in an HTTP header, and whether the two agree.
+- [core/canonical-form-drift](/rules/core/canonical-form-drift): canonicals that are each valid but disagree in form across the site.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): a canonical pointing at a URL that redirects instead of answering.
+- [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict): rich-result markup on a page that is blocked from indexing.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [How to specify a canonical URL, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [rel=canonical, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#canonical)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each page reports the canonical it declared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

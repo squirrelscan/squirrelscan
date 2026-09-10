@@ -1,9 +1,38 @@
 ---
-title: "Twitter Cards"
-description: "Validates Twitter Card meta tags"
+title: "twitter:card: the card types and the Open Graph fallback"
+description: "A page with no twitter:card, an unrecognised type, or a large-image card with no image. squirrel checks the type and the fallback."
 ---
 
-Validates Twitter Card meta tags
+## What a Twitter card is
+
+`<meta name="twitter:card">` chooses how a link renders on X. Four types are defined: `summary` for a small square thumbnail, `summary_large_image` for a wide banner, `player` for embedded media, and `app` for a mobile app listing.
+
+For a `summary` or `summary_large_image` card the other `twitter:` tags are optional, because X falls back to Open Graph for the title, description and image. A `player` or `app` card is different: each needs its own tags, which Open Graph has no equivalent for. That is why a page with good Open Graph tags and no `twitter:card` is a reasonable configuration, and why this rule reports at info severity rather than warning.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the parsed `twitter:` and `og:` values. It emits one check named `twitter-card`:
+
+- At info status with the message `No Twitter card specified, will use Open Graph fallback` when there is no `twitter:card` but both `og:title` and `og:description` are present.
+- Warning with the message `No Twitter card or Open Graph tags for Twitter sharing` when there is no card and the Open Graph fallback is incomplete.
+- Warning with the message `Invalid Twitter card type: <value>` when the card value is not one of `summary`, `summary_large_image`, `app` or `player`. The four valid types are listed as items.
+- Warning with the message `summary_large_image card requires an image` when that card type is declared and neither `twitter:image` nor `og:image` is present.
+- Passing with the message `Twitter card configured: <type>`.
+
+The card type is matched exactly, so a value with different casing or surrounding whitespace is reported as invalid. Only `summary_large_image` has its image requirement checked; a `summary` card with no image passes.
+
+## How to fix it
+
+```html
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Configuring the build cache" />
+<meta name="twitter:description" content="How the build cache stores compiled output between runs." />
+<meta name="twitter:image" content="https://example.com/og/build-cache.png" />
+```
+
+Note that these use `name`, not `property`, which is the opposite of Open Graph. For a summary card, declaring `twitter:card` alone and letting the rest fall back to Open Graph is enough and keeps one set of values to maintain. A `player` or `app` card needs its own full set.
+
+The common false positive is a page deliberately relying on the fallback. That is reported at info status, which is the correct outcome and not something to fix.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Validates Twitter Card meta tags
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Twitter Cards enhance how links appear in tweets. The twitter:card meta tag specifies the card type (summary, summary_large_image, player, or app). Add twitter:card, twitter:title, twitter:description, and twitter:image tags. For large images, use summary_large_image with images at least 800x418 pixels. Validate using Twitter's Card Validator tool.
 
 ## Enable / disable
 
@@ -40,3 +65,31 @@ disable = ["core/*"]
 enable = ["core/twitter-cards"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/og-tags](/rules/core/og-tags): the tags this card type falls back to.
+- [social/og-image-size](/rules/social/og-image-size): whether the image is the right dimensions for a large card.
+- [social/share-buttons](/rules/social/share-buttons): the on-page sharing affordances.
+- [social/social-profiles](/rules/social/social-profiles): links to the site's social profiles in the page itself.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [About X Cards, X developer docs](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards)
+- [Getting started with Cards, X developer docs](https://developer.x.com/en/docs/x-for-websites/cards/guides/getting-started)
+- [meta name, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each page reports the card type it declared, or that it has none. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

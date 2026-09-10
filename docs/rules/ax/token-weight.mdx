@@ -1,38 +1,45 @@
 ---
-title: "Token Weight"
-description: "Per-page raw-HTML token estimate and text-to-HTML ratio"
+title: "Text to HTML ratio: the token cost of a page for an agent"
+description: "Visible text under 15% of the HTML, or a page over a 100,000-token budget. squirrel estimates both from the raw response."
 ---
 
-Estimates how many LLM tokens a page's raw HTML costs to fetch and parse, and reports the **text-to-HTML ratio**: how much of that token budget is actual content versus markup, scripts, and styles. An agent that fetches a page pays for every token in the response, whether or not it's useful; a bloated page costs more per unit of content than a lean one.
+## What text-to-HTML ratio is
+
+An agent that fetches a page pays for every byte of it in tokens, including the parts a reader never sees: inline scripts, inline styles, wrapper divs, and long utility-class strings. The text-to-HTML ratio is the share of the response that is visible text. A page at 5% is spending nineteen tokens on markup for every one on content.
+
+The second number is absolute size. A response large enough to fill a meaningful part of a context window is a problem regardless of its ratio, because the agent has to hold all of it to find the part it wanted.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the raw HTML and emits two checks:
+
+- `token-weight-ratio`: warns with the message `Visible text is under 15% of the page HTML — agents pay token cost mostly for markup, scripts, and styles` when the ratio is below 0.15. The per-page number is in the item, which reads `~N% of HTML is visible text (~N est. tokens)`. Otherwise it passes with `~N% of this page's HTML is visible text, above the 15% floor`.
+- `token-weight-budget`: warns with the message `Raw HTML exceeds a generous 100,000-token budget for a single page fetch — too heavy for an agent's context window` when the estimate is over 100,000 tokens, with the item reading `~N estimated tokens (N bytes)`. Otherwise it passes with `~N estimated tokens (N bytes), within budget`.
+
+Instead of both, a single `token-weight` check is emitted as skipped with the message `Page too small (or not a real content page) to assess token weight` when the page has no parsed document or its HTML is under 1,024 bytes. The rule is also skipped on a page detected as a soft 404, whose numbers describe the error template rather than a real page.
+
+The token estimate is the UTF-8 byte length of the HTML divided by four and rounded. It is a heuristic, not any model's tokenizer, and it is there to flag order-of-magnitude bloat rather than to bill anyone. The two warning messages carry the fixed thresholds but no per-page numbers: the report groups checks by message, and differing digits would collapse the shared headline into a literal `N`. The per-page figures live in the item instead.
+
+## How to fix it
+
+Move inline scripts and styles into external files, which also lets them cache:
+
+```html
+<link rel="stylesheet" href="/app.css" />
+<script src="/app.js" defer></script>
+```
+
+Then look at the markup around the content itself. Deeply nested wrapper divs and hundred-character class strings on every paragraph are the other half of the ratio. Serving a Markdown representation, covered by [ax/markdown-response](/rules/ax/markdown-response), removes the markup from the response entirely.
+
+The common false positive is a page that is mostly a data table or a media gallery, where the markup-to-text ratio is inherent to the content. The finding is still true about token cost, but there may be nothing to cut.
 
 | | |
 |---|---|
 | **Rule ID** | `ax/token-weight` |
 | **Category** | [Agent Experience](/rules/ax) |
-| **Scope** | Per page |
+| **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 2/10 |
-
-<Note>This rule flags pages that exceed the token budget below. Unlike most AX rules, it can produce a **warning**: bloated markup is an actionable defect, not just a missing-but-optional signal.</Note>
-
-## What it checks
-
-For each crawled page, the rule:
-
-- Estimates the token count of the raw HTML response using the same tokenization approach a typical LLM fetcher would incur.
-- Computes the **text-to-HTML ratio**: visible text length divided by total HTML length.
-- Flags the page when the ratio falls under **15%**, the budget line used by Vercel's Agent Readability spec. Below that, an agent is paying for mostly markup, inline scripts, and styling to extract a small amount of usable content.
-
-## Why it matters
-
-Agents that fetch pages directly — coding assistants pulling in docs, answer engines summarizing a page, research agents crawling a site — pay token costs proportional to response size, not proportional to what's useful in it. A heavy component library, inlined SVGs, verbose class names, and unstripped scripts all inflate the raw HTML an agent has to wade through before it reaches your actual content. High-ratio pages are cheaper to fetch, cheaper to summarize correctly, and more likely to stay within an agent's context budget.
-
-## Solution
-
-- Strip or externalize inline `<script>` and `<style>` blocks where practical: they count as HTML tokens but carry no readable content.
-- Avoid deeply nested wrapper `<div>`s and long utility-class strings on content-bearing elements.
-- Serve a lean server-rendered markup shape rather than a client framework's verbose hydration output, especially for content pages (articles, docs, product pages).
-- Where the audience is explicitly agents, consider [content negotiation to Markdown](/rules/ax/markdown-response), which sidesteps the ratio problem entirely by removing HTML markup from the response.
 
 ## Enable / disable
 
@@ -57,3 +64,30 @@ disable = ["ax/*"]
 enable = ["ax/token-weight"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/markdown-response](/rules/ax/markdown-response): serving Markdown, which removes the markup from the response.
+- [ax/content-without-js](/rules/ax/content-without-js): the opposite failure, where the heavy HTML carries no content at all.
+- [perf/total-byte-weight](/rules/perf/total-byte-weight): the same size question measured for a browser rather than an agent.
+- [crawl/html-size](/rules/crawl/html-size): the crawl-side view of oversized HTML documents.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [Generative engine optimization](https://squirrelscan.com/learn/generative-engine-optimization) for how an agent works through a report.
+
+## References
+
+- [How large DOM sizes affect interactivity, web.dev](https://web.dev/articles/dom-size-and-interactivity)
+- [text/markdown media type, RFC 7763](https://www.rfc-editor.org/rfc/rfc7763.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each page lists its ratio and estimated tokens. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

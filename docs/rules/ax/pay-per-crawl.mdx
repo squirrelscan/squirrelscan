@@ -1,45 +1,44 @@
 ---
-title: "Pay Per Crawl"
-description: "Detects HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)"
+title: "HTTP 402 for crawlers: pay-per-crawl and x402 detection"
+description: "A payment wall served to AI crawlers, and whether it also charges a live user-action fetch. squirrel probes the homepage as three user-agents."
 ---
 
-Detects monetized agent access: an HTTP `402 Payment Required` response carrying a `crawler-price` header (Cloudflare Pay Per Crawl) or an [x402](https://x402.org) JSON payment body, served to AI crawler user-agents. This is the most literal expression of the "Actionable" pillar — a site that has decided agent access to its content is a paid transaction, not a free crawl.
+## What pay-per-crawl is
+
+HTTP 402 Payment Required has been reserved in the HTTP specification for years and has only recently found a use: charging automated clients for access. Cloudflare's Pay Per Crawl returns a 402 with a `crawler-price` header naming what a fetch costs. x402 is a separate scheme that returns a 402 with a JSON body describing how to pay.
+
+Charging for crawler access is a business decision, not a defect, and this rule reports it as such. The one case worth calling out is scope. A training crawler pulling thousands of pages and a person's assistant fetching one page they asked about are different clients, and a 402 aimed at the first will hit the second unless the rule is scoped.
+
+## What squirrel checks
+
+The rule runs once per crawl and reads the three homepage probes made during prefetch: one with a browser user-agent, one as `GPTBot` and one as `Claude-User`. It emits one or two checks:
+
+- `pay-per-crawl`: reports at info status with the message `agent access probe data not available` when the probes did not run. With no probe requiring payment it reports at info status with `No monetized agent access (pay-per-crawl / x402) detected` and the value `absent`. Otherwise it reports at info status with `Monetized agent access configured via <mechanisms> for <user-agents>`, joining the distinct mechanisms with ` and ` and the charged user-agent names with `, `. A `crawler-price` or `crawler-charged` signal reads as Cloudflare Pay Per Crawl, an x402 body reads as x402, and anything else reads as `an unnamed HTTP 402 payment wall`.
+- `pay-per-crawl-user-action`: emitted only when `Claude-User` is charged while the browser probe returned a 2xx. It warns with the message `Claude-User (a live user-action fetch) is charged HTTP 402 while browsers get a normal 2xx response — this bills a real person's in-the-moment question, not a background crawl`.
+
+Detection is a report, not a judgement. Only the second check can affect anything, and it fires on one specific asymmetry: a person's live request being billed while an ordinary browser is not.
+
+## How to fix it
+
+Scope the 402 to the crawler classes you meant to charge, and exclude the user-action fetchers:
+
+```
+ChatGPT-User
+Claude-User
+Perplexity-User
+```
+
+These three fetch because a person asked, so they belong outside the payment wall even on a site that charges for bulk crawling.
+
+There is no common false positive. A 402 is unambiguous, and the rule hands the case off from [ax/agent-blocking](/rules/ax/agent-blocking) so a payment wall is never reported as an access block.
 
 | | |
 |---|---|
 | **Rule ID** | `ax/pay-per-crawl` |
 | **Category** | [Agent Experience](/rules/ax) |
 | **Scope** | Site-wide |
-| **Severity** | warning (only when a user-action fetcher is charged; otherwise informational) |
+| **Severity** | warning |
 | **Weight** | 1/10 |
-
-<Note>Monetizing crawler access is a legitimate business decision, and this rule reports it informationally by default. It only escalates to a warning when a `402` is served to a **user-action fetcher** (`ChatGPT-User`, `Claude-User`, `Perplexity-User`) rather than a training or bulk crawler — that charges a real person's live request rather than a background crawl.</Note>
-
-## What it checks
-
-The audit re-requests representative pages using AI crawler user-agents and inspects the response for:
-
-- **Cloudflare Pay Per Crawl**: a `402` status with a `crawler-price` response header stating the price to fetch the resource.
-- **x402**: a `402` status with a JSON body following the [x402 protocol](https://x402.org) shape (payment requirements, accepted schemes, resource identifier).
-
-When found, it reports the monetization scheme, the declared price where present, and which user-agent classes (training / AI-search / user-action, per [AI Crawler Access](/rules/ax/ai-crawlers)) the `402` applies to.
-
-## Solution
-
-If you're monetizing crawler access, scope the `402` to the crawler classes you intend to charge — typically training and bulk-ingestion crawlers — and keep it off user-action fetchers so a real user's in-the-moment request through an AI assistant isn't the thing that gets billed:
-
-```http
-GET / HTTP/1.1
-User-agent: GPTBot
-
-HTTP/1.1 402 Payment Required
-crawler-price: $0.01
-Content-Type: text/plain
-
-Payment required for automated access. See https://example.com/crawler-pricing
-```
-
-If you have no intention of charging for access, no action is needed — this rule is purely informational unless a `402` shows up somewhere it shouldn't.
 
 ## Enable / disable
 
@@ -64,3 +63,30 @@ disable = ["ax/*"]
 enable = ["ax/pay-per-crawl"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/agent-blocking](/rules/ax/agent-blocking): access blocks, which this rule takes the payment cases out of.
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): the declared robots.txt policy for the same user-agents.
+- [ax/rsl-license](/rules/ax/rsl-license): machine-readable licensing terms, including crawl pricing.
+- [ax/content-signals](/rules/ax/content-signals): per-purpose AI policy declared in robots.txt.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
+
+## References
+
+- [402 Payment Required, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/402)
+- [Pay per crawl, Cloudflare docs](https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. The mechanism and every charged user-agent are listed. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,43 @@
 ---
-title: "Total Page Weight"
-description: "Checks the total byte weight of the page"
+title: "Total page weight: the 1600 KB and 5000 KB thresholds"
+description: "Everything the crawl measured, summed: CSS, JavaScript and images. squirrel warns at 1600 KB and fails at 5000 KB."
 ---
 
-Checks the total byte weight of the page
+## What total page weight is
+
+Total page weight is the sum of the sub-resources a visitor downloads. It matters most on a metered or slow connection, where it converts directly into waiting, and it is the number that best predicts how a site behaves on a phone in a place with poor coverage.
+
+Images are usually the largest share and the easiest to cut, through a modern format and a size that matches the layout rather than the original upload. JavaScript is the next largest and the hardest, because cutting it means removing a dependency rather than re-encoding a file.
+
+## What squirrel checks
+
+The rule runs once per crawl and sums what it measured: inline CSS and inline JavaScript across every page, plus the external CSS, script and image resources the crawl collected, each counted once by URL. It emits one check named `total-byte-weight`:
+
+- Passing with the message `Total tracked resources: NKB` under 1,600 KB.
+- Warning with the message `Total tracked resources: NKB (heavy page)` from 1,600 KB up to but not including 5,000 KB.
+- Failing with the message `Total tracked resources: NKB (very heavy)` at 5,000 KB or above.
+
+The threshold comparison uses the unrounded total, while the message prints it rounded, so a total of 1,599.6 KB warns and displays as `1600KB`.
+
+When the crawl produced no resource-size record and no script record at all, the rule estimates instead, from the first page's counts at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports 0 KB rather than an estimate. In that case the message opens `Estimated total:` rather than `Total tracked resources:` and the details record that it is an estimate.
+
+The details carry the breakdown: CSS, JavaScript and image totals, the inline against external split where both are present, and the number of distinct files in each pool. Inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. The HTML and font buckets exist in the sum but nothing ever writes to them, so the documents themselves and every font file are missing from the total.
+
+## How to fix it
+
+Start with images, since they are usually most of the number:
+
+```html
+<picture>
+  <source srcset="/hero.avif" type="image/avif" />
+  <source srcset="/hero.webp" type="image/webp" />
+  <img src="/hero.jpg" width="1200" height="630" alt="" />
+</picture>
+```
+
+Then serve dimensions that match the layout rather than the original file, and lazy-load everything below the fold. For JavaScript, the lever is which dependencies ship rather than how they are bundled.
+
+The common false positive follows from what is summed. The total covers every distinct resource the crawl found across the whole site, not the weight of one page load, so a large site with many unique images reports a large number even when each page is light.
 
 | | |
 |---|---|
@@ -13,25 +47,19 @@ Checks the total byte weight of the page
 | **Severity** | warning |
 | **Weight** | 6/10 |
 
-## Solution
-
-Reduce total page weight for faster loads on slow connections. Optimize images (use modern formats, compress, serve appropriate sizes). Minify and compress CSS/JS. Remove unused code via tree-shaking. Lazy-load non-critical resources. Target under 1.6MB for mobile users.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `warn_threshold_kb` | unknown | `undefined` | Warning threshold for total page weight in KB |
-| `error_threshold_kb` | unknown | `undefined` | Error threshold for total page weight in KB |
+| `warn_threshold_kb` | number | `1600` | Warning threshold for total page weight in KB |
+| `error_threshold_kb` | number | `5000` | Error threshold for total page weight in KB |
 
 ### Configuration example
 
 ```toml squirrel.toml
 [rules."perf/total-byte-weight"]
-warn_threshold_kb = undefined
-error_threshold_kb = undefined
+warn_threshold_kb = 1600
+error_threshold_kb = 5000
 ```
 
 ## Enable / disable
@@ -57,3 +85,30 @@ disable = ["perf/*"]
 enable = ["perf/total-byte-weight"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/image-file-size](/rules/images/image-file-size): the individual images making up the largest share.
+- [perf/js-file-size](/rules/perf/js-file-size): the individual scripts.
+- [perf/css-file-size](/rules/perf/css-file-size): the individual stylesheets.
+- [perf/asset-compression](/rules/perf/asset-compression): whether those bytes are at least compressed in transit.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Reduce network payloads using text compression, web.dev](https://web.dev/articles/reduce-network-payloads-using-text-compression)
+- [Largest Contentful Paint, web.dev](https://web.dev/articles/lcp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. The report shows the total with a breakdown by resource type. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

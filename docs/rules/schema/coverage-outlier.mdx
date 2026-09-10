@@ -1,9 +1,35 @@
 ---
-title: "Structured Data Coverage Outlier"
-description: "Finds pages missing the structured data the rest of their page type carries"
+title: "Structured data coverage: pages that break your own norm"
+description: "Forty of forty-five product pages carry Product markup and five do not. squirrel finds the gap against the site's own pattern, not a generic rule."
 ---
 
-Finds pages missing the structured data the rest of their page type carries
+## What a coverage outlier is
+
+A page with no structured data is not always a defect. Plenty of pages legitimately carry none, and a rule that says so on every one of them is noise. A page that lacks the markup its own siblings carry is different: the site has already shown it can emit that type, and this page does not. That is usually a template or CMS gap, and it is always a specific thing to check.
+
+This rule never asks whether a page has structured data in the abstract. It groups pages by their detected page type, works out what markup that group agrees on, and reports the pages inside the group that break the pattern.
+
+## What squirrel checks
+
+The rule runs once per crawl and emits a single check named `coverage-outlier`. A page enters a comparison group only when its HTTP status is 2xx and it carries a page type that is neither empty nor `unknown`. The `unknown` bucket holds everything the classifier could not place, and its members are not siblings of each other.
+
+- Skipped with the message `Only N page(s) crawled; 10 needed to establish a structured-data norm` when the crawl has fewer than 10 pages.
+- Skipped with the message `No page type has 8+ comparable pages sharing a structured-data pattern` when no page-type group reaches 8 pages with an agreed set of types.
+- Skipped with the message `No pages available for analysis` when the crawl produced no pages at all. This wording comes from the non-streaming path; a streaming crawl with no pages takes the `Only 0 page(s) crawled` branch instead.
+- Passes with the message `All N comparable page(s) carry the structured data their page type establishes (article Article, product BreadcrumbList+Product)` when every judged page is inside its group's norm. The parenthesised summary lists up to 10 groups, sorted by page type, each as the lowercased page type followed by its norm types in alphabetical order joined with `+`.
+- Warns, or fails, with the message `N of M page(s) are missing structured data their same-type siblings have (article Article, product BreadcrumbList+Product)`. Each item reads `40 of 45 product pages have Product schema, these 5 do not` and carries up to 20 example URLs. The status is `fail` when the deviant pages are 20% or more of the judged pages, and `warn` below that.
+
+A schema `@type` joins a group's norm when at least 70% of the group carries it, and pages below that share establish no norm at all, so a site whose same-type pages genuinely differ produces no finding. A `BreadcrumbList` present on 70% of a group does become part of that group's norm, and the 30% without it are reported. Norms are computed per `@type` rather than by exact type set, so one optional extra cannot shatter the majority and hide a real gap behind it. Items are capped at 10 gaps and the norm summary at 10 groups.
+
+Grouping is by page type, never by the rich result types derived from the markup. Deriving the group from the field being judged would put a product page missing its `Product` markup in a different group from the pages it should be compared against, where it could never be an outlier. The rich-result flag is still recorded per gap, since a missing rich-result-eligible type costs a real search feature.
+
+## How to fix it
+
+Find where the passing pages get their JSON-LD, then make sure the listed pages run through the same code path. The gap is usually one template branch, one content type in the CMS, or a set of older pages created before the markup existed.
+
+Pages built from one template are safe by construction: they all carry the same types, so they sit inside their own norm and none of them can be a deviant.
+
+A page that genuinely should not carry the markup, such as a discontinued product stub or a landing page filed under the same type, is fine to leave. The finding says only that it is currently the exception.
 
 | | |
 |---|---|
@@ -12,44 +38,6 @@ Finds pages missing the structured data the rest of their page type carries
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## How it works
-
-"This page has no structured data" is weak advice, because plenty of pages
-legitimately carry none. "40 of 45 product pages have `Product` schema, these 5 do
-not" is strong advice, because the site has already proved it knows how to emit the
-markup and simply missed some pages.
-
-So this rule never asks whether a page has schema in the abstract. It groups the
-crawled pages by page type (product, article, category, docs, and so on), works out
-which schema.org `@type`s most of each group agrees on, and reports only the members
-that break their own group's pattern.
-
-It stays quiet unless it has grounds to speak:
-
-- Fewer than 10 crawled pages: no site norm exists, so the rule is skipped.
-- Fewer than 8 pages of a given page type: that type is dropped, not guessed at.
-- A `@type` carried by under 70% of a page type: the group has no established
-  pattern, so nothing in it is a deviant. A site with no structured data anywhere
-  therefore reports nothing here. That is the job of the per-type rules such as
-  [Product Schema](/rules/schema/product) and [Article Schema](/rules/schema/article).
-
-Pages built from one template all carry the same markup, so they sit inside their
-own norm and are never reported. Page types the classifier could not identify are
-excluded, as are pages that did not return a 2xx.
-
-The finding names the ratio it is arguing from, and lists the pages that break it.
-
-## Solution
-
-These pages break your own site's pattern: most pages of the same type emit this
-schema `@type` and these do not. That is almost always a template or CMS gap rather
-than a deliberate choice, a product without its `Product` markup or an article
-without its `Article` markup, and it costs those pages the rich results their
-siblings are eligible for. Find where the working pages get their JSON-LD and make
-sure the listed pages run through the same path. If a page genuinely should not
-carry the markup (a discontinued product stub, a landing page filed under the same
-type), leave it: the point is that it is currently the exception.
 
 ## Enable / disable
 
@@ -74,3 +62,31 @@ disable = ["schema/*"]
 enable = ["schema/coverage-outlier"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/product](/rules/schema/product): the per-page check for the type this rule most often finds missing.
+- [schema/article](/rules/schema/article): the same for article and blog pages.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): the same site-norm approach applied to page titles.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): pages far shorter than the site's own norm for their page type.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Introduction to structured data markup, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data)
+- [Search gallery of rich result types, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/search-gallery)
+- [Getting started with schema.org, schema.org](https://schema.org/docs/gs.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each gap lists the page type, the missing type and the URLs. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

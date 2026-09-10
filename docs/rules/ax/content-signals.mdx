@@ -1,53 +1,51 @@
 ---
-title: "Content Signals"
-description: "Parses Content-Signal lines in robots.txt and flags contradictory AI policy"
+title: "Content-Signal in robots.txt: search, ai-input, ai-train"
+description: "A Content-Signal line with a typo, or one declaring ai-train=yes while robots.txt blocks the training crawlers. squirrel parses and cross-checks both."
 ---
 
-Parses [`Content-Signal`](https://contentsignals.org) directives in `robots.txt`: a machine-readable way to declare AI policy per-purpose rather than per-crawler. Instead of allow/disallow-ing named bots one at a time, a site declares intent directly — `search=yes, ai-input=no, ai-train=no` — and lets crawlers that honor the standard resolve their own behavior against it.
+## What Content-Signal is
+
+`Content-Signal` is a robots.txt directive that states policy per purpose rather than per bot. It takes comma-separated `key=value` pairs, and three keys are defined: `search` covers search-result display and answer-engine citation, `ai-input` covers use as input to an AI system at inference time, and `ai-train` covers training or fine-tuning a model. Each takes `yes` or `no`.
+
+```
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+```
+
+It sits inside a normal robots.txt group, so a directive under `User-agent: *` speaks for every crawler and one under a named group speaks only for those agents. Cloudflare's managed robots.txt also emits a `use=` key with the values `immediate`, `reference` or `full`, describing how a collected page may be consumed. Declaring a signal is optional.
+
+## What squirrel checks
+
+The rule runs once per crawl against the raw robots.txt. It strips comments, tracks which user-agent group each `Content-Signal:` line sits under, and emits one to three checks:
+
+- `content-signals`: reports at info status with the message `No Content-Signal declared in robots.txt (optional per-purpose AI policy)` and the value `absent` when no directive is present. No further checks run.
+- `content-signals-policy`: always emitted when a directive is present, at info status. The message is `Content-Signal declares:` followed by each declared key with its description, joined with `; `, and then any recognised auxiliary key as `<key>=<value>`. The three descriptions are `search=yes (search-result display & answer-engine citation)`, `ai-input=yes (input to an AI system at inference time)` and `ai-train=no (training / fine-tuning a model)`. When a directive is present but declares nothing recognised, the message is `Content-Signal present but declares no recognized signal`.
+- `content-signals-syntax`: warns when a token's key is not one of the three signals or `use`, when a signal's value is anything other than `yes` or `no`, when a `use` value is not `immediate`, `reference` or `full`, or when a token has no `=` at all. The message is `Content-Signal has invalid syntax — <notes>. Valid form is comma-separated key=value using search/ai-input/ai-train with yes/no.`, where the notes are `unknown key(s): <keys>` and `malformed token(s): <tokens>` joined with `; `, and a note with nothing in it is left out.
+- `content-signals-contradiction`: warns when a signal is declared `yes` while robots.txt fully disallows at least one crawler in the class that signal implies access for. `search` maps to the AI-search indexers, `ai-input` to the user-action fetchers, and `ai-train` to the training crawlers. The message is `Content-Signal <signal>=yes but robots.txt fully Disallow-s <tokens> — a crawler can't tell which directive wins`, one clause per contradiction joined with `; `.
+
+A contradiction is only reported inside the directive's own scope. A `Content-Signal` under `User-agent: *`, or outside any group, is checked against every blocked crawler; one under a named group is checked only against blocks on those agents. Full blocking means `Disallow: /` with no `Allow: /` in the groups that apply to that bot. One blocked crawler in the class is enough to raise the contradiction, and each signal is reported at most once.
+
+## How to fix it
+
+```
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+
+User-agent: GPTBot
+Disallow: /
+```
+
+Put the directive in robots.txt and keep it in step with the blocks below it. The example is consistent: `ai-train=no` and a disallowed training crawler say the same thing. Declaring `ai-train=yes` above that block is what the contradiction check reports.
+
+There is no common false positive. Absence is reported at info status and never affects the score.
 
 | | |
 |---|---|
 | **Rule ID** | `ax/content-signals` |
 | **Category** | [Agent Experience](/rules/ax) |
 | **Scope** | Site-wide |
-| **Severity** | warning (only when signals contradict or are malformed; otherwise informational) |
+| **Severity** | warning |
 | **Weight** | 2/10 |
-
-<Note>Declaring a policy is optional — a site with no `Content-Signal` line, or a clean one, is never penalized and this rule stays out of the issues list entirely. It only enters your report as a **warning** when a declared signal contradicts the site's own crawler blocks or the line has invalid syntax, since either leaves crawlers to guess which directive wins. The signal's user-agent scope is respected: a `Content-Signal` under one crawler's group is never held against a different crawler's `Disallow`.</Note>
-
-## What it checks
-
-The audit parses any `Content-Signal` line in the site's `robots.txt` and validates its `key=value` syntax against the three defined signals:
-
-- **`search`** — usable for search-result display and answer-engine citation
-- **`ai-input`** — usable as input to an AI system at inference time (e.g. RAG, browsing tools)
-- **`ai-train`** — usable to train or fine-tune a model
-
-Cloudflare's managed robots.txt also emits an auxiliary `use=<immediate|reference|full>` key describing how AI systems may consume collected content. It carries no crawl-permission semantics, but it is valid syntax — the audit recognizes it rather than flagging Cloudflare-managed files as invalid.
-
-Each takes `yes` or `no`. The rule reports:
-
-- **Presence and syntax**: whether a `Content-Signal` line exists, at the wildcard (`User-agent: *`) group or scoped to specific crawlers, and whether it parses cleanly.
-- **Declared policy**: a plain-language summary of what the site has opted into or out of.
-- **Contradictions**: cases where the declared signal disagrees with the crawler-level rules covered by [AI Crawler Access](/rules/ax/ai-crawlers) within the signal's own user-agent scope — for example, `Content-Signal: ai-train=yes` under `User-agent: *` while `Disallow: /` is set for `GPTBot` specifically. A contradiction surfaces as a **warning**, since it leaves crawlers to guess which directive wins. A signal scoped to one crawler's group is not compared against other crawlers' blocks.
-
-## Solution
-
-Add a `Content-Signal` line to `robots.txt` that matches your actual crawler-blocking policy:
-
-```txt robots.txt
-User-agent: *
-Content-Signal: search=yes, ai-input=yes, ai-train=no
-Allow: /
-```
-
-If you block specific training crawlers outright, make sure the signal doesn't claim to allow training generally, or scope the signal to the same user-agent group as the block:
-
-```txt robots.txt
-User-agent: GPTBot
-Content-Signal: ai-train=no
-Disallow: /
-```
 
 ## Enable / disable
 
@@ -72,3 +70,31 @@ disable = ["ax/*"]
 enable = ["ax/content-signals"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): the crawler blocks this rule cross-checks the declaration against.
+- [ax/noai-signals](/rules/ax/noai-signals): the per-page equivalent, declared in meta tags and the X-Robots-Tag header.
+- [ax/rsl-license](/rules/ax/rsl-license): machine-readable licensing terms, including AI-training permissions and pricing.
+- [crawl/robots-txt](/rules/crawl/robots-txt): whether robots.txt exists and parses at all.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
+
+## References
+
+- [Content Signals Policy](https://contentsignals.org/)
+- [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)
+- [How Google interprets the robots.txt specification, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. The declared policy and any contradiction are listed together. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>
