@@ -1,0 +1,94 @@
+---
+title: "Firewall and WAF exceptions"
+sidebarTitle: "Firewall exceptions"
+description: "Let squirrelscan cloud audits through your firewall, WAF, or bot protection"
+icon: "shield-check"
+---
+
+Cloud audits fetch your pages from squirrelscan's infrastructure, not from your machine. If your site sits behind a WAF, bot protection, or an IP allowlist, those requests can come back as 403s, challenge pages, or rate limits, and the report ends up auditing the block page instead of your site.
+
+This page covers how to recognise squirrelscan cloud traffic and the three ways to let it through, from most to least reliable.
+
+<Note>
+  Local audits run by the `squirrel` CLI come from your own network and are configured in `squirrel.toml`. See [User-Agent](/crawl#user-agent) and [Web Bot Auth](/guides/web-bot-auth) for the CLI equivalents of everything below.
+</Note>
+
+## Option 1: a secret request header (recommended)
+
+Every website in the dashboard can send custom HTTP headers on every request a cloud audit makes: pages, assets, `robots.txt`, sitemaps, and pages loaded in the headless browser when [rendering](/cloud/rendering) is on. A firewall rule that matches a header value only you know is the most precise exception you can make, and it works with any firewall.
+
+1. Open the website in the [dashboard](https://app.squirrelscan.com) and go to **Settings → Crawl**.
+2. Scroll to **Custom request headers** at the bottom of the page.
+3. Add a header, for example `X-Squirrelscan-Auth` with a long random value, and click **Save headers**.
+4. Add a rule to your firewall that skips bot protection when that header carries that exact value.
+
+Header values are stored as secrets and never shown in reports or logs. You can set up to 50 headers per website, and they are available on every plan.
+
+<Tabs>
+  <Tab title="Cloudflare WAF">
+    Create a custom rule under **Security → WAF → Custom rules** with the action **Skip** (select the products to skip, such as Bot Fight Mode, rate limiting, and managed rules):
+
+    ```text
+    (http.request.headers["x-squirrelscan-auth"][0] eq "your-long-random-value")
+    ```
+
+    Header names are matched in lowercase in Cloudflare expressions.
+  </Tab>
+  <Tab title="nginx">
+    ```nginx
+    map $http_x_squirrelscan_auth $squirrelscan_ok {
+        default 0;
+        "your-long-random-value" 1;
+    }
+
+    # Inside the server or location block that enforces your rule:
+    if ($squirrelscan_ok) {
+        # e.g. skip the rate-limit zone or the geo/IP deny list
+    }
+    ```
+  </Tab>
+  <Tab title="Other">
+    Any WAF that can match a request header will work: Akamai, AWS WAF, Fastly, Vercel firewall, and Netlify all support a header equals condition with an allow or bypass action. Match the header name case-insensitively and compare the full value.
+  </Tab>
+</Tabs>
+
+Rotate the value from the same settings page at any time. The next audit picks up the new value automatically.
+
+## Option 2: Web Bot Auth
+
+If your platform verifies crawlers cryptographically (Cloudflare verified bots, Shopify crawler access keys), add the three signed headers from your provider as custom request headers instead of a shared secret. The mechanics are the same as option 1; the values come from your platform. See [Web Bot Auth](/guides/web-bot-auth) for what each header contains.
+
+## Option 3: IP allowlisting
+
+squirrelscan cloud runs on Cloudflare. Audit requests, including browser renders, leave from Cloudflare's shared egress addresses, so **there is no dedicated squirrelscan IP range to allowlist**.
+
+If your firewall can only work with IP addresses, allow Cloudflare's published ranges:
+
+- [cloudflare.com/ips](https://www.cloudflare.com/ips/) (IPv4 and IPv6 lists, kept current by Cloudflare)
+- Machine-readable: [`https://api.cloudflare.com/client/v4/ips`](https://api.cloudflare.com/client/v4/ips)
+
+<Warning>
+  These ranges are shared by every Cloudflare customer's Workers and by Cloudflare's own proxy traffic. Allowlisting them opens the exception to far more than squirrelscan, so pair the IP rule with the header check from option 1 wherever your firewall allows an AND condition.
+</Warning>
+
+## What squirrelscan cloud looks like in your logs
+
+Cloud audits deliberately look like a browser so that the audit sees what your visitors see. Do not rely on a user agent match to identify them:
+
+| Request type | User agent |
+|--------------|------------|
+| Page fetches | A current desktop or mobile browser user agent, chosen at random per audit |
+| Rendered pages (headless browser) | The headless Chrome user agent from the rendering service |
+| Asset checks and external link checks | `SquirrelScan/2.0 (+https://squirrelscan.com)` |
+
+The cloud crawl does not have a custom user-agent setting. If you need a fixed identifier on every request, use a custom request header (option 1) rather than the user agent.
+
+## Checking it worked
+
+Run an audit after saving the rule and open the report. A block that is still in place usually shows up as:
+
+- a low page count with many 403 or 429 responses in the crawl summary,
+- rules complaining that every page has the same title, such as "Attention Required" or "Just a moment",
+- a [rate-limited host](/guides/rate-limited-hosts) warning.
+
+If the audit still fails, see [Failed audits](/guides/failed-audits) or contact support from the dashboard with the audit id.
