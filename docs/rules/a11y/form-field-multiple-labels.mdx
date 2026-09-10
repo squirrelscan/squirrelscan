@@ -1,9 +1,35 @@
 ---
-title: "Multiple Labels"
-description: "Checks that form fields don't have multiple labels"
+title: "One control, two labels: why multiple labels confuse"
+description: "A control with two labels is announced inconsistently across screen readers. squirrel counts the labels on every input on the page."
 ---
 
-Checks that form fields don't have multiple labels
+## What multiple labels means
+
+A form control is meant to have one accessible name. Two `<label>` elements pointing at the same control leave it to the browser to decide what to do, and browsers do not agree: some concatenate, some announce the first, some announce the last.
+
+Extra text about a field is a description, not a second name. That is what `aria-describedby` is for, and screen readers announce it after the name rather than fighting with it.
+
+## What squirrel checks
+
+One check, `form-field-multiple-labels`, at severity warning. It covers every `<input>` except types `hidden`, `submit`, `button` and `reset`, plus every `<textarea>` and `<select>`.
+
+For each control it counts every `<label for="...">` whose value matches the control's `id`, and adds one when the control has an ancestor `<label>`.
+
+- Warn when the count is more than one. Report message: `N input(s) with multiple labels`. Items read `email (2 labels)`, naming the control by its `name`, falling back to its `id` and then its tag. Every offender is listed, and the finding carries the suggestion `Use aria-describedby for additional descriptions`.
+- Pass with `No inputs have multiple labels`.
+- Info with `No form inputs found`.
+
+## How to fix it
+
+```html
+<label for="pw">Password</label>
+<input id="pw" type="password" aria-describedby="pw-hint">
+<p id="pw-hint">At least 12 characters, including a number.</p>
+```
+
+Keep one label and move the rest into `aria-describedby`. The description can point at several ids, so a hint and an error message can coexist.
+
+A control wrapped in a `<label>` that also has a separate `<label for>` pointing at it is the usual shape, and it usually arrives when a wrapper is added for click-target reasons. Removing the wrapper `<label>` and keeping the explicit association fixes both.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks that form fields don't have multiple labels
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Form inputs should have only one associated label. Multiple labels can confuse assistive technology. If you need multiple text descriptions, use aria-describedby for supplementary text instead of multiple labels.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["a11y/*"]
 enable = ["a11y/form-field-multiple-labels"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/form-labels](/rules/a11y/form-labels): controls with no label at all.
+- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): a duplicated id, which is how one label ends up naming two controls.
+- [a11y/label-content-name-mismatch](/rules/a11y/label-content-name-mismatch): a label that disagrees with the visible text.
+- [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): the resolved name once the labels are sorted out.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The label element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/label)
+- [aria-describedby, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-describedby)
+- [Labeling controls, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/forms/labels/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each control is listed with the number of labels pointing at it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

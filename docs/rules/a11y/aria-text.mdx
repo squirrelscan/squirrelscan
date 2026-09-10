@@ -1,9 +1,34 @@
 ---
-title: "ARIA Text"
-description: "Checks that elements with role='text' have no focusable descendants"
+title: "role=text with focusable children: why it breaks"
+description: "role=text flattens a subtree into one announced string, so a link inside it cannot be operated. squirrel reports every case it finds."
 ---
 
-Checks that elements with role='text' have no focusable descendants
+## What role=text is
+
+`role="text"` asks assistive technology to treat an element's whole subtree as a single flat string, so a heading broken across several `<span>` elements is announced as one phrase instead of several fragments.
+
+It is not defined in the WAI-ARIA 1.2 recommendation, nor in the 1.3 working draft, so it is a vendor extension and support varies. Where it is honored, the subtree stops being a set of separate objects, and anything interactive inside it stops being reachable as a separate object too.
+
+## What squirrel checks
+
+One check, `aria-text`, at severity warning. It finds every `[role="text"]` element and looks for focusable descendants. Focusable means matching `a[href]`, `button`, `input`, `select` or `textarea`, or carrying any `tabindex` other than `-1`. The `tabindex` lookup is case-insensitive, so React's `tabIndex` in server-rendered markup is caught.
+
+- Warn with `N role="text" element(s) with focusable descendants`. Items read `span#hero-title (2 focusable)`, up to ten with a count of the rest.
+- Pass with `All N role="text" element(s) have no focusable descendants`.
+- Info with `No elements with role="text" found`.
+
+## How to fix it
+
+```html
+<h2>
+  <span>Read our</span>
+  <a href="/report">2026 accessibility report</a>
+</h2>
+```
+
+Take `role="text"` off the container, or move the interactive element outside it. Keeping both means the link is announced as part of a sentence with no way to activate it.
+
+If the goal was to stop a screen reader chopping a heading into pieces, the usual cause is extra markup for styling. Removing the wrapper elements, or setting them to `display: inline`, fixes the announcement without a vendor role.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that elements with role='text' have no focusable descendants
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Elements with role='text' tell screen readers to treat the content as a single text string. If focusable elements (links, buttons, inputs) are nested inside, screen reader users cannot interact with them properly. Remove role='text' from the parent, or restructure so focusable elements are outside the role='text' container.
 
 ## Enable / disable
 
@@ -40,3 +61,30 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-text"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): the same conflict between a hidden region and the tab order.
+- [a11y/aria-roles](/rules/a11y/aria-roles): `text` is outside the core vocabulary, so this role is reported there too.
+- [a11y/link-text](/rules/a11y/link-text): the accessible name the link inside still needs.
+- [a11y/empty-heading](/rules/a11y/empty-heading): headings whose content does not reach assistive technology at all.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Definition of roles, WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)
+- [Understanding SC 2.1.1 Keyboard, W3C](https://www.w3.org/WAI/WCAG22/Understanding/keyboard.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each container is listed with a count of the focusable elements inside it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

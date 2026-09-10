@@ -1,9 +1,34 @@
 ---
-title: "Duplicate ID ARIA"
-description: "Checks that IDs used in ARIA attributes are unique"
+title: "ARIA references pointing at duplicate or missing ids"
+description: "aria-labelledby resolving to two elements, or to none, names the wrong thing silently. squirrel checks all eight ARIA id references."
 ---
 
-Checks that IDs used in ARIA attributes are unique
+## What an ARIA id reference is
+
+Eight ARIA attributes work by pointing at other elements by id: `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-owns`, `aria-activedescendant`, `aria-flowto`, `aria-details` and `aria-errormessage`. Each accepts a whitespace-separated list of ids.
+
+A reference that resolves to nothing produces no name and no error. A reference that resolves to two elements takes the first, which may not be the one you meant. Either way the failure is invisible until someone uses a screen reader.
+
+## What squirrel checks
+
+One check, `duplicate-id-aria`, at severity error. It collects every id named by those eight attributes, splitting each value on whitespace, then counts every `id` on the page and compares.
+
+- Fail with `N problematic ID(s) in ARIA attributes`. Items read `"settings-title" (2 occurrences)` for a duplicate, or `"settings-title" (not found)` for a dangling reference. Up to ten are shown with a count of the rest.
+- Pass with `All ARIA ID references are valid and unique`.
+- Info with `No ARIA ID references found`.
+
+Both failure modes land in one check, so read the item text to tell them apart. The rule inspects only the ids ARIA references. Unreferenced duplicates elsewhere on the page are out of scope.
+
+## How to fix it
+
+```html
+<h2 id="billing-heading">Billing</h2>
+<section aria-labelledby="billing-heading">...</section>
+```
+
+For a dangling reference, check the target still exists. Ids that disappear during a refactor are the common cause, and so are ids added by a framework at runtime that never make it into the server-rendered markup.
+
+For a duplicate, rename one of the two. A component rendered twice on the same page needs a generated id, not a hard-coded one.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that IDs used in ARIA attributes are unique
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-IDs referenced by ARIA attributes (aria-labelledby, aria-describedby, aria-controls, etc.) must be unique on the page. Duplicate IDs cause assistive technology to potentially reference the wrong element. Rename duplicate IDs to be unique.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/duplicate-id-aria"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): the same uniqueness rule on focusable elements.
+- [a11y/aria-valid-attr](/rules/a11y/aria-valid-attr): a typo in the referencing attribute itself.
+- [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name): a dialog name that depends on one of these references resolving.
+- [a11y/aria-tooltip-name](/rules/a11y/aria-tooltip-name): the `aria-describedby` target most often missing.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [aria-labelledby, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-labelledby)
+- [The id attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/id)
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Duplicates and dangling references appear together, distinguished by the item text. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

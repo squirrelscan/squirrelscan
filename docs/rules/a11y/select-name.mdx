@@ -1,9 +1,37 @@
 ---
-title: "Select Name"
-description: "Checks that select elements have accessible names"
+title: "Dropdowns with no accessible name: naming a select"
+description: "A select announced only as 'combo box' gives no clue what it changes. squirrel checks every select element on the page."
 ---
 
-Checks that select elements have accessible names
+## What a select name is
+
+A `<select>` announces its role and its current value. Without a name, that is all a screen reader user gets: "combo box, United Kingdom". Whether that is a shipping country, a billing country or a language is left to them to work out.
+
+The name comes from a `<label>`, from `aria-label` or `aria-labelledby`, or from `title`. It does not come from the first `<option>`: a "Choose a country" placeholder is announced as the current value, not as a label, and it disappears the moment a selection is made.
+
+## What squirrel checks
+
+One check, `select-name`, at severity error and weight 8. It covers every `<select>` on the page.
+
+A name is accepted from a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, a `<label for="...">` matching the element's `id`, an ancestor `<label>` with text, or a non-empty `title`.
+
+- Fail with `N select element(s) without accessible names`. Every offender is listed as `select[name="country"]`, `select#country` or a bare `select`.
+- Pass with `N select element(s) have accessible names`.
+- Info with `No select elements found`.
+
+## How to fix it
+
+```html
+<label for="country">Shipping country</label>
+<select id="country" name="country" autocomplete="shipping country">
+  <option value="">Choose a country</option>
+  <option value="GB">United Kingdom</option>
+</select>
+```
+
+A visible `<label>` is the best answer, because it also makes the words clickable. Where the layout has no room, `aria-label` on the `<select>` does the job.
+
+A native `<select>` styled to look like a custom dropdown still needs its name on the `<select>` element itself, not on the wrapper that provides the visuals.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks that select elements have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Select elements need accessible labels. Use `<label for='selectId'>`Label`</label>`, wrap in `<label>`, or use aria-label/aria-labelledby.
 
 ## Enable / disable
 
@@ -40,3 +64,31 @@ disable = ["a11y/*"]
 enable = ["a11y/select-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/form-labels](/rules/a11y/form-labels): the same requirement across inputs and textareas.
+- [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): custom dropdowns built with `role="combobox"` or `role="listbox"`.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): a `role="listbox"` with no options inside it.
+- [a11y/autocomplete-tokens](/rules/a11y/autocomplete-tokens): the autofill token a country or state select should carry.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The select element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/select)
+- [Labeling controls, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/forms/labels/)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unnamed select is listed, with no cap on the count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

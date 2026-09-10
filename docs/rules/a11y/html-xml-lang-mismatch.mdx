@@ -1,9 +1,35 @@
 ---
-title: "HTML XML Lang Mismatch"
-description: "Checks that lang and xml:lang attributes match on html element"
+title: "lang and xml:lang disagreeing on the html element"
+description: "When both attributes are present and name different languages, a screen reader can pick the wrong voice. squirrel compares them."
 ---
 
-Checks that lang and xml:lang attributes match on html element
+## What xml:lang is
+
+`xml:lang` is the XML spelling of the language declaration. It matters in XHTML served as `application/xhtml+xml`, where the XML parser reads it and ignores plain `lang`. In an ordinary HTML document it is redundant, and most pages that carry it inherited it from an old doctype.
+
+Carrying both is allowed, but the specification requires them to agree. When they disagree, which one wins depends on how the document was parsed, so the announced language depends on the content type rather than on anything visible.
+
+## What squirrel checks
+
+One check, `html-xml-lang-mismatch`, at severity error. It reads `lang` and `xml:lang` from `<html>`, trimmed and lowercased, and compares the primary subtag of each.
+
+- Fail when both are present and the primary subtags differ. Report message: `lang="en" and xml:lang="fr" don't match`, with the issue `Base languages must match` and the fix `Set both to the same value or remove xml:lang`.
+- Warn when both are present and the primary subtags match but the full values differ, such as `en` against `en-gb`. Report message: `lang="en" and xml:lang="en-gb" differ slightly`, noting `Base languages match but subtags differ`.
+- Warn when `xml:lang` is present and `lang` is not. Report message: `xml:lang present without lang attribute`, suggesting `Add lang attribute for HTML5 compatibility`.
+- Pass with `lang and xml:lang attributes match` when the two values are identical.
+- Info with `Only lang attribute present (recommended for HTML5)` in every other case. That branch also covers a page with neither attribute, where the message reads oddly. Whether `lang` exists at all is `a11y/html-lang-valid`.
+
+Values are lowercased before comparison and before being quoted in the message, so a report shows `en-gb` where the markup said `en-GB`.
+
+## How to fix it
+
+```html
+<html lang="en-GB">
+```
+
+For an HTML document, delete `xml:lang`. It does nothing, and deleting it removes the possibility of the two drifting apart.
+
+For a document genuinely served as XML, set both to exactly the same string.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks that lang and xml:lang attributes match on html element
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## Solution
-
-If both lang and xml:lang are present on the `<html>` element, they must have the same base language. Mismatches can cause screen readers to announce content in the wrong language. Typically, you only need lang for HTML5 documents.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["a11y/*"]
 enable = ["a11y/html-xml-lang-mismatch"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/html-lang-valid](/rules/a11y/html-lang-valid): whether `lang` exists and holds a usable value.
+- [a11y/valid-lang](/rules/a11y/valid-lang): `lang` on elements below `<html>`.
+- [i18n/lang-attribute](/rules/i18n/lang-attribute): the same declaration checked for internationalization.
+- [core/doctype](/rules/core/doctype): the doctype that usually explains why `xml:lang` is there.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The lang attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/lang)
+- [Declaring language in HTML, W3C Internationalization](https://www.w3.org/International/questions/qa-html-language-declarations)
+- [Tags for identifying languages, RFC 5646](https://datatracker.ietf.org/doc/html/rfc5646)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. A different language fails, a different region subtag only warns. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

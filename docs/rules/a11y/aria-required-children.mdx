@@ -1,9 +1,37 @@
 ---
-title: "ARIA Required Children"
-description: "Checks that elements with certain roles have required child roles"
+title: "ARIA roles that require particular child roles"
+description: "role=list with no listitem, or role=tablist with no tab, is an incomplete widget. squirrel checks thirteen container roles for their children."
 ---
 
-Checks that elements with certain roles have required child roles
+## What a required child role is
+
+Composite ARIA roles are containers, and the specification says what they must contain. A `tablist` holds `tab` elements. A `list` holds `listitem` elements. A `menu` holds menu items.
+
+When the children are missing, assistive technology gets a container that promises a widget and delivers nothing. Screen readers commonly announce the container and then find no items to move between.
+
+## What squirrel checks
+
+One check, `aria-required-children`, at severity error. It covers thirteen container roles: `feed`, `grid`, `list`, `listbox`, `menu`, `menubar`, `radiogroup`, `row`, `rowgroup`, `tablist`, `table`, `tree` and `treegrid`.
+
+For each element with one of those explicit roles it looks for a satisfying descendant at any depth. A descendant satisfies the container when it carries one of the required roles explicitly, or when a native equivalent is present: `<li>` for `listitem`, `<tr>` for `row`, `<td>` or `<th>` for `cell`, `<option>` for `option`, `<article>` for `article`. A container that is itself the native element also counts, so `<ul role="list">` with `<li>` children passes, as do `<table role="table">` with `<tr>` and `<select role="listbox">` with `<option>`.
+
+An empty container is skipped, on the assumption it is populated later. A finding needs the element to have at least one child element or some text.
+
+- Fail with `N element(s) missing required child roles`. Items read `div[role="tablist"]: needs child with role=tab`, up to ten with a count of the rest.
+- Pass with `All elements have required child roles`, which is also what a page using none of these roles reports.
+
+## How to fix it
+
+```html
+<div role="tablist" aria-label="Account settings">
+  <button role="tab" aria-selected="true" aria-controls="profile">Profile</button>
+  <button role="tab" aria-selected="false" aria-controls="billing">Billing</button>
+</div>
+```
+
+Give the container the children its role demands, or drop the role and let the native elements speak for themselves.
+
+squirrel searches at any depth, so an intermediate wrapper does not trip the check. The ARIA specification is stricter: owned elements must be direct children, or connected with `aria-owns`. A widget that passes here can still be wrong in a browser, so keep the required children directly inside the container.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks that elements with certain roles have required child roles
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Some ARIA roles require specific child roles. For example, role='list' must contain role='listitem', role='menu' must contain menu items. Add the required child elements with appropriate roles.
 
 ## Enable / disable
 
@@ -40,3 +64,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-required-children"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): the same relationship checked from the child upwards.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): the state attributes those children need.
+- [a11y/list-structure](/rules/a11y/list-structure): native `<ul>` and `<ol>` with the wrong children.
+- [a11y/aria-roles](/rules/a11y/aria-roles): whether the role you typed exists at all.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+- [ARIA roles, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each container is listed with the child role it is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

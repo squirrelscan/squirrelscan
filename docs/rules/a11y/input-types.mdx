@@ -1,9 +1,47 @@
 ---
-title: "Input Types"
-description: "Checks that fields use the right input type and keyboard hint, and that forms keep native validation"
+title: "Input type, enterkeyhint and novalidate on forms"
+description: "type=text where type=email belongs costs mobile users the right keyboard. squirrel checks three ways a form opts out of browser help."
 ---
 
-Checks that fields use the right input type and keyboard hint, and that forms keep native validation
+## What the browser gives you for free
+
+A typed input brings a matching mobile keyboard and a validation pass with it. `type="email"` shows the at sign, `type="tel"` shows a keypad, `type="url"` shows a slash. `type="text"` shows the full QWERTY layout and nothing else.
+
+`enterkeyhint` relabels the return key on that keyboard, so it reads Next through a form and Send or Done at the end. And `novalidate` turns off the browser's constraint validation for a whole form, which is the right call only when your own code has taken the job over.
+
+## What squirrel checks
+
+Three checks, at rule severity warning.
+
+`input-types` compares each field's `type` against the purpose inferred from its `name`, `id`, label and placeholder.
+
+- Fail when a digit-string field such as a postal code, phone number or card number uses `type="number"`. Report message: `N digit-string field(s) use type="number"`, extended with `, M other field(s) use the wrong type` when both problems appear. Items read `postal code field uses type="number", which strips leading zeros and drops non-numeric input`.
+- Warn when a field is `type="text"` where a specific type is correct. Report message: `N field(s) use type="text" where a specific type is correct`, with items reading `type="text" where type="email" is correct`. An `inputmode` that delivers the same keyboard is accepted instead: `email`, `tel` and `url` for their matching types, and `numeric` or `decimal` for `number`.
+- Pass with `N field(s) use the correct input type`, or skip with `No inputs with an evident type found`.
+
+`enterkeyhint` looks at forms with three or more data fields.
+
+- Warn when no field in such a form sets `enterkeyhint`. Report message: `N multi-field form(s) set no enterkeyhint`, with items reading `5-field form, no field sets enterkeyhint`.
+- Pass with `N multi-field form(s) set enterkeyhint`, or skip with `No forms with 3 or more fields found`.
+
+`form-novalidate` looks at forms carrying the `novalidate` attribute.
+
+- Warn when such a form still declares constraints and ships nothing of its own to replace them. Constraints means any of `required`, `pattern`, `min`, `max`, `minlength`, `maxlength` or `step`, or a self-validating type: `email`, `url`, `number`, `date`, `time`, `month` or `week`. Report message: `N form(s) set novalidate but still rely on browser constraints`.
+- Pass with `N form(s) set novalidate deliberately`, or skip with `No forms set novalidate`.
+
+A replacement counts when the form has `onsubmit` or `oninvalid`, when it contains an element matching `[oninvalid]`, `[aria-invalid]`, `[aria-errormessage]`, `[role="alert"]`, `[aria-live]`, `[data-error]`, `[data-validate]`, `[data-val]` or `[data-rules]`, or when the page's inline scripts mention `checkValidity`, `reportValidity`, `setCustomValidity`, react-hook-form, Formik, jQuery Validate, Parsley or just-validate.
+
+## How to fix it
+
+```html
+<input type="email" name="email" autocomplete="email" enterkeyhint="next" required>
+<input type="text" inputmode="numeric" name="postcode"
+       autocomplete="postal-code" enterkeyhint="done" required>
+```
+
+Use `type="number"` only for quantities you would do arithmetic on. For a digit string, keep `type="text"` and add `inputmode="numeric"`: that gives the keypad without stripping leading zeros or discarding anything that is not a valid float.
+
+The `novalidate` check is about intent, not about the attribute. A form that validates in JavaScript and shows its own messages passes, because one of the custom-validation signals is present.
 
 | | |
 |---|---|
@@ -12,38 +50,6 @@ Checks that fields use the right input type and keyboard hint, and that forms ke
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## What it checks
-
-Three ways markup opts out of help the browser gives for free. Each check reports the exact node with a selector and its opening tag.
-
-### `input-types`
-
-`fail` when a digit string uses `type="number"` (a postal code, phone number, card number or security code). `warn` when `type="text"` is used where `email`, `tel`, `url` or `number` is correct. A field that already sets a matching `inputmode` is a deliberate choice and is left alone.
-
-### `enterkeyhint`
-
-`warn` when a form with three or more fields sets `enterkeyhint` on none of them. Shorter forms are skipped.
-
-### `form-novalidate`
-
-`warn` only on a genuine intent mismatch: the form sets `novalidate`, still declares constraints (`required`, `pattern`, `min`/`max`, `minlength`/`maxlength`, `step`, or a validating input type), and ships no validation of its own. A form with an error region, an `onsubmit` handler, `aria-invalid`, or a page that calls `checkValidity()` is left alone, as is a `novalidate` form with no constraints to disable.
-
-## Solution
-
-Use the input type that matches the data. `type="email"`, `type="tel"`, `type="url"` and `type="number"` each summon the right mobile keyboard and bring free browser validation with them, while `type="text"` gives users the full QWERTY keyboard and no help at all.
-
-Never use `type="number"` for a digit string such as a postal code, phone number or card number: it strips leading zeros, adds a spinner, and silently discards anything that is not a valid float. If you need a numeric keypad without those side effects, keep `type="text"` and add `inputmode="numeric"`:
-
-```html
-<label for="zip">ZIP code</label>
-<input id="zip" name="postalCode" type="text" inputmode="numeric"
-       autocomplete="postal-code" enterkeyhint="next">
-```
-
-On forms with several fields, set `enterkeyhint="next"` on each field and `enterkeyhint="send"` or `"done"` on the last one so the mobile return key says what it does.
-
-Only add `novalidate` when your own JavaScript takes over validation. On a form that still declares `required` or `pattern` and ships no replacement, it removes the browser's error messages and hands users nothing back.
 
 ## Enable / disable
 
@@ -68,3 +74,31 @@ disable = ["a11y/*"]
 enable = ["a11y/input-types"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/autocomplete-tokens](/rules/a11y/autocomplete-tokens): the autofill token that belongs on the same fields.
+- [a11y/form-labels](/rules/a11y/form-labels): the label the purpose is partly inferred from.
+- [a11y/paste-inputs](/rules/a11y/paste-inputs): the other way forms make typing harder than it needs to be.
+- [mobile/font-size](/rules/mobile/font-size): text size on the same screens these keyboards appear on.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [inputmode, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/inputmode)
+- [enterkeyhint, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/enterkeyhint)
+- [Constraint validation, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Constraint_validation)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The three checks are reported separately, so you can act on one without the others. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

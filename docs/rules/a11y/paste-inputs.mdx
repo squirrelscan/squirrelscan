@@ -1,9 +1,35 @@
 ---
-title: "Paste Inputs"
-description: "Detects form inputs that prevent pasting"
+title: "Inputs that block paste, and why that fails users"
+description: "Blocking paste forces people to retype passwords by hand. squirrel finds onpaste, oncopy and oncut handlers that cancel the event."
 ---
 
-Detects form inputs that prevent pasting
+## What paste blocking is
+
+Some forms cancel the paste event on password and confirmation fields, on the theory that retyping proves the user knows the value. It proves nothing, and it costs a lot.
+
+A password manager cannot fill the field. A long generated password has to be transcribed by hand, which produces exactly the typos the field was trying to prevent. Users with a motor impairment, and users on a phone, lose the only practical way to enter a long string. The usual result is that people pick shorter, weaker passwords.
+
+## What squirrel checks
+
+One check, `paste-inputs`, at severity warning. It covers `<input>` of type `text`, `password`, `email`, `tel`, `url` or `search`, `<input>` with no `type` at all, and `<textarea>`.
+
+For each it reads the `onpaste`, `oncopy` and `oncut` attributes and flags any whose value contains, case-insensitively, `return false`, `return!1`, `preventDefault`, `event.returnValue=false` or `event.returnValue=!1`.
+
+- Fail with `N input(s) prevent paste`. Items read `password (blocks: paste, copy)`, naming the field by its `name`, falling back to `id`, then `placeholder`, then type. Every offender is listed.
+- Pass with `No paste-blocking inputs detected`.
+- Info with `No text inputs found`.
+
+Only inline handler attributes are read. A listener attached with `addEventListener` is invisible here, so a pass is not proof that paste works. Test it by hand on the fields that matter.
+
+## How to fix it
+
+```html
+<input type="password" name="password" autocomplete="new-password">
+```
+
+Delete the handler. There is no version of this that helps, and the standards bodies that used to recommend it have withdrawn the advice.
+
+If the goal was to stop users pasting the wrong value into a confirmation field, drop the confirmation field instead and offer a show-password toggle. That catches real typos and leaves paste working.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Detects form inputs that prevent pasting
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Remove any JavaScript that prevents pasting in form inputs. Blocking paste forces users to manually type passwords, email addresses, or other data, which increases errors and frustrates users with password managers. Users with motor impairments may rely on paste functionality. Remove onpaste='return false', event.preventDefault() on paste events, and similar anti-paste code.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["a11y/*"]
 enable = ["a11y/paste-inputs"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/autocomplete-tokens](/rules/a11y/autocomplete-tokens): the tokens password managers need to fill the field at all.
+- [a11y/input-types](/rules/a11y/input-types): the other ways a form refuses help the browser offers.
+- [a11y/form-labels](/rules/a11y/form-labels): naming the same fields.
+- [a11y/touch-targets](/rules/a11y/touch-targets): the other thing that makes a form hard to complete on a phone.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Element: paste event, MDN](https://developer.mozilla.org/en-US/docs/Web/API/Element/paste_event)
+- [The autocomplete attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete)
+- [Understanding SC 3.3.2 Labels or Instructions, W3C](https://www.w3.org/WAI/WCAG22/Understanding/labels-or-instructions.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each field is listed with which of paste, copy and cut it blocks. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

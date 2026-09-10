@@ -1,9 +1,36 @@
 ---
-title: "Autocomplete Tokens"
-description: "Checks that name, email, phone, address and payment fields carry the correct autocomplete token"
+title: "autocomplete: the right token for every form field"
+description: "Name, email, address and payment fields with a missing or wrong autocomplete token break autofill. squirrel finds every one on every page."
 ---
 
-Checks that name, email, phone, address and payment fields carry the correct autocomplete token
+## What autocomplete is
+
+`autocomplete` names what a form field collects, using a fixed vocabulary defined by the HTML standard: `given-name`, `email`, `tel`, `address-line1`, `postal-code`, `cc-number` and the rest of the autofill field names. Browsers and password managers read the token and fill the field from data the user has already saved. WCAG success criterion 1.3.5 requires it on fields that collect information about the user.
+
+Fields that collect anything else do not need a token. A search box, a quantity, a coupon code and a message body are all outside the vocabulary. A token the browser does not recognize is discarded, so a near miss such as `firstname` behaves exactly like no token at all.
+
+## What squirrel checks
+
+The rule infers each field's purpose from its `name`, `id`, associated `<label>` and `placeholder`, then compares the `autocomplete` value against that purpose. Only fields whose purpose is unambiguous count, so a field named `capacity` is never read as a city. It emits one check, `autocomplete-tokens`, at severity warning.
+
+- Fail when a field carries a token that is not in the spec, or a token belonging to a different purpose. Report message: `N field(s) carry the wrong autocomplete token`, extended to `N field(s) carry the wrong autocomplete token, M carry none` when the page has both problems.
+- Warn when an identified field has no token, or sets `autocomplete="off"` or `autocomplete="on"`. Report message: `N identified field(s) missing an autocomplete token`.
+- Pass with `N identified field(s) carry the correct autocomplete token`.
+- Skipped with `No name, email, phone, address or payment fields found` when no field on the page has an identifiable purpose.
+
+Each finding names the field with a CSS selector, quotes its opening tag and states the expected token, for example `email field is tagged autocomplete="username" (expected "email")`.
+
+## How to fix it
+
+```html
+<label for="ship-street">Address line 1</label>
+<input id="ship-street" name="shippingAddressLine1" type="text"
+       autocomplete="shipping address-line1">
+```
+
+The token goes on the field itself, never on the wrapper. Tokens accept the `section-*`, `shipping`/`billing` and `home`/`work`/`mobile` prefixes, so both `shipping address-line1` and `address-line1` satisfy the check.
+
+`autocomplete="off"` is reported rather than accepted. Browsers ignore it on personal data, so it does not stop autofill, only the accurate kind.
 
 | | |
 |---|---|
@@ -12,33 +39,6 @@ Checks that name, email, phone, address and payment fields carry the correct aut
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## What it checks
-
-The rule works out what each field is for from its `name`, `id`, label and placeholder, then checks the `autocomplete` token against that purpose. Only fields whose purpose is unambiguous are considered, so a field called `capacity` is never read as a city and `hotel` is never read as a phone number.
-
-| Outcome | When |
-|---|---|
-| `pass` | Every identified field carries a correct token |
-| `warn` | An identified field has no token, or turns autofill off |
-| `fail` | A token is not in the spec, or belongs to a different purpose |
-| `skipped` | No field on the page has an identifiable purpose |
-
-Each finding names the exact node with a selector and the field's opening tag.
-
-## Solution
-
-Give every field that collects a person's own data the matching WHATWG autofill token, e.g. `autocomplete="given-name"`, `"email"`, `"tel"`, `"address-line1"`, `"postal-code"`, `"cc-number"`. Browsers and password managers fill those fields in one tap, which is the difference between a completed checkout and an abandoned one, and WCAG 2.1 success criterion 1.3.5 (Identify Input Purpose) requires it.
-
-Tokens may be prefixed with `section-*`, `shipping`/`billing` and `home`/`work`/`mobile`:
-
-```html
-<label for="ship-street">Address line 1</label>
-<input id="ship-street" name="shippingAddressLine1" type="text"
-       autocomplete="shipping address-line1" enterkeyhint="next">
-```
-
-A token the browser does not recognise is ignored outright, so a typo like `autocomplete="firstname"` is worse than nothing: use `given-name`. Avoid `autocomplete="off"` on personal data. It does not stop autofill in modern browsers, it only stops the accurate kind.
 
 ## Enable / disable
 
@@ -63,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/autocomplete-tokens"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/form-labels](/rules/a11y/form-labels): the label the token is inferred from, when there is one.
+- [a11y/input-types](/rules/a11y/input-types): the other half of the same fix, `type="email"` next to `autocomplete="email"`.
+- [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): fields that have no accessible name at all.
+- [a11y/paste-inputs](/rules/a11y/paste-inputs): fields that block paste, which breaks password managers the same way.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The autocomplete attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete)
+- [Autofill, HTML Standard](https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#autofill)
+- [Understanding SC 1.3.5 Identify Input Purpose, W3C](https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every field with a missing or mismatched token is listed with its expected value. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,39 @@
 ---
-title: "TH Has Data Cells"
-description: "Checks that table headers have associated data cells"
+title: "th cells with no data cells: a layout table in disguise"
+description: "A header with no data in its row or column usually means the table is really a layout. squirrel builds the grid and checks each one."
 ---
 
-Checks that table headers have associated data cells
+## What an orphaned header is
+
+A `<th>` describes the cells in its row or its column. A header with no `<td>` anywhere in either direction describes nothing, and a screen reader announces a header relationship that leads nowhere.
+
+Almost always this means the table is being used for layout. The `<th>` came from a template that expected data, and the cells around it are all headers or all empty.
+
+## What squirrel checks
+
+One check, `th-has-data-cells`, at severity warning. For each table that is not `role="presentation"` or `role="none"`, it builds a two-dimensional grid, expanding `colspan` and `rowspan` so every grid slot maps to the cell that occupies it. Both span attributes are read case-insensitively.
+
+For each `<th>` in that grid it looks for a `<td>` in the same row, then in the same column.
+
+- Warn when neither is found. Report message: `N <th> element(s) without associated data cells`. Items quote the header's first 30 characters, or read `row 2, col 3` when the header has no text. Up to ten are shown with a count of the rest, and a header that spans several slots is reported once.
+- Pass with `All table headers have associated data cells`.
+- Info with `No data tables found`.
+
+Building the grid is what makes the check work on tables with merged cells. A header spanning two columns is credited with the data under both.
+
+## How to fix it
+
+For a table that is really a layout, say so:
+
+```html
+<table role="presentation">
+  ...
+</table>
+```
+
+That removes it from this check, from the table list a screen reader offers, and from every other table rule. Better still, replace it with CSS grid or flexbox, which is what the layout wanted in the first place.
+
+For a real data table, check that each header has cells under or beside it. A header row followed by nothing, left in place while the data loads, produces this finding on the served HTML.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks that table headers have associated data cells
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Each `<th>` element should be associated with at least one `<td>` data cell in the same row or column. Orphaned header cells without data cells usually indicate the table is being misused for layout purposes. If the table is for layout, add role='presentation'. Otherwise, ensure every header has corresponding data cells.
 
 ## Enable / disable
 
@@ -40,3 +66,31 @@ disable = ["a11y/*"]
 enable = ["a11y/th-has-data-cells"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/table-headers](/rules/a11y/table-headers): data tables with no `<th>` at all.
+- [a11y/td-headers-attr](/rules/a11y/td-headers-attr): explicit associations pointing at ids that do not exist.
+- [a11y/table-duplicate-name](/rules/a11y/table-duplicate-name): naming the tables that survive this check.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): rows and cells sitting outside the structure they need.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Tables with two headers, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/tables/two-headers/)
+- [The th element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/th)
+- [The presentation role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/presentation_role)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each orphaned header is quoted by its text, or located by row and column. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

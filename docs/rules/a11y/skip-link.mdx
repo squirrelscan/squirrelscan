@@ -1,9 +1,55 @@
 ---
-title: "Skip Link"
-description: "Checks for bypass mechanisms for keyboard navigation"
+title: "Skip to content: bypassing repeated navigation"
+description: "Keyboard users tab through the whole navigation on every page without a bypass. squirrel accepts a skip link or landmark structure."
 ---
 
-Checks for bypass mechanisms for keyboard navigation
+## What a bypass mechanism is
+
+Every page on a site repeats the same header and navigation. A mouse user's eye skips it. A keyboard user presses Tab through all of it, on every page, before reaching the content.
+
+WCAG success criterion 2.4.1 Bypass Blocks, Level A, requires a way past it. A skip link is the classic answer: a link at the very top of the document, hidden until it takes focus, pointing at the main content. Landmarks also satisfy the criterion, because a screen reader user can jump straight to `<main>`.
+
+## What squirrel checks
+
+One check, `skip-link`, at severity warning. It gathers five signals and grades the combination rather than requiring any one of them.
+
+- A skip link, matched as `a[href^="#main"]`, `a[href^="#content"]`, `a[href="#skip"]`, or a link with the class `skip-link`, `skip-to-content` or `skip-nav`.
+- Failing that, any `a[href^="#"]` whose text contains `skip`, `jump to content` or `go to main`.
+- A `<main>` element or `[role="main"]`.
+- An `<h1>` or `<h2>` appearing within the first 2000 characters of the body's serialized HTML, which is far enough in for a nav bar and not far enough for real content.
+- A `<nav>` element or `[role="navigation"]`.
+
+The verdict follows from those:
+
+- Pass with `Skip link found` when either skip-link signal is present.
+- Pass with `Bypass mechanism available via landmarks` when a main landmark is present together with a nav landmark or an early heading.
+- Warn with `No bypass mechanism for repetitive content` otherwise, listing whichever signals were found and suggesting `Add skip link or ensure <main> landmark with <nav> landmark`.
+
+Every finding carries the list of detected methods, so a pass tells you which mechanism it credited.
+
+## How to fix it
+
+```html
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <nav aria-label="Primary">...</nav>
+  <main id="main" tabindex="-1">...</main>
+```
+
+```css
+.skip-link {
+  position: absolute;
+  left: -9999px;
+}
+.skip-link:focus {
+  left: 0;
+  top: 0;
+}
+```
+
+The link has to be the first focusable element in the document, or the user tabs through part of the header before finding it. Hide it with off-screen positioning rather than `display: none`, which would take it out of the tab order entirely.
+
+`tabindex="-1"` on the target matters. Without it some browsers move the scroll position but leave focus where it was, so the next Tab press goes back to the navigation.
 
 | | |
 |---|---|
@@ -12,10 +58,6 @@ Checks for bypass mechanisms for keyboard navigation
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Skip links allow keyboard users to bypass repetitive navigation and jump directly to main content. Add a hidden link at the very beginning of your page: `<a href='#main-content' class='skip-link'>`Skip to main content`</a>`. Style it to become visible on focus. Ensure the target (#main-content) has tabindex='-1' if it's not naturally focusable. Alternative: use landmark roles like `<main>` which screen readers can navigate to directly.
 
 ## Enable / disable
 
@@ -40,3 +82,31 @@ disable = ["a11y/*"]
 enable = ["a11y/skip-link"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/landmark-one-main](/rules/a11y/landmark-one-main): the `<main>` landmark this rule accepts as an alternative.
+- [a11y/landmark-regions](/rules/a11y/landmark-regions): the `<nav>` landmark that completes the landmark route.
+- [a11y/focus-visible](/rules/a11y/focus-visible): making the skip link visible once it takes focus.
+- [a11y/tabindex](/rules/a11y/tabindex): positive values that would move the skip link out of first position.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Understanding SC 2.4.1 Bypass Blocks, W3C](https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html)
+- [G1: Adding a link at the top of each page that goes directly to the main content area, W3C](https://www.w3.org/WAI/WCAG22/Techniques/general/G1)
+- [Page regions, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/page-structure/regions/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. A pass names which bypass mechanism it credited, so you can see what it found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

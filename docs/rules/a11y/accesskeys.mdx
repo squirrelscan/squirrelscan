@@ -1,9 +1,30 @@
 ---
-title: "Access Keys"
-description: "Checks that accesskey values are unique"
+title: "accesskey: why duplicate shortcuts break and how to check"
+description: "Two elements claiming the same accesskey means one shortcut is unreachable. squirrel lists every duplicated access key on every page."
 ---
 
-Checks that accesskey values are unique
+## What accesskey is
+
+`accesskey` asks the browser to bind a keyboard shortcut to an element. The modifier combination is chosen by the browser and the platform, not by the page, so the same markup produces different key presses on Windows, macOS and Linux.
+
+The attribute is rarely worth using. Its values collide with browser and screen reader shortcuts that users already rely on, and there is no way to discover the binding from the page. When it is used, each value has to be unique: if two elements claim the same key, which one the shortcut reaches is left to the browser.
+
+## What squirrel checks
+
+One check, at severity warning. It collects every element carrying an `accesskey` attribute, matching the attribute name case-insensitively, and lowercases each value before comparing.
+
+- `accesskeys-unique` warns when a value is claimed by more than one element. Report message: `N duplicate access key(s) found`. Each item names the value and its claimants, for example `accesskey="s" used by: button#save, a#search`.
+- `accesskeys` passes with `N access key(s) are unique`.
+- `accesskeys` returns info with `No access keys defined` when the page has none.
+
+## How to fix it
+
+```html
+<button accesskey="s">Save</button>
+<a href="/search" accesskey="f">Find</a>
+```
+
+Give each element a distinct character, or remove the attribute. Dropping `accesskey` entirely is a legitimate fix, since landmarks and a skip link cover the same navigation need without stealing key presses.
 
 | | |
 |---|---|
@@ -12,10 +33,6 @@ Checks that accesskey values are unique
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Access keys provide keyboard shortcuts for elements. Duplicate access keys cause only one to work, confusing users. Ensure each accesskey value is unique. Consider whether access keys are necessary at all, as they can conflict with browser/OS shortcuts.
 
 ## Enable / disable
 
@@ -40,3 +57,30 @@ disable = ["a11y/*"]
 enable = ["a11y/accesskeys"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/skip-link](/rules/a11y/skip-link): the bypass mechanism that replaces most uses of `accesskey`.
+- [a11y/tabindex](/rules/a11y/tabindex): the other attribute that overrides default keyboard behavior.
+- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): duplicate identifiers on focusable elements.
+- [a11y/landmark-regions](/rules/a11y/landmark-regions): the structure screen readers navigate by instead.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [accesskey, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/accesskey)
+- [Understanding SC 2.1.1 Keyboard, W3C](https://www.w3.org/WAI/WCAG22/Understanding/keyboard.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each duplicated key is listed with every element claiming it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

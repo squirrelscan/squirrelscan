@@ -1,9 +1,39 @@
 ---
-title: "List Structure"
-description: "Checks that ul and ol elements contain only li elements"
+title: "ul and ol with children that are not list items"
+description: "A div between the li elements of a list changes what a screen reader announces. squirrel checks the direct children of every list."
 ---
 
-Checks that ul and ol elements contain only li elements
+## What list structure is
+
+A screen reader announces a list by its item count: "list, 6 items". That count comes from the direct children of the `<ul>` or `<ol>`, so anything else sitting at that level either breaks the count or breaks the list entirely.
+
+The children have to be `<li>`, or elements carrying `role="listitem"` for markup that cannot use the tag. Wrappers added for styling belong inside the `<li>`, not around it.
+
+## What squirrel checks
+
+One check, `list-structure`, at severity error. It reads the direct children of every `<ul>` and `<ol>`.
+
+- Fail when a direct child is anything other than `<li>`, an element with `role="listitem"`, `<script>` or `<template>`. Report message: `N list(s) with invalid child elements`. Each list is named `ul#nav`, `ol.steps` or a bare tag, up to ten with a count of the rest.
+- Pass with `N list(s) are properly structured`.
+- Info with `No ul/ol lists found`.
+
+`<script>` and `<template>` are allowed, matching HTML's rule that script-supporting elements may appear between list items. The check reports the list rather than the offending child, and stops at the first bad child in each list.
+
+## How to fix it
+
+```html
+<ul>
+  <li>
+    <div class="card">
+      <h3>Team</h3>
+    </div>
+  </li>
+</ul>
+```
+
+Move the wrapper inside the `<li>`. If the container is a grid or a flex layout, put the display property on the `<ul>` and let the `<li>` elements be the grid items.
+
+Where the markup genuinely cannot use `<li>`, `role="list"` on the container and `role="listitem"` on each child restores the semantics. Both halves are needed: one without the other leaves the list broken in a different way.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks that ul and ol elements contain only li elements
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Lists (`<ul>` and `<ol>`) should only contain `<li>` elements as direct children. For custom components, you can also use elements with role='listitem'. Move other content inside `<li>` elements.
 
 ## Enable / disable
 
@@ -40,3 +66,31 @@ disable = ["a11y/*"]
 enable = ["a11y/list-structure"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/listitem](/rules/a11y/listitem): `<li>` elements whose parent is not a list.
+- [a11y/definition-list](/rules/a11y/definition-list): the same check for `<dl>`.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): `role="list"` with no items inside it.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): the same relationship seen from the item.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The ul element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/ul)
+- [The list role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/list_role)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each malformed list is listed by id or class. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

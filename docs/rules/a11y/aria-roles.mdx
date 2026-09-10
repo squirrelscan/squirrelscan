@@ -1,9 +1,33 @@
 ---
-title: "ARIA Valid Roles"
-description: "Checks for valid ARIA role values"
+title: "Invalid ARIA role values and how to check them"
+description: "A misspelled or invented role gives an element no semantics at all. squirrel validates every role attribute against the ARIA vocabulary."
 ---
 
-Checks for valid ARIA role values
+## What a valid role is
+
+WAI-ARIA defines a closed vocabulary of role names. A value outside it is discarded: the element keeps whatever semantics its tag already had, and the intended role never reaches assistive technology. Nothing warns you, which is what makes a typo such as `role="buton"` expensive.
+
+The `role` attribute accepts a whitespace-separated fallback chain, and a browser uses the first token it recognizes. That makes `role="doc-subtitle heading"` legitimate markup even though only the second token is core ARIA.
+
+## What squirrel checks
+
+One check, `aria-roles`, at severity error. It reads every `[role]` element, trims the value, splits it on whitespace, lowercases each token and looks it up in a set of 83 role names covering document structure, widgets, composite widgets, landmarks, live regions and window roles.
+
+- Fail with `N invalid ARIA role(s) found`. Items read `div: role="buton"`, up to ten with a count of the rest.
+- Pass with `N element(s) with valid ARIA roles`.
+- Info with `No ARIA roles found`.
+
+Two limits are worth knowing. Every token in a fallback chain is validated, so `role="doc-subtitle heading"` is reported even though a browser resolves it to `heading`. And the vocabulary is core ARIA only, so the DPUB-ARIA and Graphics-ARIA module roles are all reported as invalid.
+
+## How to fix it
+
+```html
+<div role="button" tabindex="0">Save</div>
+```
+
+Fix the spelling, or drop the attribute. A native `<button>` needs no role at all, and replacing the `<div>` removes this finding along with the keyboard handling you would otherwise have to write.
+
+squirrel lowercases each token before comparing, so `role="BUTTON"` is accepted here. Write roles in lowercase anyway: the ARIA specification defines them that way.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for valid ARIA role values
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Use only valid ARIA role values as defined in the WAI-ARIA specification. Common mistakes include using made-up roles or misspelling valid roles. Roles are case-sensitive and must be lowercase. Multiple roles can be specified, separated by spaces, but the first valid role is used.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-roles"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-deprecated-role](/rules/a11y/aria-deprecated-role): roles that exist but should not be used.
+- [a11y/aria-valid-attr](/rules/a11y/aria-valid-attr): the same problem in `aria-*` attribute names.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): the attributes a valid role then has to declare.
+- [a11y/aria-allowed-attr](/rules/a11y/aria-allowed-attr): attributes that contradict the role you chose.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [ARIA roles, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles)
+- [Definition of roles, WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)
+- [ARIA in HTML, W3C](https://www.w3.org/TR/html-aria/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each unrecognized role is listed with the element carrying it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

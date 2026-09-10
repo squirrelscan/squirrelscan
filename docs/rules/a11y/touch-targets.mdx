@@ -1,9 +1,36 @@
 ---
-title: "Touch Targets"
-description: "Checks for minimum touch target sizing hints"
+title: "Touch target size: the 24 and 44 pixel minimums"
+description: "Buttons and links smaller than a fingertip are hard to hit on a phone. squirrel flags interactive elements sized below 44 pixels inline."
 ---
 
-Checks for minimum touch target sizing hints
+## What a touch target is
+
+A touch target is the region that reacts to a tap: a button, a link, a checkbox, anything with a click handler. WCAG sets two thresholds for it. Success criterion 2.5.8 Target Size (Minimum), Level AA, asks for 24 by 24 CSS pixels. Success criterion 2.5.5 Target Size (Enhanced), Level AAA, asks for 44 by 44.
+
+Size comes from the element's box, not its text. Padding on a small icon button raises the target; a larger font on a text link does not. The AA criterion also has a spacing exception: an undersized target passes if a 24 pixel circle centred on it does not overlap the circle of any other target.
+
+## What squirrel checks
+
+One check, `touch-targets`, at severity warning. It reads inline `style` attributes only, so it never needs a stylesheet or a rendered page.
+
+- Warn when a `<button>`, `<a>`, `<input type="submit">`, `<input type="button">` or `[role="button"]` sets an inline `width` or `height` below 44 pixels. Values in `rem` and `em` are converted at 16 pixels to the unit. Report message: `N element(s) with potentially small touch targets`, with the value `Ensure minimum 44x44px touch targets`.
+- Info in every other case, with the message `Touch target sizes require CSS analysis` and the value `Verify buttons/links are at least 44x44px`.
+
+The rule uses 44 pixels, the enhanced threshold, as its cutoff. An info result means nothing was measurable, not that the page passes: a target sized by a stylesheet or a utility class is invisible to this check.
+
+## How to fix it
+
+```css
+.icon-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 12px;
+}
+```
+
+Set the minimum on the interactive element itself, and grow it with padding rather than font size so the label stays the size you designed.
+
+The common false positive is an element with a small inline `width` that sits inside generous padding, where the real hit area is fine. squirrel only sees the declared width, so check the rendered box before changing anything.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for minimum touch target sizing hints
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Touch targets (buttons, links) should be at least 44x44 pixels for accessibility (WCAG 2.5.5) and usability. Increase size with padding rather than just increasing font size. Ensure at least 8px spacing between adjacent targets. For inline links in text, provide sufficient line-height. This helps users with motor impairments and improves mobile usability for everyone.
 
 ## Enable / disable
 
@@ -40,3 +63,30 @@ disable = ["a11y/*"]
 enable = ["a11y/touch-targets"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [mobile/tap-targets](/rules/mobile/tap-targets): the same defect from the mobile usability side.
+- [a11y/link-in-text-block](/rules/a11y/link-in-text-block): inline links that are hard to see rather than hard to hit.
+- [a11y/zoom-disabled](/rules/a11y/zoom-disabled): a viewport that stops users enlarging a target they cannot hit.
+- [mobile/font-size](/rules/mobile/font-size): text too small to read on the same screens.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Understanding SC 2.5.8 Target Size (Minimum), W3C](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+- [Understanding SC 2.5.5 Target Size (Enhanced), W3C](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every element with an undersized inline dimension is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,35 @@
 ---
-title: "Valid Lang Attributes"
-description: "Checks that all lang attributes on the page have valid values"
+title: "lang on elements below html: validating every tag"
+description: "A quoted passage marked with a bad lang tag is read in the wrong voice. squirrel validates every lang attribute except the one on html."
 ---
 
-Checks that all lang attributes on the page have valid values
+## What lang on an element does
+
+`lang` on `<html>` sets the document's language. `lang` on any element below it overrides that for its subtree, which is how a French quotation inside an English article gets read with French pronunciation.
+
+WCAG success criterion 3.1.2 Language of Parts, Level AA, asks for it wherever the language changes. An invalid tag is worse than none: the browser cannot resolve it, and the passage falls back to the page language or to whatever the screen reader guesses.
+
+## What squirrel checks
+
+One check, `valid-lang`, at severity warning. It reads every `[lang]` element except `<html>`, which `a11y/html-lang-valid` handles on its own.
+
+A value is accepted when its primary subtag, the part before the first hyphen, is one of the 190 ISO 639-1 codes the rule knows, or is any two or three lowercase letters.
+
+- Warn with `N element(s) with invalid lang attribute`. Items read `span#quote: lang="english"`, up to ten with a count of the rest.
+- Pass with `All lang attributes are valid`, which requires the page to carry `lang` on more than one element.
+- Info with `No additional lang attributes found`.
+
+A page with `lang` only on `<html>` therefore reports info here, not pass. And because any two or three letter primary subtag is accepted by shape, an invented code such as `qq` passes. Region and script subtags are not validated at all.
+
+## How to fix it
+
+```html
+<p>She ended with <span lang="fr">plus ca change</span>.</p>
+```
+
+Use the short code, not the language's name. `lang="french"` and `lang="en-english"` are both invalid, and both are common.
+
+Mark the change where it happens, on the smallest element that contains the foreign text. Marking a whole article when one sentence changes makes the rest of it read wrongly.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks that all lang attributes on the page have valid values
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-All lang attributes should use valid BCP 47 language tags. This includes lang attributes on any element, not just `<html>`. Use lang to mark up content in a different language from the page default.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["a11y/*"]
 enable = ["a11y/valid-lang"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/html-lang-valid](/rules/a11y/html-lang-valid): the document-level declaration on `<html>`.
+- [a11y/html-xml-lang-mismatch](/rules/a11y/html-xml-lang-mismatch): `lang` and `xml:lang` disagreeing on that element.
+- [i18n/lang-attribute](/rules/i18n/lang-attribute): the same declaration checked for internationalization.
+- [i18n/hreflang](/rules/i18n/hreflang): the language signals sent to search engines.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The lang attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/lang)
+- [Understanding SC 3.1.2 Language of Parts, W3C](https://www.w3.org/WAI/WCAG22/Understanding/language-of-parts.html)
+- [Tags for identifying languages, RFC 5646](https://datatracker.ietf.org/doc/html/rfc5646)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each element is listed with the invalid value it carries. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

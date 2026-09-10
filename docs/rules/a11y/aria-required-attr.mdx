@@ -1,9 +1,46 @@
 ---
-title: "ARIA Required Attributes"
-description: "Checks that elements have required ARIA attributes for their roles"
+title: "Required ARIA attributes for a role, and what is missing"
+description: "role=checkbox with no aria-checked has a state screen readers cannot read. squirrel checks the roles whose attributes are mandatory."
 ---
 
-Checks that elements have required ARIA attributes for their roles
+## What a required ARIA attribute is
+
+A role tells assistive technology what an element is. Some roles also need a state or property before they mean anything: a checkbox that never says whether it is checked, a slider that never reports its position, a heading with no level.
+
+Native HTML supplies these on its own. `<input type="checkbox">` carries its checked state in the DOM. The moment you build the same control out of a `<div>` and a role, you own the state as well.
+
+## What squirrel checks
+
+One check, `aria-required-attr`, at severity error. It reads every element with a `role`, takes the first token of the attribute, and looks it up in a table of roles and their required attributes:
+
+| Role | Required |
+|---|---|
+| `checkbox`, `radio`, `switch` | `aria-checked` |
+| `combobox` | `aria-expanded` |
+| `heading` | `aria-level` |
+| `meter`, `slider` | `aria-valuenow` |
+| `option` | `aria-selected` |
+| `scrollbar` | `aria-controls`, `aria-valuenow` |
+
+`separator` and `spinbutton` are in the table with nothing required, so they never produce a finding.
+
+- Fail with `N element(s) missing required ARIA attributes`. Items read `div[role="checkbox"]: missing aria-checked`, up to ten with a count of the rest.
+- Pass with `All elements have required ARIA attributes`.
+- Info with `No elements with ARIA roles found`.
+
+The check tests presence, not value, so `aria-checked=""` satisfies it. Whether the value is legal is `a11y/aria-valid-attr-value`.
+
+## How to fix it
+
+```html
+<div role="checkbox" aria-checked="false" tabindex="0">
+  Email me about new releases
+</div>
+```
+
+Keep the attribute in step with the visible state in your event handler, or the announcement drifts away from the control.
+
+In a role fallback chain such as `role="doc-subtitle heading"`, squirrel looks up only the first token. A chain whose first entry is unrecognized is therefore not checked against the second.
 
 | | |
 |---|---|
@@ -12,10 +49,6 @@ Checks that elements have required ARIA attributes for their roles
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Some ARIA roles require specific attributes to be present. For example, role='checkbox' requires aria-checked, role='slider' requires aria-valuenow. Add the missing required attributes with appropriate values.
 
 ## Enable / disable
 
@@ -40,3 +73,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-required-attr"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-valid-attr-value](/rules/a11y/aria-valid-attr-value): whether the value you supplied is legal for that attribute.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): the child roles a container role has to contain.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): the same relationship seen from the child.
+- [a11y/aria-toggle-field-name](/rules/a11y/aria-toggle-field-name): the name those checkbox and switch roles also need.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+- [ARIA attributes, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each element is listed with the role it declares and the attribute it is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

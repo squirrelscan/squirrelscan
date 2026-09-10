@@ -1,9 +1,36 @@
 ---
-title: "ARIA Allowed Attributes"
-description: "Checks that ARIA attributes are allowed on their elements"
+title: "ARIA attributes that are not allowed on an element"
+description: "role=presentation with an aria-label, or a decorative image with one, contradicts itself. squirrel reports both on every page."
 ---
 
-Checks that ARIA attributes are allowed on their elements
+## What an allowed ARIA attribute is
+
+Every ARIA role supports a defined set of states and properties, and an attribute outside that set has no effect at best and a wrong effect at worst.
+
+Two combinations contradict themselves outright. `role="presentation"` and `role="none"` strip an element's semantics, so giving it a name asks assistive technology to announce something it has been told to ignore. `alt=""` marks an image as decorative for the same reason, so an `aria-label` on that image says the opposite of the `alt`.
+
+## What squirrel checks
+
+One check, `aria-allowed-attr`, at severity warning. It walks every element carrying at least one `aria-*` attribute and reports those two contradictions.
+
+- An element with `role="presentation"` or `role="none"` that also has `aria-label`, `aria-labelledby` or `aria-describedby`. Item text: `div[role="presentation"]: aria-label not allowed`.
+- An `<img>` with `alt=""` that also has `aria-label` or `aria-labelledby`. Item text: `img[alt=""]: aria-label conflicts with decorative intent`.
+- Warn with `N element(s) with inappropriate ARIA attributes`, listing up to ten items plus a count of the rest.
+- Pass with `All ARIA attributes are appropriate for their elements`.
+
+The check is deliberately narrow. It does not walk the full role-to-attribute matrix from the ARIA specification, and misspelled attribute names are left to `a11y/aria-valid-attr`.
+
+## How to fix it
+
+```html
+<img src="divider.svg" alt="">
+
+<div role="presentation">
+  <p>Layout wrapper with no semantics of its own.</p>
+</div>
+```
+
+Decide which of the two you meant. If the element carries meaning, drop the presentational role and keep the label. If it does not, drop the label.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks that ARIA attributes are allowed on their elements
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Some ARIA attributes are not appropriate for certain roles or elements. For example, role='presentation' should not have aria-label since it removes semantic meaning. Remove conflicting attributes or reconsider the element's role.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-allowed-attr"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-valid-attr](/rules/a11y/aria-valid-attr): attribute names that are not in the ARIA vocabulary.
+- [a11y/aria-valid-attr-value](/rules/a11y/aria-valid-attr-value): valid names carrying values of the wrong type.
+- [a11y/aria-roles](/rules/a11y/aria-roles): role values that do not exist.
+- [images/alt-text](/rules/images/alt-text): the `alt` side of the decorative-image decision.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The presentation role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/presentation_role)
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+- [ARIA in HTML, W3C](https://www.w3.org/TR/html-aria/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each contradiction is listed with the element and the offending attribute. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

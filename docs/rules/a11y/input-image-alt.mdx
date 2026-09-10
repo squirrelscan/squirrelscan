@@ -1,9 +1,33 @@
 ---
-title: "Input Image Alt"
-description: "Checks that input type='image' elements have alt text"
+title: "input type=image without alt: an unnamed submit button"
+description: "An image input is a submit button drawn as a picture, and with no alt it announces nothing. squirrel checks every one on the page."
 ---
 
-Checks that input type='image' elements have alt text
+## What an image input is
+
+`<input type="image">` is a submit button that uses a graphic instead of a label. It submits the form and sends the click coordinates with it, which is why it still turns up in old search forms and image maps.
+
+Because it is a button, its `alt` is its accessible name, not a description of the picture. A magnifying glass icon on a search form is named "Search", not "magnifying glass".
+
+## What squirrel checks
+
+One check, `input-image-alt`, at severity error and weight 8. It finds every `input[type="image"]`.
+
+- Fail when the element has no non-empty `alt`, no non-empty `aria-label` and no `aria-labelledby`. Report message: `N image input(s) without alt text`. Every offender is listed, identified by its `name`, then by the filename taken from its `src`, then as `input[type=image]`.
+- Pass with `N image input(s) have alt text`.
+- Info with `No image inputs found`.
+
+## How to fix it
+
+```html
+<input type="image" src="/icons/search.svg" alt="Search">
+```
+
+Name the action. Everything that applies to a normal submit button applies here, so if the equivalent `<button>` would read "Search", that is the `alt`.
+
+An image input is not a decorative image, so `alt=""` does not apply. An empty `alt` here leaves a button that submits the form with nothing to announce, and squirrel reports it.
+
+If the coordinates are not needed, `<button type="submit">` with an `<img>` or an inline `<svg>` inside it is easier to name and easier to style.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that input type='image' elements have alt text
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Image inputs (input type='image') are submit buttons that use an image. They must have alt text describing the button's action. Example: `<input type='image' src='submit.png' alt='Submit form'>`
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/input-image-alt"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/button-name](/rules/a11y/button-name): the same requirement for ordinary buttons.
+- [images/alt-text](/rules/images/alt-text): `alt` on content images rather than on controls.
+- [a11y/image-redundant-alt](/rules/a11y/image-redundant-alt): alt text that exists but repeats the obvious.
+- [a11y/form-labels](/rules/a11y/form-labels): the other controls in the same form.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [input type=image, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/image)
+- [Understanding SC 1.1.1 Non-text Content, W3C](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html)
+- [H36: Using alt attributes on images used as submit buttons, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H36)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unnamed image input is listed, with no cap on the count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

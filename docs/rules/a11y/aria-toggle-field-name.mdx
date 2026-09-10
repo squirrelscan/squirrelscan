@@ -1,9 +1,41 @@
 ---
-title: "ARIA Toggle Field Name"
-description: "Checks that toggle fields (checkbox, radio, switch) have accessible names"
+title: "Checkboxes, radios and switches with no accessible name"
+description: "A checkbox that announces only its role gives no reason to tick it. squirrel checks toggle roles and native checkbox and radio inputs."
 ---
 
-Checks that toggle fields (checkbox, radio, switch) have accessible names
+## What a toggle field name is
+
+A toggle carries two pieces of information: what it controls, and whether it is on. ARIA covers the second with `aria-checked`. The first is the accessible name, and without it a screen reader says "checkbox, not checked" and stops.
+
+Native checkboxes and radios take their name from a `<label>`. Custom toggles built from a `<div>` with `role="switch"` take theirs from `aria-label`, `aria-labelledby` or their own text content.
+
+## What squirrel checks
+
+One check, `aria-toggle-field-name`, at severity error. It covers every element with `role="checkbox"`, `role="radio"` or `role="switch"`, plus native `input[type="checkbox"]` and `input[type="radio"]` that carry no explicit `role`.
+
+A name is accepted from a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, a non-empty `title`, the element's own text content, a `<label for="...">` matching its `id`, or an ancestor `<label>` with text.
+
+- Fail with `N toggle field(s) without accessible names`. Items read `div[role="switch"]`, `checkbox[name="terms"]` or `radio[name="plan"][value="pro"]`, up to ten with a count of the rest.
+- Pass with `All toggle fields have accessible names`.
+
+## How to fix it
+
+```html
+<label>
+  <input type="checkbox" name="terms">
+  I accept the terms
+</label>
+```
+
+Wrapping is the shortest fix for a native control, and it makes the words clickable as well.
+
+For a custom toggle, put the name on the element with the role and keep `aria-checked` in step with the visible state:
+
+```html
+<div role="switch" aria-checked="false" aria-label="Dark mode" tabindex="0"></div>
+```
+
+A group of radios needs one name per radio, not one for the group. The group label belongs on a `<fieldset>` with a `<legend>`, or on a `role="radiogroup"` container.
 
 | | |
 |---|---|
@@ -12,10 +44,6 @@ Checks that toggle fields (checkbox, radio, switch) have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Toggle fields need accessible names to describe what they control. Use `<label for='id'>`, aria-label, aria-labelledby, or wrap in `<label>`. Example: `<label>``<input type='checkbox'>` Subscribe to newsletter`</label>`
 
 ## Enable / disable
 
@@ -40,3 +68,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-toggle-field-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): `aria-checked`, which those same roles must declare.
+- [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): the wider naming sweep across input roles.
+- [a11y/form-labels](/rules/a11y/form-labels): the `<label>` association this rule accepts.
+- [a11y/form-field-multiple-labels](/rules/a11y/form-field-multiple-labels): two labels pointing at one control.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The checkbox role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/checkbox_role)
+- [The switch role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/switch_role)
+- [Labeling controls, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/forms/labels/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Native and custom toggles are listed together, each with a selector. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

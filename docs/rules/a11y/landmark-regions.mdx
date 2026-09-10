@@ -1,9 +1,36 @@
 ---
-title: "Landmark Regions"
-description: "Checks for proper landmark regions (main, nav, footer)"
+title: "Landmark regions: main, nav and footer on every page"
+description: "Screen reader users jump between landmarks instead of reading top to bottom. squirrel reports which of the three a page has."
 ---
 
-Checks for proper landmark regions (main, nav, footer)
+## What a landmark region is
+
+Landmarks divide a page into named areas a screen reader can jump between: `<main>` for the content, `<nav>` for navigation, `<header>`, `<footer>` and `<aside>` for the furniture around it. A user presses one key to move between them instead of tabbing through the header on every page.
+
+The semantic elements carry their roles implicitly, so `<nav>` needs no `role="navigation"`. The ARIA roles exist for markup that cannot use the elements.
+
+## What squirrel checks
+
+Three checks, at rule severity info and weight 3. This rule reports structure rather than failure, which is why its weight is the lowest in the category.
+
+- `landmark-main` warns with `No <main> landmark found` and the value `Add <main> element around primary content`, or warns with `Multiple main landmarks (N)` and the value `Pages should have exactly one <main> element`, or passes with `Main landmark present`.
+- `landmark-nav` passes with `N navigation landmark(s) found`, or returns info with `No <nav> landmark found`.
+- `landmark-footer` passes with `Footer landmark present`, or returns info with `No <footer> landmark found`.
+
+Only `main` warns. Navigation and footer landmarks are useful but not required, so their absence is reported as information.
+
+## How to fix it
+
+```html
+<header>...</header>
+<nav aria-label="Primary">...</nav>
+<main>...</main>
+<footer>...</footer>
+```
+
+Use the elements rather than the roles wherever the markup allows it. They are shorter, they cannot be misspelled, and they keep the visual structure and the announced structure in one place.
+
+Where a page has more than one `<nav>`, give each an `aria-label` so a screen reader can tell "Primary navigation" from "Breadcrumb". Landmarks of the same type are otherwise announced identically.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for proper landmark regions (main, nav, footer)
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Landmark regions help screen reader users navigate page structure. Use semantic HTML5 elements: `<main>` for primary content, `<nav>` for navigation, `<header>` for page header, `<footer>` for footer, `<aside>` for sidebars, and `<section>`/`<article>` for content sections. Alternatively, use ARIA roles: role='main', role='navigation', etc. Each page should have exactly one `<main>` element.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/landmark-regions"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/landmark-one-main](/rules/a11y/landmark-one-main): the stricter check on the `<main>` count.
+- [a11y/skip-link](/rules/a11y/skip-link): the bypass mechanism landmarks can stand in for.
+- [a11y/heading-order](/rules/a11y/heading-order): the outline users navigate alongside landmarks.
+- [a11y/aria-labels](/rules/a11y/aria-labels): naming repeated landmarks so they can be told apart.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Page regions, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/page-structure/regions/)
+- [Landmark regions, WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/)
+- [The main element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/main)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The three landmarks are reported as separate checks, so a missing footer does not hide a missing main. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

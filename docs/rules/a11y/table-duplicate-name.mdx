@@ -1,9 +1,41 @@
 ---
-title: "Table Duplicate Name"
-description: "Checks that data tables have unique accessible names"
+title: "Tables sharing a name, and tables with none"
+description: "Several tables on one page need distinct names or a screen reader's table list is unusable. squirrel checks captions and labels."
 ---
 
-Checks that data tables have unique accessible names
+## What a table name is
+
+Screen readers let users list the tables on a page and jump to one. That list shows each table's accessible name, which comes from a `<caption>`, from `aria-label`, or from `aria-labelledby`.
+
+With one table on the page the name is a convenience. With several it is the only thing distinguishing them, and two tables both called "Results" are the same entry twice.
+
+## What squirrel checks
+
+Two check names, at rule severity warning and weight 3. The rule looks at tables that are not `role="presentation"` or `role="none"`, and does nothing at all unless there is more than one: with none it returns info with `No data tables found`, and with exactly one it returns info with `Only one table found`.
+
+A name is taken from `aria-label`, from `aria-labelledby` pointing at elements with text, or from a `<caption>`.
+
+- `table-duplicate-name` warns with `N duplicate table name(s) found` when two or more tables share a name, compared lowercased and trimmed. Items read `"revenue by quarter" (2 tables)`, and the finding suggests `Give each table a unique caption or aria-label`.
+- `tables-without-names` warns with `N table(s) without accessible names`, noting `Add caption or aria-label to distinguish tables`.
+- `table-duplicate-name` passes with `All tables have unique accessible names` when neither problem appears.
+
+## How to fix it
+
+```html
+<table>
+  <caption>Revenue by quarter, 2025</caption>
+  ...
+</table>
+
+<table>
+  <caption>Revenue by quarter, 2026</caption>
+  ...
+</table>
+```
+
+A `<caption>` is the better of the two options because it is visible. Everyone gets the label, not only screen reader users, and it cannot drift out of sync with the heading above the table.
+
+Where the design has no room for a caption, `aria-label` on the `<table>` does the job. Where a heading above the table already names it, point `aria-labelledby` at that heading's `id`.
 
 | | |
 |---|---|
@@ -12,10 +44,6 @@ Checks that data tables have unique accessible names
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## Solution
-
-When a page has multiple data tables, each should have a unique accessible name to help users distinguish between them. Use `<caption>`, aria-label, or aria-labelledby with unique text for each table.
 
 ## Enable / disable
 
@@ -40,3 +68,31 @@ disable = ["a11y/*"]
 enable = ["a11y/table-duplicate-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/table-headers](/rules/a11y/table-headers): whether those tables have `<th>` cells at all.
+- [a11y/th-has-data-cells](/rules/a11y/th-has-data-cells): headers with no data under them, usually a layout table.
+- [a11y/td-headers-attr](/rules/a11y/td-headers-attr): explicit header associations in complex tables.
+- [a11y/duplicate-id-aria](/rules/a11y/duplicate-id-aria): the `aria-labelledby` reference resolving correctly.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Caption and summary, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/tables/caption-summary/)
+- [The caption element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/caption)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Duplicate names and missing names are reported as separate checks. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,32 @@
 ---
-title: "Tabindex Values"
-description: "Checks for appropriate tabindex values"
+title: "Positive tabindex and why it breaks the tab order"
+description: "tabindex=1 pulls an element to the front of the tab order for the entire page. squirrel flags every positive value on every page."
 ---
 
-Checks for appropriate tabindex values
+## What tabindex does
+
+`tabindex="0"` puts an element into the tab order at its position in the document. `tabindex="-1"` takes it out of the tab order while leaving it focusable from script, which is what a modal's container or a skip link's target needs.
+
+A positive value creates a second, earlier sequence. Every element with a positive `tabindex` is visited in ascending order before anything with `0` or a natural position. One `tabindex="1"` anywhere on a page therefore reorders the whole page, and adding a form field later puts it in a place nobody expects.
+
+## What squirrel checks
+
+One rule, two check names, at severity warning. It reads every element carrying a `tabindex`, matching the attribute name case-insensitively so React's `tabIndex` in server-rendered markup counts, and parses the value as an integer. Values of `0` and `-1` are skipped, and a non-numeric value such as `auto` is ignored.
+
+- `tabindex-very-high` fails with `N element(s) with very high tabindex values` for values above 100, carrying the issue `Very high tabindex values indicate misuse`. Items read `div#hero (tabindex=9999)`, up to ten with a count of the rest.
+- `tabindex-positive` warns with `N element(s) with positive tabindex` for values from 1 to 100, suggesting `Use natural document order instead`.
+- `tabindex` passes with `Tabindex values are appropriate (0 or -1)` when the page uses the attribute and no value is positive.
+- `tabindex` returns info with `No tabindex attributes found`.
+
+## How to fix it
+
+```html
+<div role="button" tabindex="0">Save</div>
+```
+
+Delete the number and reorder the markup instead. Source order is what the tab sequence follows, and CSS can move things visually without touching it. Where visual and source order disagree badly, that is usually a layout problem worth fixing on its own.
+
+Use `tabindex="-1"` for things focus should reach only from script: a dialog container, the target of a skip link, a region you move focus to after a route change.
 
 | | |
 |---|---|
@@ -12,10 +35,6 @@ Checks for appropriate tabindex values
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Avoid positive tabindex values (1, 2, 3...) as they override natural tab order and confuse keyboard users. Use tabindex='0' to add elements to tab order, tabindex='-1' to make elements focusable via JavaScript only. Rely on natural document order for tab sequence.
 
 ## Enable / disable
 
@@ -40,3 +59,31 @@ disable = ["a11y/*"]
 enable = ["a11y/tabindex"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/focus-visible](/rules/a11y/focus-visible): whether the ring is drawn once focus arrives.
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): focusable elements inside a region hidden from assistive technology.
+- [a11y/skip-link](/rules/a11y/skip-link): the bypass mechanism a positive `tabindex` can push out of first place.
+- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): the other attribute problem specific to focusable elements.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [tabindex, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/tabindex)
+- [Understanding SC 2.4.3 Focus Order, W3C](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html)
+- [H4: Creating a logical tab order, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H4)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Values above 100 are reported separately, since they almost always mean the attribute is being misused. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

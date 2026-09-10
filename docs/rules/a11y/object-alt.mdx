@@ -1,9 +1,33 @@
 ---
-title: "Object Alt Text"
-description: "Checks that object elements have alternative content"
+title: "object elements with no alternative content"
+description: "An embedded object with no fallback is announced as nothing at all. squirrel checks every object element on the page."
 ---
 
-Checks that object elements have alternative content
+## What alternative content is
+
+`<object>` embeds an external resource: a PDF, an SVG, a legacy plugin document. When the resource cannot be displayed, the browser falls back to whatever sits between the opening and closing tags, and assistive technology uses the same content to describe the embed.
+
+With nothing between the tags and no label, a screen reader has an element it can find and nothing to say about it.
+
+## What squirrel checks
+
+One check, `object-alt`, at severity warning and weight 6. It covers every `<object>`, skipping any with `aria-hidden="true"` or with `role="presentation"` or `role="none"`.
+
+- Fail when the element has no non-empty `aria-label`, no `aria-labelledby` and no text content between its tags. Report message: `N object element(s) without alternative content`. Every offender is listed, identified by `name`, then by the subtype of its `type` as `object[type="pdf"]`, then by the filename from its `data` attribute as `object (report.pdf)`, then as a bare `object`.
+- Pass with `N object element(s) have alternative content`.
+- Info with `No object elements found`.
+
+## How to fix it
+
+```html
+<object data="/reports/q3.pdf" type="application/pdf" aria-label="Q3 report">
+  <a href="/reports/q3.pdf">Download the Q3 report (PDF, 1.2 MB)</a>
+</object>
+```
+
+Put a real fallback between the tags. A link to the resource is the most useful one, because it works for a browser that cannot render the embed and for a screen reader user who would rather open the file directly.
+
+For an inline SVG or an image, `<img>` is usually the better element. It has an `alt` attribute, it is easier to make responsive, and it avoids this rule entirely.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that object elements have alternative content
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Object elements need alternative content for when the embedded content can't be displayed or for assistive technology. Add content between `<object>` tags as fallback, or use aria-label/aria-labelledby.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/object-alt"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/frame-title](/rules/a11y/frame-title): the same naming requirement for `<iframe>`.
+- [images/alt-text](/rules/images/alt-text): `alt` on images, the more common form of the same idea.
+- [a11y/video-captions](/rules/a11y/video-captions): the alternative content video needs.
+- [a11y/input-image-alt](/rules/a11y/input-image-alt): image inputs, which need `alt` as a button name.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The object element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/object)
+- [Understanding SC 1.1.1 Non-text Content, W3C](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html)
+- [H53: Using the body of the object element, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H53)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unlabeled object is listed, with no cap on the count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

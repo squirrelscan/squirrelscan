@@ -1,9 +1,40 @@
 ---
-title: "ARIA Treeitem Name"
-description: "Checks that treeitem elements have accessible names"
+title: "role=treeitem: naming every node in a tree"
+description: "A tree node that announces only its position in the tree is unusable. squirrel checks every role=treeitem for something to read out."
 ---
 
-Checks that treeitem elements have accessible names
+## What a treeitem is
+
+A tree presents nested items a user can expand and collapse: a file browser, a category picker, a table of contents. Each node carries `role="treeitem"` and a screen reader announces its name along with its level and position.
+
+The name normally comes from the node's own text. Icon-only nodes, and nodes whose label sits in a sibling element, need `aria-label` or `aria-labelledby` instead.
+
+## What squirrel checks
+
+One check, `aria-treeitem-name`, at severity error. It finds every `[role="treeitem"]` element.
+
+A name is accepted from a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, the node's own text content, or a nested `<img>` with non-empty `alt`.
+
+- Fail with `N treeitem(s) without accessible names`. Items read `li#node-3` or bare tag name, up to ten with a count of the rest.
+- Pass with `N treeitem(s) have accessible names`.
+- Info with `No treeitem elements found`.
+
+Text content is read from the whole subtree, so a node whose only text lives inside a nested group counts as named. That is generous: check the announced name in a screen reader before trusting a pass on a deeply nested tree.
+
+## How to fix it
+
+```html
+<li role="treeitem" aria-expanded="false">
+  <span>Invoices</span>
+  <ul role="group">
+    <li role="treeitem">2026-Q1.pdf</li>
+  </ul>
+</li>
+```
+
+Keep the node's own label in the node and its children in a nested `role="group"`. That is also what makes the level and position announcements correct.
+
+An icon-only node needs `aria-label` on the `treeitem` itself, not on the icon inside it.
 
 | | |
 |---|---|
@@ -12,10 +43,6 @@ Checks that treeitem elements have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Treeitem elements must have accessible names. Add text content, aria-label, or aria-labelledby. The text content within the treeitem typically serves as its name.
 
 ## Enable / disable
 
@@ -40,3 +67,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-treeitem-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): a `treeitem` needs a `tree` or `group` above it.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): the `tree` container needs those items in return.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): state attributes the surrounding widget roles declare.
+- [a11y/aria-labels](/rules/a11y/aria-labels): the general icon-only naming problem.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The treeitem role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/treeitem_role)
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unnamed node is listed with a selector you can search for. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

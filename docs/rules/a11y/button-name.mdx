@@ -1,9 +1,33 @@
 ---
-title: "Button Name"
-description: "Checks that all buttons have accessible names"
+title: "Accessible names for buttons: what counts and how to check"
+description: "A button with only an icon has no name for a screen reader. squirrel lists every button on every page that has nothing to announce."
 ---
 
-Checks that all buttons have accessible names
+## What an accessible name is
+
+The accessible name is the string a screen reader announces for a control. Browsers compute it from a fixed order of sources: `aria-labelledby` first, then `aria-label`, then the element's own text content, then `title`. An `<input type="button">` uses its `value` attribute.
+
+A button with visible text already has a name. The problem case is a button whose whole content is a picture: an icon `<svg>`, a background image, or a font glyph in a pseudo-element. The user hears "button" and nothing else.
+
+## What squirrel checks
+
+One check, `button-name`, at severity error. It covers every `<button>`, every element with `role="button"`, and every `<input>` of type `button`, `submit` or `reset`.
+
+- Fail when such an element has none of the following: a non-empty `aria-label`; an `aria-labelledby` pointing at an element that has text; a non-empty `title`; text content; a `value`; a nested `<img>` with non-empty `alt`; a nested `<svg><title>` with text; or a nested element carrying `aria-label`. Report message: `Buttons without accessible names`. Up to ten offenders are listed as `button#id`, `button.class`, `input[name="..."]` or `input[type="..."]`, with a count of any remainder.
+- Pass with `All buttons have accessible names`.
+- Info with `No buttons found` when the page has none.
+
+## How to fix it
+
+```html
+<button aria-label="Close settings">
+  <svg aria-hidden="true">...</svg>
+</button>
+```
+
+Put the label on the button, not on the icon inside it, and hide the icon from assistive technology with `aria-hidden="true"` so it is not announced twice.
+
+A button whose only content is an icon-font glyph in a `::before` pseudo-element is the common false positive. squirrel sees an empty button because the glyph is not in the markup. Adding `aria-label` is the correct fix in that case anyway.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that all buttons have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Buttons must have accessible names. Options: 1) Add text content inside the button. 2) Use aria-label for icon buttons. 3) Use aria-labelledby to reference visible text. 4) Use title attribute (less preferred). For `<input type='button'>`, use the value attribute.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/button-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-labels](/rules/a11y/aria-labels): the same defect on buttons and on interactive `<svg>` elements.
+- [a11y/aria-command-name](/rules/a11y/aria-command-name): the wider sweep across buttons, links and menu items.
+- [a11y/label-content-name-mismatch](/rules/a11y/label-content-name-mismatch): buttons that have a name, but not the one on screen.
+- [a11y/link-text](/rules/a11y/link-text): the equivalent problem on links.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The button element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/button)
+- [Accessible name and description computation, W3C](https://www.w3.org/TR/accname-1.2/)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unnamed button is listed by page with a selector you can search for. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

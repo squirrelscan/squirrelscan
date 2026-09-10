@@ -1,9 +1,34 @@
 ---
-title: "Frame Title"
-description: "Checks that iframes and frames have title attributes"
+title: "iframe title: naming embedded frames for screen readers"
+description: "An iframe with no title is announced as just 'frame'. squirrel checks every iframe and frame element on the page."
 ---
 
-Checks that iframes and frames have title attributes
+## What an iframe title is
+
+An iframe is a separate document embedded in the page. A screen reader user reaching one hears its title, decides whether to enter it, and either steps inside or moves past. With no title the announcement is "frame", and the only way to find out what is in it is to go in.
+
+The `title` attribute supplies that name. `aria-label` and `aria-labelledby` do the same job.
+
+## What squirrel checks
+
+One check, `frame-title`, at severity error. It covers every `<iframe>` and `<frame>`, skipping any with `aria-hidden="true"` or with `role="presentation"` or `role="none"`.
+
+- Fail when the element has no non-empty `title`, no non-empty `aria-label` and no `aria-labelledby`. Report message: `N iframe(s) without title attribute`. Items are identified by `name` first, then `id`, then the hostname taken from the `src`, as `iframe (www.youtube.com)`. Up to ten are shown with a count of the rest.
+- Pass with `N iframe(s) have title attributes`.
+- Info with `No iframes found`.
+
+Findings are labelled `iframe` even when the element is a legacy `<frame>`.
+
+## How to fix it
+
+```html
+<iframe src="https://www.youtube.com/embed/xyz"
+        title="Product demo, 3 minutes"></iframe>
+```
+
+Describe the content, not the technology. Most embed snippets ship `title="YouTube video player"`, which names the vendor rather than the video, and every embed on the site ends up with the same name.
+
+An iframe carrying an ad or a tracking pixel still needs a name. "Advertisement" is a reasonable one. squirrel also skips frames marked `aria-hidden="true"` or `role="presentation"`, so a genuinely presentational frame can be excluded that way.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that iframes and frames have title attributes
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-All iframes must have a title attribute describing their content. This helps screen reader users understand what the iframe contains. Example: `<iframe src='video.html' title='Product demo video'>`
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/frame-title"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/video-captions](/rules/a11y/video-captions): captions inside the embedded player itself.
+- [a11y/object-alt](/rules/a11y/object-alt): the same naming requirement for `<object>`.
+- [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name): another container announced by name before it is entered.
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): hidden frames that are still reachable by keyboard.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The iframe element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe)
+- [H64: Using the title attribute of the iframe element, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H64)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each unnamed frame is listed by name, id or the host it loads from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

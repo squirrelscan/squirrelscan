@@ -1,9 +1,33 @@
 ---
-title: "ARIA Valid Attributes"
-description: "Checks for valid ARIA attribute names"
+title: "Invalid aria-* attribute names, aria-labeledby included"
+description: "A misspelled ARIA attribute is ignored by every browser and warns nobody. squirrel checks each aria-* name against the ARIA vocabulary."
 ---
 
-Checks for valid ARIA attribute names
+## What a valid ARIA attribute name is
+
+ARIA defines a fixed set of `aria-*` state and property names. Anything outside it is an unknown attribute: it sits in the DOM, it validates as HTML, and it does nothing. No console warning, no visible change, nothing.
+
+The mistakes cluster in a few places. `aria-labeledby` with one `l` is the classic, because the correct spelling doubles it. `aria-role` does not exist; the attribute is plain `role`. And anything invented to look like ARIA, such as `aria-title`, falls straight through.
+
+## What squirrel checks
+
+One check, `aria-valid-attr`, at severity error. It walks every element on the page, reads every attribute, lowercases the ones beginning with `aria-`, and looks each up in a set of 53 valid names.
+
+- Fail with `N invalid ARIA attribute(s) found`. Items read `div: aria-labeledby`, up to ten with a count of the rest.
+- Pass with `All ARIA attributes are valid`, which is also what a page carrying no ARIA at all reports.
+
+The check is about names only. Whether the value is legal is `a11y/aria-valid-attr-value`, and whether the attribute belongs on that particular element is `a11y/aria-allowed-attr`.
+
+## How to fix it
+
+```html
+<h2 id="settings-title">Settings</h2>
+<div role="dialog" aria-labelledby="settings-title">...</div>
+```
+
+Correct the spelling against the ARIA attribute list. If the name you wanted does not exist, the information usually belongs in `aria-label`, `aria-describedby` or `aria-roledescription`.
+
+A component library that spreads arbitrary props onto a DOM node is the usual source of a page full of these. Filter the props at the boundary rather than fixing the attributes one at a time.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for valid ARIA attribute names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Use only valid ARIA attribute names as defined in the WAI-ARIA specification. Common typos include 'aria-labeledby' (should be 'aria-labelledby'), 'aria-role' (should be 'role'), and 'aria-description' vs 'aria-describedby'. Consult MDN or the WAI-ARIA spec for the complete list of valid attributes.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-valid-attr"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-valid-attr-value](/rules/a11y/aria-valid-attr-value): a correct name carrying a value of the wrong type.
+- [a11y/aria-allowed-attr](/rules/a11y/aria-allowed-attr): a correct name on an element that contradicts it.
+- [a11y/aria-roles](/rules/a11y/aria-roles): the same class of typo in the `role` attribute.
+- [a11y/duplicate-id-aria](/rules/a11y/duplicate-id-aria): ARIA references that point at nothing.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [ARIA attributes, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes)
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+- [aria-labelledby, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-labelledby)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each unrecognized attribute is listed with the element carrying it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

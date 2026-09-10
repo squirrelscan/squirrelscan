@@ -1,9 +1,34 @@
 ---
-title: "Deprecated ARIA Roles"
-description: "Checks for deprecated or abstract ARIA roles"
+title: "Deprecated and abstract ARIA roles, and what to use instead"
+description: "role=directory is deprecated and abstract roles were never meant for markup. squirrel names every one it finds and its replacement."
 ---
 
-Checks for deprecated or abstract ARIA roles
+## What a deprecated or abstract role is
+
+WAI-ARIA marks a role deprecated when it has been superseded. `directory` is the current example: ARIA 1.2 deprecates it in favor of `list`.
+
+Abstract roles are a separate problem. The specification uses them to organise the role taxonomy, and states that they must not be used in content. `command`, `composite`, `input`, `landmark`, `range`, `roletype`, `section`, `sectionhead`, `select`, `structure`, `widget` and `window` all exist only as base types for the concrete roles that extend them. An element carrying one gets no semantics from it.
+
+## What squirrel checks
+
+One check, `aria-deprecated-role`, at severity error. It reads every `role` attribute, lowercases it, splits it on whitespace to handle fallback chains, and looks each token up in its list of the deprecated `directory` role plus the twelve abstract roles.
+
+- Fail when any token matches. Report message: `N deprecated/abstract role(s) found`. Each item names the element, the role and the replacement, for example `ul[role="directory"]: Use 'list' instead` or `div[role="widget"]: Abstract role - use specific widget types`. Up to ten items are shown with a count of the rest.
+- Pass with `No deprecated ARIA roles found` when the page uses roles but none match.
+- Info with `No ARIA roles found`.
+
+## How to fix it
+
+```html
+<ul role="list">
+  <li>Ada Lovelace</li>
+  <li>Grace Hopper</li>
+</ul>
+```
+
+Replace the role with the concrete one the message names. For an abstract role, pick the specific descendant that matches what the element does: `button` or `link` rather than `command`, `slider` or `progressbar` rather than `range`, `dialog` rather than `window`.
+
+Removing the attribute is often better than replacing it. A `<ul>` already has an implicit `list` role, so `role="list"` is only needed where CSS such as `list-style: none` has stripped the semantics in Safari.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks for deprecated or abstract ARIA roles
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## Solution
-
-Avoid deprecated or abstract ARIA roles. Use the recommended alternatives. Abstract roles are never meant to be used directly - they're base types that other roles extend. Replace with specific, concrete roles.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-deprecated-role"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-roles](/rules/a11y/aria-roles): role values that are not in the vocabulary at all.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): roles that need particular children once you switch to a concrete one.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): the same relationship seen from the child.
+- [a11y/list-structure](/rules/a11y/list-structure): native lists carrying elements they should not.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Abstract roles, WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/#abstract_roles)
+- [directory role, WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/#directory)
+- [ARIA roles, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each offending role is listed with the element and its recommended replacement. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

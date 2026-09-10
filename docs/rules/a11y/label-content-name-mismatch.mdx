@@ -1,9 +1,33 @@
 ---
-title: "Label Content Name Mismatch"
-description: "Checks that visible label text is part of accessible name"
+title: "Visible label missing from the accessible name"
+description: "A button showing 'Search' with aria-label 'Find products' cannot be activated by voice. squirrel compares the two on every control."
 ---
 
-Checks that visible label text is part of accessible name
+## What label in name means
+
+Voice control users say what they see: "click Search". The software matches the spoken words against the control's accessible name, not against the pixels. When the name does not contain the visible words the command does nothing, and there is no error explaining why.
+
+WCAG success criterion 2.5.3 Label in Name, Level A, requires the visible label text to be part of the accessible name. Adding context around it is fine; replacing it is not.
+
+## What squirrel checks
+
+One check, `label-content-name-mismatch`, at severity error. It looks at elements carrying both an `aria-label` and visible text: `button`, `a`, `input`, `select`, and anything with `role="button"` or `role="link"`.
+
+Visible text is gathered by walking the element's child nodes, skipping any subtree marked `aria-hidden="true"` or carrying the `hidden` attribute. Both strings are lowercased and their whitespace collapsed before comparison.
+
+- Fail when the `aria-label` does not contain the visible text as a substring. Report message: `N element(s) where visible text doesn't match accessible name`. Items read `button: visible="search" vs aria-label="find products"`, truncating each side at 20 characters, up to ten with a count of the rest. The finding carries the issue `Voice control users may not be able to activate these controls`.
+- Pass with `Visible labels match accessible names`.
+- Info with `No elements with aria-label and visible text found`.
+
+## How to fix it
+
+```html
+<button aria-label="Search products">Search</button>
+```
+
+Start the `aria-label` with the visible words and add the extra context after them. That satisfies both the voice command and the screen reader.
+
+A badge inside the control is the usual false positive. `<button aria-label="Notifications">Notifications <span>3</span></button>` has visible text "notifications 3", which the label does not contain. Mark the badge `aria-hidden="true"`, or include the count in the label.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that visible label text is part of accessible name
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-For controls with visible labels, the accessible name should contain the visible text. Voice control users say what they see - if the accessible name doesn't include the visible label, voice commands won't work. Example: A button showing 'Search' should not have aria-label='Find products'.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/label-content-name-mismatch"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/button-name](/rules/a11y/button-name): controls with no accessible name at all.
+- [a11y/link-text](/rules/a11y/link-text): link names that exist but say nothing useful.
+- [a11y/aria-labels](/rules/a11y/aria-labels): where `aria-label` is the right answer rather than the problem.
+- [a11y/form-field-multiple-labels](/rules/a11y/form-field-multiple-labels): two labels competing to name one control.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Understanding SC 2.5.3 Label in Name, W3C](https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html)
+- [aria-label, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-label)
+- [Accessible name and description computation, W3C](https://www.w3.org/TR/accname-1.2/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each finding shows the visible text and the accessible name side by side. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>
