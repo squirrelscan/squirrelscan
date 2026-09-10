@@ -651,6 +651,7 @@
               "cloud/editor-summary",
               "cloud/rendering",
               "cloud/scheduled-audits",
+              "cloud/firewall",
               "cloud/team"
             ]
           },
