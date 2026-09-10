@@ -5,7 +5,7 @@ description: "Images in inactive carousel slides loaded eagerly, so the browser 
 
 ## Why a hidden slide still downloads
 
-`display: none` and `aria-hidden` change what is painted and what is announced. Neither stops a fetch. An `<img>` inside slide four of a carousel is requested as soon as the parser reaches it, competing for bandwidth with the image on slide one that the visitor can actually see.
+`display: none` and `aria-hidden` change what is painted and what is announced. Neither stops a fetch. An `<img>` inside slide four of a carousel is requested as soon as the parser reaches it, competing for bandwidth with the image on slide one that the visitor can see.
 
 `loading="lazy"` is what defers it. The browser holds the request until the element comes within its loading distance of the viewport, which for an off-screen slide usually means when the slide is shown. The first slide should stay eager, because deferring the visible one delays the paint that matters.
 

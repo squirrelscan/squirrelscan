@@ -5,7 +5,7 @@ description: "Large text sub-resources served with no Content-Encoding, while th
 
 ## What asset compression is
 
-Server configuration usually compresses `text/html` and stops there. The MIME types a page actually spends its bytes on, `text/css` and `application/javascript`, have to be listed separately in nginx `gzip_types` or Apache `AddOutputFilterByType`, and it is easy to ship a site where the document is compressed and everything it loads is not.
+Server configuration usually compresses `text/html` and stops there. The MIME types a page spends most of its bytes on, `text/css` and `application/javascript`, have to be listed separately in nginx `gzip_types` or Apache `AddOutputFilterByType`, and it is easy to ship a site where the document is compressed and everything it loads is not.
 
 The saving on text is large enough that this is worth checking separately from the document. Brotli beats gzip on text and every current browser accepts it; `zstd` and the shared-dictionary codings are newer and also count.
 
@@ -18,7 +18,7 @@ The rule runs once per crawl over the CSS, image and script resources the crawl 
 - Passing with the message `All N compressible asset(s) are compressed or under 100.0 KB`.
 - Warning with the message `N text asset(s) over 100.0 KB served without compression`, the expectation `gzip, Brotli, or zstd on every large text asset`, and one item per asset, largest first.
 
-An asset is judged only when its status was 2xx, it recorded no error, it was fetched on this run rather than reused from a cached record, its content encoding was actually observed, and its content type is compressible. Those exclusions are the point: a record with no observed encoding cannot prove the server sent none, and reporting on it would invent a finding. Any declared coding counts as compressed, so a coding newer than this rule is never reported as uncompressed. `identity`, including a list of nothing but `identity` tokens, means no coding and does count.
+An asset is judged only when its status was 2xx, it recorded no error, it was fetched on this run rather than reused from a cached record, its content encoding was observed on that fetch, and its content type is compressible. Those exclusions are the point: a record with no observed encoding cannot prove the server sent none, and reporting on it would invent a finding. Any declared coding counts as compressed, so a coding newer than this rule is never reported as uncompressed. `identity`, including a list of nothing but `identity` tokens, means no coding and does count.
 
 ## How to fix it
 

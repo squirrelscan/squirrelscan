@@ -7,7 +7,7 @@ description: "A page with an embedded video and no VideoObject markup, or markup
 
 `VideoObject` is the schema.org type for a video. It names the video with `name` and `description`, points at a still with `thumbnailUrl`, dates it with `uploadDate`, and locates the file with `contentUrl` for the video itself or `embedUrl` for a player.
 
-`duration` is typed as an ISO 8601 duration, which starts with `P` and puts a `T` before any time component: `PT1H30M` for ninety minutes, `PT45S` for forty-five seconds. A plain number of seconds or a `1:30:00` clock string is not valid. The markup describes a video that is actually on the page, so it belongs on the watch page rather than on an index of videos.
+`duration` is typed as an ISO 8601 duration, which starts with `P` and puts a `T` before any time component: `PT1H30M` for ninety minutes, `PT45S` for forty-five seconds. A plain number of seconds or a `1:30:00` clock string is not valid. The markup describes a video present on the page, so it belongs on the watch page rather than on an index of videos.
 
 ## What squirrel checks
 

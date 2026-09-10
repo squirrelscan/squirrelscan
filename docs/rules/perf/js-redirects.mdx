@@ -7,7 +7,7 @@ description: "JavaScript files that answer with a 3xx before serving. squirrel r
 
 A script that answers 301 or 302 costs a full extra round trip before a byte of code moves. On a blocking script that delay is added to first paint, and it is paid on every visit that is not served from cache.
 
-The causes are all historical: a CDN that changed its URL shape, a versioned path that now points at `latest`, a domain migration where the old host still answers with a redirect. The `src` attribute in the page is simply out of date.
+The causes are all historical: a CDN that changed its URL shape, a versioned path that now points at `latest`, a domain migration where the old host still answers with a redirect. The `src` attribute in the page is out of date.
 
 ## What squirrel checks
 

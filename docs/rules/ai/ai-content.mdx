@@ -1,5 +1,5 @@
 ---
-title: "AI content detection: why this rule is retired, and what runs"
+title: "AI content detection: why this rule is retired"
 description: "The AI-generated content check no longer runs. squirrel emits a skip on every page and never calls a model."
 ---
 
@@ -62,7 +62,7 @@ enable = ["ai/*"]
 - [ai/llm-parsability](/rules/ai/llm-parsability): how well a model can extract the page's facts, which does run.
 - [ai/page-type-match](/rules/ai/page-type-match): the classified page type against the declared structured data.
 - [content/quality](/rules/content/quality): the content quality analysis that runs on a cloud audit.
-- [content/placeholder-text](/rules/content/placeholder-text): unedited template text, which is a defect a rule can actually establish.
+- [content/placeholder-text](/rules/content/placeholder-text): unedited template text, which is a defect a rule can establish from evidence.
 
 Agent experience findings ship in every audit next to the SEO, performance and security rules. See [Generative engine optimization](https://squirrelscan.com/learn/generative-engine-optimization) for how an agent works through a report.
 

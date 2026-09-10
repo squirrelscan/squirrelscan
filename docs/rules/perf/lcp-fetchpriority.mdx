@@ -7,7 +7,7 @@ description: "A hero image loaded eagerly with neither fetchpriority='high' nor 
 
 `fetchpriority` is an HTML attribute that hints how the browser should rank a resource against everything else it is fetching. On the image that paints the largest element above the fold, `fetchpriority="high"` raises it relative to the rest of the queue. Chrome starts most images at a low priority and raises them once layout shows they are in the viewport, and that delay lands on Largest Contentful Paint.
 
-A `<link rel="preload" as="image">` for the same URL attacks a different delay: the browser starts the fetch as soon as it parses `<head>`, before it reaches the `<img>`. The two compose, and a preload can itself carry `fetchpriority`. Either one satisfies this rule. Neither belongs on a below-fold image, where raising priority steals bandwidth from the element that is actually visible.
+A `<link rel="preload" as="image">` for the same URL attacks a different delay: the browser starts the fetch as soon as it parses `<head>`, before it reaches the `<img>`. The two compose, and a preload can itself carry `fetchpriority`. Either one satisfies this rule. Neither belongs on a below-fold image, where raising priority steals bandwidth from the element in the viewport.
 
 ## What squirrel checks
 
