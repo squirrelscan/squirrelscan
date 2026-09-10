@@ -1,9 +1,50 @@
 ---
-title: "LocalBusiness Schema"
-description: "Validates LocalBusiness schema for local SEO"
+title: "LocalBusiness schema: required name, address or areaServed"
+description: "LocalBusiness markup with no name, an incomplete PostalAddress, or neither an address nor a service area. squirrel checks all three."
 ---
 
-Validates LocalBusiness schema for local SEO
+## What LocalBusiness schema is
+
+`LocalBusiness` is the schema.org subtype of `Organization` for a business a customer can reach in the physical world. Beyond `name` and `url` it carries `address` as a `PostalAddress`, `telephone`, `openingHours`, `geo` coordinates and `priceRange`. Subtypes such as `Restaurant`, `Dentist` and `AutoRepair` inherit all of it and narrow the category.
+
+A business with a storefront declares its address. A business that travels to customers and has no public address declares `areaServed` instead, naming the places it covers as text, as a `Place`, or as a `GeoShape`. Google's LocalBusiness reference lists `address` and `name` as the required properties and does not document the service-area alternative.
+
+## What squirrel checks
+
+The rule flattens the page's JSON-LD, including any `@graph` wrapper, and takes the first node whose `@type` is one of the recognised LocalBusiness types. It emits one to five checks:
+
+- `local-business-schema`: reports at info status with the message `No LocalBusiness schema found` when no such node exists. No further checks run.
+- `local-business-required`: warns with the message `LocalBusiness schema missing required properties` and lists the missing names as items. The required set here is `name` alone. When it is present the check passes with `LocalBusiness schema has required properties`.
+- `local-business-address`: emitted only when an address is present. It warns with the message `Address incomplete` and lists whichever of `streetAddress`, `addressLocality` and `postalCode` are missing. A single `PostalAddress` wrapped in an array is unwrapped, and the check passes silently when any entry in the array is complete.
+- `local-business-location`: emitted only when no address is present. It passes with the message `Service-area business detected: areaServed declared, no public address required` when `areaServed` or the legacy `serviceArea` names somewhere. Otherwise it warns with the message `LocalBusiness schema has no address or service area` and a value spelling out both fixes.
+- `local-business-geo`: emitted only when `geo` is absent, at info status, with the message `LocalBusiness missing geo coordinates` and the value `Add GeoCoordinates for map placement`.
+- `local-business-recommended`: emitted only when at least one of `telephone`, `openingHours`, `image` and `priceRange` is absent, at info status, with the message `LocalBusiness could include recommended properties`.
+
+squirrel deliberately does not require `address`, which is where it differs from Google's reference. A service-area business that declares `areaServed` passes here. The declaration may be plain text such as `Sydney NSW`, an array of values, a structured `Place`, `GeoShape` or `AdministrativeArea` node, or an `@id` reference to one elsewhere in the graph, which the rule resolves before accepting it. An `address` set to an empty array counts as no address, so the service-area path applies.
+
+The whole rule is skipped, with the reason shown in the report, when the site profile says the site is not a local business.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Plumber",
+  "name": "Acme Plumbing",
+  "url": "https://example.com/",
+  "telephone": "+14155550142",
+  "areaServed": [
+    { "@type": "City", "name": "San Francisco" },
+    { "@type": "City", "name": "Oakland" }
+  ]
+}
+</script>
+```
+
+Put it in the `<head>` of the homepage or the location page, and use a storefront `address` with `streetAddress`, `addressLocality` and `postalCode` instead of `areaServed` when the business has a public address.
+
+The common false positive is an informal address written as one string. The subfield check still runs on it and reports all three subfields as missing, because a plain string has no `streetAddress` to read.
 
 | | |
 |---|---|
@@ -12,10 +53,6 @@ Validates LocalBusiness schema for local SEO
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-LocalBusiness schema helps your business appear in local search and Google Maps. Required: name, plus either a full PostalAddress (streetAddress, addressLocality, postalCode) for a storefront, or areaServed for a service-area business (SAB) with no public storefront: Google supports omitting the address when areaServed is declared. Include telephone, openingHours (use OpeningHoursSpecification for complex hours), geo coordinates, and priceRange. Match data with your Google Business Profile.
 
 ## Enable / disable
 
@@ -40,3 +77,31 @@ disable = ["schema/*"]
 enable = ["schema/local-business"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [local/nap-consistency](/rules/local/nap-consistency): whether the phone number and address in this markup match the rest of the site.
+- [schema/organization](/rules/schema/organization): the parent type, for an organization with no physical presence.
+- [local/service-area](/rules/local/service-area): whether the site has location pages for the areas declared here.
+- [local/geo-meta](/rules/local/geo-meta): the geo meta tags that should agree with the `geo` coordinates.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+- [LocalBusiness, schema.org](https://schema.org/LocalBusiness)
+- [PostalAddress, schema.org](https://schema.org/PostalAddress)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Missing address subfields are listed by name. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

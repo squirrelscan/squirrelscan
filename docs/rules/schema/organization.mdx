@@ -1,9 +1,47 @@
 ---
-title: "Organization Schema"
-description: "Validates Organization schema for brand presence"
+title: "Organization schema: name, url, logo and sameAs checks"
+description: "Organization JSON-LD missing name or url, with no logo, or a sameAs list that omits a social profile the site clearly runs. squirrel finds all three."
 ---
 
-Validates Organization schema for brand presence
+## What Organization schema is
+
+`Organization` is the schema.org type for the company, institution or group behind a site. It carries the identity fields a machine reader cannot infer from page text: `name`, `url`, `logo`, `contactPoint`, and `sameAs`, an array of URLs for the same entity elsewhere, such as a LinkedIn company page or a Wikipedia article.
+
+One `Organization` node belongs on the homepage or an about page, not on every page. A business with a physical location or a service area should use [LocalBusiness](/rules/schema/local-business) instead, which is a subtype of `Organization` and carries the address and hours fields as well.
+
+## What squirrel checks
+
+The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `Organization` or `Corporation`, or whose `@type` array contains either. It then emits between one and five checks:
+
+- `organization-schema`: reports at info status with the message `No Organization schema found` when no such node exists. No further checks run.
+- `organization-required`: warns with the message `Organization schema missing required properties` and lists the missing names as items. The required set is `name` and `url`. When both are present it passes with `Organization schema has required properties`.
+- `organization-logo`: emitted only when `logo` is absent, at info status, with the message `Organization missing logo` and the value `Add logo for knowledge panel`.
+- `organization-social`: passes with the message `N social profile(s) linked`, counting the string entries in `sameAs`. With no string entries it reports at info status with `No sameAs social profiles` and the value `Link to social profiles for brand verification`.
+- `organization-sameas-missing`: emitted only when the site profile already knows official social accounts for the site and `sameAs` omits one or more of them. It warns with the message `N known social account(s) missing from schema sameAs`, the value `Add detected official profiles to Organization sameAs`, and one item per account labelled with its platform.
+
+`logo` is not part of the required set even though the missing-logo result mentions the knowledge panel. A page with `name` and `url` and no logo passes `organization-required` and gets the separate info result. The cross-check in the last bullet is a no-op when the audit has no site metadata, so an offline run behaves as if it were not there.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Acme Coffee",
+  "url": "https://example.com/",
+  "logo": "https://example.com/logo.png",
+  "sameAs": [
+    "https://www.linkedin.com/company/acme-coffee",
+    "https://github.com/acme-coffee"
+  ]
+}
+</script>
+```
+
+Put it in the `<head>` of the homepage, and list every profile you control in `sameAs`.
+
+The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so an `Organization` node nested inside one reports as `No Organization schema found`.
 
 | | |
 |---|---|
@@ -12,10 +50,6 @@ Validates Organization schema for brand presence
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 4/10 |
-
-## Solution
-
-Organization schema helps Google understand your brand and may show a knowledge panel. Required: name, url, logo. Add contactPoint for customer service info, sameAs for social profiles (LinkedIn, Twitter, etc.). Place on homepage or about page. For local businesses, use LocalBusiness instead.
 
 ## Enable / disable
 
@@ -40,3 +74,31 @@ disable = ["schema/*"]
 enable = ["schema/organization"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/local-business](/rules/schema/local-business): the subtype to use instead when the organization has an address or a service area.
+- [social/social-profiles](/rules/social/social-profiles): the profile links found in the page itself, which feed the `sameAs` cross-check.
+- [schema/website-search](/rules/schema/website-search): the `WebSite` node that usually sits alongside `Organization` on the homepage.
+- [eeat/authority-signals](/rules/eeat/authority-signals): the wider trust signals a reader looks for on the same pages.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Organization structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/organization)
+- [Organization, schema.org](https://schema.org/Organization)
+- [sameAs, schema.org](https://schema.org/sameAs)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Missing properties and missing profiles are listed by name. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

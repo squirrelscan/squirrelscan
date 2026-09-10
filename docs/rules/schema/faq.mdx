@@ -1,9 +1,44 @@
 ---
-title: "FAQ Schema"
-description: "Validates FAQPage schema structure"
+title: "FAQPage schema: mainEntity, Question and acceptedAnswer"
+description: "FAQ markup with no mainEntity, or Question entries missing name or acceptedAnswer. squirrel checks the structure on every page that carries it."
 ---
 
-Validates FAQPage schema structure
+## What FAQPage schema is
+
+`FAQPage` is the schema.org type for a page of questions and answers written by the site itself. Its `mainEntity` holds an array of `Question` nodes, each with a `name` holding the question text and an `acceptedAnswer` holding an `Answer` with a `text`. A page where readers submit competing answers is `QAPage`, not `FAQPage`.
+
+Google stopped showing FAQ rich results in Search on 7 May 2026 and removed the documentation for the feature, having already restricted it in August 2023 to well-known government and health sites. The markup is still valid schema.org and still describes the page accurately for any other consumer, which is why this rule checks the structure rather than telling you to add it.
+
+## What squirrel checks
+
+The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `FAQPage`, or whose `@type` array contains it. It emits one or two checks:
+
+- `faq-schema`: reports at info status with the message `No FAQPage schema found` when no such node exists. No further checks run.
+- `faq-mainEntity`: warns with the message `FAQPage missing mainEntity` and the value `Add array of Question items` when `mainEntity` is absent.
+- `faq-questions`: warns with the message `FAQPage has no questions` when `mainEntity` is an empty array. It warns with the message `N question(s) missing required properties` and the value `Each Question needs @type, name, acceptedAnswer` when at least one entry lacks any of the three.
+- `faq-valid`: passes with the message `FAQPage has N valid question(s)`, counting entries that have all three.
+
+An entry counts as valid only when its `@type` is exactly the string `Question`. An entry whose `@type` is an array containing `Question` is counted as invalid. A `mainEntity` holding a single object rather than an array is accepted and treated as one question.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [{
+    "@type": "Question",
+    "name": "How long does delivery take?",
+    "acceptedAnswer": { "@type": "Answer", "text": "Three to five working days." }
+  }]
+}
+</script>
+```
+
+Put it in the `<head>` of the FAQ page, and keep every question and answer visible in the page content as well.
+
+The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so an `FAQPage` node nested inside one reports as `No FAQPage schema found`.
 
 | | |
 |---|---|
@@ -12,10 +47,6 @@ Validates FAQPage schema structure
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-FAQPage schema enables FAQ rich results in search. Structure: FAQPage with mainEntity array of Question items. Each Question needs name (question text) and acceptedAnswer (Answer with text). FAQ content must be visible on the page. Don't use for single Q&A or forums - those have different schema types.
 
 ## Enable / disable
 
@@ -40,3 +71,31 @@ disable = ["schema/*"]
 enable = ["schema/faq"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): the heading structure an FAQ page normally uses for the same questions.
+- [ax/llms-txt](/rules/ax/llms-txt): the plain-text summary agents read, which often covers the same ground as an FAQ.
+- [schema/article](/rules/schema/article): the type to use when the page is a written article rather than a question list.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Changes to HowTo and FAQ rich results, Google Search Central Blog](https://developers.google.com/search/blog/2023/08/howto-faq-changes)
+- [Search documentation updates, Google Search Central](https://developers.google.com/search/updates)
+- [FAQPage, schema.org](https://schema.org/FAQPage)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each FAQ page shows how many questions validated. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,43 @@
 ---
-title: "Breadcrumb Schema"
-description: "Checks for BreadcrumbList schema on non-homepage"
+title: "BreadcrumbList schema: positions, names and what breaks"
+description: "Breadcrumb markup with no itemListElement, items missing position or name, or positions out of order. squirrel checks every non-homepage URL."
 ---
 
-Checks for BreadcrumbList schema on non-homepage
+## What BreadcrumbList schema is
+
+`BreadcrumbList` is the schema.org type for the trail of pages that leads to the current one. It holds an `itemListElement` array of `ListItem` nodes, each with a `position` starting at 1, a `name`, and an `item` URL. The last entry is the current page and does not need an `item`.
+
+It describes a path, not the navigation widget, so the markup should mirror the trail a reader would follow rather than the site's whole menu. A homepage has no trail, which is why this rule skips it.
+
+## What squirrel checks
+
+The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `BreadcrumbList`, or whose `@type` array contains it. It emits one or more checks:
+
+- `breadcrumb-schema`: on the homepage, meaning a URL path of `/` or empty, it reports at info status with the message `Homepage - breadcrumbs not typically needed` and stops. On any other page with no `BreadcrumbList` node it reports at info status with the message `No BreadcrumbList schema found` and the value `Consider adding for non-homepage`.
+- `breadcrumb-items`: warns with the message `BreadcrumbList has no items` when `itemListElement` is absent, is not an array, or is empty. It warns with the message `Some breadcrumb items missing position or name` when at least one entry lacks either property.
+- `breadcrumb-order`: warns with the message `Breadcrumb positions not sequential` when a numeric `position` is not one more than the previous entry's. This check is pushed once per offending entry, so a badly numbered list emits it more than once.
+- `breadcrumb-valid`: passes with the message `BreadcrumbList has N item(s)` when every entry has both a `position` and a `name`.
+
+The sequence check only runs on positions that are JavaScript numbers. A `position` written as the string `"1"` is accepted as present by `breadcrumb-valid` but skipped by `breadcrumb-order`, so a string-numbered list never reports as out of order.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Guides", "item": "https://example.com/guides" },
+    { "@type": "ListItem", "position": 2, "name": "Deployment" }
+  ]
+}
+</script>
+```
+
+Put it in the `<head>` of the page it describes, number the positions from 1 with no gaps, and emit them as numbers rather than strings.
+
+The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so a `BreadcrumbList` nested inside one reports as `No BreadcrumbList schema found`.
 
 | | |
 |---|---|
@@ -12,10 +46,6 @@ Checks for BreadcrumbList schema on non-homepage
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-BreadcrumbList schema shows navigation path in search results. Structure: BreadcrumbList with itemListElement array of ListItem. Each ListItem needs position (1, 2, 3...), name, and item (URL). The last item (current page) doesn't need a URL. Breadcrumbs help users understand site structure and improve click-through rates.
 
 ## Enable / disable
 
@@ -40,3 +70,31 @@ disable = ["schema/*"]
 enable = ["schema/breadcrumb"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
+- [links/internal-links](/rules/links/internal-links): the real internal link graph the breadcrumb trail should reflect.
+- [url/slug-convention](/rules/url/slug-convention): URL path structure, which is usually what the trail mirrors.
+- [schema/coverage-outlier](/rules/schema/coverage-outlier): pages missing markup the rest of their page type carries.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Breadcrumb structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/breadcrumb)
+- [BreadcrumbList, schema.org](https://schema.org/BreadcrumbList)
+- [ListItem, schema.org](https://schema.org/ListItem)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each page shows how many breadcrumb items it declared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

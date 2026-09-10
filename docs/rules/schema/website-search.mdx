@@ -1,9 +1,44 @@
 ---
-title: "WebSite Search Schema"
-description: "Checks for WebSite schema with sitelinks searchbox"
+title: "WebSite SearchAction and the retired sitelinks searchbox"
+description: "WebSite schema on a homepage with no SearchAction, or a SearchAction missing target or query-input. squirrel checks the homepage markup."
 ---
 
-Checks for WebSite schema with sitelinks searchbox
+## What WebSite SearchAction is
+
+`WebSite` is the schema.org type for a site as a whole, usually declared once on the homepage. Its `potentialAction` property can hold a `SearchAction` that points at the site's own search endpoint: `target` is a URL template containing a `{search_term_string}` placeholder, and `query-input` names that placeholder so a consumer knows what to substitute.
+
+Google used this markup to render a sitelinks search box under a site's result. It removed that visual element on 21 November 2024 and deleted the documentation for it, so the markup no longer produces anything in Google Search. It is still valid schema.org and still describes a real endpoint, which is why this rule reports at info severity rather than failing a page for the absence.
+
+## What squirrel checks
+
+The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `WebSite`, or whose `@type` array contains `WebSite`. Depending on what it finds it emits one to three checks:
+
+- `website-schema`: passes with the message `WebSite schema found` when the node exists. When it does not and the page is the homepage, meaning a URL path of `/` or empty, it reports at info status with the message `No WebSite schema on homepage` and the value `Consider adding for sitelinks searchbox`. On any other page with no `WebSite` node the rule emits nothing at all.
+- `website-search`: reports at info status with the message `WebSite has no potentialAction` and the value `Add SearchAction for sitelinks searchbox` when `potentialAction` is absent, or with the message `WebSite has no SearchAction` when `potentialAction` exists but holds no node typed `SearchAction`.
+- `search-action`: warns with the message `SearchAction missing target URL` when `target` is absent, warns with `SearchAction missing query-input` when `target` is present but `query-input` is not, and otherwise passes with `SearchAction properly configured`.
+
+The rule checks that `target` and `query-input` exist. It does not parse the target template or confirm that the placeholder in `query-input` matches the one in `target`.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "url": "https://example.com/",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://example.com/search?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+```
+
+This block goes in the homepage `<head>`.
+
+The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so a `WebSite` node nested inside one is not found and the homepage reports `No WebSite schema on homepage`. Check the markup before adding a second block.
 
 | | |
 |---|---|
@@ -12,10 +47,6 @@ Checks for WebSite schema with sitelinks searchbox
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-WebSite schema with SearchAction enables the sitelinks searchbox in Google results. Add to your homepage: WebSite with url, potentialAction (SearchAction with target URL using `{search_term_string}` placeholder, and query-input). This lets users search your site directly from Google results.
 
 ## Enable / disable
 
@@ -40,3 +71,31 @@ disable = ["schema/*"]
 enable = ["schema/website-search"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/organization](/rules/schema/organization): the Organization node that usually sits alongside `WebSite` on the homepage.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
+- [schema/breadcrumb](/rules/schema/breadcrumb): the other site-structure markup, checked on every non-homepage URL.
+- [schema/coverage-outlier](/rules/schema/coverage-outlier): pages missing the structured data the rest of their page type carries.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Farewell, Sitelinks Search Box, Google Search Central Blog](https://developers.google.com/search/blog/2024/10/sitelinks-search-box)
+- [WebSite, schema.org](https://schema.org/WebSite)
+- [SearchAction, schema.org](https://schema.org/SearchAction)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. The homepage result shows which part of the markup is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>
