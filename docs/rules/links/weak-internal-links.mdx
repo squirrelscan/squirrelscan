@@ -1,9 +1,29 @@
 ---
-title: "Weak Internal Links"
-description: "Detects pages with only 1 dofollow internal link pointing to them"
+title: "Pages with only one internal link pointing to them"
+description: "One inbound link is enough to be found and not enough to look important. squirrel lists every page whose dofollow inbound count is exactly one."
 ---
 
-Detects pages with only 1 dofollow internal link pointing to them
+## What weak internal linking is
+
+Internal links do two jobs: they let a crawler reach a page, and they distribute the site's own signals of importance. A page with a single inbound link clears the first bar and barely registers on the second.
+
+It is the band just above an orphan. Nothing is broken, and the page will be crawled, but it has no support from the rest of the site, which usually means it is not linked from any of the content it belongs with.
+
+## What squirrel checks
+
+The rule is site-wide and reads the same dofollow inbound counts as `links/orphan-pages`. The homepage is never flagged, and neither is any URL matching an exclusion pattern. It emits a single check named `weak-internal-links`:
+
+- Skipped when fewer than two pages were crawled. Message: `Insufficient pages for internal link analysis`.
+- Warn when any page has exactly one inbound internal link. Message: `12 page(s) have only 1 internal link`. Severity warning, weight 3.
+- Pass otherwise. Message: `All pages have sufficient internal link support`.
+
+The count of one is fixed and not configurable. With `links/orphan-pages` at its default threshold of 2, a page with one inbound link is reported by both rules.
+
+## How to fix it
+
+Add contextual links from the pages that share the topic, and from the hub or category page the content belongs to. Two or three links from related content are worth more than another entry in the footer.
+
+Which links count matters more than how many. See `links/no-contextual-inbound` for the difference between an editorial link and a sitewide one.
 
 | | |
 |---|---|
@@ -13,23 +33,17 @@ Detects pages with only 1 dofollow internal link pointing to them
 | **Severity** | warning |
 | **Weight** | 3/10 |
 
-## Solution
-
-Pages with only a single internal link have weak internal linking support and may struggle to rank. Search engines use internal links to understand page importance and distribute link equity. Add contextual links from related content, include in navigation or sidebar, or link from category/hub pages to strengthen internal link profiles.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `excludePatterns` | unknown | `undefined` | URL patterns to exclude from weak link detection |
+| `excludePatterns` | array of strings | `[]` | URL patterns to exclude from weak link detection |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."links/weak-internal-links"]
-excludePatterns = undefined
+[rule_options."links/weak-internal-links"]
+excludePatterns = ["/lp/", "/tag/"]
 ```
 
 ## Enable / disable
@@ -55,3 +69,29 @@ disable = ["links/*"]
 enable = ["links/weak-internal-links"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/orphan-pages](/rules/links/orphan-pages): pages below the inbound threshold entirely.
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): whether the inbound links are editorial or chrome.
+- [links/anchor-text](/rules/links/anchor-text): what those links say about the page.
+- [links/dead-end-pages](/rules/links/dead-end-pages): the outbound side of the same structure.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every page with a single inbound link is listed. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

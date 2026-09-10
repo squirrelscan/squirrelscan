@@ -1,9 +1,40 @@
 ---
-title: "Anchor Text"
-description: "Checks for empty or generic anchor text"
+title: "Empty and generic anchor text: click here, read more, and icons"
+description: "A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name."
 ---
 
-Checks for empty or generic anchor text
+## What anchor text does
+
+Anchor text is the visible name of a link. It tells a reader where the link goes before they take it, and it is one of the few signals a search engine has about the page on the other end.
+
+Two failures matter. A link with no text at all, usually an icon or a wrapped image with no `alt`, has no accessible name: a screen reader announces it as "link" and nothing more. A link whose text is `click here` or `read more` has a name that describes nothing, which fails WCAG's link purpose criterion when the surrounding context does not supply it.
+
+Cards are the reason this needs care. A card often links to the same destination three times, from the image, the headline and a "Read more". Only one of those has to carry the name.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It takes every `a[href]`, skips fragment-only links, resolves each href against the page URL, and groups links by resolved destination. A group passes when any member has an accessible name that is not generic.
+
+An accessible name comes from the link's text content, an `alt` on an image inside it, an `aria-label`, an `aria-labelledby` pointing at an element with text, a `title`, a `<title>` or `aria-label` on an `<svg>` inside it, or an `aria-label` on a descendant with `role="img"`. Generic means the trimmed lowercased text is exactly one of `click here`, `here`, `read more`, `learn more`, `more`, `link`, `this`, `this link`, `go` or `continue`.
+
+- `empty-anchor` warns for groups where no member has any accessible name. Message: `3 link(s) have empty anchor text`, each item carrying the destination and a markup snippet of the first link.
+- `generic-anchor` reports info for groups whose only names are generic. Message: `8 link(s) use generic anchor text`, listing the distinct phrases found.
+- `anchor-text` passes when neither fired. Message: `Link anchor text is descriptive`.
+
+Severity warning, weight 4.
+
+## How to fix it
+
+```html
+<a href="/guides/url-structure">
+  <img src="/thumb.png" alt="" />
+  <h3>How to structure URLs</h3>
+</a>
+```
+
+Let the headline carry the name and leave the decorative image with an empty `alt`, so the group has exactly one accessible name and no duplication. For a standalone icon link, put an `aria-label` on the anchor.
+
+Where "Read more" has to stay for the layout, give it a name that works out of context: `aria-label="Read more about URL structure"`.
 
 | | |
 |---|---|
@@ -12,23 +43,6 @@ Checks for empty or generic anchor text
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing. When a card links to the same target more than once (e.g. an image link and a headline link), only one of those links needs descriptive text — the group is evaluated together, not link by link.
-
-## How this rule evaluates links
-
-This rule groups a page's outgoing links by resolved target URL before evaluating them, rather than scoring every `<a>` tag on its own. That matters for the common card pattern — an image link, a headline link, and a "Read more" link all pointing at the same destination — where the headline already names the target and the other two links are intentionally redundant.
-
-A target group is flagged as:
-
-- **`empty-anchor`** only when *no* link in the group carries any accessible name (text content, image `alt`, `aria-label`, `aria-labelledby`, `title`, or an accessible SVG name).
-- **`generic-anchor`** only when *every* link in the group uses generic text (e.g. "read more", "click here") and none carries a descriptive accessible name.
-
-A group with at least one descriptively-labeled link passes, even if its sibling links (an image wrapper, a "Read more" affordance) are empty or generic.
-
-Note this is narrower than it sounds: a genuinely empty single link, or a card where every link is empty or generic, is still reported. If you need to flag empty links in the tab order regardless of sibling context, that's an accessibility concern handled by the `a11y` category — this rule is an SEO check on whether the destination is described.
 
 ## Enable / disable
 
@@ -53,3 +67,30 @@ disable = ["links/*"]
 enable = ["links/anchor-text"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/link-text](/rules/a11y/link-text): the accessibility rule covering the same defect.
+- [images/alt-text](/rules/images/alt-text): the alt attribute that names an image-only link.
+- [links/internal-links](/rules/links/internal-links): how many internal links a page carries.
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): whether those links sit in body copy or in chrome.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The anchor element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a)
+- [Understanding link purpose in context, WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every unnamed link is listed with its destination and a markup snippet. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

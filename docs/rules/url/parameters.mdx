@@ -7,7 +7,7 @@ description: "Every parameter combination is a separate URL to a crawler. squirr
 
 A query parameter creates a new URL. Three filters with five values each produce well over a hundred addresses for one listing, and a crawler has no way to know in advance that most of them return near-identical content.
 
-The cost is crawl budget spent on combinations nobody searches for, and index entries competing with each other. Tracking parameters are the simplest case: `utm_source` and `gclid` change nothing about the page, so a URL carrying one is a duplicate of the same URL without it, and a self-referencing canonical is enough to resolve it.
+The cost is crawl budget spent on combinations nobody searches for, and index entries competing with each other. Tracking parameters are the simplest case: `utm_source` and `gclid` change nothing about the page, so a URL carrying one is a duplicate of the same URL without it, and pointing its canonical at the clean URL is the signal that says so. Canonical selection is still the search engine's decision, not an instruction it has to follow.
 
 ## What squirrel checks
 
@@ -26,7 +26,9 @@ Severity for the rule is info and the weight is 3. The threshold of three is fix
 <link rel="canonical" href="https://example.com/shoes" />
 ```
 
-Give every parameterised URL a canonical pointing at the clean version. For faceted navigation, decide which combinations deserve to be indexable, and keep the rest out with `noindex` or by not linking them with crawlable hrefs.
+Point a tracking or otherwise equivalent variant at the clean URL. Parameters that select different content are different pages: `?page=2` gets its own self-referencing canonical, not one pointing at page one.
+
+For faceted navigation, decide which combinations deserve to be indexable. Not linking the rest with crawlable hrefs limits discovery but does not keep them out of the index, because a URL can be found elsewhere. Keeping a URL out of the index takes a `noindex` the crawler is allowed to fetch and read.
 
 Move content-defining values into the path where they matter: `/shoes/running` reads better and behaves better than `/products?category=shoes&type=running`.
 

@@ -7,7 +7,7 @@ description: "Spaces, percent signs and non-ASCII characters in a path break whe
 
 A URL path is limited by RFC 3986 to a defined set of characters. Anything else has to be percent-encoded, which is why a space becomes `%20`. Some characters are reserved because they delimit parts of the URL: `?` starts the query, `#` starts the fragment, `&` and `=` separate parameters.
 
-Encoded characters work, but they travel badly. A path with `%20` in it gets mangled when pasted into a chat client, truncated by a link parser at the first unexpected character, or double-encoded by a system that cannot tell whether it has already been processed. Non-ASCII characters in a path are valid as internationalised URLs and display well in a browser while appearing as long percent sequences everywhere else.
+Encoding is correct and works. What varies is how the software around it behaves: link parsers that stop at the first unexpected character, systems that encode an already-encoded path a second time, tools that display the raw percent sequence rather than decoding it. Non-ASCII characters in a path are valid, and browsers show them decoded, but whether anything else does depends on the application. Sticking to unreserved characters removes the question.
 
 ## What squirrel checks
 

@@ -16,7 +16,7 @@ The rule runs on every crawled page and looks only at the last non-empty path se
 - Pass when the URL is pagination, meaning the previous segment is `page`, `pages` or `p` and the last segment is all digits. Message: `Pagination URL (excluded from slug analysis)`.
 - Warn when the segment is all digits, or is eight or more hexadecimal characters. Message: `URL uses numeric/hash ID instead of descriptive slug`, with the segment as the value.
 - Warn when the segment matches `page`, `post`, `item`, `product`, `article` or `node` followed by an optional hyphen and digits. Message: `URL uses generic slug pattern`.
-- Info when the segment is under four characters and looks like a short ID, meaning one to eight alphanumeric characters with no doubled vowel. Message: `URL slug is very short, may lack keywords`.
+- Info when the segment is under four characters and looks like a short ID, meaning one to eight alphanumeric characters containing no two consecutive vowels. `xyz` qualifies; `aex` does not, and falls through to the descriptive branch below. Message: `URL slug is very short, may lack keywords`.
 - Pass when splitting the segment on hyphens and underscores yields at least one word longer than two characters. Message: `URL appears to contain descriptive keywords`.
 - Info otherwise. Message: `URL slug may not be descriptive`.
 - Info on the root path. Message: `Root URL (no slug to analyze)`.

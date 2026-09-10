@@ -1,9 +1,34 @@
 ---
-title: "Internal Links"
-description: "Validates internal link count"
+title: "Internal link count per page: too few and too many"
+description: "A page with no internal links leads nowhere and a page with hundreds dilutes each one. squirrel counts internal links against a configurable range."
 ---
 
-Validates internal link count
+## What the internal link count measures
+
+This is a count of the internal links a page carries, judged against a floor and a ceiling. It is a shape check rather than a quality one: it says nothing about where the links go or what they say.
+
+The floor catches pages that lead nowhere. The ceiling catches the opposite, usually a page rendering an entire category tree or a mega-menu with several hundred entries, where any individual link is a small fraction of what the page is pointing at.
+
+## What squirrel checks
+
+The rule runs on every crawled page and counts links the parser marked as internal, including navigation and footer links. It emits a single check named `internal-links`:
+
+- Warn below `min_internal_links`, default 1. Message: `Too few internal links (0, min 1)`, with the count as the value and the threshold as the expected value.
+- Warn above `max_internal_links`, default 100. Message: `Too many internal links (240, max 100)`.
+- Pass otherwise. Message: `42 internal link(s)`, with the count as the value.
+
+Severity warning, weight 4. Every internal link on the page counts, so a large sitewide navigation pushes every page toward the ceiling. Raise the ceiling rather than removing navigation if that is the shape of the site.
+
+## How to fix it
+
+```toml squirrel.toml
+[rule_options."links/internal-links"]
+max_internal_links = 200
+```
+
+For the floor, add links to related content from the body copy. For the ceiling, decide whether the page really needs to expose the whole tree, or whether a hub page per section would serve a reader better.
+
+Set the ceiling to match the site. A documentation site with a full sidebar will exceed 100 on every page by design.
 
 | | |
 |---|---|
@@ -13,25 +38,19 @@ Validates internal link count
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## Solution
-
-Internal links help users navigate your site and distribute page authority. Each page should have at least one internal link pointing to it (not counting navigation). Add contextual internal links from related content. Use descriptive anchor text that indicates what the linked page is about. Avoid orphan pages (no internal links) and ensure important pages receive more internal links. Review your site structure to create logical content clusters.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_internal_links` | unknown | `undefined` | Minimum internal links |
-| `max_internal_links` | unknown | `undefined` | Maximum internal links |
+| `min_internal_links` | number | `1` | Minimum internal links |
+| `max_internal_links` | number | `100` | Maximum internal links |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."links/internal-links"]
-min_internal_links = undefined
-max_internal_links = undefined
+[rule_options."links/internal-links"]
+min_internal_links = 3
+max_internal_links = 200
 ```
 
 ## Enable / disable
@@ -57,3 +76,29 @@ disable = ["links/*"]
 enable = ["links/internal-links"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/dead-end-pages](/rules/links/dead-end-pages): the floor, with exclusions for pages meant to be terminal.
+- [links/external-links](/rules/links/external-links): the same count for links leaving the site.
+- [links/orphan-pages](/rules/links/orphan-pages): the inbound side of the same structure.
+- [links/anchor-text](/rules/links/anchor-text): what those links say.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Each page is reported with its internal link count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

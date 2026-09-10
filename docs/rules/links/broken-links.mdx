@@ -1,9 +1,30 @@
 ---
-title: "Broken Links"
-description: "Detects links returning 404 or 5xx errors"
+title: "Broken internal links: 404s inside your own site"
+description: "An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl."
 ---
 
-Detects links returning 404 or 5xx errors
+## What a broken internal link is
+
+A broken internal link is an `<a href>` on your site pointing at a URL on your site that answers with an error. The visitor hits a 404, and a crawler spends a request learning the same thing.
+
+Internal links break quietly. A page is renamed, a section is restructured, a product is retired, and the links that pointed at it are left behind in body copy, in old posts and in hard-coded navigation. Nothing warns you, because the link still looks like a link.
+
+## What squirrel checks
+
+The rule is site-wide and compares link targets against pages the crawl actually fetched. It collects every internal link from every crawled page, normalises both sides, and looks up the recorded status code. Targets the crawl never visited are skipped rather than guessed at.
+
+- Skipped when there is no site data. Message: `Site data not available for broken link analysis`.
+- `broken-links` fails when a target returned 400 or above. Message: `7 broken internal link(s) (4xx/5xx)`. Each item reads `https://example.com/old-page (404)` and lists every page that links to it. Severity error, weight 7.
+- `broken-links` passes otherwise. Message: `No broken internal links detected`.
+- `rate-limited-links` reports info for targets that returned a rate-limit status. Message: `3 internal link(s) rate-limited - status unverifiable`.
+
+Normalisation strips the fragment and the trailing slash and lowercases the scheme and host, but not the path, so a case difference in the path is treated as a different URL. A throttled response means the host limited the crawl, not that the page is missing, so those are separated out before the 400 test.
+
+## How to fix it
+
+Update the link to the current URL, or redirect the old URL permanently and leave the link alone. Prefer fixing the link where you can: a redirect works but costs a hop on every click.
+
+Fix the source, not just the page. The report lists which pages carry each broken link, and a link repeated in a template needs one change rather than twenty.
 
 | | |
 |---|---|
@@ -12,10 +33,6 @@ Detects links returning 404 or 5xx errors
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Broken links hurt user experience and waste crawl budget. Regularly audit links using tools or crawlers. Fix or remove broken links. Set up 301 redirects for moved content. For external links, consider using nofollow and regularly verifying they still work. Implement custom 404 pages that help users find content.
 
 ## Enable / disable
 
@@ -40,3 +57,30 @@ disable = ["links/*"]
 enable = ["links/broken-links"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/broken-external-links](/rules/links/broken-external-links): the same check for links leaving your site.
+- [links/redirect-chains](/rules/links/redirect-chains): internal links that resolve, but through a redirect.
+- [crawl/soft-404](/rules/crawl/soft-404): pages that answer 200 while showing an error.
+- [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx): dead URLs you are also submitting in a sitemap.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [HTTP status codes and Google Search](https://developers.google.com/search/docs/crawling-indexing/http-network-errors)
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every broken link is listed with its status code and the pages that link to it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

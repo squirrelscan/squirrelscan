@@ -3,7 +3,7 @@ title: "Links"
 description: "Internal and external link health and structure"
 ---
 
-Internal and external link health and structure
+Links rules read the link graph the crawl built. Half of them are health checks: internal and external targets that return an error, hrefs that do not parse, links that drop to plain HTTP, links that resolve only through a redirect. The other half describe structure: how many links point at a page, whether any of them sit in body copy rather than the footer, and whether the anchor text says what the destination is.
 
 ## Rules
 
@@ -61,3 +61,5 @@ Internal and external link health and structure
 [rules]
 disable = ["links/*"]
 ```
+
+Every audit reports Links findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

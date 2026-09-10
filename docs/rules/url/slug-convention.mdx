@@ -17,12 +17,13 @@ Three guards apply in order. The site needs at least 10 crawled pages. A site-wi
 
 The rule emits a single check named `slug-convention`:
 
+- Skipped when there are no pages at all. Message: `No pages available for analysis`.
 - Skipped below the page floor. Message: `Only 6 page(s) crawled; 10 needed to establish a URL convention norm`.
 - Skipped when no dimension clears the agreement floor. Message: `No URL convention reaches 70% agreement across enough comparable pages`.
-- Pass when every page follows the norms. Message: `All 240 page(s) follow the site's own URL conventions (slug word separator kebab-case 98%, trailing slash no trailing slash 91%)`.
-- Warn when deviants exist and cover under 20% of crawled pages, and fail at or above that share. Message: `14 of 240 page(s) deviate from the site's own URL conventions (slug word separator kebab-case 94%)`. Each item reads `9 of 210 pages use snake_case but the slug word separator norm is kebab-case`, with up to 10 example URLs.
+- Pass when no unsuppressed deviation remains. Message: `All 240 page(s) follow the site's own URL conventions (URL letter case all-lowercase 100%, trailing slash no trailing slash 100%)`.
+- Warn when deviants exist and cover under 20% of crawled pages, and fail at or above that share. Message: `14 of 240 page(s) deviate from the site's own URL conventions (slug word separator kebab-case 94%)`. Each item reads `9 of 210 page(s) use camelCase but the slug word separator norm is kebab-case`, with up to 10 example URLs.
 
-Suppression runs one way. A deviant that `url/lowercase` already warns on is dropped from the case dimension, and one that `url/hyphens` already warns on is dropped from the separator dimension, so a site is not accused twice for one root cause. A dimension whose deviants are all suppressed still appears in the message tail as `(deferred to url/hyphens)`. Reported items are capped at 10, example URLs at 10 per item. Severity warning, weight 3.
+Suppression runs one way and is unconditional. A deviant URL whose path contains an uppercase letter is dropped from the case dimension, and one whose path contains an underscore is dropped from the separator dimension, because `url/lowercase` and `url/hyphens` own those pages. The test reads the URL characters directly rather than consulting whether those rules ran. A dimension that lost any deviant this way is named in the message tail as `(deferred to separator -> url/hyphens)`, so a snake_case minority stays visible without being reported twice. Reported items are capped at 10, example URLs at 10 per item. Severity warning, weight 3.
 
 ## How to fix it
 

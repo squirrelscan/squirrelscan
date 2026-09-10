@@ -1,9 +1,30 @@
 ---
-title: "Redirect Chains"
-description: "Detects URLs that redirect and links pointing to redirects"
+title: "Links pointing at redirecting URLs: the hop on every click"
+description: "An internal link to a URL that redirects costs a round trip every time anyone follows it. squirrel finds redirecting pages and who links to them."
 ---
 
-Detects URLs that redirect and links pointing to redirects
+## What linking to a redirect costs
+
+A redirect is fine as a safety net for old URLs arriving from elsewhere. It is waste when your own pages link to the redirecting URL instead of the destination, because every click and every crawl pays a round trip that a corrected link would remove.
+
+The pattern accumulates after any restructure. The redirect is set up, the content is moved, and the links in body copy and navigation still point at the old address. Nothing appears broken, so nothing prompts a fix.
+
+## What squirrel checks
+
+The rule is site-wide and works in two passes. First it finds crawled pages that redirected, using recorded redirect evidence rather than a URL comparison, so a page whose final URL differs only in normalisation is not counted. Then it walks every internal link on every page and matches it against those redirecting URLs.
+
+- Skipped when no pages are available. Message: `No pages available for redirect analysis`.
+- `redirect-pages` warns for the redirecting URLs themselves. Message: `5 page(s) redirect to another URL`, each item labelled with the full chain such as `/old (301) → /new (200)`.
+- `links-to-redirect` warns for the link targets. Message: `3 link target(s) point to redirecting URLs`, each item carrying the chain and every page that links to it.
+- `redirect-chains` passes when neither fired. Message: `No redirects detected`.
+
+Link matching is slash-sensitive. A page that links `/about/` is not blamed for `/about`'s redirect, because those are different hrefs and only one of them is the mistake.
+
+## How to fix it
+
+Rewrite the links to point at the final URL. The report lists which pages carry each one, so a link repeated in a template is a single change.
+
+Leave the redirect in place. It is still doing its job for links you do not control.
 
 | | |
 |---|---|
@@ -12,10 +33,6 @@ Detects URLs that redirect and links pointing to redirects
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Redirects add latency and waste crawl budget, especially when chained. Make sure every internal link hits the final destination directly, not the intermediate redirect, and consult the chain context emitted by this rule to trace multi-hop paths. Consolidate redirect rules, prefer 301s for permanent moves, and audit redirects regularly to remove legacy hops.
 
 ## Enable / disable
 
@@ -40,3 +57,30 @@ disable = ["links/*"]
 enable = ["links/redirect-chains"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/redirect-chain](/rules/crawl/redirect-chain): chains longer than a configured hop count, wherever they occur.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): a canonical tag pointing into one of these chains.
+- [links/broken-links](/rules/links/broken-links): internal links whose target fails outright.
+- [url/trailing-slash](/rules/url/trailing-slash): the slash convention that produces many of these redirects.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [301 redirects and Google Search](https://developers.google.com/search/docs/crawling-indexing/301-redirects)
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Each redirecting target is listed with its chain and the pages that link to it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,31 @@
 ---
-title: "HTTPS Downgrade"
-description: "Detects links from HTTPS pages to HTTP destinations"
+title: "Links from an HTTPS page to an http:// destination"
+description: "A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page."
 ---
 
-Detects links from HTTPS pages to HTTP destinations
+## What an HTTPS downgrade link is
+
+A downgrade link is an `<a href="http://...">` on a page that was itself served over HTTPS. Following it takes the visitor to an unencrypted connection, where the request and the response can be read and modified in transit.
+
+This is separate from mixed content. Mixed content is about subresources the page loads itself, which the browser blocks or upgrades. A navigation link is not blocked: the browser follows it, and the only signal the visitor gets is the address bar changing after the fact.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It emits a single check named `https-downgrade`:
+
+- Info when the page itself is not HTTPS, since there is nothing to downgrade from. Message: `Page is not HTTPS, downgrade check not applicable`.
+- Warn when any `a[href]` has an href that literally starts with `http://`. Message: `4 link(s) downgrade to HTTP`, with each href listed. Severity warning, weight 5.
+- Pass otherwise. Message: `No HTTPS to HTTP downgrades`.
+
+The test is on the raw attribute text, so protocol-relative hrefs such as `//example.org/page` are not flagged, and neither is a relative link. The check does not distinguish internal from external destinations.
+
+## How to fix it
+
+```html
+<a href="https://example.org/reference">Reference</a>
+```
+
+Change the scheme where the link is authored. For internal links this is always the right fix, since your own site serves HTTPS. For an external destination, check that the target actually supports HTTPS before rewriting, and reconsider linking there at all if it does not.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Detects links from HTTPS pages to HTTP destinations
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Links from HTTPS to HTTP pages create security warnings and break the trust chain. Users may see 'not secure' warnings. Update all links to use HTTPS. If the target site doesn't support HTTPS, consider if you really need to link there. For internal links, ensure your entire site uses HTTPS.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["links/*"]
 enable = ["links/https-downgrade"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/mixed-content](/rules/security/mixed-content): subresources loaded over HTTP, which browsers do block.
+- [security/https](/rules/security/https): whether the page itself is served over HTTPS.
+- [security/http-to-https](/rules/security/http-to-https): whether the HTTP forms of your own URLs redirect.
+- [links/external-links](/rules/links/external-links): the outbound links this rule reads.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Why HTTPS matters, web.dev](https://web.dev/articles/why-https-matters)
+- [Mixed content, MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Mixed_content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every downgrading link is listed with its href. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

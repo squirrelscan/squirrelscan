@@ -14,9 +14,10 @@ Google's own guidance is that either convention is fine as long as you pick one 
 The rule runs on every crawled page over the URL path only. A path is treated as a file when it ends in a dot followed by two to four alphanumeric characters. It emits a single check named `trailing-slash`:
 
 - Info on the root path. Message: `Root URL (trailing slash check not applicable)`.
-- Warn when a file-like path ends in a slash. Message: `File URL has trailing slash`, with the path as the value.
-- Pass when a file-like path does not. Message: `File URL correctly has no trailing slash`.
-- Info for any extensionless path, reporting the state rather than judging it. Message: `URL has trailing slash` or `URL has no trailing slash`, with `Ensure consistency across site` as the value.
+- Pass when a file-like path has no trailing slash. Message: `File URL correctly has no trailing slash`.
+- Info for every other non-root path, reporting the state rather than judging it. Message: `URL has trailing slash` or `URL has no trailing slash`, with `Ensure consistency across site` as the value.
+
+A fourth branch, `File URL has trailing slash`, exists in the code but cannot fire: the extension test anchors the extension to the end of the path, so `/report.pdf/` fails it and falls into the informational branch above. That branch therefore covers extensionless paths and anything else the extension test rejects.
 
 Severity is info and the weight is 3. Consistency across the site is not judged here: that is `url/slug-convention`, which computes the site's own dominant form and reports the minority against it.
 
