@@ -11,14 +11,14 @@ Google stopped showing FAQ rich results in Search on 7 May 2026 and removed the 
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `FAQPage`, or whose `@type` array contains it. It emits one or two checks:
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `FAQPage` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It emits one or two checks:
 
 - `faq-schema`: reports at info status with the message `No FAQPage schema found` when no such node exists. No further checks run.
 - `faq-mainEntity`: warns with the message `FAQPage missing mainEntity` and the value `Add array of Question items` when `mainEntity` is absent.
 - `faq-questions`: warns with the message `FAQPage has no questions` when `mainEntity` is an empty array. It warns with the message `N question(s) missing required properties` and the value `Each Question needs @type, name, acceptedAnswer` when at least one entry lacks any of the three.
-- `faq-valid`: passes with the message `FAQPage has N valid question(s)`, counting entries that have all three.
+- `faq-valid`: emitted only when at least one entry is valid, passing with the message `FAQPage has N valid question(s)`.
 
-An entry counts as valid only when its `@type` is exactly the string `Question`. An entry whose `@type` is an array containing `Question` is counted as invalid. A `mainEntity` holding a single object rather than an array is accepted and treated as one question.
+An entry counts as valid only when its `@type` is exactly the string `Question`. An entry whose `@type` is an array containing `Question` is counted as invalid. A `mainEntity` holding a single object rather than an array is accepted and treated as one question. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A `mainEntity` of `""` or `0` therefore reports as missing.
 
 ## How to fix it
 

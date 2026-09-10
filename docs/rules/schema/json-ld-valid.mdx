@@ -7,15 +7,15 @@ description: "A structured data block that will not parse, or parses but omits p
 
 JSON-LD is the format Google and other consumers read structured data in: a JSON document inside a `<script type="application/ld+json">` tag, with a `@context` pointing at `https://schema.org` and a `@type` naming what the node describes. It sits beside the page content rather than inside it, so nothing about the rendered page changes when it is wrong.
 
-Two different faults show up here. A syntax error means the block is not valid JSON at all, usually from a trailing comma, an unescaped quote in a value, or a template that emitted a raw newline inside a string. A validation error means the JSON parsed but a type is missing a property schema.org defines for it. The first makes the whole block invisible; the second usually costs a rich result.
+Two different faults show up here. A syntax error means the block is not valid JSON at all, usually from a trailing comma, an unescaped quote in a value, or a template that emitted a raw newline inside a string. A validation error means the JSON parsed but a type is missing a property squirrel's schema validator expects for it. The first makes the whole block unreadable; the second narrows what a consumer can do with it.
 
 ## What squirrel checks
 
 The rule reads the page's parsed JSON-LD and emits exactly one check:
 
-- `json-ld`, at info status with the message `No JSON-LD structured data found`, when the page carries no JSON-LD block.
+- `json-ld`, at info status with the message `No JSON-LD structured data found`, when the page's parsed JSON-LD is empty.
 - `json-ld`, at info status with the message `JSON-LD detected but schema metadata unavailable`, when a block was found but the parser could not produce validation metadata for it.
-- `json-ld-valid`, failing with the message `Invalid JSON-LD syntax` when any block failed to parse, or with the message `Schema.org validation errors detected` when every block parsed but at least one type is missing a required property. Items list the parse errors verbatim, then one entry per validation issue labelled `<type> missing <property>` and carrying the property path.
+- `json-ld-valid`, failing when the parser marked the JSON-LD invalid, when any block failed to parse, or when at least one validation issue was recorded. The message is `Invalid JSON-LD syntax` if there is a parse error and `Schema.org validation errors detected` otherwise. Items list the parse errors verbatim, then one entry per validation issue labelled `<type> missing <property>` and carrying the property path.
 - `json-ld-types`, warning with the message `JSON-LD present but no @type found`, when the JSON-LD parsed cleanly but declares no type.
 - `json-ld`, passing with the message `Valid JSON-LD with N type(s)` and one item per type name.
 

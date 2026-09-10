@@ -11,14 +11,14 @@ It describes a path, not the navigation widget, so the markup should mirror the 
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `BreadcrumbList`, or whose `@type` array contains it. It emits one or more checks:
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `BreadcrumbList` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It emits one or more checks:
 
 - `breadcrumb-schema`: on the homepage, meaning a URL path of `/` or empty, it reports at info status with the message `Homepage - breadcrumbs not typically needed` and stops. On any other page with no `BreadcrumbList` node it reports at info status with the message `No BreadcrumbList schema found` and the value `Consider adding for non-homepage`.
 - `breadcrumb-items`: warns with the message `BreadcrumbList has no items` when `itemListElement` is absent, is not an array, or is empty. It warns with the message `Some breadcrumb items missing position or name` when at least one entry lacks either property.
-- `breadcrumb-order`: warns with the message `Breadcrumb positions not sequential` when a numeric `position` is not one more than the previous entry's. This check is pushed once per offending entry, so a badly numbered list emits it more than once.
+- `breadcrumb-order`: warns with the message `Breadcrumb positions not sequential` when a numeric `position` is not one more than the previous entry's. The first entry is compared against 1, so a list starting at 0 or 2 is reported. This check is pushed once per offending entry, so a badly numbered list emits it more than once.
 - `breadcrumb-valid`: passes with the message `BreadcrumbList has N item(s)` when every entry has both a `position` and a `name`.
 
-The sequence check only runs on positions that are JavaScript numbers. A `position` written as the string `"1"` is accepted as present by `breadcrumb-valid` but skipped by `breadcrumb-order`, so a string-numbered list never reports as out of order.
+The sequence check only runs on positions that are JavaScript numbers. A `position` written as the string `"1"` is accepted as present by `breadcrumb-valid` but skipped by `breadcrumb-order`, so a string-numbered list never reports as out of order. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A `position` of `0` and a `name` of `""` therefore both read as missing.
 
 ## How to fix it
 

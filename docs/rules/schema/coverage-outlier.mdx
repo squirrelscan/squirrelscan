@@ -5,21 +5,21 @@ description: "Forty of forty-five product pages carry Product markup and five do
 
 ## What a coverage outlier is
 
-A page with no structured data is not always a defect. Plenty of pages legitimately carry none, and a rule that says so on every one of them is noise. A page that lacks the markup its own siblings all have is different: the site has already proved it can emit that type, and this page missed it. That is a template or CMS gap with a specific fix.
+A page with no structured data is not always a defect. Plenty of pages legitimately carry none, and a rule that says so on every one of them is noise. A page that lacks the markup its own siblings carry is different: the site has already shown it can emit that type, and this page does not. That is usually a template or CMS gap, and it is always a specific thing to check.
 
 This rule never asks whether a page has structured data in the abstract. It groups pages by their detected page type, works out what markup that group agrees on, and reports the pages inside the group that break the pattern.
 
 ## What squirrel checks
 
-The rule runs once per crawl and emits a single check named `coverage-outlier`. Pages classified as `unknown` are excluded, because that bucket holds everything the classifier could not place and its members are not siblings of each other.
+The rule runs once per crawl and emits a single check named `coverage-outlier`. A page enters a comparison group only when its HTTP status is 2xx and it carries a page type that is neither empty nor `unknown`. The `unknown` bucket holds everything the classifier could not place, and its members are not siblings of each other.
 
 - Skipped with the message `Only N page(s) crawled; 10 needed to establish a structured-data norm` when the crawl has fewer than 10 pages.
 - Skipped with the message `No page type has 8+ comparable pages sharing a structured-data pattern` when no page-type group reaches 8 pages with an agreed set of types.
-- Skipped with the message `No pages available for analysis` when the crawl produced no pages at all.
-- Passes with the message `All N comparable page(s) carry the structured data their page type establishes (product Product+BreadcrumbList, article Article)` when every judged page is inside its group's norm. The parenthesised summary lists up to 10 groups as the page type followed by its norm types joined with `+`.
-- Warns, or fails, with the message `N of M page(s) are missing structured data their same-type siblings have (product Product+BreadcrumbList, article Article)`. Each item reads `40 of 45 product pages have Product schema, these 5 do not` and carries up to 20 example URLs. The status is `fail` when the deviant pages are 20% or more of the judged pages, and `warn` below that.
+- Skipped with the message `No pages available for analysis` when the crawl produced no pages at all. This wording comes from the non-streaming path; a streaming crawl with no pages takes the `Only 0 page(s) crawled` branch instead.
+- Passes with the message `All N comparable page(s) carry the structured data their page type establishes (article Article, product BreadcrumbList+Product)` when every judged page is inside its group's norm. The parenthesised summary lists up to 10 groups, sorted by page type, each as the lowercased page type followed by its norm types in alphabetical order joined with `+`.
+- Warns, or fails, with the message `N of M page(s) are missing structured data their same-type siblings have (article Article, product BreadcrumbList+Product)`. Each item reads `40 of 45 product pages have Product schema, these 5 do not` and carries up to 20 example URLs. The status is `fail` when the deviant pages are 20% or more of the judged pages, and `warn` below that.
 
-A schema `@type` joins a group's norm only when at least 70% of the group carries it, so an optional extra such as a `BreadcrumbList` on some pages does not become a requirement, and a site whose same-type pages genuinely differ produces no norm and no finding. Groups are compared per type rather than by exact set, so an optional extra cannot mask a real gap. Items are capped at 10 gaps and the norm summary at 10 groups.
+A schema `@type` joins a group's norm when at least 70% of the group carries it, and pages below that share establish no norm at all, so a site whose same-type pages genuinely differ produces no finding. A `BreadcrumbList` present on 70% of a group does become part of that group's norm, and the 30% without it are reported. Norms are computed per `@type` rather than by exact type set, so one optional extra cannot shatter the majority and hide a real gap behind it. Items are capped at 10 gaps and the norm summary at 10 groups.
 
 Grouping is by page type, never by the rich result types derived from the markup. Deriving the group from the field being judged would put a product page missing its `Product` markup in a different group from the pages it should be compared against, where it could never be an outlier. The rich-result flag is still recorded per gap, since a missing rich-result-eligible type costs a real search feature.
 

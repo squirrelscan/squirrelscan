@@ -5,13 +5,13 @@ description: "Organization JSON-LD missing name or url, with no logo, or a sameA
 
 ## What Organization schema is
 
-`Organization` is the schema.org type for the company, institution or group behind a site. It carries the identity fields a machine reader cannot infer from page text: `name`, `url`, `logo`, `contactPoint`, and `sameAs`, an array of URLs for the same entity elsewhere, such as a LinkedIn company page or a Wikipedia article.
+`Organization` is the schema.org type for the company, institution or group behind a site. It states the identity fields as named properties: `name`, `url`, `logo`, `contactPoint`, and `sameAs`, an array of URLs for the same entity elsewhere, such as a LinkedIn company page or a Wikipedia article.
 
-One `Organization` node belongs on the homepage or an about page, not on every page. A business with a physical location or a service area should use [LocalBusiness](/rules/schema/local-business) instead, which is a subtype of `Organization` and carries the address and hours fields as well.
+Google's guidance is to put the node on the page that best describes the organization, typically the homepage or an about page. A business with a physical location or a service area uses [LocalBusiness](/rules/schema/local-business) instead, which is a subtype of `Organization` and carries the address and hours fields as well.
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `Organization` or `Corporation`, or whose `@type` array contains either. It then emits between one and five checks:
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `Organization` or `Corporation` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It then emits between one and four checks:
 
 - `organization-schema`: reports at info status with the message `No Organization schema found` when no such node exists. No further checks run.
 - `organization-required`: warns with the message `Organization schema missing required properties` and lists the missing names as items. The required set is `name` and `url`. When both are present it passes with `Organization schema has required properties`.
@@ -19,7 +19,7 @@ The rule reads every `script[type="application/ld+json"]` on the page and takes 
 - `organization-social`: passes with the message `N social profile(s) linked`, counting the string entries in `sameAs`. With no string entries it reports at info status with `No sameAs social profiles` and the value `Link to social profiles for brand verification`.
 - `organization-sameas-missing`: emitted only when the site profile already knows official social accounts for the site and `sameAs` omits one or more of them. It warns with the message `N known social account(s) missing from schema sameAs`, the value `Add detected official profiles to Organization sameAs`, and one item per account labelled with its platform.
 
-`logo` is not part of the required set even though the missing-logo result mentions the knowledge panel. A page with `name` and `url` and no logo passes `organization-required` and gets the separate info result. The cross-check in the last bullet is a no-op when the audit has no site metadata, so an offline run behaves as if it were not there.
+`logo` is not part of the required set even though the missing-logo result mentions the knowledge panel. A page with `name` and `url` and no logo passes `organization-required` and gets the separate info result. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. The cross-check in the last bullet is a no-op when the audit has no site metadata, so an offline run behaves as if it were not there.
 
 ## How to fix it
 

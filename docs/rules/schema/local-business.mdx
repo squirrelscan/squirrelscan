@@ -11,16 +11,16 @@ A business with a storefront declares its address. A business that travels to cu
 
 ## What squirrel checks
 
-The rule flattens the page's JSON-LD, including any `@graph` wrapper, and takes the first node whose `@type` is one of the recognised LocalBusiness types. It emits one to five checks:
+The rule flattens the page's JSON-LD, including any `@graph` wrapper, and takes the first node whose `@type` is one of the recognised LocalBusiness types. It emits one to four checks:
 
 - `local-business-schema`: reports at info status with the message `No LocalBusiness schema found` when no such node exists. No further checks run.
 - `local-business-required`: warns with the message `LocalBusiness schema missing required properties` and lists the missing names as items. The required set here is `name` alone. When it is present the check passes with `LocalBusiness schema has required properties`.
-- `local-business-address`: emitted only when an address is present. It warns with the message `Address incomplete` and lists whichever of `streetAddress`, `addressLocality` and `postalCode` are missing. A single `PostalAddress` wrapped in an array is unwrapped, and the check passes silently when any entry in the array is complete.
+- `local-business-address`: emitted only when an address is present and no entry in it is complete. It warns with the message `Address incomplete` and lists whichever of `streetAddress`, `addressLocality` and `postalCode` the first entry is missing. A single `PostalAddress` wrapped in an array is unwrapped, and nothing is emitted when any entry is complete.
 - `local-business-location`: emitted only when no address is present. It passes with the message `Service-area business detected: areaServed declared, no public address required` when `areaServed` or the legacy `serviceArea` names somewhere. Otherwise it warns with the message `LocalBusiness schema has no address or service area` and a value spelling out both fixes.
 - `local-business-geo`: emitted only when `geo` is absent, at info status, with the message `LocalBusiness missing geo coordinates` and the value `Add GeoCoordinates for map placement`.
 - `local-business-recommended`: emitted only when at least one of `telephone`, `openingHours`, `image` and `priceRange` is absent, at info status, with the message `LocalBusiness could include recommended properties`.
 
-squirrel deliberately does not require `address`, which is where it differs from Google's reference. A service-area business that declares `areaServed` passes here. The declaration may be plain text such as `Sydney NSW`, an array of values, a structured `Place`, `GeoShape` or `AdministrativeArea` node, or an `@id` reference to one elsewhere in the graph, which the rule resolves before accepting it. An `address` set to an empty array counts as no address, so the service-area path applies.
+The address and location checks are mutually exclusive, so at most one of them appears. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. squirrel deliberately does not require `address`, which is where it differs from Google's reference. A service-area business that declares `areaServed` passes here. The declaration may be plain text such as `Sydney NSW`, an array of values, a structured `Place`, `GeoShape` or `AdministrativeArea` node, or an `@id` reference to one elsewhere in the graph, which the rule resolves before accepting it. An `address` set to an empty array counts as no address, so the service-area path applies.
 
 The whole rule is skipped, with the reason shown in the report, when the site profile says the site is not a local business.
 

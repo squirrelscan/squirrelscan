@@ -5,20 +5,20 @@ description: "Article JSON-LD missing headline, author or datePublished, or carr
 
 ## What Article schema is
 
-`Article` is the schema.org type for a piece of written content, with `NewsArticle` and `BlogPosting` as its two common subtypes. It names the things a machine reader cannot reliably lift from the page: the headline, who wrote it, when it was published, and when it was last changed.
+`Article` is the schema.org type for a piece of written content, with `NewsArticle` and `BlogPosting` as its two common subtypes. It states the headline, the author, the publication date and the date of the last change as named properties, rather than leaving them to be inferred from the page layout.
 
 The dates are typed as schema.org `Date` or `DateTime`, which means ISO 8601. `2026-03-14` and `2026-03-14T09:30:00Z` are valid; a raw database timestamp such as `2026-03-14 09:30:00`, an epoch number, or `14/03/2026` are not. Article markup belongs on the article itself, not on an index or a category listing.
 
 ## What squirrel checks
 
-The rule reads the page's parsed JSON-LD nodes, which are already flattened out of any `@graph` wrapper, and keeps the last node whose `@type` is `Article`, `NewsArticle` or `BlogPosting`, or whose `@type` array contains one of them. It emits one to four checks:
+The rule reads the page's parsed JSON-LD nodes, which are already flattened out of any `@graph` wrapper, and keeps the last node whose `@type` is `Article`, `NewsArticle` or `BlogPosting`, or whose `@type` array contains one of them. It emits one to three checks:
 
 - `article-schema`: reports at info status with the message `No Article schema found` and the value `Consider adding for blog/news content` when no such node exists. No further checks run.
 - `article-required`: warns with the message `Article schema missing required properties` and lists the missing names as items. The required set is `headline`, `author` and `datePublished`. When all three are present it passes with `Article schema has required properties`.
 - `article-recommended`: emitted only when at least one of `dateModified`, `image` and `publisher` is absent, at info status, with the message `Article schema could include recommended properties` and the missing names as items.
 - `article-date-format`: emitted only when `datePublished` or `dateModified` is present but not valid ISO 8601. It warns with the message `Article schema dates are not valid ISO 8601` and lists each offending property with its literal value.
 
-The date check tests the shape and then the calendar. Month must be 01 to 12, day 01 to 31, hour 00 to 23, and the day must exist in that month and year, so `2026-02-31` and `2026-04-31` are both rejected. A time part is optional, and a UTC offset on a time part is optional too. An empty string is reported as missing rather than as malformed, so it never appears in both checks at once.
+The date check tests the shape and then the calendar. Month must be 01 to 12, day 01 to 31, hour 00 to 23, and the day must exist in that month and year, so `2026-02-31` and `2026-04-31` are both rejected. A time part is optional, and a UTC offset on a time part is optional too. Every property test is a truthiness test rather than a presence test, so an empty string, `0` or `false` counts as missing. That is why an empty `datePublished` is reported as missing rather than as malformed, and never appears in both checks at once.
 
 ## How to fix it
 

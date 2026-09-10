@@ -7,17 +7,17 @@ description: "Rating markup missing ratingValue or a review count, and Review no
 
 `AggregateRating` is the schema.org type for a summary of many ratings of one thing: `ratingValue` holds the average, `ratingCount` or `reviewCount` holds how many it is drawn from, and `bestRating` holds the top of the scale, defaulting to 5. It attaches to the thing being rated, usually a `Product` or a `LocalBusiness`.
 
-A single `Review` is the other half. It needs an `author`, a `reviewRating` and a `datePublished`, and it rates a specific item rather than the site as a whole. Google's structured data policies require the rating to be visible to readers on the same page.
+A single `Review` is the other half. Google's review snippet guidance asks for an `author` and a `reviewRating`, recommends `datePublished`, and expects the review to be about a specific item rather than the site as a whole. Its structured data policies require the rating to be visible to readers on the same page.
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page. It collects an `aggregateRating` property from any node, a node whose `@type` is exactly `AggregateRating`, a `review` property from any node, and any node whose `@type` is exactly `Review`. It emits one to three checks:
+The rule reads every `script[type="application/ld+json"]` on the page and inspects each script's root object, or the entries of a root array. It does not walk nested nodes and does not flatten `@graph`. From those top-level nodes it collects an `aggregateRating` property, a node whose `@type` is exactly `AggregateRating`, a `review` property, and any node whose `@type` is exactly `Review`. It emits one to three checks:
 
 - `review-schema`: reports at info status with the message `No Review or AggregateRating schema found` when neither is present. No further checks run.
-- `aggregate-rating`: warns with the message `AggregateRating missing ratingValue` when the value is absent, warns with `AggregateRating missing ratingCount/reviewCount` when neither count is present, and otherwise passes with `AggregateRating: X/5 (N reviews)`.
+- `aggregate-rating`: warns with the message `AggregateRating missing ratingValue` when `ratingValue` is falsy. Only when it is present does the count get checked, warning with `AggregateRating missing ratingCount/reviewCount` when neither `ratingCount` nor `reviewCount` is present. With both it passes with `AggregateRating: 4.7/5 (218 reviews)`, filling in the value and the count.
 - `individual-reviews`: warns with the message `N review(s) missing author or rating` for entries lacking `author` or `reviewRating`, and passes with `N valid review(s) found` for those that have both. Both can appear on the same page.
 
-The pass message prints the scale as `/5` regardless of what `bestRating` says, so a rating on a 10-point scale is still rendered as out of 5. When several nodes carry an `aggregateRating`, the last one wins. An `AggregateRating` that a generator has wrapped in an array is unwrapped and the first object entry is used.
+The pass message prints the scale as `/5` regardless of what `bestRating` says, so a rating on a 10-point scale is still rendered as out of 5. When several nodes carry an `aggregateRating`, the last one wins. An `AggregateRating` that a generator has wrapped in an array is unwrapped and the first object entry is used. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing.
 
 ## How to fix it
 

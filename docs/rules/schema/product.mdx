@@ -7,11 +7,11 @@ description: "Product markup with no name or image, an Offer missing price or av
 
 `Product` is the schema.org type for a thing being sold. It names the product with `name` and `image`, describes what it costs through an `offers` property holding an `Offer` with `price`, `priceCurrency` and `availability`, and identifies it with `brand`, `sku` or `gtin`. Ratings hang off it as `aggregateRating` or an array of `review` nodes.
 
-The markup belongs on the page a shopper can buy from, one `Product` per page. A category listing that shows twenty products uses `ItemList`, not twenty `Product` nodes.
+Google's guidance is to put the markup on the page that is about that product. A listing page that shows many products is described with `ItemList` and product snippets rather than a full `Product` node for each one.
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `Product`, or whose `@type` array contains it. It emits one to four checks:
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `Product` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It emits one to three checks:
 
 - `product-schema`: reports at info status with the message `No Product schema found` when no such node exists. No further checks run.
 - `product-required`: warns with the message `Product schema missing required properties` and lists the missing names as items. The required set is `name` and `image`. When both are present it passes with `Product schema has required properties`.
@@ -19,7 +19,7 @@ The rule reads every `script[type="application/ld+json"]` on the page and takes 
 - `product-offer-details`: warns with the message `Product Offer missing price or availability` when the offer lacks either property.
 - `product-reviews`: emitted only when `review` or `aggregateRating` is present, passing with the message `Product has review/rating data`.
 
-When `offers` is an array only the first entry is checked, so a product with several offers is judged on one of them. The offer check tests for the presence of `price` and `availability` and does not validate the values, so a price of `0` is treated as missing because it is falsy.
+When `offers` is an array only the first entry is checked, so a product with several offers is judged on one of them. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A price of `0` is therefore treated as missing, and so is an `image` of `""`.
 
 ## How to fix it
 

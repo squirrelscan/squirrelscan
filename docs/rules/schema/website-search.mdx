@@ -7,17 +7,17 @@ description: "WebSite schema on a homepage with no SearchAction, or a SearchActi
 
 `WebSite` is the schema.org type for a site as a whole, usually declared once on the homepage. Its `potentialAction` property can hold a `SearchAction` that points at the site's own search endpoint: `target` is a URL template containing a `{search_term_string}` placeholder, and `query-input` names that placeholder so a consumer knows what to substitute.
 
-Google used this markup to render a sitelinks search box under a site's result. It removed that visual element on 21 November 2024 and deleted the documentation for it, so the markup no longer produces anything in Google Search. It is still valid schema.org and still describes a real endpoint, which is why this rule reports at info severity rather than failing a page for the absence.
+Google used this markup to render a sitelinks search box under a site's result. It removed that element on 21 November 2024 and deleted the documentation for it, so the search box the markup produced is gone. The markup is still valid schema.org and still describes a real endpoint, which is why this rule reports at info severity rather than failing a page for its absence.
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and takes the first node whose `@type` is `WebSite`, or whose `@type` array contains `WebSite`. Depending on what it finds it emits one to three checks:
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `WebSite` node from the last script that contains one, matching either a plain `@type` or an `@type` array. Depending on what it finds it emits zero to two checks:
 
 - `website-schema`: passes with the message `WebSite schema found` when the node exists. When it does not and the page is the homepage, meaning a URL path of `/` or empty, it reports at info status with the message `No WebSite schema on homepage` and the value `Consider adding for sitelinks searchbox`. On any other page with no `WebSite` node the rule emits nothing at all.
 - `website-search`: reports at info status with the message `WebSite has no potentialAction` and the value `Add SearchAction for sitelinks searchbox` when `potentialAction` is absent, or with the message `WebSite has no SearchAction` when `potentialAction` exists but holds no node typed `SearchAction`.
 - `search-action`: warns with the message `SearchAction missing target URL` when `target` is absent, warns with `SearchAction missing query-input` when `target` is present but `query-input` is not, and otherwise passes with `SearchAction properly configured`.
 
-The rule checks that `target` and `query-input` exist. It does not parse the target template or confirm that the placeholder in `query-input` matches the one in `target`.
+A `SearchAction` is recognised only when its `@type` is exactly the string `SearchAction`; an `@type` array containing it is not matched. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. The rule checks that `target` and `query-input` are truthy and stops there. It does not parse the target template or confirm that the placeholder in `query-input` matches the one in `target`.
 
 ## How to fix it
 
