@@ -14,10 +14,10 @@ They are not the same thing and neither implies the other. A site can have Wayba
 The rule runs once per crawl and looks the domain up in both archives. The lookup is a cloud service, so the check needs a cloud audit. It emits one or two checks:
 
 - `archive-indexing`, skipped with the message `Archive indexing check skipped` when the lookup did not run or returned nothing, with the reason naming why.
-- `common-crawl-indexed`: passes with the message `Site is in the Common Crawl index (CC-MAIN-2026-33)`, naming the crawl the record came from. It warns with `Site is in the Common Crawl index but the latest capture is over a year old — recent content is missing from CC-derived AI training data` when the newest capture is more than 365 days before the lookup. With no record it warns with `Site is not in the Common Crawl index — Common Crawl feeds the training corpora of the major AI labs, so the site is invisible to models trained on it`.
+- `common-crawl-indexed`: passes with the message `Site is in the Common Crawl index`, adding ` (<source>)` when the record names the crawl it came from. It warns with `Site is in the Common Crawl index but the latest capture is over a year old — recent content is missing from CC-derived AI training data` when the newest capture is more than 365 days before the lookup. With no record it warns with `Site is not in the Common Crawl index — Common Crawl feeds the training corpora of the major AI labs, so the site is invisible to models trained on it`.
 - `wayback-archived`: passes with the message `Site is archived in the Wayback Machine`. It warns with `Site is in the Wayback Machine but the latest snapshot is over a year old` past the same 365-day threshold, and with `Site has no Wayback Machine snapshot — the Internet Archive has never captured it, a strong signal the archive crawlers can't reach or discover it` when there is no snapshot at all.
 
-The staleness threshold is measured from the time the lookup was captured, not from the moment the report is read.
+The staleness threshold is 365 days, measured from the time the lookup was captured. When that timestamp is missing or unparseable the rule falls back to the current time, and a capture with no date is never called stale.
 
 ## How to fix it
 

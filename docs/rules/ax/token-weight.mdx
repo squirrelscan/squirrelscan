@@ -13,12 +13,12 @@ The second number is absolute size. A response large enough to fill a meaningful
 
 The rule runs on every crawled page against the raw HTML and emits two checks:
 
-- `token-weight-ratio`: warns with the message `Visible text is under 15% of the page HTML — agents pay token cost mostly for markup, scripts, and styles` when the ratio is below 0.15. The per-page number is in the item, which reads `~7% of HTML is visible text (~48,000 est. tokens)`. Otherwise it passes with `~34% of this page's HTML is visible text, above the 15% floor`.
-- `token-weight-budget`: warns with the message `Raw HTML exceeds a generous 100,000-token budget for a single page fetch — too heavy for an agent's context window` when the estimate is over 100,000 tokens, with the item reading `~118,000 estimated tokens (472,000 bytes)`. Otherwise it passes with `~12,000 estimated tokens (48,000 bytes), within budget`.
+- `token-weight-ratio`: warns with the message `Visible text is under 15% of the page HTML — agents pay token cost mostly for markup, scripts, and styles` when the ratio is below 0.15. The per-page number is in the item, which reads `~N% of HTML is visible text (~N est. tokens)`. Otherwise it passes with `~N% of this page's HTML is visible text, above the 15% floor`.
+- `token-weight-budget`: warns with the message `Raw HTML exceeds a generous 100,000-token budget for a single page fetch — too heavy for an agent's context window` when the estimate is over 100,000 tokens, with the item reading `~N estimated tokens (N bytes)`. Otherwise it passes with `~N estimated tokens (N bytes), within budget`.
 
 Instead of both, a single `token-weight` check is emitted as skipped with the message `Page too small (or not a real content page) to assess token weight` when the page has no parsed document or its HTML is under 1,024 bytes. The rule is also skipped on a page detected as a soft 404, whose numbers describe the error template rather than a real page.
 
-The token estimate is HTML bytes divided by four. It is a heuristic, not any model's tokenizer, and it is there to flag order-of-magnitude bloat rather than to bill anyone. The two warning messages deliberately carry no numbers: the report groups checks by message, and differing digits would collapse the shared headline into a literal `N`.
+The token estimate is the UTF-8 byte length of the HTML divided by four and rounded. It is a heuristic, not any model's tokenizer, and it is there to flag order-of-magnitude bloat rather than to bill anyone. The two warning messages carry the fixed thresholds but no per-page numbers: the report groups checks by message, and differing digits would collapse the shared headline into a literal `N`. The per-page figures live in the item instead.
 
 ## How to fix it
 

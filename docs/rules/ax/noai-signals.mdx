@@ -13,9 +13,9 @@ description: "Which pages declare noai, noimageai, nosnippet or max-snippet:0, a
 
 The rule runs on every crawled page. It reads the `X-Robots-Tag` response header and every `<meta>` element whose `name` is `robots`, `ai`, `googlebot` or `bingbot`, and matches four tokens case-insensitively in each: `noai`, `noimageai`, `nosnippet`, and `max-snippet:0` with optional spaces around the colon. It emits one check:
 
-- `noai-signals`: passes with the message `No noai / noimageai / snippet-limit signals declared` and the value `none` when nothing matched. Otherwise it reports at info status with `Declares AI opt-out signals:` followed by the signals found, each described in place, joined with `, `. The four descriptions are `noai (advisory opt-out from AI text use)`, `noimageai (advisory opt-out from AI image use)`, `nosnippet (limits AI-search quoting)` and `max-snippet:0 (limits AI-search quoting)`. When `noai` or `noimageai` is among them the message ends with ` noai/noimageai are advisory only — honoring them is up to each crawler, with no enforcement behind the tag.` Each item names the token and the source it came from, such as `noai in X-Robots-Tag header`.
+- `noai-signals`: passes with the message `No noai / noimageai / snippet-limit signals declared` and the value `none` when nothing matched. Otherwise it reports at info status with `Declares AI opt-out signals: <signals>.`, joining the signals found with `, ` and closing with a full stop. The four descriptions are `noai (advisory opt-out from AI text use)`, `noimageai (advisory opt-out from AI image use)`, `nosnippet (limits AI-search quoting)` and `max-snippet:0 (limits AI-search quoting)`. When `noai` or `noimageai` is among them the message ends with ` noai/noimageai are advisory only — honoring them is up to each crawler, with no enforcement behind the tag.` Each item names the token and the source it came from, such as `noai in X-Robots-Tag header`.
 
-The `noai` match is word-bounded, so it never fires inside `noimageai`. When the page has no parsed document, which happens on an error page or a stored parse, the rule falls back to the extracted robots meta value alone. This rule reports and never penalises: the only non-info result is the pass.
+The `noai` match is word-bounded, so it never fires inside `noimageai`. The `X-Robots-Tag` header is always read. When the page has no parsed document, which happens on an error page or a stored parse, the meta side falls back to the extracted robots value instead of scanning the DOM. This rule reports and never penalises: the only non-info result is the pass.
 
 ## How to fix it
 
@@ -27,7 +27,7 @@ There is nothing to fix unless the declaration is missing or wrong. To declare t
 
 Put it in `<head>`, or send the same directives in an `X-Robots-Tag` header when you want them on non-HTML responses too.
 
-Treat these tags as the declared-intent layer and robots.txt crawler blocks, covered by [ax/ai-crawlers](/rules/ax/ai-crawlers), as the enforcement layer. A `noai` tag with no matching robots.txt block is a request, not a control.
+Treat these tags as the declared-intent layer and robots.txt crawler blocks, covered by [ax/ai-crawlers](/rules/ax/ai-crawlers), as the layer a cooperative crawler is more likely to act on. Neither is a control: robots.txt is also honoured voluntarily. Blocking at the edge is the only layer that enforces anything.
 
 | | |
 |---|---|
@@ -63,7 +63,7 @@ disable = ["*"]
 
 ## Related rules
 
-- [ax/ai-crawlers](/rules/ax/ai-crawlers): the robots.txt blocks that actually enforce a policy.
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): the robots.txt blocks a cooperative crawler reads before fetching.
 - [ax/content-signals](/rules/ax/content-signals): the site-wide per-purpose declaration in robots.txt.
 - [core/nosnippet](/rules/core/nosnippet): the same directive read for its effect on search snippets.
 - [core/robots-meta](/rules/core/robots-meta): the indexing directives declared alongside these tokens.
