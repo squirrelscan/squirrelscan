@@ -13,7 +13,7 @@ With nothing between the tags and no label, a screen reader has an element it ca
 
 One check, `object-alt`, at severity warning and weight 6. It covers every `<object>`, skipping any with `aria-hidden="true"` or with `role="presentation"` or `role="none"`.
 
-- Fail when the element has no non-empty `aria-label`, no `aria-labelledby` and no text content between its tags. Report message: `N object element(s) without alternative content`. Every offender is listed, identified by `name`, then by the subtype of its `type` as `object[type="pdf"]`, then by the filename from its `data` attribute as `object (report.pdf)`, then as a bare `object`.
+- Warn when the element has no non-empty `aria-label`, no `aria-labelledby` and no text content between its tags. Report message: `N object element(s) without alternative content`. Every offender is listed, identified by `name`, then by the subtype of its `type` as `object[type="pdf"]`, then by the filename from its `data` attribute as `object (report.pdf)`, then as a bare `object`.
 - Pass with `N object element(s) have alternative content`.
 - Info with `No object elements found`.
 

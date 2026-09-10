@@ -13,7 +13,7 @@ The usual cause is a component that renders a term-description pair without rend
 
 One check, `dlitem`, at severity error. For every `<dt>` and `<dd>` it looks at the immediate parent. That parent is valid when it is a `<dl>`, or a `<div>` whose own parent is a `<dl>`.
 
-- Fail with `N dt/dd element(s) not inside a dl`. Items quote the first 20 characters of the element's text, as `dt: "Shipping address..."`, up to ten with a count of the rest.
+- Fail with `N dt/dd element(s) not inside a dl`. Items quote the first 20 characters of the element's text, as `dt: "Shipping address for..."`, up to ten with a count of the rest.
 - Pass with `All dt/dd elements are inside definition lists`.
 - Info with `No dt/dd elements found`.
 

@@ -15,8 +15,8 @@ One check, `image-redundant-alt`, at severity warning. It reads every `img[alt]`
 
 - The alt matches one of 42 patterns. Those cover the prefixes `image of`, `photo of`, `photograph of`, `picture of`, `graphic of`, `icon of`, `illustration of`, `diagram of`, `screenshot of`, `chart of`, `graph of`, `figure of` and `infographic of`, the bare nouns on their own, `logo`, `banner`, `img`, `thumbnail`, `hero image`, `cover image`, `featured image`, `placeholder`, `untitled`, `spacer`, `divider`, and bare file extensions such as `.jpg` and `.png`.
 - The alt matches the `src` filename. Both are lowercased and stripped of hyphens, underscores and spaces, and the filename must be longer than three characters. Item: `alt="hero-banner" matches filename`.
-- The alt is repeated in the parent element's text. This needs the alt to be longer than ten characters and the parent's text to be shorter than three times the alt, so a caption-sized repeat is caught and a long article is not. Item: `"Annual report cov..." duplicates surrounding text`.
-- The alt is repeated in a `<figcaption>`. The image has to be inside a `<figure>`, the alt longer than five characters, and the caption has to equal or contain it. Item: `"Annual report cov..." duplicates figcaption`.
+- The alt is repeated in the parent element's text. This needs the alt to be longer than ten characters and the parent's text to be shorter than three times the alt, so a caption-sized repeat is caught and a long article is not. Item: `"Annual revenue chart..." duplicates surrounding text`.
+- The alt is repeated in a `<figcaption>`. The image has to be inside a `<figure>`, the alt longer than five characters, and the caption has to equal or contain it. Item: `"Annual revenue chart..." duplicates figcaption`.
 
 Findings are deduplicated, then reported as `N image(s) with redundant alt text`, up to ten with a count of the rest. With nothing found the check passes as `No redundant image alt text found`, and a page with no `alt` at all returns info with `No images with alt text found`.
 

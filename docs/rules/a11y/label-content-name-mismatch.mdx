@@ -15,7 +15,7 @@ One check, `label-content-name-mismatch`, at severity error. It looks at element
 
 Visible text is gathered by walking the element's child nodes, skipping any subtree marked `aria-hidden="true"` or carrying the `hidden` attribute. Both strings are lowercased and their whitespace collapsed before comparison.
 
-- Fail when the `aria-label` does not contain the visible text as a substring. Report message: `N element(s) where visible text doesn't match accessible name`. Items read `button: visible="search" vs aria-label="find products"`, truncating each side at 20 characters, up to ten with a count of the rest. The finding carries the issue `Voice control users may not be able to activate these controls`.
+- Fail when the `aria-label` does not contain the visible text as a substring. Report message: `N element(s) where visible text doesn't match accessible name`. Items read `button: visible="search" vs aria-label="find products"`, truncating each side at 20 characters. Only the first ten are listed. The finding carries the issue `Voice control users may not be able to activate these controls`.
 - Pass with `Visible labels match accessible names`.
 - Info with `No elements with aria-label and visible text found`.
 

@@ -15,7 +15,7 @@ One check, `identical-links-same-purpose`, at severity warning. It reads every `
 
 Destinations are normalized before comparison: the `href` is lowercased, trailing slashes are stripped and the query string is dropped. So `/pricing`, `/pricing/` and `/pricing?ref=nav` all count as one destination.
 
-- Warn when one text maps to more than one destination. Report message: `N link text(s) lead to different destinations`. Items read `"learn more" → 3 different URLs`, up to ten with a count of the rest, carrying the suggestion `Make link text unique to differentiate destinations`.
+- Warn when one text maps to more than one destination. Report message: `N link text(s) lead to different destinations`. Items read `"learn more" → 3 different URLs`, capped at the first ten, carrying the suggestion `Make link text unique to differentiate destinations`.
 - Pass with `Identical link texts go to same destinations`.
 - Info with `No links found`.
 
