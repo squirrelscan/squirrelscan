@@ -1,9 +1,38 @@
 ---
-title: "CLS Optimization Hints"
-description: "Checks for Cumulative Layout Shift prevention"
+title: "Images without width and height: the CLS risk squirrel finds"
+description: "Images and iframes with no dimensions, so the browser cannot reserve space before they load. squirrel lists every one by page."
 ---
 
-Checks for Cumulative Layout Shift prevention
+## What causes layout shift
+
+Cumulative Layout Shift measures how much visible content moves after it has been painted. The most common cause is a replaced element with no declared size: the browser lays out the page with the element collapsed, then reflows everything below it once the file arrives and its real dimensions are known.
+
+Declaring `width` and `height` on an `<img>` gives the browser the aspect ratio before the bytes arrive, so it can reserve the right box immediately. The attributes are unitless numbers and CSS still controls the rendered size, so `width="1200" height="630"` with `style="width:100%;height:auto"` is both responsive and stable. Iframes need the same treatment.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one or two checks:
+
+- `cls-images`: fails with the message `N image(s) without width/height (CLS risk)` when more than five images lack dimensions, warns with the same message for one to five, and passes with `All images have dimensions` when none do. Each offending image `src` is listed as an item.
+- `cls-iframes`: emitted only when at least one iframe lacks dimensions, warning with the message `N iframe(s) without dimensions` and listing each `src`.
+
+An `<img>` counts as dimensioned when it has a `width` attribute other than `auto`, or a `height` attribute other than `auto`, or an inline `style` containing both the strings `width` and `height`. One attribute is therefore enough to clear the check even though the browser needs both to compute a ratio. Only images with a `src` are considered. An `<iframe>` is flagged when either `width` or `height` is missing, which is the stricter test of the two.
+
+The candidates come from a shared analysis of the page that six performance rules read, computed once per page.
+
+## How to fix it
+
+```html
+<img src="/photo.jpg" width="1200" height="630" style="width:100%;height:auto" alt="" />
+```
+
+The attributes carry the aspect ratio and the CSS carries the layout. For an element whose size is only known at runtime, such as an ad slot or an embed, reserve the box in CSS instead:
+
+```css
+.ad-slot { min-height: 250px; }
+```
+
+The common false positive is an image sized entirely in an external stylesheet with `aspect-ratio`. The browser is stable, but the check reads attributes and inline styles only, so it still reports the image.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks for Cumulative Layout Shift prevention
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-CLS measures visual stability - how much content shifts during load. Prevent layout shifts by: 1) Always set width and height attributes on images and iframes. 2) Reserve space for ads and embeds with CSS min-height. 3) Use CSS aspect-ratio for responsive media. 4) Avoid inserting content above existing content. 5) Use transform animations instead of properties that trigger layout.
 
 ## Enable / disable
 
@@ -40,3 +65,31 @@ disable = ["perf/*"]
 enable = ["perf/cls-hints"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/dimensions](/rules/images/dimensions): the same attributes checked from the images category.
+- [images/aspect-mismatch](/rules/images/aspect-mismatch): declared dimensions that disagree with the real file.
+- [perf/font-loading](/rules/perf/font-loading): `font-display`, the other common source of a late reflow.
+- [perf/carousel-hidden-eager](/rules/perf/carousel-hidden-eager): hidden slides that load eagerly and shift the page when revealed.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Cumulative Layout Shift, web.dev](https://web.dev/articles/cls)
+- [The img element, HTML Standard](https://html.spec.whatwg.org/multipage/embedded-content.html#the-img-element)
+- [aspect-ratio, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/aspect-ratio)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every image and iframe missing dimensions is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

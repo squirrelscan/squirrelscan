@@ -1,9 +1,37 @@
 ---
-title: "INP Optimization Hints"
-description: "Checks for Interaction to Next Paint optimization"
+title: "Third-party scripts and INP: what squirrel counts per page"
+description: "More than five known third-party scripts, or more than three that block the parser. squirrel counts both on every page."
 ---
 
-Checks for Interaction to Next Paint optimization
+## What INP measures
+
+Interaction to Next Paint measures the delay between a user acting and the browser painting the result. The delay comes from the main thread being busy: a long task started by a script has to finish before the browser can respond to a click.
+
+Third-party scripts are the usual source, because they are written for a different set of constraints and they run on every page whether the feature is used or not. A script with neither `async` nor `defer` is worse still: it blocks parsing while it downloads and executes, which delays everything after it. Neither number is a measurement of INP, and only a field measurement is. They are the two things a static read of the HTML can tell you about the main thread.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one or two checks:
+
+- `inp-third-party`: warns with the message `N third-party scripts may impact INP` above five, reports at info status with `N third-party script(s) detected` from one to five, and passes with `No third-party scripts detected` at zero. Each script URL is listed as an item in the first two cases.
+- `inp-blocking-scripts`: warns with the message `N blocking scripts (consider async/defer)` when more than three `<script src>` elements have neither `async` nor `defer`. With three or fewer and at least one script on the page it passes with `Script loading patterns look good`. A page with no scripts at all emits nothing for this check.
+
+A script counts as third-party only when its host differs from the page host and matches one of about twenty-five known analytics, advertising, support and monitoring domains, either exactly or as a subdomain. A script from an unlisted third-party host is not counted, so the number is a floor rather than a total.
+
+The signals come from a shared analysis of the page that six performance rules read, computed once per page.
+
+## How to fix it
+
+```html
+<script src="/app.js" defer></script>
+<script src="https://cdn.example.com/analytics.js" async></script>
+```
+
+`defer` keeps execution order and runs after parsing. `async` runs as soon as it downloads, which suits an independent script that touches nothing else. Both stop the parser blocking.
+
+For the third-party count, the fix is deletion rather than an attribute. Each tag is a separate decision about whether the feature is worth the main thread it costs.
+
+The common false positive is a tag manager loading one script that pulls in ten more. The rule sees one script in the HTML, so the count understates the page.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks for Interaction to Next Paint optimization
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 5/10 |
-
-## Solution
-
-INP measures responsiveness to user interactions. Improve by: 1) Minimize third-party scripts that block the main thread. 2) Use async/defer for non-critical scripts. 3) Break up long JavaScript tasks into smaller chunks. 4) Use web workers for heavy computations. 5) Implement code splitting to reduce initial bundle size. Consider using requestIdleCallback for non-urgent work.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["perf/*"]
 enable = ["perf/inp-hints"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/render-blocking](/rules/perf/render-blocking): the same blocking scripts measured for their effect on first paint.
+- [perf/dom-size](/rules/perf/dom-size): the tree size that makes each interaction more expensive.
+- [perf/duplicate-js](/rules/perf/duplicate-js): the same library loaded more than once.
+- [analytics/gtm-present](/rules/analytics/gtm-present): the tag manager that usually sits behind a third-party count.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Interaction to Next Paint, web.dev](https://web.dev/articles/inp)
+- [The script element, HTML Standard](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each page lists its third-party scripts and its blocking count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

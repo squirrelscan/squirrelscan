@@ -1,9 +1,35 @@
 ---
-title: "Time to First Byte"
-description: "Measures server response time (TTFB)"
+title: "Time to First Byte: the 600ms and 1000ms thresholds"
+description: "A server that takes over 600ms to send the first byte, or over 1000ms. squirrel measures TTFB on every fresh fetch."
 ---
 
-Measures server response time (TTFB)
+## What TTFB measures
+
+Time to First Byte is the gap between the request leaving and the first byte of the response arriving. It covers DNS, the connection, and everything the server did before it started writing: routing, database queries, template rendering, and any upstream call in the way.
+
+It is not a Core Web Vital itself, but every one of them starts after it. A page cannot paint before the HTML arrives, so a slow TTFB moves the floor under Largest Contentful Paint by the same amount. The usual causes are an uncached page rendered per request, a slow query, and a long distance between the visitor and the origin.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one or two checks:
+
+- `ttfb`, skipped with the message `TTFB not measured` and the reason `No TTFB timing data (only available for fresh fetches)` when the response came from a cache rather than the network.
+- `ttfb`, passing with the message `Fast server response (Nms)` under 600ms, warning with `Slow server response (Nms)` from 600 to 999ms, and failing with `Very slow server response (Nms)` at 1000ms or above. The expected value shown is `< 600ms` on a pass or a warning and `< 1000ms` on a failure.
+- `download-time`, emitted only when the crawl recorded it, at info status with the message `Content download: Nms`.
+
+The rule uses the measured TTFB alone and never falls back to total load time, which includes the download and would overstate the server's share. Values are rounded to whole milliseconds.
+
+## How to fix it
+
+Serve the page from cache when the content allows it, so the origin is not rendering per request:
+
+```
+Cache-Control: public, max-age=0, s-maxage=600, stale-while-revalidate=86400
+```
+
+That lets a CDN answer from its edge and revalidate in the background. When the page genuinely has to be rendered per request, the work is in the request path: the query that runs without an index, the upstream API called serially, the template compiled on every hit.
+
+The common false positive is a cold start. The first request to a serverless origin after an idle period pays for boot, and a single crawl can catch exactly that request. Re-run the audit before acting on one slow page.
 
 | | |
 |---|---|
@@ -13,39 +39,19 @@ Measures server response time (TTFB)
 | **Severity** | warning |
 | **Weight** | 7/10 |
 
-## Solution
-
-Time to First Byte (TTFB) measures how quickly your server responds. Slow TTFB indicates server/backend issues.
-
-Thresholds (Core Web Vitals):
-- Good: < 600ms
-- Needs improvement: 600-1000ms
-- Poor: > 1000ms
-
-Fixes for slow TTFB:
-- Enable server caching (Redis, Varnish, CDN)
-- Optimize database queries
-- Use CDN for static assets
-- Upgrade server resources
-- Reduce server-side processing
-- Enable HTTP/2 or HTTP/3
-- Use edge computing (Cloudflare Workers, Vercel Edge)
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `good_threshold` | unknown | `undefined` | Good TTFB in ms |
-| `poor_threshold` | unknown | `undefined` | Poor TTFB in ms |
+| `good_threshold` | number | `600` | Good TTFB in ms |
+| `poor_threshold` | number | `1000` | Poor TTFB in ms |
 
 ### Configuration example
 
 ```toml squirrel.toml
 [rules."perf/ttfb"]
-good_threshold = undefined
-poor_threshold = undefined
+good_threshold = 600
+poor_threshold = 1000
 ```
 
 ## Enable / disable
@@ -71,3 +77,31 @@ disable = ["perf/*"]
 enable = ["perf/ttfb"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/cache-headers](/rules/perf/cache-headers): the per-page caching directives that decide whether the origin is hit at all.
+- [perf/bad-caching](/rules/perf/bad-caching): the same question asked across the whole crawl.
+- [perf/http2](/rules/perf/http2): the protocol the request was made over.
+- [perf/lcp-hints](/rules/perf/lcp-hints): the paint that cannot start until this number is spent.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Time to First Byte, web.dev](https://web.dev/articles/ttfb)
+- [Web Vitals, web.dev](https://web.dev/articles/vitals)
+- [PerformanceResourceTiming, MDN](https://developer.mozilla.org/en-US/docs/Web/API/PerformanceResourceTiming)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each page reports its measured server response time. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

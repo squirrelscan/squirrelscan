@@ -1,9 +1,39 @@
 ---
-title: "LCP Image Fetch Priority"
-description: "Flags the hero/LCP image when it is eagerly loaded but has no fetchpriority='high' or preload"
+title: "fetchpriority='high': the LCP image hint squirrel checks"
+description: "A hero image loaded eagerly with neither fetchpriority='high' nor a matching preload. squirrel picks the likely LCP candidate per page."
 ---
 
-Flags the hero/LCP image when it is eagerly loaded but has neither `fetchpriority="high"` nor a matching preload.
+## What fetchpriority does
+
+`fetchpriority` is an HTML attribute that tells the browser how to rank a resource against everything else it is fetching. On the image that paints the largest element above the fold, `fetchpriority="high"` moves it out of the queue behind stylesheets and scripts. Chrome loads images at low priority until layout proves they are in the viewport, and that delay lands directly on Largest Contentful Paint.
+
+A `<link rel="preload" as="image">` for the same URL does the same job by a different route: the browser starts the fetch as soon as it parses `<head>`, before it reaches the `<img>`. Either signal is enough and there is no gain from both. Neither belongs on a below-fold image, where raising priority steals bandwidth from the element that is actually visible.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It picks one LCP candidate: the first `<img>` in document order that has a `src`, is not a `data:` URI, whose `src` does not match `pixel`, `spacer`, `blank`, `1x1` or `tracking`, whose path does not end in `.svg` or `.ico`, is not `loading="lazy"`, is not inside a `<header>` or `<nav>`, and is not declared small. It emits one check:
+
+- `lcp-fetchpriority`, at info status with the message `No eager hero image candidate found` when nothing passes that filter.
+- `lcp-fetchpriority`, passing with the message `Hero image has fetchpriority='high'` when the candidate carries that exact attribute value, or `Hero image is preloaded` when its URL matches an image preload on the page.
+- `lcp-fetchpriority`, warning with the message `Hero/LCP image loaded eagerly without fetchpriority='high' or preload`, with the image's `src` as the item id, its filename as the label, and the tag itself as a snippet.
+
+An image counts as declared small only when both `width` and `height` parse as numbers and the larger of the two is under 300, so an undimensioned hero stays eligible. Preload matching is by absolute URL: the rule collects the `href` and every `imagesrcset` URL from each `link[rel~="preload"][as="image"]`, then compares them against the candidate's `src` and its own `srcset` URLs. A preload for some other image is no evidence about this one, so an unmatched preload elsewhere on the page does not clear the check.
+
+A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+```html
+<img src="/hero.jpg" width="1200" height="630" fetchpriority="high" alt="" />
+```
+
+Put the attribute on the one image that paints the largest above-fold element, and nowhere else. The preload alternative goes in `<head>`:
+
+```html
+<link rel="preload" as="image" href="/hero.jpg" fetchpriority="high" />
+```
+
+The common false positive is a page whose real LCP element is a background image in CSS, or text rather than an image. This rule picks the first eligible `<img>`, which may not be what the browser measures. Check the reported filename against a field measurement before adding the attribute.
 
 | | |
 |---|---|
@@ -12,21 +42,6 @@ Flags the hero/LCP image when it is eagerly loaded but has neither `fetchpriorit
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 2/10 |
-
-## What it detects
-
-The rule picks the likely Largest Contentful Paint element: the first eagerly-loaded content `<img>` on the page (it skips `loading="lazy"` images, data URIs, SVG/ICO icons, tracking pixels, small declared thumbnails, and logos inside `<header>`/`<nav>`). It then warns when that image is left at default priority:
-
-- **No `fetchpriority="high"`** on the image, **and**
-- **No `<link rel="preload" as="image">`** whose `href` or responsive `imagesrcset` matches the image `src`.
-
-Either signal is enough to pass. A default-priority hero is discovered and fetched late, delaying LCP.
-
-This rule overlaps with [LCP Hints](/rules/perf/lcp-hints) on the no-preload case, which is why its weight is deliberately low: it adds the `fetchpriority` recommendation without double-charging the same root cause.
-
-## Solution
-
-Give the LCP image an early, high-priority fetch. Add `fetchpriority="high"` to the `<img>`, or preload it with `<link rel="preload" as="image" href="..." fetchpriority="high">`. You do not need both. Frameworks such as React 19 emit an image preload for eager images automatically. Only apply this to the single above-fold LCP image, never to below-fold images, which should stay lazy.
 
 ## Enable / disable
 
@@ -51,3 +66,31 @@ disable = ["perf/*"]
 enable = ["perf/lcp-fetchpriority"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/lcp-hints](/rules/perf/lcp-hints): the heavier check on the same root cause, which is why this rule's weight is low.
+- [perf/lazy-above-fold](/rules/perf/lazy-above-fold): the opposite defect, an above-fold image marked `loading="lazy"`.
+- [perf/preconnect](/rules/perf/preconnect): connection setup for the host the hero image comes from.
+- [images/dimensions](/rules/images/dimensions): the `width` and `height` attributes this rule reads to size the candidate.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [fetchpriority, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/fetchpriority)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)
+- [rel=preload, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each flagged page names the image it picked as the candidate. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

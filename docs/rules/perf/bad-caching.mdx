@@ -1,9 +1,38 @@
 ---
-title: "Weak Caching (site-wide)"
-description: "Flags sites where most pages lack caching freshness, validators, or compression"
+title: "Weak caching across a site: freshness, validators, gzip"
+description: "Most pages missing a freshness lifetime, an ETag, or compression. squirrel measures the share across every crawled HTML response."
 ---
 
-Flags sites where most pages lack caching freshness, validators, or compression.
+## What site-wide caching coverage is
+
+One page with weak caching headers is a nit. A site where most pages have them is a pattern, and it costs on every repeat visit and behind every CDN, because nothing can be reused and every request reaches the origin.
+
+Three things are worth counting separately. A freshness lifetime, from `max-age`, `s-maxage` or `Expires`, decides whether a cache may reuse a response without asking. A validator, meaning an `ETag` or `Last-Modified`, decides whether asking is cheap: the server can answer 304 with no body. Compression decides how many bytes move when it is not cheap.
+
+## What squirrel checks
+
+The rule runs once per crawl over every page whose status was 2xx, whose headers were recorded, and whose content type contains `text/html`. It emits one to three checks:
+
+- `bad-caching`, skipped with the message `No cacheable HTML responses with headers to evaluate` when nothing qualifies.
+- `bad-caching-freshness`: warns with the message `N/M pages lack a caching freshness lifetime` when under 60% of pages declare one, and fails with the same message under 25%. Otherwise it passes with `N/M pages declare a caching freshness lifetime`.
+- `bad-caching-validators`: warns with `N/M pages lack an ETag or Last-Modified validator` under 60%, fails under 25%, and otherwise passes with `N/M pages expose a revalidation validator`.
+- `bad-caching-compression`: emitted only when at least one response was compressible. It warns with `N/M compressible pages served without gzip/Brotli` under 80%, fails under 50%, and otherwise passes with `N/M compressible pages compressed`.
+
+A page counts as having freshness only when it has neither `no-store` nor `no-cache` and declares a positive lifetime through `s-maxage`, `max-age` or `Expires`, with `s-maxage` taking precedence. Compression counts `br`, `gzip`, `deflate` and `zstd`. Each failing check carries up to five example URLs.
+
+## How to fix it
+
+Set the headers at the edge rather than per route, so coverage is uniform by construction:
+
+```
+Cache-Control: public, max-age=0, s-maxage=600, stale-while-revalidate=86400
+ETag: "a1b2c3"
+Content-Encoding: br
+```
+
+Most servers and CDNs emit an `ETag` automatically once the response is not streamed, and compression is usually a single switch. The freshness value is the one that needs a decision per content type.
+
+The common false positive is a site that is entirely personalised, where every page is per-user and `no-store` is correct. The freshness check counts those as lacking a lifetime, because from a cache's point of view they do.
 
 | | |
 |---|---|
@@ -13,38 +42,13 @@ Flags sites where most pages lack caching freshness, validators, or compression.
 | **Severity** | warning |
 | **Weight** | 5/10 |
 
-## What it checks
-
-Where [`perf/cache-headers`](/rules/perf/cache-headers) and
-[`perf/compression`](/rules/perf/compression) report per page, this rule looks at
-the **whole site** and flags systemic weakness: caching mistakes that cost you
-on every repeat visit and behind every CDN. Across all crawled HTML responses it
-measures the fraction of pages that:
-
-- declare a caching **freshness lifetime** (`Cache-Control: max-age`/`s-maxage`
-  or `Expires`, and not `no-store`),
-- expose a **validator** (`ETag` or `Last-Modified`) for cheap revalidation, and
-- serve compressible bodies with **gzip/Brotli/zstd** compression.
-
-Each dimension reports `pass`/`warn`/`fail` with the ratio and example pages.
-
-## Solution
-
-Set `Cache-Control` with an appropriate `max-age` on every response (short for
-HTML, long + `immutable` for hashed static assets), expose an `ETag` or
-`Last-Modified` for cheap revalidation, and enable gzip/Brotli for text
-responses. Consistent caching across the whole site cuts repeat-visit load times
-and origin/CDN cost.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `min_freshness_ratio` | number | `0.6` | Minimum fraction of pages that should declare a freshness lifetime |
-| `min_validator_ratio` | number | `0.6` | Minimum fraction of pages that should expose a validator (ETag or Last-Modified) |
-| `min_compression_ratio` | number | `0.8` | Minimum fraction of compressible responses that should be gzip/Brotli compressed |
+| `min_validator_ratio` | number | `0.6` | Minimum fraction of pages that should expose a validator |
+| `min_compression_ratio` | number | `0.8` | Minimum fraction of compressible responses that should be compressed |
 
 ### Configuration example
 
@@ -78,3 +82,31 @@ disable = ["perf/*"]
 enable = ["perf/bad-caching"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/cache-headers](/rules/perf/cache-headers): the same headers read page by page.
+- [perf/compression](/rules/perf/compression): the per-page compression check.
+- [perf/asset-compression](/rules/perf/asset-compression): compression on the sub-resources rather than the documents.
+- [perf/ttfb](/rules/perf/ttfb): the origin time this coverage is meant to stop paying repeatedly.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Prevent unnecessary network requests with the HTTP Cache, web.dev](https://web.dev/articles/http-cache)
+- [Cache-Control, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control)
+- [ETag, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each check reports the share of pages that carry the header, with example URLs. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

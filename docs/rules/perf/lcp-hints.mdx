@@ -1,9 +1,34 @@
 ---
-title: "LCP Optimization Hints"
-description: "Checks for Largest Contentful Paint optimization opportunities"
+title: "LCP image not preloaded: what squirrel counts as a hero"
+description: "Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eager images on every page."
 ---
 
-Checks for Largest Contentful Paint optimization opportunities
+## What LCP preloading is
+
+Largest Contentful Paint measures when the biggest element in the viewport finishes painting. On most pages that element is an image, and the browser cannot start fetching it until it has parsed the markup that references it. A `<link rel="preload" as="image">` in `<head>` starts the fetch earlier, before the parser reaches the `<img>`.
+
+Preloading helps when the image is discoverable late, which is the usual case behind a slow LCP: a hero inside a component, an image referenced from CSS, or one whose URL is only known after a script runs. It does not help an image the parser reaches immediately anyway, and preloading several images at once slows the one that matters.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check:
+
+- `lcp-preload`, warning with the message `N likely-LCP images loaded without preload`, or `1 likely-LCP image loaded without preload` in the singular. The value is the count. There are no items: the count is per page rather than a list of every image across the site.
+- `lcp-preload`, passing with the message `LCP images appear to be optimized`.
+
+A candidate is one of the first three elements matching `img:not([loading="lazy"])` or `img[fetchpriority="high"]` in document order. It counts as unpreloaded when its `src` is not a `data:` URI and does not appear among the page's `link[rel="preload"]` hrefs that end in `.jpg`, `.jpeg`, `.png`, `.webp` or `.avif`.
+
+The candidates come from a shared analysis of the page that six performance rules read, computed once per page.
+
+## How to fix it
+
+```html
+<link rel="preload" as="image" href="/hero.jpg" fetchpriority="high" />
+```
+
+Put it in `<head>`, for one image, and only when that image really is the largest element in the viewport.
+
+The common false positive is a URL written two different ways. The match compares the `src` attribute against the preload `href` as written, so `/hero.jpg` in the tag and `https://example.com/hero.jpg` in the preload do not match and the image is still counted. Writing both the same way clears it. A second cause is a page whose LCP element is text or a CSS background, neither of which this rule can see.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks for Largest Contentful Paint optimization opportunities
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 7/10 |
-
-## Solution
-
-LCP measures when the largest content element becomes visible. Optimize by: 1) Preload your LCP image with `<link rel='preload' as='image'>`. 2) Don't use loading='lazy' on above-fold images as it delays loading. 3) Minimize render-blocking CSS/JS in `<head>`. 4) Use modern image formats (WebP/AVIF) for faster loading. 5) Consider using fetchpriority='high' on the LCP image.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["perf/*"]
 enable = ["perf/lcp-hints"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/lcp-fetchpriority](/rules/perf/lcp-fetchpriority): the lighter attribute-only signal for the same image.
+- [perf/lazy-above-fold](/rules/perf/lazy-above-fold): an above-fold image marked `loading="lazy"`, which delays the same paint.
+- [perf/render-blocking](/rules/perf/render-blocking): resources holding up the paint before the image is even requested.
+- [images/modern-format](/rules/images/modern-format): serving that image in a format that downloads faster.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Largest Contentful Paint, web.dev](https://web.dev/articles/lcp)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)
+- [rel=preload, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each page reports how many likely-LCP images went unpreloaded. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

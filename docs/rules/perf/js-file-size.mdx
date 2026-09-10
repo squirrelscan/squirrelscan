@@ -1,9 +1,36 @@
 ---
-title: "JavaScript File Size Too Large"
-description: "Checks for JavaScript files that exceed recommended size limits"
+title: "JavaScript bundle too large: the 250 KB and 1 MB limits"
+description: "Scripts over 250 KB warn and over 1 MB fail. squirrel measures every JavaScript file the crawl found and names the pages that load it."
 ---
 
-Checks for JavaScript files that exceed recommended size limits
+## What JavaScript size costs
+
+A JavaScript file costs twice. It costs bandwidth to download, which scales with connection speed, and it costs main-thread time to parse and execute, which scales with device. The second cost is the one that hurts: a mid-range phone parses JavaScript several times slower than a laptop, and none of that time is visible in a transfer-size number.
+
+Bundle size is usually a dependency question rather than an application-code question. A date library included whole for one format call, an icon set imported as a barrel file, and a polyfill bundle serving browsers nobody uses are the common three.
+
+## What squirrel checks
+
+The rule runs once per crawl over the script resources the crawl collected, with their sizes and the pages that referenced them. It emits one or two checks:
+
+- `js-file-size`, passing with the message `No JavaScript files detected` when the crawl found none.
+- `js-file-size`, failing with the message `N JS file(s) exceed 1.0 MB` and one item per file, carrying its size, HTTP status, content type and the pages that load it.
+- `js-file-size-warn`, warning with the message `N JS file(s) exceed 250.0 KB` for files above the warning threshold but not above the error one, with the same items.
+- `js-file-size`, passing with the message `All JavaScript files are within size limits` when nothing crossed either threshold.
+
+Sizes are the transferred sizes the crawl observed. A file whose size could not be determined is counted in neither bucket. The fail and warn checks can both appear on the same audit, since they cover different files.
+
+## How to fix it
+
+Split the bundle so a route loads only its own code:
+
+```js
+const Editor = lazy(() => import("./editor"));
+```
+
+Then look at what the shared chunk contains. A bundle analyser against the production build names the dependency responsible far faster than reading imports, and the answer is usually one package that has a smaller equivalent or a per-function import path.
+
+The common false positive is a single bundle deliberately shipped for the whole application and cached across every route. The parse cost is still paid on the first visit, so the finding is true, but the second navigation pays nothing.
 
 | | |
 |---|---|
@@ -13,18 +40,12 @@ Checks for JavaScript files that exceed recommended size limits
 | **Severity** | error |
 | **Weight** | 7/10 |
 
-## Solution
-
-Large JavaScript files block the main thread and delay interactivity. Code-split bundles into smaller chunks, tree-shake unused exports, lazy-load non-critical scripts, and defer or async load third-party scripts. Use dynamic imports for route-based splitting.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `warn_bytes` | number | `256000` (250KB) | Byte size to trigger warning |
-| `error_bytes` | number | `1048576` (1MB) | Byte size to trigger error |
+| `warn_bytes` | number | `256000` (250 KB) | Byte size to trigger warning |
+| `error_bytes` | number | `1048576` (1 MB) | Byte size to trigger error |
 
 ### Configuration example
 
@@ -57,3 +78,30 @@ disable = ["perf/*"]
 enable = ["perf/js-file-size"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/unminified-js](/rules/perf/unminified-js): whether the file is large because it was never minified.
+- [perf/duplicate-js](/rules/perf/duplicate-js): the same library shipped more than once in that total.
+- [perf/legacy-js](/rules/perf/legacy-js): polyfills and transpilation output inflating the bundle.
+- [perf/asset-compression](/rules/perf/asset-compression): whether the file is at least served compressed.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Reduce network payloads using text compression, web.dev](https://web.dev/articles/reduce-network-payloads-using-text-compression)
+- [Interaction to Next Paint, web.dev](https://web.dev/articles/inp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every oversized script is listed with its size and the pages that load it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

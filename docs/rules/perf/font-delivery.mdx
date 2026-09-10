@@ -1,9 +1,41 @@
 ---
-title: "Font Delivery"
-description: "Flags render-blocking third-party font stylesheets in the critical request chain"
+title: "Google Fonts blocking render: the font CSS squirrel flags"
+description: "A stylesheet from a hosted font service in head, blocking first paint. squirrel checks eight providers and inline @import too."
 ---
 
-Flags render-blocking third-party font stylesheets that sit in the critical request chain.
+## What font delivery costs
+
+A `<link rel="stylesheet">` to a hosted font service puts a cross-origin request in the critical path. The browser cannot paint until that stylesheet arrives, and it cannot even start fetching the font files until it has parsed it, so the text waits on two round trips to a host that is not yours.
+
+Self-hosting the font files and their `@font-face` CSS removes the third-party request. Keeping the hosted CSS but loading it asynchronously removes the blocking, at the cost of a brief fallback font. An `@import` inside a `<style>` block is the worst of both: it blocks and it serialises, because the browser has to parse the inline CSS before it discovers the URL.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check:
+
+- `font-delivery`, at info status with the message `No <head> element found` when the page has no head.
+- `font-delivery`, warning with the message `N render-blocking third-party font stylesheet(s) in the critical path` and listing each offending href as an item.
+- `font-delivery`, passing with the message `No render-blocking third-party font stylesheets`.
+
+Two things are scanned. In `<head>`, every `link[rel~="stylesheet"]` whose href resolves to one of eight font hosts counts, unless its `media` attribute is exactly `print`, which is the asynchronous-load idiom. Anywhere in the document, every `<style>` element is searched for an `@import` of one of those hosts, reported as `@import <url>`; a print-only import is skipped, and `not print` is kept because it does apply to screen.
+
+The eight hosts are `fonts.googleapis.com`, `use.typekit.net`, `p.typekit.net`, `fast.fonts.net`, `fast.fonts.com`, `cloud.typography.com`, `fonts.bunny.net` and `use.fontawesome.com`. A subdomain of any of them matches too. A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+```html
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Inter&display=swap"
+  media="print"
+  onload="this.media='all'"
+/>
+```
+
+The `media="print"` value means the browser fetches the stylesheet without blocking paint, and the `onload` handler switches it on once it has arrived. Self-hosting the `woff2` files and writing your own `@font-face` blocks removes the third-party request entirely and is the better fix where you can subset the font.
+
+The common false positive is a font stylesheet that is genuinely wanted in the critical path, on a site where a fallback flash is unacceptable. The finding is still accurate about the cost.
 
 | | |
 |---|---|
@@ -12,22 +44,6 @@ Flags render-blocking third-party font stylesheets that sit in the critical requ
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## What it detects
-
-- **Render-blocking font CSS**: a `<link rel="stylesheet">` in `<head>` pointing at a hosted font service (Google Fonts, Adobe Typekit, Monotype fast.fonts, Typography.com, Bunny Fonts, Font Awesome) that is not deferred. A stylesheet loaded with `media="print"` (the async-load trick) is treated as non-blocking and is not flagged.
-- **`@import` of a font provider** inside an inline `<style>` block, which adds an extra render-blocking round-trip.
-
-A generic "critical request chains" warning tells you *that* you have a blocking resource; this rule names the font stylesheet specifically and gives font-focused fixes.
-
-## Solution
-
-A `<link rel="stylesheet">` to a hosted font service blocks rendering and adds a cross-origin round-trip before any text can paint. Make font delivery non-blocking:
-
-1. **Self-host** the font files and the `@font-face` CSS to remove the third-party request entirely.
-2. If you keep the hosted CSS, **preconnect** to the font host and load the stylesheet asynchronously with `media="print" onload="this.media='all'"`.
-3. Use `font-display: swap` so fallback text shows immediately.
-4. **Subset** the font to the characters you actually use to cut bytes.
 
 ## Enable / disable
 
@@ -52,3 +68,31 @@ disable = ["perf/*"]
 enable = ["perf/font-delivery"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/font-loading](/rules/perf/font-loading): `font-display` and the Google Fonts preconnect.
+- [perf/render-blocking](/rules/perf/render-blocking): every blocking resource in head, not just fonts.
+- [perf/preconnect](/rules/perf/preconnect): the connection setup for that font host.
+- [perf/critical-request-chains](/rules/perf/critical-request-chains): the chained requests an @import creates.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Best practices for fonts, web.dev](https://web.dev/articles/font-best-practices)
+- [@import, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@import)
+- [The link element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-link-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every blocking font stylesheet is listed with its URL. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

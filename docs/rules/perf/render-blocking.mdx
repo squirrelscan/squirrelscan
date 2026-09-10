@@ -1,9 +1,35 @@
 ---
-title: "Render-Blocking Resources"
-description: "Checks for render-blocking CSS and JavaScript"
+title: "Render-blocking resources: the ones squirrel counts in head"
+description: "Stylesheets and scripts in head that hold up first paint. squirrel counts them per page and lists each URL."
 ---
 
-Checks for render-blocking CSS and JavaScript
+## What render blocking is
+
+A stylesheet in `<head>` blocks rendering: the browser will not paint until it has downloaded and parsed every one of them, because painting with the wrong styles and repainting is worse than waiting. A `<script src>` in `<head>` with neither `async` nor `defer` blocks parsing as well, which stops the browser even discovering what comes next.
+
+The fix is not to remove them but to change when they matter. Styles the first screen needs can be inlined. Styles it does not need can load with a media attribute that does not apply, then be switched on once loaded. Scripts almost always take `defer`.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check:
+
+- `render-blocking`: warns with the message `N render-blocking resources` above three, reports at info status with `N render-blocking resource(s)` from one to three, and passes with `No significant render-blocking resources` at zero. Each URL is listed as an item.
+
+Only `<head>` is scanned. A stylesheet counts when it is a `link[rel="stylesheet"]` with no `media` attribute at all: any `media` value, including `media="all"`, excludes it. A script counts when it is a `<script src>` with neither `async` nor `defer`. Inline `<style>` blocks and inline scripts are not counted, and neither is anything in `<body>`.
+
+The signals come from a shared analysis of the page that six performance rules read, computed once per page.
+
+## How to fix it
+
+```html
+<style>/* styles the first screen needs */</style>
+<link rel="stylesheet" href="/rest.css" media="print" onload="this.media='all'" />
+<script src="/app.js" defer></script>
+```
+
+Inline what the first screen needs, load the rest with a `media` value that does not apply and switch it on once it has arrived, and give every script `defer`.
+
+The common false positive follows from how a stylesheet is counted. Adding `media="all"`, which changes nothing about the browser's behaviour, removes the link from this rule's count. Check the reported URLs rather than the number alone.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for render-blocking CSS and JavaScript
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Render-blocking resources delay First Contentful Paint (FCP) and LCP. Fix by: 1) Inline critical CSS for above-fold content. 2) Load non-critical CSS with media='print' onload='this.media=all'. 3) Add async or defer to non-critical scripts. 4) Move scripts to end of body when possible. 5) Use `<link rel='preload'>` for critical resources. Consider tools like Critical to extract critical CSS.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["perf/*"]
 enable = ["perf/render-blocking"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/css-file-size](/rules/perf/css-file-size): how large those blocking stylesheets are.
+- [perf/critical-request-chains](/rules/perf/critical-request-chains): resources that pull in further resources before paint.
+- [perf/font-delivery](/rules/perf/font-delivery): third-party font stylesheets, a blocking resource with its own rule.
+- [perf/inp-hints](/rules/perf/inp-hints): the same blocking scripts measured for their effect on interaction.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Largest Contentful Paint, web.dev](https://web.dev/articles/lcp)
+- [The link element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-link-element)
+- [The script element, HTML Standard](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every blocking stylesheet and script is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

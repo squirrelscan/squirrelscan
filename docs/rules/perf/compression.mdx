@@ -1,9 +1,43 @@
 ---
-title: "Compression"
-description: "Checks for Gzip or Brotli compression"
+title: "No compression detected: gzip and Brotli on the response"
+description: "A text response served with no Content-Encoding, or with compression explicitly disabled. squirrel reads the headers on every page."
 ---
 
-Checks for Gzip or Brotli compression
+## What response compression is
+
+A client advertises what it can decode with `Accept-Encoding`, and a server that supports it returns the body compressed and names the scheme in `Content-Encoding`. On HTML, CSS, JavaScript and JSON the saving is large, because text repeats itself.
+
+Brotli, sent as `br`, compresses text better than gzip at the same cost to decode, and every current browser supports it. gzip remains the safe default. `identity` means the server was asked for compression and deliberately returned none.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check named `compression`:
+
+- At info status with the message `Content type may not benefit from compression` when the content type is not text, JSON, JavaScript or XML. Nothing else runs.
+- Passing with `Brotli compression enabled (optimal)` when `Content-Encoding` contains `br`.
+- Passing with `<encoding> compression enabled` when it contains `gzip` or `deflate`.
+- Warning with `Compression explicitly disabled` when the encoding is exactly `identity`.
+- At info status with `Unknown content encoding: <encoding>` for anything else.
+- Warning with `Chunked transfer without compression` when there is no `Content-Encoding` and `Transfer-Encoding` is chunked.
+- Failing with `No compression detected (NKB uncompressed)` when there is no encoding at all and the HTML is over 1,000 characters, with an estimated saving in the details.
+- At info status with `Small response - compression not critical` when there is no encoding and the body is 1,000 characters or fewer.
+
+The size test measures the decoded HTML the crawl holds, in characters rather than bytes. A content type counts as compressible when it contains `text/`, `application/json`, `application/javascript`, `application/xml`, `+xml` or `+json`.
+
+## How to fix it
+
+On nginx:
+
+```nginx
+gzip on;
+gzip_types text/html text/css application/javascript application/json;
+brotli on;
+brotli_types text/html text/css application/javascript application/json;
+```
+
+Behind a CDN the switch is usually on by default, and the thing to check is that the origin is not sending `Content-Encoding: identity`, which some proxies pass through unchanged.
+
+The common false positive is a response the crawl fetched without offering compression. squirrel sends a normal `Accept-Encoding`, so this is rare, but an origin that varies on user agent can answer differently for a crawler than for a browser.
 
 | | |
 |---|---|
@@ -12,10 +46,6 @@ Checks for Gzip or Brotli compression
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Enable Gzip or Brotli compression on your server to reduce transfer sizes by 60-90%. Most web servers support this via configuration. For nginx: 'gzip on;' For Apache: 'AddOutputFilterByType DEFLATE text/html'. Brotli provides better compression than Gzip for text content.
 
 ## Enable / disable
 
@@ -40,3 +70,30 @@ disable = ["perf/*"]
 enable = ["perf/compression"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/asset-compression](/rules/perf/asset-compression): the same question asked of CSS, JavaScript and other sub-resources.
+- [perf/bad-caching](/rules/perf/bad-caching): compression coverage measured across the whole crawl.
+- [perf/total-byte-weight](/rules/perf/total-byte-weight): the transferred size compression reduces.
+- [perf/http2](/rules/perf/http2): the protocol carrying the compressed body.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Content-Encoding, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Encoding)
+- [Reduce network payloads using text compression, web.dev](https://web.dev/articles/reduce-network-payloads-using-text-compression)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each page reports the Content-Encoding it returned. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>
