@@ -20,7 +20,7 @@ The rule is site-wide. It looks for a disclosure page by URL and, separately, co
 - `affiliate-disclosure` passes when no links were found but a page exists. Message: `Disclosure page exists`.
 - `affiliate-disclosure` reports info when neither was found. Message: `No affiliate links or disclosure page detected`.
 
-The disclosure page is matched on `/disclosure`, `/affiliate-disclosure`, `/advertising-disclosure`, `/sponsored-disclosure` or `/ftc-disclosure`. Affiliate links are matched on an Amazon URL carrying `tag=`, on `shareasale.com`, `go.redirectingat.com`, `awin1.com` or `commission-junction`, or on any URL containing `?ref=` or `?affiliate=`. That last pair is broad: an internal referral parameter will match it. Severity info, weight 4.
+The disclosure page is matched on `/disclosure`, `/affiliate-disclosure`, `/advertising-disclosure`, `/sponsored-disclosure` or `/ftc-disclosure`. Affiliate links are matched against seven patterns applied to the whole URL string, not to the hostname: `amazon.<tld>/` followed later by `tag=`, `shareasale.com`, `go.redirectingat.com`, `awin1.com`, `commission-junction`, `?ref=` and `?affiliate=`. The Amazon pattern needs the tag to come after a path segment, so a bare `amazon.co.uk/?tag=…` does not match, and the last two are broad enough that an internal referral parameter will. Severity info, weight 4.
 
 The rule only runs when the audit classified the site as a blog or a news site. A classification below medium confidence, or an audit with no site metadata at all, runs it anyway.
 
@@ -82,7 +82,7 @@ E-E-A-T findings ship in every audit next to the SEO, performance and agent expe
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with its affiliate link count and whether a disclosure page exists. Local audits are free.
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with how many pages carry a matching affiliate link and whether a disclosure page exists. Local audits are free.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

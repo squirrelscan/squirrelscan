@@ -1,9 +1,35 @@
 ---
-title: "Video Thumbnail"
-description: "Checks that videos have poster/thumbnail images"
+title: "Video poster attribute: the frame shown before playback"
+description: "A video with no poster renders as a blank box until it buffers. squirrel checks every HTML video element for the poster attribute."
 ---
 
-Checks that videos have poster/thumbnail images
+## What the poster attribute is
+
+`poster` on a `<video>` element names an image the browser shows in the video's box until playback starts. Without it, the browser shows either nothing or the first frame, and the first frame of most videos is black.
+
+It is a perceived-performance measure as much as a design one. The poster is a normal image, so it loads at image speed and gives the reader something to look at while the video is still buffering. The equivalent for an embedded video is `thumbnailUrl` in the `VideoObject` schema, which is also what a search result uses.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `<video>` element and checks for a `poster` attribute. It emits a single check named `video-thumbnail`:
+
+- Info when the page has no `<video>` element. Message: `No HTML5 video elements found`.
+- Warn when any video has no `poster`. Message: `2 video(s) missing poster attribute`, with `Add poster images for better UX` as the value.
+- Pass otherwise. Message: `All 3 video(s) have poster images`.
+
+Only the presence of the attribute is checked. The image is not fetched, so a `poster` pointing at a 404 passes. Severity info, weight 3.
+
+## How to fix it
+
+```html
+<video controls poster="/talk-poster.jpg" width="1280" height="720">
+  <source src="/talk.mp4" type="video/mp4" />
+</video>
+```
+
+Use a frame from the video itself at 1280 by 720 or larger, and give the element `width` and `height` so the box is reserved before the poster loads.
+
+For an embedded video, the equivalent is `thumbnailUrl` on the `VideoObject` node.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks that videos have poster/thumbnail images
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Video poster images improve perceived performance and user experience. For HTML5 video, use the poster attribute. For embedded videos, thumbnailUrl in VideoObject schema. Thumbnails should be high quality, relevant to content, and properly sized (recommend 1280x720 or higher).
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["video/*"]
 enable = ["video/video-thumbnail"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [video/video-schema](/rules/video/video-schema): the thumbnailUrl the schema needs for an embed.
+- [video/video-accessible](/rules/video/video-accessible): captions on the same element.
+- [images/dimensions](/rules/images/dimensions): the width and height that reserve the video's space.
+- [performance/lcp-hints](/rules/performance/lcp-hints): the poster, which is often the largest visible element.
+
+Video findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The video element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/video)
+- [Video structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/video)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Video section of the report. Each page is reported with how many of its videos carry a poster. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Video section looks like on a real site.
+  </Card>
+</CardGroup>

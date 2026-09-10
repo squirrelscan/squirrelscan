@@ -1,9 +1,33 @@
 ---
-title: "Viewport Meta"
-description: "Checks for proper viewport meta tag"
+title: "Missing viewport meta tag: what it does and what to set"
+description: "Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties."
 ---
 
-Checks for proper viewport meta tag
+## What the viewport meta tag does
+
+`<meta name="viewport">` tells a mobile browser how wide to make the layout viewport. Without it, the browser assumes a desktop-width page, lays it out at around 980 pixels, and scales the result down to fit the screen, which is why an unstyled page looks like a shrunken desktop site.
+
+`width=device-width` sets the layout viewport to the device's own width, so CSS media queries measure what the user actually has. `initial-scale=1` sets the starting zoom so the two agree. Those two together are the whole tag for almost every site.
+
+## What squirrel checks
+
+The rule runs on every crawled page and looks for `meta[name="viewport"]`. It emits a single check named `viewport`, testing the `content` attribute by substring:
+
+- Fail when the tag is absent. Message: `Missing viewport meta tag`, with the recommended tag as the value. Severity error, weight 8.
+- Warn when `content` has no `width=` at all. Message: `Viewport missing width property`, with the content as the value.
+- Warn when it has a width that is not `width=device-width`. Message: `Viewport should use width=device-width`.
+- Info when it has `width=device-width` but no `initial-scale=`. Message: `Viewport missing initial-scale`.
+- Pass otherwise. Message: `Viewport meta tag is properly configured`.
+
+The checks are ordered, so only the first problem found is reported.
+
+## How to fix it
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+```
+
+Put it in the head of every page, usually in the base layout. Do not add `maximum-scale` or `user-scalable=no` alongside it: those disable zoom, which `mobile/viewport-zoom` reports separately.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for proper viewport meta tag
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-The viewport meta tag is essential for responsive design. Use: `<meta name='viewport' content='width=device-width, initial-scale=1'>`. This ensures proper scaling on mobile devices. Without it, mobile browsers render at desktop width and zoom out. Required for mobile-first indexing.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["mobile/*"]
 enable = ["mobile/viewport"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [mobile/viewport-zoom](/rules/mobile/viewport-zoom): the properties on the same tag that disable zoom.
+- [mobile/horizontal-scroll](/rules/mobile/horizontal-scroll): layout that overflows even with a correct viewport.
+- [content/meta-in-body](/rules/content/meta-in-body): a viewport tag that ended up outside the head.
+- [mobile/font-size](/rules/mobile/font-size): text sized for a desktop layout.
+
+Mobile findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Viewport meta element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Viewport_meta_element)
+- [Page experience, Google Search Central](https://developers.google.com/search/docs/appearance/page-experience)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Mobile section of the report. Each page is reported with its viewport tag and what the content is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Mobile section looks like on a real site.
+  </Card>
+</CardGroup>

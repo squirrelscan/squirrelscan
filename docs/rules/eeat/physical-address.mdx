@@ -11,7 +11,7 @@ Structured data is what makes it machine-readable. `PostalAddress` describes the
 
 ## What squirrel checks
 
-The rule is site-wide. It walks the crawled pages looking for two things in the structured data: the `PostalAddress` type anywhere, and any of `LocalBusiness`, `Organization`, `Restaurant` or `Store`. It emits a single check named `physical-address`:
+The rule is site-wide. It walks the crawled pages looking for two things in the list of schema types the parser collected: `PostalAddress`, and any of `LocalBusiness`, `Organization`, `Restaurant` or `Store`. That list covers top-level and `@graph` nodes, so a `PostalAddress` nested as an `address` property does not satisfy the first test on its own. It emits a single check named `physical-address`:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - Pass when either was found. Message: `Address schema markup found`, with `LocalBusiness/Organization` or `PostalAddress` as the value.

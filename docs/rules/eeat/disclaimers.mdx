@@ -11,7 +11,7 @@ It is both a legal position and a trust signal. A page that is clear about what 
 
 ## What squirrel checks
 
-The rule is site-wide. It matches each crawled page's URL path against five patterns and takes the first hit. It emits a single check named `disclaimer-page`:
+The rule is site-wide. It matches each crawled page's URL path against five patterns and takes the first hit. It emits one check, named `disclaimers` for the skip and `disclaimer-page` for the other two:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - Pass when a page matches. Message: `Disclaimer page found`, with the URL as the value.

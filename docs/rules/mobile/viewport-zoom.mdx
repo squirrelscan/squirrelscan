@@ -1,9 +1,31 @@
 ---
-title: "Viewport Zoom"
-description: "Checks that viewport doesn't disable user zoom"
+title: "user-scalable=no: the viewport setting that blocks zoom"
+description: "Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale."
 ---
 
-Checks that viewport doesn't disable user zoom
+## What disabling zoom does
+
+`user-scalable=no` and a low `maximum-scale` in the viewport meta tag ask the browser to prevent pinch zoom. The usual motivation is stopping iOS zooming in when a small form field is focused, which is a font-size problem being solved in the wrong place.
+
+The cost falls on people who need to magnify. WCAG success criterion 1.4.4 requires text to be resizable to 200% without loss of content or function, and blocking zoom fails it directly. Safari and recent Chrome ignore the request on that basis, but plenty of browsers still honour it.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads `meta[name="viewport"]`. It emits a single check named `viewport-zoom`:
+
+- Skipped when there is no viewport tag. Message: `No viewport meta tag to check`.
+- Fail when the content contains `user-scalable=no`, `user-scalable=0`, or `maximum-scale=1` or `maximum-scale=1.0`. Message: `Viewport disables user zoom (accessibility issue)`, listing which of `user-scalable=no` and `maximum-scale=1` was found. Severity error, weight 7.
+- Pass otherwise. Message: `Viewport allows user zoom`.
+
+The `maximum-scale` test matches only the value 1, with optional decimal, so a `maximum-scale=2` is not flagged even though it also caps zoom below the WCAG threshold.
+
+## How to fix it
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+```
+
+Remove `user-scalable` and `maximum-scale` entirely. If the reason was iOS zooming into form fields, the fix is to set those fields to 16px or larger, which is what triggers the behaviour.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks that viewport doesn't disable user zoom
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Never disable user zoom with maximum-scale=1, user-scalable=no, or user-scalable=0. Users with visual impairments need to zoom. This is an accessibility violation (WCAG 1.4.4). It also harms usability for all users. Remove these properties from your viewport meta tag.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["mobile/*"]
 enable = ["mobile/viewport-zoom"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [mobile/viewport](/rules/mobile/viewport): the same tag, checked for the properties it should have.
+- [mobile/font-size](/rules/mobile/font-size): the small form fields that motivate disabling zoom.
+- [a11y/zoom-disabled](/rules/a11y/zoom-disabled): the accessibility rule covering the same defect.
+- [mobile/tap-targets](/rules/mobile/tap-targets): the other mobile accessibility measurement.
+
+Mobile findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Understanding resize text, WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
+- [Viewport meta element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Viewport_meta_element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Mobile section of the report. Each page is reported with the zoom-blocking properties found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Mobile section looks like on a real site.
+  </Card>
+</CardGroup>

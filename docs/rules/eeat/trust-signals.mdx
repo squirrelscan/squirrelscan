@@ -27,6 +27,8 @@ Both tests are coarse. Security and payment badges are not detected, certificati
 
 Publish real reviews with names and dates, and mark up the aggregate rating so it is machine-readable. Put the strongest proof where the decision happens: the product page, the pricing page, the checkout.
 
+Note that this example alone will not satisfy the rule. The parser collects top-level and `@graph` node types, so an `AggregateRating` nested inside a `Product` is recorded as `Product`. Detection needs a `Review` or `AggregateRating` node of its own, or a URL matching the testimonial patterns.
+
 Do not mark up ratings you cannot back with visible reviews on the page. Google's review snippet guidelines require the rating to be about the page's own subject and visible to the reader.
 
 | | |

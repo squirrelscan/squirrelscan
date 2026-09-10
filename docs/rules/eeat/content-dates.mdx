@@ -5,7 +5,7 @@ description: "Undated content leaves a reader guessing whether it is current. sq
 
 ## What content dates do
 
-A published date tells a reader when something was written; a modified date tells them whether it has been kept up. Both can come from `Article` structured data or from visible markup in the entry header.
+A published date tells a reader when something was published, which is not always when it was written; a modified date tells them whether it has been kept up. Both can come from `Article` structured data or from visible markup in the entry header.
 
 They matter where age changes the answer. On a tutorial for a tool that ships every month, a 2019 date is the most useful thing on the page. On a page about something that has not changed in a century, it is noise, which is why this rule is gated to content-publishing sites.
 
@@ -17,8 +17,8 @@ Dates are read from any flattened JSON-LD node carrying `datePublished` or `date
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - Info when no article content was detected. Message: `No article content detected for date analysis`.
-- `date-published` passes at 80% coverage or above. Message: `95% of content has datePublished`. It warns below that, with `Only 40% of content has datePublished` or `No content pages have datePublished`, and `Add dates to Article schema` as the value. Severity warning, weight 4.
-- `date-modified` passes at 50% or above. Message: `70% of content has dateModified`. It reports info below that, with `20% of content has dateModified` and `Add dateModified to show freshness` as the value.
+- `date-published` passes when the coverage percentage, rounded to a whole number, is 80 or above. Message: `95% of content has datePublished`. It warns below that, with `Only 40% of content has datePublished` or `No content pages have datePublished`, and `Add dates to Article schema` as the value. Severity warning, weight 4.
+- `date-modified` passes when its rounded percentage is 50 or above. Message: `70% of content has dateModified`. It reports info below that, with `20% of content has dateModified` and `Add dateModified to show freshness` as the value.
 
 Flattening the JSON-LD matters here: a top-level-only read misses every date on a site whose SEO plugin emits an `@graph`.
 

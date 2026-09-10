@@ -13,14 +13,14 @@ This rule does not judge the content. It reports which YMYL categories appear on
 
 ## What squirrel checks
 
-The rule is site-wide. It scans each page's text and URL path for keywords in three groups and counts the pages matching each. It emits up to two checks:
+The rule is site-wide. It searches each page's title, meta description and URL pathname for keywords in three groups, case-insensitively, and counts the pages matching each. The body copy is not searched. It emits up to two checks:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - `ymyl-content` reports info when any category matched. Message: `YMYL content detected - apply higher E-E-A-T standards`, listing what was found as `Health (14 pages)`, `Finance (3 pages)` and `Legal (1 pages)`.
 - `ymyl-requirements` reports info alongside it. Message: `YMYL content should have expert authors, disclaimers, and citations`.
 - `ymyl-detection` passes when nothing matched. Message: `No obvious YMYL content detected`.
 
-The three keyword groups cover health terms such as `symptoms`, `treatment`, `medication` and `surgery`; finance terms such as `investment`, `mortgage`, `tax` and `crypto`; and legal terms such as `lawyer`, `lawsuit` and `custody`. A keyword anywhere in the page text or the path is a match, so an unrelated page mentioning `insurance` in a sentence is counted. Read the counts as a prompt, not a classification. Severity info, weight 5.
+The three keyword groups cover health terms such as `symptoms`, `treatment`, `medication` and `surgery`; finance terms such as `investment`, `mortgage`, `tax` and `crypto`; and legal terms such as `lawyer`, `lawsuit` and `custody`. A keyword anywhere in the title, the description or the path is a match, so a page titled around an unrelated use of `credit` is counted. Read the counts as a prompt, not a classification. Severity info, weight 5.
 
 Several other E-E-A-T rules are gated on the audit's own site classification, which is a separate mechanism from this rule's keyword scan.
 

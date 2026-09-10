@@ -17,9 +17,9 @@ An author is found from the parser's extracted author, from any flattened JSON-L
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - Info when no content pages were detected. Message: `No content pages detected for author analysis`.
-- Pass at 80% coverage or above. Message: `92% of content pages have author attribution`, with `46/50 pages` as the value. Severity warning, weight 5.
-- Info from 50%. Message: `64% of content pages have author attribution`, with `Consider adding authors to more content` as the value.
-- Warn below 50%. Message: `Only 20% of content pages have author attribution`, or `No content pages have author attribution` when none do.
+- Pass when the coverage percentage, rounded to a whole number, is 80 or above. Message: `92% of content pages have author attribution`, with `46/50 pages` as the value. Severity warning, weight 5.
+- Info from 50. Message: `64% of content pages have author attribution`, with `Consider adding authors to more content` as the value.
+- Warn below 50. Message: `Only 20% of content pages have author attribution`, or `No content pages have author attribution` when none do.
 
 The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider, an education site or a nonprofit. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
 

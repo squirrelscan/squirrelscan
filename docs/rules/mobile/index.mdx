@@ -3,7 +3,7 @@ title: "Mobile"
 description: "Mobile-friendliness and responsive design"
 ---
 
-Mobile-friendliness and responsive design
+Mobile rules check whether a page works on a phone: the viewport tag that decides how it is laid out, whether zoom is still available, whether text and tap targets are large enough, and whether anything overflows the screen. Most of them read static markup, so they see inline styles and not the stylesheet, and several report a count as context rather than a measurement. Treat them as a list of things to look at in a narrow browser window.
 
 ## Rules
 
@@ -34,3 +34,5 @@ Mobile-friendliness and responsive design
 [rules]
 disable = ["mobile/*"]
 ```
+
+Every audit reports Mobile findings next to the performance, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.

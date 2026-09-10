@@ -1,9 +1,33 @@
 ---
-title: "Social Profiles"
-description: "Checks for links to social media profiles"
+title: "Social profile links: which platforms a page links to"
+description: "Linking your official accounts confirms which ones are yours. squirrel detects profile links and cross-checks the accounts the audit knows about."
 ---
 
-Checks for links to social media profiles
+## What a profile link does
+
+A link from your site to your social accounts is the simplest confirmation that those accounts are yours. Marked up as `sameAs` on an `Organization` node, it is also the machine-readable form, which is what feeds knowledge panels and entity matching.
+
+The reverse matters too. An account that exists and is linked from nowhere on the site cannot be verified as yours by anything reading the page, which is what the second half of this rule looks for.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `a[href]`, matching each href against seven platform patterns: Facebook, Twitter and X, Instagram, LinkedIn, YouTube, TikTok and Pinterest. It emits up to two checks:
+
+- `social-profiles` passes when any platform matched. Message: `3 social platform(s) linked`, listing the platform names.
+- `social-profiles` reports info when none did. Message: `No social media profile links found`, with `Consider adding to footer` as the value.
+- `social-profiles-missing` warns when the audit's site metadata knows about official accounts the page does not link. Message: `2 known social account(s) not linked on this page`, with `Link your official social profiles (Organization sameAs)` as the value and each missing account listed by URL and platform.
+
+The second check needs site metadata that identified official accounts. Without it, from an offline run or one where nothing was detected, it never fires. Severity for the rule is info, weight 2.
+
+The rule only runs when the audit classified the site as ecommerce, a marketplace, corporate, a small local business, an agency, SaaS, news, a blog, a nonprofit or media streaming. A classification below medium confidence, or an audit with no site metadata at all, runs it anyway.
+
+## How to fix it
+
+```json
+{"@context":"https://schema.org","@type":"Organization","name":"Acme","url":"https://example.com","sameAs":["https://www.linkedin.com/company/acme","https://x.com/acme"]}
+```
+
+Link the accounts from the footer and list them in `sameAs` on the `Organization` node. Keep the two lists in agreement: an account in `sameAs` that is not linked anywhere on the site is the case the second check reports.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for links to social media profiles
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-Link to your social media profiles from your website. Include in footer or about page. Use Organization schema with sameAs property to list all official social profiles. This helps Google's Knowledge Panel and verifies your brand across platforms. Ensure links open in new tabs.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["social/*"]
 enable = ["social/social-profiles"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/organization](/rules/schema/organization): the node that carries the sameAs list.
+- [social/share-buttons](/rules/social/share-buttons): links out to platforms rather than to your accounts.
+- [eeat/trust-signals](/rules/eeat/trust-signals): the other things a visitor checks.
+- [security/new-tab](/rules/security/new-tab): the rel attributes those outbound links should carry.
+
+Social Media findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [sameAs, Schema.org](https://schema.org/sameAs)
+- [Organization logo structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/logo)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Social Media section of the report. Each page is reported with the platforms it links and any known accounts it misses. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Social Media section looks like on a real site.
+  </Card>
+</CardGroup>

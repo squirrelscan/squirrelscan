@@ -16,8 +16,8 @@ The rule is site-wide. It finds the privacy page by a known multilingual slug, o
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - `privacy-policy` warns when no page is found. Message: `No Privacy Policy page found`, with `Create /privacy-policy page` as the value. No further checks run. Severity warning, weight 5.
 - `privacy-policy` passes when one is found. Message: `Privacy Policy page exists`, with the URL as the value.
-- `privacy-linked` passes at 80% coverage or above. Message: `Privacy policy linked from 94% of pages`.
-- `privacy-linked` reports info from 50%. Message: `Privacy policy linked from 62% of pages`, with `Consider adding to all page footers` as the value.
+- `privacy-linked` passes when the coverage percentage, rounded to a whole number, is 80 or above. Message: `Privacy policy linked from 94% of pages`.
+- `privacy-linked` reports info from 50. Message: `Privacy policy linked from 62% of pages`, with `Consider adding to all page footers` as the value.
 - `privacy-linked` warns below 50%. Message: `Privacy policy only linked from 12% of pages`, with `Add privacy link to footer on all pages` as the value.
 
 Coverage is measured by matching the link href against the known privacy slugs, not by anchor text. `legal/privacy-policy` is the rule that also reads anchor text.
@@ -30,7 +30,7 @@ Coverage is measured by matching the link href against the known privacy slugs, 
 
 Put the link in the footer component so every page inherits it. Cover what you collect, why, who you share it with, how long you keep it, and how someone exercises their rights.
 
-Update it when the practices change, not on a schedule. A policy that describes vendors you stopped using is worse than useless.
+Update it when the practices change, and check what periodic requirement applies to you: a business covered by the CCPA has to refresh the specified disclosures at least every twelve months. A policy that describes vendors you stopped using is worse than useless.
 
 | | |
 |---|---|

@@ -17,7 +17,7 @@ The rule is site-wide. It walks the external links on every crawled page and cou
 - Pass when any authoritative link was found. Message: `24 authoritative citation(s) found`, with `Across 9 page(s)` as the value.
 - Info when none was. Message: `No authoritative citations detected`, with `Consider citing .gov, .edu, or industry sources` as the value.
 
-The list has fifteen entries: `gov`, `edu`, `who.int`, `cdc.gov`, `nih.gov`, `fda.gov`, `mayo.clinic`, `webmd`, `healthline`, `wikipedia.org`, `reuters.com`, `bbc.com`, `nytimes.com`, `wsj.com`. Matching is a substring test on the hostname, so `gov` and `edu` catch any `.gov` or `.edu` domain and also anything else containing those letters in its hostname. The list is US and English-centric, and a site citing national statistics offices or journals outside it will report zero. Severity info, weight 3.
+The list has fourteen entries: `gov`, `edu`, `who.int`, `cdc.gov`, `nih.gov`, `fda.gov`, `mayo.clinic`, `webmd`, `healthline`, `wikipedia.org`, `reuters.com`, `bbc.com`, `nytimes.com`, `wsj.com`. Matching is a substring test on the hostname, so `gov` and `edu` catch any `.gov` or `.edu` domain and also anything else containing those letters in its hostname. The list is US and English-centric, and a site citing national statistics offices or journals outside it will report zero. Severity info, weight 3.
 
 The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider, an education site or a nonprofit. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
 

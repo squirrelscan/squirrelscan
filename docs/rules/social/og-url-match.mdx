@@ -1,9 +1,33 @@
 ---
-title: "OG URL Match"
-description: "Checks that og:url matches canonical URL"
+title: "og:url versus canonical: why they should be the same URL"
+description: "When og:url and the canonical disagree, share counts split across two addresses. squirrel normalises both and compares them."
 ---
 
-Checks that og:url matches canonical URL
+## What og:url is for
+
+`og:url` is the canonical address of the page as far as social platforms are concerned. It is what they use to deduplicate shares, so every share of the page accumulates against one identifier however the sharer arrived.
+
+The `<link rel="canonical">` tag does the same job for search engines. When the two disagree, usually over `www`, the scheme or a trailing slash, the page has two canonical identities and the share count splits between them.
+
+## What squirrel checks
+
+The rule runs on every crawled page and compares `meta[property="og:url"]` against `link[rel="canonical"]`. Both are resolved against the page URL and stripped of a trailing slash before comparison. It emits a single check named `og-url-match`:
+
+- Info when there is no `og:url`. Message: `No og:url tag found`.
+- Info when there is no canonical to compare against. Message: `No canonical to compare og:url against`.
+- Pass when the normalised values are equal. Message: `og:url matches canonical URL`.
+- Warn otherwise. Message: `og:url does not match canonical URL`, with the og value as the value and the canonical as the expected value. Severity warning, weight 3.
+
+Normalisation only removes a trailing slash. Everything else, including a query string, a fragment and a case difference in the path, is compared as-is.
+
+## How to fix it
+
+```html
+<link rel="canonical" href="https://example.com/guides/url-structure" />
+<meta property="og:url" content="https://example.com/guides/url-structure" />
+```
+
+Render both from the same value in the layout. That way a change to the canonical rule cannot leave `og:url` behind.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that og:url matches canonical URL
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## Solution
-
-og:url should match your canonical URL. Mismatches can cause social share stats to be fragmented across different URLs. Use the same URL normalization (https, www, trailing slash) as your canonical tag. Facebook uses og:url for share counting and deduplication.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["social/*"]
 enable = ["social/og-url-match"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): the canonical tag checked on its own.
+- [core/og-tags](/rules/core/og-tags): the rest of the Open Graph tags.
+- [url/trailing-slash](/rules/url/trailing-slash): the difference that most often causes the mismatch.
+- [social/og-image-size](/rules/social/og-image-size): the share image on the same card.
+
+Social Media findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The Open Graph protocol](https://ogp.me/)
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Social Media section of the report. Each mismatch is reported with both URLs. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Social Media section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,33 @@
 ---
-title: "Video Schema"
-description: "Checks for VideoObject schema on pages with video"
+title: "VideoObject schema: video on a page with no markup for it"
+description: "Without VideoObject markup a search engine cannot tell there is a video on the page. squirrel detects video elements and embeds, then checks the schema."
 ---
 
-Checks for VideoObject schema on pages with video
+## What VideoObject is
+
+`VideoObject` is the schema.org type describing a video: its name, description, thumbnail and upload date, plus optional duration, content URL and embed URL. Google requires `name`, `description`, `thumbnailUrl` and `uploadDate` for a video to be eligible for its video features.
+
+Without it, a search engine sees an iframe or a `<video>` element and has no title, no description and no thumbnail to work with. The video may still be found, but it cannot appear as a video result.
+
+## What squirrel checks
+
+The rule runs on every crawled page. A page counts as having video when it contains any `<video>` element, or an `iframe` whose `src` contains `youtube` or `vimeo`. It emits a single check named `video-schema`:
+
+- Info when no video was detected. Message: `No video content detected`.
+- Pass when the page's schema types include `VideoObject`. Message: `VideoObject schema present for video content`.
+- Warn otherwise. Message: `Video content without VideoObject schema`, with `Add schema for video rich results` as the value. Severity warning, weight 5.
+
+Detection covers only YouTube and Vimeo iframes, so a video embedded from another host is not counted. The schema check reads the parser's list of schema types, which covers top-level and `@graph` nodes; it does not validate that the required properties are present.
+
+## How to fix it
+
+```json
+{"@context":"https://schema.org","@type":"VideoObject","name":"How to structure URLs","description":"…","thumbnailUrl":"https://example.com/thumb.jpg","uploadDate":"2026-03-12T09:00:00+11:00","duration":"PT6M14S","embedUrl":"https://www.youtube.com/embed/…"}
+```
+
+Emit the node from the same data that renders the player, so the title and description cannot drift from what the page shows. `uploadDate` needs a timezone offset, and `duration` is an ISO 8601 duration.
+
+Check the result in Google's Rich Results Test. This rule confirms the type exists, not that the required properties are there.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for VideoObject schema on pages with video
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Add VideoObject schema to pages with video content for rich results. Required: name, description, thumbnailUrl, uploadDate. Recommended: duration, contentUrl, embedUrl. Schema enables video carousels and previews in search results. Test with Google's Rich Results Test.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["video/*"]
 enable = ["video/video-schema"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/video](/rules/schema/video): the structured data checks over the same node.
+- [video/video-thumbnail](/rules/video/video-thumbnail): the poster image, and the thumbnailUrl the schema needs.
+- [video/video-accessible](/rules/video/video-accessible): captions on the same videos.
+- [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict): rich markup on a page that is not indexable.
+
+Video findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Video structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/video)
+- [VideoObject, Schema.org](https://schema.org/VideoObject)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Video section of the report. Each page with video is reported with whether VideoObject markup is present. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Video section looks like on a real site.
+  </Card>
+</CardGroup>
