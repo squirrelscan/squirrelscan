@@ -17,8 +17,44 @@ env:
   NO_TELEMETRY: "1"
 
 jobs:
+  # Docs-only changes (everything under docs/) skip the code jobs. This is
+  # job-level gating on purpose, NOT `on.push.paths`: a filtered-out push
+  # produces no CI run at all, so every ruleset-required check would sit at
+  # "Expected" forever and the PR could never merge. A skipped job satisfies a
+  # required check; an absent one does not.
+  changes:
+    name: Classify changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: classify
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -eu
+          # Unknown base (first push, force-push, empty sha) → run everything.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          changed=$(git diff --name-only "$BASE" HEAD)
+          echo "$changed"
+          if [ -z "$changed" ] || echo "$changed" | grep -qv '^docs/'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs-only change: skipping code jobs"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   quality:
     name: Format, lint, and typecheck
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -167,9 +203,12 @@ jobs:
       - uses: ./.github/actions/setup-bun
       - run: bun run test:release
 
+  # Runs on every change (docs cross-reference rule ids and CLI flags), and is
+  # the only build job a docs-only change triggers. Deliberately not behind
+  # `quality`: nothing in docs:check depends on the code lint passing.
   docs:
     name: Docs check and build
-    needs: quality
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -190,6 +229,8 @@ jobs:
 
   psl-freshness:
     name: Public suffix data freshness
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     continue-on-error: true
