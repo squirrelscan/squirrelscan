@@ -5,18 +5,18 @@ description: "One phone number or address written several ways across a site. sq
 
 ## What NAP consistency is
 
-NAP is the name, address and phone number a business publishes. Directories, maps and search engines match a business across sources by comparing those three strings, so a number written `(415) 555-0142` in the header and `+1 415 555 0142` in the footer reads as two contact points rather than one. The same applies to `Suite 400` against `Ste. 400` in an address.
+NAP is the name, address and phone number a business publishes. Anything that reads those values off the page and compares them as strings, from a directory importer to an agent filling a contact form, sees `(415) 555-0142` in the header and `+1 415 555 0142` in the footer as two different values. `Suite 400` against `Ste. 400` in an address is the same problem.
 
-Consistency matters for a business with a physical location or a service area. It does not matter for a global product site with no address to publish, and a genuine multi-location business has several correct numbers by design, which is why this rule needs a clear majority before it calls anything a deviation.
+One written form per value removes the ambiguity. It matters for a business with a physical location or a service area, and not at all for a product site with no address to publish. A genuine multi-location business has several correct numbers by design, which is why this rule needs a clear majority before it calls anything a deviation.
 
 ## What squirrel checks
 
-The rule runs once per crawl, over every page, and emits four checks. It reads each page's first phone number as that page's primary contact number, so a branch list further down the page does not make the site look inconsistent.
+The rule runs once per crawl, over every page, and emits up to four checks. Three always appear; `contact-info` appears only when it passes. It reads each page's first phone number as that page's primary contact number, so a branch list further down the page does not make the site look inconsistent.
 
-- `local-business-schema`: passes when any page carries a business schema type, with the message `LocalBusiness/Organization schema found` and the business name as the value. Otherwise it reports at info status with the message `No LocalBusiness schema found` and the value `Add schema if this is a local business`.
-- `contact-info`: passes with the message `Contact page has contact information` when the first URL whose path contains `/contact` carries a `tel:` or `mailto:` link. The check is only emitted on that pass, so it never appears as a failure.
+- `local-business-schema`: passes when any page carries a JSON-LD node whose `@type` is `LocalBusiness`, `Organization`, `Restaurant` or `Store`, with the message `LocalBusiness/Organization schema found`. The value is the business name taken from the first `LocalBusiness` or `Organization` node, and is absent when the markup does not name one. Otherwise it reports at info status with the message `No LocalBusiness schema found` and the value `Add schema if this is a local business`.
+- `contact-info`: passes with the message `Contact page has contact information` when the first crawled URL whose path contains `/contact`, matched case-insensitively, carries a `tel:` or `mailto:` link. The check is emitted only on that pass, so it never appears as a failure.
 - `phone-consistency`: judges the primary phone number across the crawl. A different number on some pages fails with the message `N page(s) show a different phone number to the site norm "..."`. One number written several ways warns with the message `The same phone number is formatted N different ways across M pages`. Agreement with no format drift passes with `The same phone number is used consistently across N pages`.
-- `address-consistency`: the same three outcomes for the postal address, with `postal address` in place of `phone number` in every message.
+- `address-consistency`: the same outcomes for the postal address. Both checks share one message builder, so every message below is the phone wording with `postal address` substituted for `phone number`.
 
 Both consistency checks skip rather than guess when the evidence is thin. Fewer than 10 pages declaring the signal skips with `Only N page(s) declare a phone number; 10 needed to judge consistency`. No page declaring it skips with `No phone number declared on any page`. When the most common value appears on less than 70% of the samples, the site is treated as genuinely varied and the check skips with `No dominant phone number across N pages (the most common appears on X%), so the site is too varied to judge`. A crawl with no pages emits a single `nap-consistency` check, skipped, with `No pages available for analysis`.
 

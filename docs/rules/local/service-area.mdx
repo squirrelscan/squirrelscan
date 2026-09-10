@@ -5,9 +5,9 @@ description: "A local business with no /locations or /service-areas page. squirr
 
 ## What a service area page is
 
-A service area page is a page about one place a business serves, usually one per city or neighbourhood, sitting under a hub such as `/locations` or `/service-areas`. The hub gives search engines and readers a single index of coverage, and each child page carries the address, hours and proof for that area.
+A service area page is a page about one place a business serves, usually one per city or neighbourhood. Sites that publish them normally put an index at a path such as `/locations` or `/service-areas` and hang the individual pages under it. That index is what this rule looks for.
 
-They matter for a business that travels to customers, such as a plumber, a mover or a clinic with several branches. They do nothing for a product sold everywhere, and near-duplicate pages built by swapping a city name into one template are a liability rather than a gain. One page per place you can write about honestly is the working limit.
+They apply to a business that travels to customers, such as a plumber, a mover or a clinic with several branches. The same coverage is expressed in markup with `areaServed` on the business node, which squirrel's [schema/local-business](/rules/schema/local-business) rule accepts in place of a street address.
 
 ## What squirrel checks
 

@@ -7,11 +7,11 @@ description: "Location pages carrying no geo.region, geo.placename, geo.position
 
 `geo.placename` is a `<meta>` tag naming the city or locality a page is about. It travels with three others: `geo.region` holds an ISO 3166-2 country and subdivision code, `geo.position` holds `latitude;longitude`, and `ICBM` holds the same coordinates comma separated. None of the four is a web standard. They were proposed in an IETF Internet-Draft that expired in 2008 and never became an RFC.
 
-Google says it "ignores locational `meta` tags (like `geo.position` or `distribution`) or geotargeting HTML attributes", so adding them will not move a page in local search. They still cost nothing to serve and stay readable by directory crawlers and in-house tools, and keeping them in step with [LocalBusiness structured data](/rules/schema/local-business) catches a stale city name. Treat them as a supplement to schema, never a replacement.
+Google says it "ignores locational `meta` tags (like `geo.position` or `distribution`) or geotargeting HTML attributes", so adding them will not move a page in local search. They are still valid HTML and cost nothing to serve, and keeping them in step with [LocalBusiness structured data](/rules/schema/local-business) means a wrong city name shows up in two places instead of one. Treat them as a supplement to schema, never a replacement.
 
 ## What squirrel checks
 
-The rule runs on every crawled page and emits one check:
+The rule runs on every crawled page whose HTML parsed into a document, and emits one check. A page with no parsed document emits nothing at all.
 
 - `geo-meta`: looks for `meta[name="geo.region"]`, `meta[name="geo.placename"]`, `meta[name="geo.position"]` and `meta[name="ICBM"]`. One or more present passes, with the message `N geo meta tag(s) found` and the names it found listed as items. None present reports at info status with the message `No geo meta tags found` and the value `Consider adding for local businesses`. Severity info.
 
