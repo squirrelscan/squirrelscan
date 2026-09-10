@@ -1,9 +1,33 @@
 ---
-title: "Lazy Loading Above Fold"
-description: "Detects lazy loading on likely above-fold images"
+title: "loading=lazy on a hero image: the LCP delay squirrel finds"
+description: "An above-fold image marked loading=lazy, which delays the paint that matters. squirrel checks the first three eligible images."
 ---
 
-Detects lazy loading on likely above-fold images
+## What lazy loading does
+
+`loading="lazy"` tells the browser to hold the request until the element approaches the viewport. For an image below the fold that is exactly right: the bytes are never fetched if the visitor does not scroll.
+
+For an image in the first screen it is the wrong instruction. The browser has to complete layout before it knows the element is visible, so the fetch starts later than it would have with no attribute at all. When that image is the Largest Contentful Paint element, the delay lands directly on the metric.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It walks `<img>` elements in document order and considers the first three that could plausibly be above the fold. It emits one check:
+
+- `lazy-above-fold`: warns with the message `N above-fold image(s) with lazy loading` and lists each `src`. Otherwise it passes with `No lazy loading on above-fold images`.
+
+Three kinds of image are skipped without using up one of the three slots, so a genuinely visible image further down the markup still gets judged. An image is skipped when an ancestor is `aria-hidden="true"`, `hidden`, `inert` or carries an inline `display: none`; when it sits in an inactive carousel slide; or when it is inside a `<footer>`.
+
+A slide counts as inactive when its group has at least two slides and it is not the active one. Active is read from an explicit marker where one exists, meaning `.active`, `.is-active`, `.swiper-slide-active`, `.slick-active`, `.splide__slide--active`, `aria-current="true"` or `aria-hidden="false"`, and falls back to the first slide in DOM order only when no slide in the group is marked. Images whose `src` is a `data:` URI or contains `pixel` or `spacer` are skipped too, also without using a slot. A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+```html
+<img src="/hero.jpg" width="1200" height="630" fetchpriority="high" alt="" />
+```
+
+Leave the hero with no `loading` attribute and add `fetchpriority="high"`. Keep `loading="lazy"` for everything below the fold, which is what [images/offscreen-lazy](/rules/images/offscreen-lazy) checks.
+
+The common false positive is a page whose first three images are all genuinely below the fold, for example under a full-height banner that is a CSS background. DOM order is the only fold signal a static read has, so those images are judged as if they were visible.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Detects lazy loading on likely above-fold images
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Don't use loading='lazy' on images that appear above the fold (visible without scrolling). Lazy loading these images delays LCP because the browser waits for layout before fetching. For hero images and LCP candidates: 1) Remove loading='lazy'. 2) Add fetchpriority='high'. 3) Consider preloading with `<link rel='preload' as='image'>`. Only use lazy loading for below-fold images.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["perf/*"]
 enable = ["perf/lazy-above-fold"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/lcp-fetchpriority](/rules/perf/lcp-fetchpriority): the attribute the hero should carry instead.
+- [perf/lcp-hints](/rules/perf/lcp-hints): whether that image is preloaded.
+- [images/offscreen-lazy](/rules/images/offscreen-lazy): below-fold images that should be lazy and are not.
+- [perf/carousel-hidden-eager](/rules/perf/carousel-hidden-eager): the opposite error inside a carousel.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Lazy loading, MDN](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Lazy_loading)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)
+- [The img element, HTML Standard](https://html.spec.whatwg.org/multipage/embedded-content.html#the-img-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each lazily loaded above-fold image is listed by URL. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

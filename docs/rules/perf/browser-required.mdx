@@ -1,9 +1,33 @@
 ---
-title: "Browser-Required Audits"
-description: "Lists performance audits that require browser execution"
+title: "Audits that need a browser: what a static crawl cannot see"
+description: "The runtime metrics no HTML analysis can produce. squirrel lists them so the gap in a static audit is explicit."
 ---
 
-Lists performance audits that require browser execution
+## What a static audit cannot measure
+
+Reading HTML tells you what a page declares. It cannot tell you what the page does once a browser executes it. Every Core Web Vital is a measurement of a real render: Largest Contentful Paint needs a paint, Cumulative Layout Shift needs elements moving, Interaction to Next Paint needs an interaction.
+
+The same applies to the main thread. How long the JavaScript takes to execute, whether any task blocks for over 50 milliseconds, and what the console logs are all runtime facts. The static rules in this category are hints about likely causes, not substitutes for the measurement.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check:
+
+- `browser-required-audits`, at info status with the message `18 audits require browser execution`, listing the first ten as items and recording the total in the details.
+
+The list is fixed and does not depend on the page. It covers the six Core Web Vitals and related paint metrics, four main-thread and execution measurements, three runtime behaviours including console errors, two network waterfall measurements, and three permission and API detections that only exist at runtime.
+
+This rule never fails and never warns. It exists so the boundary of a static audit is written down in the report rather than assumed.
+
+## How to fix it
+
+There is nothing to fix. Run a browser-based measurement alongside the audit when you need the numbers this rule lists:
+
+```bash
+squirrel audit https://example.com --render
+```
+
+A rendered audit executes the page, which is what [ax/content-without-js](/rules/ax/content-without-js) and the other render-backed rules need. Field data from real visitors, rather than a single lab run, is what tells you whether a Core Web Vital is actually failing for people.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Lists performance audits that require browser execution
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 1/10 |
-
-## Solution
-
-For complete performance analysis, run browser-based tools like Lighthouse, WebPageTest, or Chrome DevTools. These tools measure actual runtime metrics that cannot be determined through static HTML analysis alone.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["perf/*"]
 enable = ["perf/browser-required"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/lcp-hints](/rules/perf/lcp-hints): the static hints for the paint metric this rule says it cannot measure.
+- [perf/cls-hints](/rules/perf/cls-hints): the same for layout shift.
+- [perf/inp-hints](/rules/perf/inp-hints): the same for interaction.
+- [ax/content-without-js](/rules/ax/content-without-js): a rule that does use a real browser render.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Web Vitals, web.dev](https://web.dev/articles/vitals)
+- [Interaction to Next Paint, web.dev](https://web.dev/articles/inp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. The list appears once per page as an informational note. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

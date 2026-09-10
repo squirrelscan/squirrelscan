@@ -1,9 +1,37 @@
 ---
-title: "Critical Request Chains"
-description: "Identifies chains of dependent resources that delay rendering"
+title: "Critical request chains: the blocking head resources counted"
+description: "Blocking stylesheets and scripts in head, plus every CSS @import. squirrel counts each as a link in the chain before first paint."
 ---
 
-Identifies chains of dependent resources that delay rendering
+## What a critical request chain is
+
+A critical request chain is a sequence of requests that must complete in order before the page can render. The HTML arrives, the parser finds a stylesheet, the stylesheet arrives, and inside it an `@import` names another file that has to be fetched before anything can paint. Each link costs a full round trip, and round trips are the part of the load that a faster connection does not fix.
+
+Depth matters more than count. Four independent blocking resources fetch in parallel; four chained ones fetch one after another. `@import` is the worst offender because the browser cannot even discover the second URL until the first file is parsed.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check:
+
+- `critical-request-chains`, at info status with the message `No <head> element found` when the page has no head.
+- `critical-request-chains`, warning with the message `N critical request chain(s) found` and listing up to ten members as items, each written `CSS: <href>` or `JS: <src>`. The details record the blocking CSS count, the blocking JS count, the import count, the number of preloads and any overflow.
+- `critical-request-chains`, passing with the message `No critical request chains detected`, with the preload count in the details.
+
+Three things are counted, all from `<head>` except the imports. A blocking stylesheet is a `link[rel="stylesheet"]` that is neither `media="print"` nor `disabled`. A blocking script is a `script[src]` with none of `async`, `defer` or `type="module"`. Every `@import` in every `<style>` element on the page adds one entry, reported as a single item naming the count.
+
+The count is a count of blocking resources rather than a measured chain depth, since a static read of the HTML cannot see what a stylesheet fetches once parsed.
+
+## How to fix it
+
+```html
+<style>/* styles the first screen needs */</style>
+<link rel="stylesheet" href="/rest.css" media="print" onload="this.media='all'" />
+<script src="/app.js" defer></script>
+```
+
+Replace every `@import` with a `<link>`, which lets the browser fetch in parallel instead of serially. Add `defer` to scripts and inline the styles the first screen needs.
+
+The common false positive is `type="module"`, which this rule treats as non-blocking. A module script is deferred by default, so that is correct for parsing, but its dependency graph is itself a chain the rule cannot see.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Identifies chains of dependent resources that delay rendering
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Critical request chains are sequences of dependent network requests that must complete before the page can render. Reduce chain depth by: 1) Inlining critical CSS instead of linking external files. 2) Adding async or defer to non-critical scripts. 3) Avoiding CSS @import; use `<link>` tags instead. 4) Using `<link rel='preload'>` for critical resources. 5) Reducing the number of render-blocking resources in `<head>`.
 
 ## Enable / disable
 
@@ -40,3 +64,31 @@ disable = ["perf/*"]
 enable = ["perf/critical-request-chains"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/render-blocking](/rules/perf/render-blocking): the same resources counted with a different threshold.
+- [perf/font-delivery](/rules/perf/font-delivery): the third-party font stylesheet that often heads a chain.
+- [perf/preconnect](/rules/perf/preconnect): connection setup for the origins in that chain.
+- [perf/lcp-hints](/rules/perf/lcp-hints): the paint these requests are delaying.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Largest Contentful Paint, web.dev](https://web.dev/articles/lcp)
+- [@import, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@import)
+- [The link element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-link-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every blocking resource is listed with its URL. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

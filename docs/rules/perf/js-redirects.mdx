@@ -1,9 +1,35 @@
 ---
-title: "JavaScript Redirects"
-description: "Detects JavaScript resources that return 3XX redirects"
+title: "Script URL redirects: a 3xx in front of every script load"
+description: "JavaScript files that answer with a 3xx before serving. squirrel reports every one with the pages that reference it."
 ---
 
-Detects JavaScript resources that return 3XX redirects
+## Why a redirecting script costs
+
+A script that answers 301 or 302 costs a full extra round trip before a byte of code moves. On a blocking script that delay is added to first paint, and it is paid on every visit that is not served from cache.
+
+The causes are all historical: a CDN that changed its URL shape, a versioned path that now points at `latest`, a domain migration where the old host still answers with a redirect. The `src` attribute in the page is simply out of date.
+
+## What squirrel checks
+
+The rule runs once per crawl over the script resources the crawl fetched. It emits one check named `js-redirects`:
+
+- Skipped with the message `No JavaScript resources available for analysis` when the crawl collected none.
+- Warning with the message `N JavaScript resource(s) redirect`, one item per script carrying its URL, its status as the label, the pages that reference it, and its content type. The check's value holds the first five as `<path> (<status>)` lines, with `+N more` when there are others.
+- Passing with the message `No JavaScript resources are redirecting`.
+
+A script counts when its recorded status is 300 to 399. The rule reports the redirect rather than following it, so the destination is not shown; the fix is to read the `Location` header once and paste the final URL into the page.
+
+## How to fix it
+
+Point the tag at the URL the redirect resolves to:
+
+```html
+<script src="https://cdn.example.com/v2/widget.js" defer></script>
+```
+
+`curl -sIL https://old.example.com/widget.js | grep -i location` gives the destination. For a third-party script, check the vendor's current documentation rather than following the chain, since they usually publish the URL they want you on.
+
+There is no common false positive. A 3xx on a script is unambiguous, though a redirect that exists to pin a version deliberately is a trade the site may want to keep.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Detects JavaScript resources that return 3XX redirects
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-JavaScript files that redirect add unnecessary latency and increase page load time. Update script src attributes to point directly to the final URL. Common causes: CDN URL changes, versioned script paths, or domain migrations. Check if third-party scripts have updated their recommended URLs.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["perf/*"]
 enable = ["perf/js-redirects"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/critical-request-chains](/rules/perf/critical-request-chains): the chain a redirect adds a link to.
+- [links/redirect-chains](/rules/links/redirect-chains): the same problem on page URLs rather than assets.
+- [crawl/redirect-chain](/rules/crawl/redirect-chain): redirect chains seen from the crawl side.
+- [perf/js-file-size](/rules/perf/js-file-size): the scripts those URLs eventually serve.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Redirections in HTTP, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Redirections)
+- [The script element, HTML Standard](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each redirecting script is listed with its status and the pages that load it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

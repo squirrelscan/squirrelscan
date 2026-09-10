@@ -1,9 +1,37 @@
 ---
-title: "JS Libraries"
-description: "Detects JavaScript libraries and checks for known vulnerabilities"
+title: "Outdated jQuery and friends: the libraries squirrel detects"
+description: "Twenty-two known JavaScript libraries detected by URL, bundled code or markup, with a version check against known CVEs."
 ---
 
-Detects JavaScript libraries and checks for known vulnerabilities
+## Why the library version matters
+
+A client-side library runs with the same privileges as your own code. A known cross-site scripting hole in an old version of jQuery or Bootstrap is exploitable from the page it is loaded on, and the fix is almost always a version bump rather than a rewrite.
+
+Version is also the number that tells you whether a dependency is being maintained at all. A library detected at a release from several years ago usually means nothing has updated it since it was added, which is worth knowing separately from any specific advisory.
+
+## What squirrel checks
+
+The rule runs on every crawled page and tries to detect twenty-two libraries: jQuery, React, Vue.js, Angular, Svelte, Next.js, Nuxt, Bootstrap, Tailwind CSS, Lodash, Underscore.js, Moment.js, Day.js, Axios, Redux, D3.js, Chart.js, Three.js, GSAP, Prototype.js, MooTools and YUI. It emits one or two checks:
+
+- `js-libraries-vulnerable`: fails with the message `N library/libraries with known vulnerabilities`, listing each as `<name> v<version>` with the advisory description as the label and the CVE in the metadata.
+- `js-libraries-detected`: reports the message `N JavaScript library/libraries detected`, at warn status when something vulnerable was found and at info status otherwise. Each item is `<name> v<version>`, labelled either `vulnerable` or with how it was detected.
+- `js-libraries`: reports at info status with the message `No common JavaScript libraries detected`.
+
+Detection is tried in three passes and stops at the first hit per library. First the `<script src>` URLs, reported as `script URL`. Then the inline and bundled script content, reported as `inline code`. Then the page HTML itself, reported as `HTML markers`, which is how a framework attribute such as Angular's version marker is found. A version is extracted where a pattern in the same pass yields one; without a version no vulnerability check runs.
+
+Only five of the twenty-two carry advisory data: jQuery, Bootstrap, Lodash, Prototype.js and YUI. A version is flagged when it is at or below the advisory's maximum affected version. A page with no parsed document, or no HTML, emits nothing at all.
+
+## How to fix it
+
+Update the dependency. For a library loaded from a CDN that is one URL:
+
+```html
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+```
+
+For one that comes through a bundler, `npm audit` names the advisory and the version that fixes it, and a lockfile update ships it.
+
+The common false positive is a version this rule could not read. Detection by inline code or HTML markers often finds the library without a version, in which case nothing is checked against the advisories and the library is reported as present only. Absence from the vulnerable list is not evidence that the version is safe.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Detects JavaScript libraries and checks for known vulnerabilities
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Keep JavaScript libraries updated to their latest versions. Outdated libraries may contain security vulnerabilities that attackers can exploit. Consider replacing large libraries like jQuery with modern vanilla JavaScript or smaller alternatives. Use npm audit or Snyk to monitor dependencies for vulnerabilities.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["perf/*"]
 enable = ["perf/js-libraries"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/duplicate-js](/rules/perf/duplicate-js): the same library loaded twice, sometimes at two versions.
+- [perf/legacy-js](/rules/perf/legacy-js): polyfills that often arrive with an old library.
+- [security/sri](/rules/security/sri): subresource integrity on the CDN URLs those libraries come from.
+- [perf/js-file-size](/rules/perf/js-file-size): the weight those libraries add.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Vulnerable and outdated components, OWASP Top 10](https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/)
+- [The script element, HTML Standard](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each detected library is listed with its version and how it was found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

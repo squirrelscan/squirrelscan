@@ -1,9 +1,37 @@
 ---
-title: "Unminified JavaScript"
-description: "Detects unminified JavaScript that could be optimized"
+title: "Unminified JavaScript: the signals squirrel reads in a file"
+description: "Scripts that read as source rather than build output. squirrel analyses the content it has and judges the rest by filename."
 ---
 
-Detects unminified JavaScript that could be optimized
+## What minification removes
+
+Minifying JavaScript strips whitespace and comments and shortens local identifiers, which is where most of the saving comes from: a bundle full of descriptive variable names compresses well but still parses every one of those characters.
+
+Every current bundler does this in production mode. An unminified bundle in production is normally a build that ran in development mode, or a script that was written by hand and never went through the build at all.
+
+## What squirrel checks
+
+The rule runs on every crawled page and looks at three sources. It emits one to three checks:
+
+- `unminified-js`: warns with the message `N JavaScript file(s) appear unminified`, listing up to five sources with their size and estimated saving. The details carry the total saving and how many more there were.
+- `potentially-unminified-js`: reports at info status with the message `N script(s) may not be minified`, listing up to five, with the note that these are files whose name has no `.min` in it.
+- `minified-js`: passes with the message `JavaScript appears to be minified` when neither list has anything in it.
+
+Content is analysed when the rule has it: inline `<script>` blocks over 2,048 characters, excluding any whose type mentions `json` or `template`, and external scripts the crawl fetched the body of. A leading `/*! ... */` licence banner is stripped first, and anything under 200 characters after that is treated as minified. A file counts as unminified when any of these fires: more than 0.5% newlines, more than three comments, more than one long variable declaration per 500 characters, more than five long function names, indentation on more than one line per 200 characters, or more than 5% of the file in runs of repeated whitespace.
+
+A script the rule has no content for is judged by filename. It is suspected when the name contains none of `.min.`, `-min.` or `.prod.`, has no eight-character-or-longer hex hash, does not contain `chunk`, `bundle` or `vendor`, does not come from a URL containing `cdn`, `unpkg`, `jsdelivr` or `cloudflare`, and ends in `.js` or `.mjs`. A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+Run the production build:
+
+```bash
+vite build
+```
+
+For a script outside the build, `esbuild --minify` does the same job in one command.
+
+The common false positive is the filename half of the rule. A perfectly minified `app.js` is still reported at info status, because the rule read the name rather than the bytes. A content hash in the filename, which most bundlers add anyway, clears it.
 
 | | |
 |---|---|
@@ -13,31 +41,17 @@ Detects unminified JavaScript that could be optimized
 | **Severity** | warning |
 | **Weight** | 5/10 |
 
-## What it detects
-
-Unminified JavaScript, based on newline ratio, comment volume, identifier length, indentation, and whitespace. Preserved `/*! ... */` and `//!` license banners (the standard "keep on minify" convention used by Terser, esbuild, Vite, and Webpack) are stripped before analysis, so a fully minified bundle that legitimately retains license comments is not flagged.
-
-Comment counting is string aware. The `//` in a URL such as `"https://example.com"`, and comment openers inside single-quoted, double-quoted and template literals, are not counted as comments, so a minified bundle that ships URLs is not reported as unminified with an inflated savings estimate.
-
-Regular expression literals are recognised heuristically rather than parsed. A `/` is read as the start of a regex after an operator, after a keyword such as `return` or `typeof`, and after the `)` of an `if`, `while` or `for` head. In rarer positions, such as directly after another `)` or `]`, it is read as division instead, and the regex body is scanned as ordinary code. A regex used directly as the left operand of `/` or `*`, as in `/a/*2`, is also read as division, since dividing or multiplying by a regular expression is not something real code does. Both cases are rare, and neither affects whether ordinary minified output is flagged. Shebang lines (`#!`) and Annex B `<!--` comments are not counted.
-
-## Solution
-
-Minify JavaScript to reduce file size and improve load times. Use build tools like Terser, esbuild, or UglifyJS. Most bundlers (Webpack, Vite, Rollup) minify automatically in production. Minification shortens variable names, removes whitespace, and dead code.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_size_bytes` | unknown | `undefined` | Minimum JS size in bytes to check for minification |
+| `min_size_bytes` | number | `2048` | Minimum JS size in bytes to check for minification |
 
 ### Configuration example
 
 ```toml squirrel.toml
 [rules."perf/unminified-js"]
-min_size_bytes = undefined
+min_size_bytes = 2048
 ```
 
 ## Enable / disable
@@ -63,3 +77,30 @@ disable = ["perf/*"]
 enable = ["perf/unminified-js"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/js-file-size](/rules/perf/js-file-size): the size those bytes add up to.
+- [perf/unminified-css](/rules/perf/unminified-css): the same analysis on stylesheets.
+- [perf/source-maps](/rules/perf/source-maps): the other sign that a build shipped development output.
+- [perf/legacy-js](/rules/perf/legacy-js): transpilation output and polyfills, another kind of bundle bloat.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Reduce network payloads using text compression, web.dev](https://web.dev/articles/reduce-network-payloads-using-text-compression)
+- [The script element, HTML Standard](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each script is listed with the reason it was flagged. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

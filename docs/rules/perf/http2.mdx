@@ -1,9 +1,43 @@
 ---
-title: "HTTP/2"
-description: "Checks for HTTP/2 protocol support"
+title: "HTTP/2 and HTTP/3: what the response headers can tell you"
+description: "Whether the server advertises HTTP/2 or HTTP/3. squirrel reads Alt-Svc and the Server header, and says when it cannot tell."
 ---
 
-Checks for HTTP/2 protocol support
+## What HTTP/2 and HTTP/3 change
+
+HTTP/1.1 opens a connection per request, up to a small per-host limit, and a slow response holds up everything behind it. HTTP/2 multiplexes many requests over one connection and compresses headers, which removes the queueing and most of the per-request overhead. It requires HTTPS in every browser that implements it.
+
+HTTP/3 runs the same semantics over QUIC, which is built on UDP. Its advantage is connection setup and recovery: no separate TCP and TLS handshakes, and a lost packet in one stream does not stall the others. A server advertises it with an `Alt-Svc` header naming `h3`.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the response headers. It emits one or two checks:
+
+- `http-version`: passes with the message `HTTP/3 (QUIC) support advertised` when `Alt-Svc` contains `h3`, or with `HTTP/2 support advertised via Alt-Svc` when it contains `h2` and not `h3`.
+- `http3-hint`: emitted alongside the previous check when `Alt-Svc` names `h2` but not `h3`, at info status with the message `Consider enabling HTTP/3 (QUIC) — only HTTP/2 is advertised` and the expectation `Alt-Svc advertising h3`.
+- `http2-https-required`: warns with the message `HTTP/2 requires HTTPS` and stops when the page URL is not https.
+- `http2-likely`: emitted only when nothing above fired, at info status with the message `Server likely supports HTTP/2`, when the `Server` or `Via` header contains `cloudflare`, `cloudfront`, `fastly`, `akamai`, `google`, `nginx` or `h2o`.
+- `http2-unknown`: at info status with the message `HTTP/2 support cannot be determined from headers` when nothing else applied.
+
+The negotiated protocol is not a response header, so this rule infers rather than observes. `Alt-Svc` is an advertisement of what else is available, not a statement about the connection the response arrived on.
+
+## How to fix it
+
+Most servers and every major CDN support HTTP/2 by default over HTTPS. On nginx it is a listen directive:
+
+```nginx
+listen 443 ssl;
+http2 on;
+```
+
+For HTTP/3, enable QUIC and advertise it:
+
+```nginx
+listen 443 quic reuseport;
+add_header Alt-Svc 'h3=":443"; ma=86400';
+```
+
+The common false positive is a site already on HTTP/2 that does not send `Alt-Svc` and runs behind a server string this rule does not recognise. It reports that it cannot tell, which is accurate and not a defect. Check with `curl -I --http2 https://example.com`.
 
 | | |
 |---|---|
@@ -12,10 +46,6 @@ Checks for HTTP/2 protocol support
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-HTTP/2 enables multiplexing, header compression, and server push for faster page loads. Most modern web servers and CDNs support HTTP/2 out of the box. Requires HTTPS. Check your server/CDN documentation to enable it. HTTP/3 (QUIC) provides even better performance.
 
 ## Enable / disable
 
@@ -40,3 +70,31 @@ disable = ["perf/*"]
 enable = ["perf/http2"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/preconnect](/rules/perf/preconnect): connection setup, which HTTP/3 shortens.
+- [perf/ttfb](/rules/perf/ttfb): the response time those connections carry.
+- [security/https](/rules/security/https): the transport HTTP/2 requires.
+- [security/hsts](/rules/security/hsts): the header that keeps clients on that transport.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Alt-Svc, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Alt-Svc)
+- [HTTP/2, RFC 9113](https://www.rfc-editor.org/rfc/rfc9113.html)
+- [HTTP/3, RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each page reports what its headers advertised. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>
