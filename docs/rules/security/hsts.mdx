@@ -29,7 +29,7 @@ Severity is warning and the scope is site-wide, so the verdict comes from one pa
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 ```
 
-Set the header on the HTTPS origin, not on the HTTP redirect. Start with a short `max-age` while you confirm that every subdomain serves HTTPS, then raise it to a year. Adding `preload` is a separate, hard-to-reverse commitment: browsers ship the entry in their source, and removal takes months.
+Set the header on the HTTPS origin, not on the HTTP redirect. Start with a short `max-age` while you confirm that every subdomain serves HTTPS, then raise it to a year. The `preload` token is consent, not enrolment: the hostname joins the browser preload list only after you submit it at hstspreload.org and it is accepted. Getting an accepted entry removed again takes months, so treat submission as the hard-to-reverse step.
 
 | | |
 |---|---|

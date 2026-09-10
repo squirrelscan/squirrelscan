@@ -7,7 +7,7 @@ description: "A missing CSP, a report-only policy or an unsafe-inline script-src
 
 `Content-Security-Policy` is a response header that lists, per resource type, which origins a page is allowed to load from and whether inline code may run. The browser enforces it and blocks anything outside the policy. Its main job is to contain cross-site scripting: an injected `<script>` cannot execute if the policy has no matching source.
 
-A policy is only worth what its `script-src` says. `'unsafe-inline'` re-permits exactly the injected code CSP exists to stop, and a wildcard source lets any host serve executable code. `Content-Security-Policy-Report-Only` sends violation reports without blocking anything, which is the right way to develop a policy and the wrong way to ship one.
+A policy is only worth what its `script-src` says. `'unsafe-inline'` re-permits exactly the injected code CSP exists to stop, unless the same source list also carries a nonce or a hash, in which case browsers ignore it. A wildcard source lets any host serve executable code. `Content-Security-Policy-Report-Only` sends violation reports without blocking anything, which is the right way to develop a policy and the wrong way to ship one.
 
 ## What squirrel checks
 
@@ -23,7 +23,7 @@ The rule reads the response headers of the first crawled page and can emit sever
 - `csp-no-frame-ancestors` reports info when `frame-ancestors` is absent and no `X-Frame-Options` header is set either. Message: `CSP missing frame-ancestors directive`.
 - `csp-no-object-src` reports info when neither `object-src` nor `default-src` is declared. Message: `CSP missing object-src directive`.
 
-The effective script source is `script-src` when present, otherwise `default-src`. Severity is warning and the scope is site-wide.
+The effective script source is `script-src` when it is present and non-empty, otherwise `default-src`. Severity is warning and the scope is site-wide.
 
 ## How to fix it
 

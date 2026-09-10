@@ -5,7 +5,7 @@ description: "A contact or newsletter form with no bot protection collects spam 
 
 ## What form CAPTCHA protection is
 
-A CAPTCHA is a challenge in front of a form submission that a script cannot answer cheaply. Modern implementations, including Cloudflare Turnstile, hCaptcha and reCAPTCHA v3, are usually invisible: they score the session in the background and only interrupt when the score is poor.
+A CAPTCHA is a challenge in front of a form submission that a script cannot answer cheaply. Modern implementations are usually invisible. reCAPTCHA v3 never interrupts the visitor at all: it returns a score and your server decides what to do with a low one. Cloudflare Turnstile and hCaptcha run a background check and show a challenge only when they need one.
 
 Any form that anyone on the internet can reach and that ends in an email or a database row is a target. Contact forms, comment boxes, newsletter signups and registration forms attract automated submissions within days of going live. A search box or a login form is a different problem: rate limiting and account lockout apply there, not a challenge on every keystroke.
 
@@ -20,7 +20,7 @@ The rule runs on every crawled page and emits a single check named `form-captcha
 
 A form is classified as excluded when it contains an `input[type="password"]` or when its `action`, `id`, `class` or `name` contains `search`, `login`, `signin`, `sign-in`, `admin`, `checkout` or `cart`. It is public when one of those attributes contains `contact`, `comment`, `feedback`, `newsletter`, `subscribe`, `register`, `signup`, `sign-up`, `inquiry`, `enquiry`, `request`, `support`, `message` or `email`, or when it holds a `<textarea>`, or an `input[type="email"]` with no password field. Anything else is unknown and is not checked.
 
-Protection is detected from the provider scripts, iframes and widget classes of reCAPTCHA, Turnstile, hCaptcha and Friendly Captcha, from their response fields such as `g-recaptcha-response`, from preload and modulepreload hints pointing at those scripts, from Shopify's `script#captcha-bootstrap` bootstrap, and from explicit-render containers whose id or class carries a provider token. FormShield is recognised from a `formshield.dev` script or a `data-fs-project-key` attribute and covers every public form on the page. A page-level signal only credits a public form when that form is the only public form on the page and no other form owns a widget of its own.
+Protection is detected from the provider scripts, iframes and widget classes of reCAPTCHA, Turnstile, hCaptcha and Friendly Captcha, from their response fields such as `g-recaptcha-response`, from preload and modulepreload hints pointing at those scripts, from Shopify's `script#captcha-bootstrap` bootstrap, and from explicit-render containers whose id or class carries a provider token. FormShield is recognised from a `script[src]` that either carries a `data-fs-project-key` attribute or points at `formshield.dev` or a subdomain of it with a path of `/js/formshield.js` or `/js/formshield.esm.js`, and it covers every public form on the page. A page-level signal only credits a public form when that form is the only public form on the page and no other form owns a widget of its own.
 
 ## How to fix it
 

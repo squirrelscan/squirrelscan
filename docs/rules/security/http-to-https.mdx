@@ -19,7 +19,7 @@ The rule is site-wide and makes live network requests. It builds a sample of sam
 - Warn when at least one probed URL redirects to HTTPS. Message: `12 HTTP URL(s) redirect to HTTPS`, with each entry labelled `http://example.com/ → https://example.com/ (301)`.
 - Pass when none do. Message: `No HTTP to HTTPS redirects detected in sample`.
 
-Read the warn status as an inventory rather than a defect: it lists the HTTP URLs that are still reachable and redirecting. Probes run five at a time with a 100 ms stagger, each hop times out after 10 seconds, chains stop at 10 hops, and the whole probe is capped at 20 seconds of wall clock. When the budget runs out the rule reports on the subset it managed to probe. Redirect loops are skipped.
+Read the warn status as an inventory rather than a defect: it lists the HTTP URLs that are still reachable and redirecting. Probes run five at a time with a 100 ms stagger, each hop times out after 10 seconds and chains stop at 10 hops. A 20 second budget stops workers picking up new URLs, so the rule reports on the subset it started; probes already in flight are still awaited and can finish after the budget expires. Redirect loops are skipped.
 
 ## How to fix it
 

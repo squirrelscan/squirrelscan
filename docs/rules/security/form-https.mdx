@@ -7,7 +7,7 @@ description: "A form on an HTTPS page that posts to http:// sends the data in th
 
 A form's `action` attribute is the URL the browser submits to. When that URL is `http://`, the field values travel unencrypted regardless of how the page itself was delivered. The padlock in the address bar describes the document, not the submission.
 
-The worst version is an HTTPS page with an HTTP action, because the user has every visual signal that the page is safe. Chrome and Firefox warn on it and may block the submission. A relative action such as `/subscribe` inherits the page's scheme and is safe on an HTTPS page, so only actions that carry their own scheme are worth checking. `formaction` on a submit button overrides the form's action and needs the same treatment.
+The worst version is an HTTPS page with an HTTP action, because the user has every visual signal that the page is safe. Chrome and Firefox warn on it and may block the submission. A relative action such as `/subscribe` resolves against the document base URL, which is the page URL unless a `<base href>` overrides it, so it is safe on an HTTPS page with no HTTP base. Only actions that carry their own scheme are checked. `formaction` on a submit button overrides the form's action and needs the same treatment.
 
 ## What squirrel checks
 
@@ -15,8 +15,8 @@ The rule runs on every crawled page and emits a single check named `form-https`.
 
 - Fail when the page is HTTPS and at least one of those actions resolves to `http:`. Message: `2 form(s) on this HTTPS page submit to HTTP`, and each item is labelled `HTTPS page submits to <url> in the clear`. Severity error.
 - Warn when the page is not HTTPS and an action still resolves to `http:`. Message: `2 form(s) submit to HTTP`.
-- Pass when forms or submitters were found and none submit over HTTP. Message: `All forms use secure submission`.
-- Info when the page has no form actions at all. Message: `No forms detected`.
+- Pass when at least one `action` or qualifying `formaction` was collected and none of them submit over HTTP. Message: `All forms use secure submission`.
+- Info when the page carries no `action` or `formaction` at all, even if it has `<form>` elements. Message: `No forms detected`.
 
 Empty actions, fragment-only actions and the non-network schemes `javascript:`, `mailto:`, `tel:`, `sms:`, `data:`, `blob:` and `about:` are skipped. So are relative actions, because their scheme comes from the page and `security/https` already reports that. An action that fails to parse is still flagged when it literally begins with `http://`.
 
@@ -26,7 +26,7 @@ Empty actions, fragment-only actions and the non-network schemes `javascript:`, 
 <form action="https://example.com/subscribe" method="post">
 ```
 
-Change the scheme at the source, or drop the origin entirely and use a relative action so the form follows the page. Check `formaction` on any submit button that overrides the form, since it is easy to miss in a template.
+Change the scheme at the source, or drop the origin entirely and use a relative action, which is safe as long as the document base URL is HTTPS. Check `formaction` on any submit button that overrides the form, since it is easy to miss in a template.
 
 | | |
 |---|---|

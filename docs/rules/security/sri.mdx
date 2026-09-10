@@ -13,7 +13,7 @@ SRI only works on assets whose content never changes at a given URL. A versioned
 
 The rule runs on every crawled page. It looks at every `<script src>` and every `<link rel~="stylesheet" href>` whose URL resolves to a cross-origin `http:` or `https:` address, and emits a single check named `sri`:
 
-- Warn when one or more of those resources has no `integrity` attribute. Report message: `2 cross-origin resources without Subresource Integrity` (`resource`, singular, when there is one). Each URL is listed and labelled `script` or `stylesheet`. Severity warning.
+- Warn when one or more of those resources has a missing or empty `integrity` attribute. Report message: `2 cross-origin resources without Subresource Integrity` (`resource`, singular, when there is one). Each URL is listed and labelled `script` or `stylesheet`. Severity warning.
 - Pass when every cross-origin resource carries `integrity`. Message: `All cross-origin scripts and stylesheets use Subresource Integrity`.
 - Info when the page loads no cross-origin scripts or stylesheets at all. Message: `No cross-origin scripts or stylesheets on this page — SRI not applicable`.
 
@@ -29,7 +29,7 @@ Relative and protocol-relative URLs are resolved against the page URL before the
 ></script>
 ```
 
-The attribute goes on the tag that loads the resource. `crossorigin="anonymous"` is required alongside it, or the browser cannot read the response body to hash it. jsDelivr, cdnjs and unpkg publish the hash next to the file URL.
+The attribute goes on the tag that loads the resource. For a cross-origin classic script like this one, add `crossorigin="anonymous"` and make sure the host returns a permissive `Access-Control-Allow-Origin`, or the browser cannot read the body to hash it. Module scripts already fetch with CORS, and a same-origin resource needs no `crossorigin` attribute at all. jsDelivr, cdnjs and unpkg publish the hash next to the file URL.
 
 A self-updating third-party script that is not on the exemption list still gets flagged. Pinning a hash there breaks the embed on the vendor's next release, so disable the rule instead of inventing an `integrity` value.
 

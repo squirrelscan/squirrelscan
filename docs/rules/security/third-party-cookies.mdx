@@ -7,17 +7,17 @@ description: "Trackers and 1x1 pixels set cookies from domains you do not contro
 
 A third-party cookie is one set by a domain other than the one in the address bar, usually by a script, iframe or image the page loads from an external host. It is the mechanism behind cross-site advertising and session-replay analytics, because the same host sees the same identifier on every site that embeds it.
 
-Browsers have been closing it off. Safari and Firefox block third-party cookies by default, and Chrome has restricted them for a growing share of traffic. What survives is first-party measurement, server-side collection and consent-gated embeds. From a compliance angle, each of these domains is a processor you have to name in a privacy policy and, in most of Europe, ask permission for before it loads.
+Browsers have been closing it off, in different ways. Safari blocks third-party cookies outright. Firefox partitions third-party storage per top-level site and blocks known tracking cookies. Chrome kept them behind a user choice rather than removing them. What works everywhere is first-party measurement, server-side collection and consent-gated embeds. Each external domain also has a role under privacy law, as controller or processor depending on what it does with the data, and most of them need consent before they load.
 
 ## What squirrel checks
 
 The rule runs on every crawled page and inventories external hosts referenced in the HTML. It compares each resource hostname against the page hostname and emits up to three checks:
 
-- `tracking-domains` warns when a host matches its list of known tracking domains. Message: `3 known tracking domain(s) detected`, listing up to ten entries as `hostname (type)` where type is `script`, `iframe`, `pixel`, `image` or `script+iframe`.
+- `tracking-domains` warns for hosts it treats as trackers, meaning a host on its known-tracker list or the host of a 0 by 0 or 1 by 1 image that it saw for the first time as that image. Message: `3 known tracking domain(s) detected`, listing up to ten entries as `hostname (type)` where type is `script`, `iframe`, `pixel`, `image` or `script+iframe`.
 - `third-party-resources` reports info for the remaining external hosts. Message: `7 other third-party domain(s) found`, listing up to five.
 - `third-party-cookies` passes when neither list has an entry. Message: `No third-party tracking resources detected`.
 
-Scripts and iframes are collected from every `script[src]` and `iframe[src]`. Images are only collected when the host is a known tracker or when `width` and `height` are both `0` or `1`, which is the tracking-pixel shape. The tracking list covers roughly forty domains including `doubleclick.net`, `google-analytics.com`, `facebook.net`, `hotjar.com`, `segment.com`, `mixpanel.com`, `clarity.ms` and `sentry.io`, matched on the domain or any parent domain.
+Scripts and iframes are collected from every `script[src]` and `iframe[src]`. Images are only collected when the host is a known tracker or when `width` and `height` are both `0` or `1`, which is the tracking-pixel shape. A host counts as external unless one hostname contains the other as a substring, and resource URLs that are relative or protocol-relative are skipped because the hostname is parsed without a base URL. The tracking list covers roughly forty domains including `doubleclick.net`, `google-analytics.com`, `facebook.net`, `hotjar.com`, `segment.com`, `mixpanel.com`, `clarity.ms` and `sentry.io`, matched on the domain or any parent domain.
 
 No cookies are actually observed. The rule reads markup, so it reports domains that commonly set cookies rather than cookies that were set.
 
@@ -27,7 +27,7 @@ No cookies are actually observed. The rule reads markup, so it reports domains t
 <script type="text/plain" data-consent="analytics" src="https://cdn.example-analytics.com/a.js"></script>
 ```
 
-Hold third-party tags behind a consent gate and only rewrite the `type` to `text/javascript` once the visitor has agreed. For measurement you control, a first-party or server-side collector removes the third-party host entirely.
+Hold third-party tags behind a consent gate. Changing the `type` on an existing element does not start it, so the consent manager has to create and insert a fresh `<script>` once the visitor has agreed, which is what the common ones do. For measurement you control, a first-party or server-side collector removes the third-party host entirely.
 
 The info check is an inventory, not a defect. A CDN or font host appears there and needs no action beyond being named in the privacy policy where it applies.
 

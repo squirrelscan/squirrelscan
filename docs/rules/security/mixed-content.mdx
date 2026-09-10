@@ -7,7 +7,7 @@ description: "An HTTPS page that loads a script or stylesheet over HTTP is not s
 
 Mixed content is an HTTPS page that pulls in a subresource over plain HTTP. The document arrives encrypted, the subresource does not, and anything in the network path can read or replace it. A tampered script has the same power as any other script on the page.
 
-Browsers treat the two halves differently. Active content, meaning scripts, stylesheets, frames and workers, is blocked outright. Passive content, meaning images, audio and video, is upgraded to HTTPS where possible and blocked when the upgrade fails. Either way the padlock is downgraded and the resource may not load, so mixed content shows up as a broken page before it shows up as a security report.
+Browsers treat the two halves differently. Active content, meaning scripts, stylesheets, frames and workers, is blocked outright. Passive content, meaning images, audio and video, is usually upgraded to HTTPS and blocked when the upgrade fails. Some requests are blocked rather than upgraded, including `srcset` and `<picture>` images and anything on an IP-literal host. What a visitor notices first is a missing asset, so mixed content tends to surface as a broken page before it surfaces as a security report.
 
 ## What squirrel checks
 

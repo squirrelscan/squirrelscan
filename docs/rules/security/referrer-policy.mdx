@@ -29,7 +29,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 Set it on the HTML responses at the edge. Use `no-referrer` for pages whose URLs carry tokens or personal data, and `same-origin` when no external site should learn where the user came from. Remove `unsafe-url` wherever it appears.
 
-Analytics tools that attribute traffic by referrer see less detail under a stricter policy. That is the trade the header exists to make, and origin-level attribution survives every value except `no-referrer`.
+Analytics tools that attribute traffic by referrer see less detail under a stricter policy. That is the trade the header exists to make. Origin-level attribution survives `strict-origin-when-cross-origin` and `strict-origin`, but not `no-referrer` or `same-origin`, and no policy sends a referrer from HTTPS to HTTP except the ones that leak more.
 
 | | |
 |---|---|

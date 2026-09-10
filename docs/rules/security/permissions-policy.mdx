@@ -7,7 +7,7 @@ description: "Without a Permissions-Policy, embedded frames inherit access to ca
 
 `Permissions-Policy` is a response header that lists which browser features the page and anything it embeds may use. Each entry names a feature and an allowlist of origins, so `camera=()` disables the camera entirely and `geolocation=(self)` limits it to your own origin.
 
-It matters most on pages that embed third-party frames, because an iframe otherwise inherits the permissions of the top-level document and can prompt the user in your name. The header was called `Feature-Policy` until 2020 and the old name still parses in some browsers, with a different syntax.
+It matters most on pages that embed third-party frames. A cross-origin frame gets no camera, microphone or geolocation access unless you delegate it, and the header is where you decide which features are available to delegate at all. The header was called `Feature-Policy` until 2020 and the old name still parses in some browsers, with a different syntax.
 
 ## What squirrel checks
 
@@ -26,7 +26,7 @@ The policy is not parsed and individual directives are not validated. Severity i
 Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
 ```
 
-Set it on HTML responses. Empty parentheses disable a feature for the document and every frame inside it. Name your own origin, as in `geolocation=(self)`, for the features the page genuinely uses, and add an embedded partner's origin explicitly when they need one.
+Set it on HTML responses. Empty parentheses disable a feature for the document and every frame inside it. Name your own origin, as in `geolocation=(self)`, for the features the page genuinely uses. Delegating a feature to an embedded partner takes two steps: list their origin in the header and add a matching `allow` attribute on the iframe.
 
 | | |
 |---|---|
