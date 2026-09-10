@@ -1,9 +1,31 @@
 ---
-title: "Schema + Noindex Conflict"
-description: "Detects pages with rich result schema that are blocked from indexing"
+title: "Rich result schema on a noindexed page: wasted markup"
+description: "Structured data on a page search engines cannot index will never produce a rich result. squirrel finds pages carrying both."
 ---
 
-Detects pages with rich result schema that are blocked from indexing
+## What the conflict is
+
+Rich results are the enhanced listings search engines build from structured data: review stars, recipe times, event dates, product prices. They appear in search results, which means the page has to be in the index for them to exist at all.
+
+Markup on a page that is blocked from indexing produces nothing. It is not harmful, but it is effort spent on a page that will never show it, and it usually means one of the two decisions was made without knowing about the other: a template that emits schema for every post type, applied to a post type someone later set to `noindex`.
+
+## What squirrel checks
+
+The rule is site-wide. For each crawled page it extracts the rich-result types from the page's structured data, skips pages with none, then runs the shared indexability test over the head, headers, URL and robots.txt. It emits a single check named `schema-noindex`:
+
+- Skipped when there are no pages. Message: `No pages to check`.
+- Fail when at least one page has rich-result schema and is not indexable. Message: `3 page(s) have rich schema but are blocked from indexing`. The value lists up to five as the path, the schema types found, and the reasons it is blocked, such as `meta:noindex` or `robots.txt:disallowed`.
+- Pass otherwise. Message: `No schema+noindex conflicts`.
+
+Severity error, weight 8. Only schema types that can produce a rich result count; generic `WebPage` or `Organization` markup does not trigger the rule.
+
+## How to fix it
+
+```html
+<meta name="robots" content="index, follow" />
+```
+
+Decide which of the two is wrong. If the page should rank with a rich result, remove the directive the report names. If it should stay out of the index, remove the structured data from that template so the markup stops being generated.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Detects pages with rich result schema that are blocked from indexing
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Pages with rich result schemas (Article, Product, Recipe, Event, etc.) should be indexed so search engines can display rich results. Having schema markup on noindexed pages wastes effort and prevents rich results from appearing. Remove noindex directive or remove schema markup if page shouldn't be indexed.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["crawl/*"]
 enable = ["crawl/schema-noindex-conflict"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/indexability](/rules/crawl/indexability): the per-page verdict and which directive produced it.
+- [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages): every blocked page, with the same reason strings.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the markup itself parses and validates.
+- [schema/article](/rules/schema/article): one of the rich-result types this rule counts.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Search gallery of rich results, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/search-gallery)
+- [Block search indexing with noindex, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/block-indexing)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Each page is listed with its schema types and the reason it is blocked. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,34 @@
 ---
-title: "Sitemap Domain"
-description: "Checks that all sitemap URLs belong to the expected domain"
+title: "Cross-domain sitemap URL: why search engines ignore it"
+description: "A sitemap can only vouch for URLs on its own host. squirrel compares every sitemap entry's hostname against your base URL."
 ---
 
-Checks that all sitemap URLs belong to the expected domain
+## What cross-submission means
+
+A sitemap speaks for the host that serves it. A search engine will not accept a `<loc>` pointing at a different domain from a sitemap at `example.com/sitemap.xml`, because anyone could then submit URLs on someone else's behalf.
+
+The `www` and bare forms of the same registrable name are treated as the same site here, since one is normally a redirect to the other. Anything further away is either a configuration mistake, usually a generator with the wrong base URL, or a leftover from a domain migration.
+
+## What squirrel checks
+
+The rule is site-wide. It takes the hostname of the site's base URL, then compares it against the hostname of every `<loc>` in every discovered sitemap, lowercased.
+
+- Skipped when no sitemap was discovered. Message: `No sitemap to validate`.
+- Skipped when the base URL has no parseable hostname. Message: `Could not determine expected domain`.
+- Fail when any entry's hostname differs. Message: `14 URL(s) point to different domain(s)`, listing each URL with the host it resolved to. Severity error, weight 8.
+- Pass otherwise. Message: `All sitemap URLs match site domain`.
+
+A hostname matches when it equals the expected host, equals `www.` plus the expected host, or when `www.` plus itself equals the expected host. Entries whose `<loc>` has no parseable hostname are skipped rather than flagged.
+
+## How to fix it
+
+```xml
+<url><loc>https://example.com/pricing</loc></url>
+```
+
+Set the generator's base URL to the canonical host and regenerate. Where a second domain genuinely has pages of its own, give it its own sitemap served from that host.
+
+A site that has just moved domains will produce this finding until the sitemap is regenerated. Fix the sitemap, not the redirects.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that all sitemap URLs belong to the expected domain
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-All URLs in your sitemap should point to pages on your own domain. Cross-domain URLs in sitemaps are a configuration error - search engines will ignore URLs that don't match the sitemap's domain. Remove external URLs from your sitemap or fix the domain in URLs if they're incorrectly formatted.
 
 ## Enable / disable
 
@@ -40,3 +61,30 @@ disable = ["crawl/*"]
 enable = ["crawl/sitemap-domain"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-valid](/rules/crawl/sitemap-valid): the structural checks over the same files.
+- [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx): entries that resolve to an error rather than to another host.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): canonical tags pointing somewhere other than the page itself.
+- [links/https-downgrade](/rules/links/https-downgrade): internal references that keep the wrong scheme.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [Sitemaps overview, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every cross-domain entry is listed with the host it points at. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

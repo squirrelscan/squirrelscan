@@ -1,9 +1,39 @@
 ---
-title: "Sitemap Valid"
-description: "Validates sitemap structure and URL limits"
+title: "Sitemap validation: XML errors and the 50,000 entry limit"
+description: "A sitemap that fails to parse or exceeds the protocol limits is ignored past the break. squirrel reports errors per file and checks entry counts."
 ---
 
-Validates sitemap structure and URL limits
+## What sitemap validity means
+
+A valid sitemap is well-formed XML in UTF-8, using the sitemap protocol namespace, with each URL in a `<loc>` element. A sitemap index uses a different root element and lists child sitemap files instead of URLs.
+
+The protocol caps a single file at 50,000 entries and 50 MB uncompressed. Those two limits apply separately to the two file types: a URL set is capped at 50,000 URLs, and an index is capped at 50,000 child sitemaps. Sites past either limit shard into several files behind an index.
+
+## What squirrel checks
+
+The rule is site-wide. It emits up to five checks:
+
+- `sitemap-fetch-failed` fails when a sitemap named in robots.txt could not be fetched, excluding ones the walk never requested. Message: `1 sitemap(s) from robots.txt failed to fetch`, listing each URL with its error.
+- `sitemap-valid` reports info when discovery was truncated with nothing found. Message: `Sitemap discovery did not complete, so no sitemap was validated`.
+- `sitemap-valid` is skipped when there is simply no sitemap. Message: `No sitemap to validate`.
+- `sitemap-syntax` fails when any discovered sitemap recorded parse errors. Message: `3 error(s) in 1 sitemap(s)`, listing each sitemap with its first error. It passes otherwise with `Sitemap XML syntax is valid`.
+- `sitemap-size` warns when a URL set holds more than 50,000 URLs, or an index holds more than 50,000 child sitemaps. Message: `1 sitemap(s) exceed the 50,000-entry protocol limit`. It passes otherwise with `All sitemaps within URL limits`.
+- `sitemap-orphans` reports info for sitemap URLs the crawl did not reach. Message: `12 URL(s) in sitemap not found during crawl`.
+- `sitemap-missing` reports info for crawled pages the sitemap does not list. Message: `7 crawled page(s) not in sitemap`.
+
+The URL count stored on a top-level index is the aggregated total across its children, which is why an index is measured against its child count rather than that total. Severity error, weight 8.
+
+## How to fix it
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/sitemap-posts-1.xml</loc></sitemap>
+  <sitemap><loc>https://example.com/sitemap-posts-2.xml</loc></sitemap>
+</sitemapindex>
+```
+
+Shard past 50,000 entries behind an index. For parse errors, look for unescaped ampersands and raw angle brackets in URLs, which is what hand-built or string-concatenated sitemaps usually get wrong.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Validates sitemap structure and URL limits
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Sitemaps must follow the sitemap protocol: use UTF-8 encoding, proper XML structure, and valid URLs. Each sitemap file can contain max 50,000 URLs and be max 50MB uncompressed. For larger sites, use a sitemap index file. All URLs should return 200 status codes. Use lastmod dates to indicate content freshness. Compress with gzip for faster loading.
 
 ## Enable / disable
 
@@ -40,3 +66,30 @@ disable = ["crawl/*"]
 enable = ["crawl/sitemap-valid"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): whether a sitemap was found at all.
+- [crawl/sitemap-domain](/rules/crawl/sitemap-domain): sitemap URLs pointing at a host that is not yours.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): the gap between what you crawl and what the sitemap lists.
+- [crawl/sitemap-lastmod-churn](/rules/crawl/sitemap-lastmod-churn): whether the `lastmod` values in it mean anything.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [Sitemaps overview, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Each sitemap is listed with its parse errors and entry count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

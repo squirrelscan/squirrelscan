@@ -1,9 +1,35 @@
 ---
-title: "All Non-Indexed Pages"
-description: "Lists all pages blocked from indexing for user audit"
+title: "All non-indexed pages: the full blocked list for review"
+description: "One list of every page a search engine will not index, with the reason. squirrel can raise severity for URL patterns that must never be blocked."
 ---
 
-Lists all pages blocked from indexing for user audit
+## What this list is for
+
+Individual `noindex` directives are easy to justify one at a time and hard to audit in aggregate. A staging directive that survived a deploy, a robots.txt rule that is broader than intended, or a CMS default applied to a whole post type all look normal on the page and only become visible when you list every blocked URL together.
+
+This rule is that list. It is informational by default, and it becomes a real finding only for URL patterns you nominate as ones that must stay indexable.
+
+## What squirrel checks
+
+The rule is site-wide. For each crawled page it runs the shared indexability test over the parsed head, the response headers, the URL and robots.txt, collecting a reason list such as `meta:noindex`, `header:noindex` or `robots.txt:disallowed`. Every non-indexable page is bucketed by the patterns you configured:
+
+- `critical-noindex` fails for pages matching `errorOnPatterns`. Message: `2 critical page(s) blocked from indexing (match error patterns)`, listing up to five as path plus reasons.
+- `important-noindex` warns for pages matching `warnOnPatterns`. Message: `4 important page(s) blocked from indexing (match warning patterns)`, listing up to five.
+- `all-noindex` reports info for everything else that is blocked. Message: `18 page(s) blocked from indexing`, listing up to ten.
+- `all-noindex` passes when every page is indexable. Message: `All pages are indexable`.
+- `all-noindex` is skipped when there are no pages. Message: `No pages to check`.
+
+Both pattern lists are empty by default, so an unconfigured run only ever produces the info bucket. Severity for the rule is info, weight 2.
+
+## How to fix it
+
+```toml squirrel.toml
+[rule_options."crawl/all-noindex-pages"]
+errorOnPatterns = ["/products/", "/blog/"]
+warnOnPatterns = ["/guides/"]
+```
+
+Nominate the sections that must stay indexable, then treat any failure as a release blocker. For the pages themselves, remove the directive the reason names: `meta:noindex` is in the head, `header:noindex` is in the response, `robots.txt:disallowed` is a crawl rule rather than an index rule.
 
 | | |
 |---|---|
@@ -13,9 +39,20 @@ Lists all pages blocked from indexing for user audit
 | **Severity** | info |
 | **Weight** | 2/10 |
 
-## Solution
+## Options
 
-Review this list to ensure all non-indexed pages are intentionally blocked. Common unintentional blocks: staging directives left in production, overly broad robots.txt rules, CMS defaults. Remove noindex from pages that should be indexed.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warnOnPatterns` | array of strings | `[]` | URL patterns that should trigger warning severity if noindex (for example `/blog/`, `/products/`) |
+| `errorOnPatterns` | array of strings | `[]` | URL patterns that should trigger error severity if noindex (for example `/landing-pages/`) |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."crawl/all-noindex-pages"]
+warnOnPatterns = ["/blog/"]
+errorOnPatterns = ["/products/"]
+```
 
 ## Enable / disable
 
@@ -40,3 +77,30 @@ disable = ["crawl/*"]
 enable = ["crawl/all-noindex-pages"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/indexability](/rules/crawl/indexability): the per-page version, with the directive named.
+- [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts): robots.txt allowing what the page then noindexes, and the reverse.
+- [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap): blocked pages you are still submitting in a sitemap.
+- [crawl/robots-txt](/rules/crawl/robots-txt): the file that produces the `robots.txt:disallowed` reason.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Robots meta tag and X-Robots-Tag, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [Introduction to robots.txt, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots/intro)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every blocked page is listed by path with the reason it is blocked. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

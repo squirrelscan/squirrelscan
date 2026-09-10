@@ -32,7 +32,7 @@ When the probe is off, the rule emits nothing. It never reports a path it did no
 
 ## Enable the probe
 
-The probe is off by default and bounded by a hard page cap, so it never multiplies crawl cost.
+The probe is off by default. It adds two requests per selected path, or three when query variation is on, and the page cap is what bounds that extra work.
 
 ```toml squirrel.toml
 [integrity.cloaking_probe]
@@ -49,7 +49,7 @@ query_variation = true    # also probe an appended query token (token-gating)
 curl -A 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' https://example.com/path
 ```
 
-Fetch the URL yourself with a Googlebot user-agent to see what the crawler sees. Then look for server-side rules that branch on user-agent or query string, and audit recently modified files and plugins.
+Fetch the URL yourself with a Googlebot user-agent to see how the server responds to that string. A server can also identify Googlebot by reverse DNS on the request IP, so a spoofed user-agent shows you the user-agent branch and not necessarily what Google receives. Then look for server-side rules that branch on user-agent or query string, and audit recently modified files and plugins.
 
 Paywalls and A/B tests can produce a similarity divergence without being cloaking. Confirm what the Googlebot response actually contains before treating a finding as a compromise.
 

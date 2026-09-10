@@ -1,9 +1,43 @@
 ---
-title: "Soft 404"
-description: "Detects pages that serve 404/error content with an HTTP 200 status"
+title: "Soft 404: error content served with an HTTP 200 status"
+description: "A not-found page that answers 200 gets crawled and can be indexed as thin content. squirrel detects the error shell and re-checks it before reporting."
 ---
 
-Detects pages that serve 404/error content with an HTTP 200 status
+## What a soft 404 is
+
+A soft 404 is a page that tells a human the content is missing while telling a machine that everything is fine. The body says "page not found" and the response status is 200 rather than 404 or 410.
+
+Crawlers have no reason to stop requesting a URL that answers 200, so soft 404s consume crawl budget indefinitely and can be indexed as thin or duplicate content. Search engines try to detect them heuristically, which means you lose control of whether the URL is dropped and when. Single-page applications produce them easily, because the shell renders successfully and only the client-side route resolves to nothing.
+
+## What squirrel checks
+
+The signal itself is computed during parsing from the status code and the page content. The rule surfaces it and emits a single check named `soft-404`:
+
+- Pass when the page is not a soft 404. Message: `Page does not serve 404 content with a success status`.
+- Warn when it is, with the wording chosen by an end-of-crawl confirmation re-fetch. Severity warning, weight 5.
+
+Every warn message ends with the same sentence: `This check reads the server's HTML response and can differ from what a browser shows.` The part before it depends on the confirmation verdict:
+
+- Confirmed: `Page serves 404 content with HTTP 200.`
+- Intermittent, meaning the re-fetch returned real content: `Page intermittently serves 404 error content with HTTP 200.`
+- Unconfirmed: `Page serves 404 content with HTTP 200 (based on a single crawl observation).`
+- Unconfirmed after a rendered observation: `Page serves 404 content with HTTP 200 (based on the rendered crawl observation; cannot verify without JS rendering).`
+
+The value is the status code as `HTTP 200`, and each detection signal is listed as an item with its own detail. The intermittent case matters on sites where a CDN or incremental regeneration occasionally serves the error shell for a real page.
+
+## How to fix it
+
+```js
+export async function loader({ params }) {
+  const post = await getPost(params.slug);
+  if (!post) throw new Response("Not Found", { status: 404 });
+  return post;
+}
+```
+
+Return the real status from the server. For a client-rendered app, that means the server route has to know the resource is missing, which usually means resolving it during server rendering rather than after hydration.
+
+If the URL is valid and the finding is wrong, the page is emitting error-shell markup: a title or heading saying not found, or an error template that renders alongside the content.
 
 | | |
 |---|---|
@@ -12,31 +46,6 @@ Detects pages that serve 404/error content with an HTTP 200 status
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-A soft 404 is a URL that shows "not found" or error content but returns a success (2xx) status instead of a real 404 or 410. squirrelscan flags a page only when it shows at least two independent signals, with at least one strong content signal: a framework error-shell marker (for example `<html id="__next_error__">`), a "page not found" title or heading, plus supporting signals such as a robots `noindex` directive or near-empty content. A regular article that merely mentions "404" is never flagged.
-
-Soft 404s waste crawl budget and can be indexed as thin or duplicate content. They also cause downstream content, legal, and agent-experience rules to skip the page (with a visible `soft-404` skip reason), so one broken template can't spray per-page warnings.
-
-## Confirmation before warning
-
-Some sites intermittently serve an error shell (HTTP 200 with `noindex`) for real, existing pages because of transient CDN or incremental-static-regeneration behaviour. To avoid a confusing false positive, squirrelscan does not warn from a single observation: when a page trips the soft-404 signals during the crawl, it re-fetches that page once at the end of the crawl and re-runs detection.
-
-- The error shell reproduces: the standard soft 404 warning is reported.
-- The re-fetch returns real content: a distinct finding, "page intermittently serves 404 error content with HTTP 200", is reported instead. This is still a problem because crawlers can hit the poisoned variant and the `noindex` on it can deindex a real page, even though your browser may show the page normally.
-- The re-fetch is not possible (offline, a network error, or the confirmation budget is exhausted): the finding is reported but annotated as based on a single crawl observation.
-
-Every variant notes that the check reads the server's raw HTML response, which can differ from what a browser renders.
-
-The confirmation pass is on by default, is bounded to the flagged pages only, and stays polite: same-host re-fetches are sequential and honor the crawl's per-host delay, with an overall time budget. On rate-limited or staging hosts you can turn it off, in which case flagged pages are reported as unconfirmed rather than re-fetched:
-
-```toml squirrel.toml
-[integrity.soft404_confirm]
-enabled = false
-```
-
-## Solution
-
-Return a proper 404 (or 410 for permanently removed URLs) for missing pages, or restore the real content if the URL should resolve. If the URL is valid, remove the error-shell markup and the "page not found" title/heading so the page reads as a real page.
 
 ## Enable / disable
 
@@ -61,3 +70,30 @@ disable = ["crawl/*"]
 enable = ["crawl/soft-404"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/indexability](/rules/crawl/indexability): whether the same page is also blocked from indexing.
+- [links/broken-links](/rules/links/broken-links): internal links pointing at pages that fail outright.
+- [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx): sitemap entries returning a real 4XX status.
+- [content/word-count](/rules/content/word-count): the thin-content side of the same page.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [HTTP status codes and Google Search](https://developers.google.com/search/docs/crawling-indexing/http-network-errors)
+- [Managing crawl budget for large sites, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every soft 404 is listed with the signals that identified it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

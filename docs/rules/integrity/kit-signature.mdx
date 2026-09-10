@@ -13,7 +13,7 @@ A signature encodes that combination. It is stricter than a heuristic, because i
 
 The rule is part of the opt-in threat-intel feature. When the feature is on, squirrelscan loads the bundled kit signatures before the audit rules run, then matches each crawled page. The match input is the page URL, its title, its HTML, its extracted text and the bodies of the external scripts attached to that page. Inline scripts are covered through the HTML.
 
-- Fail, once per matching signature. Message: `Matched kit signature "Calendly credential kit" (brand-lexicon, exfil-endpoint)`, naming the signature and every string that matched. The reported value is the signature id, and the details carry the signature's own severity and description. Severity error, weight 9.
+- Fail, once per matching signature. Message: `Matched kit signature "Calendly phishing kit" (calendly_brand, google_auth_overlay)`, naming the signature and the identifiers of the patterns that matched, not the text found on the page. The reported value is the signature id, and the details carry the signature's own severity and description. Severity error, weight 9.
 
 Signatures require several corroborating strings on the same page, so a match reports a failure directly rather than going through the two-signal correlation gate that the heuristic integrity rules use. When the threat-intel feature is off, the rule emits nothing at all: it never reports a page as clean for signatures it never ran.
 
@@ -40,7 +40,7 @@ enabled = true            # off by default
 
 Remove the matched page and every file that came with it. Treat the site as compromised: look for a web shell or an injected loader, audit recently modified files, rotate credentials and read the access logs. A signature match is not a casual false positive, because it needed several corroborating strings to fire.
 
-Read the matched strings in the report before acting. They name exactly what was found on the page, which is the fastest way to locate the file that emits it.
+Read the matched pattern identifiers in the report before acting. They name which parts of the signature fired, such as a brand string in the title or an overlay id in the HTML, which narrows down where to look.
 
 ## Enable / disable
 

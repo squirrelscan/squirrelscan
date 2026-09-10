@@ -1,9 +1,37 @@
 ---
-title: "Canonical Chain"
-description: "Checks for redirect chains on canonical URLs"
+title: "Canonical URL resolves through a redirect: how to spot it"
+description: "A canonical that redirects sends search engines on an extra hop before they reach the real URL. squirrel checks the tag against the page's own redirect chain."
 ---
 
-Checks for redirect chains on canonical URLs
+## What a canonical chain is
+
+A `<link rel="canonical">` names the URL you want a page indexed under. It should be the address that serves the content directly, with no redirect in between.
+
+When the canonical points at a URL that redirects, the crawler has to follow a hop before it reaches the page, and the signal is weaker than a direct one. The common causes are a canonical built from a stored URL that has since moved, a canonical using the wrong scheme or host variant, and a canonical that points at the requested URL on a page that redirected on the way in.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It reads the first `link[rel="canonical"]` in the document and resolves it against the page URL. It can emit several checks:
+
+- `page-redirect-chain` warns when the page itself redirected before serving content. Message: `Page redirects before content is served`, with the hops listed.
+- `canonical-chain` is skipped when there is no canonical tag. Message: `No canonical tag found`.
+- `canonical-chain` warns when the canonical href cannot be parsed. Message: `Invalid canonical URL`.
+- `canonical-protocol` warns when the page is HTTPS and the canonical is HTTP. Message: `Canonical points to HTTP instead of HTTPS`.
+- `canonical-chain` warns when the canonical URL matches one of the redirect-looking patterns `/?...redirect`, `/go/`, `/out/`, `/link/` or `/r/`. Message: `Canonical URL may be a redirect`. It passes otherwise with `Canonical URL appears direct`.
+- `canonical-target` reports info when the canonical names a different URL from the page, ignoring a trailing slash difference. Message: `Page canonicalizes to different URL`.
+- `canonical-redirects` warns when the canonical names the exact URL that was requested and that request redirected. Message: `Canonical URL resolves through a redirect chain`, with the hops listed.
+
+The last check compares request targets, not normalised forms, so `/page`, `/page/` and `/page?x=1` are treated as distinct. Only the one that was actually fetched carries the chain. Severity warning, weight 5.
+
+## How to fix it
+
+```html
+<link rel="canonical" href="https://example.com/pricing" />
+```
+
+Point the canonical at the final URL: the scheme, host and path that answer 200 directly. Generate it from the resolved route rather than from a stored string, so it moves when the route does.
+
+A cross-page canonical, where one page deliberately points at another, is reported as info rather than a defect. That is a normal deduplication choice.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks for redirect chains on canonical URLs
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Canonical URLs should point directly to the final destination, not through redirects. Redirect chains waste crawl budget and dilute link equity. If your canonical URL redirects, update it to point to the final URL. Check that canonical URLs use the preferred protocol (https) and www/non-www version. Self-referencing canonicals should match the page URL exactly.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["crawl/*"]
 enable = ["crawl/canonical-chain"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/redirect-chain](/rules/crawl/redirect-chain): multi-hop chains anywhere on the site.
+- [crawl/pagination](/rules/crawl/pagination): paginated pages canonicalizing to page 1.
+- [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts): directives that disagree about the same URL.
+- [url/trailing-slash](/rules/url/trailing-slash): the slash difference this check normalises away.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [How Google canonicalization works](https://developers.google.com/search/docs/crawling-indexing/canonicalization)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Each canonical is reported with its target and any redirect hops behind it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

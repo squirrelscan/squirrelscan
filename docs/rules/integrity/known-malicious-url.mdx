@@ -5,7 +5,7 @@ description: "A page can be listed by Safe Browsing before you notice anything w
 
 ## What a threat-intel URL check is
 
-Reputation feeds are lists of URLs that security vendors have observed serving phishing or malware. Safe Browsing, URLhaus, ThreatFox, urlscan, VirusTotal, OpenPhish and PhishTank each publish or answer queries about them, and browsers use the same data to show interstitial warnings.
+Reputation feeds are lists of URLs that security vendors have observed serving phishing or malware. Safe Browsing, URLhaus, ThreatFox, urlscan, VirusTotal, OpenPhish and PhishTank each publish such lists or answer queries against them. Browsers show interstitial warnings from their own protection service, which for Chrome is Safe Browsing and for Edge is Microsoft Defender SmartScreen, so a listing in one feed does not mean every browser will warn.
 
 Checking your own URLs against those lists catches two things a crawler cannot. A page that only serves its payload to a specific referrer or token never renders the payload for your audit, but the feed may already have a sample of it. And an outbound link on your site may point at a host that was compromised after you linked to it.
 
@@ -13,8 +13,8 @@ Checking your own URLs against those lists catches two things a crawler cannot. 
 
 The rule is part of the opt-in threat-intel feature. All feed pulls and lookups happen before the rules run; the rule itself reads memoized verdicts. It collects candidates from the site base URL, every crawled page's URL and final URL, and every outbound external link, deduplicated by URL and tagged as `site` or `external-link`. It emits a check named `known-malicious-url`:
 
-- Fail, once per listed URL that belongs to the site. Message: `Site URL flagged as malicious by URLhaus, OpenPhish (phishing)`, naming the providers that listed it and any threat labels they attached.
-- Fail, once per listed outbound link. Message: `Outbound link to a known-malicious URL flagged by URLhaus (malware_download)`.
+- Fail, once per listed URL that belongs to the site. Message: `Site URL flagged as malicious by urlhaus, openphish (phishing)`, naming the provider ids that listed it and any threat labels they attached.
+- Fail, once per listed outbound link. Message: `Outbound link to a known-malicious URL flagged by urlhaus (malware_download)`.
 - Pass, once, when at least one provider was consulted and nothing matched. Message: `No site URLs or outbound links matched any threat-intel feed`.
 
 When no provider was consulted for any candidate, because the feature is off or nothing was prefetched, the rule emits nothing. Absence of data is never reported as a clean result. Severity error, weight 9.
@@ -29,15 +29,15 @@ When no provider was consulted for any candidate, because the feature is off or 
 
 ## Enable the feature
 
-Threat-intel is off by default. Turn it on and configure at least one provider so this rule has feeds to check against. URLhaus, ThreatFox, OpenPhish and PhishTank are keyless daily-pull feeds; Safe Browsing, urlscan and VirusTotal are API-keyed on-demand lookups.
+Threat-intel is off by default. Turn it on and configure at least one provider so this rule has feeds to check against. URLhaus, ThreatFox, OpenPhish and PhishTank are daily-pull feeds; Safe Browsing, urlscan and VirusTotal are on-demand lookups. URLhaus and ThreatFox both take an abuse.ch key, which squirrel sends as the `Auth-Key` header.
 
 ```toml squirrel.toml
 [intel]
 enabled = true            # off by default
 
-# Keyless daily-pull feeds: just switch them on.
+# Daily-pull feeds.
 [intel.providers.urlhaus]
-enabled = true
+api_key = "your-abuse-ch-key" # pragma: allowlist secret
 
 [intel.providers.openphish]
 enabled = true
@@ -52,7 +52,7 @@ api_key = "your-virustotal-key" # pragma: allowlist secret
 
 ## How to fix it
 
-A listed URL of your own means the page is serving a payload. Remove the content, rotate credentials, read the access logs, then request a review from the provider that listed it once the page is clean.
+A listing is a report of suspected malicious activity, not proof, and false positives happen. Open the URL and confirm before acting. Once you have confirmed it, remove the content, rotate credentials, read the access logs, then request a review from the provider that listed it.
 
 A listed outbound link points your visitors at a malicious host. Remove or replace it, and check whether you put it there. A link you did not add is itself a compromise signal.
 

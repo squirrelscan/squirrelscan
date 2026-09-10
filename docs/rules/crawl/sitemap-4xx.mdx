@@ -1,9 +1,31 @@
 ---
-title: "4XX Pages in Sitemap"
-description: "Checks for sitemap URLs returning 4XX status codes"
+title: "4XX pages in sitemap: dead URLs you are still submitting"
+description: "A sitemap entry that returns 404 wastes a crawl and teaches search engines to trust the file less. squirrel reports the status of every checked entry."
 ---
 
-Checks for sitemap URLs returning 4XX status codes
+## What a 4XX sitemap entry is
+
+A sitemap lists URLs you are asking a crawler to fetch. An entry that answers with a 4XX status is a request you asked for and cannot serve: 404 for a page that no longer exists, 403 for one behind auth, 410 for one deliberately removed.
+
+Each one costs a fetch that could have gone to a real page, and a sitemap with many of them is a weaker signal overall. The usual causes are a generator reading a stale cache, a content deletion that never propagated to the sitemap, and URLs built from data that has since changed.
+
+## What squirrel checks
+
+The rule is site-wide and reads the status codes the crawl recorded for sitemap URLs. It emits up to two checks:
+
+- Skipped when no sitemap was discovered. Message: `No sitemap to compare`.
+- `sitemap-4xx` passes when no sitemap URL statuses were collected. Message: `No sitemap URL checks available`.
+- `sitemap-4xx` warns when entries returned a status from 400 to 499. Message: `9 sitemap URL(s) return 4XX`, with each URL listed alongside its status and any fetch error. Severity warning, weight 6.
+- `sitemap-4xx` passes otherwise. Message: `No 4XX pages found in sitemap URLs checked`.
+- `sitemap-rate-limited` reports info for entries the host throttled. Message: `5 sitemap URL(s) rate-limited - status unverifiable`.
+
+Rate-limit responses are separated deliberately. A 429, a 430 or a 503 carrying `Retry-After` sits inside or near the 4XX band but says the host throttled the audit, not that the URL is dead, so those entries are excluded from the warn list and reported on their own.
+
+## How to fix it
+
+Remove the dead entries and regenerate from live data. Where a URL moved, redirect it and list the destination instead: a sitemap should hold final URLs, not redirects.
+
+A rate-limited run leaves entries unverified rather than failing them. Re-run with a lower concurrency if you need a definite answer for those URLs.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for sitemap URLs returning 4XX status codes
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Sitemaps should only list URLs that return 200 and are intended for indexing. Remove 4XX URLs from the sitemap or fix them by restoring the content or redirecting to a valid page. Keep sitemap entries clean to avoid wasting crawl budget.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["crawl/*"]
 enable = ["crawl/sitemap-4xx"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): the reverse gap, pages missing from the sitemap.
+- [crawl/sitemap-valid](/rules/crawl/sitemap-valid): structural problems in the same files.
+- [links/broken-links](/rules/links/broken-links): internal links that point at the same dead URLs.
+- [crawl/soft-404](/rules/crawl/soft-404): pages that return 200 while showing an error, which this check cannot see.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [HTTP status codes and Google Search](https://developers.google.com/search/docs/crawling-indexing/http-network-errors)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every failing entry is listed with the status code it returned. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

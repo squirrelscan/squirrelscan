@@ -1,9 +1,32 @@
 ---
-title: "Sitemap Lastmod Drift"
-description: "Checks that sitemap lastmod matches the page's own dateModified"
+title: "Sitemap lastmod disagrees with the page's dateModified"
+description: "When lastmod and the page's own dateModified disagree, one of them is wrong. squirrel compares them per URL and separates the two directions."
 ---
 
-Checks that sitemap lastmod matches the page's own dateModified
+## What lastmod drift is
+
+A page usually carries its own modification date twice: once in the sitemap as `<lastmod>`, and once on the page as schema `dateModified` or a visible updated date. Both are supposed to describe the same event.
+
+When they disagree, the sitemap generator and the page renderer are reading different fields. A `lastmod` older than the page's own date tells crawlers not to bother with a page that has in fact changed, and usually means a stale cached sitemap or a generator resolving `publishedAt` where the page renders `updatedAt`. A `lastmod` newer than the page's date usually means it is stamped at deploy time.
+
+## What squirrel checks
+
+The rule is site-wide. For each crawled page it looks up the sitemap `lastmod` by normalised URL, then resolves the page's own date from the first of three sources that yields a usable value: the `dateModified` of the JSON-LD node describing this document, the `dateModified` markup the parser lifted from the page, or the visible published date. Pages with no `lastmod` or no page-side date are skipped rather than reported.
+
+- Skipped when no sitemap was discovered. Message: `No sitemap to compare`.
+- Skipped when no pages were crawled. Message: `No pages to compare`.
+- Skipped when no URL had both values. Message: `No sitemap URL carries both a lastmod and a page-side date signal`.
+- `sitemap-lastmod-behind-page` warns when the page's own date is newer than `lastmod` by more than `behind_days`, 7 by default. Message: `12 page(s) have a sitemap lastmod older than the page's own dateModified by more than 7 day(s)`.
+- `sitemap-lastmod-ahead-of-page` warns when `lastmod` is newer than the page's date by more than `ahead_days`, 30 by default. Message: `40 page(s) have a sitemap lastmod newer than the page's own dateModified by more than 30 day(s)`.
+- `sitemap-lastmod-drift` passes when neither fired. Message: `220 sitemap URL(s) carry a lastmod consistent with the page's own dateModified`.
+
+Each item reads `lastmod 2026-01-04 vs dateModified 2026-03-14 (69 day(s))` and records which of the three sources the page date came from. The day count is truncated rather than rounded, so a 7.5 day gap reports as 7 and does not warn. Findings are capped at 50 items, with the real total in the details. Severity warning, weight 4.
+
+An Article-family JSON-LD node wins over any other document node wherever it sits in the graph, so a sitewide `WebSite` node emitted first by an SEO plugin cannot supply the date.
+
+## How to fix it
+
+Drive both values from the same content-modification timestamp. Check the field precedence on each side: a generator reading `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` passes every presence check and still disagrees on every post that was ever edited.
 
 | | |
 |---|---|
@@ -13,67 +36,19 @@ Checks that sitemap lastmod matches the page's own dateModified
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## What it checks
-
-For every crawled page that appears in a sitemap with a `lastmod`, the rule compares that
-`lastmod` against the page's own strongest date signal: schema.org `dateModified`, else the
-`dateModified`-equivalent markup (`[itemprop="dateModified"]` meta / `<time>`), else the visible
-published date. Pages with no date signal at all are skipped: that is
-[Content Freshness](/rules/content/freshness) territory, not drift.
-
-### Which JSON-LD node the date comes from
-
-Only the node that describes the **document** is read: an `Article`, `BlogPosting`,
-`NewsArticle` or similar, else a page-level node such as `WebPage`, `FAQPage` or `Recipe`. A
-sitewide `WebSite`, `Organization`, `Product` or `SoftwareApplication` node carries its own
-`dateModified` that has nothing to do with when this page changed, and Yoast and Rank Math emit
-one *first* in `@graph`, ahead of the article. Those nodes are ignored, and an article node is
-preferred over a page-level one wherever the two sit, so moving a sitewide node around the
-`@graph` cannot change the verdict.
-
-Types may be written bare (`Article`), as a full IRI (`https://schema.org/Article`) or against
-the `schema:` prefix, and a node may claim several at once (`["WebPage", "BlogPosting"]` counts
-as the article). The date itself may be a plain string, a `{"@value": "..."}` wrapper, or a
-list of either, in which case the first entry that parses as a date is used.
-
-If no document-describing node carries a usable `dateModified`, the rule falls through to the
-page's own markup and visible date rather than borrowing the sitewide one. The same scoping is
-applied by [Date Agreement](/rules/content/date-agreement).
-
-The two directions are reported as separate checks, because they point at different code:
-
-| Check | Fires when | Usual cause |
-|-------|-----------|-------------|
-| `sitemap-lastmod-behind-page` | `lastmod` is older than the page's `dateModified` by more than 7 days | Stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` |
-| `sitemap-lastmod-ahead-of-page` | `lastmod` is newer than the page's `dateModified` by more than 30 days | `lastmod` stamped at build/deploy time instead of on content change |
-
-Each finding reports both dates and the gap in days. The gap is counted in whole elapsed days,
-so a difference has to reach the next whole day past the threshold before it warns: with the
-default `behind_days = 7`, a 7.5-day gap passes and an 8-day gap warns. Same-day and
-within-threshold differences never warn.
-
-Lastmod being *older* than the page's own `dateModified` is the more clearly wrong of the two:
-it tells crawlers not to bother re-fetching a page that has in fact changed.
-
-## Solution
-
-A sitemap lastmod that disagrees with the page's own dateModified points at the sitemap generator, not the content. Lastmod OLDER than the page's dateModified tells crawlers not to bother with a page that has in fact changed - usually a stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` (a precedence inversion; both fields are present, so presence checks pass). Lastmod NEWER than the page's dateModified usually means lastmod is stamped at build/deploy time. Drive both values from the same content-modification timestamp.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `ahead_days` | number | `30` | Days a sitemap lastmod may run ahead of the page's own dateModified before warning |
 | `behind_days` | number | `7` | Days a sitemap lastmod may lag the page's own dateModified before warning |
 
-### Configuration Example
+### Configuration example
 
 ```toml squirrel.toml
-[rules."crawl/sitemap-lastmod-drift"]
-ahead_days = 30
-behind_days = 7
+[rule_options."crawl/sitemap-lastmod-drift"]
+ahead_days = 14
+behind_days = 3
 ```
 
 ## Enable / disable
@@ -99,3 +74,30 @@ disable = ["crawl/*"]
 enable = ["crawl/sitemap-lastmod-drift"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-lastmod-churn](/rules/crawl/sitemap-lastmod-churn): every lastmod carrying the same build date.
+- [content/date-agreement](/rules/content/date-agreement): the dates a single page shows in its own markup and text.
+- [content/freshness](/rules/content/freshness): how old the content is, independent of what it claims.
+- [eeat/content-dates](/rules/eeat/content-dates): whether the page publishes a date at all.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Best practices for setting the lastmod element, Google Search Central](https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping)
+- [dateModified, Schema.org](https://schema.org/dateModified)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Each mismatched URL is listed with both dates and the gap in days. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

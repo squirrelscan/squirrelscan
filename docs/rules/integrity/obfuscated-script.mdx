@@ -7,11 +7,11 @@ description: "A large inline script with high entropy and eval or anti-tamper ma
 
 An obfuscated script is JavaScript deliberately rewritten so a reader cannot follow it: identifiers replaced with hex names such as `_0x4a2b`, strings encoded and rebuilt with `String.fromCharCode` or `atob`, and the whole body wrapped in an `eval` or a packer. Injected payloads use it to hide what they do from anyone who views source.
 
-Minification is not obfuscation. A minified bundle is dense and has similar character entropy, but it does not call `eval`, does not rebuild its own strings at runtime, and does not carry anti-tamper strings. A large obfuscated blob shipped inline rather than as an external, source-mapped bundle is the combination worth looking at.
+Minification is a different goal. It shortens code without hiding intent, and a minified bundle is usually readable again once it is formatted. Minifiers do not forbid `eval` or runtime string rebuilding, so those markers are a signal rather than proof. What is worth looking at is the combination: a large, high-entropy blob shipped inline rather than as an external, source-mapped bundle.
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every inline `<script>`, meaning any `<script>` with no `src`. A script is a hit only when all three conditions hold: it is at least 4096 bytes; its lowercased body contains at least one packer marker; and its Shannon entropy is at least 4.5 bits per character. When several scripts qualify, the largest is reported.
+The rule runs on every crawled page over every inline `<script>`. An inline script here means one whose `src` attribute is absent or empty. A script is a hit only when all three conditions hold: its text is at least 4096 characters long, counted as UTF-16 code units rather than encoded bytes; its lowercased body contains at least one packer marker; and its Shannon entropy is at least 4.5 bits per character. When several scripts qualify, the longest is reported.
 
 The packer markers are `eval(`, `function("return this")`, `function('return this')`, `atob(`, `unescape(`, `fromcharcode`, `the code has been tampered` and `_0x`.
 
@@ -20,7 +20,7 @@ It emits at most one check named `obfuscated-script`:
 - Info when this is the only integrity signal on the page. Message: `Suspicious 152.4KB obfuscated inline script (single signal — review)`.
 - Fail when at least two distinct integrity signals fire on the page. Message: `Likely injected payload: 152.4KB obfuscated inline script (3 corroborating integrity signals)`.
 
-The reported value carries the size in kilobytes, the entropy rounded to two decimals, and the list of markers that matched. External scripts are out of scope for this signal.
+The size in the message is that character count divided by 1024, so it tracks the text length rather than the transferred bytes. The reported value carries that size, the entropy rounded to two decimals, and the list of markers that matched. Scripts with a real `src` are out of scope for this signal.
 
 ## How to fix it
 

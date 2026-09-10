@@ -3,7 +3,7 @@ title: "Crawlability"
 description: "Robots.txt, sitemaps, and crawl directives"
 ---
 
-Robots.txt, sitemaps, and crawl directives
+Crawlability rules cover the layer before ranking: whether a search engine can reach a page, is permitted to index it, and is being told the truth about it. They read robots.txt, every discovered sitemap, the robots directives in each page's head and headers, and the redirect chains the crawl recorded. Most findings here are configuration mismatches rather than content problems, which makes them cheap to fix and easy to ship by accident.
 
 ## Rules
 
@@ -33,7 +33,7 @@ Robots.txt, sitemaps, and crawl directives
     Checks that paginated pages have proper canonicals
   </Card>
   <Card title="PDF Size" icon="triangle-exclamation" href="/rules/crawl/pdf-size">
-    Checks linked PDF sizes against Googlebot 64MB truncation limit
+    Checks linked PDF sizes against a 60MB default truncation threshold
   </Card>
   <Card title="Redirect Chains" icon="triangle-exclamation" href="/rules/crawl/redirect-chain">
     Detects multi-hop redirect chains that waste crawl budget
@@ -76,3 +76,5 @@ Robots.txt, sitemaps, and crawl directives
 [rules]
 disable = ["crawl/*"]
 ```
+
+Every audit reports Crawlability findings next to the performance, security and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.

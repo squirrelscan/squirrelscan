@@ -13,7 +13,7 @@ The geometry is what gives it away: `position: fixed`, a very high `z-index`, wi
 
 The rule runs on every crawled page and emits at most one check named `fake-auth-overlay`. It examines every `<iframe>` with an inline `style` attribute and requires all four geometry conditions: `position` is `fixed` or `absolute`; `z-index` is at least 1000; width contains `100%` or `100vw` and height contains `100%` or `100vh`; and `top` or `left` is `0` or `0px`.
 
-A frame with that geometry fires only when it also carries auth intent, meaning either its `id`, `class` or `src` matches `auth`, `login`, `signin`, `sign-in`, `oauth`, `verify` or `credential`, or it loads from a host that is not the site's own while the page separately shows auth copy or a password field.
+A frame with that geometry fires only when it also carries auth intent. That means either its `id` or `class` matches `auth`, `login`, `signin`, `sign-in`, `oauth`, `verify` or `credential`, or its `src` matches the same list without `credential`, or it loads from a host that is not the site's own while the page separately shows auth copy or a password field.
 
 - Info when this is the only integrity signal on the page. Message: `Suspicious authentication overlay (single signal — review)`.
 - Fail when at least two distinct integrity signals fire on the page. Message: `Likely credential-harvesting overlay (3 corroborating integrity signals)`.
@@ -29,7 +29,7 @@ The reported value names the z-index, the frame id and the source URL. The "Sign
 
 Find the template or plugin that emits the markup and delete it, then look for the loader that injected it. Treat the site as compromised: audit recently modified files, rotate credentials and read the access logs.
 
-A cookie banner or a support widget in a fixed iframe does not match, because it does not fill the viewport. A legitimate full-page portal iframe on your own origin does not match either, unless its id or class contains one of the auth words.
+A cookie banner or a support widget in a fixed iframe does not match, because it does not fill the viewport. A legitimate full-page portal iframe on your own origin matches only if an auth word appears in its id, its class or its `src`, which a path like `/login` will do.
 
 | | |
 |---|---|

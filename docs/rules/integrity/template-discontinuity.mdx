@@ -5,13 +5,15 @@ description: "An injected standalone page loads none of your site's CSS, hosts o
 
 ## What template discontinuity is
 
-Every page a CMS renders shares a template: the same stylesheets, the same asset hosts, the same body classes, the same navigation and footer. A page an attacker drops in has none of that, because it was written to stand alone and to look like something else.
+Most pages a CMS renders share theme markers: the same stylesheets, the same asset hosts, overlapping body classes, a navigation element and a footer. It is not a rule. WordPress supports per-page templates and page-specific body classes, and injected content can also inherit the theme it was injected into. What the pattern catches is the standalone case, a page written to look like something else that loads none of the site's own assets.
 
 Measuring the gap turns "this page looks wrong" into a number. A page can legitimately be off-theme, a bare landing page or a hosted form, so a low score on its own is a review item rather than a verdict.
 
 ## What squirrel checks
 
-The rule is site-wide. It fingerprints each page on five theme markers: stylesheet hrefs, external asset hosts, body class tokens, declared CSS custom-property names, and whether the page has a `<nav>` and a `<footer>`. It builds a baseline from the dominant cluster, then scores each page's similarity as a weighted Jaccard average: stylesheets 0.35, asset hosts 0.25, body classes 0.15, CSS variables 0.1 and page chrome 0.15.
+The rule is site-wide. It fingerprints each page on five theme markers: stylesheet hrefs, asset hostnames from `link`, `script` and `img` references including same-origin ones, body class tokens, CSS custom-property names declared in `<style>` elements or in an inline `style` on `<html>` or `<body>`, and whether the page matches `nav, [role='navigation']` and `footer, [role='contentinfo']`.
+
+The baseline is not a cluster. Each marker is tallied across every fingerprint and kept when it appears on at least `max(2, ceil(n / 2))` pages. Similarity is then a weighted sum: Jaccard overlap for stylesheets at 0.35, asset hosts at 0.25, body classes at 0.15 and CSS variables at 0.1, plus a chrome term at 0.15 that is the average of two boolean matches on nav and footer.
 
 - Skipped when the crawl produced fewer pages than `minPages`. Message: `Need >=4 pages to establish a template baseline`.
 - Skipped when too few pages had a parseable document. Message: `Too few parseable pages for a template baseline`.
@@ -26,7 +28,7 @@ Severity is warning, weight 6.
 
 Open the listed pages and compare them with a normal page from the same site. If a page is yours, load the shared stylesheet and the site chrome on it, which also fixes the inconsistency a visitor would notice. If it is not, treat the site as compromised: remove it, audit recently modified files and read the access logs.
 
-A site built from several unrelated templates, or one where a marketing landing page deliberately ships its own CSS, produces review-only findings on every audit. Lower `similarityThreshold`, or disable the rule, if that is the design.
+A marketing landing page that deliberately ships its own CSS scores low and is reported for review. A site with no shared stylesheets or asset hosts at all produces a skip instead, because there is no baseline to measure against. Lower `similarityThreshold`, or disable the rule, when off-template pages are the design.
 
 | | |
 |---|---|
