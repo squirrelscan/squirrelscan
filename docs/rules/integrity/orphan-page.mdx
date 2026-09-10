@@ -1,9 +1,32 @@
 ---
-title: "Hidden Orphan Page"
-description: "Detects crawled pages absent from every sitemap AND linked from nowhere"
+title: "Hidden orphan page: reachable but linked from nowhere"
+description: "An injected page hides by being in no sitemap and linked from no page. squirrel finds crawled pages with zero inbound links and no sitemap entry."
 ---
 
-Detects crawled pages that are absent from every sitemap **and** have no inbound internal links: a hidden page is a common injected-page signal.
+## What a hidden orphan page is
+
+A hidden page is one that answers a request but appears nowhere in the site's own structure: no internal link points at it and no sitemap lists it. It is live to anyone holding the URL and invisible to the owner browsing their own site.
+
+That is exactly how injected phishing and spam pages survive. A legitimate unlisted landing page has the same shape, which is why the rule separates the two by whether the page also carries other compromise signals. Note that this is a different question from `links/orphan-pages`, which counts pages with too few inbound links for discoverability.
+
+## What squirrel checks
+
+The rule is site-wide. It builds the set of sitemap URLs from every discovered sitemap, counts inbound internal links for every crawled page, then evaluates each page. The homepage is never flagged, and pages whose status code is outside 200 to 299 are ignored.
+
+A page is hidden when it has zero inbound internal links and, if the site has a sitemap at all, is absent from it. When the site has no sitemap, absence from it means nothing, so zero inbound links alone qualifies. Each hidden page is then correlated with the page-level integrity signals for that page.
+
+- Skipped when the crawl produced fewer pages than `minPages`. Message: `Need >=3 pages for hidden-page analysis`.
+- Pass when no page is hidden. Message: `No hidden pages (all crawled pages are linked or in a sitemap)`.
+- `orphan-page` fails for hidden pages that carry at least one page-level integrity signal. Message: `2 hidden page(s) carrying compromise signals — likely injected`, with up to five paths listed.
+- `orphan-page-review` reports info for hidden pages with no other signal. Message: `4 hidden page(s): in no sitemap and linked from nowhere (review)`.
+
+URLs are normalised before comparison on both sides. Severity is warning, weight 6.
+
+## How to fix it
+
+Open each listed page. If you created it, add it to the sitemap so it is at least visible to you, or link it from somewhere in the site. If you did not, treat the site as compromised: remove the page, audit recently modified files and read the access logs.
+
+A crawl that starts from a sitemap it cannot reach, or one that stops before it walks the whole site, produces hidden pages that are only artefacts of the crawl. Check the crawl coverage before acting on a long list.
 
 | | |
 |---|---|
@@ -13,25 +36,17 @@ Detects crawled pages that are absent from every sitemap **and** have no inbound
 | **Severity** | warning |
 | **Weight** | 6/10 |
 
-## How it differs from `links/orphan-pages`
-
-The SEO rule [`links/orphan-pages`](/rules/links) flags pages with *fewer than N* inbound internal links, a discoverability concern. This integrity rule is about *hidden* pages: zero inbound links **and** absent from the sitemap, which is exactly how injected phishing or spam pages stay invisible to the site owner while remaining live to anyone with the URL.
-
-A lone hidden page is reported as **info**. It escalates to a **failure** only when the hidden page also carries page-level compromise signals: the correlation gating that keeps false positives down.
-
-## Solution
-
-A reachable page that is in no sitemap and linked from nowhere on your site is invisible to you but live to anyone with the URL: exactly how injected phishing/spam pages hide. Confirm you created the page; if not, treat the site as compromised: remove it, audit recently modified files, and review server logs. Legitimate hidden pages (e.g. unlisted landing pages) should at least be in your sitemap if you want them found.
-
 ## Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `minPages` | `3` | Minimum crawled pages before hidden-page analysis runs |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `minPages` | integer, 2 or more | `3` | Minimum crawled pages before hidden-page analysis runs |
+
+### Configuration example
 
 ```toml squirrel.toml
-[rules."integrity/orphan-page"]
-minPages = 3
+[rule_options."integrity/orphan-page"]
+minPages = 10
 ```
 
 ## Enable / disable
@@ -57,3 +72,30 @@ disable = ["integrity/*"]
 enable = ["integrity/orphan-page"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/orphan-pages](/rules/links/orphan-pages): the discoverability version, counting pages with too few inbound links.
+- [integrity/template-discontinuity](/rules/integrity/template-discontinuity): whether a hidden page even uses your theme.
+- [integrity/seo-doorway](/rules/integrity/seo-doorway): what injected hidden pages usually contain.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): the gap between what you crawl and what the sitemap lists.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Sitemaps overview, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
+- [Hacked content, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Every hidden page is listed by path, split by whether it carries other compromise signals. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

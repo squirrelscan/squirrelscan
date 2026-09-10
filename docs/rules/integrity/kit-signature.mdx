@@ -1,9 +1,23 @@
 ---
-title: "Kit Signature"
-description: "Matches a page's HTML and JavaScript against threat-intel signatures of known phishing and malware kits"
+title: "Kit signature: matching a page against known phishing kits"
+description: "A phishing kit reuses the same markup and strings on every site it lands on. squirrel matches each page against bundled kit signatures."
 ---
 
-Matches a page's HTML and JavaScript against threat-intel signatures of known phishing and malware kits (for example the Calendly credential kit). A signature fires on the structural fingerprint of a kit, so it can catch an injected, token-gated standalone page that impersonates a brand's login or booking surface even when the softer heuristic integrity rules miss it.
+## What a kit signature is
+
+A phishing kit is a packaged set of files an attacker drops onto a compromised site: the cloned login page, the credential exfiltration script and a loader. Because the same kit is deployed on thousands of sites, it carries a recognisable structural fingerprint, a combination of brand strings, script tells and markup shapes that appear together.
+
+A signature encodes that combination. It is stricter than a heuristic, because it names the exact strings a specific kit ships, so it can catch an injected page that the softer integrity heuristics miss: a token-gated standalone document that shares nothing with the rest of the site.
+
+## What squirrel checks
+
+The rule is part of the opt-in threat-intel feature. When the feature is on, squirrelscan loads the bundled kit signatures before the audit rules run, then matches each crawled page. The match input is the page URL, its title, its HTML, its extracted text and the bodies of the external scripts attached to that page. Inline scripts are covered through the HTML.
+
+- Fail, once per matching signature. Message: `Matched kit signature "Calendly credential kit" (brand-lexicon, exfil-endpoint)`, naming the signature and every string that matched. The reported value is the signature id, and the details carry the signature's own severity and description. Severity error, weight 9.
+
+Signatures require several corroborating strings on the same page, so a match reports a failure directly rather than going through the two-signal correlation gate that the heuristic integrity rules use. When the threat-intel feature is off, the rule emits nothing at all: it never reports a page as clean for signatures it never ran.
+
+The signatures ship with squirrelscan and need no API key or network access, so the rule works on any opted-in audit from the CLI as well as in the cloud.
 
 | | |
 |---|---|
@@ -12,18 +26,6 @@ Matches a page's HTML and JavaScript against threat-intel signatures of known ph
 | **Scope** | Page |
 | **Severity** | error |
 | **Weight** | 9/10 |
-
-## How it works
-
-This rule is part of the opt-in **threat-intel** feature (`[intel]`). When the feature is on, squirrelscan loads a set of bundled kit signatures before the audit rules run, then matches each page against them using:
-
-- the page **URL** and **title**,
-- the page **HTML** and extracted **text**, and
-- the bodies of **inline and external scripts** attached to that page.
-
-Signatures are written to be high precision: each one requires several corroborating strings on the same page (a brand lexicon plus a kit tell), so a casual mention never trips it. Because the signature already demands multiple corroborating strings, a match reports a **failure** directly rather than going through the correlation gate the heuristic integrity rules use.
-
-The signatures ship with squirrelscan and need no API key or network access, so this rule works on every opted-in audit, both from the CLI and in the cloud. When the `[intel]` feature is off, `ctx.intel` is undefined and the rule does nothing: it never reports a page as clean for signatures it never ran.
 
 ## Enable the feature
 
@@ -34,9 +36,11 @@ Threat-intel is off by default. Turn it on to activate this rule:
 enabled = true            # off by default
 ```
 
-## Solution
+## How to fix it
 
-A page matching a known kit signature is a strong indicator that your site is compromised: an injected, often token-gated standalone page that impersonates a brand's login or booking surface to harvest credentials. Remove the page and any unexpected files, rotate credentials, audit server access logs, and review for a web shell or an injected loader. Signatures are high precision (they require multiple corroborating strings), so a match is not a casual false positive.
+Remove the matched page and every file that came with it. Treat the site as compromised: look for a web shell or an injected loader, audit recently modified files, rotate credentials and read the access logs. A signature match is not a casual false positive, because it needed several corroborating strings to fire.
+
+Read the matched strings in the report before acting. They name exactly what was found on the page, which is the fastest way to locate the file that emits it.
 
 ## Enable / disable
 
@@ -53,3 +57,30 @@ disable = ["integrity/kit-signature"]
 [rules]
 disable = ["integrity/*"]
 ```
+
+## Related rules
+
+- [integrity/known-malicious-url](/rules/integrity/known-malicious-url): the other half of the threat-intel feature, checking URLs against reputation feeds.
+- [integrity/brand-impersonation](/rules/integrity/brand-impersonation): the heuristic that catches kits with no signature yet.
+- [integrity/cloaking](/rules/integrity/cloaking): pages that hide the payload from your crawler entirely.
+- [integrity/orphan-page](/rules/integrity/orphan-page): how a standalone injected page usually shows up in a crawl.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Social engineering (phishing and deceptive sites), Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/social-engineering)
+- [Hacked content, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each match is listed by page with the signature name and the strings that matched. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

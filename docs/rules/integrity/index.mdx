@@ -3,9 +3,7 @@ title: "Site Integrity"
 description: "Signs of compromise: injected pages, phishing kits, malware, SEO spam"
 ---
 
-Site Integrity rules answer a question SEO tools usually ignore: **is this site hacked?**
-
-A compromised page is, by construction, an anomaly: off-theme, hidden from your own navigation, impersonating a third-party brand, or carrying an obfuscated payload. squirrelscan already crawls every page's DOM, scripts, links, and sitemap, so it can spot these patterns for free, with no external calls.
+Site Integrity rules answer a question audit tools usually skip: is this site hacked? A compromised page is an anomaly by construction, off-theme, hidden from your own navigation, impersonating a brand, or carrying an obfuscated payload. squirrelscan already has every page's DOM, scripts, links and sitemap from the crawl, so it looks for those patterns without any extra request.
 
 ## Correlation gating (low false positives)
 
@@ -51,3 +49,5 @@ These rules run **locally and free**, no login required.
 [rules]
 disable = ["integrity/*"]
 ```
+
+Every audit reports Site Integrity findings next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.

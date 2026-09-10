@@ -1,9 +1,35 @@
 ---
-title: "Fake Authentication Overlay"
-description: "Detects full-viewport credential overlays and off-brand sign-in controls"
+title: "Fake authentication overlay: full-screen iframe login prompts"
+description: "A fixed, full-viewport, high z-index iframe with an auth identifier is a credential-harvesting overlay. squirrel measures the geometry and the intent."
 ---
 
-Detects full-viewport fixed high-z-index iframe overlays or sign-in controls that send credentials to an off-brand host: a credential-harvesting overlay pattern.
+## What a fake authentication overlay is
+
+A credential-harvesting overlay is an iframe injected into a real page, positioned to cover the whole viewport, that renders a login form the attacker controls. The address bar still shows your domain, so nothing about the page warns the visitor. The injected `#google-auth` iframe is the pattern this rule was written against.
+
+The geometry is what gives it away: `position: fixed`, a very high `z-index`, width and height at 100% of the viewport, and pinned to the top left corner. Legitimate full-page app shells share that geometry, which is why geometry alone is not enough to call it an attack.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits at most one check named `fake-auth-overlay`. It examines every `<iframe>` with an inline `style` attribute and requires all four geometry conditions: `position` is `fixed` or `absolute`; `z-index` is at least 1000; width contains `100%` or `100vw` and height contains `100%` or `100vh`; and `top` or `left` is `0` or `0px`.
+
+A frame with that geometry fires only when it also carries auth intent, meaning either its `id`, `class` or `src` matches `auth`, `login`, `signin`, `sign-in`, `oauth`, `verify` or `credential`, or it loads from a host that is not the site's own while the page separately shows auth copy or a password field.
+
+- Info when this is the only integrity signal on the page. Message: `Suspicious authentication overlay (single signal — review)`.
+- Fail when at least two distinct integrity signals fire on the page. Message: `Likely credential-harvesting overlay (3 corroborating integrity signals)`.
+
+The reported value names the z-index, the frame id and the source URL. The "Sign in with brand" link pattern is deliberately left to `integrity/brand-impersonation`, so one off-brand sign-in link cannot count as two signals and satisfy the escalation gate on its own.
+
+## How to fix it
+
+```html
+<!-- remove the injected overlay -->
+<iframe id="google-auth" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999"></iframe>
+```
+
+Find the template or plugin that emits the markup and delete it, then look for the loader that injected it. Treat the site as compromised: audit recently modified files, rotate credentials and read the access logs.
+
+A cookie banner or a support widget in a fixed iframe does not match, because it does not fill the viewport. A legitimate full-page portal iframe on your own origin does not match either, unless its id or class contains one of the auth words.
 
 | | |
 |---|---|
@@ -12,19 +38,6 @@ Detects full-viewport fixed high-z-index iframe overlays or sign-in controls tha
 | **Scope** | Page |
 | **Severity** | warning |
 | **Weight** | 8/10 |
-
-## How it works
-
-Two patterns trip this rule:
-
-1. A **full-viewport, fixed, high-z-index iframe** pinned to a corner (the injected `#google-auth` overlay from the real incident). A normal fixed cookie banner won't match: it lacks the viewport-filling dimensions.
-2. A **"Sign in with &lt;brand&gt;" control** whose link target is neither the brand's real host nor your own origin (i.e. where the credentials would actually go).
-
-A lone overlay signal is reported as **info**. It escalates to a **failure** only when another compromise signal corroborates on the same page.
-
-## Solution
-
-A full-viewport, fixed, high-z-index iframe that covers the page, or a 'Sign in with Google/Microsoft' control whose target is not the brand's real domain, is a credential-harvesting overlay. If you did not build it, your site is likely compromised: remove the overlay markup/script, audit recently modified files, and rotate credentials. Legitimate sign-in always targets the provider's own host (accounts.google.com, login.microsoftonline.com).
 
 ## Enable / disable
 
@@ -49,3 +62,30 @@ disable = ["integrity/*"]
 enable = ["integrity/fake-auth-overlay"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [integrity/brand-impersonation](/rules/integrity/brand-impersonation): the link version of the same credential grab.
+- [integrity/obfuscated-script](/rules/integrity/obfuscated-script): the script that usually injects the overlay.
+- [security/x-frame-options](/rules/security/x-frame-options): stopping other sites from framing you, the mirror problem.
+- [integrity/template-discontinuity](/rules/integrity/template-discontinuity): whether the page carrying the overlay belongs to your theme at all.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The iframe element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe)
+- [Social engineering (phishing and deceptive sites), Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/social-engineering)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each overlay is listed by page with its z-index, id and source. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>
