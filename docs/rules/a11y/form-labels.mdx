@@ -1,13 +1,13 @@
 ---
 title: "Form labels: which inputs need one and how to check"
-description: "An input with only a placeholder has no name for a screen reader. squirrel lists every unlabeled input, textarea and select on every page."
+description: "An input labelled only by its placeholder loses its label the moment someone types. squirrel lists every unlabeled input, textarea and select."
 ---
 
 ## What a form label is
 
 A `<label>` gives a form control its accessible name, and clicking the label moves focus into the control. Two forms work: `<label for="id">` matching the control's `id`, or a `<label>` that wraps the control.
 
-Where a visible label does not fit the design, `aria-label` or `aria-labelledby` supplies the name instead. A `placeholder` does not: it disappears the moment the user types, and it is a hint, not a name. Buttons, hidden inputs and image inputs are named by other means and are out of scope.
+Where a visible label does not fit the design, `aria-label` or `aria-labelledby` supplies the name instead. A `placeholder` is only a last-resort fallback in the name computation, and squirrel does not accept it: it disappears the moment the user types, so a form labelled that way is unusable as soon as it is filled in. Buttons, hidden inputs and image inputs are named by other means and are out of scope.
 
 ## What squirrel checks
 

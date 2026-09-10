@@ -5,7 +5,7 @@ description: "When both attributes are present and name different languages, a s
 
 ## What xml:lang is
 
-`xml:lang` is the XML spelling of the language declaration. It matters in XHTML served as `application/xhtml+xml`, where the XML parser reads it and ignores plain `lang`. In an ordinary HTML document it is redundant, and most pages that carry it inherited it from an old doctype.
+`xml:lang` is the XML spelling of the language declaration. It matters in XHTML served as `application/xhtml+xml`, where it takes precedence over plain `lang`. In an ordinary HTML document it is redundant, and most pages that carry it inherited it from an old doctype.
 
 Carrying both is allowed, but the specification requires them to agree. When they disagree, which one wins depends on how the document was parsed, so the announced language depends on the content type rather than on anything visible.
 
@@ -16,8 +16,8 @@ One check, `html-xml-lang-mismatch`, at severity error. It reads `lang` and `xml
 - Fail when both are present and the primary subtags differ. Report message: `lang="en" and xml:lang="fr" don't match`, with the issue `Base languages must match` and the fix `Set both to the same value or remove xml:lang`.
 - Warn when both are present and the primary subtags match but the full values differ, such as `en` against `en-gb`. Report message: `lang="en" and xml:lang="en-gb" differ slightly`, noting `Base languages match but subtags differ`.
 - Warn when `xml:lang` is present and `lang` is not. Report message: `xml:lang present without lang attribute`, suggesting `Add lang attribute for HTML5 compatibility`.
-- Pass with `lang and xml:lang attributes match` when the two values are identical.
-- Info with `Only lang attribute present (recommended for HTML5)` in every other case. That branch also covers a page with neither attribute, where the message reads oddly. Whether `lang` exists at all is `a11y/html-lang-valid`.
+- Pass with `lang and xml:lang attributes match` when both values are non-empty and identical.
+- Info with `Only lang attribute present (recommended for HTML5)` in every other case. Every branch above tests the trimmed, lowercased value for truthiness, so an empty or whitespace-only attribute counts as absent and lands here. So does a page with neither attribute, where the message reads oddly. Whether `lang` exists at all is `a11y/html-lang-valid`.
 
 Values are lowercased before comparison and before being quoted in the message, so a report shows `en-gb` where the markup said `en-GB`.
 

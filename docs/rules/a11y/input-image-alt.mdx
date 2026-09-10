@@ -25,7 +25,7 @@ One check, `input-image-alt`, at severity error and weight 8. It finds every `in
 
 Name the action. Everything that applies to a normal submit button applies here, so if the equivalent `<button>` would read "Search", that is the `alt`.
 
-An image input is not a decorative image, so `alt=""` does not apply. An empty `alt` here leaves a button that submits the form with nothing to announce, and squirrel reports it.
+An image input is not a decorative image, so `alt=""` does not apply: it leaves a button that submits the form with no name of its own. squirrel reports it unless the element also carries an `aria-label` or `aria-labelledby`, either of which names it instead.
 
 If the coordinates are not needed, `<button type="submit">` with an `<img>` or an inline `<svg>` inside it is easier to name and easier to style.
 

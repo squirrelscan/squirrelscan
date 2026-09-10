@@ -64,10 +64,10 @@ disable = ["*"]
 
 ## Related rules
 
-- [a11y/video-captions](/rules/a11y/video-captions): captions inside the embedded player itself.
+- [a11y/video-captions](/rules/a11y/video-captions): recognizes a YouTube, Vimeo or Wistia iframe and asks you to confirm captions in the player.
 - [a11y/object-alt](/rules/a11y/object-alt): the same naming requirement for `<object>`.
 - [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name): another container announced by name before it is entered.
-- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): hidden frames that are still reachable by keyboard.
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): focusable controls inside a hidden region. Frames only count there when they carry an explicit `tabindex`.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 

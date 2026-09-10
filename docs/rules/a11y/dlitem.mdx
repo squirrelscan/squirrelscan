@@ -5,7 +5,7 @@ description: "A dt or dd that is not inside a dl loses the term-description pair
 
 ## What an orphaned dt or dd is
 
-`<dt>` and `<dd>` mean nothing on their own. Their semantics come from the `<dl>` that contains them: this term goes with that description. Outside a `<dl>` the browser exposes them as generic containers and a screen reader announces two unrelated blocks of text.
+`<dt>` and `<dd>` earn their meaning from the `<dl>` that contains them: this term goes with that description. Outside a `<dl>` the elements still map to term and definition roles, but the grouping that pairs them is gone, so a screen reader has no relationship to announce and the reader hears two unrelated blocks of text.
 
 The usual cause is a component that renders a term-description pair without rendering the list around it, or a refactor that moved the wrapper and left the items behind.
 

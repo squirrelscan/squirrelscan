@@ -68,7 +68,7 @@ disable = ["*"]
 - [a11y/heading-order](/rules/a11y/heading-order): levels that skip, once the headings have content.
 - [content/heading-hierarchy](/rules/content/heading-hierarchy): the same outline judged for structure and SEO.
 - [core/h1](/rules/core/h1): whether the page has a single top-level heading at all.
-- [a11y/aria-text](/rules/a11y/aria-text): headings flattened with a vendor role instead of fixed.
+- [a11y/aria-text](/rules/a11y/aria-text): `role="text"` containers that swallow focusable elements, a role sometimes reached for on split headings.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 

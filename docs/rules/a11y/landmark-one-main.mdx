@@ -15,7 +15,7 @@ One check, `landmark-one-main`, at rule severity warning. It counts every `<main
 
 - Warn with `Page has no main landmark` when the count is zero, expecting `One <main> element or role='main'`.
 - Pass with `Page has exactly one main landmark` when the count is one.
-- Fail with `Page has N main landmarks (should be 1)` when the count is above one. Each is listed as `main#id`, `main.class` or a bare tag name, with the issue `Multiple main landmarks confuse navigation`.
+- Fail with `Page has N main landmarks (should be 1)` when the count is above one. Each is listed by its own tag, as `tag#id`, `tag.class` or a bare tag name, so a `<div role="main">` appears as `div#content`. The finding carries the issue `Multiple main landmarks confuse navigation`.
 
 Having none is a warning while having several is a failure. That is deliberate: a missing landmark degrades navigation, while duplicated ones actively mislead.
 
@@ -70,7 +70,7 @@ disable = ["*"]
 ## Related rules
 
 - [a11y/landmark-regions](/rules/a11y/landmark-regions): the wider sweep across `main`, `nav` and `footer`.
-- [a11y/skip-link](/rules/a11y/skip-link): the bypass mechanism that accepts `<main>` as an alternative.
+- [a11y/skip-link](/rules/a11y/skip-link): the bypass check, which accepts `<main>` only alongside a `<nav>` landmark or an early heading.
 - [a11y/heading-order](/rules/a11y/heading-order): the other structure screen readers navigate by.
 - [a11y/aria-required-parent](/rules/a11y/aria-required-parent): roles that need a landmark or container above them.
 

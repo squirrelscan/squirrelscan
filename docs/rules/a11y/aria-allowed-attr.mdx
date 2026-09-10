@@ -7,7 +7,7 @@ description: "role=presentation with an aria-label, or a decorative image with o
 
 Every ARIA role supports a defined set of states and properties, and an attribute outside that set has no effect at best and a wrong effect at worst.
 
-Two combinations contradict themselves outright. `role="presentation"` and `role="none"` strip an element's semantics, so giving it a name asks assistive technology to announce something it has been told to ignore. `alt=""` marks an image as decorative for the same reason, so an `aria-label` on that image says the opposite of the `alt`.
+Two combinations contradict themselves outright. `role="presentation"` and `role="none"` ask the browser to drop an element's semantics, and a global ARIA property such as `aria-label` reverses that request: the specification's conflict resolution tells the browser to ignore the presentational role and keep the native semantics instead. `alt=""` marks an image as decorative, so an `aria-label` on that image says the opposite of the `alt`.
 
 ## What squirrel checks
 

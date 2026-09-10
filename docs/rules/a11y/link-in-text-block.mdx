@@ -7,7 +7,7 @@ description: "A link inside body text needs more than color to be visible. squir
 
 A link inside a paragraph has to be distinguishable from the words around it. Color alone does not do that, because a reader with a color vision deficiency may see the link and the surrounding text as the same shade.
 
-WCAG success criterion 1.4.1 Use of Color, Level A, covers this. An underline is the simplest answer. The alternative accepted by WCAG technique G183 is a color with at least 3:1 contrast against the surrounding text, plus an extra visual cue on hover and focus.
+WCAG success criterion 1.4.1 Use of Color, Level A, covers this. An underline is the simplest answer. The alternative documented in WCAG technique G183 is a link color with at least 3:1 contrast against the surrounding static text, on top of each color meeting its own contrast requirement against the background.
 
 ## What squirrel checks
 
@@ -15,7 +15,7 @@ One check, `link-in-text-block`, at severity warning. It looks inside text-beari
 
 For each `a[href]` inside one of those, it flags two markup patterns:
 
-- an inline `style` that mentions `text-decoration` and either sets it to `none` or does not mention `underline`
+- an inline `style` that contains the substring `text-decoration` and either contains `none` anywhere in the value or does not contain `underline`. The tests are plain substring matches over the whole attribute, so `text-decoration: underline; display: none` also matches.
 - a `class` containing `no-underline` or `text-decoration-none`
 
 Findings are reported as `N link(s) in text may lack underlines`, quoting the first 30 characters of each link's text, capped at the first ten. The finding carries the note `Links need visual distinction beyond color` and the suggestion `Ensure 3:1 contrast with surrounding text or add underlines`. With nothing flagged the check passes as `Links in text blocks appear distinguishable`, and with no links in text at all it returns info with `No links found in text blocks`.
@@ -69,7 +69,7 @@ disable = ["*"]
 
 ## Related rules
 
-- [a11y/color-contrast](/rules/a11y/color-contrast): the contrast ratio the alternative approach depends on.
+- [a11y/color-contrast](/rules/a11y/color-contrast): text against its background. It does not measure link text against the words around it, which is what G183 needs.
 - [a11y/link-text](/rules/a11y/link-text): what those links say once they are visible.
 - [a11y/focus-visible](/rules/a11y/focus-visible): the keyboard equivalent of the same problem.
 - [links/anchor-text](/rules/links/anchor-text): the same links judged as ranking signals.

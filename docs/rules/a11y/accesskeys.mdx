@@ -7,7 +7,7 @@ description: "Two elements claiming the same accesskey means one shortcut is unr
 
 `accesskey` asks the browser to bind a keyboard shortcut to an element. The modifier combination is chosen by the browser and the platform, not by the page, so the same markup produces different key presses on Windows, macOS and Linux.
 
-The attribute is rarely worth using. Its values collide with browser and screen reader shortcuts that users already rely on, and there is no way to discover the binding from the page. When it is used, each value has to be unique: if two elements claim the same key, which one the shortcut reaches is left to the browser.
+The attribute is rarely worth using. Its values collide with browser and screen reader shortcuts that users already rely on, and the binding stays invisible unless the page spells it out somewhere. When it is used, each value has to be unique: if two elements claim the same key, which one the shortcut reaches is left to the browser.
 
 ## What squirrel checks
 

@@ -5,7 +5,7 @@ description: "Buttons, links and inputs with no visible text and no aria-label h
 
 ## What aria-label is
 
-`aria-label` gives an element a name that assistive technology reads out when the element has no visible text. A button that only contains an icon, an `<a>` wrapping an image, or an `<svg>` with a click handler has nothing a screen reader can announce. The user hears "button" and nothing else.
+`aria-label` gives an element a name that assistive technology reads out when the element has no visible text. A button whose only content is an unlabeled icon, an `<a>` wrapping an image with no `alt`, or an `<svg>` with a click handler and no `<title>` has nothing a screen reader can announce. The user hears "button" and nothing else.
 
 Most elements do not need it. Visible text is the accessible name, so `<button>Save</button>` is complete. `aria-label` is for the cases where the visible label is a picture, or the visible text is not the whole story ("Close" on a dialog is clearer as `aria-label="Close settings"`). `aria-labelledby` does the same job by pointing at existing text, and `<title>` inside an `<svg>` names the graphic.
 

@@ -5,9 +5,9 @@ description: "aria-labelledby resolving to two elements, or to none, names the w
 
 ## What an ARIA id reference is
 
-Eight ARIA attributes work by pointing at other elements by id: `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-owns`, `aria-activedescendant`, `aria-flowto`, `aria-details` and `aria-errormessage`. Each accepts a whitespace-separated list of ids.
+Eight ARIA attributes work by pointing at other elements by id: `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-owns`, `aria-activedescendant`, `aria-flowto`, `aria-details` and `aria-errormessage`. Most take a whitespace-separated list; `aria-activedescendant`, `aria-details` and `aria-errormessage` take a single id. squirrel splits all eight on whitespace either way.
 
-A reference that resolves to nothing produces no name and no error. A reference that resolves to two elements takes the first, which may not be the one you meant. Either way the failure is invisible until someone uses a screen reader.
+A reference that resolves to nothing loses whatever it was contributing, be that a name, a description or a relationship, and reports no error. A reference that resolves to two elements takes the first, which may not be the one you meant. Either way the failure is invisible until someone uses a screen reader.
 
 ## What squirrel checks
 

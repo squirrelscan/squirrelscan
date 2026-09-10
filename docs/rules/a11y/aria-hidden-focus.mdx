@@ -11,7 +11,7 @@ The two states have to agree. Either the region is available, in which case it s
 
 ## What squirrel checks
 
-Two checks, at rule severity error. The rule walks every `[aria-hidden="true"]` element and tests the element itself and each descendant for focusability. Focusable means matching `a[href]`, `button:not([disabled])`, `input:not([disabled]):not([type="hidden"])`, `select:not([disabled])`, `textarea:not([disabled])`, `[contenteditable="true"]`, `audio[controls]`, `video[controls]` or `details > summary`, or carrying any `tabindex` other than `-1`. The `tabindex` lookup is case-insensitive, so React's `tabIndex` in server-rendered markup is caught.
+Two checks, at rule severity error. The rule walks every `[aria-hidden="true"]` element and tests the element itself first. A focusable container is reported and its descendants are not examined; otherwise every descendant is tested. Focusable means matching `a[href]`, `button:not([disabled])`, `input:not([disabled]):not([type="hidden"])`, `select:not([disabled])`, `textarea:not([disabled])`, `[contenteditable="true"]`, `audio[controls]`, `video[controls]` or `details > summary`, or carrying any `tabindex` other than `-1`. The `tabindex` lookup is case-insensitive, so React's `tabIndex` in server-rendered markup is caught.
 
 - `aria-hidden-focus` fails with `N focusable element(s) inside aria-hidden`. Items read `a#archive`, or `div (self is focusable)` when the hidden container is itself focusable. Up to ten are listed with a count of the rest.
 - `aria-hidden-focus-honeypot` warns with `N focusable element(s) inside aria-hidden appear to be an anti-spam honeypot`, carrying the value `Add tabindex="-1" (and autocomplete="off") to remove the honeypot from the tab order`. An element qualifies only when all three hold: it is an `<input>`, its `id` or `name` contains `hp`, `honeypot` or `trap` as a hyphen- or underscore-delimited token, and it sits inside a `<form>`. Requiring all three keeps a genuine bug on an unrelated hidden control from being quietly downgraded.
@@ -65,7 +65,7 @@ disable = ["*"]
 
 - [a11y/aria-hidden-body](/rules/a11y/aria-hidden-body): the same attribute applied to the whole document.
 - [a11y/tabindex](/rules/a11y/tabindex): positive values that reorder the tab sequence.
-- [a11y/focus-visible](/rules/a11y/focus-visible): whether the ring is drawn once focus lands somewhere.
+- [a11y/focus-visible](/rules/a11y/focus-visible): the static scan for `outline: none` shipped without a `:focus-visible` fallback.
 - [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name): the modal pattern that produces most of these.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
@@ -74,7 +74,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 - [aria-hidden, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-hidden)
 - [tabindex, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/tabindex)
-- [Understanding SC 2.4.3 Focus Order, W3C](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html)
+- [aria-hidden element is not focusable, W3C ACT rules](https://www.w3.org/WAI/standards-guidelines/act/rules/6cfa84/)
 
 ## Check your site
 

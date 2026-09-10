@@ -13,11 +13,11 @@ Styling a `<td>` to look like a header gives none of that. It looks identical an
 
 One check, `table-headers`, at severity warning. It covers every `<table>` except those with `role="presentation"` or `role="none"`.
 
-- Warn when a table contains no `<th>` at all. Report message: `N table(s) without <th> headers`. Each is listed as `Table 1`, numbered by document order, and every offender is listed.
+- Warn when a table contains no `<th>` at all. Report message: `N table(s) without <th> headers`. Each is listed as `Table 1`, numbered in document order across the tables the rule looked at, and every offender is listed.
 - Pass with `All N data table(s) have headers`.
 - Info with `No data tables found`.
 
-The check tests presence only. Whether the headers carry `scope`, whether the table has a `<caption>`, and whether each header has data under it are separate questions, covered by `a11y/th-has-data-cells` and `a11y/td-headers-attr`.
+The check tests presence only. It does not look at `scope` or at `<caption>`, and no rule in this category does. Whether each header has data under it is `a11y/th-has-data-cells`, and whether explicit `headers` references resolve is `a11y/td-headers-attr`.
 
 ## How to fix it
 
@@ -92,7 +92,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Accessibility section of the report. Tables are numbered by document order, so Table 3 is the third one in the source. Local audits are free.
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Table 3 means the third non-presentational table in document order. Local audits are free.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

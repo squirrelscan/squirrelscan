@@ -5,9 +5,9 @@ description: "An embedded object with no fallback is announced as nothing at all
 
 ## What alternative content is
 
-`<object>` embeds an external resource: a PDF, an SVG, a legacy plugin document. When the resource cannot be displayed, the browser falls back to whatever sits between the opening and closing tags, and assistive technology uses the same content to describe the embed.
+`<object>` embeds an external resource: a PDF, an SVG, a legacy plugin document. When the resource cannot be displayed, the browser falls back to whatever sits between the opening and closing tags, and that fallback is what a reader gets instead.
 
-With nothing between the tags and no label, a screen reader has an element it can find and nothing to say about it.
+With nothing between the tags and no label, a screen reader has an element it can find and nothing to say about it. Where the embedded resource does render, the fallback is not shown, so the resource has to carry its own accessibility as well.
 
 ## What squirrel checks
 
@@ -25,7 +25,7 @@ One check, `object-alt`, at severity warning and weight 6. It covers every `<obj
 </object>
 ```
 
-Put a real fallback between the tags. A link to the resource is the most useful one, because it works for a browser that cannot render the embed and for a screen reader user who would rather open the file directly.
+Put a real fallback between the tags. A link to the resource is the most useful one, because it is what a browser shows when it cannot render the embed. It is not a substitute for making the embedded document accessible when the embed does render.
 
 For an inline SVG or an image, `<img>` is usually the better element. It has an `alt` attribute, it is easier to make responsive, and it avoids this rule entirely.
 

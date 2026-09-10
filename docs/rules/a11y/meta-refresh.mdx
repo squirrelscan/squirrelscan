@@ -14,8 +14,8 @@ Both take control away from the reader. Someone using a screen reader, or readin
 One check name per case, at rule severity error. The rule finds the first `<meta>` whose `http-equiv` is `refresh`, matched case-insensitively, and parses its `content` as a number of seconds optionally followed by `;url=`.
 
 - `meta-refresh-redirect` warns with `Immediate meta refresh redirect found` when a url is present and the delay is zero, carrying the issue `Use server-side 301/302 redirect instead`.
-- `meta-refresh-redirect` fails with `Meta refresh redirect after N seconds` when a url is present and the delay is above zero, carrying the issue `Timed redirects disorient users`.
-- `meta-refresh-auto` fails with `Page auto-refreshes every N seconds` when there is no url and the delay is under 20 seconds, carrying the issue `Frequent refresh disrupts screen reader users`.
+- `meta-refresh-redirect` fails with `Meta refresh redirect after N seconds` when a url is present and the delay is anything other than zero, which includes a negative or unparsable value, carrying the issue `Timed redirects disorient users`.
+- `meta-refresh-auto` fails with `Page auto-refreshes every N seconds` when there is no url and the delay parses to a number above zero and under 20, carrying the issue `Frequent refresh disrupts screen reader users`.
 - `meta-refresh-auto` warns with `Page auto-refreshes every N seconds` when there is no url and the delay is 20 seconds or more, suggesting `Provide user control over refresh`.
 - `meta-refresh` passes with `No meta refresh found`.
 

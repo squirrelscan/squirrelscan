@@ -1,13 +1,13 @@
 ---
-title: "aria-hidden on body or html: the whole page disappears"
-description: "aria-hidden=true on the body or html element hides every element from assistive technology. squirrel checks both, at the highest weight."
+title: "aria-hidden on body or html: what it breaks"
+description: "aria-hidden=true on the body or html element asks assistive technology to ignore the entire page. squirrel checks both, at the highest weight."
 ---
 
 ## What aria-hidden does
 
 `aria-hidden="true"` removes an element and everything inside it from the accessibility tree. The element stays on screen and stays in the tab order. It stops existing only for a screen reader.
 
-That is the right tool for a decorative icon next to a text label. Applied to `<body>` or `<html>` it removes the entire page, and a screen reader reports an empty document.
+That is the right tool for a decorative icon next to a text label. On `<body>` or `<html>` it asks for the whole document to be ignored. Browsers differ in how far they honor that, and some refuse it outright on those two elements, but the markup is wrong either way and no page should depend on which browser is reading it.
 
 ## What squirrel checks
 

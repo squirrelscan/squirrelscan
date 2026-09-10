@@ -28,7 +28,7 @@ Two checks, at rule severity error. Both accept the same three name sources: a n
 
 Point `aria-labelledby` at the heading the dialog already shows. That keeps the announced name and the visible title in step, which is what a voice control user needs to open and close it by name.
 
-A dialog rendered into the page but never opened is still reported. That is correct: the name has to be in the markup before the dialog is shown, not added at open time.
+A dialog rendered into the page but never opened is still reported, because the rule reads a static snapshot of the markup. A name your script adds at open time is invisible to it, so keeping the name in the markup is the simplest way to satisfy both the audit and the announcement.
 
 | | |
 |---|---|

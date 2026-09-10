@@ -69,7 +69,7 @@ disable = ["*"]
 - [a11y/list-structure](/rules/a11y/list-structure): the same problem seen from the list.
 - [a11y/dlitem](/rules/a11y/dlitem): the equivalent for `<dt>` and `<dd>`.
 - [a11y/aria-required-parent](/rules/a11y/aria-required-parent): the ancestor-chain version of this check.
-- [a11y/aria-required-children](/rules/a11y/aria-required-children): a `role="list"` container with nothing inside it.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): a non-empty `role="list"` container with no item descendant. Empty containers are skipped there.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 

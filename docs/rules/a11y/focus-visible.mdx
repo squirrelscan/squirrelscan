@@ -7,14 +7,14 @@ description: "Removing the focus outline leaves keyboard users with no idea wher
 
 When a keyboard user tabs through a page the browser draws a ring around the focused element. `outline: none` deletes it, and without a replacement the user is navigating blind. WCAG success criterion 2.4.7 Focus Visible, Level AA, requires that the indicator exist.
 
-`:focus-visible` is the modern way to restyle it. The browser matches it only when it judges an indicator useful, which covers keyboard focus and skips ordinary mouse clicks, so a custom ring can be styled without reappearing every time someone clicks a button.
+`:focus-visible` is the modern way to restyle it. The browser decides when an indicator is warranted rather than matching every focus event, so in practice a keyboard user gets the ring and someone clicking a button does not. The heuristic is the browser's, not the page's: text inputs generally match on a mouse click too, and a user preference can force the indicator on everywhere.
 
 ## What squirrel checks
 
 This rule scans the page source as text, covering inline `<style>` blocks and `style` attributes. Rules in a linked stylesheet are not fetched, so they are invisible to it. Severity is warning.
 
 - `focus-outline-global` fails when the source contains a universal-selector rule that removes the outline, matching the shape `* { ... outline: none }` or `outline: 0`. Report message: `Global outline removal detected`, with the value `* { outline: none } removes focus for all elements`.
-- `focus-outline` warns when `outline: none` or `outline: 0` appears anywhere and `:focus-visible` does not. Report message: `outline:none found - ensure alternative focus styles exist`, with the value `Consider using :focus-visible for custom focus styles`.
+- `focus-outline` warns when no global removal pattern matched, `outline: none` or `outline: 0` appears anywhere, and `:focus-visible` does not. The two branches are exclusive, so a page with global removal never produces this warning. Report message: `outline:none found - ensure alternative focus styles exist`, with the value `Consider using :focus-visible for custom focus styles`.
 - `focus-modern` passes when `:focus-visible` or `:focus-within` appears, with the message `Modern focus selectors in use` and the matched selector as its value.
 - `focus-visible` returns info with `Focus styles not analyzed (requires CSS inspection)` when none of the above matched.
 
@@ -31,7 +31,7 @@ This rule scans the page source as text, covering inline `<style>` blocks and `s
 }
 ```
 
-Keep both rules together: the first draws the ring for keyboard users, the second suppresses it for pointer users, and neither leaves anyone without an indicator.
+Keep both rules together: the first draws the ring where the browser judges an indicator useful, the second removes the default ring everywhere else. Between them nobody navigating by keyboard is left without an indicator.
 
 Because the match is textual, `outline: none` inside a comment or a minified vendor bundle is still reported. The reverse is more common: a site whose focus styles live in an external stylesheet returns info even when the styles are correct.
 
@@ -72,7 +72,7 @@ disable = ["*"]
 - [a11y/tabindex](/rules/a11y/tabindex): positive `tabindex` values that scramble the order the ring moves in.
 - [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): elements that take focus while hidden from assistive technology.
 - [a11y/skip-link](/rules/a11y/skip-link): letting keyboard users jump past repeated navigation.
-- [a11y/color-contrast](/rules/a11y/color-contrast): the contrast the focus ring itself needs.
+- [a11y/color-contrast](/rules/a11y/color-contrast): text against its background, the contrast check squirrel does run. It does not measure the ring itself.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 

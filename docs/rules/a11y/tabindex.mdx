@@ -11,7 +11,7 @@ A positive value creates a second, earlier sequence. Every element with a positi
 
 ## What squirrel checks
 
-One rule, two check names, at severity warning. It reads every element carrying a `tabindex`, matching the attribute name case-insensitively so React's `tabIndex` in server-rendered markup counts, and parses the value as an integer. Values of `0` and `-1` are skipped, and a non-numeric value such as `auto` is ignored.
+One rule, three check names, at severity warning. It reads every element carrying a `tabindex`, matching the attribute name case-insensitively so React's `tabIndex` in server-rendered markup counts, and parses the value as an integer. Values of `0` and `-1` are skipped, and a non-numeric value such as `auto` is ignored.
 
 - `tabindex-very-high` fails with `N element(s) with very high tabindex values` for values above 100, carrying the issue `Very high tabindex values indicate misuse`. Items read `div#hero (tabindex=9999)`. Only the first ten are listed, and no count of the remainder is reported.
 - `tabindex-positive` warns with `N element(s) with positive tabindex` for values from 1 to 100, suggesting `Use natural document order instead`.

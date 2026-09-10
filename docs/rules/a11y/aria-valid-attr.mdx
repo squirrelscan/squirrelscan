@@ -5,7 +5,7 @@ description: "A misspelled ARIA attribute is ignored by every browser and warns 
 
 ## What a valid ARIA attribute name is
 
-ARIA defines a fixed set of `aria-*` state and property names. Anything outside it is an unknown attribute: it sits in the DOM, it validates as HTML, and it does nothing. No console warning, no visible change, nothing.
+ARIA defines a fixed set of `aria-*` state and property names. Anything outside it is an unknown attribute: the parser keeps it in the DOM, it fails HTML and ARIA conformance checking, and it does nothing at runtime. No console warning, no visible change, nothing.
 
 The mistakes cluster in a few places. `aria-labeledby` with one `l` is the classic, because the correct spelling doubles it. `aria-role` does not exist; the attribute is plain `role`. And anything invented to look like ARIA, such as `aria-title`, falls straight through.
 

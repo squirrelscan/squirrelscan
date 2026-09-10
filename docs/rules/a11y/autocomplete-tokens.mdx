@@ -5,7 +5,7 @@ description: "Name, email, address and payment fields with a missing or wrong au
 
 ## What autocomplete is
 
-`autocomplete` names what a form field collects, using a fixed vocabulary defined by the HTML standard: `given-name`, `email`, `tel`, `address-line1`, `postal-code`, `cc-number` and the rest of the autofill field names. Browsers and password managers read the token and fill the field from data the user has already saved. WCAG success criterion 1.3.5 requires it on fields that collect information about the user.
+`autocomplete` names what a form field collects, using a fixed vocabulary defined by the HTML standard: `given-name`, `email`, `tel`, `address-line1`, `postal-code`, `cc-number` and the rest of the autofill field names. Browsers and password managers read the token and fill the field from data the user has already saved. WCAG success criterion 1.3.5 Identify Input Purpose, Level AA, asks that the purpose of such a field be programmatically determinable, and an `autocomplete` token is the technique W3C documents for meeting it.
 
 Fields that collect anything else do not need a token. A search box, a quantity, a coupon code and a message body are all outside the vocabulary. A token the browser does not recognize is discarded, so a near miss such as `firstname` behaves exactly like no token at all.
 
@@ -30,7 +30,7 @@ Each finding names the field with a CSS selector, quotes its opening tag and sta
 
 The token goes on the field itself, never on the wrapper. Tokens accept the `section-*`, `shipping`/`billing` and `home`/`work`/`mobile` prefixes, so both `shipping address-line1` and `address-line1` satisfy the check.
 
-`autocomplete="off"` is reported rather than accepted. Browsers ignore it on personal data, so it does not stop autofill, only the accurate kind.
+`autocomplete="off"` is reported rather than accepted. It suppresses the browser's ordinary autocomplete suggestions, but browsers and password managers make exceptions for credentials, so it is a poor way to keep a field out of autofill and a good way to lose the accurate kind.
 
 | | |
 |---|---|

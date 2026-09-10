@@ -31,7 +31,7 @@ An empty container is skipped, on the assumption it is populated later. A findin
 
 Give the container the children its role demands, or drop the role and let the native elements speak for themselves.
 
-squirrel searches at any depth, so an intermediate wrapper does not trip the check. The ARIA specification is stricter: owned elements must be direct children, or connected with `aria-owns`. A widget that passes here can still be wrong in a browser, so keep the required children directly inside the container.
+squirrel searches at any depth, so an intermediate wrapper does not trip the check. Nor does it check the other half of the relationship: an element can be a DOM descendant and still not be owned by the container in the way the role expects, and `aria-owns` can pull in elements from elsewhere in the document. A widget that passes here can still be wrong in a browser.
 
 | | |
 |---|---|

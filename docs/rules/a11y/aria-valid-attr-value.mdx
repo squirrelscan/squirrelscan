@@ -5,7 +5,7 @@ description: "aria-checked=yes and aria-level=two are ignored by browsers. squir
 
 ## What a valid ARIA value is
 
-Each ARIA attribute declares a value type, and a value outside that type is discarded. `aria-checked="yes"` leaves the control with no checked state at all, which is worse than omitting the attribute, because the markup looks correct.
+Each ARIA attribute declares a value type. ARIA specifies how a user agent should handle a value outside that type, and the handling is per attribute: some fall back to a default, some are ignored. `aria-checked="yes"` cannot be relied on to produce a checked state, which is worse than omitting the attribute, because the markup looks correct.
 
 The types are: booleans that take only `true` or `false`; booleans that also accept `undefined`; tristates that add `mixed`; enumerated tokens with a fixed list; token lists; integers; and numbers.
 
@@ -19,7 +19,7 @@ One check, `aria-valid-attr-value`, at severity error. It reads every `aria-*` a
 | Boolean or undefined | `aria-expanded`, `aria-grabbed`, `aria-hidden`, `aria-selected` | `true`, `false`, `undefined`, empty |
 | Tristate | `aria-checked`, `aria-pressed` | `true`, `false`, `mixed` |
 | Token | `aria-autocomplete`, `aria-current`, `aria-haspopup`, `aria-invalid`, `aria-live`, `aria-orientation`, `aria-sort` | each attribute's own list |
-| Token list | `aria-dropeffect`, `aria-relevant` | any number of that attribute's tokens |
+| Token list | `aria-dropeffect`, `aria-relevant` | one or more of that attribute's tokens |
 | Integer | `aria-level` | a whole number, negative allowed |
 | Number | `aria-valuemax`, `aria-valuemin`, `aria-valuenow` | a decimal number, or empty |
 
@@ -35,7 +35,7 @@ Attributes outside the table are skipped, so a name that is not in the ARIA voca
 <div id="filters" aria-live="polite">...</div>
 ```
 
-Use the literal strings the type expects. `aria-expanded="1"` and `aria-expanded="yes"` both mean nothing; `aria-expanded="false"` is the value.
+Use the literal strings the type expects. `aria-expanded="1"` and `aria-expanded="yes"` are both outside the type and neither reliably produces a collapsed state. `aria-expanded="false"` is the value.
 
 Comparison is case-insensitive, so `aria-checked="TRUE"` passes. Write the values in lowercase anyway, so the markup matches the specification and the next reader.
 

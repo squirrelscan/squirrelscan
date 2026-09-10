@@ -13,8 +13,8 @@ The tag has a primary subtag, `en`, optionally followed by script and region sub
 
 Two check names, at rule severity error. Only one runs per page.
 
-- `html-has-lang` fails when `<html>` has no `lang` attribute at all. Report message: `HTML element missing lang attribute`, with the expected value `lang="en" or appropriate language code`. Nothing else is checked.
-- `html-lang-valid` fails when the value is empty, or when its primary subtag is neither one of the 190 ISO 639-1 codes the rule knows nor a plain two or three letter sequence. Report message: `Invalid lang attribute: empty value` or `Invalid lang attribute: invalid primary language 'english'`, with the expected value `Valid BCP 47 language tag (e.g., 'en', 'en-US', 'es')`.
+- `html-has-lang` fails when `<html>` has no `lang` attribute, and also when it has `lang=""`, since the rule tests the attribute for truthiness. Report message: `HTML element missing lang attribute`, with the expected value `lang="en" or appropriate language code`. Nothing else is checked.
+- `html-lang-valid` fails when the value is whitespace only, or when its primary subtag is neither one of the 190 ISO 639-1 codes the rule knows nor a plain two or three letter sequence. Report message: `Invalid lang attribute: empty value` or `Invalid lang attribute: invalid primary language 'english'`, with the expected value `Valid BCP 47 language tag (e.g., 'en', 'en-US', 'es')`.
 - `html-lang-valid` passes with `Valid lang attribute: "en-GB"`.
 
 Two limits follow from that shape check. Any two or three lowercase letters pass, so an invented code such as `qq` is accepted. And script and region subtags are not validated at all, so `en-ZZ` passes.

@@ -7,7 +7,7 @@ description: "A div between the li elements of a list changes what a screen read
 
 A screen reader announces a list by its item count: "list, 6 items". That count comes from the direct children of the `<ul>` or `<ol>`, so anything else sitting at that level either breaks the count or breaks the list entirely.
 
-The children have to be `<li>`, or elements carrying `role="listitem"` for markup that cannot use the tag. Wrappers added for styling belong inside the `<li>`, not around it.
+HTML allows `<li>` and script-supporting elements as the children of a `<ul>` or `<ol>`, and nothing else. squirrel additionally accepts an element carrying `role="listitem"`, which restores the semantics for markup that cannot use the tag even though it is not conforming HTML. Either way, wrappers added for styling belong inside the `<li>`, not around it.
 
 ## What squirrel checks
 

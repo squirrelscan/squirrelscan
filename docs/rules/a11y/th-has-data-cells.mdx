@@ -19,7 +19,7 @@ For each `<th>` in that grid it looks for a `<td>` in the same row, then in the 
 - Pass with `All table headers have associated data cells`.
 - Info with `No data tables found`.
 
-Building the grid is what makes the check work on tables with merged cells. A header spanning two columns is credited with the data under both.
+Building the grid is what makes the check work on tables with merged cells, but the test runs per grid slot. A header spanning two columns whose own row has no data cell is judged column by column, so data under one of the two columns does not clear the other.
 
 ## How to fix it
 
@@ -31,7 +31,7 @@ For a table that is really a layout, say so:
 </table>
 ```
 
-That removes it from this check, from the table list a screen reader offers, and from every other table rule. Better still, replace it with CSS grid or flexbox, which is what the layout wanted in the first place.
+That removes it from this check, from `a11y/table-headers` and from `a11y/table-duplicate-name`, which all skip presentational tables. `a11y/td-headers-attr` looks at every table regardless. Better still, replace it with CSS grid or flexbox, which is what the layout wanted in the first place.
 
 For a real data table, check that each header has cells under or beside it. A header row followed by nothing, left in place while the data loads, produces this finding on the served HTML.
 

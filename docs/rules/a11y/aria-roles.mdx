@@ -17,7 +17,7 @@ One check, `aria-roles`, at severity error. It reads every `[role]` element, tri
 - Pass with `N element(s) with valid ARIA roles`.
 - Info with `No ARIA roles found`.
 
-Two limits are worth knowing. Every token in a fallback chain is validated, so `role="doc-subtitle heading"` is reported even though a browser resolves it to `heading`. And the vocabulary is core ARIA only, so the DPUB-ARIA and Graphics-ARIA module roles are all reported as invalid.
+Two limits are worth knowing. Every token in a fallback chain is validated, so `role="doc-subtitle heading"` is reported even though the chain is written correctly: a browser that supports `doc-subtitle` uses it, and one that does not falls through to `heading`. And the vocabulary is core ARIA only, so the DPUB-ARIA and Graphics-ARIA module roles are all reported as invalid.
 
 ## How to fix it
 

@@ -28,7 +28,7 @@ A name is accepted from a non-empty `aria-label`, an `aria-labelledby` pointing 
 
 An indeterminate progress bar, one with no `value`, still needs a name. It is announced as busy, and the name is the only thing that says what is busy.
 
-For a custom `role="progressbar"`, add `aria-valuenow`, `aria-valuemin` and `aria-valuemax` alongside the name. The name says what is happening; those say how far it has got.
+For a custom `role="progressbar"`, add `aria-valuenow` alongside the name so the widget reports its position. Leave `aria-valuenow` off when the progress is indeterminate, which is how that state is signalled, and leave `aria-valuemin` and `aria-valuemax` off unless the range differs from the default 0 to 100.
 
 | | |
 |---|---|
@@ -65,7 +65,7 @@ disable = ["*"]
 ## Related rules
 
 - [a11y/aria-meter-name](/rules/a11y/aria-meter-name): the same check for `<meter>` and `role="meter"`.
-- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): the value attributes a progress bar role should carry.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): required state attributes for the widget roles that have them, `meter` and `slider` among them.
 - [a11y/aria-valid-attr-value](/rules/a11y/aria-valid-attr-value): those values having to be numbers.
 - [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): the sibling naming check over input roles.
 

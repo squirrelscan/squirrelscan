@@ -7,16 +7,16 @@ description: "Buttons and links smaller than a fingertip are hard to hit on a ph
 
 A touch target is the region that reacts to a tap: a button, a link, a checkbox, anything with a click handler. WCAG sets two thresholds for it. Success criterion 2.5.8 Target Size (Minimum), Level AA, asks for 24 by 24 CSS pixels. Success criterion 2.5.5 Target Size (Enhanced), Level AAA, asks for 44 by 44.
 
-Size comes from the element's box, not its text. Padding on a small icon button raises the target; a larger font on a text link does not. The AA criterion also has a spacing exception: an undersized target passes if a 24 pixel circle centered on it does not overlap the circle of any other target.
+Size comes from the element's box. Padding enlarges the target without enlarging the text, while font size changes both, since an inline link's box is derived from its content. The AA criterion also has a spacing exception: an undersized target passes when a 24 pixel circle centered on it does not intersect another target, nor the circle of another undersized target.
 
 ## What squirrel checks
 
 One check, `touch-targets`, at severity warning. It reads inline `style` attributes only, so it never needs a stylesheet or a rendered page.
 
-- Warn when a `<button>`, `<a>`, `<input type="submit">`, `<input type="button">` or `[role="button"]` sets an inline `width` or `height` below 44 pixels. Values in `rem` and `em` are converted at 16 pixels to the unit. Report message: `N element(s) with potentially small touch targets`, with the value `Ensure minimum 44x44px touch targets`.
-- Info in every other case, with the message `Touch target sizes require CSS analysis` and the value `Verify buttons/links are at least 44x44px`.
+- Warn when a `<button>`, `<a>`, `<input type="submit">`, `<input type="button">` or `[role="button"]` has an inline style declaring a `width` or `height` below 44 pixels. The match is an unanchored search for an integer followed by `px`, `rem` or `em`, so `min-width: 20px` counts and `width: 1.5rem` is not measured at all. `rem` and `em` are converted at 16 pixels to the unit. Width and height are counted separately, so one element can add two to the tally. Report message: `N element(s) with potentially small touch targets`, with the value `Ensure minimum 44x44px touch targets`. The check emits no items, only the count.
+- Info whenever the tally is zero, with the message `Touch target sizes require CSS analysis` and the value `Verify buttons/links are at least 44x44px`.
 
-The rule uses 44 pixels, the enhanced threshold, as its cutoff. An info result means nothing was measurable, not that the page passes: a target sized by a stylesheet or a utility class is invisible to this check.
+The rule uses 44 pixels, the enhanced threshold, as its cutoff. An info result means no undersized inline dimension was found, which is not the same as the page passing: a target sized by a stylesheet or a utility class is invisible to this check.
 
 ## How to fix it
 
@@ -80,7 +80,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every element with an undersized inline dimension is listed by page. Local audits are free.
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The finding is a per-page count of undersized inline dimensions, not a list of elements. Local audits are free.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

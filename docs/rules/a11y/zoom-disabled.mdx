@@ -20,7 +20,7 @@ One check, `zoom-disabled`, at severity error. It reads the first `meta[name="vi
 - Pass with `User zoom is not restricted`.
 - Info with `No viewport meta tag found`.
 
-The `maximum-scale` cutoff of 5 matches the threshold Lighthouse uses. It is stricter than WCAG's 200 percent, so a page with `maximum-scale=3` fails this rule while meeting the success criterion.
+The `maximum-scale` cutoff of 5 matches the threshold Lighthouse uses. It is stricter than WCAG's 200 percent, so a page with `maximum-scale=3` fails this rule and can still meet the success criterion, provided text reaches 200 percent without losing content or function.
 
 ## How to fix it
 
@@ -77,7 +77,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 - [Viewport meta element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Viewport_meta_element)
 - [Understanding SC 1.4.4 Resize Text, W3C](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
-- [F69: Failure when resizing visually rendered text up to 200 percent, W3C](https://www.w3.org/WAI/WCAG22/Techniques/failures/F69)
+- [Meta viewport allows for zoom, W3C ACT rules](https://www.w3.org/WAI/standards-guidelines/act/rules/b4f0c3/)
 
 ## Check your site
 

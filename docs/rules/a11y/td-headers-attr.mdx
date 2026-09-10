@@ -74,7 +74,7 @@ disable = ["*"]
 
 - [a11y/table-headers](/rules/a11y/table-headers): whether the table has `<th>` cells to point at.
 - [a11y/th-has-data-cells](/rules/a11y/th-has-data-cells): headers with no data in their row or column.
-- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): duplicated ids, which make a reference ambiguous.
+- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): duplicated ids on focusable elements. It does not cover `<th>` ids, so header collisions have to be caught by hand.
 - [a11y/table-duplicate-name](/rules/a11y/table-duplicate-name): telling several tables apart.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
@@ -82,7 +82,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 ## References
 
 - [The headers attribute, HTML Standard](https://html.spec.whatwg.org/multipage/tables.html#attr-tdth-headers)
-- [Tables with irregular headers, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/tables/irregular/)
+- [Tables with multi-level headers, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/tables/multi-level/)
 - [The td element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/td)
 
 ## Check your site

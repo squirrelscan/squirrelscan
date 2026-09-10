@@ -15,7 +15,7 @@ Two check names, at rule severity warning.
 
 - `video-captions` runs when the page has at least one `<video>`. It warns with `N video(s) without caption tracks` for any `<video>` with no `track[kind="captions"]` and no `track[kind="subtitles"]`, listing each by the first 50 characters of its `src`, or of its first `<source>`'s `src`, or as `inline video` when neither exists. With every video covered it passes as `All videos have caption tracks`.
 - `video-embeds` returns info with `N embedded video(s) detected` and the value `Verify captions are enabled in embed settings` when the page has an `<iframe>` whose `src` contains `youtube`, `vimeo` or `wistia`.
-- With neither native video nor a recognised embed, one info check reports `No videos detected`.
+- With neither native video nor a recognized embed, one info check reports `No videos detected`.
 
 squirrel cannot see inside a third-party player, so the embed check is a prompt rather than a verdict. Confirm captions in the platform's own settings.
 
@@ -28,7 +28,7 @@ squirrel cannot see inside a third-party player, so the embed check is a prompt 
 </video>
 ```
 
-Add one `<track>` per language, and mark the default one. `kind="captions"` is for viewers who cannot hear the audio, so it includes sound effects and speaker changes; `kind="subtitles"` is a translation for viewers who can.
+Add one `<track>` per language, and mark the default one. `kind="captions"` is for viewers who cannot hear the audio, so it carries sound effects and speaker changes alongside the dialogue. `kind="subtitles"` carries the dialogue only, transcribed or translated, for viewers who can hear but need the words.
 
 Automatic captions from a hosting platform are a starting point, not a finish. Review them for names, jargon and numbers, which is where they fail most.
 
@@ -66,7 +66,7 @@ disable = ["*"]
 
 ## Related rules
 
-- [video/video-accessible](/rules/video/video-accessible): the wider accessibility check on video markup.
+- [video/video-accessible](/rules/video/video-accessible): the same native caption-track presence check, reported differently and with no embed detection.
 - [a11y/frame-title](/rules/a11y/frame-title): naming the iframe an embedded player sits in.
 - [a11y/object-alt](/rules/a11y/object-alt): alternative content for other embedded media.
 - [video/video-schema](/rules/video/video-schema): the structured data that describes the same video to search engines.

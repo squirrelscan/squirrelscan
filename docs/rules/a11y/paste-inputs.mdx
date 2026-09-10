@@ -7,7 +7,7 @@ description: "Blocking paste forces people to retype passwords by hand. squirrel
 
 Some forms cancel the paste event on password and confirmation fields, on the theory that retyping proves the user knows the value. It proves nothing, and it costs a lot.
 
-A password manager cannot fill the field. A long generated password has to be transcribed by hand, which produces exactly the typos the field was trying to prevent. Users with a motor impairment, and users on a phone, lose the only practical way to enter a long string. The usual result is that people pick shorter, weaker passwords.
+Anyone transferring a password by copy and paste, from a manager, a note or another window, cannot enter it that way. A long generated password has to be transcribed by hand, which produces exactly the typos the field was trying to prevent. Users with a motor impairment, and users on a phone, lose the only practical way to enter a long string. The usual result is that people pick shorter, weaker passwords.
 
 ## What squirrel checks
 
@@ -65,7 +65,7 @@ disable = ["*"]
 
 ## Related rules
 
-- [a11y/autocomplete-tokens](/rules/a11y/autocomplete-tokens): the tokens password managers need to fill the field at all.
+- [a11y/autocomplete-tokens](/rules/a11y/autocomplete-tokens): autofill tokens on identifiable name, contact, address and payment fields.
 - [a11y/input-types](/rules/a11y/input-types): the other ways a form refuses help the browser offers.
 - [a11y/form-labels](/rules/a11y/form-labels): naming the same fields.
 - [a11y/touch-targets](/rules/a11y/touch-targets): the other thing that makes a form hard to complete on a phone.
@@ -76,7 +76,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 - [Element: paste event, MDN](https://developer.mozilla.org/en-US/docs/Web/API/Element/paste_event)
 - [The autocomplete attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete)
-- [Understanding SC 3.3.2 Labels or Instructions, W3C](https://www.w3.org/WAI/WCAG22/Understanding/labels-or-instructions.html)
+- [Understanding SC 3.3.8 Accessible Authentication (Minimum), W3C](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html)
 
 ## Check your site
 

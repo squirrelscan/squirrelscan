@@ -1,11 +1,11 @@
 ---
 title: "Visible label missing from the accessible name"
-description: "A button showing 'Search' with aria-label 'Find products' cannot be activated by voice. squirrel compares the two on every control."
+description: "A button showing 'Search' with aria-label 'Find products' may not respond when a user speaks its visible label. squirrel compares the two."
 ---
 
 ## What label in name means
 
-Voice control users say what they see: "click Search". The software matches the spoken words against the control's accessible name, not against the pixels. When the name does not contain the visible words the command does nothing, and there is no error explaining why.
+Voice control users say what they see: "click Search". The software matches the spoken words against the control's accessible name, not against the pixels. When the name does not contain the visible words that command fails, with no error explaining why, and the user has to find another way in.
 
 WCAG success criterion 2.5.3 Label in Name, Level A, requires the visible label text to be part of the accessible name. Adding context around it is fine; replacing it is not.
 

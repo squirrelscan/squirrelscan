@@ -5,7 +5,7 @@ description: "A control with two labels is announced inconsistently across scree
 
 ## What multiple labels means
 
-A form control is meant to have one accessible name. Two `<label>` elements pointing at the same control leave it to the browser to decide what to do, and browsers do not agree: some concatenate, some announce the first, some announce the last.
+A form control has one accessible name. When two `<label>` elements point at the same control, HTML says the name is the label texts concatenated in document order, which is legal and usually unhelpful: the user hears both strings run together, in whatever order the markup happens to be in.
 
 Extra text about a field is a description, not a second name. That is what `aria-describedby` is for, and screen readers announce it after the name rather than fighting with it.
 
@@ -66,7 +66,7 @@ disable = ["*"]
 ## Related rules
 
 - [a11y/form-labels](/rules/a11y/form-labels): controls with no label at all.
-- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): a duplicated id, which is how one label ends up naming two controls.
+- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): a duplicated id, which sends a `<label for>` to the first match and leaves the control you meant unlabeled.
 - [a11y/label-content-name-mismatch](/rules/a11y/label-content-name-mismatch): a label that disagrees with the visible text.
 - [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): the resolved name once the labels are sorted out.
 

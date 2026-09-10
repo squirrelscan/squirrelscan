@@ -15,8 +15,8 @@ One check, `color-contrast`, at severity warning. It runs four passes over what 
 
 - Inline styles: any element whose `style` sets both `color` and `background` or `background-color` to a hex value, an `rgb()`/`rgba()` value or one of 32 named colors. squirrel computes the WCAG ratio and reports anything under 4.5:1 as `span: #999 on #fff (2.85:1)`. `transparent` is treated as white.
 - Class names: elements whose `class` matches a known low-contrast pattern. That covers Tailwind-style `text-gray-3xx` and `text-gray-4xx` and the slate, zinc, neutral and stone equivalents, Bootstrap's `text-muted` and `text-secondary`, the generic `text-light`, `text-subtle`, `text-disabled` and `text-placeholder`, and `opacity-2x`/`opacity-3x`.
-- `<style>` blocks: rules that set a `color` to a known-light value such as `#ccc`, `#ddd`, `#eee`, `#999`, `#aaa`, `#bbb`, `#c0c0c0`, `#d3d3d3` or `#dcdcdc`, or an `rgb()` whose first channel falls between 180 and 229. Capped at five findings.
-- Raw source: the same light hex values plus `lightgray`, `lightgrey`, `silver`, and `color: white` or `color: #fff`, counted as `Light gray text: N instance(s)`.
+- `<style>` blocks: any rule that declares a `color` and contains a known-light value anywhere inside it. That covers `#ccc`, `#ddd`, `#eee`, `#999`, `#aaa`, `#bbb`, `#c0c0c0`, `#d3d3d3`, `#dcdcdc` and an `rgb()` whose first channel falls between 180 and 229. The match is over the whole rule, so `.x { color: #000; background: #ccc }` is reported even though the light value is the background. Capped at five findings.
+- Raw source: four separate patterns over the whole HTML, each counted on its own. `color: #ccc`, `#ddd`, `#eee`, `#999`, `#aaa` or `#bbb` and `color: lightgray`, `lightgrey` or `silver` are both counted as `Light gray text: N instance(s)`; `color: white` or `color: #fff` as `White text (verify background): N instance(s)`; and a `color:` set to a three-digit hex drawn from `d`, `e` and `f`, such as `#eef`, as `Very light text color: N instance(s)`.
 
 Findings are deduplicated, and the check reports `N potential color contrast issue(s)` with up to ten items. With nothing found it passes as `No obvious contrast issues detected`, and on a page with no styled elements at all it returns info with `Limited contrast analysis available`.
 
@@ -81,7 +81,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every measurable low-contrast pair is listed with its computed ratio. Local audits are free.
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The first ten deduplicated findings are listed, and inline color pairs carry their computed ratio. Local audits are free.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

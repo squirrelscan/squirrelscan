@@ -7,7 +7,7 @@ description: "A quoted passage marked with a bad lang tag is read in the wrong v
 
 `lang` on `<html>` sets the document's language. `lang` on any element below it overrides that for its subtree, which is how a French quotation inside an English article gets read with French pronunciation.
 
-WCAG success criterion 3.1.2 Language of Parts, Level AA, asks for it wherever the language changes. An invalid tag is worse than none: the browser cannot resolve it, and the passage falls back to the page language or to whatever the screen reader guesses.
+WCAG success criterion 3.1.2 Language of Parts, Level AA, asks for it wherever the language changes. An invalid tag is worse than none: it is exposed as given, and what a screen reader does with a tag it cannot resolve is up to the screen reader.
 
 ## What squirrel checks
 
