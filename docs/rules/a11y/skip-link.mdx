@@ -85,9 +85,9 @@ disable = ["*"]
 
 ## Related rules
 
-- [a11y/landmark-one-main](/rules/a11y/landmark-one-main): the `<main>` landmark, which clears this rule only alongside a `<nav>` landmark or an early heading.
+- [a11y/landmark-one-main](/rules/a11y/landmark-one-main): whether the page has exactly one `<main>`, which clears this rule only alongside a `<nav>` landmark or an early heading.
 - [a11y/landmark-regions](/rules/a11y/landmark-regions): the `<nav>` landmark that completes the landmark route.
-- [a11y/focus-visible](/rules/a11y/focus-visible): making the skip link visible once it takes focus.
+- [a11y/focus-visible](/rules/a11y/focus-visible): `outline: none` with no `:focus-visible` replacement, which is what would hide the skip link.
 - [a11y/tabindex](/rules/a11y/tabindex): positive values that would move the skip link out of first position.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.

@@ -68,7 +68,7 @@ disable = ["*"]
 
 - [a11y/link-in-text-block](/rules/a11y/link-in-text-block): links told apart from body text by color alone.
 - [content/hidden-text](/rules/content/hidden-text): text hidden outright rather than made faint.
-- [a11y/focus-visible](/rules/a11y/focus-visible): the focus ring, which needs contrast of its own.
+- [a11y/focus-visible](/rules/a11y/focus-visible): `outline: none` in the page source with no `:focus-visible` fallback.
 - [mobile/font-size](/rules/mobile/font-size): small type, which makes a marginal ratio worse.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
