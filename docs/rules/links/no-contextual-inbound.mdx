@@ -5,9 +5,9 @@ description: "A footer link on every page looks like hundreds of inbound links a
 
 ## What a contextual inbound link is
 
-A contextual link sits inside the content: a sentence in an article, a description on a hub page, a related-reading list written for that page. A chrome link sits in the header, footer, navigation or a sidebar widget, and appears identically on every page of the site.
+A contextual link sits inside the content: a sentence in an article, a description on a hub page, a related-reading list written for that page. A chrome link is one whose anchor has a `nav`, `header`, `footer` or `aside` ancestor. That is an element test rather than a repetition test, so an article's own `<header>` or a per-page `<aside>` counts as chrome too.
 
-Counting them together hides a real problem. A page reachable only through the footer has a large raw inbound count and no editorial support at all: nothing on the site says what the page is about or why it matters, only that it exists. This rule counts contextual links only.
+Counting the two together hides a real problem. A page reachable only through the footer has a large raw inbound count and no editorial support at all: nothing on the site says what the page is about or why it matters, only that it exists. This rule counts contextual links only.
 
 ## What squirrel checks
 
@@ -25,7 +25,7 @@ Crawls stored before the chrome flag existed report every link as contextual, so
 
 Link to the page from the body of the content it belongs with, using anchor text that describes it. A category page that introduces its members in prose, rather than only listing them, produces contextual links as a side effect.
 
-A whole site that links only through chrome will report every page. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
+A whole site that links only through chrome reports every page that is not the homepage, is not excluded, and has at least `minInboundLinks` raw inbound links. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
 
 | | |
 |---|---|

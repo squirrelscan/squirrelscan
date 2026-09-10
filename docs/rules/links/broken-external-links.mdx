@@ -7,7 +7,7 @@ description: "External links die without warning when the other site changes. sq
 
 An external link points at a site you do not control, so it can break at any time and you will not be told. Studies of link rot put the half-life of a web citation in the low single-digit years.
 
-Not every failed check is a dead link. A 403 from a web application firewall means the site refused an automated request while serving humans normally. A 429, or a 503 carrying `Retry-After`, means the host was throttling the audit. Both are unverifiable rather than broken, and treating them as broken sends you chasing links that work.
+Not every failed check is a dead link. A 403 from a web application firewall means the automated request was refused; whether a person would reach the page is unverified either way. A 429, or a 503 carrying `Retry-After`, is treated as throttling, though a 503 can equally be scheduled maintenance. squirrel classifies both as unverifiable rather than broken, because reporting them as broken sends you chasing links that work.
 
 ## What squirrel checks
 

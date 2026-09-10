@@ -1,9 +1,34 @@
 ---
-title: "Inline SVG Size"
-description: "Checks for large inline SVGs bloating HTML"
+title: "Large inline SVG: when to move it to an external file"
+description: "Inline SVG cannot be cached separately from the HTML, so a big one is paid for on every page view. squirrel measures inline SVG size per page."
 ---
 
-Checks for large inline SVGs bloating HTML
+## What inline SVG costs
+
+An inline `<svg>` is part of the HTML document. That is exactly what you want for a small icon: no extra request, and the fill colour can be styled from CSS. It is the wrong shape for anything large, because the markup is re-downloaded with every page and cannot be cached on its own.
+
+An illustration exported from a design tool is often tens of kilobytes of path data. Referenced with `<img src="illustration.svg">` it is cached once and reused; inlined, it is added to every HTML response that carries it.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `<svg>` element in the document, measuring the length of each element's serialised markup. It emits a single check named `svg-inline`:
+
+- Info when the page has no inline SVG. Message: `No inline SVGs found`.
+- Warn when any single SVG exceeds 4000 characters. Message: `2 large inline SVG(s) (>4KB each)`, with `Total inline SVG size: 31.4KB. Consider external files` as the value. Severity info, weight 3.
+- Info when no single SVG is large but the total exceeds 10000 characters. Message: `24 inline SVG(s) totaling 14.2KB`, with `Consider using SVG sprites or external files` as the value.
+- Pass otherwise. Message: `9 inline SVG(s), 3.1KB total`.
+
+Sizes are character counts of the markup rather than transferred bytes, and they are measured before compression, which typically shrinks SVG considerably. The rule's own severity is info, so even the warn branch does not fail an audit.
+
+## How to fix it
+
+```html
+<img src="/illustration.svg" width="600" height="400" alt="" />
+```
+
+Move large graphics to an external file and reference them. Keep small icons inline where you need to style them from CSS, or collect them into one sprite sheet referenced with `<use>`.
+
+Run the files through SVGO first. Design-tool exports usually carry metadata, unused definitions and far more decimal places than any renderer needs.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks for large inline SVGs bloating HTML
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Large inline SVGs increase HTML size and block rendering. Move SVGs >4KB to external files and reference with `<img>` or CSS background. Inline small, critical SVGs (icons, logos) only. Use SVGO to optimize. Consider SVG sprites for icon sets. Inline SVGs can't be cached separately from HTML.
 
 ## Enable / disable
 
@@ -40,3 +61,30 @@ disable = ["images/*"]
 enable = ["images/svg-inline"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/html-size](/rules/crawl/html-size): the document size these SVGs contribute to.
+- [images/modern-format](/rules/images/modern-format): formats for raster images, which SVG is exempt from.
+- [a11y/aria-labels](/rules/a11y/aria-labels): the accessible name an interactive SVG needs.
+- [performance/dom-size](/rules/performance/dom-size): the node count a large inline SVG adds.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [SVG, MDN](https://developer.mozilla.org/en-US/docs/Web/SVG)
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each page is reported with its inline SVG count and total size. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

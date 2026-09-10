@@ -5,16 +5,16 @@ description: "A malformed href is a link that goes nowhere, and javascript:void(
 
 ## What an invalid link is
 
-An invalid link is an `<a href>` whose value the parser could not turn into a URL. That covers malformed addresses, hrefs built from a template variable that resolved to nothing, and stray whitespace or markup inside the attribute.
+An invalid link is an `<a href>` whose value the parser could not turn into a URL, such as `http://[invalid` or an address with an unparseable host. It is a link that cannot go anywhere, usually produced by string concatenation or a template variable that resolved to something unexpected.
 
-The `javascript:void(0)` pattern belongs to the same family. It is an anchor used as a click target with the navigation deliberately disabled, which means keyboard and assistive-technology users get a link that announces itself as a link and does not go anywhere. A `<button>` is the element for that.
+Several things that look wrong are not reported here. An empty `href` and non-HTTP schemes are skipped by the extractor, surrounding whitespace is trimmed, and a space inside a path is encoded during parsing rather than rejected. A `javascript:void(0)` click target is a real accessibility problem and a real reason to use a `<button>`, but it is not what this rule counts.
 
 ## What squirrel checks
 
 The rule runs on every crawled page and reports the links the parser flagged with an error while extracting them. It emits a single check named `invalid-links`:
 
 - Pass when no link carries a parse error. Message: `No invalid link formats found`.
-- Warn otherwise. Message: `Found 3 invalid link(s)`, with each href listed alongside the parser's error string, or `Invalid format` when no error text was recorded. Severity warning, weight 2.
+- Warn otherwise. Message: `Found 3 invalid link(s)`, with each href listed alongside the parser's recorded error string. Severity warning, weight 2.
 
 The classification comes from the parser rather than from this rule, so what counts as invalid is whatever the link extractor could not resolve against the page URL.
 

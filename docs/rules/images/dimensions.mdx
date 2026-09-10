@@ -1,9 +1,33 @@
 ---
-title: "Image Dimensions"
-description: "Checks for width/height attributes (prevents CLS)"
+title: "Image width and height attributes: preventing layout shift"
+description: "An image with no width and height reserves no space, so the page jumps when it loads. squirrel checks both attributes on every image."
 ---
 
-Checks for width/height attributes (prevents CLS)
+## What width and height do
+
+The `width` and `height` attributes on an `<img>` give the browser the image's aspect ratio before the file arrives. It can then reserve the right amount of space and lay the page out once, instead of reflowing everything below the image when it loads.
+
+That reflow is Cumulative Layout Shift, one of the Core Web Vitals. The attributes are not a sizing instruction: CSS still controls the rendered size, and `height: auto` alongside a percentage width keeps the image responsive while the ratio does its job.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the images the parser extracted. It emits a single check named `image-dimensions`:
+
+- Pass when the page has no images. Message: `No images on page`, with a value of 0.
+- Warn when any image is missing `width` or `height`, or has either set to a falsy value. Message: `5 image(s) missing width/height (causes CLS)`, with the count as the value and each image listed with a markup snippet. Severity warning, weight 4.
+- Pass otherwise. Message: `All 12 image(s) have dimensions`, with the count as the value.
+
+Both attributes are required for a finding to pass; one on its own does not give a ratio.
+
+## How to fix it
+
+```html
+<img src="/photo.jpg" width="1200" height="800" alt="…" style="width:100%;height:auto" />
+```
+
+Use the image's intrinsic pixel dimensions in the attributes and let CSS size it. `height: auto` is what keeps the rendered image proportional while the attributes supply the ratio.
+
+For an image whose dimensions are unknown at render time, set `aspect-ratio` in CSS on the container instead. That reserves the space the same way.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for width/height attributes (prevents CLS)
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Specifying width and height attributes prevents Cumulative Layout Shift (CLS) by reserving space before images load. Add width and height attributes to img tags matching the image's intrinsic dimensions. Use CSS for responsive sizing if needed. For responsive images, the aspect ratio from width/height prevents layout shifts even when CSS overrides the actual size.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["images/*"]
 enable = ["images/dimensions"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/aspect-mismatch](/rules/images/aspect-mismatch): dimensions that disagree with the CSS box, which distorts the image.
+- [performance/cls-hints](/rules/performance/cls-hints): the other sources of layout shift on the page.
+- [images/offscreen-lazy](/rules/images/offscreen-lazy): lazy images, which shift the layout hardest without dimensions.
+- [images/srcset](/rules/images/srcset): serving the right file for the reserved space.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Optimize Cumulative Layout Shift, web.dev](https://web.dev/articles/optimize-cls)
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Every image missing a dimension is listed with a markup snippet. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

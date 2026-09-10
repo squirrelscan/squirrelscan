@@ -1,9 +1,35 @@
 ---
-title: "Figure Captions"
-description: "Checks for proper use of figure and figcaption elements"
+title: "figure and figcaption: captions that are properly associated"
+description: "A caption in a plain div is text near an image; a figcaption is the image's caption. squirrel checks figures for captions and notes standalone images."
 ---
 
-Checks for proper use of figure and figcaption elements
+## What figure and figcaption are
+
+`<figure>` groups a piece of content with its caption, and `<figcaption>` is that caption. The association is explicit in the markup, so assistive technology can announce the caption as belonging to the image rather than as unrelated text that happens to follow it.
+
+A caption is not a substitute for `alt`. The caption is visible to everyone and describes the image's role in the argument; the `alt` is the text alternative for people who cannot see it. An image can reasonably have both, or a caption and an empty `alt` when the caption already says everything.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It counts `<figure>` elements and, separately, images that are not inside one, using the selector `img:not(figure img)`. It emits up to two checks:
+
+- Skipped when the page has neither figures nor standalone images. Message: `No images or figures found`.
+- `figure-figcaption` reports info when any figure has no `<figcaption>`, or one whose text is empty. Message: `2/5 figure(s) missing figcaption`, with `Add descriptive captions to figures` as the value.
+- `figure-figcaption` passes when every figure has a caption. Message: `All 5 figure(s) have captions`.
+- `figure-usage` reports info when the page has standalone images and no figures at all. Message: `8 image(s) not using figure/figcaption`, with `Consider using <figure> for images that need captions` as the value.
+
+Severity info, weight 2. A `<figure>` is valid without a caption in the HTML specification, so the informational status is deliberate: this rule suggests rather than requires.
+
+## How to fix it
+
+```html
+<figure>
+  <img src="/chart.png" width="800" height="500" alt="Revenue rising each quarter" />
+  <figcaption>Quarterly revenue, 2024 to 2026. Source: internal reporting.</figcaption>
+</figure>
+```
+
+Use a figure when the image has a caption a reader should see. Leave a purely decorative or inline image as a bare `<img>`; wrapping everything in figures adds markup without adding meaning.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for proper use of figure and figcaption elements
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-Use `<figure>` and `<figcaption>` for images with captions. This provides semantic meaning and accessibility benefits. Screen readers announce figcaption as the image caption. Good for SEO as captions often contain keywords. Example: `<figure>``<img src='...' alt='...'>``<figcaption>`Description`</figcaption>``</figure>`.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["images/*"]
 enable = ["images/figure-figcaption"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/alt-text](/rules/images/alt-text): the text alternative, which a caption does not replace.
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): the other structural markup on the same page.
+- [images/dimensions](/rules/images/dimensions): the attributes that belong on the img inside.
+- [images/filename-quality](/rules/images/filename-quality): the filename, another descriptive signal.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [The figure element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/figure)
+- [Google Images best practices](https://developers.google.com/search/docs/appearance/google-images)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each page is reported with its figure count and how many carry a caption. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

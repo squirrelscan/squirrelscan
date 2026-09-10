@@ -1,9 +1,32 @@
 ---
-title: "Image Aspect Ratio Mismatch"
-description: "Flags images whose width/height attributes conflict with their CSS box aspect ratio"
+title: "Image aspect ratio mismatch: attributes versus the CSS box"
+description: "When width and height describe one ratio and CSS forces another, the image stretches. squirrel compares the two and allows for object-fit."
 ---
 
-Flags images whose `width`/`height` attributes declare a different aspect ratio than their CSS box, which stretches or squishes the image.
+## What an aspect ratio mismatch is
+
+An `<img>` can have its ratio declared twice: once by the `width` and `height` attributes, and once by CSS, either through an explicit `aspect-ratio` or through a fixed width and height in pixels. When those two disagree, the browser fills the CSS box and the image is stretched or squashed.
+
+`object-fit` is the escape hatch. `cover`, `contain`, `scale-down` and `none` all reshape the image inside the box rather than distorting it, so a mismatch under one of those is a deliberate crop rather than a bug.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `img[style]`, so an image with no inline style is not examined. It needs integer `width` and `height` attributes and an inline style that fixes a ratio, either an `aspect-ratio` declaration or both `width` and `height` in `px`.
+
+- Warn when the two ratios differ by more than `tolerance`, as a fraction of the attribute ratio. Message: `2 image(s) with conflicting attribute vs CSS aspect ratio (distortion risk)`, each item labelled `/photo.jpg (1200x800 attr vs 1.00:1 CSS)` with a markup snippet. Up to ten items are listed. Severity warning, weight 4.
+- Pass otherwise. Message: `No conflicting image aspect ratios detected`.
+
+An image is skipped when its inline style sets `object-fit` to `cover`, `contain`, `scale-down` or `none`, or when its `class` attribute contains one of `object-cover`, `object-contain`, `object-scale-down` or `object-none`. External stylesheets cannot be read, so a utility class is the only signal available for class-based `object-fit`.
+
+## How to fix it
+
+```html
+<img src="/photo.jpg" width="1200" height="800" alt="…" style="width:600px;height:400px" />
+```
+
+Make the two agree, or set only the width in CSS and let the height follow. Where the crop is deliberate, add `object-fit: cover` so the image fills the box without distortion.
+
+An image styled through an external stylesheet cannot be checked, because the rule only reads inline styles.
 
 | | |
 |---|---|
@@ -13,32 +36,17 @@ Flags images whose `width`/`height` attributes declare a different aspect ratio 
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## What it detects
+## Options
 
-The rule compares two aspect ratios that are both declared in the HTML:
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `tolerance` | number | `0.05` | Allowed fractional difference between the two aspect ratios |
 
-- The ratio from the `width`/`height` **attributes** (e.g. `1200x1500` = 4:5).
-- The ratio fixed by the **inline CSS**: either an explicit `width` and `height` in `px`, or an `aspect-ratio` property (e.g. `1000x750` / `aspect-ratio: 4/3` = 4:3).
-
-When the two differ by more than the tolerance (default 5%) and no `object-fit: cover/contain/scale-down/none` compensates, the image renders distorted. Images without both attribute dimensions, with only relative CSS units (`%`, `vw`), or with `height: auto` (the recommended responsive pattern) are not flagged.
-
-<Info>
-This rule catches aspect conflicts that are **declared statically** in the markup. Detecting a mismatch between an image file's *intrinsic* dimensions and its display slot (wasted cropped bytes) would require the natural image dimensions, which the audit does not decode, so that case is out of scope.
-</Info>
-
-## Solution
-
-When an image's `width`/`height` attributes describe one aspect ratio but CSS forces a different one, the image is stretched or squished. Set the `width`/`height` attributes to the image's true aspect ratio, and let CSS size it with `height: auto` (or a matching ratio). If cropping is intended, add `object-fit: cover` so the image fills the box without distortion.
-
-## Configuration
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `tolerance` | `0.05` | Allowed fractional difference between the attribute and CSS aspect ratios before flagging. |
+### Configuration example
 
 ```toml squirrel.toml
-[rules."images/aspect-mismatch"]
-tolerance = 0.1
+[rule_options."images/aspect-mismatch"]
+tolerance = 0.02
 ```
 
 ## Enable / disable
@@ -64,3 +72,30 @@ disable = ["images/*"]
 enable = ["images/aspect-mismatch"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/dimensions](/rules/images/dimensions): the attributes this rule compares against.
+- [images/responsive-size](/rules/images/responsive-size): images displayed much smaller than the file served.
+- [performance/cls-hints](/rules/performance/cls-hints): the layout shift the same attributes prevent.
+- [images/srcset](/rules/images/srcset): serving a file that matches the rendered box.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [object-fit, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit)
+- [aspect-ratio, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/aspect-ratio)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each mismatch is listed with both ratios and a markup snippet. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

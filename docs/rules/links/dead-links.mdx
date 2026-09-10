@@ -7,7 +7,7 @@ description: "Checking every external link from your machine is slow and rude to
 
 ## What the cloud dead-links service is
 
-Verifying external links means one HTTP request per link. On a site with a few thousand outbound links, that is a slow phase for you and a burst of automated traffic for everyone you link to.
+Verifying external links means at least one HTTP request per link, and often more: the checker tries `HEAD`, falls back to `GET`, and follows redirects. On a site with a few thousand outbound links, that is a slow phase for you and a burst of automated traffic for everyone you link to.
 
 The cloud service moves that work behind a cache shared across every audit. A link any recent audit checked comes back immediately, working links stay cached for seven days and failures for 24 hours. This rule is the gate that turns it on: enabling it routes the audit's external-link phase through the service instead of fetching each link locally.
 
@@ -23,7 +23,7 @@ A link counts as dead on the same basis as `links/broken-external-links`: a fetc
 
 ## How to fix it
 
-Log in with `squirrel auth login` to use the service. If an audit's estimated dead-link spend exceeds your confirmation threshold you are prompted before the phase runs, and declining falls back to local per-link checking.
+Log in with `squirrel auth login` to use the service. Dead-link checking is included in the audit base charge, so it does not produce a separate spend prompt. Being logged out falls back to local per-link checking.
 
 The findings themselves are on `links/broken-external-links`. Fix them there.
 

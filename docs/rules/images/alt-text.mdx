@@ -1,9 +1,36 @@
 ---
-title: "Image Alt Text"
-description: "Checks that every image carries an alt attribute, counting an empty alt as a decorative marker"
+title: "Missing alt attribute: what an empty alt means"
+description: "An image with no alt attribute has no name for a screen reader. An empty alt is the correct way to say decorative, and squirrel accepts it."
 ---
 
-Checks that every image carries an alt attribute, counting an empty alt as a decorative marker
+## What the alt attribute is
+
+`alt` is the text alternative for an image: what a screen reader announces, and what a browser shows when the image does not load. Every `<img>` is required to have one.
+
+The two valid states are a description and an empty string. `alt="Chart showing revenue by quarter"` names an image that carries information. `alt=""` marks an image as decorative and tells assistive technology to skip it, which is the correct markup for a divider, a background flourish or an icon whose meaning is already in the adjacent text. Omitting the attribute is the failure, because it leaves the software to guess, and most screen readers fall back to reading the filename.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the images the parser extracted. It emits a single check named `alt-text` or `alt-text-missing`:
+
+- `alt-text` passes when the page has no images. Message: `No images on page`, with a value of 0.
+- `alt-text-missing` fails when any image has no `alt` attribute at all. Message: `3 image(s) missing alt text`, listing each image source. Severity warning, weight 5. No further checks run.
+- `alt-text` passes when every image has a non-empty alt. Message: `All 12 image(s) have alt text`.
+- `alt-text` passes when every image is marked decorative. Message: `All 12 image(s) marked decorative (alt="")`.
+- `alt-text` passes on a mix. Message: `9/12 image(s) have alt text, 3 marked decorative (alt="")`.
+
+A whitespace-only alt counts as decorative, since it is a sloppy spelling of the same thing. There is no check on the quality or length of the text: this rule only asks whether the attribute is there.
+
+## How to fix it
+
+```html
+<img src="/revenue.png" alt="Revenue by quarter, rising from Q1 to Q4" />
+<img src="/divider.svg" alt="" />
+```
+
+Describe what the image conveys in context, not what it depicts in general. Skip "image of" and "photo of", which screen readers already announce. Keep it under about 125 characters.
+
+For an icon inside a labelled button, the empty alt is right: the button carries the name and the icon should not be announced twice.
 
 | | |
 |---|---|
@@ -12,28 +39,6 @@ Checks that every image carries an alt attribute, counting an empty alt as a dec
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Alt text describes images for screen readers and displays when images fail to load. It is essential for accessibility and helps with image search SEO. Add descriptive alt text to every image that carries information, keeping it concise (under 125 characters) and free of keyword stuffing. An image that is purely decorative should carry an empty alt attribute (alt="") instead: that is the correct markup for "skip me" and this rule accepts it. Only an image with no alt attribute at all is reported here.
-
-## What counts as missing
-
-| Markup | Reported |
-|---|---|
-| `<img src="photo.jpg" alt="A red barn">` | No |
-| `<img src="divider.svg" alt="">` | No, this is a decorative image |
-| `<img src="photo.jpg">` | Yes, the alt attribute is absent |
-
-A decorative image is one that carries no information the surrounding text does
-not already give: a spacer, a background flourish, or an icon sitting beside a
-label that already names it. Giving such an image invented alt text makes the
-page worse for screen reader users, which is why `alt=""` is the right answer
-and why this rule accepts it.
-
-If an `alt=""` image is the only content of a link, the link itself has no
-accessible name. That is a real defect, and [`a11y/link-text`](/rules/a11y/link-text)
-reports it.
 
 ## Enable / disable
 
@@ -58,3 +63,31 @@ disable = ["images/*"]
 enable = ["images/alt-text"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/image-redundant-alt](/rules/a11y/image-redundant-alt): alt text that repeats the adjacent link or caption.
+- [links/anchor-text](/rules/links/anchor-text): image-only links whose alt is the link's name.
+- [images/figure-figcaption](/rules/images/figure-figcaption): captions, which are visible text rather than an alternative.
+- [images/filename-quality](/rules/images/filename-quality): the filename a screen reader falls back to.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+- [Decorative images, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/images/decorative/)
+- [Google Images best practices](https://developers.google.com/search/docs/appearance/google-images)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Every image with no alt attribute is listed by source. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

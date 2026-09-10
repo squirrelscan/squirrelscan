@@ -1,9 +1,37 @@
 ---
-title: "Offscreen Image Lazy Loading"
-description: "Checks if offscreen images use lazy loading"
+title: "loading=lazy: which images need it and which must not have it"
+description: "Images below the fold that load eagerly compete with the ones the visitor can see. squirrel treats the first few images as above the fold."
 ---
 
-Checks if offscreen images use lazy loading
+## What loading="lazy" does
+
+`loading="lazy"` on an `<img>` tells the browser to defer the request until the image is near the viewport. It is native, needs no JavaScript, and is supported in every current browser.
+
+It is the wrong attribute for anything visible on arrival. Lazy-loading the largest visible image delays the request that Largest Contentful Paint is measured on, so a page can get slower by adding it. The rule of thumb is lazy below the fold, `eager` or nothing above it.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It takes every `img[src]` in document order, treats the first `above_fold_count` of them as above the fold, and examines the rest. Images with a `data:` source are skipped.
+
+- Info when the page has no images. Message: `No images found`.
+- Pass when there are no images past the fold count. Message: `Few images on page - lazy loading not critical`.
+- `offscreen-images-not-lazy` warns for below-fold images with no `loading` attribute. Message: `7 below-fold image(s) without lazy loading`, listing up to ten filenames. Severity warning, weight 5.
+- `lazy-loading-used` passes when any below-fold image is lazy. Message: `12 image(s) use lazy loading`.
+- `eager-below-fold` reports info for below-fold images explicitly set to `eager`. Message: `2 below-fold image(s) explicitly set to eager`, noted as possibly intentional.
+- `offscreen-lazy` reports info when nothing below the fold has a `loading` attribute either way. Message: `No lazy loading configured - consider adding loading='lazy'`.
+
+Document order is a proxy for position, not a measurement. An image that appears late in the markup but is positioned at the top of the viewport by CSS is treated as below the fold.
+
+## How to fix it
+
+```html
+<img src="/hero.jpg" width="1200" height="600" alt="…" fetchpriority="high" />
+<img src="/gallery-1.jpg" width="600" height="400" alt="…" loading="lazy" />
+```
+
+Leave the hero image alone, or mark it `fetchpriority="high"`, and add `loading="lazy"` to everything the visitor has to scroll to. A component that renders a list of images can apply it to every item after the first row.
+
+Raise `above_fold_count` for a page whose first screen genuinely shows more images than the default three.
 
 | | |
 |---|---|
@@ -13,23 +41,17 @@ Checks if offscreen images use lazy loading
 | **Severity** | warning |
 | **Weight** | 5/10 |
 
-## Solution
-
-Add loading='lazy' to images below the fold to defer loading until needed. This reduces initial page load time and saves bandwidth. Exception: Don't lazy-load LCP image or above-the-fold content. Use loading='eager' for critical images.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `above_fold_count` | unknown | `undefined` | Number of images considered above the fold |
+| `above_fold_count` | number | `3` | Number of images considered above the fold |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."images/offscreen-lazy"]
-above_fold_count = undefined
+[rule_options."images/offscreen-lazy"]
+above_fold_count = 6
 ```
 
 ## Enable / disable
@@ -55,3 +77,30 @@ disable = ["images/*"]
 enable = ["images/offscreen-lazy"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/lazy-loading](/rules/images/lazy-loading): the page-wide count of lazy elements, including iframes.
+- [performance/lazy-above-fold](/rules/performance/lazy-above-fold): the opposite mistake, lazy-loading the LCP image.
+- [performance/lcp-fetchpriority](/rules/performance/lcp-fetchpriority): marking the image that should load first.
+- [images/dimensions](/rules/images/dimensions): the width and height that stop lazy images shifting the layout.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Browser-level image lazy loading, web.dev](https://web.dev/articles/browser-level-image-lazy-loading)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Every below-fold image without the attribute is listed by filename. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

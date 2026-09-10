@@ -5,21 +5,21 @@ description: "A phone link whose href differs from the number on screen dials th
 
 ## What tel: and mailto: links are
 
-`tel:` and `mailto:` are URI schemes that hand a phone number or an email address to the device's own application. RFC 3966 defines the phone form and recommends the global E.164 format, a leading `+` and digits with no punctuation, because a national number is ambiguous outside its country. RFC 6068 defines the mail form, including the `?subject=` and `?body=` parameters.
+`tel:` and `mailto:` are URI schemes that hand a phone number or an email address to the device's own application. RFC 3966 defines the phone form: it requires the global form, a leading `+` and the full number, whenever the number can be represented that way, permits the visual separators `-`, `.`, `(` and `)`, and requires a `phone-context` parameter for a local number. RFC 6068 defines the mail form, including the `?subject=` and `?body=` parameters.
 
 The failure that matters is a mismatch. When the href and the visible text carry different numbers or addresses, tapping the link contacts someone other than the person shown on screen. That is usually an edit applied to one and not the other.
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every `a[href]` starting with `tel:` or `mailto:`. It emits up to five checks:
+The rule runs on every crawled page over every `a[href]` starting with `tel:` or `mailto:`. Five check names are possible and at most four appear in one result, since the last only fires when neither link type is present:
 
 - `tel-links` warns when a phone value has no digit or `+`, or is shorter than seven characters. Message: `1/4 tel: link(s) may be invalid`. It passes otherwise with `4 tel: link(s) found`.
-- `mailto-links` warns when an address is present but has no `@` or no dot. Message: `1/3 mailto: link(s) may be invalid`. It passes otherwise with `3 mailto: link(s) found`. An address-less share link such as `mailto:?subject=…` is not validated, since the recipient fills it in.
-- `tel-mismatch` warns when the link text contains three or more digits that do not match the href. Message: `2 tel link(s) have mismatched phone number in href vs display text`, each item labelled `href "+61414123456" ≠ text "0400 000 000"` with a markup snippet.
+- `mailto-links` warns when an address is present but has no `@` or no dot. Message: `1/3 mailto: link(s) may be invalid`. It passes otherwise with `3 mailto: link(s) found`. Format validation is skipped only for an empty recipient followed by a `?`, the `mailto:?subject=…` share pattern; a bare `mailto:` with nothing after it still warns.
+- `tel-mismatch` warns when the link text contains three or more consecutive digits that do not match the href. Message: `2 tel link(s) have mismatched phone number in href vs display text`, each item labelled `href "+61414123456" ≠ text "0400 000 000"` with a markup snippet.
 - `mailto-mismatch` warns when the link text looks like an email address and differs from the href, compared case-insensitively. Message: `1 mailto link(s) have mismatched email in href vs display text`.
 - `tel-mailto` reports info when the page has neither kind of link. Message: `No tel: or mailto: links found`.
 
-Numbers match on an exact digit comparison, on either digit string ending with the other, or on an E.164 href against national text with a leading trunk zero, so `+61414123456` and `0414 123 456` are not a mismatch. Severity for the rule is info, weight 2.
+Numbers match on an exact digit comparison, on either digit string ending with the other, or on a trunk-prefix comparison. That last one drops a single leading zero from either side and accepts the pair when the shared suffix is at least five digits and the other number carries exactly two or three extra leading digits, the length of a country calling code. It works in both directions and does not require a literal `+`, so `+61414123456` and `0414 123 456` are not a mismatch. Severity for the rule is info, weight 2.
 
 ## How to fix it
 

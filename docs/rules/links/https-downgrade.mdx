@@ -5,9 +5,9 @@ description: "A link that drops the visitor to plain HTTP hands their next reque
 
 ## What an HTTPS downgrade link is
 
-A downgrade link is an `<a href="http://...">` on a page that was itself served over HTTPS. Following it takes the visitor to an unencrypted connection, where the request and the response can be read and modified in transit.
+A downgrade link is an `<a href="http://...">` on a page that was itself served over HTTPS. Unless something upgrades it first, following it takes the visitor to an unencrypted connection where the request and the response can be read and modified in transit. HSTS on the destination host, or a browser in HTTPS-only mode, will rewrite or block it, which is protection you do not control from your own markup.
 
-This is separate from mixed content. Mixed content is about subresources the page loads itself, which the browser blocks or upgrades. A navigation link is not blocked: the browser follows it, and the only signal the visitor gets is the address bar changing after the fact.
+This is separate from mixed content. Mixed content is about subresources the page loads itself, which the browser blocks or upgrades on its own. A navigation link gets no such treatment from the page: whether it is upgraded depends on the destination's policy and the visitor's browser settings.
 
 ## What squirrel checks
 

@@ -11,10 +11,10 @@ The pattern accumulates after any restructure. The redirect is set up, the conte
 
 ## What squirrel checks
 
-The rule is site-wide and works in two passes. First it finds crawled pages that redirected, using recorded redirect evidence rather than a URL comparison, so a page whose final URL differs only in normalisation is not counted. Then it walks every internal link on every page and matches it against those redirecting URLs.
+The rule is site-wide and works in two passes. First it finds crawled pages that redirected: either the request target changed, comparing path, trailing slash and query, or a redirect was actually observed in the recorded chain. Then it walks every internal link on every page and matches it against those redirecting URLs.
 
 - Skipped when no pages are available. Message: `No pages available for redirect analysis`.
-- `redirect-pages` warns for the redirecting URLs themselves. Message: `5 page(s) redirect to another URL`, each item labelled with the full chain such as `/old (301) → /new (200)`.
+- `redirect-pages` warns for the redirecting URLs themselves. Message: `5 page(s) redirect to another URL`. A multi-hop chain is labelled with full URLs and status codes, `https://example.com/old (301) → https://example.com/new (200)`. With no multi-hop chain the label falls back to `original → final` with no status codes.
 - `links-to-redirect` warns for the link targets. Message: `3 link target(s) point to redirecting URLs`, each item carrying the chain and every page that links to it.
 - `redirect-chains` passes when neither fired. Message: `No redirects detected`.
 

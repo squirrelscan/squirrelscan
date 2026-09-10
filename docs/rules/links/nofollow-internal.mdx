@@ -24,7 +24,7 @@ The hostname comparison is exact, so a link to a subdomain of the same site is t
 <a href="/pricing">Pricing</a>
 ```
 
-Remove the attribute. If the link points at something you genuinely do not want crawled, such as a faceted filter URL, the tool for that is robots.txt or `noindex` on the target, not nofollow on the link.
+Remove the attribute. If the link points at something you genuinely do not want crawled, such as a faceted filter URL, the tool is a robots.txt `Disallow`. If you want it crawled but not indexed, the tool is `noindex` on the target, which only works when the crawler is allowed to fetch it. Neither job belongs to nofollow on the link.
 
 Keep it for user-generated content, where `rel="ugc nofollow"` is the correct marking even on an internal profile link.
 

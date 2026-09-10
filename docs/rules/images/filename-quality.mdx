@@ -1,9 +1,33 @@
 ---
-title: "Image Filename Quality"
-description: "Checks for descriptive image filenames"
+title: "IMG_1234.jpg: image filenames that describe nothing"
+description: "A filename straight off a camera or a hash tells nobody what the picture is. squirrel matches image filenames against a list of generic patterns."
 ---
 
-Checks for descriptive image filenames
+## What an image filename does
+
+The filename is one of the few pieces of text attached to an image file itself, and Google's image guidance names it alongside the `alt` text and the surrounding copy as a signal about what an image shows.
+
+It also matters when the alternatives fail. A screen reader with no `alt` to read often falls back to the filename, and a downloaded image keeps its name in the user's folder. `red-running-shoes.jpg` is useful in both cases; `IMG_20231015.jpg` is not.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `img[src]`, taking the last path segment with any query string removed. `data:` sources and `.svg` files are skipped. The filename without its extension is matched against thirteen patterns.
+
+- Skipped when the page has no images. Message: `No images found`.
+- Pass when at least one filename is descriptive and none are poor. Message: `All 12 image(s) have descriptive filenames`.
+- Info when any filename matches a poor pattern. Message: `4 image(s) with non-descriptive filenames`, listing up to three examples.
+
+The patterns catch camera and device names such as `IMG_001`, `DSC1234`, `DCIM001` and `P20231015`, generic names such as `image1`, `photo1`, `pic1`, `screenshot`, `screen-shot` and `untitled`, and machine identifiers: a name that is eight or more leading digits, a 32-character hexadecimal hash, or a 36-character UUID. Severity info, weight 2.
+
+## How to fix it
+
+```
+/images/red-running-shoes-side-view.jpg
+```
+
+Rename on upload, deriving the name from the title or the alt text: lowercase, hyphens between words, no more than a few words. Most CMSes can do this automatically.
+
+A hashed filename from a build pipeline is deliberate cache-busting and will be reported here. Keep the descriptive part in front of the hash where the tooling allows it, or accept the finding.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for descriptive image filenames
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-Use descriptive, keyword-rich filenames for images instead of generic names like IMG_001.jpg or DSC1234.png. Good: 'red-running-shoes-nike.jpg'. Bad: 'IMG_20231015.jpg'. Filenames contribute to image SEO and help search engines understand image content. Use hyphens to separate words.
 
 ## Enable / disable
 
@@ -40,3 +60,29 @@ disable = ["images/*"]
 enable = ["images/filename-quality"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/alt-text](/rules/images/alt-text): the text alternative that matters more than the filename.
+- [url/slug-keywords](/rules/url/slug-keywords): the same question asked of page URLs.
+- [images/figure-figcaption](/rules/images/figure-figcaption): the visible caption, a third descriptive signal.
+- [images/broken-images](/rules/images/broken-images): sources that are malformed rather than uninformative.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Google Images best practices](https://developers.google.com/search/docs/appearance/google-images)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Up to three example filenames are listed for each page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>
