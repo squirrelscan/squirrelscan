@@ -5,9 +5,9 @@ description: "If every lastmod carries the same date, the field records your dep
 
 ## What lastmod churn is
 
-`<lastmod>` is meant to record when a page's content last changed, so a crawler can prioritise what has actually moved. It only works if the values differ from one another.
+`<lastmod>` records when a page's content last changed, so a crawler can prioritise what has actually moved. Its usefulness depends on the values being derived from the content rather than from the pipeline that publishes it.
 
-A sitemap where every URL carries today's date is recording the build, not the content. The generator stamps the current time on every entry each time it runs. The field then carries no information, and a search engine that notices has no reason to trust it on that site again.
+When several hundred URLs all carry the same date, that is what a build-time stamp looks like: the generator writing the current time onto every entry each run. It is not proof, since a site really can republish everything on one day, and this is why the rule reports rather than fails. But a `lastmod` that moves on every deploy tells a crawler nothing it can act on.
 
 ## What squirrel checks
 

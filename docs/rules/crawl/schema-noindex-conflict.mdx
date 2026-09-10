@@ -17,7 +17,7 @@ The rule is site-wide. For each crawled page it extracts the rich-result types f
 - Fail when at least one page has rich-result schema and is not indexable. Message: `3 page(s) have rich schema but are blocked from indexing`. The value lists up to five as the path, the schema types found, and the reasons it is blocked, such as `meta:noindex` or `robots.txt:disallowed`.
 - Pass otherwise. Message: `No schema+noindex conflicts`.
 
-Severity error, weight 8. Only schema types that can produce a rich result count; generic `WebPage` or `Organization` markup does not trigger the rule.
+Severity error, weight 8. The types that count come from a fixed list: `Article`, `NewsArticle`, `BlogPosting`, `Product`, `Review`, `Recipe`, `Event`, `FAQPage`, `HowTo`, `LocalBusiness`, `Organization`, `Person`, `VideoObject`, `BreadcrumbList`, `WebSite` and `SearchAction`. A plain `WebPage` node does not trigger the rule. The list is squirrel's own and is not tied to what Google currently supports: `HowTo` is on it although its Google rich result was retired.
 
 ## How to fix it
 

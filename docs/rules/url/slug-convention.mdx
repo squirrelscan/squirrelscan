@@ -1,9 +1,34 @@
 ---
-title: "URL Convention Consistency"
-description: "Finds URLs that break the site's own URL conventions"
+title: "Mixed URL conventions: finding the minority form on your site"
+description: "Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates."
 ---
 
-Finds URLs that break the site's own URL conventions
+## What URL convention consistency is
+
+Every other URL rule judges one address against a fixed idea of a good address. None of them can see that a site is internally inconsistent: most slugs kebab-case with a pocket of snake_case, most paths bare with a handful slash-terminated.
+
+The mixing is the problem, not the form. `/My_Page`, `/my-page` and `/my-page/` are three URLs to a crawler even when they serve one document, and a site that applies one convention everywhere has none of that ambiguity regardless of which convention it picked. So this rule computes the site's own dominant form per dimension and reports only the minority against it.
+
+## What squirrel checks
+
+The rule is site-wide and judges five dimensions independently. Three are computed across the whole site: the slug word separator, kebab-case against snake_case against camelCase; the URL letter case, all-lowercase against a path carrying uppercase; and the trailing slash, present against absent, over extensionless paths only. Two are computed per page type: whether the slug carries a date, and the path-segment depth.
+
+Three guards apply in order. The site needs at least 10 crawled pages. A site-wide dimension needs at least 10 pages that vote in it, and a per-page-type dimension at least 8. A dimension's most common value must hold at least 70% of its votes, or the site legitimately mixes and nothing in it is a deviant.
+
+The rule emits a single check named `slug-convention`:
+
+- Skipped below the page floor. Message: `Only 6 page(s) crawled; 10 needed to establish a URL convention norm`.
+- Skipped when no dimension clears the agreement floor. Message: `No URL convention reaches 70% agreement across enough comparable pages`.
+- Pass when every page follows the norms. Message: `All 240 page(s) follow the site's own URL conventions (slug word separator kebab-case 98%, trailing slash no trailing slash 91%)`.
+- Warn when deviants exist and cover under 20% of crawled pages, and fail at or above that share. Message: `14 of 240 page(s) deviate from the site's own URL conventions (slug word separator kebab-case 94%)`. Each item reads `9 of 210 pages use snake_case but the slug word separator norm is kebab-case`, with up to 10 example URLs.
+
+Suppression runs one way. A deviant that `url/lowercase` already warns on is dropped from the case dimension, and one that `url/hyphens` already warns on is dropped from the separator dimension, so a site is not accused twice for one root cause. A dimension whose deviants are all suppressed still appears in the message tail as `(deferred to url/hyphens)`. Reported items are capped at 10, example URLs at 10 per item. Severity warning, weight 3.
+
+## How to fix it
+
+Pick the form the majority of the site already uses, migrate the minority onto it, and 301-redirect the old paths. The report names the dominant form and its share, so the decision is already made for you.
+
+A section that deliberately differs, a dated archive or a deeper product tree, is fine. This rule computes date-in-slug and depth per page type for exactly that reason, so a blog with dated URLs and a docs tree without them are judged separately.
 
 | | |
 |---|---|
@@ -12,61 +37,6 @@ Finds URLs that break the site's own URL conventions
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## How it works
-
-Every other URL rule judges one URL against a fixed idea of a good URL. None of them
-can see that a site is internally inconsistent, which is what actually produces
-duplicate-content and canonical bugs: `/My_Page`, `/my-page` and `/my-page/` are
-three different URLs to a crawler even when they serve the same thing.
-
-So the mixing is the finding here, never an individual URL. The rule computes your
-site's own dominant convention in each of five dimensions and reports only the
-minority form standing against it:
-
-| Dimension | Scope | Compares |
-|---|---|---|
-| Slug word separator | site-wide | kebab-case vs snake_case vs camelCase |
-| URL letter case | site-wide | all-lowercase paths vs paths carrying uppercase |
-| Trailing slash | site-wide | present vs absent, on extensionless paths |
-| Date in slug | per page type | dated vs undated posts of the same type |
-| Path depth | per page type | path-segment count within one page type |
-
-A site that is uniformly snake_case, or uniformly slash-terminated, is clean here:
-there is no minority to report. The rule only ever describes the deviants against
-the dominant form.
-
-It stays quiet unless it has grounds to speak:
-
-- Fewer than 10 crawled pages: no site norm exists, so the rule is skipped.
-- Fewer than 10 pages voting in a site-wide dimension (or 8 pages of one page type
-  for the per-type dimensions): the dimension is dropped, not guessed at.
-- No form reaching 70% of a dimension: the site mixes deliberately there, so
-  nothing in it is a deviant.
-
-## Precedence over the per-page URL rules
-
-The per-page rules own their pages, and this rule defers to them so one root cause
-is never reported twice:
-
-- [URL Lowercase](/rules/url/lowercase) already warns on every path containing an
-  uppercase letter, so those pages are dropped from the letter-case dimension.
-- [URL Hyphens](/rules/url/hyphens) already warns on every path containing an
-  underscore, so those pages are dropped from the separator dimension.
-- [Trailing Slash](/rules/url/trailing-slash) only raises on paths with a file
-  extension, so this rule judges the trailing-slash dimension over extensionless
-  paths only.
-
-A dimension whose deviants are entirely deferred is still named in the finding, so
-nothing is silently dropped.
-
-## Solution
-
-Your site uses more than one URL convention: some paths follow one form and a
-minority follow another. Pick the dominant form already used by most of your site,
-migrate the minority onto it, and 301-redirect the old paths so links and rankings
-follow. If a section deliberately differs (a dated archive, a deeper product tree),
-that is fine: the point is that a handful of pages should not be the exception.
 
 ## Enable / disable
 
@@ -91,3 +61,30 @@ disable = ["url/*"]
 enable = ["url/slug-convention"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/lowercase](/rules/url/lowercase): the per-page rule the case dimension defers to.
+- [url/hyphens](/rules/url/hyphens): the per-page rule the separator dimension defers to.
+- [url/trailing-slash](/rules/url/trailing-slash): the per-page state this rule measures against the site norm.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): the canonical bugs mixed conventions produce.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Keep a simple URL structure, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Each norm is reported with its agreement share, and each deviant group with example URLs. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

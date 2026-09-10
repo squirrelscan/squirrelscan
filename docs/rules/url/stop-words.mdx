@@ -1,9 +1,33 @@
 ---
-title: "URL Stop Words"
-description: "Flags common stop words in URL slugs"
+title: "Stop words in a URL slug: when to drop them"
+description: "the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups."
 ---
 
-Flags common stop words in URL slugs
+## What stop words are
+
+Stop words are the high-frequency function words of a language: articles, prepositions, auxiliaries. In a URL slug they take up characters and carry almost no information about what the page is.
+
+Dropping them is a style choice, not a correctness one. `best-running-shoes` is shorter and reads as well as `the-best-running-shoes-for-you`. Keeping one is right when removing it changes the meaning or makes the slug unreadable, which is why this rule only reports slugs that have accumulated several.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It lowercases the URL path, splits it on hyphens, underscores and slashes, and counts the resulting words against a fixed list of 35 stop words.
+
+- Info when more than two stop words are found. Message: `URL contains 4 stop words`, with each word listed.
+- Pass when one or two are found. Message: `URL has minimal stop words`, with them listed.
+- Pass when none are found. Message: `URL has no stop words`.
+
+Severity is info and the weight is 2, the lowest in the URL Structure category. The list covers `a`, `an`, `and`, `are`, `as`, `at`, `be`, `but`, `by`, `for`, `from`, `has`, `have`, `in`, `is`, `it`, `of`, `on`, `or`, `our`, `that`, `the`, `their`, `there`, `they`, `this`, `to`, `was`, `were`, `what`, `which`, `will`, `with`, `would` and `your`. It is English-only, so a slug in another language is scored against English words and will usually pass.
+
+## How to fix it
+
+```
+https://example.com/blog/best-running-shoes
+```
+
+Strip stop words in the slug generator, before the slug is first published rather than after. Keep the word when the slug stops making sense without it: `state-of-the-art` is not improved by becoming `state-art`.
+
+Do not rewrite existing URLs for this. The finding is informational, and the redirect costs more than the characters save.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Flags common stop words in URL slugs
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-Stop words (a, an, the, of, etc.) add length without SEO value. While not harmful, removing them makes URLs shorter and more focused. 'best-running-shoes' is better than 'the-best-running-shoes-for-you'. However, keep stop words if removing them makes the URL confusing or grammatically awkward.
 
 ## Enable / disable
 
@@ -40,3 +60,29 @@ disable = ["url/*"]
 enable = ["url/stop-words"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/slug-keywords](/rules/url/slug-keywords): whether the remaining words describe the page.
+- [url/length](/rules/url/length): the total the stop words contribute to.
+- [url/hyphens](/rules/url/hyphens): the separator this rule splits on.
+- [content/keyword-stuffing](/rules/content/keyword-stuffing): the opposite failure, too many meaningful words.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Keep a simple URL structure, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Each slug is listed with the stop words it contains. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

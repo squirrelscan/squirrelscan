@@ -5,9 +5,9 @@ description: "A sitemap can only vouch for URLs on its own host. squirrel compar
 
 ## What cross-submission means
 
-A sitemap speaks for the host that serves it. A search engine will not accept a `<loc>` pointing at a different domain from a sitemap at `example.com/sitemap.xml`, because anyone could then submit URLs on someone else's behalf.
+A sitemap normally speaks for the host that serves it, so a `<loc>` on another domain is usually a generator with the wrong base URL or a leftover from a migration.
 
-The `www` and bare forms of the same registrable name are treated as the same site here, since one is normally a redirect to the other. Anything further away is either a configuration mistake, usually a generator with the wrong base URL, or a leftover from a domain migration.
+Cross-submission is not forbidden. Google accepts URLs for another host when you have verified ownership of both, or when the other host's robots.txt names the sitemap. This rule does not know about either arrangement: it compares hostnames only, treating the `www` and bare forms of one registrable name as the same site. A deliberate, authorised cross-submission will therefore be flagged.
 
 ## What squirrel checks
 
@@ -26,9 +26,9 @@ A hostname matches when it equals the expected host, equals `www.` plus the expe
 <url><loc>https://example.com/pricing</loc></url>
 ```
 
-Set the generator's base URL to the canonical host and regenerate. Where a second domain genuinely has pages of its own, give it its own sitemap served from that host.
+Set the generator's base URL to the canonical host and regenerate. A site that has just moved domains will produce this finding until the sitemap is rebuilt; fix the sitemap, not the redirects.
 
-A site that has just moved domains will produce this finding until the sitemap is regenerated. Fix the sitemap, not the redirects.
+If the cross-domain entries are intentional, verify both hosts in Search Console or reference the sitemap from the other host's robots.txt, and disable this rule for that site.
 
 | | |
 |---|---|
@@ -73,7 +73,7 @@ Crawlability findings ship in every audit next to the SEO, performance and agent
 
 ## References
 
-- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [Sitemaps FAQs, including cross-submission, Google Search Central](https://developers.google.com/search/blog/2008/01/sitemaps-faqs)
 - [Sitemaps overview, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
 
 ## Check your site

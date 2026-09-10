@@ -5,11 +5,11 @@ description: "A very large HTML document risks being read only in part. squirrel
 
 ## What the HTML size limit is
 
-Crawlers do not read an unlimited amount of markup. Google documents that Googlebot fetches up to 15 MB of an HTML or text-based file and its resources, and anything past that point is not considered. Other crawlers publish lower limits or none at all.
+Crawlers do not read an unlimited amount of markup. Google documents that Googlebot fetches up to 2 MB from any individual URL other than a PDF, response headers included, and stops there. The bytes past the cutoff are not fetched, not rendered and not indexed. Referenced resources such as stylesheets and scripts have their own separate per-URL counter and do not consume the document's allowance.
 
-Long before any limit, size costs time. A document that carries an entire product catalogue inline, or a framework payload serialised into the page, is slower to transfer and slower to parse, and pushes the content that matters further from the top of the file.
+Most pages are nowhere near it. A page gets there through inline base64 images, large blocks of inline CSS or JavaScript, or a serialised framework payload, and what falls off the end is whatever came last in the file.
 
-squirrel's thresholds are stricter than Google's documented figure. The default warning is 1 MB and the default failure is 2 MB, which is closer to what a page should need than to what a crawler will tolerate.
+squirrel's default failure threshold is that same 2 MB, with a warning at 1 MB so a page is flagged before it starts losing content.
 
 ## What squirrel checks
 
@@ -19,15 +19,15 @@ The rule runs on every crawled page. It measures the UTF-8 byte length of the re
 - Warn at or above `warn_bytes`, 1 MB by default. Message: `HTML is 1180KB — approaching Googlebot 2MB limit`.
 - Pass otherwise. Message: `HTML size OK: 84KB`.
 
-The failure message names a 2 MB Googlebot limit, which is the rule's own default threshold rather than the 15 MB figure Google publishes. Both thresholds are configurable.
+Both thresholds are configurable. The default failure threshold matches the 2 MB per-URL limit Google documents for Googlebot.
 
 ## How to fix it
 
-```html
-<script id="__DATA__" type="application/json" src="/data/catalogue.json"></script>
+```js
+const catalogue = await fetch("/data/catalogue.json").then((r) => r.json());
 ```
 
-Move large inline blobs out of the document: serialised state, base64 images, inline SVG sprites and inline CSS are the usual culprits. Paginate or lazy-load long lists rather than rendering ten thousand rows.
+Move large inline blobs out of the document and fetch them instead. A `<script type="application/json">` block only holds inline data, so an external file has to be requested rather than referenced with `src`. Serialised state, base64 images, inline SVG sprites and inline CSS are the usual culprits. Paginate or lazy-load long lists rather than rendering ten thousand rows.
 
 Keep the title, meta description, headings and main body near the top of the file. If anything is ever cut, it should be the parts that do not describe the page.
 
@@ -89,7 +89,7 @@ Crawlability findings ship in every audit next to the SEO, performance and agent
 
 ## References
 
-- [Googlebot, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/googlebot)
+- [Inside Googlebot: crawling, fetching and the bytes we process, Google Search Central](https://developers.google.com/search/blog/2026/03/crawler-blog-post)
 - [Managing crawl budget for large sites, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget)
 
 ## Check your site

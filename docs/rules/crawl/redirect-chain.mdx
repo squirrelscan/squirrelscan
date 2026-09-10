@@ -5,7 +5,7 @@ description: "Each redirect hop costs latency and crawl budget, and search engin
 
 ## What a redirect chain is
 
-A redirect chain is more than one redirect between the requested URL and the page that answers. `http://example.com` to `https://example.com` to `https://www.example.com` to `https://www.example.com/` is three hops for one request.
+A redirect chain is more than one redirect between the requested URL and the page that answers. `http://example.com/page` to `https://example.com/page` to `https://www.example.com/page` to `https://www.example.com/page/` is three redirects for one request.
 
 Chains accumulate rather than being designed. Each migration adds a layer: a protocol switch, a host consolidation, a slash convention, a site restructure. The cost is a round trip per hop for every visitor who takes the old URL, and a crawler that may give up before the end. The fix is to collapse the rules so each source URL points at the final destination in one step.
 
@@ -18,12 +18,12 @@ The rule is site-wide and reads the redirect chain the crawler recorded for each
 - `redirect-chain` warns for other pages whose chain exceeds `maxHops`. Message: `4 page(s) have redirect chains >2 hops`, listing each URL with its hop count and the chain rendered as `/old (301) → /new (301) → /final (200)`.
 - `redirect-chain` passes when neither fired. Message: `No redirect chains exceed 2 hops`.
 
-The default `maxHops` is 2. Severity warning, weight 5.
+The default `maxHops` is 2. The count is the number of entries in the recorded chain, and that includes the final non-redirect response, so `/old (301) → /new (301) → /final (200)` counts as three hops rather than two redirects. Severity warning, weight 5.
 
 ## How to fix it
 
 ```nginx
-# one rule, one hop: scheme, host and slash resolved together
+# scheme and host in a single hop
 server {
   listen 80;
   server_name example.com www.example.com;
@@ -31,7 +31,7 @@ server {
 }
 ```
 
-Collapse the rules so each source URL reaches its destination in one hop. Then update internal links, canonical tags and the sitemap to the final URLs, so no ordinary navigation takes a redirect at all.
+Collapse the rules so each source URL reaches its destination in one hop. `$request_uri` carries the original path and query through unchanged, so a slash convention needs its own routing rule rather than falling out of this one. Then update internal links, canonical tags and the sitemap to the final URLs, so no ordinary navigation takes a redirect at all.
 
 | | |
 |---|---|

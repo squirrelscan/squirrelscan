@@ -7,13 +7,13 @@ description: "A very large PDF may only be read in part by a crawler. squirrel m
 
 Search engines index PDFs as documents in their own right, extracting text, title and links. Like HTML, a PDF is read up to a limit rather than in full, and content past that point does not contribute to what the document ranks for.
 
-Google publishes a 15 MB fetch limit for HTML and text-based files and does not publish a separate figure for PDFs. squirrel's thresholds, 30 MB for a warning and 60 MB for a failure, are its own defaults and are configurable. Either way, a 60 MB PDF is a slow download for a human as well as a crawler, and is usually a scanned document that could be compressed or split.
+Google documents a 64 MB fetch limit for PDFs, against 2 MB for any other individual URL. squirrel's thresholds sit just under it: 30 MB for a warning and 60 MB for a failure, both configurable. Either way, a 60 MB PDF is a slow download for a person as well as a crawler, and is usually a scanned document that could be compressed or split.
 
 ## What squirrel checks
 
 The rule is site-wide and reads PDF sizes the crawl fetched ahead of time. When no size data is present it first looks for internal PDF links, meaning links ending in `.pdf` whose origin matches the site base URL.
 
-- Skipped when no pages were crawled. Message: `No pages crawled`.
+- Skipped when no PDF sizes were fetched and no pages were crawled. Message: `No pages crawled`. A non-empty size list is processed regardless of the page count.
 - Pass when there is no size data and no internal PDF link exists. Message: `No internal PDF links found`.
 - Skipped when internal PDF links exist but no sizes were fetched. Message: `PDF size data not available`.
 - `pdf-size` fails at or above `error_bytes`, 60 MB by default. Message: `2 PDF(s) exceed Googlebot 60MB limit`, each listed with its size in megabytes. Severity error, weight 4.
@@ -21,7 +21,7 @@ The rule is site-wide and reads PDF sizes the crawl fetched ahead of time. When 
 - `pdf-size` passes when every measured PDF is under the warning threshold. Message: `14 PDF(s) checked — all under 30MB`.
 - `pdf-size-errors` reports info for PDFs whose size could not be fetched. Message: `Could not check 2 PDF(s)`.
 
-The messages name a 60 MB Googlebot limit, which is the rule's own default threshold rather than a figure Google publishes.
+The messages name a 60 MB Googlebot limit. That is the rule's own default threshold; the figure Google documents is 64 MB.
 
 ## How to fix it
 
@@ -89,7 +89,7 @@ Crawlability findings ship in every audit next to the SEO, performance and agent
 
 ## References
 
-- [Googlebot, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/googlebot)
+- [Inside Googlebot: crawling, fetching and the bytes we process, Google Search Central](https://developers.google.com/search/blog/2026/03/crawler-blog-post)
 - [Robots meta tag and X-Robots-Tag, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
 
 ## Check your site

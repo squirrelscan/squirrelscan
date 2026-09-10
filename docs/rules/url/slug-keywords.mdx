@@ -1,9 +1,37 @@
 ---
-title: "Slug Keywords"
-description: "Checks if URL slug contains relevant keywords"
+title: "Non-descriptive URL slug: numeric IDs and generic patterns"
+description: "A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones."
 ---
 
-Checks if URL slug contains relevant keywords
+## What a descriptive slug is
+
+The last segment of a path is the part that names the page. A descriptive slug uses the words a person would use for the content: `/blog/url-structure`. A non-descriptive one uses a database key: `/p/48213` or `/node/1204`.
+
+A descriptive slug helps in small, real ways. It appears in the search result and in a shared link, so a reader knows where they are going before they click, and it gives a search engine a few more terms about the page. It is not a ranking mechanism worth restructuring a site for; it is worth getting right when you choose the URL.
+
+## What squirrel checks
+
+The rule runs on every crawled page and looks only at the last non-empty path segment. It emits a single check named `slug-keywords`:
+
+- Pass when the URL is pagination, meaning the previous segment is `page`, `pages` or `p` and the last segment is all digits. Message: `Pagination URL (excluded from slug analysis)`.
+- Warn when the segment is all digits, or is eight or more hexadecimal characters. Message: `URL uses numeric/hash ID instead of descriptive slug`, with the segment as the value.
+- Warn when the segment matches `page`, `post`, `item`, `product`, `article` or `node` followed by an optional hyphen and digits. Message: `URL uses generic slug pattern`.
+- Info when the segment is under four characters and looks like a short ID, meaning one to eight alphanumeric characters with no doubled vowel. Message: `URL slug is very short, may lack keywords`.
+- Pass when splitting the segment on hyphens and underscores yields at least one word longer than two characters. Message: `URL appears to contain descriptive keywords`.
+- Info otherwise. Message: `URL slug may not be descriptive`.
+- Info on the root path. Message: `Root URL (no slug to analyze)`.
+
+Severity is info and the weight is 3.
+
+## How to fix it
+
+```
+https://example.com/products/merino-crew-socks
+```
+
+Build the slug from the title when the record is created and store it, so it stays stable when the title is later edited. Keep the ID in the database, not in the URL.
+
+Where the ID has to stay for routing, put the descriptive part first: `/products/merino-crew-socks-48213` reads correctly and still resolves. That form passes this check.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks if URL slug contains relevant keywords
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-URLs should contain keywords that describe the page content. Good: /blue-running-shoes. Bad: /product-12345 or /p?id=abc. Include primary keywords in the URL path, but avoid keyword stuffing. URLs should be readable by humans and give users an idea of page content before clicking. Dynamic parameters don't provide SEO value.
 
 ## Enable / disable
 
@@ -40,3 +64,29 @@ disable = ["url/*"]
 enable = ["url/slug-keywords"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/stop-words](/rules/url/stop-words): words in the slug that are not carrying meaning.
+- [url/slug-convention](/rules/url/slug-convention): the site's own separator and depth norms.
+- [url/length](/rules/url/length): how long the descriptive slug is allowed to get.
+- [core/meta-title](/rules/core/meta-title): the title the slug should be derived from.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Keep a simple URL structure, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Each ID-shaped slug is listed with the segment that triggered it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

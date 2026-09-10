@@ -3,7 +3,7 @@ title: "URL Structure"
 description: "URL structure, length, and formatting"
 ---
 
-URL structure, length, and formatting
+URL Structure rules read the address of each crawled page: its case, its word separators, its length and depth, its query parameters and its trailing slash. Most of them are conventions rather than defects, so their severities are low and their findings are worth applying to new URLs rather than retrofitting to old ones. The exception is `url/slug-convention`, which measures the site against its own dominant form and reports the minority, because mixed conventions are how duplicate-content and canonical bugs start.
 
 ## Rules
 
@@ -43,3 +43,5 @@ URL structure, length, and formatting
 [rules]
 disable = ["url/*"]
 ```
+
+Every audit reports URL Structure findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

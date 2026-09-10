@@ -14,7 +14,7 @@ Being non-indexable is often correct. Thank-you pages, faceted filter combinatio
 The rule runs on every crawled page and emits a single check named `indexability`, using the shared indexability test over the parsed head and the response headers.
 
 - Skipped when the page could not be parsed. Message: `Page could not be parsed`.
-- Info when the page is not indexable. Message: `Page is blocked from indexing via robots meta tag`, or `via X-Robots-Tag header`, or `via unknown` when neither string contains `noindex`. The value is `not indexable`.
+- Info when the page is not indexable. Message: `Page is blocked from indexing via robots meta tag` or `via X-Robots-Tag header`. The value is `not indexable`. A third wording, `via unknown`, exists in the code but is unreachable: a page is only non-indexable here when one of those two strings contains `noindex`.
 - Pass when it is indexable. Message: `Page is indexable`, value `indexable`.
 
 The source is decided by looking for `noindex` in the lowercased `robots` meta first, then in the lowercased `x-robots-tag` header. Severity is info and the weight is 2, so this rule describes rather than penalises.

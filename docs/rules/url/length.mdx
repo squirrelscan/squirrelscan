@@ -1,9 +1,34 @@
 ---
-title: "URL Length"
-description: "Checks URL length for optimal SEO"
+title: "URL length: when a URL is long enough to be a problem"
+description: "Long URLs get truncated in results and shares, and usually signal deep nesting. squirrel measures the full URL and counts path segments."
 ---
 
-Checks URL length for optimal SEO
+## What URL length affects
+
+There is no ranking penalty for a long URL and no protocol limit worth worrying about at the sizes real pages use. What length affects is display and handling: search results and social cards truncate, messaging apps break long links across lines, and a URL nobody can read is a URL nobody edits by hand.
+
+Length is also a symptom. A URL with six path segments and four parameters usually describes a site structure that is deeper than it needs to be, or a filter combination that should not be its own indexable page.
+
+## What squirrel checks
+
+The rule runs on every crawled page and measures the full URL string, not just the path. It emits up to two checks:
+
+- `url-length` warns above 100 characters. Message: `URL is 128 characters (over 100)`, with the first 60 characters plus an ellipsis as the value.
+- `url-length` reports info above 75 characters. Message: `URL is 84 characters (recommended: <75)`, with the full URL as the value.
+- `url-length` passes otherwise. Message: `URL length is optimal (42 chars)`.
+- `url-depth` reports info when the path has more than four non-empty segments. Message: `URL has 5 path segments (deep nesting)`, with `Consider flattening site structure` as the value.
+
+Severity for the rule is info and the weight is 3, so this is a description rather than a defect. Both thresholds are fixed and not configurable.
+
+## How to fix it
+
+```
+https://example.com/guides/url-structure
+```
+
+Shorten the slug rather than the hierarchy where you can: the slug should carry the terms that describe the page and nothing else. Drop tracking parameters from URLs you link to internally, and flatten a path that repeats information already in the parent segment.
+
+An established URL is worth more than a shorter one. Apply this to new pages and leave old ones alone unless you are restructuring anyway.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks URL length for optimal SEO
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Shorter URLs are easier to read, share, and may rank better. Keep URLs under 75 characters when possible. URLs over 100 characters can be truncated in search results and social shares. Remove unnecessary parameters, stop words, and path segments. Use descriptive but concise slugs. Long URLs often indicate poor site architecture.
 
 ## Enable / disable
 
@@ -40,3 +61,30 @@ disable = ["url/*"]
 enable = ["url/length"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/parameters](/rules/url/parameters): the query string that usually makes a URL long.
+- [url/stop-words](/rules/url/stop-words): words in the slug that add length without meaning.
+- [url/slug-convention](/rules/url/slug-convention): path depth measured against the site's own norm.
+- [url/slug-keywords](/rules/url/slug-keywords): whether the length is buying anything.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Keep a simple URL structure, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+- [What is a URL, MDN](https://developer.mozilla.org/en-US/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_URL)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Every long URL is listed with its character count and segment depth. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

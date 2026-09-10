@@ -1,9 +1,34 @@
 ---
-title: "Trailing Slash"
-description: "Checks for consistent trailing slash usage"
+title: "Trailing slash: /page and /page/ are two different URLs"
+description: "A file URL with a trailing slash is a mistake; a directory URL either has one or does not, consistently. squirrel reports the state of each path."
 ---
 
-Checks for consistent trailing slash usage
+## What the trailing slash decides
+
+`/about` and `/about/` are distinct URLs. A server can serve the same content at both, redirect one to the other, or serve one and 404 the other. Which it does is a configuration choice, not a property of the web.
+
+Google's own guidance is that either convention is fine as long as you pick one and redirect the other, because serving both without a redirect means one page has two addresses. The convention most sites use is a trailing slash for directory-like paths and none for a path that names a file with an extension.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the URL path only. A path is treated as a file when it ends in a dot followed by two to four alphanumeric characters. It emits a single check named `trailing-slash`:
+
+- Info on the root path. Message: `Root URL (trailing slash check not applicable)`.
+- Warn when a file-like path ends in a slash. Message: `File URL has trailing slash`, with the path as the value.
+- Pass when a file-like path does not. Message: `File URL correctly has no trailing slash`.
+- Info for any extensionless path, reporting the state rather than judging it. Message: `URL has trailing slash` or `URL has no trailing slash`, with `Ensure consistency across site` as the value.
+
+Severity is info and the weight is 3. Consistency across the site is not judged here: that is `url/slug-convention`, which computes the site's own dominant form and reports the minority against it.
+
+## How to fix it
+
+```nginx
+rewrite ^/(.*)/$ /$1 permanent;   # or the reverse, but only one
+```
+
+Pick a convention, apply it in the router, and redirect the other form permanently. Then make internal links, canonical tags and the sitemap all use the chosen form so no navigation takes the redirect.
+
+Do not redirect in both directions. A rule that adds a slash and another that removes it produce a loop.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks for consistent trailing slash usage
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Be consistent with trailing slashes across your site. /page and /page/ are technically different URLs. Pick one convention and stick to it. Configure your server to redirect one to the other. Most sites use trailing slashes for directories and no trailing slash for files. Use canonical tags to specify the preferred version.
 
 ## Enable / disable
 
@@ -40,3 +61,30 @@ disable = ["url/*"]
 enable = ["url/trailing-slash"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/slug-convention](/rules/url/slug-convention): whether the site mixes the two forms, which is the real finding.
+- [crawl/redirect-chain](/rules/crawl/redirect-chain): the hop a slash rule adds to every chain.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): the canonical that has to agree with the choice.
+- [url/lowercase](/rules/url/lowercase): the other way one page ends up with two addresses.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [To slash or not to slash, Google Search Central](https://developers.google.com/search/blog/2010/04/to-slash-or-not-to-slash)
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Each path is reported with its current trailing-slash state. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

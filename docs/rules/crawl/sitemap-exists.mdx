@@ -14,7 +14,7 @@ It matters most where link discovery is weak. New sites with few inbound links, 
 The rule is site-wide and reads what sitemap discovery found. It emits up to three checks:
 
 - `sitemap-exists` reports info when no sitemap data is available. Message: `Sitemap data not available`.
-- `sitemap-exists` reports info when discovery was truncated before every candidate location was tried, so nothing was established. Message: `Sitemap discovery did not complete, so no sitemap check was made`, with `Not all candidate locations were reached` as the value.
+- `sitemap-exists` reports info when discovery was truncated before every candidate location was tried and found nothing at all, so nothing was established. Message: `Sitemap discovery did not complete, so no sitemap check was made`, with `Not all candidate locations were reached` as the value. A truncated walk that did find a sitemap reports the pass below instead.
 - `sitemap-exists` fails when discovery finished and found nothing. Message: `No XML sitemap found`, with `Checked common locations and robots.txt` as the value. Severity error, weight 10, the highest in the Crawlability category.
 - `sitemap-exists` passes when sitemaps were found. Message: `2 sitemap(s) found`, listing each with its URL count.
 - `sitemap-in-robots` runs only when robots.txt exists. It passes when a `Sitemap` line was one of the discovery sources, and otherwise reports info with `Sitemap not referenced in robots.txt`.

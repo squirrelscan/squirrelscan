@@ -7,7 +7,9 @@ description: "A page blocked in robots.txt can never be read for its noindex tag
 
 robots.txt controls crawling and a robots meta tag controls indexing. They are different mechanisms applied at different moments, and combining them wrongly produces two distinct situations.
 
-The first is a page robots.txt allows that then carries `noindex`. That works: the crawler fetches the page, reads the directive and drops it. Two mechanisms are declaring the same intent, which is confusing but harmless. The second is a page robots.txt blocks that also carries `noindex`. That does not work as intended, because the crawler never fetches the page and so never sees the tag. The URL can still be indexed from links elsewhere with no description.
+The first is a page robots.txt allows that then carries `noindex`. That is the combination that works, and it is how you keep a page out of the index: the crawler has to fetch the page to read the directive. It is reported here so you can confirm the exclusion was deliberate.
+
+The second is a page robots.txt blocks that carries no `noindex` at all. The crawler never fetches it, so nothing on the page can influence indexing either way, and the URL can still be listed from links elsewhere with no description. Adding a `noindex` to such a page would not help, which is the point of the informational status.
 
 ## What squirrel checks
 
@@ -28,9 +30,9 @@ User-agent: *
 Allow: /private-preview/
 ```
 
-To keep a page out of the index, let it be crawled and use `noindex`. To save crawl budget on pages nobody should fetch, use `Disallow` and drop the meta tag, accepting that a URL can still be listed without a description.
+When you are relying on `noindex`, allow the crawl. The directive only works if the page is fetched, so a `Disallow` on the same path defeats it.
 
-Use one mechanism per page and pick it based on what you want: `noindex` removes a page from results, `Disallow` stops the fetch.
+When the goal is saving crawl budget on pages nobody should fetch, `Disallow` alone is the right tool, and the URL can still be listed without a description. Pick based on which of the two you want: `noindex` removes a page from results, `Disallow` stops the fetch.
 
 | | |
 |---|---|

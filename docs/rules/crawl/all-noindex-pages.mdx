@@ -19,7 +19,7 @@ The rule is site-wide. For each crawled page it runs the shared indexability tes
 - `all-noindex` passes when every page is indexable. Message: `All pages are indexable`.
 - `all-noindex` is skipped when there are no pages. Message: `No pages to check`.
 
-Both pattern lists are empty by default, so an unconfigured run only ever produces the info bucket. Severity for the rule is info, weight 2.
+Both pattern lists are empty by default, so an unconfigured run produces the info bucket when anything is blocked, a pass when nothing is, and a skip when there are no pages. Severity for the rule is info, weight 2.
 
 ## How to fix it
 
