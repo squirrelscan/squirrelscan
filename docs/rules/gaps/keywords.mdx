@@ -7,7 +7,7 @@ description: "A keyword gap is demand your competitors capture and you do not. s
 
 ## What a keyword gap is
 
-A keyword gap is a search term with real volume where competitors appear and you do not. It is a different question from how well your existing pages rank: it asks what you have not written about at all.
+A keyword gap is a search term with real volume where competitors appear and you do not. It is a different question from how well your existing pages rank. A gap can mean you have nothing on the topic, or that what you have does not rank, and the fix differs: a new page in the first case, an expanded one in the second.
 
 The comparison needs competitors, either named by you or inferred, and live search data for volume. Without both, a keyword list is a guess. What comes back is demand, not a plan: a term with volume is only worth pursuing when it matches what your site is actually for.
 
@@ -18,7 +18,7 @@ The rule is site-wide and reads a result the cloud keyword-gaps service produced
 - `keyword-gaps` is skipped when no result is available, because the rule was not enabled or the service skipped it. Message: `Keyword gap analysis skipped`, with a readable skip reason.
 - `keyword-gaps` passes when the service found none. Message: `No keyword gaps found`.
 - `keyword-gaps` reports info with the count. Message: `18 keyword gaps found`, or `1 keyword gap found` for one.
-- `keyword-gaps-high-volume` warns when any gap has at least 500 monthly searches. Message: `4 high-volume keyword gaps (≥500 searches/mo) — significant untapped search demand`.
+- `keyword-gaps-high-volume` warns when more than 20 gaps each have at least 500 monthly searches. Message: `21 high-volume keyword gaps (≥500 searches/mo) — significant untapped search demand`.
 
 Severity for the rule is info and the weight is 1, so it never moves a score much: it is a research output rather than a defect. It is disabled by default and costs 25 credits per audit when enabled.
 

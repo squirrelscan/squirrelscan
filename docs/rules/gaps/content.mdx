@@ -18,7 +18,7 @@ The rule is site-wide and reads a result the cloud content-gaps service produced
 - `content-gaps` is skipped when no result is available, because the rule was not enabled or the service skipped it. Message: `Content gap analysis skipped`, with a readable skip reason.
 - `content-gaps` passes when the service found none. Message: `No content gaps found`.
 - `content-gaps` reports info with the count. Message: `6 content gap topics found`, or `1 content gap topic found` for one.
-- `content-gaps-high-volume` warns when any cluster has at least 500 combined monthly searches. Message: `2 high-volume content gap topics (≥500 combined searches/mo) — significant uncovered demand`.
+- `content-gaps-high-volume` warns when more than 20 clusters each have at least 500 combined monthly searches. Message: `21 high-volume content gap topics (≥500 combined searches/mo) — significant uncovered demand`.
 
 Severity for the rule is info and the weight is 1. It is disabled by default and costs 25 credits per audit when enabled.
 

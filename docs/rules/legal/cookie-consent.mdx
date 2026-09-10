@@ -11,7 +11,7 @@ What counts is behaviour rather than appearance. A banner that says cookies are 
 
 ## What squirrel checks
 
-The rule runs on every crawled page and looks for structural signals only, never for prose about cookies. It emits a single check named `cookie-consent`:
+The rule runs on every crawled page. It emits a single check named `cookie-consent`:
 
 - Pass when a consent mechanism is found. Message: `Cookie consent mechanism detected`.
 - Warn when none is found and the site metadata places the audience under the GDPR. Message: `No cookie consent mechanism detected — required for your EU/UK (GDPR) audience`.
@@ -19,7 +19,7 @@ The rule runs on every crawled page and looks for structural signals only, never
 
 Three kinds of signal count. A script or stylesheet URL matching one of about twenty consent platform patterns, covering Cookiebot, OneTrust, Usercentrics, CookieYes, iubenda, Didomi, Osano, Quantcast, Termly, TrustArc, Axeptio, Complianz, Klaro, Sourcepoint and others, plus Shopify's first-party privacy banner. A known platform banner container, matched by id or class such as `#onetrust-banner-sdk` or `#CybotCookiebotDialog`. Or an element whose id or class carries an unambiguous consent token such as `cookie-banner` or `cookie-consent`.
 
-Matching is against structural attributes only, script `src`, element `id` and `class`, so a blog post about cookies no longer registers as a consent mechanism. Severity info, weight 4. The rule is skipped on soft 404 pages, and it does not run for personal sites or portfolios.
+The third path is the one that reads text. A region is eligible when its id, class or role marks it as a cookie or consent widget or a dialog; it then qualifies either because its id or class carries an unambiguous consent token, or because the region mentions cookies, in its attributes or its own text, and contains a control whose label, `value` or `aria-label` reads as an accept or reject action. So a cookie dialog with an accept button passes without any consent-keyed class, while a blog post about cookies does not, because it has no such control. Severity info, weight 4. The rule is skipped on soft 404 pages, and it does not run for personal sites or portfolios.
 
 ## How to fix it
 

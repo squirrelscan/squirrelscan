@@ -15,13 +15,13 @@ The rule is site-wide and reads a result the cloud blocklist service produced be
 
 - Skipped when no result is available. Message: `Ad-blocker link check skipped`, with a readable skip reason.
 - Pass when nothing matched. Message: `No links or resources match EasyList ad-blocking rules`.
-- Warn once per match, up to `maxMatchesToReport`. Message: `Blocked by ad blockers: ads-twitter.com — X/Twitter ad pixel — https://static.ads-twitter.com/uwt.js`, naming the vendor where the domain is recognised and falling back to the bare hostname where it is not, with a note of the page it appeared on. Severity warning, weight 2.
+- Warn once per match, up to `maxMatchesToReport` and always at least one, so a misconfigured `0` does not drop the finding. Message: `Blocked by ad blockers: static.ads-twitter.com — X/Twitter ad pixel — https://static.ads-twitter.com/uwt.js (1 page)`, naming the vendor where the registrable domain is recognised and falling back to the bare hostname where it is not, with a page count when the source pages are known. Severity warning, weight 2.
 
 The three blocking rules share one blocklist check per audit.
 
 ## How to fix it
 
-Move anything the page needs off a blocked host. For measurement, a first-party or server-side collector survives blocking; for advertising, the finding is a description of your audience rather than a defect.
+Move anything the page needs off a blocked host. For measurement, a first-party or server-side collector may reduce blocking, though it is not a guarantee: filters can match a first-party endpoint too, and server-side forwarding cannot recover an event whose browser request never left. For advertising, the finding is a description of your audience rather than a defect.
 
 Check what each match actually is before acting. The report names the vendor for the domains it recognises, which is usually enough to tell an ad pixel from something the page depends on.
 
@@ -82,6 +82,7 @@ Blocking findings ship in every audit next to the SEO, performance and agent exp
 ## References
 
 - [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
+- [HTMLScriptElement, MDN](https://developer.mozilla.org/en-US/docs/Web/API/HTMLScriptElement)
 
 ## Check your site
 

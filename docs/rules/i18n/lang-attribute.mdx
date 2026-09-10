@@ -5,7 +5,7 @@ description: "Without a lang attribute a screen reader guesses which voice to us
 
 ## What the lang attribute is
 
-`<html lang="en">` declares the natural language of a page's content. A screen reader uses it to pick a pronunciation model, a browser uses it for hyphenation and for offering translation, and a search engine uses it as one signal about who the page is for.
+`<html lang="en">` declares the natural language of a page's content. A screen reader uses it to pick a pronunciation model, and a browser uses it for hyphenation and for offering translation. Google is explicit that it ignores code-level language declarations and works out the language from the visible content instead, so treat this as an accessibility and browser-behaviour attribute rather than a ranking one.
 
 The value is a BCP 47 language tag: a two or three letter language subtag, optionally followed by a region, as in `en`, `es` or `en-AU`. Use a region subtag only when the regional variant matters; `en` is more useful than `en-US` on a page that is not specifically American.
 
@@ -76,6 +76,7 @@ Internationalization findings ship in every audit next to the SEO, performance a
 
 - [The lang global attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/lang)
 - [Declaring language in HTML, W3C Internationalization](https://www.w3.org/International/questions/qa-html-language-declarations)
+- [Managing multi-regional and multilingual sites, Google Search Central](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)
 
 ## Check your site
 

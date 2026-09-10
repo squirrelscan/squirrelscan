@@ -5,7 +5,7 @@ description: "Google Ads in the EEA requires Consent Mode v2. squirrel checks fo
 
 ## What Consent Mode is
 
-Consent Mode is Google's mechanism for telling its tags what a visitor has consented to. You set defaults before the tags load, then update them when the visitor answers the banner. Tags adjust their behaviour rather than being blocked outright, which is what lets modelling fill the gap.
+Consent Mode is Google's mechanism for telling its tags what a visitor has consented to. You set defaults before the tags load, then update them when the visitor answers the banner. In advanced mode the tags load and adjust their behaviour, sending cookieless pings that let modelling fill the gap; in basic mode they do not load at all until consent is granted.
 
 Version 2 added two parameters to the original two. `ad_storage` and `analytics_storage` cover cookies; `ad_user_data` and `ad_personalization` cover sending user data to Google for advertising and using it for personalisation. Google has required v2 for EEA traffic to its advertising products since March 2024.
 
@@ -18,7 +18,7 @@ The rule runs on every crawled page and matches the raw HTML against patterns. I
 - Info when a consent signal is present without a v2 signal. Message: `Consent Mode detected (may need v2 upgrade)`, with `Add ad_user_data and ad_personalization for v2` as the value.
 - Info when no consent signal is present. Message: `Google Consent Mode not detected`, with `Required for EU Google Ads compliance` as the value.
 
-A consent signal is any of a `gtag('consent'` call, a `consent: 'default'` pair, or the literal strings `ad_storage`, `analytics_storage`, `ad_user_data` or `ad_personalization`. A v2 signal is `ad_user_data` or `ad_personalization`. All of it is a substring match on the page HTML, so consent mode configured inside a tag manager container rather than inline is not detected. Severity info, weight 4.
+A consent signal is any of a `gtag('consent'` call, a `consent: 'default'` pair, or the literal strings `ad_storage`, `analytics_storage`, `ad_user_data` or `ad_personalization`. A v2 signal is `ad_user_data` or `ad_personalization`. The consent patterns are case-insensitive regular expressions that tolerate whitespace inside the call. The Google-tag and v2 tests are case-sensitive substring matches, so an uppercase `AD_USER_DATA` satisfies the consent test and not the v2 one. Either way it reads the page HTML, so consent mode configured inside a tag manager container rather than inline is not detected. Severity info, weight 4.
 
 ## How to fix it
 
@@ -35,7 +35,7 @@ A consent signal is any of a `gtag('consent'` call, a `consent: 'default'` pair,
 
 Set the defaults before any Google tag loads, then call `gtag('consent', 'update', …)` with the visitor's answer. Deny by default for an EEA audience.
 
-Most consent platforms do this for you. What they cannot do is run before your tags, so the ordering in the page is still yours to get right.
+Most consent platforms do this for you, and a tag manager can run the platform on its consent initialization trigger so it fires before the other tags. Getting that ordering right is the part that is still yours.
 
 | | |
 |---|---|
@@ -81,6 +81,7 @@ Analytics findings ship in every audit next to the SEO, performance and agent ex
 ## References
 
 - [Consent Mode, Google tag platform](https://developers.google.com/tag-platform/security/guides/consent)
+- [Consent Mode concepts, Google tag platform](https://developers.google.com/tag-platform/security/concepts/consent-mode)
 - [Google Tag Manager developer guide](https://developers.google.com/tag-platform/tag-manager)
 
 ## Check your site

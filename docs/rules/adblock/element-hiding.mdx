@@ -7,9 +7,9 @@ description: "A block named .ad-container is hidden for anyone running an ad blo
 
 ## What a cosmetic filter is
 
-EasyList is the filter list most ad blockers use. Alongside network rules that stop requests, it carries cosmetic rules: CSS selectors the blocker hides on every page, so an element with a class like `ad-wrapper` or `sponsored-box` disappears whether or not it holds an advert.
+EasyList is the filter list most ad blockers use. Alongside network rules that stop requests, it carries cosmetic rules: CSS selectors the blocker hides. Some are global and some apply only on named domains, and they match ids, attributes and selector structure as well as classes.
 
-That is the trap. A blocker cannot read your intent, only your class names, so a legitimate block called `.banner` or a `#sponsors` section thanking supporters is hidden from a large share of visitors. The fix is naming, not markup.
+That is the trap. A blocker cannot read your intent, only your markup, so a legitimate block called `.banner` or a `#sponsors` section thanking supporters can be hidden from a large share of visitors.
 
 ## What squirrel checks
 
@@ -27,7 +27,7 @@ The three blocking rules share one blocklist check per audit, so enabling them a
 <section class="partner-list">…</section>
 ```
 
-Rename the classes and ids that match. `partner-list` and `promo-panel` carry the same meaning to you and do not match a filter written to catch advertising.
+Rename whatever the filter matched, and check the result against a blocker rather than assuming. A name like `partner-list` carries the same meaning to you, but the fix is that the new markup stops matching the applicable rules, which can key on an id or an attribute as easily as a class.
 
 Where the element really is an advert, the finding is accurate and the choice is yours. What is worth fixing is the case where a blocker hides content you meant everyone to see.
 
@@ -87,6 +87,7 @@ Blocking findings ship in every audit next to the SEO, performance and agent exp
 
 ## References
 
+- [CSS selectors, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_selectors)
 - [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
 
 ## Check your site

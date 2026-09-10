@@ -7,7 +7,7 @@ description: "Privacy filters block trackers by default in several browsers, so 
 
 EasyPrivacy is the tracker list, separate from the advertising one. Blocking it is not a niche setting: uBlock Origin uses it by default, Brave blocks equivalent hosts, and Firefox's strict mode blocks a comparable set.
 
-The effect on measurement is silent. Nothing errors and nothing appears in the report; the page does not load the tracker for those visitors, and they do not appear in the numbers. That skews the data most where your audience is most technical, which is often the audience you most want to understand.
+The effect on your measurement is silent, even though the browser is not. A blocked script can raise an error event and show up in developer tools, but nothing reaches the analytics dashboard, so those visitors are absent from the numbers with no gap to notice. That skews the data most where your audience is most technical, which is often the audience you most want to understand.
 
 ## What squirrel checks
 
@@ -21,7 +21,7 @@ The three blocking rules share one blocklist check per audit.
 
 ## How to fix it
 
-Move measurement first-party or server-side, so it is a request to your own domain rather than to a host on the list. Privacy-focused analytics products are built for this and are usually a smaller change than proxying an existing tool.
+Move measurement first-party or server-side, so it is a request to your own domain rather than to a host on the list. That may reduce blocking rather than end it: filters can match a first-party endpoint, and forwarding server-side cannot recover an event whose browser request was blocked. Privacy-focused analytics products are built for this and are usually a smaller change than proxying an existing tool.
 
 Whatever you do, treat the numbers you already have as an undercount rather than as the truth.
 
