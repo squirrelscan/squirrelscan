@@ -10,41 +10,41 @@ See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Article Schema" icon="triangle-exclamation" href="/rules/schema/article">
-    Validates Article schema required properties
+  <Card title="Article schema: headline, author and datePublished checks" icon="triangle-exclamation" href="/rules/schema/article">
+    Article JSON-LD missing headline, author or datePublished, or carrying a date that is not ISO 8601. squirrel checks both on every page.
   </Card>
-  <Card title="Breadcrumb Schema" icon="circle-info" href="/rules/schema/breadcrumb">
-    Checks for BreadcrumbList schema on non-homepage
+  <Card title="BreadcrumbList schema: positions, names and what breaks" icon="circle-info" href="/rules/schema/breadcrumb">
+    Breadcrumb markup with no itemListElement, items missing position or name, or positions out of order. squirrel checks every non-homepage URL.
   </Card>
-  <Card title="FAQ Schema" icon="triangle-exclamation" href="/rules/schema/faq">
-    Validates FAQPage schema structure
+  <Card title="FAQPage schema: mainEntity, Question and acceptedAnswer" icon="triangle-exclamation" href="/rules/schema/faq">
+    FAQ markup with no mainEntity, or Question entries missing name or acceptedAnswer. squirrel checks the structure on every page that carries it.
   </Card>
-  <Card title="JSON-LD Valid" icon="triangle-exclamation" href="/rules/schema/json-ld-valid">
-    Validates JSON-LD structured data
+  <Card title="Invalid JSON-LD syntax: what breaks it and how to fix" icon="triangle-exclamation" href="/rules/schema/json-ld-valid">
+    A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property.
   </Card>
-  <Card title="LocalBusiness Schema" icon="triangle-exclamation" href="/rules/schema/local-business">
-    Validates LocalBusiness schema for local SEO
+  <Card title="LocalBusiness schema: required name, address or areaServed" icon="triangle-exclamation" href="/rules/schema/local-business">
+    LocalBusiness markup with no name, an incomplete PostalAddress, or neither an address nor a service area. squirrel checks all three.
   </Card>
-  <Card title="Organization Schema" icon="circle-info" href="/rules/schema/organization">
-    Validates Organization schema for brand presence
+  <Card title="Organization schema: name, url, logo and sameAs checks" icon="circle-info" href="/rules/schema/organization">
+    Organization JSON-LD missing name or url, with no logo, or a sameAs list that omits a social profile the site clearly runs. squirrel finds all three.
   </Card>
-  <Card title="Product Schema" icon="triangle-exclamation" href="/rules/schema/product">
-    Validates Product schema for e-commerce
+  <Card title="Product schema: name, image, offers and review checks" icon="triangle-exclamation" href="/rules/schema/product">
+    Product markup with no name or image, an Offer missing price or availability, and no rating data. squirrel checks each product page.
   </Card>
-  <Card title="Rating Scope" icon="triangle-exclamation" href="/rules/schema/rating-scope">
-    Finds AggregateRating markup that is not about the page it sits on, or that no reader can see
+  <Card title="AggregateRating on the wrong page: visible and on-topic" icon="triangle-exclamation" href="/rules/schema/rating-scope">
+    A sitewide star rating stamped on privacy, terms and blog pages, or one no reader can see. squirrel flags both as policy risks.
   </Card>
-  <Card title="Review Schema" icon="triangle-exclamation" href="/rules/schema/review">
-    Validates Review and AggregateRating schema
+  <Card title="AggregateRating: ratingValue, ratingCount and review checks" icon="triangle-exclamation" href="/rules/schema/review">
+    Rating markup missing ratingValue or a review count, and Review nodes with no author or reviewRating. squirrel checks both shapes.
   </Card>
-  <Card title="Structured Data Coverage Outlier" icon="triangle-exclamation" href="/rules/schema/coverage-outlier">
-    Finds pages missing the structured data the rest of their page type carries
+  <Card title="Structured data coverage: pages that break your own norm" icon="triangle-exclamation" href="/rules/schema/coverage-outlier">
+    Forty of forty-five product pages carry Product markup and five do not. squirrel finds the gap against the site's own pattern, not a generic rule.
   </Card>
-  <Card title="Video Schema" icon="triangle-exclamation" href="/rules/schema/video">
-    Validates VideoObject schema for video content
+  <Card title="VideoObject schema: required props and duration format" icon="triangle-exclamation" href="/rules/schema/video">
+    A page with an embedded video and no VideoObject markup, or markup missing thumbnailUrl, uploadDate or an ISO 8601 duration. squirrel checks both.
   </Card>
-  <Card title="WebSite Search Schema" icon="circle-info" href="/rules/schema/website-search">
-    Checks for WebSite schema with sitelinks searchbox
+  <Card title="WebSite SearchAction and the retired sitelinks searchbox" icon="circle-info" href="/rules/schema/website-search">
+    WebSite schema on a homepage with no SearchAction, or a SearchAction missing target or query-input. squirrel checks the homepage markup.
   </Card>
 </CardGroup>
 

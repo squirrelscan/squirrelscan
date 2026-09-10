@@ -10,95 +10,95 @@ See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Animated Content" icon="triangle-exclamation" href="/rules/perf/animated-content">
-    Checks for large GIFs that could be converted to video
+  <Card title="Animated GIF on a page: convert to video for the bytes" icon="triangle-exclamation" href="/rules/perf/animated-content">
+    GIF images used for animation, and videos with no modern codec source. squirrel finds both in the markup.
   </Card>
-  <Card title="Browser-Required Audits" icon="circle-info" href="/rules/perf/browser-required">
-    Lists performance audits that require browser execution
+  <Card title="Audits that need a browser: what a static crawl cannot see" icon="circle-info" href="/rules/perf/browser-required">
+    The runtime metrics no HTML analysis can produce. squirrel lists them so the gap in a static audit is explicit.
   </Card>
-  <Card title="Cache Headers" icon="triangle-exclamation" href="/rules/perf/cache-headers">
-    Checks Cache-Control header configuration
+  <Card title="Cache-Control on a page: what squirrel reads and expects" icon="triangle-exclamation" href="/rules/perf/cache-headers">
+    A response with no caching headers, no-cache with no validator, or a static asset cached for under a day. squirrel reads the headers per page.
   </Card>
-  <Card title="Weak Caching" icon="triangle-exclamation" href="/rules/perf/bad-caching">
-    Flags sites where most pages lack caching freshness, validators, or compression
+  <Card title="Weak caching across a site: freshness, validators, gzip" icon="triangle-exclamation" href="/rules/perf/bad-caching">
+    Most pages missing a freshness lifetime, an ETag, or compression. squirrel measures the share across every crawled HTML response.
   </Card>
-  <Card title="CLS Optimization Hints" icon="triangle-exclamation" href="/rules/perf/cls-hints">
-    Checks for Cumulative Layout Shift prevention
+  <Card title="Images without width and height: the CLS risk squirrel finds" icon="triangle-exclamation" href="/rules/perf/cls-hints">
+    Images and iframes with no dimensions, so the browser cannot reserve space before they load. squirrel lists every one by page.
   </Card>
-  <Card title="Compression" icon="triangle-exclamation" href="/rules/perf/compression">
-    Checks for Gzip or Brotli compression
+  <Card title="No compression detected: gzip and Brotli on the response" icon="triangle-exclamation" href="/rules/perf/compression">
+    A text response served with no Content-Encoding, or with compression explicitly disabled. squirrel reads the headers on every page.
   </Card>
-  <Card title="Uncompressed Assets" icon="triangle-exclamation" href="/rules/perf/asset-compression">
-    Checks for large CSS, JavaScript, and other text assets served without gzip or Brotli
+  <Card title="Uncompressed CSS and JS: assets served without gzip" icon="triangle-exclamation" href="/rules/perf/asset-compression">
+    Large text sub-resources served with no Content-Encoding, while the HTML around them is compressed. squirrel checks every crawled asset.
   </Card>
-  <Card title="Critical Request Chains" icon="triangle-exclamation" href="/rules/perf/critical-request-chains">
-    Identifies chains of dependent resources that delay rendering
+  <Card title="Critical request chains: the blocking head resources counted" icon="triangle-exclamation" href="/rules/perf/critical-request-chains">
+    Blocking stylesheets and scripts in head, plus every CSS @import. squirrel counts each as a link in the chain before first paint.
   </Card>
-  <Card title="CSS File Size Too Large" icon="hexagon-exclamation" href="/rules/perf/css-file-size">
-    Checks for CSS files that exceed recommended size limits
+  <Card title="CSS file too large: the 150 KB and 500 KB thresholds" icon="hexagon-exclamation" href="/rules/perf/css-file-size">
+    Stylesheets over 150 KB warn and over 500 KB fail. squirrel measures every CSS file the crawl found and names the pages that load it.
   </Card>
-  <Card title="JavaScript File Size Too Large" icon="hexagon-exclamation" href="/rules/perf/js-file-size">
-    Checks for JavaScript files that exceed recommended size limits
+  <Card title="JavaScript bundle too large: the 250 KB and 1 MB limits" icon="hexagon-exclamation" href="/rules/perf/js-file-size">
+    Scripts over 250 KB warn and over 1 MB fail. squirrel measures every JavaScript file the crawl found and names the pages that load it.
   </Card>
-  <Card title="DOM Size" icon="triangle-exclamation" href="/rules/perf/dom-size">
-    Detects excessive DOM complexity that impacts performance
+  <Card title="Large DOM: node count, depth and children per element" icon="triangle-exclamation" href="/rules/perf/dom-size">
+    A page at 1,500 DOM nodes or more, deeper than 32 levels, or with an element holding more than 60 children. squirrel counts all three.
   </Card>
-  <Card title="Duplicate JavaScript" icon="triangle-exclamation" href="/rules/perf/duplicate-js">
-    Detects duplicate JavaScript libraries loaded multiple times
+  <Card title="Same library loaded twice: duplicate JavaScript on a page" icon="triangle-exclamation" href="/rules/perf/duplicate-js">
+    One library loaded from two script tags, or at two different versions. squirrel reads library names out of the script URLs.
   </Card>
-  <Card title="Font Loading" icon="triangle-exclamation" href="/rules/perf/font-loading">
-    Checks for font loading best practices
+  <Card title="font-display swap: the @font-face rule squirrel looks for" icon="triangle-exclamation" href="/rules/perf/font-loading">
+    An @font-face block with no font-display, or Google Fonts loaded without a preconnect. squirrel reads the inline CSS on every page.
   </Card>
-  <Card title="Font Delivery" icon="triangle-exclamation" href="/rules/perf/font-delivery">
-    Flags render-blocking third-party font stylesheets in the critical request chain
+  <Card title="Google Fonts blocking render: the font CSS squirrel flags" icon="triangle-exclamation" href="/rules/perf/font-delivery">
+    A stylesheet from a hosted font service in head, blocking first paint. squirrel checks eight providers and inline @import too.
   </Card>
-  <Card title="Carousel Hidden Eager Images" icon="triangle-exclamation" href="/rules/perf/carousel-hidden-eager">
-    Flags eagerly-loaded images inside hidden carousel slides
+  <Card title="Hidden carousel slides still download: eager images inside" icon="triangle-exclamation" href="/rules/perf/carousel-hidden-eager">
+    Images in inactive carousel slides loaded eagerly, so the browser fetches them anyway. squirrel walks up eight ancestors to find them.
   </Card>
-  <Card title="HTTP/2" icon="circle-info" href="/rules/perf/http2">
-    Checks for HTTP/2 protocol support
+  <Card title="HTTP/2 and HTTP/3: what the response headers can tell you" icon="circle-info" href="/rules/perf/http2">
+    Whether the server advertises HTTP/2 or HTTP/3. squirrel reads Alt-Svc and the Server header, and says when it cannot tell.
   </Card>
-  <Card title="INP Optimization Hints" icon="circle-info" href="/rules/perf/inp-hints">
-    Checks for Interaction to Next Paint optimization
+  <Card title="Third-party scripts and INP: what squirrel counts per page" icon="circle-info" href="/rules/perf/inp-hints">
+    More than five known third-party scripts, or more than three that block the parser. squirrel counts both on every page.
   </Card>
-  <Card title="JavaScript Redirects" icon="triangle-exclamation" href="/rules/perf/js-redirects">
-    Detects JavaScript resources that return 3XX redirects
+  <Card title="Script URL redirects: a 3xx in front of every script load" icon="triangle-exclamation" href="/rules/perf/js-redirects">
+    JavaScript files that answer with a 3xx before serving. squirrel reports every one with the pages that reference it.
   </Card>
-  <Card title="JS Libraries" icon="triangle-exclamation" href="/rules/perf/js-libraries">
-    Detects JavaScript libraries and checks for known vulnerabilities
+  <Card title="Outdated jQuery and friends: the libraries squirrel detects" icon="triangle-exclamation" href="/rules/perf/js-libraries">
+    Twenty-two known JavaScript libraries detected by URL, bundled code or markup, with a version check against known CVEs.
   </Card>
-  <Card title="Lazy Loading Above Fold" icon="triangle-exclamation" href="/rules/perf/lazy-above-fold">
-    Detects lazy loading on likely above-fold images
+  <Card title="loading=lazy on a hero image: the LCP delay squirrel finds" icon="triangle-exclamation" href="/rules/perf/lazy-above-fold">
+    An above-fold image marked loading=lazy, which delays the paint that matters. squirrel checks the first three eligible images.
   </Card>
-  <Card title="LCP Optimization Hints" icon="triangle-exclamation" href="/rules/perf/lcp-hints">
-    Checks for Largest Contentful Paint optimization opportunities
+  <Card title="LCP image not preloaded: what squirrel counts as a hero" icon="triangle-exclamation" href="/rules/perf/lcp-hints">
+    Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three candidate images on every page.
   </Card>
-  <Card title="LCP Image Fetch Priority" icon="triangle-exclamation" href="/rules/perf/lcp-fetchpriority">
-    Flags the hero/LCP image when it lacks fetchpriority='high' and a preload
+  <Card title="fetchpriority='high': the LCP image hint squirrel checks" icon="triangle-exclamation" href="/rules/perf/lcp-fetchpriority">
+    A hero image loaded eagerly with neither fetchpriority='high' nor a matching preload. squirrel picks the likely LCP candidate per page.
   </Card>
-  <Card title="Legacy JavaScript" icon="circle-info" href="/rules/perf/legacy-js">
-    Detects ES5 polyfills and legacy JavaScript code
+  <Card title="core-js and Babel helpers: legacy JavaScript in a bundle" icon="circle-info" href="/rules/perf/legacy-js">
+    Polyfill bundles and ES5 transpilation helpers shipped to browsers that do not need them. squirrel reads script URLs and inline code.
   </Card>
-  <Card title="Preconnect Hints" icon="circle-info" href="/rules/perf/preconnect">
-    Checks for preconnect hints to critical third-party origins
+  <Card title="rel=preconnect: the CDN origins squirrel checks for a hint" icon="circle-info" href="/rules/perf/preconnect">
+    A page loading from a known CDN with no preconnect for that origin. squirrel checks thirteen common hosts.
   </Card>
-  <Card title="Render-Blocking Resources" icon="triangle-exclamation" href="/rules/perf/render-blocking">
-    Checks for render-blocking CSS and JavaScript
+  <Card title="Render-blocking resources: the ones squirrel counts in head" icon="triangle-exclamation" href="/rules/perf/render-blocking">
+    Stylesheets and scripts in head that hold up first paint. squirrel counts them per page and lists each URL.
   </Card>
-  <Card title="Source Maps" icon="circle-info" href="/rules/perf/source-maps">
-    Checks for source map availability and configuration
+  <Card title="Exposed source maps: sourceMappingURL in production output" icon="circle-info" href="/rules/perf/source-maps">
+    A sourceMappingURL comment or SourceMap header pointing at a map anyone can fetch. squirrel finds them in the page.
   </Card>
-  <Card title="Time to First Byte" icon="triangle-exclamation" href="/rules/perf/ttfb">
-    Measures server response time (TTFB)
+  <Card title="Time to First Byte: the 600ms and 1000ms thresholds" icon="triangle-exclamation" href="/rules/perf/ttfb">
+    A server that takes over 600ms to send the first byte, or over 1000ms. squirrel measures TTFB on every fresh fetch.
   </Card>
-  <Card title="Total Page Weight" icon="triangle-exclamation" href="/rules/perf/total-byte-weight">
-    Checks the total byte weight of the page
+  <Card title="Total page weight: the 1600 KB and 5000 KB thresholds" icon="triangle-exclamation" href="/rules/perf/total-byte-weight">
+    Everything the crawl measured, summed: CSS, JavaScript and images. squirrel warns at 1600 KB and fails at 5000 KB.
   </Card>
-  <Card title="Unminified CSS" icon="triangle-exclamation" href="/rules/perf/unminified-css">
-    Detects unminified CSS that could be optimized
+  <Card title="Unminified CSS: how squirrel tells minified from formatted" icon="triangle-exclamation" href="/rules/perf/unminified-css">
+    Stylesheets that read as source rather than build output. squirrel analyses inline CSS and judges linked files by their filename.
   </Card>
-  <Card title="Unminified JavaScript" icon="triangle-exclamation" href="/rules/perf/unminified-js">
-    Detects unminified JavaScript that could be optimized
+  <Card title="Unminified JavaScript: the signals squirrel reads in a file" icon="triangle-exclamation" href="/rules/perf/unminified-js">
+    Scripts that read as source rather than build output. squirrel analyses the content it has and judges the rest by filename.
   </Card>
 </CardGroup>
 

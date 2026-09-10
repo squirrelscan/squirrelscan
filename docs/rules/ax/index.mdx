@@ -57,59 +57,59 @@ Actionable asks whether an agent can go beyond reading and transact: call an API
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Content Without JavaScript" icon="code" href="/rules/ax/content-without-js">
-    Flags main content that only appears after JavaScript runs, invisible to agents that read raw HTML
+  <Card title="Content that needs JavaScript: invisible to raw-HTML agents" icon="code" href="/rules/ax/content-without-js">
+    Most of a page's text arriving only after JavaScript runs. squirrel compares the raw HTML against the rendered DOM and reports the gap.
   </Card>
-  <Card title="Token Weight" icon="gauge" href="/rules/ax/token-weight">
-    Per-page raw-HTML token estimate and text-to-HTML ratio
+  <Card title="Text to HTML ratio: the token cost of a page for an agent" icon="gauge" href="/rules/ax/token-weight">
+    Visible text under 15% of the HTML, or a page over a 100,000-token budget. squirrel estimates both from the raw response.
   </Card>
-  <Card title="Markdown Response" icon="markdown" href="/rules/ax/markdown-response">
-    Checks whether the site serves text/markdown via content negotiation or a .md variant
+  <Card title="Accept: text/markdown: serving Markdown to AI agents" icon="markdown" href="/rules/ax/markdown-response">
+    No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header. squirrel probes all three.
   </Card>
-  <Card title="AI Crawler Access" icon="robot" href="/rules/ax/ai-crawlers">
-    Classifies and reports which training, AI-search, and user-action crawlers robots.txt allows or blocks
+  <Card title="AI crawlers in robots.txt: which bots you block, by class" icon="robot" href="/rules/ax/ai-crawlers">
+    robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs.
   </Card>
-  <Card title="Agent Blocking" icon="ban" href="/rules/ax/agent-blocking">
-    Probes whether agent user-agents get 403s or challenge pages that browsers don't
+  <Card title="Blocking AI agents at the edge: what robots.txt hides" icon="ban" href="/rules/ax/agent-blocking">
+    A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three.
   </Card>
-  <Card title="llms.txt" icon="file-lines" href="/rules/ax/llms-txt">
-    Detects /llms.txt (+ /llms-full.txt) at the domain root and checks its basic Markdown format
+  <Card title="llms.txt: what the file is and how squirrel validates it" icon="file-lines" href="/rules/ax/llms-txt">
+    No /llms.txt at the root, an SPA fallback served in its place, or a file with no H1 and no links. squirrel checks the file and its format.
   </Card>
-  <Card title="AGENTS.md" icon="clipboard-list" href="/rules/ax/agents-md">
-    Detects /AGENTS.md and variants: instructions for coding agents working against the site
+  <Card title="AGENTS.md: the paths squirrel probes and what counts" icon="clipboard-list" href="/rules/ax/agents-md">
+    No AGENTS.md at the repository root or any conventional path, or an SPA fallback served in its place. squirrel probes four paths and sniffs the body.
   </Card>
-  <Card title="Well-Known Agent Files" icon="id-badge" href="/rules/ax/well-known-agent">
-    Detects MCP server cards, A2A agent cards, and agent-skills manifests
+  <Card title="MCP and A2A manifests under .well-known: what squirrel finds" icon="id-badge" href="/rules/ax/well-known-agent">
+    No MCP server card, A2A agent card or agent-skills manifest, or a leftover ai-plugin.json from the ChatGPT plugin era. squirrel probes for all four.
   </Card>
-  <Card title="Content Signals" icon="flag" href="/rules/ax/content-signals">
-    Parses Content-Signal lines in robots.txt and flags contradictory AI policy
+  <Card title="Content-Signal in robots.txt: search, ai-input, ai-train" icon="flag" href="/rules/ax/content-signals">
+    A Content-Signal line with a typo, or one declaring ai-train=yes while robots.txt blocks the training crawlers. squirrel parses and cross-checks both.
   </Card>
-  <Card title="noai Signals" icon="eye-slash" href="/rules/ax/noai-signals">
-    Reports noai/noimageai tags and AI-search-quoting opt-outs
+  <Card title="noai and nosnippet: the AI opt-out tags squirrel reports" icon="eye-slash" href="/rules/ax/noai-signals">
+    Which pages declare noai, noimageai, nosnippet or max-snippet:0, and where the directive came from. squirrel reports, and never penalises.
   </Card>
-  <Card title="RSL License" icon="file-contract" href="/rules/ax/rsl-license">
-    Checks for a robots.txt License directive pointing to a valid RSL document
+  <Card title="robots.txt License: directive and RSL document validation" icon="file-contract" href="/rules/ax/rsl-license">
+    A License: reference in robots.txt pointing at a document that does not resolve as valid RSL. squirrel fetches it and checks.
   </Card>
-  <Card title="API & OAuth Discovery" icon="diagram-project" href="/rules/ax/api-discovery">
-    Detects api-catalog, OpenAPI, and OAuth discovery documents
+  <Card title="api-catalog and OpenAPI: how an agent finds your API" icon="diagram-project" href="/rules/ax/api-discovery">
+    No OpenAPI spec at a conventional path, or OAuth metadata with no way for an agent to register a client. squirrel probes both.
   </Card>
-  <Card title="Pay Per Crawl" icon="credit-card" href="/rules/ax/pay-per-crawl">
-    Detects HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)
+  <Card title="HTTP 402 for crawlers: pay-per-crawl and x402 detection" icon="credit-card" href="/rules/ax/pay-per-crawl">
+    A payment wall served to AI crawlers, and whether it also charges a live user-action fetch. squirrel probes the homepage as three user-agents.
   </Card>
-  <Card title="Archive Indexing" icon="box-archive" href="/rules/ax/archive-indexing">
-    Checks presence in the Wayback Machine and Common Crawl, the archives AI training corpora are built from
+  <Card title="Common Crawl and Wayback: is your site in the archives" icon="box-archive" href="/rules/ax/archive-indexing">
+    A site missing from the Common Crawl index or the Wayback Machine, or archived only with a capture over a year old. squirrel checks both.
   </Card>
-  <Card title="Site Profile" icon="circle-info" href="/rules/ai/site-metadata">
-    Resolves the per-domain site profile that gates cloud features and which rules apply
+  <Card title="Site profile: the per-domain classification rules read" icon="circle-info" href="/rules/ai/site-metadata">
+    The resolved site type, business category, country and audience for a domain. squirrel reports it, and other rules use it to decide what applies.
   </Card>
-  <Card title="LLM Parsability" icon="circle-info" href="/rules/ai/llm-parsability">
-    Analyzes how well LLMs can parse and understand the content
+  <Card title="LLM parsability score: what it measures and how to raise it" icon="circle-info" href="/rules/ai/llm-parsability">
+    A page a language model reads badly, scored under 70 out of 100. squirrel scores every crawled page and names the ones below the mark.
   </Card>
-  <Card title="Page Type Match" icon="triangle-exclamation" href="/rules/ai/page-type-match">
-    Checks the AI-classified page type agrees with declared structured data
+  <Card title="Page type mismatch: when schema disagrees with the page" icon="triangle-exclamation" href="/rules/ai/page-type-match">
+    A page that reads as a listing but declares Product schema. squirrel compares the classified type against the declared JSON-LD.
   </Card>
-  <Card title="AI Content Detection" icon="circle-info" href="/rules/ai/ai-content">
-    Detects if content appears to be AI-generated (currently disabled)
+  <Card title="AI content detection: why this rule is retired" icon="circle-info" href="/rules/ai/ai-content">
+    The AI-generated content check no longer runs. squirrel emits a skip on every page and never calls a model.
   </Card>
 </CardGroup>
 
