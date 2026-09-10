@@ -1,9 +1,32 @@
 ---
-title: "Form HTTPS"
-description: "Checks that form actions use HTTPS"
+title: "Form action over HTTP: the insecure form submission warning"
+description: "A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction."
 ---
 
-Checks that form actions use HTTPS
+## What an insecure form action is
+
+A form's `action` attribute is the URL the browser submits to. When that URL is `http://`, the field values travel unencrypted regardless of how the page itself was delivered. The padlock in the address bar describes the document, not the submission.
+
+The worst version is an HTTPS page with an HTTP action, because the user has every visual signal that the page is safe. Chrome and Firefox warn on it and may block the submission. A relative action such as `/subscribe` inherits the page's scheme and is safe on an HTTPS page, so only actions that carry their own scheme are worth checking. `formaction` on a submit button overrides the form's action and needs the same treatment.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits a single check named `form-https`. It collects every `<form action>` plus every `formaction` on a real submit control, meaning `button[formaction]` that is not `type="button"` or `type="reset"`, `input[type="submit"][formaction]` and `input[type="image"][formaction]`:
+
+- Fail when the page is HTTPS and at least one of those actions resolves to `http:`. Message: `2 form(s) on this HTTPS page submit to HTTP`, and each item is labelled `HTTPS page submits to <url> in the clear`. Severity error.
+- Warn when the page is not HTTPS and an action still resolves to `http:`. Message: `2 form(s) submit to HTTP`.
+- Pass when forms or submitters were found and none submit over HTTP. Message: `All forms use secure submission`.
+- Info when the page has no form actions at all. Message: `No forms detected`.
+
+Empty actions, fragment-only actions and the non-network schemes `javascript:`, `mailto:`, `tel:`, `sms:`, `data:`, `blob:` and `about:` are skipped. So are relative actions, because their scheme comes from the page and `security/https` already reports that. An action that fails to parse is still flagged when it literally begins with `http://`.
+
+## How to fix it
+
+```html
+<form action="https://example.com/subscribe" method="post">
+```
+
+Change the scheme at the source, or drop the origin entirely and use a relative action so the form follows the page. Check `formaction` on any submit button that overrides the form, since it is easy to miss in a template.
 
 | | |
 |---|---|
@@ -12,21 +35,6 @@ Checks that form actions use HTTPS
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## What it checks
-
-`form` `action` and submit-button `formaction` values are resolved against the page URL, so a relative or protocol-relative action inherits the page's scheme rather than being guessed at.
-
-| Outcome | When |
-|---|---|
-| `pass` | Every submission target resolves to HTTPS |
-| `warn` | A page already served over HTTP submits to `http://` |
-| `fail` | An HTTPS page submits to `http://`, downgrading the submission |
-| `info` | Nothing on the page submits anywhere |
-
-## Solution
-
-Forms should always submit to HTTPS URLs to protect user data in transit. Update form action attributes from http:// to https://, and check `formaction` on any submit button that overrides the form. A form on an HTTPS page that posts to http:// is the worst case: the padlock tells the user they are safe while the submission itself travels in the clear, and browsers block or interstitial it. Be especially careful with login forms, payment forms, and any forms collecting personal data. For relative URLs, ensure the page itself is on HTTPS.
 
 ## Enable / disable
 
@@ -51,3 +59,30 @@ disable = ["security/*"]
 enable = ["security/form-https"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/form-captcha](/rules/security/form-captcha): the same forms, checked for bot protection.
+- [security/https](/rules/security/https): the page scheme that a relative action inherits.
+- [security/mixed-content](/rules/security/mixed-content): subresources with the same downgrade problem.
+- [a11y/form-labels](/rules/a11y/form-labels): the accessibility pass over the same markup.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The form element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/form)
+- [Mixed content, MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Mixed_content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Every insecure form action is listed by page with the form's selector and a markup snippet. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -4,10 +4,7 @@ description: "The Security score group: transport security, compromise signals, 
 icon: "shield-check"
 ---
 
-Security is one of the four score groups on every report. It spans four
-categories: transport and header hardening (this page), signs of compromise,
-legal compliance signals, and content blocked by ad blockers and privacy
-filters.
+Security is one of the four score groups on every report. This page covers transport and header hardening: HTTPS, response headers, cookie flags, form submission and secrets that reached the browser. Signs of compromise, legal compliance signals and content blocked by privacy filters are scored in the same group but documented in the categories below.
 
 ## Categories
 
@@ -84,3 +81,5 @@ HTTPS, headers, and safe link practices (16 rules).
 [rules]
 disable = ["security/*"]
 ```
+
+Every audit reports Security findings next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.

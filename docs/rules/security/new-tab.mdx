@@ -1,9 +1,33 @@
 ---
-title: "External Link Security"
-description: "Checks external target=_blank links for noopener (security) and noreferrer (privacy)"
+title: "rel=noopener: external target=_blank links and tabnabbing"
+description: "An external link with target=_blank and no rel gives the opened page a handle on yours. squirrel lists every one, per page."
 ---
 
-Checks external target=_blank links for noopener (security) and noreferrer (privacy)
+## What rel="noopener" is
+
+`rel="noopener"` on a link tells the browser not to give the newly opened document a `window.opener` reference back to the page that opened it. Without it, the destination can call `window.opener.location = "..."` and silently replace the tab the user came from with a copy of your login page. That attack is called tabnabbing.
+
+`rel="noreferrer"` is the privacy half: it stops the `Referer` header and `window.opener` both, so the destination never learns which page sent the user. Browsers have applied `noopener` implicitly to `target="_blank"` since 2021, which makes the attribute a compatibility measure rather than the only defence. `noreferrer` has no such default.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `a[href][target="_blank"]` whose resolved hostname differs from the page hostname, and emits up to three checks:
+
+- `noopener` warns when at least one such link has a `rel` that does not contain `noopener`. Message: `4 external link(s) missing rel="noopener"`, with each href listed. It passes instead when every external `_blank` link has it, with message `4 external _blank link(s) have noopener`.
+- `noreferrer` reports info on the same basis for `noreferrer`. Message: `4 external link(s) missing rel="noreferrer"`. The pass message is `4 external _blank link(s) have noreferrer`.
+- `new-tab-security` reports info when the page has no external `_blank` links at all. Message: `No external target="_blank" links found`.
+
+The `rel` value is lowercased and matched as a substring, and hrefs that do not parse as URLs are skipped. Severity for the rule is warning.
+
+## How to fix it
+
+```html
+<a href="https://example.org/docs" target="_blank" rel="noopener noreferrer">Docs</a>
+```
+
+Add both tokens in the template or the component that renders external links, not link by link. If the site uses a Markdown renderer, most support a config option that adds the attributes to every external link.
+
+Dropping `noreferrer` is a legitimate choice when an affiliate or partner needs the referrer for attribution. Keep `noopener` in that case.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks external target=_blank links for noopener (security) and noreferrer (priv
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-External links with target="_blank" should include rel="noopener noreferrer". noopener prevents the opened page from accessing window.opener (tab-nabbing attacks). noreferrer prevents leaking the referrer URL to the destination site (privacy). Modern browsers default noopener for target="_blank", but explicit attributes ensure compatibility.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["security/*"]
 enable = ["security/new-tab"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/referrer-policy](/rules/security/referrer-policy): the site-wide version of what `noreferrer` does per link.
+- [links/external-links](/rules/links/external-links): how many external links a page carries and where they go.
+- [links/broken-external-links](/rules/links/broken-external-links): whether those destinations still resolve.
+- [integrity/known-malicious-url](/rules/integrity/known-malicious-url): outbound links to hosts that should not be there at all.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [rel=noopener, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/noopener)
+- [Link type noopener, HTML Standard](https://html.spec.whatwg.org/multipage/links.html#link-type-noopener)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Every external new-tab link missing the attribute is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

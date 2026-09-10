@@ -1,9 +1,35 @@
 ---
-title: "HTTPS"
-description: "Checks for HTTPS usage"
+title: "HTTPS: what it means when a page is not served over HTTPS"
+description: "A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https."
 ---
 
-Checks for HTTPS usage
+## What HTTPS is
+
+HTTPS is HTTP carried inside a TLS connection. It encrypts the request and the response, and it proves to the browser that the server holding the certificate is the one that owns the hostname. Without it, anything between the user and the server can read the page and change it before it arrives.
+
+It is not optional infrastructure any more. Browsers mark plain HTTP pages as not secure, block most powerful web APIs on them, and Google treats HTTPS as a ranking signal. Certificates are free from Let's Encrypt and issued automatically by most hosts.
+
+## What squirrel checks
+
+The rule parses the URL of each crawled page and emits a single check named `https`:
+
+- Fail when the parsed protocol is anything other than `https:`. Report message: `Page not served over HTTPS`, with the page's actual protocol as the value and `https:` as the expected value. Severity error.
+- Pass when the protocol is `https:`. Message: `Page served over HTTPS`.
+- Fail when the URL cannot be parsed at all. Message: `Invalid URL format`, with the raw URL as the value.
+
+The check is per-page, so a site that has migrated but still links to a handful of `http://` URLs internally shows those pages individually rather than one site-wide verdict.
+
+## How to fix it
+
+```nginx
+server {
+  listen 80;
+  server_name example.com;
+  return 301 https://example.com$request_uri;
+}
+```
+
+Issue a certificate, serve the site on 443, then send a permanent redirect for every HTTP URL. After the switch, update internal links, canonical tags and the sitemap to the `https://` form, and re-audit for mixed content.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for HTTPS usage
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-HTTPS encrypts data between users and your server, protecting sensitive information. It's a ranking signal and required for many modern browser features. Migrate to HTTPS by obtaining an SSL certificate (free from Let's Encrypt). Update internal links to use https://. Set up 301 redirects from HTTP to HTTPS. Update your canonical URLs and sitemap. Check for mixed content warnings after migration.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["security/*"]
 enable = ["security/https"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/http-to-https](/rules/security/http-to-https): whether the HTTP versions of your URLs redirect to HTTPS at all.
+- [security/hsts](/rules/security/hsts): the header that stops the browser from trying HTTP again.
+- [security/mixed-content](/rules/security/mixed-content): HTTPS pages that still pull assets over HTTP.
+- [links/https-downgrade](/rules/links/https-downgrade): internal links that point back at `http://`.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [HTTPS, MDN glossary](https://developer.mozilla.org/en-US/docs/Glossary/HTTPS)
+- [Why HTTPS matters, web.dev](https://web.dev/articles/why-https-matters)
+- [Transport Layer Security, MDN implementation guide](https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/TLS)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Every page that is not served over HTTPS is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

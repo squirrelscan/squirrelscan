@@ -1,9 +1,34 @@
 ---
-title: "X-Frame-Options"
-description: "Checks for clickjacking protection header"
+title: "X-Frame-Options: how to stop your pages being framed"
+description: "With no X-Frame-Options and no frame-ancestors, any site can iframe your pages and overlay them. squirrel checks both headers together."
 ---
 
-Checks for clickjacking protection header
+## What X-Frame-Options is
+
+`X-Frame-Options` is a response header that tells the browser whether the page may be loaded inside a `<frame>`, `<iframe>`, `<embed>` or `<object>`. `DENY` refuses all framing, `SAMEORIGIN` allows it only from the same origin. Without one, an attacker can load your page invisibly over their own and capture clicks meant for their interface, which is clickjacking.
+
+The header is superseded by the CSP `frame-ancestors` directive, which supports a source list rather than a single keyword and is the one modern browsers consult first. The `ALLOW-FROM` value never worked in Chrome and was removed from the others. Sending both headers is still common for older clients.
+
+## What squirrel checks
+
+The rule reads the response headers of the first crawled page and emits a single check named `x-frame-options`:
+
+- Skipped when the crawl produced no pages. Message: `No pages to check`.
+- Pass when `X-Frame-Options` is `DENY` or `SAMEORIGIN`, compared case-insensitively. Message: `X-Frame-Options header present`, with the raw value.
+- Warn when the value contains `ALLOW-FROM`. Message: `ALLOW-FROM is deprecated`, with `Use CSP frame-ancestors instead` as the value.
+- Pass when there is no `X-Frame-Options` header but the `Content-Security-Policy` header contains `frame-ancestors`. Message: `Clickjacking protection via CSP frame-ancestors`.
+- Warn when neither is present. Message: `No clickjacking protection`, with `Add X-Frame-Options: DENY or CSP frame-ancestors` as the value.
+
+An `X-Frame-Options` value that is neither of the two keywords nor contains `ALLOW-FROM` produces no check at all, so a typo shows up as a missing result rather than a warning.
+
+## How to fix it
+
+```
+Content-Security-Policy: frame-ancestors 'self'
+X-Frame-Options: SAMEORIGIN
+```
+
+Set both on every HTML response. Use `frame-ancestors 'none'` and `DENY` when nothing should ever frame the page. If a partner genuinely embeds you, list their origin in `frame-ancestors` rather than dropping the header, and keep `SAMEORIGIN` as the legacy fallback.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks for clickjacking protection header
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-X-Frame-Options prevents your site from being embedded in iframes, protecting against clickjacking attacks. Set: X-Frame-Options: DENY (no framing) or SAMEORIGIN (same origin only). For modern browsers, CSP frame-ancestors is preferred: Content-Security-Policy: frame-ancestors 'self'. Use both for maximum compatibility.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["security/*"]
 enable = ["security/x-frame-options"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/csp](/rules/security/csp): where `frame-ancestors` lives and what else the policy should say.
+- [security/x-content-type](/rules/security/x-content-type): the other one-line response header worth setting at the same time.
+- [security/permissions-policy](/rules/security/permissions-policy): what an embedded frame is allowed to access.
+- [integrity/fake-auth-overlay](/rules/integrity/fake-auth-overlay): overlays served from your own pages rather than framed from outside.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [X-Frame-Options, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options)
+- [CSP frame-ancestors, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors)
+- [Clickjacking defence cheat sheet, OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Framing protection is reported once for the site, with the header value your server sent. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

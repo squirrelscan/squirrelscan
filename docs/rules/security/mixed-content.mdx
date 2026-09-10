@@ -1,9 +1,33 @@
 ---
-title: "Mixed Content"
-description: "Checks for HTTP resources on HTTPS pages"
+title: "Mixed content: HTTP resources on an HTTPS page"
+description: "An HTTPS page that loads a script or stylesheet over HTTP is not secure and browsers block it. squirrel lists every HTTP resource per page."
 ---
 
-Checks for HTTP resources on HTTPS pages
+## What mixed content is
+
+Mixed content is an HTTPS page that pulls in a subresource over plain HTTP. The document arrives encrypted, the subresource does not, and anything in the network path can read or replace it. A tampered script has the same power as any other script on the page.
+
+Browsers treat the two halves differently. Active content, meaning scripts, stylesheets, frames and workers, is blocked outright. Passive content, meaning images, audio and video, is upgraded to HTTPS where possible and blocked when the upgrade fails. Either way the padlock is downgraded and the resource may not load, so mixed content shows up as a broken page before it shows up as a security report.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits a single check named `mixed-content`:
+
+- Info when the page URL does not start with `https://`, since the concept does not apply. Message: `Mixed content check not applicable - page not HTTPS`.
+- Fail when the HTML contains any element whose `src`, `href` or `data` attribute literally starts with `http://`. Message: `3 HTTP resource(s) on HTTPS page`, with each URL listed. Severity error.
+- Pass when none do. Message: `No mixed content detected`.
+
+The selectors are `img[src]`, `script[src]`, `link[href]`, `iframe[src]`, `video[src]`, `audio[src]`, `source[src]`, `embed[src]` and `object[data]`. The match is on the literal `http://` prefix in the markup, so protocol-relative URLs such as `//cdn.example.com/x.js` are not flagged, and neither are HTTP URLs that only appear in inline scripts or CSS.
+
+## How to fix it
+
+```html
+<script src="https://cdn.example.com/lib.js"></script>
+```
+
+Change the URL to `https://` at the source, in the template or the CMS field that produced it. For a large legacy corpus, `Content-Security-Policy: upgrade-insecure-requests` makes the browser rewrite the requests while you work through the markup, but it is a mitigation rather than the fix.
+
+A third-party host that has no HTTPS endpoint cannot be upgraded. Self-host the asset or drop it.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for HTTP resources on HTTPS pages
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Mixed content occurs when an HTTPS page loads resources over HTTP, breaking the security chain. Browsers may block these resources. Update all resource URLs to use HTTPS or protocol-relative URLs (//example.com). Check images, scripts, stylesheets, fonts, and iframes. Use Content-Security-Policy: upgrade-insecure-requests to automatically upgrade HTTP to HTTPS.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["security/*"]
 enable = ["security/mixed-content"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/https](/rules/security/https): whether the page itself is HTTPS before its subresources matter.
+- [links/https-downgrade](/rules/links/https-downgrade): navigation links, rather than subresources, that point at `http://`.
+- [security/sri](/rules/security/sri): integrity hashes for the cross-origin assets that remain.
+- [images/broken-images](/rules/images/broken-images): images that fail to load, which is how blocked mixed content usually surfaces.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Mixed content, MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Mixed_content)
+- [What is mixed content, web.dev](https://web.dev/articles/what-is-mixed-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Every HTTP resource is listed by page with its URL. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>
