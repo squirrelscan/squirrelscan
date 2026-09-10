@@ -1,9 +1,29 @@
 ---
-title: "Duplicate Description"
-description: "Checks for duplicate meta descriptions across the site"
+title: "Duplicate meta descriptions across pages"
+description: "One description reused across a section describes none of those pages well. squirrel groups every crawled page by its meta description."
 ---
 
-Checks for duplicate meta descriptions across the site
+## What a meta description does
+
+The meta description is a suggestion for the snippet under a search result. Search engines often write their own instead, taking text from the page that matches the query, so a description is an opportunity rather than a guarantee.
+
+When several pages share one, none of them gets a snippet that describes it. It is the same failure as a duplicate title but with a lower cost, since the search engine can substitute page text. A description reused across a whole section usually means a template default nobody filled in.
+
+## What squirrel checks
+
+The rule is site-wide. It groups crawled pages by their meta description, trimmed and lowercased, and reports any description held by more than one page. Pages with no description are skipped. It emits a single check named `duplicate-description`:
+
+- Skipped below two pages. Message: `Insufficient pages to check for duplicates`.
+- Warn when duplicates exist. Message: `3 duplicate description(s) found across 9 pages`. Each item is the description, labelled `"The best products for every occa..." (4 pages)`, with the URLs that share it. Severity warning, weight 5.
+- Pass otherwise. Message: `All pages have unique meta descriptions`.
+
+Comparison is exact after trimming and lowercasing.
+
+## How to fix it
+
+Write a description per page that summarises that page. Where a section has too many pages for that to be practical, generating one from the page's own content beats reusing a template string.
+
+For a page with nothing unique to say, omitting the description entirely is better than duplicating one. The search engine will take text from the page.
 
 | | |
 |---|---|
@@ -12,10 +32,6 @@ Checks for duplicate meta descriptions across the site
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Each page should have a unique meta description that summarizes its specific content. Duplicate descriptions reduce click-through rates and provide poor user experience in search results. Write unique, compelling descriptions for each page. For pages without unique content (like paginated results), consider using no description rather than a duplicate.
 
 ## Enable / disable
 
@@ -40,3 +56,29 @@ disable = ["content/*"]
 enable = ["content/duplicate-description"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/duplicate-title](/rules/content/duplicate-title): the same problem in the title, which matters more.
+- [core/meta-description](/rules/core/meta-description): the per-page description checks.
+- [core/nosnippet](/rules/core/nosnippet): directives that suppress the snippet entirely.
+- [crawl/pagination](/rules/crawl/pagination): the paginated pages that most often share one.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Control your snippets in search results, Google Search Central](https://developers.google.com/search/docs/appearance/snippet)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each duplicated description is listed with the pages that share it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

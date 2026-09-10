@@ -11,14 +11,14 @@ The saving is large enough to be worth the conversion on its own. For a typical 
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It reads the `src` of every `img[src]` and the `srcset` and `type` of every `source[srcset]`, all lowercased, and classifies by substring. It emits a single check named `modern-format`:
+The rule runs on every crawled page. It reads the `src` of every `img[src]` and the `srcset` and `type` of every `source[srcset]`, all lowercased, and classifies by substring. It emits at most one check named `modern-format`, and none at all when images are present but neither count is above zero, which an SVG-only page produces:
 
 - Skipped when the page has no images. Message: `No images found`.
 - Pass when modern formats are present and no legacy ones are. Message: `All 8 image(s) use modern formats`.
 - Info on a mix. Message: `8 modern format(s), 4 legacy format(s)`, with `Consider converting remaining images to WebP/AVIF` as the value.
 - Info when only legacy formats are present. Message: `12 image(s) using legacy formats (JPEG/PNG)`, with `Consider using WebP or AVIF for better compression` as the value.
 
-Modern means the URL contains `.webp` or `.avif`, or a `<source>` whose `type` contains `webp` or `avif`. Legacy means `.jpg`, `.jpeg`, `.png` or `.gif`. The test is a substring match anywhere in the URL, so a query parameter naming a format is enough. An image served as WebP through content negotiation, with a `.jpg` URL, is counted as legacy. Severity info, weight 3.
+Modern means the URL contains `.webp` or `.avif`, or a `<source>` whose `type` contains `webp` or `avif`. Legacy means `.jpg`, `.jpeg`, `.png` or `.gif`. The match includes the leading dot, so `?format=webp` does not count and `?format=.webp` does. Legacy extensions are only counted on `<img src>`, never on a `<source srcset>`. An image served as WebP through content negotiation, with a `.jpg` URL, is counted as legacy. Severity info, weight 3.
 
 ## How to fix it
 

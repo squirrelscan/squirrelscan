@@ -15,10 +15,10 @@ The rule runs on every crawled page. It takes every `img[src]` in document order
 
 - Info when the page has no images. Message: `No images found`.
 - Pass when there are no images past the fold count. Message: `Few images on page - lazy loading not critical`.
-- `offscreen-images-not-lazy` warns for below-fold images with no `loading` attribute. Message: `7 below-fold image(s) without lazy loading`, listing up to ten filenames. Severity warning, weight 5.
+- `offscreen-images-not-lazy` warns for below-fold images whose `loading` value is neither exactly `lazy` nor exactly `eager`, which covers an absent attribute, an empty one and any misspelling. Message: `7 below-fold image(s) without lazy loading`, listing up to ten filenames. Severity warning, weight 5.
 - `lazy-loading-used` passes when any below-fold image is lazy. Message: `12 image(s) use lazy loading`.
 - `eager-below-fold` reports info for below-fold images explicitly set to `eager`. Message: `2 below-fold image(s) explicitly set to eager`, noted as possibly intentional.
-- `offscreen-lazy` reports info when nothing below the fold has a `loading` attribute either way. Message: `No lazy loading configured - consider adding loading='lazy'`.
+- `offscreen-lazy` reports info when nothing was flagged and nothing was lazy, which happens when every examined image is `eager` or every one was skipped as a data URI. Message: `No lazy loading configured - consider adding loading='lazy'`.
 
 Document order is a proxy for position, not a measurement. An image that appears late in the markup but is positioned at the top of the viewport by CSS is treated as below the fold.
 

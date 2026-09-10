@@ -1,9 +1,30 @@
 ---
-title: "Reading Level"
-description: "Analyzes content readability using Flesch-Kincaid"
+title: "Flesch reading ease: measuring how hard a page is to read"
+description: "squirrel computes a Flesch reading ease score and a Flesch-Kincaid grade level from the page text, and reports both without judging them."
 ---
 
-Analyzes content readability using Flesch-Kincaid
+## What the Flesch scores are
+
+Flesch Reading Ease and Flesch-Kincaid Grade Level are two formulas over the same two inputs: average sentence length and average syllables per word. Reading ease runs from 0 to 100, higher being easier; grade level maps the same numbers onto a US school year.
+
+They measure sentence and word length, not clarity. A page of short sentences made of jargon scores well, and a precise technical explanation scores badly for being precise. That is why this rule reports the numbers as information and never fails: the right score depends entirely on who the page is for.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the body text with scripts, styles and noscript excluded. It splits sentences on `.`, `!` and `?`, takes words as runs of letters, and estimates syllables with a vowel-group heuristic. It emits up to two checks:
+
+- Skipped when there is no `<body>`. Message: `No body content to analyze`.
+- Info when the text has fewer than 5 sentences or fewer than 100 words. Message: `Content too short for readability analysis`.
+- `reading-level` reports info with the result. Message: `Readability: Moderate (Grade 9.4)`, with `Flesch score: 58/100` as the value. The label is `Easy` at 70 or above, `Moderate` from 50, `Difficult` from 30, and `Very Difficult` below that.
+- `sentence-length` reports info when the average sentence exceeds 25 words. Message: `Average sentence length is high`, with `28 words/sentence` as the value.
+
+Severity info, weight 3. The syllable count is an approximation, so treat the grade level as a rough band rather than a measurement.
+
+## How to fix it
+
+Shorten the sentences that are long because they contain three ideas, and leave the ones that are long because the idea is long. Break up paragraphs, and use headings and lists where the content is genuinely a list.
+
+Technical content for expert readers scoring as Difficult is not a problem. Compare the score against the audience, not against a target.
 
 | | |
 |---|---|
@@ -12,10 +33,6 @@ Analyzes content readability using Flesch-Kincaid
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Content should match your target audience's reading level. For general audiences, aim for 6th-8th grade level (60-70 Flesch score). Use shorter sentences and simpler words. Break up long paragraphs. Use bullet points and headings. Technical content may have lower readability scores, which is acceptable for expert audiences.
 
 ## Enable / disable
 
@@ -40,3 +57,29 @@ disable = ["content/*"]
 enable = ["content/reading-level"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/word-count](/rules/content/word-count): how much text there is to read.
+- [content/quality](/rules/content/quality): an LLM read of the same content.
+- [content/keyword-stuffing](/rules/content/keyword-stuffing): repetition measured over the same text.
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): the structure that makes long content navigable.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is reported with its reading ease score and grade level. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

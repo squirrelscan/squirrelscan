@@ -5,9 +5,9 @@ description: "When width and height describe one ratio and CSS forces another, t
 
 ## What an aspect ratio mismatch is
 
-An `<img>` can have its ratio declared twice: once by the `width` and `height` attributes, and once by CSS, either through an explicit `aspect-ratio` or through a fixed width and height in pixels. When those two disagree, the browser fills the CSS box and the image is stretched or squashed.
+An `<img>` can have its ratio declared twice: once by the `width` and `height` attributes, and once by CSS, either through an explicit `aspect-ratio` or through a fixed width and height in pixels. A disagreement is a distortion risk rather than a certainty: with a fixed width and height the image is stretched to fill the box, while `aspect-ratio` has no effect when both dimensions are already definite.
 
-`object-fit` is the escape hatch. `cover`, `contain`, `scale-down` and `none` all reshape the image inside the box rather than distorting it, so a mismatch under one of those is a deliberate crop rather than a bug.
+`object-fit` is the escape hatch. `cover`, `contain`, `scale-down` and `none` all preserve the image's natural proportions inside the box, whether by cropping, by leaving space around it, or by not resizing it at all. A mismatch under any of those is deliberate rather than a bug.
 
 ## What squirrel checks
 
@@ -24,7 +24,7 @@ An image is skipped when its inline style sets `object-fit` to `cover`, `contain
 <img src="/photo.jpg" width="1200" height="800" alt="…" style="width:600px;height:400px" />
 ```
 
-Make the two agree, or set only the width in CSS and let the height follow. Where the crop is deliberate, add `object-fit: cover` so the image fills the box without distortion.
+Make the two agree, or set the width in CSS with `height: auto` so the height follows the ratio. A CSS width alone does not do it while a `height` attribute is still in play. Where the crop is deliberate, add `object-fit: cover` so the image fills the box without distortion.
 
 An image styled through an external stylesheet cannot be checked, because the rule only reads inline styles.
 

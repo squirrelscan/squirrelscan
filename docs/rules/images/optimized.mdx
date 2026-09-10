@@ -11,7 +11,7 @@ This rule reads those marks off the URLs. It is inference rather than measuremen
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every `img[src]`, skipping `data:` sources. It emits up to five checks:
+The rule runs on every crawled page over every `img[src]`, skipping `data:` sources. Six check names are possible and at most four appear in one result, since the optimization warning requires both the CDN and the modern-format counts to be zero:
 
 - `image-optimization` reports info when the page has no images. Message: `No images found`.
 - `image-cdn` passes when any image comes from a known image CDN. Message: `14 image(s) served from image CDN`.

@@ -17,7 +17,7 @@ The rule runs on every crawled page over every `img[src]`, taking the last path 
 - Pass when at least one filename is descriptive and none are poor. Message: `All 12 image(s) have descriptive filenames`.
 - Info when any filename matches a poor pattern. Message: `4 image(s) with non-descriptive filenames`, listing up to three examples.
 
-The patterns catch camera and device names such as `IMG_001`, `DSC1234`, `DCIM001` and `P20231015`, generic names such as `image1`, `photo1`, `pic1`, `screenshot`, `screen-shot` and `untitled`, and machine identifiers: a name that is eight or more leading digits, a 32-character hexadecimal hash, or a 36-character UUID. Severity info, weight 2.
+The patterns catch camera and device names such as `IMG_001`, `DSC1234`, `DCIM001` and `P20231015`, generic names such as `image1`, `photo1`, `pic1`, `screenshot`, `screen-shot` and `untitled`, and machine identifiers: a name starting with eight or more digits, one starting with 32 or more hexadecimal characters, or one starting with 36 or more hexadecimal characters and hyphens. The last two are prefix tests rather than exact hash or UUID validation. Severity info, weight 2.
 
 ## How to fix it
 
@@ -27,7 +27,7 @@ The patterns catch camera and device names such as `IMG_001`, `DSC1234`, `DCIM00
 
 Rename on upload, deriving the name from the title or the alt text: lowercase, hyphens between words, no more than a few words. Most CMSes can do this automatically.
 
-A hashed filename from a build pipeline is deliberate cache-busting and will be reported here. Keep the descriptive part in front of the hash where the tooling allows it, or accept the finding.
+A long content hash at the start of a filename matches the machine-identifier patterns. A short one such as `a1b2c3d4.jpg` does not, and neither does a name that leads with words and carries the hash after them, which is the shape worth keeping anyway.
 
 | | |
 |---|---|

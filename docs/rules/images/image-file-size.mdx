@@ -13,7 +13,7 @@ Weight shows up directly in Largest Contentful Paint, because the LCP element is
 
 The rule is site-wide and reads the image sizes the crawl fetched. It emits up to two checks:
 
-- Pass when no image files were measured. Message: `No image files detected`.
+- Pass when the crawl recorded no image resources at all. Message: `No image files detected`. A recorded resource whose size could not be read falls through to the pass below instead.
 - `image-file-size` fails for files above `error_bytes`, 1 MB by default. Message: `2 image(s) exceed 1.0 MB`, each listed with its URL, size, status and content type, and the pages it appears on. Severity error, weight 7.
 - `image-file-size-warn` warns for files above `warn_bytes` and at or below the error threshold. Message: `9 image(s) exceed 200.0 KB`.
 - `image-file-size` passes when neither fired. Message: `All image files are within size limits`.

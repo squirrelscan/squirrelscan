@@ -1,9 +1,29 @@
 ---
-title: "Word Count"
-description: "Checks content length for thin content issues"
+title: "Thin content: the 300 word floor and what to do below it"
+description: "A page under a few hundred words rarely answers the question it ranks for. squirrel counts the words and reports against two thresholds."
 ---
 
-Checks content length for thin content issues
+## What thin content is
+
+Thin content is a page with too little substance to be worth returning as a search result. Word count is a proxy for it rather than the thing itself: a 200-word page that answers a question completely is fine, and a 2000-word page that says nothing is not.
+
+The count is still useful as a floor. Below a few hundred words a page usually is not answering anything, and a site with many of them dilutes its own crawl budget. Google's guidance is about helpfulness rather than length, so treat the number as a prompt to look at the page.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the word count the parser computed. It emits a single check named `word-count`:
+
+- Warn below `min_words`, 300 by default. Message: `Thin content: 140 words (min 300)`, with the count as the value and the threshold as the expected value. Severity warning, weight 4.
+- Info below `warn_threshold`, 500 by default. Message: `Content could be longer: 420 words`.
+- Pass otherwise. Message: `Good content length: 1240 words`.
+
+The 300-word floor is also a precedence boundary. `content/thin-vs-site-norm` compares a page against the median for its page type, and it never considers a page below this floor, so the two rules cannot both raise a finding on the same page.
+
+## How to fix it
+
+Expand the page to answer the question it exists for, consolidate it into a fuller page and redirect, or `noindex` it if it exists only for navigation.
+
+A category or listing page is short by design. Those are worth excluding rather than padding.
 
 | | |
 |---|---|
@@ -13,25 +33,19 @@ Checks content length for thin content issues
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## Solution
-
-Pages with thin content (under 300 words) often struggle to rank well and are actively deindexed by Google since the June 2025 core update. Add more valuable, relevant content to thin pages, aiming for at least 500 words for standard pages and 1000+ for in-depth articles. If a page can't be fleshed out, voluntarily noindex it or consolidate it into a more comprehensive resource. Trimming thin pages from your index is better than leaving low-value content for Google to penalize.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_words` | unknown | `undefined` | Minimum word count |
-| `warn_threshold` | unknown | `undefined` | Word count for optimal content |
+| `min_words` | number | `300` | Minimum word count |
+| `warn_threshold` | number | `500` | Word count for optimal content |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."content/word-count"]
-min_words = undefined
-warn_threshold = undefined
+[rule_options."content/word-count"]
+min_words = 150
+warn_threshold = 400
 ```
 
 ## Enable / disable
@@ -57,3 +71,29 @@ disable = ["content/*"]
 enable = ["content/word-count"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): the same question asked against your own site's median.
+- [content/quality](/rules/content/quality): an LLM read of whether the words are worth anything.
+- [content/reading-level](/rules/content/reading-level): how hard the words are to read.
+- [crawl/indexability](/rules/crawl/indexability): noindexing a page that cannot be made worthwhile.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is reported with its word count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

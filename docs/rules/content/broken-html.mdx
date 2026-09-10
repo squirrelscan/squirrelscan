@@ -1,9 +1,38 @@
 ---
-title: "Broken HTML"
-description: "Checks for malformed HTML structure"
+title: "Malformed HTML: missing doctype, nested links and deprecated tags"
+description: "Browsers recover from bad markup silently and other parsers may not. squirrel checks document structure, nesting and deprecated elements."
 ---
 
-Checks for malformed HTML structure
+## What malformed HTML means here
+
+Browsers are required to recover from broken markup, so a page with structural errors usually looks correct. Anything else reading the page, a crawler, a reader-mode extractor, an assistive technology, may recover differently or not at all.
+
+The errors worth checking are the ones with consequences. A missing doctype puts the browser in quirks mode, where layout follows rules from the 1990s. Nested interactive elements, a link inside a link or a button inside a link, have no defined behaviour and produce a confusing accessibility tree. Deprecated presentational elements still render and have had CSS equivalents for two decades.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the raw HTML and the parsed document. It emits a single check named `broken-html`:
+
+- Pass when nothing was found. Message: `HTML structure appears valid`.
+- Warn or info otherwise. Message: `3 HTML issue(s) found`, with each issue listed by a slug and a readable label.
+
+The issues detected are: `missing-doctype` when the trimmed HTML does not start with `<!doctype`; `missing-html`, `missing-head` and `missing-body` when the parsed document has no such element; `nested-links` labelled `2 nested <a> tag(s)`; `button-in-link` for a button inside a link or the reverse; `nested-forms`; and one `deprecated-<tag>` for the first of `center`, `font`, `marquee`, `blink` or `strike` that appears, reported once regardless of how many deprecated elements the page has.
+
+The status is warn when any of the four structural issues fired, and info otherwise. Severity for the rule is warning, weight 4.
+
+## How to fix it
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>…</head>
+  <body>…</body>
+</html>
+```
+
+Start every document with the doctype. For nested interactive elements, pick one: a card that is a link should be one anchor, and a button inside it should be a sibling rather than a child.
+
+Replace deprecated presentational tags with CSS. `<center>` is `text-align: center`, `<font>` is a font declaration, `<strike>` is `<s>` or `<del>` depending on what you mean.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks for malformed HTML structure
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Valid HTML helps search engines parse and understand your content. Common issues: unclosed tags, nested elements incorrectly, invalid attributes. Use an HTML validator to find issues. Modern browsers are forgiving, but search engine parsers may not be. Clean HTML also improves accessibility and maintainability.
 
 ## Enable / disable
 
@@ -40,3 +65,30 @@ disable = ["content/*"]
 enable = ["content/broken-html"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/meta-in-body](/rules/content/meta-in-body): meta tags displaced by a structural error.
+- [a11y/empty-heading](/rules/a11y/empty-heading): the accessibility view of an empty heading.
+- [core/doctype](/rules/core/doctype): the doctype checked on its own.
+- [content/unrendered-markup](/rules/content/unrendered-markup): markup that reached the reader as text.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The head element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-head-element)
+- [The anchor element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the structural issues found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

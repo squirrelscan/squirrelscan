@@ -7,7 +7,7 @@ description: "An image with no width and height reserves no space, so the page j
 
 The `width` and `height` attributes on an `<img>` give the browser the image's aspect ratio before the file arrives. It can then reserve the right amount of space and lay the page out once, instead of reflowing everything below the image when it loads.
 
-That reflow is Cumulative Layout Shift, one of the Core Web Vitals. The attributes are not a sizing instruction: CSS still controls the rendered size, and `height: auto` alongside a percentage width keeps the image responsive while the ratio does its job.
+That reflow is Cumulative Layout Shift, one of the Core Web Vitals. The attributes are a rendered-size hint as well as a ratio, and CSS overrides them: `height: auto` alongside a percentage width keeps the image responsive while the ratio does its job.
 
 ## What squirrel checks
 

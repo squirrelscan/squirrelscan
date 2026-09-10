@@ -11,7 +11,7 @@ A caption is not a substitute for `alt`. The caption is visible to everyone and 
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It counts `<figure>` elements and, separately, images that are not inside one, using the selector `img:not(figure img)`. It emits up to two checks:
+The rule runs on every crawled page. It counts `<figure>` elements and, separately, images that are not inside one, using the selector `img:not(figure img)`. It emits at most one check, since the caption branches need figures and the usage branch needs none:
 
 - Skipped when the page has neither figures nor standalone images. Message: `No images or figures found`.
 - `figure-figcaption` reports info when any figure has no `<figcaption>`, or one whose text is empty. Message: `2/5 figure(s) missing figcaption`, with `Add descriptive captions to figures` as the value.

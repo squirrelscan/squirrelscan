@@ -5,7 +5,7 @@ description: "An image with no alt attribute has no name for a screen reader. An
 
 ## What the alt attribute is
 
-`alt` is the text alternative for an image: what a screen reader announces, and what a browser shows when the image does not load. Every `<img>` is required to have one.
+`alt` is the text alternative for an image: what a screen reader announces, and what a browser shows when the image does not load. This rule expects one on every `<img>`. The HTML specification allows a few narrow exceptions, for cases where no alternative text is available and none can be produced, and they do not apply to a normal page.
 
 The two valid states are a description and an empty string. `alt="Chart showing revenue by quarter"` names an image that carries information. `alt=""` marks an image as decorative and tells assistive technology to skip it, which is the correct markup for a divider, a background flourish or an icon whose meaning is already in the adjacent text. Omitting the attribute is the failure, because it leaves the software to guess, and most screen readers fall back to reading the filename.
 

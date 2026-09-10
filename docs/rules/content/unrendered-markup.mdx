@@ -1,9 +1,34 @@
 ---
-title: "Unrendered Markup"
-description: "Detects literal markdown or escaped HTML leaking into rendered copy"
+title: "Literal **bold** on the page: markdown that never rendered"
+description: "Visible asterisks, bracket links or escaped tags mean a value was printed as text instead of markup. squirrel reads the prose and names which mistake it is."
 ---
 
-Detects literal markdown or escaped HTML leaking into rendered copy
+## What unrendered markup is
+
+Unrendered markup is authored markup that reached the reader as literal text. Three different mistakes produce it, and they have different fixes.
+
+Literal markdown, `**bold**` or `[text](url)` on screen, means a field stored as markdown was printed without a markdown-to-HTML pass. Visible `<p>` or `<a href` means the opposite: HTML was escaped twice, usually by escaping a value that the templating engine had already escaped. A visible `&amp;nbsp;` means the entity itself was encoded a second time on the way in.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the prose in `<body>`, excluding scripts, styles and the code-like elements `<code>`, `<pre>`, `<samp>` and `<kbd>`, so a page deliberately quoting markup is not reported. It emits a single check named `unrendered-markup`:
+
+- Skipped when there is no parsed document. Message: `No document available`.
+- Skipped when there is no `<body>`. Message: `No body element to read visible text from`.
+- Pass when nothing matched. Message: `No unrendered markup in visible text`.
+- Warn or fail otherwise. Message: `4 unrendered markup occurrence(s) in visible text (markdown-emphasis, markdown-link): example **bold**`.
+
+Seven families are detected: `markdown-emphasis`, `markdown-link`, `markdown-heading`, `markdown-code-fence`, `markdown-inline-code`, `escaped-html-tag` and `double-encoded-entity`. Inline code is corroborating only: it appears in the details when something else fires and never accuses on its own, and it is excluded from the count and the example in the message.
+
+The status is fail when an escaped tag or a double-encoded entity was found, since nothing renders those on purpose outside a code block, or when three or more literal markdown occurrences were found. One stray asterisk pair is a typo; three is a template that never ran its markdown pass. Severity for the rule is warning, weight 5. The rule is skipped on soft 404 pages.
+
+## How to fix it
+
+Find the field rather than the page. A CMS storing markdown and a template printing it raw produces the same literal text everywhere that field appears, so fixing one page leaves the rest broken.
+
+For escaped HTML, remove the manual escape rather than marking the value safe: the templating engine already escaped it. For a double-encoded entity, re-import the affected content.
+
+If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.
 
 | | |
 |---|---|
@@ -12,62 +37,6 @@ Detects literal markdown or escaped HTML leaking into rendered copy
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Something rendered a value as plain text that was authored as markup. Find the field, not the page: a CMS that stores markdown and a template that prints it without a markdown-to-HTML pass produces literal `**bold**` and `[text](url)` everywhere that field appears, and fixing one page leaves the rest broken. Visible `<p>` or `<a href` means the opposite mistake: HTML was escaped twice, usually by escaping a value that a templating engine (Jinja, Twig, Blade, JSX) had already escaped, so remove the manual escape rather than marking the value safe. Visible `&nbsp;` or `&amp;` means the entity itself was encoded a second time on the way in, which is normally an import or a rich-text editor round-trip, so re-import the affected content. If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.
-
-## What it checks
-
-Seven kinds, in three families, in visible text only:
-
-| Kind | Example on screen | Meaning |
-|---|---|---|
-| `markdown-emphasis` | `**unlimited audits**` | a markdown field printed as plain text |
-| `markdown-link` | `[our docs](https://example.com/d)` | the same, for links and images |
-| `markdown-heading` | a line starting `## ` | the same, for headings |
-| `markdown-code-fence` | a line of three backticks | the same, for fenced code |
-| `markdown-inline-code` | `` `squirrel audit` `` | corroborating only, see below |
-| `escaped-html-tag` | `<p>Prices exclude tax.</p>` | HTML escaped twice |
-| `double-encoded-entity` | `&nbsp;`, `&amp;` | an entity encoded a second time |
-
-The check reads the text a visitor sees, decoded, never the raw HTML. That matters for the HTML families: the page source says `&lt;p&gt;`, and the browser paints `<p>`, so the rule looks for the painted form.
-
-**Severity depends on certainty.** Visible tags and entities fail, because nothing outside a code block renders them on purpose. Literal markdown warns at one or two occurrences and fails at three or more, where it stops looking like a typo and starts looking like a template that never ran its markdown pass.
-
-## What is excluded
-
-Displaying markup is not the same as leaking it, and this rule is mostly a list of ways to tell the two apart.
-
-- `<script>`, `<style>`, `<noscript>` and `<template>`, because a visitor never reads them.
-- `<code>`, `<pre>`, `<samp>`, `<kbd>` and `<textarea>`, because a visitor reads them as a quoted literal. A tutorial showing `**bold**` in a code span is doing its job, and an editor pre-filled with a post's markdown source is not a defect.
-- Any element a syntax highlighter marks as its own: the whole class tokens `highlight`, `hljs`, `shiki`, `chroma`, `codehilite`, `code-block`, `preformatted` and their siblings, any `language-*` or `lang-*` class, and the `data-language` family of attributes. Whole tokens, so a `highlight-box` callout is still judged as prose.
-
-Five more limits keep the rule quiet on pages that talk about markup rather than mangle it.
-
-- **Underscore emphasis must contain a space.** `__init__` and `__main__` are flanked exactly like bold and appear in ordinary prose, so `__bold__` on its own is not reported. `**bold**` still is.
-- **A markdown link needs a URL-shaped target.** `array[i](arg)` and `[see note] (below)` are not links.
-- **A single `#` needs a capitalised word after it.** `#` is also the number sign, so `# of seats` in a table header is not a heading, and neither is the URL fragment MDN prints under a specification link. `##` and deeper have no second reading and are taken as written, so `## my-package` still counts.
-- **Escaped tags must be lowercase.** `<Article>` and `<Header>` are component names a page is showing on purpose. Markup that leaked from a template came from HTML a server emitted, which is lowercase.
-- **At least one escaped tag must carry a true closing form or a recognised attribute with a value.** A page that writes `<pre>` or `<meta name>` in a sentence is documenting an element. A leak brings `</p>` or `class="row"` with it. A self-closing `<br/>` is not a closing form, `</path/to/file>` is a path rather than a closing tag, and `c=1` is not an attribute, so `if a<b then c=1>0` stays clean.
-
-## False positives
-
-Two classes are known and deliberate.
-
-Prose full of identifiers stays clean: `CLOUDFLARE_API_TOKEN`, `some_file_name.ts`, `max_pages`, `width * height` and `2 * 3` are none of them emphasis, because both emphasis forms require CommonMark-style flanking.
-
-Backticks alone never trip the rule. They are the one markdown character people put on a page on purpose and often, in a prompt written to be copied into an agent, a chat transcript, or a changelog. Inline code spans are reported in the detail once another family has fired, and never before.
-
-Text is read block by block, so a match is never assembled out of two elements that each hold half of it. A heading ending in `*` followed by a link starting with `*` is two stray asterisks, not emphasis.
-
-The residual case is a page whose subject is HTML source, displayed in a container the rule cannot recognise. A tutorial that shows `<p>This is a paragraph.</p>` inside a plain `<div>` with a bespoke class is indistinguishable from a page that leaked it. Wrap such examples in `<pre>` or `<code>`, which is also what makes them selectable and copyable for readers.
-
-## Related rules
-
-[content/mojibake](/rules/content/mojibake) covers the neighbouring problem: bytes decoded with the wrong encoding. The two sit one encoding level apart on entities. Mojibake reports a visible `&amp;nbsp;`, meaning the source was encoded three times; this rule reports a visible `&nbsp;`, meaning twice.
-
-They do overlap on triple-encoded text, and deliberately so. A page showing `&amp;nbsp;` trips mojibake on the whole sequence and this rule on the `&amp;` inside it, and both findings are true: the entity was encoded once too many, and a reader is looking at raw markup. Expect one finding from each rule on such a page.
 
 ## Enable / disable
 
@@ -92,3 +61,29 @@ disable = ["content/*"]
 enable = ["content/unrendered-markup"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/mojibake](/rules/content/mojibake): the encoding half of the same class of problem.
+- [content/placeholder-text](/rules/content/placeholder-text): template syntax that never rendered at all.
+- [content/broken-html](/rules/content/broken-html): structural problems in the same markup.
+- [content/dev-leakage](/rules/content/dev-leakage): development values that reached production copy.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the markup families found and an example. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

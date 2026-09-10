@@ -5,9 +5,9 @@ description: "Without srcset every visitor downloads the same file, sized for th
 
 ## What srcset is
 
-`srcset` lists several versions of the same image with their widths, and `sizes` tells the browser how wide the image will be rendered. The browser picks a file before it downloads anything, taking screen density into account.
+`srcset` lists several versions of the same image. In its width form each candidate carries a `w` descriptor and `sizes` tells the browser how wide the image will be rendered; in its density form each carries `1x` or `2x` and no `sizes` is used. Either way the browser picks one file before it downloads anything.
 
-Without it there is one file for everyone. A hero sized for a 2560-pixel display is downloaded in full by a phone that will render it 390 pixels wide, which is most of the wasted bytes on a typical page. `<picture>` solves a related but different problem: choosing between formats, or between differently cropped images at different breakpoints.
+Without it there is one file for everyone. A hero sized for a 2560-pixel display is downloaded in full by a phone that will render it 390 pixels wide, which is most of the wasted bytes on a typical page. In a width-descriptor set, `sizes` matters as much as the candidates: with no `sizes` the browser assumes the image fills the viewport. `<picture>` solves a related but different problem: choosing between formats, or between differently cropped images at different breakpoints.
 
 ## What squirrel checks
 
@@ -31,7 +31,7 @@ Severity info, weight 3. The responsive count adds the `srcset` images and the `
 />
 ```
 
-Generate the variants at build time or through an image CDN. `sizes` matters as much as `srcset`: without it the browser assumes the image is the full viewport width and picks a file that is too large.
+Generate the variants at build time or through an image CDN. For a fixed-size image, the density form is shorter: `srcset="/logo.png 1x, /logo@2x.png 2x"` and no `sizes` at all.
 
 Icons, logos and anything rendered at a fixed small size do not need this.
 

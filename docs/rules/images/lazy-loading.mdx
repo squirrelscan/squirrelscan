@@ -15,7 +15,7 @@ The rule runs on every crawled page. It counts every `<img>` by its `loading` at
 
 - Skipped when the page has no images. Message: `No images found`. Iframes are not considered in this branch.
 - `lazy-loading` passes when any image or iframe is lazy. Message: `9 element(s) use lazy loading`, counting both kinds together.
-- `lazy-loading-missing` reports info alongside that pass, when some images have no `loading` attribute at all. Message: `4 image(s) without loading attribute`, with `Consider adding loading='lazy' for below-fold images` as the value.
+- `lazy-loading-missing` reports info alongside that pass, counting every image whose `loading` value is neither exactly `lazy` nor exactly `eager`. That includes an absent attribute, an empty one, a misspelling and a different capitalisation. Message: `4 image(s) without loading attribute`, with `Consider adding loading='lazy' for below-fold images` as the value.
 - `lazy-loading` reports info when nothing is lazy and the page has more than three images. Message: `12 images without lazy loading`, with `Add loading='lazy' to below-fold images` as the value.
 - `lazy-loading` reports info when nothing is lazy and there are three images or fewer. Message: `2 image(s) found, no lazy loading detected`.
 

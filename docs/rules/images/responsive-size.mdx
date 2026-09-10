@@ -17,7 +17,7 @@ The rule runs on every crawled page over every `img[src]` that has both `width` 
 - Info when the page has no images. Message: `No images found on page`.
 - `images-possibly-oversized` warns for images whose declared width and height are both at or below `max_thumbnail_dimension`, and which have no `srcset` and no `<picture>` ancestor. Message: `6 small image(s) may be serving oversized files`, listing up to ten as `avatar.jpg (64x64, no srcset)`. Severity warning, weight 5.
 - `responsive-size` passes when images with dimensions were examined and none qualified. Message: `Image sizes appear appropriate`.
-- `responsive-size` reports info when no image carried explicit dimensions. Message: `No images with explicit dimensions to check`.
+- `responsive-size` reports info when no image yielded two dimensions that parse as non-zero integers. An absent attribute reaches this branch, and so does `width="0"` or `height="invalid"`. Message: `No images with explicit dimensions to check`.
 
 SVG and ICO files and `data:` sources are skipped. The rule does not fetch the images, so it cannot tell whether the file really is oversized: a small declared size with no responsive variants is the signal.
 
@@ -30,7 +30,7 @@ SVG and ICO files and `data:` sources are skipped. The rule does not fetch the i
 
 Generate a thumbnail variant and reference it, or hand the resize to an image CDN with a width parameter. Two candidates are enough for a fixed-size thumbnail: one for standard displays and one for high-density ones.
 
-An SVG or a small icon does not need this and is already excluded.
+The exclusions are a lowercase `.svg` or `.ico` filename and a `data:` source. A small PNG or WebP icon is not excluded and will be reported.
 
 | | |
 |---|---|
