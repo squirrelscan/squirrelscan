@@ -1,9 +1,38 @@
 ---
-title: "Canonical Header Validation"
-description: "Detects mismatch between HTML canonical tag and Link header"
+title: "Link rel=canonical header vs the HTML tag: the mismatch"
+description: "A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares."
 ---
 
-Detects mismatch between HTML canonical tag and Link header
+## What the canonical Link header is
+
+A canonical can be declared in an HTTP header as well as in the markup: `Link: <https://example.com/page>; rel="canonical"`. The header exists for responses that have no HTML to put a tag in, which is what makes it the right way to canonicalise a PDF or an image.
+
+For an HTML page there is no reason to use both. When a page sends both and they disagree, a search engine has two contradictory declarations from the same page and has to pick, which is exactly the ambiguity the canonical was meant to remove.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It parses the `Link` response header, splitting on commas and matching entries of the form `<url>; rel=canonical`, with the rel value optionally quoted and matched case-insensitively. It emits one check named `canonical-header`:
+
+- Skipped with the message `No Link header canonical found` and the reason `Page has no HTTP Link canonical header`. This is the normal case.
+- At info status with the message `Canonical only in Link header (no HTML tag)` when the header declares one and the markup does not, which is valid.
+- Passing with the message `HTML canonical matches Link header` when both are present and agree.
+- Failing with the message `Canonical mismatch between HTML and Link header`, the value `HTML: <url>, Header: <url>` and the expectation `Both should match`.
+
+The comparison normalises both URLs first: the fragment is dropped, a trailing slash is removed except on the site root, and the whole string is lowercased. So `https://example.com/Page/` in the header and `https://example.com/page` in the markup are treated as agreeing.
+
+The comma split is a simplification of the `Link` header grammar. A URL containing a literal comma can be split across two entries, though a comma in a path is rare enough that it does not come up in practice.
+
+## How to fix it
+
+Pick one. For an HTML page, that is the tag:
+
+```html
+<link rel="canonical" href="https://example.com/guides/build-cache" />
+```
+
+Then stop sending the header, which usually means removing a rule at the CDN or reverse proxy that was added for a different content type and applied too broadly.
+
+The common false positive is a CDN adding the header automatically with the request URL, on a page whose markup canonicalises somewhere else deliberately. The mismatch is real and the fix is to stop the CDN adding it.
 
 | | |
 |---|---|
@@ -12,15 +41,6 @@ Detects mismatch between HTML canonical tag and Link header
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 7/10 |
-
-## Solution
-
-When both HTML canonical tag and HTTP Link header are present, they must match. Search engines may get confused by conflicting signals.
-
-HTML: `<link rel="canonical" href="https://example.com/page">`
-HTTP: `Link: <https://example.com/page>; rel="canonical"`
-
-Best practice: Use HTML canonical tag only. Only add Link header if unable to modify HTML (e.g., PDF files).
 
 ## Enable / disable
 
@@ -45,3 +65,31 @@ disable = ["core/*"]
 enable = ["core/canonical-header"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/canonical](/rules/core/canonical): the markup declaration this rule compares against.
+- [core/canonical-form-drift](/rules/core/canonical-form-drift): canonicals across the site that disagree in form.
+- [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): the same kind of contradiction in indexing directives.
+- [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts): signals that disagree about whether a page should be indexed.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [How to specify a canonical URL, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [Link, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Link)
+- [Web Linking, RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each mismatching page shows both declared values. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

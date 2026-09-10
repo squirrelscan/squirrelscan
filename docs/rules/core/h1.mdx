@@ -1,9 +1,36 @@
 ---
-title: "H1 Tag"
-description: "Validates H1 tag presence and uniqueness"
+title: "Missing or multiple H1: what squirrel expects on a page"
+description: "A page with no H1, more than one, or an empty one. squirrel checks the heading on every crawled page."
 ---
 
-Validates H1 tag presence and uniqueness
+## What the H1 is for
+
+The H1 names what the page is about. A screen reader user jumping through headings lands on it first, and a search engine reads it alongside the title element as the page's own statement of its subject.
+
+One per page is the working convention. HTML5's outline algorithm was meant to make multiple H1s meaningful inside sections, but no browser implemented it and assistive technology does not use it, so several H1s just means several competing claims about the page's subject. The H1 should say the same thing as the title element, usually with more room.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the parsed heading data. It emits one check named `h1`:
+
+- Failing with the message `No H1 tag found`, the value 0 and the expectation 1.
+- Warning with the message `Multiple H1 tags found (N)`, the count as the value and the expectation 1.
+- Warning with the message `H1 tag is empty` and an empty value when there is exactly one H1 with no text.
+- Passing with the message `Single H1 tag present` and the heading text as the value.
+
+The four outcomes are exclusive and the rule stops at the first that applies, so a page with two H1s is reported for the count and never checked for emptiness. Severity is error and weight is 7, the joint highest in this category, because a missing H1 is one of the few purely structural defects that is always worth fixing.
+
+## How to fix it
+
+```html
+<main>
+  <h1>Configuring the build cache</h1>
+</main>
+```
+
+One per page, at the top of the main content, saying what the page is about. Where a design has a logo in an H1 in the header, that H1 belongs to the site rather than the page: make it a link with an image and give the page its own H1.
+
+The common false positive is a heading rendered by JavaScript. squirrel reads the HTML the server sent unless [browser rendering](/guides/browser-rendering) is on, so a client-rendered H1 is not there to find.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Validates H1 tag presence and uniqueness
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Each page should have exactly one H1 tag that clearly describes the main topic. The H1 is the primary heading users and search engines see, and it should align with the page title while being more detailed. If missing, add an H1 at the top of your main content. If you have multiple H1s, demote extras to H2 or lower. Ensure the H1 is descriptive and contains relevant keywords naturally.
 
 ## Enable / disable
 
@@ -40,3 +63,30 @@ disable = ["core/*"]
 enable = ["core/h1"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): whether the headings below the H1 descend in order.
+- [a11y/empty-heading](/rules/a11y/empty-heading): headings at any level with no text.
+- [core/meta-title](/rules/core/meta-title): the title element the H1 should agree with.
+- [a11y/heading-order](/rules/a11y/heading-order): the axe-core check for skipped heading levels.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The h1 to h6 elements, HTML Standard](https://html.spec.whatwg.org/multipage/sections.html#the-h1,-h2,-h3,-h4,-h5,-and-h6-elements)
+- [Heading elements, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Every page without exactly one non-empty H1 is listed. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

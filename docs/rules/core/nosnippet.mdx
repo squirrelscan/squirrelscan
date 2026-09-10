@@ -1,9 +1,41 @@
 ---
-title: "Nosnippet Directive"
-description: "Detects pages preventing search engine snippets"
+title: "nosnippet and max-snippet:0: pages with no search snippet"
+description: "A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page."
 ---
 
-Detects pages preventing search engine snippets
+## What nosnippet does
+
+`nosnippet` tells a search engine not to show any text snippet for the page. The result becomes a title and a URL with nothing underneath it, which is a large drop in click-through rate for anything that competes on a results page. `max-snippet:0` does the same thing by setting the allowed length to zero.
+
+`max-snippet` with a positive number is different and harmless: it caps the snippet length rather than removing it. There are pages where suppressing the snippet is the right call, such as a login page or licensed content a publisher may not excerpt, but on an ordinary page it is nearly always an accident.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the parsed robots meta value. It splits the value on commas and whitespace and lowercases it. It emits one check named `nosnippet`:
+
+- Passing with the message `No snippet restrictions found` when there is no robots meta at all, or when it has neither directive.
+- Warning with the message `Page has nosnippet directive - prevents SERP snippets` or `Page has max-snippet:0 directive - prevents SERP snippets`, with the whole robots value and the expectation `Remove to allow search snippets`.
+- At info status with the message `Snippet length limited: max-snippet:120` when a positive limit is set.
+
+`nosnippet` has to be its own directive to match; it is not found as a substring of something else. `max-snippet` matches only the exact form `max-snippet:<digits>`, so a value with a space around the colon is not recognised. When both directives are present, the message names `nosnippet`.
+
+This rule reads the robots meta element only. An `X-Robots-Tag` response header carrying the same directive is not checked here.
+
+## How to fix it
+
+Remove the directive:
+
+```html
+<meta name="robots" content="index, follow" />
+```
+
+Where the intent was to cap the snippet rather than remove it, a positive number does that:
+
+```html
+<meta name="robots" content="max-snippet:160" />
+```
+
+The common false positive is a page where suppression is deliberate, such as a paywalled article or a members-only page. The finding is still accurate about the effect.
 
 | | |
 |---|---|
@@ -12,17 +44,6 @@ Detects pages preventing search engine snippets
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 7/10 |
-
-## Solution
-
-The nosnippet directive prevents search engines from showing descriptions in search results, severely harming click-through rates.
-
-Found in: `<meta name="robots" content="nosnippet">`
-Or: `<meta name="robots" content="max-snippet:0">`
-
-This is almost always unintentional. Remove unless you specifically need to hide snippets (e.g., login pages, legal content).
-
-Note: max-snippet:N where N > 0 is fine (sets snippet character limit).
 
 ## Enable / disable
 
@@ -47,3 +68,30 @@ disable = ["core/*"]
 enable = ["core/nosnippet"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/robots-meta](/rules/core/robots-meta): the indexing directives in the same tag.
+- [ax/noai-signals](/rules/ax/noai-signals): the same directives read for their effect on AI answer engines.
+- [core/meta-description](/rules/core/meta-description): the text the snippet would otherwise use.
+- [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): robots directives that contradict each other.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Robots meta tag, data-nosnippet, and X-Robots-Tag specifications, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [Control your snippets in search results, Google Search Central](https://developers.google.com/search/docs/appearance/snippet)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each restricted page shows the robots value it declared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,39 @@
 ---
-title: "Robots Meta"
-description: "Checks robots meta tag for indexing directives"
+title: "noindex in a robots meta tag: what squirrel reports per page"
+description: "A page declaring noindex or nofollow in its robots meta. squirrel reads the tag on every crawled page and names which directive it found."
 ---
 
-Checks robots meta tag for indexing directives
+## What the robots meta tag does
+
+`<meta name="robots">` controls how a search engine treats one page. Absent, the default is `index, follow`: index the page and follow its links. `noindex` keeps the page out of the index. `nofollow` stops link signals passing to the pages it links to.
+
+Both have legitimate uses. A thank-you page after a form submission should be `noindex`. A page of user-submitted links might be `nofollow`. What matters is whether the directive is on the pages you meant, which is the question a crawl answers and a single page view does not.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the parsed robots meta value, lowercased. It emits one check named `robots-meta`:
+
+- Passing with the message `No robots meta tag (defaults to index, follow)` and a null value when there is no tag.
+- Warning with the message `Page is set to noindex and nofollow` when both appear.
+- Warning with the message `Page is set to noindex` when only that appears.
+- At info status with the message `Page is set to nofollow (links won't pass equity)` when only that appears.
+- Passing with the message `Robots meta tag allows indexing` when the tag is present and carries neither.
+
+The value is always reported alongside the message, so the full directive list is visible in the report.
+
+The match is a substring test on the lowercased value, so `nofollow` is also found inside `nofollow-something` and, more importantly, `noindex` is found inside any token containing it. This rule reads the meta element only; an `X-Robots-Tag` header saying the same thing is checked by [crawl/indexability](/rules/crawl/indexability).
+
+## How to fix it
+
+Remove the directive from pages that should be indexed:
+
+```html
+<meta name="robots" content="index, follow" />
+```
+
+Omitting the tag entirely does the same thing and is one less place for a template to go wrong. Where the page really should stay out of the index, leaving it is correct, and the finding is a report rather than a defect.
+
+The common false positive is a staging environment audited by mistake, where a site-wide `noindex` is exactly what should be there.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks robots meta tag for indexing directives
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-The robots meta tag controls how search engines index and follow links on a page. Common directives include noindex, nofollow, noarchive, and nosnippet. If your page has noindex, it won't appear in search results. Review whether this is intentional. For pages that should be indexed, remove the noindex directive or change to "index, follow". Be careful with nofollow as it prevents link equity from flowing to linked pages.
 
 ## Enable / disable
 
@@ -40,3 +66,30 @@ disable = ["core/*"]
 enable = ["core/robots-meta"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/indexability](/rules/crawl/indexability): the same question including the X-Robots-Tag header and robots.txt.
+- [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): a robots meta that contradicts another signal on the page.
+- [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap): a noindex page listed in the sitemap.
+- [core/nosnippet](/rules/core/nosnippet): the snippet directives in the same tag.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Robots meta tag, data-nosnippet, and X-Robots-Tag specifications, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [meta name=robots, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name#robots)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each page reports the robots directives it declared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

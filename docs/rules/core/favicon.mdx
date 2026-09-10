@@ -1,9 +1,36 @@
 ---
-title: "Favicon"
-description: "Checks for favicon presence"
+title: "No favicon found: the link rel icon tags squirrel looks for"
+description: "A page with no icon link at all, or only one format. squirrel reads the rel and the file extension on every link."
 ---
 
-Checks for favicon presence
+## What a favicon is
+
+A favicon is the small icon a browser shows in the tab, the bookmark list and the history. Google also shows one beside the result in search, and a site with none gets a generic globe there.
+
+Several formats exist for different places. A `.ico` file is the legacy fallback that every browser understands. An SVG scales to any size and can carry a dark-mode variant. An Apple touch icon, at 180 by 180 pixels, is what iOS uses when someone adds the site to their home screen. One file is enough to work; three cover every surface properly.
+
+## What squirrel checks
+
+The rule runs on every crawled page over its `<link>` elements. It emits one or two checks:
+
+- `favicon`: warns with the message `No favicon found` and the value `Add <link rel='icon'> for brand recognition` when nothing matched. It passes with `Favicon found: <format>` and a value suggesting more formats when exactly one distinct format was found, and with `Multiple favicon formats found` and one item per format when there were several.
+- `apple-touch-icon`: emitted only when at least one favicon was found and none of them was an Apple touch icon, at info status with the message `No Apple touch icon found` and the value `Add for iOS home screen bookmarks`.
+
+A link counts when its `rel` is `icon`, `shortcut icon`, `apple-touch-icon` or `apple-touch-icon-precomposed`, or contains `icon` anywhere, and it has an `href`. The format recorded is `apple-touch-icon` when the rel says so, otherwise `svg`, `ico` or `png` from the href's file extension, and `icon` when the extension is none of those. Formats are deduplicated, so ten PNG sizes count as one.
+
+The rule does not fetch the file, so a `<link rel="icon">` pointing at a URL that returns 404 still passes. A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+```html
+<link rel="icon" href="/favicon.ico" sizes="32x32" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+```
+
+Those three cover legacy browsers, modern browsers and iOS. Google's guidance for the icon in search results is a square file, at least 8 by 8 pixels and a multiple of 48 where possible.
+
+The common false positive is a site relying on the implicit `/favicon.ico` path with no link element. Browsers do request that path automatically, so the icon works, but this rule reads markup and reports it as missing. Adding the link is the fix and is worth doing anyway, because Google's documentation asks for one.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for favicon presence
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## Solution
-
-Favicons help with brand recognition and UX. Include multiple formats: `<link rel='icon' href='/favicon.ico'>` for legacy, `<link rel='icon' type='image/svg+xml' href='/favicon.svg'>` for modern browsers, and `<link rel='apple-touch-icon' href='/apple-touch-icon.png'>` for iOS. 32x32px for .ico, 180x180px for Apple touch icon.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["core/*"]
 enable = ["core/favicon"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/og-tags](/rules/core/og-tags): the other brand assets a page declares for external surfaces.
+- [core/twitter-cards](/rules/core/twitter-cards): the same for X.
+- [social/og-image-size](/rules/social/og-image-size): whether that share image is usable.
+- [images/svg-inline](/rules/images/svg-inline): SVG handling elsewhere on the page.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Define a favicon to show in search results, Google Search Central](https://developers.google.com/search/docs/appearance/favicon-in-search)
+- [The link element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-link-element)
+- [rel=icon, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#icon)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each page reports the icon formats it declared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

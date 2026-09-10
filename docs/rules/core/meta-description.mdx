@@ -1,9 +1,36 @@
 ---
-title: "Meta Description"
-description: "Validates meta description presence and length"
+title: "Meta description length: the 120 to 160 character range"
+description: "A page with no meta description, or one outside 120 to 160 characters. squirrel measures it on every crawled page."
 ---
 
-Validates meta description presence and length
+## What the meta description is
+
+The meta description is a summary a page offers for use in a search result snippet. Google is explicit that it is not a ranking factor and that it uses the description only when it judges it a better summary than text drawn from the page, which happens for roughly half of results.
+
+That still makes it worth writing. When the page has no description, the snippet is assembled from whatever text sits near the query terms, which on a page with a long navigation or a cookie banner can be nothing useful. Length matters for the same reason as the title: a snippet is truncated at display width, and text past that is written for nobody.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the parsed description. It emits one check named `meta-description`:
+
+- Failing with the message `Missing meta description` and a null value when there is none.
+- Warning with the message `Description too short` under 120 characters, or `Description too long` over 160. Both carry the description as the value, `120-160 characters` as the expectation, and an item holding the page URL with the first 50 characters and the length.
+- Passing with the message `Description length OK` and the description as the value.
+
+Length is counted in characters of the parsed description. Severity is error and weight is 7.
+
+## How to fix it
+
+```html
+<meta
+  name="description"
+  content="How the build cache stores compiled output between runs, when it invalidates, and the three settings that control it."
+/>
+```
+
+Write one per page, summarising that page. A description repeated across a section is worse than none, because it tells a reader nothing that distinguishes the pages.
+
+The common false positive is a page whose description is deliberately absent so that Google composes a snippet from the content, which is a defensible choice on a long reference page. The rule reports it as missing either way.
 
 | | |
 |---|---|
@@ -13,25 +40,19 @@ Validates meta description presence and length
 | **Severity** | error |
 | **Weight** | 7/10 |
 
-## Solution
-
-Meta descriptions should be 120-160 characters and provide a compelling summary of the page. While not a direct ranking factor, good descriptions improve click-through rates from search results. Write unique descriptions for each page that accurately preview the content. Include a call-to-action when appropriate. If missing, search engines will auto-generate snippets which may not represent your page optimally.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_length` | unknown | `undefined` | Minimum description length |
-| `max_length` | unknown | `undefined` | Maximum description length |
+| `min_length` | number | `120` | Minimum description length |
+| `max_length` | number | `160` | Maximum description length |
 
 ### Configuration example
 
 ```toml squirrel.toml
 [rules."core/meta-description"]
-min_length = undefined
-max_length = undefined
+min_length = 120
+max_length = 160
 ```
 
 ## Enable / disable
@@ -57,3 +78,30 @@ disable = ["core/*"]
 enable = ["core/meta-description"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/duplicate-description](/rules/content/duplicate-description): the same description used on more than one page.
+- [core/meta-title](/rules/core/meta-title): the title above the snippet.
+- [core/nosnippet](/rules/core/nosnippet): the directive that suppresses the snippet entirely.
+- [core/og-tags](/rules/core/og-tags): the description used when the page is shared instead of searched.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Control your snippets in search results, Google Search Central](https://developers.google.com/search/docs/appearance/snippet)
+- [meta name=description, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name#description)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each page reports its description and character count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,38 @@
 ---
-title: "Title Uniqueness"
-description: "Checks that page titles are unique across the site"
+title: "Duplicate page titles: the site-wide uniqueness check"
+description: "Two or more pages sharing a title after case and whitespace are normalised. squirrel groups them and lists every URL."
 ---
 
-Checks that page titles are unique across the site
+## Why titles should be unique
+
+A title that appears on twenty pages tells a reader choosing between twenty search results nothing. It also gives a search engine no way to tell which of those pages answers a query, which is one of the signals that leads to the wrong one being shown.
+
+Duplicates are almost never written by hand. They come from a template that falls back to the site name when a page has no title of its own, from paginated listings that repeat page one's title, and from filter or sort parameters that produce many URLs for one page of content.
+
+## What squirrel checks
+
+The rule runs once per crawl. It normalises every non-empty page title by lowercasing it and collapsing runs of whitespace to a single space, groups pages by the result, and emits one check named `title-unique`:
+
+- Skipped with the message `Need multiple pages to check uniqueness` when the crawl has fewer than two pages.
+- Passing with the message `All page titles are unique` when no normalised title appears more than once.
+- Warning with the message `N duplicate title(s) affecting M pages`. Each item is one group, identified by the first 60 characters of the title, labelled with the first 40 characters and the page count, and carrying every URL in the group.
+
+Pages with no title are skipped rather than grouped together, so a site where fifty pages have no title at all produces nothing here. That case belongs to [core/meta-title](/rules/core/meta-title), which reports each of them individually.
+
+The normalisation here is stricter than [content/duplicate-title](/rules/content/duplicate-title), which lowercases but does not collapse whitespace. Two titles differing only by a double space are duplicates to this rule and distinct to that one.
+
+## How to fix it
+
+Give the template a title that varies with the page, and a distinct one for paginated pages:
+
+```html
+<title>Configuring the build cache | Acme Docs</title>
+<title>Guides, page 2 | Acme Docs</title>
+```
+
+Where the duplicates come from URL parameters serving the same content, the fix is a [canonical URL](/rules/core/canonical) rather than a new title, because those are one page rather than several.
+
+The common false positive is a set of pages that genuinely are near-identical, such as location pages for the same service. Those still need distinct titles, and the duplicate title is a symptom of the page not being distinct either.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks that page titles are unique across the site
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Each page should have a unique title that accurately describes its content. Duplicate titles confuse search engines and users about which page to display. Use a pattern like 'Page Topic | Brand Name' to ensure uniqueness. CMS often generate duplicate titles - audit and customize them.
 
 ## Enable / disable
 
@@ -40,3 +65,30 @@ disable = ["core/*"]
 enable = ["core/title-unique"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/duplicate-title](/rules/content/duplicate-title): the same question with looser normalisation.
+- [core/meta-title](/rules/core/meta-title): the per-page presence and length check.
+- [content/duplicate-description](/rules/content/duplicate-description): the same problem in the snippet text.
+- [core/canonical](/rules/core/canonical): the fix when duplicate titles mean duplicate pages.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Influencing your title links in search results, Google Search Central](https://developers.google.com/search/docs/appearance/title-link)
+- [The title element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-title-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each duplicated title is listed with every page that uses it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>
