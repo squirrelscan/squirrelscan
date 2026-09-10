@@ -1,9 +1,38 @@
 ---
-title: "Content Dates"
-description: "Checks for published and modified dates on content"
+title: "datePublished and dateModified coverage across content pages"
+description: "Undated content leaves a reader guessing whether it is current. squirrel measures how much of your content carries each date."
 ---
 
-Checks for published and modified dates on content
+## What content dates do
+
+A published date tells a reader when something was written; a modified date tells them whether it has been kept up. Both can come from `Article` structured data or from visible markup in the entry header.
+
+They matter where age changes the answer. On a tutorial for a tool that ships every month, a 2019 date is the most useful thing on the page. On a page about something that has not changed in a century, it is noise, which is why this rule is gated to content-publishing sites.
+
+## What squirrel checks
+
+The rule is site-wide. It counts content pages and how many carry each date. A page counts as content when its schema declares `Article`, `BlogPosting` or `NewsArticle`, or when the parser found a visible published date or a visible author. On a crawl of five pages or fewer, every page counts.
+
+Dates are read from any flattened JSON-LD node carrying `datePublished` or `dateModified`, falling back to visible entry-meta `<time>` markup. It emits up to two checks:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Info when no article content was detected. Message: `No article content detected for date analysis`.
+- `date-published` passes at 80% coverage or above. Message: `95% of content has datePublished`. It warns below that, with `Only 40% of content has datePublished` or `No content pages have datePublished`, and `Add dates to Article schema` as the value. Severity warning, weight 4.
+- `date-modified` passes at 50% or above. Message: `70% of content has dateModified`. It reports info below that, with `20% of content has dateModified` and `Add dateModified to show freshness` as the value.
+
+Flattening the JSON-LD matters here: a top-level-only read misses every date on a site whose SEO plugin emits an `@graph`.
+
+The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider or an education site. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
+
+## How to fix it
+
+```html
+<time datetime="2026-03-12" class="entry-date published">12 March 2026</time>
+```
+
+Render the date in the article header and put the same value in the `Article` schema. One content timestamp should drive both.
+
+Move `dateModified` when the content actually changes. A date that updates on every deploy tells a reader nothing and tells a crawler something false.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks for published and modified dates on content
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Visible dates show content freshness and help users assess relevance. Include datePublished and dateModified in Article schema. Show human-readable dates on pages. Update dateModified when making significant changes. Fresh content signals ongoing maintenance and expertise. Stale dates may hurt rankings for time-sensitive topics.
 
 ## Enable / disable
 
@@ -40,3 +65,30 @@ disable = ["eeat/*"]
 enable = ["eeat/content-dates"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/date-agreement](/rules/content/date-agreement): whether the dates on a page agree with each other.
+- [content/freshness](/rules/content/freshness): the same signals inventoried per page.
+- [crawl/sitemap-lastmod-drift](/rules/crawl/sitemap-lastmod-drift): the sitemap date compared against them.
+- [eeat/author-byline](/rules/eeat/author-byline): the other half of a complete byline.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+- [The time element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/time)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with the share of content carrying each date. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

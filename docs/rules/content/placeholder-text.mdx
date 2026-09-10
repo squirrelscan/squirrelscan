@@ -7,7 +7,7 @@ description: "Filler copy, unrendered template syntax and a visible undefined al
 
 Placeholder text is anything on a live page that was never meant to be read: lorem ipsum, a theme's demo copy, a template expression that never evaluated, a JavaScript value that was concatenated into a sentence, a TODO note.
 
-Each family points at a different break in the publishing pipeline. Filler copy means the page was published before the copy was written. Unrendered template syntax means the engine never ran over that string. A visible `undefined` or `[object Object]` means the code printed a value it did not have. All of them are visible to readers and to search engines exactly as written.
+Each family points at a different break in the publishing pipeline. Filler copy means the page was published before the copy was written. Unrendered template syntax means the engine never ran over that string. A visible `undefined` means the code printed a value it did not have; a visible `[object Object]` means it printed one it did have and coerced an object to a string on the way. All of them are visible to readers and to search engines exactly as written.
 
 ## What squirrel checks
 
@@ -16,7 +16,7 @@ The rule runs on every crawled page over the prose in `<body>`, excluding script
 - Skipped when there is no parsed document. Message: `No document available`.
 - Skipped when there is no `<body>`. Message: `No body element to read visible text from`.
 - Pass when nothing matched. Message: `No placeholder or template leftovers in visible text`.
-- Warn or fail otherwise. Message: `3 placeholder occurrence(s) in visible text: lorem ipsum filler (Lorem ipsum dolor sit amet, consectetur…)`, naming each family with a truncated sample. Each family is listed as an item with its own count and samples.
+- Warn or fail otherwise. Message: `3 placeholder occurrence(s) in visible text: lorem ipsum filler (lorem)`, naming each family with the marker token that matched rather than a passage excerpt. Each family is listed as an item with its own count and samples.
 
 Six families are detected, reported under these labels: `lorem ipsum filler`, `theme boilerplate`, `unrendered template syntax`, `stringified object in copy`, `JavaScript value in copy` and `source-comment marker`. The status is fail when lorem ipsum, unrendered template syntax or a stringified object was found, because none of those has an innocent reading, and warn for the other three. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
 

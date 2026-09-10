@@ -17,7 +17,7 @@ The rule runs on every crawled page and reads the word count the parser computed
 - Info below `warn_threshold`, 500 by default. Message: `Content could be longer: 420 words`.
 - Pass otherwise. Message: `Good content length: 1240 words`.
 
-The 300-word floor is also a precedence boundary. `content/thin-vs-site-norm` compares a page against the median for its page type, and it never considers a page below this floor, so the two rules cannot both raise a finding on the same page.
+The 300-word floor is also a precedence boundary. `content/thin-vs-site-norm` never reports a page below 300 words, so at the default `min_words` the two rules cannot both raise a finding on one page. That boundary is the fixed constant, not the configured option, so raising `min_words` above 300 opens a band where both can fire.
 
 ## How to fix it
 

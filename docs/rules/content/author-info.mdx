@@ -16,7 +16,7 @@ The rule runs on every crawled page and emits one check per signal it finds, plu
 - `author-schema` passes when a JSON-LD block contains `"author"`. Message: `Author schema markup present`, with the author name when one can be pulled out of the text.
 - `author-links` passes when the page has any `a[rel="author"]`. Message: `2 author link(s) found`, with the first link's text.
 - `og-author` passes when `article:author` is present. Message: `Open Graph author meta present`, with its content.
-- `visible-author` reports info when an element whose class contains `author` or `byline` exists but no schema and no author link do. Message: `Author element found but no structured data`, with `Consider adding author schema markup` as the value.
+- `visible-author` reports info when the page matches `[class*="author"], [class*="byline"], [rel="author"]` but has no author schema and no author link. The `rel` half of that selector matches any element, not only anchors. Message: `Author element found but no structured data`, with `Consider adding author schema markup` as the value.
 - `author-info` reports info when none of the four were found. Message: `No author information detected`, with `Consider adding author attribution for E-E-A-T` as the value.
 
 The schema test is a substring match over the script text rather than a parse, and the name is extracted with a regular expression, so a deeply nested author object may be detected without a name. Severity info, weight 3.

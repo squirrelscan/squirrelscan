@@ -1,9 +1,38 @@
 ---
-title: "Affiliate Disclosure"
-description: "Checks for affiliate and sponsored content disclosures"
+title: "Affiliate disclosure: detecting affiliate links without one"
+description: "Undisclosed affiliate links are a regulatory problem and a trust problem. squirrel detects affiliate link patterns and looks for a disclosure page."
 ---
 
-Checks for affiliate and sponsored content disclosures
+## What affiliate disclosure is
+
+An affiliate link earns the publisher a commission when the reader buys. Disclosure is telling the reader that before they click, and in the United States the Federal Trade Commission requires it for any material connection between the endorser and the seller. Other jurisdictions have equivalent rules.
+
+Where it goes matters as much as whether it exists. A line in the footer is not where someone reads before clicking a product link; the disclosure belongs near the links it covers, at the top of the page or beside them.
+
+## What squirrel checks
+
+The rule is site-wide. It looks for a disclosure page by URL and, separately, counts pages carrying links that match affiliate patterns. It emits up to two checks:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- `affiliate-links` reports info when affiliate links were found. Message: `12 page(s) appear to have affiliate links`.
+- `affiliate-disclosure` passes when links were found and a disclosure page exists. Message: `Affiliate disclosure page found`, with the URL.
+- `affiliate-disclosure` warns when links were found and no page exists. Message: `Affiliate links detected but no disclosure page found`, with `Create /affiliate-disclosure page (FTC requirement)` as the value.
+- `affiliate-disclosure` passes when no links were found but a page exists. Message: `Disclosure page exists`.
+- `affiliate-disclosure` reports info when neither was found. Message: `No affiliate links or disclosure page detected`.
+
+The disclosure page is matched on `/disclosure`, `/affiliate-disclosure`, `/advertising-disclosure`, `/sponsored-disclosure` or `/ftc-disclosure`. Affiliate links are matched on an Amazon URL carrying `tag=`, on `shareasale.com`, `go.redirectingat.com`, `awin1.com` or `commission-junction`, or on any URL containing `?ref=` or `?affiliate=`. That last pair is broad: an internal referral parameter will match it. Severity info, weight 4.
+
+The rule only runs when the audit classified the site as a blog or a news site. A classification below medium confidence, or an audit with no site metadata at all, runs it anyway.
+
+## How to fix it
+
+```html
+<p class="disclosure">We earn a commission from purchases made through the links below.</p>
+```
+
+Put the sentence at the top of the page, above the links it covers, and keep a dedicated disclosure page linked from the footer for the detail. Use plain language rather than a legal formula.
+
+A `?ref=` parameter on an internal link will be counted as affiliate. Check what was matched before concluding you have a disclosure gap.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks for affiliate and sponsored content disclosures
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 4/10 |
-
-## Solution
-
-FTC requires clear disclosure of affiliate relationships and sponsored content. Disclose at the top of pages with affiliate links, not just in footer. Use clear language: 'We earn commissions from purchases' or 'This post is sponsored.' Create a dedicated disclosure page and link to it. Failure to disclose can result in penalties.
 
 ## Enable / disable
 
@@ -40,3 +65,30 @@ disable = ["eeat/*"]
 enable = ["eeat/affiliate-disclosure"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/disclaimers](/rules/eeat/disclaimers): the non-commercial version of the same obligation.
+- [links/external-links](/rules/links/external-links): the outbound links this rule is reading.
+- [security/new-tab](/rules/security/new-tab): the rel attributes those links should carry.
+- [eeat/trust-signals](/rules/eeat/trust-signals): the other things a reader weighs on a review page.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Qualify your outbound links, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with its affiliate link count and whether a disclosure page exists. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

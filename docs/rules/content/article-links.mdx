@@ -17,7 +17,7 @@ The rule runs on every crawled page, and only on pages the parser classified as 
 - `internal-links` warns below the minimum. Message: `long article has 1 internal links (min 3)`, with the count and the threshold. It passes otherwise with `4 internal links`.
 - `external-links` warns below the minimum. Message: `medium article has 0 external links (min 2)`. It passes otherwise with `3 external links`.
 
-The bands are short below `short_max_words`, 800 by default; medium up to `long_min_words`, 1500 by default; and long above that. The defaults are 1 internal and 1 external for short, 2 and 2 for medium, and 3 internal and 2 external for long. Severity warning, weight 4.
+The bands are short below `short_max_words`, 800 by default; medium from there up to but not including `long_min_words`, 1500 by default; and long from 1500 up. The defaults are 1 internal and 1 external for short, 2 and 2 for medium, and 3 internal and 2 external for long. Severity warning, weight 4.
 
 ## How to fix it
 

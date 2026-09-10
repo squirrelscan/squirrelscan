@@ -1,9 +1,31 @@
 ---
-title: "Editorial Policy"
-description: "Checks for editorial and content policy pages"
+title: "Editorial policy: publishing how the content gets made"
+description: "A stated editorial process is a claim a reader can hold you to. squirrel looks for policy pages by their multilingual URL patterns."
 ---
 
-Checks for editorial and content policy pages
+## What an editorial policy is
+
+An editorial policy describes how content on a site is produced: who writes it, who reviews it, how facts are checked, what happens when something is wrong, and who has a say in what gets published.
+
+It is standard at news organisations and increasingly common on any site publishing at scale. Its value is that it is checkable: a correction policy means a reader can see whether corrections actually appear.
+
+## What squirrel checks
+
+The rule is site-wide. It matches each crawled page's URL path against the multilingual editorial policy patterns and collects every match. It emits a single check named `editorial-policy`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when at least one page matches. Message: `2 policy page(s) found`, listing each path.
+- Info when none does. Message: `No editorial/content policy pages found`, with `Consider adding for content-heavy sites` as the value.
+
+The match is on the URL path only, so a policy published on an unusual slug or inside the About page is not found. Severity info, weight 3.
+
+The rule only runs when the audit classified the site as a news site, a blog, a healthcare provider or an education site. A classification below medium confidence, or an audit with no site metadata at all, runs it anyway.
+
+## How to fix it
+
+Publish a page covering how content is created and reviewed, how facts are checked, how corrections are handled, and how editorial decisions stay independent of commercial ones. Link it from the footer or the About page.
+
+Write what you actually do. A policy describing a review process nobody follows is worse than none.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for editorial and content policy pages
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Editorial policies demonstrate content quality standards and professionalism. Include: how content is created/reviewed, fact-checking process, correction policy, and editorial independence. For news sites, this is essential. For content sites, it builds trust and supports E-E-A-T. Link from footer or about page.
 
 ## Enable / disable
 
@@ -40,3 +58,29 @@ disable = ["eeat/*"]
 enable = ["eeat/editorial-policy"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/about-page](/rules/eeat/about-page): the page this one usually sits beside.
+- [eeat/author-expertise](/rules/eeat/author-expertise): who the policy says is qualified to write.
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the topics where a review process matters most.
+- [eeat/trust-signals](/rules/eeat/trust-signals): the other claims a reader can check.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. Each policy page found is listed by path. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

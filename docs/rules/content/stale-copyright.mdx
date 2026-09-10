@@ -7,7 +7,7 @@ description: "An old year in the footer is the cheapest signal that a site is ab
 
 The copyright line in a site footer is one of the few dates every visitor sees on every page. When it is a year or two behind, it reads as nobody has touched this site since then, whatever the content says.
 
-It has no legal consequence and no direct ranking effect. It is a trust signal, and it costs nothing to fix, which is why the rule exists and why its weight is low.
+It is read as a maintenance signal, which is not what a copyright notice formally is: the conventional US notice carries the year of first publication, not the year the site was last touched. That is why the rule warns rather than fails, and why its weight is low.
 
 ## What squirrel checks
 
@@ -28,7 +28,7 @@ A notice is recognised from `©`, `(c)`, the `&copy;` entity or the word `copyri
 
 Render the year from the server or the build step rather than hardcoding it, or use a range whose end year updates.
 
-If the date is a deliberate legal assertion tied to a fixed publication, move it out of the site chrome and into the page body, so it reads as a statement about that content rather than about the site.
+If the year is an accurate publication date rather than a maintenance signal, leave it as it is. Moving it out of the site chrome and into the page body makes it read as a statement about that content rather than about the site, which is what it is.
 
 | | |
 |---|---|

@@ -1,9 +1,37 @@
 ---
-title: "Author Expertise"
-description: "Checks for author credentials and expertise indicators"
+title: "Author expertise: bio pages and Person schema"
+description: "A name is attribution; a bio is expertise. squirrel looks for author pages and Person structured data across the crawl."
 ---
 
-Checks for author credentials and expertise indicators
+## What an expertise signal is
+
+A byline says who wrote something. An expertise signal says why they were the person to write it: a bio page with credentials, a professional profile, a `Person` node in the structured data linking the two.
+
+Google's guidance asks about the degree of expertise behind content and about who is responsible for it. On health, finance and legal topics, that is the difference between a name and a qualification. This rule looks for the infrastructure that carries it rather than judging the credentials themselves.
+
+## What squirrel checks
+
+The rule is site-wide. It counts pages whose path matches `/author/`, `/authors`, `/team`, `/contributors` or `/about-the-author`, and separately checks whether any crawled page declares the `Person` schema type. It emits a single check named `author-expertise`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when either signal is present. Message: `Author expertise signals found`, listing what was found as `4 author page(s)` and `Person schema`.
+- Info when neither is. Message: `Limited author expertise signals`, with `Consider adding author pages with credentials` as the value.
+
+The check is structural. It does not read the bio pages or look for credentials in them, so a `/team` page with four names and no detail passes. Severity info, weight 4.
+
+The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider, an education site or a nonprofit. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Person","name":"Jane Diaz","jobTitle":"Registered Dietitian","url":"https://example.com/authors/jane-diaz"}
+</script>
+```
+
+Give each regular author a page that says what they know and how they know it: qualifications, relevant experience, where else they publish. Mark it up as a `Person` and link the byline to it.
+
+For content where a reviewer signs off, such as medical writing, name the reviewer and their credentials as well as the writer.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks for author credentials and expertise indicators
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 4/10 |
-
-## Solution
-
-Author expertise is key for E-E-A-T, especially for YMYL content. Include: professional credentials (MD, JD, CPA), work experience, education, relevant certifications, and author bio pages. Link authors to LinkedIn or professional profiles. For health content, show medical reviewer credentials.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["eeat/*"]
 enable = ["eeat/author-expertise"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/author-byline](/rules/eeat/author-byline): whether the content is attributed at all.
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the topics where credentials matter most.
+- [eeat/disclaimers](/rules/eeat/disclaimers): what those pages need alongside the credentials.
+- [content/author-info](/rules/content/author-info): the per-page markup inventory.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Person, Schema.org](https://schema.org/Person)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with the author pages and Person schema found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

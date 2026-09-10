@@ -1,9 +1,35 @@
 ---
-title: "Physical Address"
-description: "Checks for visible physical address information"
+title: "Physical address: PostalAddress and LocalBusiness schema"
+description: "A real address is a trust signal a visitor can verify. squirrel looks for address structured data across the crawl."
 ---
 
-Checks for visible physical address information
+## What the address signal is
+
+A publicly listed address tells a visitor there is a place and an entity behind the site. For a business with premises it is also what feeds local search results and map listings, where the address is the thing being matched.
+
+Structured data is what makes it machine-readable. `PostalAddress` describes the address itself, and it is normally attached to a `LocalBusiness` or `Organization` node that says whose address it is.
+
+## What squirrel checks
+
+The rule is site-wide. It walks the crawled pages looking for two things in the structured data: the `PostalAddress` type anywhere, and any of `LocalBusiness`, `Organization`, `Restaurant` or `Store`. It emits a single check named `physical-address`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when either was found. Message: `Address schema markup found`, with `LocalBusiness/Organization` or `PostalAddress` as the value.
+- Info when neither was. Message: `No address schema markup detected`, with `Add PostalAddress schema if applicable` as the value.
+
+The check reads structured data only. An address printed in the footer as plain text is not detected, and an `Organization` node with no address at all passes, since the type alone satisfies the second test. Severity info, weight 3.
+
+The rule only runs when the audit classified the site as a local business. A classification below medium confidence, or an audit with no site metadata at all, runs it anyway.
+
+## How to fix it
+
+```json
+{"@context":"https://schema.org","@type":"LocalBusiness","name":"Acme","address":{"@type":"PostalAddress","streetAddress":"12 Example St","addressLocality":"Sydney","addressRegion":"NSW","postalCode":"2000","addressCountry":"AU"}}
+```
+
+Publish the address in the footer or on the contact page and mark it up as a `PostalAddress` on the node that owns it. Keep the name, address and phone identical to what your directory and map listings say.
+
+An online-only business can list a registered office. The point is that something is verifiable.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for visible physical address information
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-A physical address builds trust and is essential for local businesses. Include in: footer, contact page, about page. Use PostalAddress schema markup. For local SEO, ensure NAP (Name, Address, Phone) consistency across the site and external listings. Virtual businesses can use registered office addresses.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["eeat/*"]
 enable = ["eeat/physical-address"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/local-business](/rules/schema/local-business): the full local business markup this address belongs to.
+- [local/nap-consistency](/rules/local/nap-consistency): whether the same details appear consistently across the site.
+- [eeat/contact-page](/rules/eeat/contact-page): the page the address usually sits on.
+- [links/tel-mailto](/rules/links/tel-mailto): the phone number that goes with it.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+- [PostalAddress, Schema.org](https://schema.org/PostalAddress)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with the address schema types found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

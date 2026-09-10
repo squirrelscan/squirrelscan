@@ -7,7 +7,7 @@ description: "Browsers recover from bad markup silently and other parsers may no
 
 Browsers are required to recover from broken markup, so a page with structural errors usually looks correct. Anything else reading the page, a crawler, a reader-mode extractor, an assistive technology, may recover differently or not at all.
 
-The errors worth checking are the ones with consequences. A missing doctype puts the browser in quirks mode, where layout follows rules from the 1990s. Nested interactive elements, a link inside a link or a button inside a link, have no defined behaviour and produce a confusing accessibility tree. Deprecated presentational elements still render and have had CSS equivalents for two decades.
+The errors worth checking are the ones with consequences. A missing doctype puts the browser in quirks mode, where layout follows rules from the 1990s. Nested interactive elements, a link inside a link or a button inside a link, are nonconforming. The parser has defined recovery for them, so the page renders, but what a click or a screen reader does with the result is not what the markup suggests. Deprecated presentational elements still render and have had CSS equivalents for two decades.
 
 ## What squirrel checks
 
@@ -78,7 +78,7 @@ Content findings ship in every audit next to the SEO, performance and agent expe
 ## References
 
 - [The head element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-head-element)
-- [The anchor element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a)
+- [Parsing HTML documents, HTML Standard](https://html.spec.whatwg.org/multipage/parsing.html)
 
 ## Check your site
 

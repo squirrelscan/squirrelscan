@@ -5,7 +5,7 @@ description: "squirrel computes a Flesch reading ease score and a Flesch-Kincaid
 
 ## What the Flesch scores are
 
-Flesch Reading Ease and Flesch-Kincaid Grade Level are two formulas over the same two inputs: average sentence length and average syllables per word. Reading ease runs from 0 to 100, higher being easier; grade level maps the same numbers onto a US school year.
+Flesch Reading Ease and Flesch-Kincaid Grade Level are two formulas over the same two inputs: average sentence length and average syllables per word. The reading ease formula can produce values outside 0 to 100; squirrel clamps and rounds the reported score into that range, higher being easier. Grade level maps the same inputs onto a US school year.
 
 They measure sentence and word length, not clarity. A page of short sentences made of jargon scores well, and a precise technical explanation scores badly for being precise. That is why this rule reports the numbers as information and never fails: the right score depends entirely on who the page is for.
 
@@ -69,7 +69,7 @@ Content findings ship in every audit next to the SEO, performance and agent expe
 
 ## References
 
-- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Readable, WCAG 2.2](https://www.w3.org/TR/WCAG22/#readable)
 
 ## Check your site
 

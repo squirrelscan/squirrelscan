@@ -7,7 +7,7 @@ description: "Visible asterisks, bracket links or escaped tags mean a value was 
 
 Unrendered markup is authored markup that reached the reader as literal text. Three different mistakes produce it, and they have different fixes.
 
-Literal markdown, `**bold**` or `[text](url)` on screen, means a field stored as markdown was printed without a markdown-to-HTML pass. Visible `<p>` or `<a href` means the opposite: HTML was escaped twice, usually by escaping a value that the templating engine had already escaped. A visible `&amp;nbsp;` means the entity itself was encoded a second time on the way in.
+Literal markdown, `**bold**` or `[text](url)` on screen, means a field stored as markdown was printed without a markdown-to-HTML pass. A visible `<p>` or `<a href` means HTML was escaped when it was meant to be rendered, which is one escape rather than two: the source said `&lt;p&gt;`. A visible `&amp;nbsp;` means the entity itself was encoded a second time on the way in.
 
 ## What squirrel checks
 
@@ -26,7 +26,7 @@ The status is fail when an escaped tag or a double-encoded entity was found, sin
 
 Find the field rather than the page. A CMS storing markdown and a template printing it raw produces the same literal text everywhere that field appears, so fixing one page leaves the rest broken.
 
-For escaped HTML, remove the manual escape rather than marking the value safe: the templating engine already escaped it. For a double-encoded entity, re-import the affected content.
+For escaped HTML, trace the rendering path before changing anything. The value is being escaped somewhere it was meant to be rendered as markup, and the fix is to render it through a sanitising HTML path rather than to switch autoescaping off. For a double-encoded entity, re-import the affected content.
 
 If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.
 
@@ -73,7 +73,8 @@ Content findings ship in every audit next to the SEO, performance and agent expe
 
 ## References
 
-- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Character reference, MDN glossary](https://developer.mozilla.org/en-US/docs/Glossary/Character_reference)
+- [HTML Sanitizer API, MDN](https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API)
 
 ## Check your site
 

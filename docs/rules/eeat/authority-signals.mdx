@@ -1,11 +1,31 @@
 ---
-title: "Authority Signals"
-description: "AI assessment of per-page authority signals: authorship, citations, and outbound references"
+title: "Authority signals: an AI read of authorship and citations"
+description: "Pattern matching sees markup; this rule reads the page. The cloud service reports whether it is attributed and what its claims rest on."
 ---
 
 <Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
 
-AI assessment of per-page authority signals: authorship, citations, and outbound references.
+## What an authority signal is
+
+Authority, in the sense Google's guidance uses, is whether a page shows who stands behind what it says and what those claims rest on. In practice that is authorship and sourcing.
+
+Markup rules can only see the shapes those take: a `Person` node, a `rel="author"` link, an outbound link to a domain on a list. This rule reads the page instead, so it can recognise a byline that is plain text and tell a citation from a footer link to a partner site.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads a result the cloud service produced before the rules ran. It emits a single check named `authority-signals`:
+
+- Skipped when no result is available for the page, whether because the feature was not prefetched or the service skipped it. Message: `Authority signal analysis skipped`, with a readable skip reason.
+- Warn when the page has no author attribution and zero citations. Message: `No author attribution or citations detected on this page`. When the page has outbound links, the details add `4 outbound link(s) present but none read as citations.` Severity warning, weight 3.
+- Pass otherwise. Message: `Authority signals: author attributed, 6 citation(s), 14 outbound reference(s)`, or `no author` in place of the first part. Any specific signals the service identified are listed as items.
+
+The rule is skipped on soft 404 pages, so a broken template cannot warn about a missing author on every URL.
+
+## How to fix it
+
+Add a visible byline with credentials where they are relevant, cite sources for factual claims in the sentences that make them, and link out to the references the argument rests on.
+
+The warn condition needs both halves to be missing. A page with an author and no citations passes, as does a page with citations and no named author.
 
 | | |
 |---|---|
@@ -16,16 +36,6 @@ AI assessment of per-page authority signals: authorship, citations, and outbound
 | **Weight** | 3/10 |
 | **Default** | Enabled |
 
-## What it checks
-
-The cloud service reads each page and reports whether an author is attributed, how many claims are backed by citations, and how many outbound references the page makes. A page with **no author attribution and zero citations** warns; otherwise the rule passes and lists the detected signals.
-
-Unlike the pattern-based [`eeat/author-byline`](/rules/eeat/author-byline) and [`eeat/citations`](/rules/eeat/citations) rules, this is a semantic assessment - it understands attribution and sourcing in context rather than matching markup patterns.
-
-## Solution
-
-Pages that demonstrate who wrote them and what their claims rest on earn more trust from readers, search engines, and AI assistants. Add a visible author byline (with credentials where relevant), cite sources for factual claims, and link out to authoritative references.
-
 ## Enable / disable
 
 ### Disable this rule
@@ -34,3 +44,29 @@ Pages that demonstrate who wrote them and what their claims rest on earn more tr
 [rules]
 disable = ["eeat/authority-signals"]
 ```
+
+## Related rules
+
+- [eeat/author-byline](/rules/eeat/author-byline): the pattern-based version of the attribution half.
+- [eeat/citations](/rules/eeat/citations): the pattern-based version of the sourcing half.
+- [content/author-info](/rules/content/author-info): the per-page markup inventory.
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the topics where both halves matter most.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. Each page is reported with its author, citation and outbound reference counts. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

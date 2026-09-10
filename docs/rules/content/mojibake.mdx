@@ -20,7 +20,7 @@ The rule runs on every crawled page over the prose in `<body>`, excluding `<scri
 
 The status is fail when the replacement character was found, since that is not arguable, and warn for the other two families. The cause named in the message depends on the page's declared charset: no `<meta charset>` at all means the browser guessed; a correct `utf-8` means the source bytes are already double-encoded; any other value means the declaration is wrong and the source may be too.
 
-Eighteen byte sequences are matched, each a real UTF-8 lead byte rendered as its latin1 character, so legitimate French, German and Spanish copy stays clean. The alternation is ordered longest first, because `â€` is a prefix of five of the others and counting them independently would double-count every long one.
+Eighteen byte sequences are matched, each a real UTF-8 lead byte rendered as its latin1 character, so legitimate French, German and Spanish copy stays clean. They are matched as one alternation ordered longest first, so a longer sequence is consumed whole rather than partly matched by a shorter entry.
 
 ## How to fix it
 

@@ -11,16 +11,16 @@ Per-page rules cannot see when that breaks. `core/meta-title` checks that a titl
 
 ## What squirrel checks
 
-The rule is site-wide. It splits each title on `|`, `::`, `»`, `>`, ` - ` and `: `, infers the brand affix that most titles carry at the same end, then infers the separator that sits next to it. It emits a single check named `title-pattern-outlier`:
+The rule is site-wide. It splits each title on a separator set: `|`, `::` and `»` with optional surrounding whitespace; `-`, `–`, `—`, `·` and `>` with whitespace required on both sides; `>>`; and `:` followed by whitespace. It infers the brand affix that most titles carry at the same end, then infers the separator that sits next to it. Only pages that returned a 2xx status with a parseable URL are sampled. It emits a single check named `title-pattern-outlier`:
 
 - Skipped when there are no pages. Message: `No pages available for analysis`.
 - Skipped below 10 crawled pages. Message: `Only 6 page(s) crawled; 10 needed to establish a title template`.
 - Skipped below 10 titled pages. Message: `Only 7 page(s) have a title; 10 needed to establish a title template`.
 - Skipped when no brand affix reaches 70% agreement. Message: `No title template reaches 70% agreement across the crawled titles`.
-- Pass when nothing deviates. Message: `All 240 titled page(s) follow the site's own title template (brand "Acme" as suffix, separator "|")`.
-- Warn when deviations exist, and fail at or above 20% of titled pages. Message: `9 of 240 titled page(s) break the site's own title template (brand "Acme" as suffix, separator "|")`.
+- Pass when nothing deviates. Message: `All 240 titled page(s) follow the site's own title template (brand "Acme" last 100%, separator "|" 100%)`.
+- Warn when deviations exist, and fail at or above 20% of titled pages. Message: `9 of 240 titled page(s) break the site's own title template (brand "Acme" last 96%, separator "|" 100%)`.
 
-Deviations are grouped into four classes, reported most meaningful first. Each item is labelled in full: `3 of 240 page(s) have a title that is only the brand "Acme"`; `4 of 240 page(s) never mention "Acme", which 96% of titles carry`; `1 of 240 page(s) put "Acme" at the start but the norm is at the end`; `1 of 210 page(s) separate "Acme" with "-" but the norm is "|"`. Up to ten groups are listed with up to ten example URLs each.
+Deviations are grouped into four classes and ordered by group size, with the class order breaking ties. Each item is labelled in full: `3 of 240 page(s) have a title that is only the brand "Acme"`; `4 of 240 page(s) never mention "Acme", which 96% of titles carry`; `1 of 240 page(s) put "Acme" first but the norm is last`; `1 of 210 page(s) separate "Acme" with "-" but the norm is "|"`. Up to ten groups are listed with up to ten example URLs each. The separator norm needs its own sample of at least 10 votes and its own 70% agreement before a separator deviation is reported at all.
 
 Two guards keep it honest. On a multi-section site the brand candidate must appear in at least two sections, so a section label such as `Blog` cannot be mistaken for the brand in a lopsided crawl. And the homepage is exempt, since `Acme - tools for X` is a normal home title. A page with no title never votes and is never a deviant, because `core/meta-title` owns that case. Severity warning, weight 3.
 

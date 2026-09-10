@@ -7,22 +7,22 @@ description: "A page states its date in several places and presence checks pass 
 
 A dated page usually carries its date more than once: a visible byline, `datePublished` and `dateModified` in schema, a year in the URL or the title, the sitemap `lastmod`, the `Last-Modified` header. Readers see one of those and crawlers read another.
 
-When they disagree, at least one is wrong, and a presence check cannot tell you which, because it passes as soon as any single signal exists. The usual cause is a template printing a build-time or hardcoded value while the schema prints the CMS field, or the other way round.
+Different dates are not automatically a contradiction: a publication date and a modification date describe different events and should differ. What should agree is the visible and the machine-readable version of the same event. When those disagree, one of them is wrong, and a presence check cannot tell you which, because it passes as soon as any single signal exists. The usual cause is a template printing a build-time or hardcoded value while the schema prints the CMS field, or the other way round.
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It reads the visible byline date, the schema dates on the node that describes this document, and any year in the URL or title. Only a node of a document type counts, so a sitewide `Organization` or `SoftwareApplication` node cannot supply the date. It emits up to four checks:
+The rule runs on every crawled page. It reads the visible byline date, the schema dates on the node that describes this document, and any year in the URL or title. Only a node of a document type counts, so a sitewide `Organization` or `SoftwareApplication` node cannot supply the date. Four check names exist and at most two appear in one result, since the schema-source branch returns immediately and the byline and missing-date branches are mutually exclusive:
 
 - `schema-date-source` reports info when the only schema date sits on a non-document node. Message: `The only schema date on this page is datePublished 2019-04-02 on a SoftwareApplication node, which describes that entity rather than this page — the visible date 12 March 2026 has nothing to be checked against. Add datePublished/dateModified to an Article or WebPage node.`
-- `byline-vs-schema-date` warns when the visible date and the nearest schema date are more than `tolerance_days` apart. Message: `The visible date reads 12 March 2026 but the Article schema says datePublished 2026-01-04 — 67 day(s) apart, so readers and crawlers are being told different things`. It passes otherwise with `Visible date 12 March 2026 agrees with the Article schema dates`.
+- `byline-vs-schema-date` compares every visible date against every schema date and takes the closest pairing, so one visible date that matches prevents a warning. It is skipped for a non-article document node with several visible dates. It warns when that closest pair is more than `tolerance_days` apart. Message: `The visible date reads 12 March 2026 but the Article schema says datePublished 2026-01-04 — 67 day(s) apart, so readers and crawlers are being told different things`. It passes otherwise with `Visible date 12 March 2026 agrees with the Article schema dates`.
 - `visible-date-missing` warns when an article-type node carries a date and the page shows the reader none. Message: `This Article states datePublished 2026-03-12 in its schema but shows the reader no date at all`.
-- `url-title-year` warns when a year in the URL or title is not one of the schema years. Message: `The title says 2024 but the Article schema dates are from 2026`. It passes otherwise with `The title year 2024 matches the Article schema dates`.
+- `url-title-year` takes the first eligible year in the URL path, and looks at the title only when the path has none. It warns when that year is not one of the schema years. Message: `The title says 2024 but the Article schema dates are from 2026`. It passes otherwise with `The title year 2024 matches the Article schema dates`.
 
-The visible-date-missing branch only fires when the page prints no date at all, so a page showing a date this rule declined to parse is not accused. Severity warning, weight 4. The rule is skipped on soft 404 pages, whose dates describe nothing.
+The visible-date-missing branch is suppressed by any recognisable date in the selected content root, using the same date matcher, so it can still fire on a page printing a date in a format the matcher does not support. Severity warning, weight 4. The rule is skipped on soft 404 pages, whose dates describe nothing.
 
 ## How to fix it
 
-Drive every date on the page from one content timestamp. When the byline and the schema disagree, find which one renders from the wrong field, and check that the schema date is attached to the node describing the page rather than to a sitewide entity.
+Render the visible date and the schema date for the same event from the same field. When the byline and the schema disagree, find which one renders from the wrong field, and check that the schema date is attached to the node describing the page rather than to a sitewide entity. Keep the publication and modification dates as separate values: they are meant to differ.
 
 If the schema carries dates the reader never sees, render the date in the article header. Google asks for a visible date on dated content, and a date only crawlers can see is not one.
 

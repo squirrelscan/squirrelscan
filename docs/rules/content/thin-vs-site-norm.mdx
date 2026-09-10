@@ -17,11 +17,13 @@ The rule is site-wide. It groups crawled pages by page type, then computes the m
 - Skipped below the site floor of 10 crawled pages. Message: `Only 6 page(s) crawled; 10 needed to establish a site norm`.
 - Skipped when no page type qualifies. Message: `No page type has 8+ comparable pages with a clear word-count norm`.
 - Pass when no page is an outlier. Message: `All 210 comparable page(s) sit within their page type's word-count norm (median words: article 1840, product 320)`.
-- Warn when outliers exist, and fail when they cover 20% or more of the judged pages. Message: `7 of 210 page(s) are far shorter than the norm for their page type (median words: article 1840)`. Each item reads `240 words vs the article norm of 1840 (13%)`, with up to ten listed.
+- Warn when outliers exist, and fail when they cover 20% or more of the judged pages. Message: `7 of 210 page(s) are far shorter than the norm for their page type (median words: article 1840)`. Each item reads `340 words vs the article norm of 1840 (18%)`, with up to ten listed.
 
-Four guards apply in order. The site needs 10 crawled pages. A page type needs 8. At least 70% of a group must sit within half its median for that median to count as a norm. And a flagged page must be both under half the group median and more than three robust standard deviations below it, so neither a tight nor a wide distribution can fire on its own.
+Four guards apply in order. The site needs 10 crawled pages. A page type needs 8. At least 70% of a group must sit within half its median for that median to count as a norm. And a flagged page must be both under half the group median and more than three deviations below it, where a deviation is the larger of 1.4826 times the median absolute deviation and a tenth of the median, so neither a tight nor a wide distribution can fire on its own.
 
-Pages below 300 words are never considered here, because `content/word-count` owns them. Severity warning, weight 3.
+Only pages that returned a 2xx status and carry a known page type are sampled.
+
+Pages below 300 words are never reported here, because `content/word-count` owns them, but they do still count toward their group's size, median, deviation and agreement, and toward the judged-page total in the message. Severity warning, weight 3.
 
 ## How to fix it
 
