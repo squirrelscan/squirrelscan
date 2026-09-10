@@ -67,8 +67,8 @@ disable = ["*"]
 
 - [core/canonical-header](/rules/core/canonical-header): the same declaration in an HTTP header, and whether the two agree.
 - [core/canonical-form-drift](/rules/core/canonical-form-drift): canonicals that are each valid but disagree in form across the site.
-- [crawl/canonical-chain](/rules/crawl/canonical-chain): a canonical pointing at a page that canonicalises somewhere else again.
-- [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict): indexing directives that contradict each other.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): a canonical pointing at a URL that redirects instead of answering.
+- [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict): rich-result markup on a page that is blocked from indexing.
 
 Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 

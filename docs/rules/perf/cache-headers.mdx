@@ -89,7 +89,7 @@ disable = ["*"]
 - [perf/bad-caching](/rules/perf/bad-caching): the same headers judged across the whole crawl rather than page by page.
 - [perf/ttfb](/rules/perf/ttfb): the origin time caching is meant to avoid paying twice.
 - [perf/compression](/rules/perf/compression): the other response header that decides transfer size.
-- [security/cookie-flags](/rules/security/cookie-flags): the other response headers worth auditing per page.
+- [security/cookie-flags](/rules/security/cookie-flags): Secure, HttpOnly and SameSite on the Set-Cookie headers of the same response.
 
 Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
 
