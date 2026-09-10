@@ -5,9 +5,9 @@ description: "Without VideoObject markup a search engine cannot tell there is a 
 
 ## What VideoObject is
 
-`VideoObject` is the schema.org type describing a video: its name, description, thumbnail and upload date, plus optional duration, content URL and embed URL. Google requires `name`, `description`, `thumbnailUrl` and `uploadDate` for a video to be eligible for its video features.
+`VideoObject` is the schema.org type describing a video: its name, description, thumbnail and upload date, plus optional duration, content URL and embed URL. Google requires `name`, `thumbnailUrl` and `uploadDate`, and recommends `description`, for a video to be eligible for its video features.
 
-Without it, a search engine sees an iframe or a `<video>` element and has no title, no description and no thumbnail to work with. The video may still be found, but it cannot appear as a video result.
+Without it, a search engine has to infer the title, description and thumbnail from the page. Google can still discover a video that way, so the markup is not a precondition for appearing at all; what it does is describe the video accurately and open the enhancements that depend on it.
 
 ## What squirrel checks
 
@@ -25,7 +25,7 @@ Detection covers only YouTube and Vimeo iframes, so a video embedded from anothe
 {"@context":"https://schema.org","@type":"VideoObject","name":"How to structure URLs","description":"…","thumbnailUrl":"https://example.com/thumb.jpg","uploadDate":"2026-03-12T09:00:00+11:00","duration":"PT6M14S","embedUrl":"https://www.youtube.com/embed/…"}
 ```
 
-Emit the node from the same data that renders the player, so the title and description cannot drift from what the page shows. `uploadDate` needs a timezone offset, and `duration` is an ISO 8601 duration.
+Emit the node from the same data that renders the player, so the title and description cannot drift from what the page shows. `uploadDate` should include a timezone offset, since Google otherwise assumes Googlebot's own, and `duration` is an ISO 8601 duration.
 
 Check the result in Google's Rich Results Test. This rule confirms the type exists, not that the required properties are there.
 
@@ -73,7 +73,7 @@ Video findings ship in every audit next to the SEO, performance and agent experi
 ## References
 
 - [Video structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/video)
-- [VideoObject, Schema.org](https://schema.org/VideoObject)
+- [Video best practices, Google Search Central](https://developers.google.com/search/docs/appearance/video)
 
 ## Check your site
 

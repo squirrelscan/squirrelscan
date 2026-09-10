@@ -5,7 +5,7 @@ description: "Keyword and content gap analysis backed by live search data"
 
 <Note>**Cloud rules, opt-in** - these rules require login (`squirrel auth login`), cost **25 credits each per audit**, and are **disabled by default** so a routine audit never spends them by surprise. See [Cloud rules](/cloud/rules).</Note>
 
-Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover.
+Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover. Both rules read a result the cloud service produced before the rules ran, report at info severity with a weight of 1, and flag anything above 500 monthly searches as high volume. They are research output rather than defects, which is why they barely move a score.
 
 ## Rules
 
@@ -37,3 +37,5 @@ country = "US"                       # ISO country for search data
 language = "en"                      # language code for search data
 competitors = ["competitor.com"]     # up to 5 competitor domains
 ```
+
+Every audit reports Gap Analysis findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

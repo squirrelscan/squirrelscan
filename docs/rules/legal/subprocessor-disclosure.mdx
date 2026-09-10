@@ -1,9 +1,29 @@
 ---
-title: "Sub-processor Disclosure"
-description: "Checks for a sub-processor / data-processing (DPA) disclosure page or link"
+title: "Sub-processor disclosure: the page a security review asks for"
+description: "A processor has to name the sub-processors it engages. squirrel looks for a subprocessors page or a DPA link anywhere on the site."
 ---
 
-Checks for a sub-processor / data-processing (DPA) disclosure page or link
+## What a sub-processor disclosure is
+
+When a business handles personal data on behalf of its customers, the vendors it passes that data to are sub-processors. Article 28 of the GDPR requires a processor to disclose them and to have a data processing agreement in place with the customer.
+
+In practice it is a page listing each third party that touches customer data, what it does and where it is, plus a DPA a customer can sign. For B2B software it is a standard item on a security review, and not having one delays deals.
+
+## What squirrel checks
+
+The rule is site-wide and looks in two places, in order. First a crawled page whose URL path matches one of the sub-processor path patterns. Then, if none matched, a link on any crawled page whose text or href reads as a sub-processor or DPA reference. The first hit wins in crawl order. It emits a single check named `subprocessor-disclosure`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when a disclosure is found. Message: `Sub-processor / data-processing disclosure found`, with the URL as the value.
+- Warn when none is found. Message: `No sub-processor / data-processing (DPA) disclosure found`, with `Publish a /subprocessors page + DPA (GDPR Art. 28)` as the value.
+
+Severity info, weight 3. The rule only runs when the audit classified the site as SaaS, a web app or corporate, and, when a business category is known, as software and technology, fintech, banking or IT services. A classification below medium confidence, or an audit with no site metadata, runs it anyway.
+
+## How to fix it
+
+Publish a `/subprocessors` page listing each third party that processes customer personal data, what it is used for and where it operates. Link a DPA from your legal or trust pages, and keep the list current when you change vendors.
+
+A stale list is worse than none in a security review, because it is checkable and the reviewer will check it.
 
 | | |
 |---|---|
@@ -12,14 +32,6 @@ Checks for a sub-processor / data-processing (DPA) disclosure page or link
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-<Note>This rule only runs for SaaS, web-app, and corporate sites (and software, fintech, banking, and IT-services businesses): the site types where the GDPR Art. 28 sub-processor duty applies. It is skipped for everyone else and when no site profile is available.</Note>
-
-## Solution
-
-Under GDPR Art. 28, processors must disclose the sub-processors they engage and offer a Data Processing Agreement (DPA). Publish a `/subprocessors` page listing each third party that handles customer personal data (purpose, location), keep it current, and link a DPA from your legal/trust pages. B2B SaaS and fintech buyers expect this during security review.
-
-The rule passes when it finds a dedicated sub-processor / data-processing / DPA page (by URL path) or a link to one (by href or anchor text) on any crawled page.
 
 ## Enable / disable
 
@@ -44,3 +56,29 @@ disable = ["legal/*"]
 enable = ["legal/subprocessor-disclosure"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [legal/privacy-policy](/rules/legal/privacy-policy): the policy that names the same vendors.
+- [legal/terms-of-service](/rules/legal/terms-of-service): the contract the DPA attaches to.
+- [security/third-party-cookies](/rules/security/third-party-cookies): the vendors visible from the page itself.
+- [eeat/trust-signals](/rules/eeat/trust-signals): the other things a buyer checks during review.
+
+Legal Compliance findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Privacy on the web, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Legal Compliance section of the report. The site is reported with the disclosure URL it found, or that it found none. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Legal Compliance section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -9,6 +9,8 @@ The **Blocking** category covers content, links, and trackers that ad blockers a
 
 <Note>Rule IDs and config filters keep the `adblock/` prefix (e.g. `adblock/*`) - only the report category was renamed to Blocking.</Note>
 
+The three rules answer one question from three angles: what does a visitor running a blocker not get? A resource on an EasyList domain is never requested, a tracker on EasyPrivacy is blocked in several browsers by default, and an element whose class matches a cosmetic filter is hidden whatever is in it. All three share a single blocklist check per audit.
+
 ## Ad blocking
 
 <CardGroup cols={2}>
@@ -34,3 +36,5 @@ The **Blocking** category covers content, links, and trackers that ad blockers a
 [rules]
 disable = ["adblock/*"]
 ```
+
+Every audit reports Blocking findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

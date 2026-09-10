@@ -1,25 +1,42 @@
 ---
-title: "Privacy Policy"
-description: "Checks for privacy policy link presence"
+title: "Privacy policy link: finding one anywhere on the site"
+description: "A missing privacy policy is a legal exposure where the GDPR or CCPA applies. squirrel accepts a policy page or a link to one from any crawled page."
 ---
 
-Checks for privacy policy link presence
+## What this rule looks for
+
+A privacy policy explains what personal data a site collects, why, who receives it and what a visitor can do about it. The GDPR and the CCPA both require one for the audiences they cover, and most analytics and advertising vendors require one in their own terms.
+
+This rule asks the narrow question of whether the site has one at all, by page or by link. `eeat/privacy-policy` asks the related question of how widely it is linked.
+
+## What squirrel checks
+
+The rule is site-wide. It accepts a privacy policy in two ways: a crawled page that is one, found by a known multilingual slug or by a title or `h1` reading as a privacy policy, or a link to one from any crawled page. The link test reads both the href and the anchor text, which is what makes it wider than the `eeat` rule's href-only test. It emits a single check named `privacy-policy`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when either is found. Message: `Privacy policy link found`, with the URL as the value.
+- Fail when none is found and the site metadata places the site under a stricter privacy regime. Message: `No privacy policy link found across site — required under GDPR`, naming the regime, with `Add a privacy policy — legally required for your audience (GDPR)` as the value.
+- Warn when none is found otherwise. Message: `No privacy policy link found across site`, with `Add a link to your privacy policy` as the value.
+
+Severity for the rule is warning, weight 5. The escalation to a failure depends on site metadata; an offline run or one with no metadata warns instead.
+
+## How to fix it
+
+```html
+<a href="/privacy-policy">Privacy policy</a>
+```
+
+Publish the policy and link it from the footer component so every page carries it. Cover what you collect, why, who you share it with, how long you keep it and how someone exercises their rights.
+
+Keep it in step with the vendors you actually use. A policy naming an analytics tool you removed is inaccurate in both directions.
 
 | | |
 |---|---|
 | **Rule ID** | `legal/privacy-policy` |
 | **Category** | [Legal Compliance](/rules/legal) |
-| **Scope** | Per-page |
+| **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-A privacy policy is legally required in many jurisdictions (GDPR, CCPA). Link to your privacy policy from every page, typically in the footer. The policy should explain what data you collect, how it's used, and user rights. Consider using schema.org markup to identify the policy page.
-
-## Detection
-
-This rule credits a privacy policy when the crawl contains a page whose URL matches a known privacy slug (`/privacy`, `/privacy-policy`, `/legal/privacy`, and localized variants) or whose title or h1 reads "Privacy Policy" / "Privacy Notice", or when any page links to one. It shares this acceptance with the E-E-A-T privacy policy rule so both stay consistent.
 
 ## Enable / disable
 
@@ -44,3 +61,30 @@ disable = ["legal/*"]
 enable = ["legal/privacy-policy"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/privacy-policy](/rules/eeat/privacy-policy): the same page, measured for link coverage.
+- [legal/cookie-consent](/rules/legal/cookie-consent): the banner that should link to it.
+- [legal/terms-of-service](/rules/legal/terms-of-service): the other legal page in the footer.
+- [security/third-party-cookies](/rules/security/third-party-cookies): the vendors the policy has to name.
+
+Legal Compliance findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Privacy on the web, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy)
+- [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Legal Compliance section of the report. The site is reported with the privacy policy URL it found, or that it found none. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Legal Compliance section looks like on a real site.
+  </Card>
+</CardGroup>

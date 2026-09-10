@@ -7,7 +7,7 @@ description: "When og:url and the canonical disagree, share counts split across 
 
 `og:url` is the canonical address of the page as far as social platforms are concerned. It is what they use to deduplicate shares, so every share of the page accumulates against one identifier however the sharer arrived.
 
-The `<link rel="canonical">` tag does the same job for search engines. When the two disagree, usually over `www`, the scheme or a trailing slash, the page has two canonical identities and the share count splits between them.
+The `<link rel="canonical">` tag does the same job for search engines. When the two disagree, usually over `www`, the scheme or a trailing slash, the page is presenting two canonical identities. Whether that has actually split a share count depends on which URLs people shared, but it is the condition under which counts fragment.
 
 ## What squirrel checks
 
@@ -16,9 +16,9 @@ The rule runs on every crawled page and compares `meta[property="og:url"]` again
 - Info when there is no `og:url`. Message: `No og:url tag found`.
 - Info when there is no canonical to compare against. Message: `No canonical to compare og:url against`.
 - Pass when the normalised values are equal. Message: `og:url matches canonical URL`.
-- Warn otherwise. Message: `og:url does not match canonical URL`, with the og value as the value and the canonical as the expected value. Severity warning, weight 3.
+- Warn otherwise. Message: `og:url does not match canonical URL`, with `og: https://example.com/page` as the value and the raw canonical href as the expected value. Severity warning, weight 3.
 
-Normalisation only removes a trailing slash. Everything else, including a query string, a fragment and a case difference in the path, is compared as-is.
+Normalisation is whatever the URL parser does plus a trailing-slash strip. The parser resolves a relative value, lowercases the hostname, drops a default port and resolves dot segments; the extra step removes one trailing slash. A query string, a fragment and a case difference in the path all survive and are compared as-is.
 
 ## How to fix it
 

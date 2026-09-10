@@ -7,7 +7,7 @@ description: "A video with no poster renders as a blank box until it buffers. sq
 
 `poster` on a `<video>` element names an image the browser shows in the video's box until playback starts. Without it, the browser shows either nothing or the first frame, and the first frame of most videos is black.
 
-It is a perceived-performance measure as much as a design one. The poster is a normal image, so it loads at image speed and gives the reader something to look at while the video is still buffering. The equivalent for an embedded video is `thumbnailUrl` in the `VideoObject` schema, which is also what a search result uses.
+It is a perceived-performance measure as much as a design one. The poster is a normal image, so it loads at image speed and gives the reader something to look at while the video is still buffering. An embedded player has no `poster`: its preview frame is configured through the provider. `thumbnailUrl` in the `VideoObject` schema is a separate thing, the image a search result uses, not the one the embed renders.
 
 ## What squirrel checks
 
@@ -29,7 +29,7 @@ Only the presence of the attribute is checked. The image is not fetched, so a `p
 
 Use a frame from the video itself at 1280 by 720 or larger, and give the element `width` and `height` so the box is reserved before the poster loads.
 
-For an embedded video, the equivalent is `thumbnailUrl` on the `VideoObject` node.
+For an embedded video, set the preview through the player or provider, and supply `thumbnailUrl` on the `VideoObject` node separately for search.
 
 | | |
 |---|---|
@@ -75,7 +75,7 @@ Video findings ship in every audit next to the SEO, performance and agent experi
 ## References
 
 - [The video element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/video)
-- [Video structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/video)
+- [Video best practices, Google Search Central](https://developers.google.com/search/docs/appearance/video)
 
 ## Check your site
 

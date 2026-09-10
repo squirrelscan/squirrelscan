@@ -15,7 +15,7 @@ The rule runs on every crawled page over every `a[href]`, matching each href aga
 
 - `social-profiles` passes when any platform matched. Message: `3 social platform(s) linked`, listing the platform names.
 - `social-profiles` reports info when none did. Message: `No social media profile links found`, with `Consider adding to footer` as the value.
-- `social-profiles-missing` warns when the audit's site metadata knows about official accounts the page does not link. Message: `2 known social account(s) not linked on this page`, with `Link your official social profiles (Organization sameAs)` as the value and each missing account listed by URL and platform.
+- `social-profiles-missing` warns when the audit's site metadata knows about official accounts that this page's own links do not include. The comparison is against the page's anchor hrefs, not against the whole site and not against the page's `sameAs` list. Message: `2 known social account(s) not linked on this page`, with `Link your official social profiles (Organization sameAs)` as the value and each missing account listed by URL and platform.
 
 The second check needs site metadata that identified official accounts. Without it, from an offline run or one where nothing was detected, it never fires. Severity for the rule is info, weight 2.
 
@@ -27,7 +27,7 @@ The rule only runs when the audit classified the site as ecommerce, a marketplac
 {"@context":"https://schema.org","@type":"Organization","name":"Acme","url":"https://example.com","sameAs":["https://www.linkedin.com/company/acme","https://x.com/acme"]}
 ```
 
-Link the accounts from the footer and list them in `sameAs` on the `Organization` node. Keep the two lists in agreement: an account in `sameAs` that is not linked anywhere on the site is the case the second check reports.
+Link the accounts from the footer, which puts them on every page, and list them in `sameAs` on the `Organization` node. The second check compares the accounts the audit detected against the links on each page, so an account nobody links from this page is what it reports.
 
 | | |
 |---|---|

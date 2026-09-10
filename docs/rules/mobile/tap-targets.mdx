@@ -11,12 +11,12 @@ The common guideline is around 44 by 44 CSS pixels with space between adjacent t
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It counts `button` and `[role="button"]` elements, `a[href]` links, and `input`, `select` and `textarea` controls. It then looks at the inline `style` on the buttons and links for a `font-size`, `height` or `width` in pixels below 30. It emits up to two checks:
+The rule runs on every crawled page. It counts `button` and `[role="button"]` elements, `a[href]` links, and `input`, `select` and `textarea` controls. It then looks at the inline `style` on the buttons and links for a `font-size`, `height` or `width` declared as an integer number of pixels below 30. The patterns are case-sensitive and unanchored, so `min-width: 20px` matches the width test and a fractional `width: 20.5px` matches nothing. It emits up to two checks:
 
 - `tap-targets` reports info when the page has any interactive element. Message: `84 interactive element(s) found`, with `Ensure tap targets are at least 44x44px` as the value.
 - `small-tap-targets` warns when any of those carries a small inline dimension. Message: `3 element(s) may have small tap targets`, with `Check inline styles for small dimensions` as the value. Severity warning, weight 5.
 
-Nothing is measured. Static markup carries no computed size, so the rule reports the count as context and uses inline styles as a weak proxy. A page whose sizes come from an external stylesheet produces the informational count and nothing else.
+The counts are sums of selector matches with no deduplication, so an `<a href>` carrying `role="button"` is counted twice, in the small-target count as well when it qualifies. Nothing is measured either: static markup carries no computed size, so the rule reports the count as context and uses inline styles as a weak proxy. A page whose sizes come from an external stylesheet produces the informational count and nothing else.
 
 ## How to fix it
 

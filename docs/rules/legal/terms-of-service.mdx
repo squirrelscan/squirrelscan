@@ -1,9 +1,34 @@
 ---
-title: "Terms of Service"
-description: "Checks for terms of service link presence"
+title: "Terms of service link: finding it in the page's links"
+description: "Terms of service belong in the footer of every page. squirrel checks each page's links by both href and anchor text, in five languages."
 ---
 
-Checks for terms of service link presence
+## What this rule looks for
+
+Terms of service define what a visitor may do with a site or a service and what the operator owes them. They matter most where there is an account, a transaction or user-generated content, and they are optional on a site that publishes and sells nothing.
+
+This rule checks per page rather than per site, because the convention is a footer link that every page carries. A terms page that exists but is linked from nowhere is not doing its job.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `a[href]`, testing both the href and the link text. It emits a single check named `terms-of-service`:
+
+- Pass when a link matches. Message: `Terms of service link found`, with the href as the value.
+- Info when none does. Message: `No terms of service link found`, with `Consider adding terms of service for legal protection` as the value.
+
+The href is matched against nine patterns covering `terms-of-service`, `terms-of-use`, `terms-and-conditions`, `tos`, `/terms`, `/legal/terms`, and the German, French and Spanish equivalents `nutzungsbedingungen`, `agb`, `conditions générales` and `condiciones`. The text matches on `terms of service`, `terms of use`, `terms and conditions`, `terms & conditions`, or any text containing `terms` that is under 30 characters.
+
+That last text rule is loose: a link labelled "Search terms" would satisfy it. Severity info, weight 3. The rule is skipped on soft 404 pages, which have no footer.
+
+## How to fix it
+
+```html
+<a href="/terms">Terms of service</a>
+```
+
+Put the link in the footer component alongside the privacy policy. Label it plainly so both the href and the text are recognisable.
+
+Cover what a user may and may not do, who owns what, what you disclaim and how disputes are resolved. Note the last revision date so a reader can tell whether they have seen this version.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks for terms of service link presence
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Terms of Service (ToS) protect your business by defining user rights and limitations. Link to ToS from your footer on every page. Essential for: e-commerce sites, SaaS products, user-generated content platforms, and membership sites. Include sections on: usage rules, liability limits, dispute resolution, and termination.
 
 ## Enable / disable
 
@@ -40,3 +61,29 @@ disable = ["legal/*"]
 enable = ["legal/terms-of-service"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/terms-of-service](/rules/eeat/terms-of-service): the same page, found by URL rather than by link.
+- [legal/privacy-policy](/rules/legal/privacy-policy): the other legal page, which is more often required.
+- [legal/subprocessor-disclosure](/rules/legal/subprocessor-disclosure): what a B2B buyer asks for next.
+- [eeat/about-page](/rules/eeat/about-page): the page a reader reads before any of these.
+
+Legal Compliance findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Privacy on the web, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Legal Compliance section of the report. Each page is reported with the terms link it carries, or that it carries none. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Legal Compliance section looks like on a real site.
+  </Card>
+</CardGroup>

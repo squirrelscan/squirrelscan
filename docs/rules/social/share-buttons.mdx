@@ -7,7 +7,7 @@ description: "Share buttons make it one click instead of three to pass a page on
 
 A share button is a link or control that opens a platform's compose window prefilled with the page URL. It saves a reader copying the address and switching apps, which is most of the friction in sharing something.
 
-They earn their place on content people share: articles, guides, research. On a pricing page or a contact form they are decoration. Three or four platforms is usually the whole useful set, and every additional button is a third-party script.
+They earn their place on content people share: articles, guides, research. On a pricing page or a contact form they are decoration. Three or four platforms is usually the whole useful set. A share button can be a plain link, but the widget versions bring a third-party script each.
 
 ## What squirrel checks
 
@@ -22,10 +22,10 @@ The HTML pattern test is loose: an article about sharing on Facebook can match i
 ## How to fix it
 
 ```html
-<a href="https://x.com/intent/tweet?url=https%3A%2F%2Fexample.com%2Fpost">Share on X</a>
+<a href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fexample.com%2Fpost">Share on X</a>
 ```
 
-Plain links to each platform's share endpoint need no third-party script and work without JavaScript. Put them where a reader finishes reading rather than before they start.
+Plain links to each platform's share endpoint need no third-party script and work without JavaScript. Note that this rule recognises `twitter.com/intent/tweet` and not the `x.com` form, so a site using the newer host is not detected. Put them where a reader finishes reading rather than before they start.
 
 The `navigator.share` API is a better fit on mobile, since it offers the platforms the reader actually uses.
 

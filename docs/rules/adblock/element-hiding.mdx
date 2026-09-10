@@ -1,11 +1,35 @@
 ---
-title: "Adblock Element Hiding"
-description: "Checks for elements that would be hidden by common adblockers"
+title: "Adblock cosmetic filters: classes that get hidden"
+description: "A block named .ad-container is hidden for anyone running an ad blocker, whatever is in it. squirrel matches your selectors against EasyList."
 ---
 
 <Note>**Cloud rule** - requires login (`squirrel auth login`). All three [adblock rules](/rules/adblock) share a single blocklist check per audit, **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
 
-Checks for elements that would be hidden by common adblockers (matched server-side against the full EasyList cosmetic rules)
+## What a cosmetic filter is
+
+EasyList is the filter list most ad blockers use. Alongside network rules that stop requests, it carries cosmetic rules: CSS selectors the blocker hides on every page, so an element with a class like `ad-wrapper` or `sponsored-box` disappears whether or not it holds an advert.
+
+That is the trap. A blocker cannot read your intent, only your class names, so a legitimate block called `.banner` or a `#sponsors` section thanking supporters is hidden from a large share of visitors. The fix is naming, not markup.
+
+## What squirrel checks
+
+The rule is site-wide and reads a result the cloud blocklist service produced before the rules ran, matching the site's selectors against the full EasyList cosmetic rules server-side. It emits a single check named `adblock-elements`:
+
+- Skipped when no result is available. Message: `Adblock element-hiding check skipped`, with a readable skip reason.
+- Pass when nothing matched. Message: `No elements match common adblock filters`.
+- Warn otherwise. Message: `4 selector(s) on the site match adblock element-hiding rules`, listing up to `maxMatchesToReport` of them. Severity warning, weight 3.
+
+The three blocking rules share one blocklist check per audit, so enabling them all costs the same as enabling one.
+
+## How to fix it
+
+```html
+<section class="partner-list">…</section>
+```
+
+Rename the classes and ids that match. `partner-list` and `promo-panel` carry the same meaning to you and do not match a filter written to catch advertising.
+
+Where the element really is an advert, the finding is accurate and the choice is yours. What is worth fixing is the case where a blocker hides content you meant everyone to see.
 
 | | |
 |---|---|
@@ -15,24 +39,17 @@ Checks for elements that would be hidden by common adblockers (matched server-si
 | **Severity** | warning |
 | **Weight** | 3/10 |
 
-## Solution
-
-Elements matching adblock filter rules may be hidden for users with adblockers. This can affect ad revenue or hide legitimate content if element names/classes match ad patterns. Consider renaming CSS classes that unintentionally match ad-blocking patterns (like .ad-*, .banner, .sponsor).
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `maxMatchesToReport` | unknown | `undefined` | Maximum matching elements to report in detail |
-| `lists` | unknown | `undefined` | Filter lists to check against |
+| `maxMatchesToReport` | number | `10` | Maximum matching selectors to report in detail |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."adblock/element-hiding"]
-maxMatchesToReport = 20
+[rule_options."adblock/element-hiding"]
+maxMatchesToReport = 25
 ```
 
 ## Enable / disable
@@ -58,3 +75,29 @@ disable = ["adblock/*"]
 enable = ["adblock/element-hiding"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [adblock/blocked-links](/rules/adblock/blocked-links): requests the same lists block outright.
+- [adblock/privacy-blocked](/rules/adblock/privacy-blocked): the tracker half, matched against EasyPrivacy.
+- [content/hidden-text](/rules/content/hidden-text): content hidden by your own CSS rather than by a blocker.
+- [analytics/gtm-present](/rules/analytics/gtm-present): the measurement that may be blocked with it.
+
+Blocking findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Blocking section of the report. Each matching selector is listed, up to the configured maximum. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Blocking section looks like on a real site.
+  </Card>
+</CardGroup>

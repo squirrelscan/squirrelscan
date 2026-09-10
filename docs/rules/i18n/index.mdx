@@ -3,7 +3,7 @@ title: "Internationalization"
 description: "Language declarations and multi-region support"
 ---
 
-Language declarations and multi-region support
+Internationalization rules cover two declarations. The `lang` attribute on the `html` element says what language this page is in, which a screen reader uses to pick a voice. The hreflang tags say which other language or region versions exist, which is what stops them competing with each other in search. Both are cheap to get right and quietly wrong on a lot of sites.
 
 ## Rules
 
@@ -22,3 +22,5 @@ Language declarations and multi-region support
 [rules]
 disable = ["i18n/*"]
 ```
+
+Every audit reports Internationalization findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

@@ -7,13 +7,13 @@ description: "Body text below about 16px is hard to read on a phone without zoom
 
 Text on a phone is read at arm's length on a screen a few inches wide. Around 16 CSS pixels is the common floor for body copy, which is also most browsers' default. Below about 12 pixels, text is small enough that a reader has to zoom to follow it.
 
-Relative units are what make this hold up. Sizing in `rem` means the text scales with the user's own browser setting, which is the setting people with low vision change first. A fixed pixel size ignores it.
+Relative units are what make this hold up, if you let them. `rem` is relative to the root element's font size, so text follows the reader's browser setting only when that root size is left alone or set relatively. A fixed pixel size on `html`, or on the text itself, ignores the setting people with low vision change first.
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every element with a `style` attribute. It reads a `font-size` declaration in `px` or `pt`, converting points to pixels by multiplying by 1.33. It emits a single check named `font-size`:
+The rule runs on every crawled page over every element with a `style` attribute. It matches `font-size:` followed by an integer and `px` or `pt`, converting points to pixels by multiplying by 1.33. The integer requirement means `font-size: 11.5px` is not read at all. It emits a single check named `font-size`:
 
-- Warn when any inline font size resolves below 12 pixels. Message: `4 element(s) with font-size under 12px`, with `Ensure text is readable without zooming` as the value. Severity warning, weight 4.
+- Warn when any matched inline font size resolves below 12 pixels. Message: `4 element(s) with font-size under 12px`, with `Ensure text is readable without zooming` as the value. Severity warning, weight 4.
 - Info otherwise. Message: `No extremely small inline font sizes detected`, with `Verify body text is at least 16px` as the value.
 
 Only inline styles are read. Font sizes set in an external stylesheet, which is where most of them live, are not visible to this rule, and neither are relative units such as `rem`, `em` or `%`. The pass wording says so: it reports that nothing small was found inline, not that the page is readable.
@@ -25,7 +25,7 @@ body { font-size: 1rem; line-height: 1.5; }
 .small-print { font-size: 0.875rem; }
 ```
 
-Set body copy in `rem` so it follows the reader's browser setting, and keep the smallest text on the page above about 0.75rem. Give it a line height of at least 1.5.
+Set body copy in `rem` and leave the root font size unset, so the text follows the reader's browser setting. Keep the smallest text on the page above about 0.75rem. Give it a line height of at least 1.5.
 
 Check the real sizes in a browser rather than relying on this rule alone. It only sees what is written in a `style` attribute.
 
@@ -73,6 +73,7 @@ Mobile findings ship in every audit next to the SEO, performance and agent exper
 ## References
 
 - [Understanding resize text, WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
+- [CSS length values, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/length)
 - [Page experience, Google Search Central](https://developers.google.com/search/docs/appearance/page-experience)
 
 ## Check your site

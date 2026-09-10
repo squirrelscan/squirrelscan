@@ -1,11 +1,29 @@
 ---
-title: "Blocked Tracking Links"
-description: "Checks for links and resources pointing to blocked tracking domains"
+title: "Requests ad blockers stop: links and resources on EasyList"
+description: "A resource on an EasyList domain never loads for a visitor running a blocker. squirrel reports each one with what it is."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`). All three [adblock rules](/rules/adblock) share a single blocklist check per audit, **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+## What a blocked request is
 
-Checks for links and resources pointing to blocked tracking domains (matched server-side against the full EasyList filter rules)
+EasyList's network rules stop requests to advertising and tracking hosts. A visitor running uBlock Origin, AdBlock or a browser with built-in blocking never fetches them, so whatever the resource does simply does not happen for that visitor.
+
+The consequence depends on what it is. An advertising pixel not firing means missing revenue data. A conversion tag not firing means the conversion is not recorded. And when something essential to the page has ended up on a blocked host, the page itself breaks for a share of visitors that is large in some audiences and small in others.
+
+## What squirrel checks
+
+The rule is site-wide and reads a result the cloud blocklist service produced before the rules ran, matched server-side against the full EasyList rules. It emits one check per finding, all named `blocked-links`:
+
+- Skipped when no result is available. Message: `Ad-blocker link check skipped`, with a readable skip reason.
+- Pass when nothing matched. Message: `No links or resources match EasyList ad-blocking rules`.
+- Warn once per match, up to `maxMatchesToReport`. Message: `Blocked by ad blockers: ads-twitter.com — X/Twitter ad pixel — https://static.ads-twitter.com/uwt.js`, naming the vendor where the domain is recognised and falling back to the bare hostname where it is not, with a note of the page it appeared on. Severity warning, weight 2.
+
+The three blocking rules share one blocklist check per audit.
+
+## How to fix it
+
+Move anything the page needs off a blocked host. For measurement, a first-party or server-side collector survives blocking; for advertising, the finding is a description of your audience rather than a defect.
+
+Check what each match actually is before acting. The report names the vendor for the domains it recognises, which is usually enough to tell an ad pixel from something the page depends on.
 
 | | |
 |---|---|
@@ -15,23 +33,17 @@ Checks for links and resources pointing to blocked tracking domains (matched ser
 | **Severity** | warning |
 | **Weight** | 2/10 |
 
-## Solution
-
-Links to tracking domains (analytics, pixels, etc.) will be blocked by users with adblockers like uBlock Origin or AdBlock. If these are essential resources, they won't load. If they're analytics, you may get incomplete data from users with adblockers. Consider using first-party analytics or privacy-respecting alternatives.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `maxMatchesToReport` | unknown | `undefined` | Maximum blocked links to report in detail |
+| `maxMatchesToReport` | number | `10` | Maximum blocked links to report in detail |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."adblock/blocked-links"]
-maxMatchesToReport = 20
+[rule_options."adblock/blocked-links"]
+maxMatchesToReport = 25
 ```
 
 ## Enable / disable
@@ -57,3 +69,29 @@ disable = ["adblock/*"]
 enable = ["adblock/blocked-links"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [adblock/privacy-blocked](/rules/adblock/privacy-blocked): the tracker half, matched against EasyPrivacy.
+- [adblock/element-hiding](/rules/adblock/element-hiding): elements hidden by cosmetic filters rather than blocked.
+- [security/third-party-cookies](/rules/security/third-party-cookies): the same hosts seen from the privacy side.
+- [analytics/gtm-present](/rules/analytics/gtm-present): the measurement that may be blocked.
+
+Blocking findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Blocking section of the report. Each blocked resource is listed with what it is and where it appeared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Blocking section looks like on a real site.
+  </Card>
+</CardGroup>

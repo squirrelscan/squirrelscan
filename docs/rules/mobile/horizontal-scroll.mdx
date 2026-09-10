@@ -13,7 +13,7 @@ Three things cause most of it. A fixed pixel width wider than a phone screen, wh
 
 The rule runs on every crawled page and collects three signals from the markup:
 
-- Elements with an inline `width` in pixels above 500.
+- Elements whose inline style declares a `width` as an integer number of pixels above 500. A fractional value such as `width: 500.5px` is not matched.
 - Every `table` on the page.
 - Every `iframe` carrying a `width` attribute.
 

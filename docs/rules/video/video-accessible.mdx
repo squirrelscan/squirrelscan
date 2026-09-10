@@ -5,7 +5,7 @@ description: "A video with no captions excludes anyone who cannot hear it. squir
 
 ## What a caption track is
 
-A `<track>` element inside a `<video>` points at a timed text file, usually WebVTT, that the browser renders as captions. `kind="captions"` is for a transcript that includes sound effects and speaker identification; `kind="subtitles"` is for a translation.
+A `<track>` element inside a `<video>` points at a timed text file, usually WebVTT, that the browser renders as captions. `kind="captions"` additionally carries relevant non-speech audio, such as sound effects and speaker identification, for a viewer who cannot hear the track. `kind="subtitles"` carries dialogue, either translated or in the same language as the audio.
 
 WCAG success criterion 1.2.2 requires captions for prerecorded audio in synchronised media at Level A, the lowest conformance level. They also help anyone watching without sound, which is most people on a phone in public, and the text is indexable in a way audio is not.
 

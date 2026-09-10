@@ -15,9 +15,9 @@ The rule runs on every crawled page and reads `meta[property="og:image"]` along 
 
 - `og-image-size` reports info when there is no `og:image`. Message: `No og:image tag found`. No further checks run.
 - `og-image-exists` passes when the tag is present. Message: `og:image is set`, with the first 60 characters of the URL.
-- `og-image-size` passes when both declared dimensions are at least 1200 and 630. Message: `og:image dimensions meet recommendations`, with `1200x630` as the value.
-- `og-image-size` warns when they are below that. Message: `og:image may be too small (600x315)`, with the recommendation as the value.
-- `og-image-size` reports info when the dimensions are not declared. Message: `og:image dimensions not specified`, with `Add og:image:width and og:image:height` as the value.
+- `og-image-size` passes when both declared dimensions parse as positive numbers and are at least 1200 and 630. Message: `og:image dimensions meet recommendations`, with `1200x630` as the value.
+- `og-image-size` warns when both parse as positive and at least one is below its recommendation. Message: `og:image may be too small (600x315)`, with the recommendation as the value.
+- `og-image-size` reports info in every other case. Message: `og:image dimensions not specified`, with `Add og:image:width and og:image:height` as the value. That covers an absent tag and also a present one whose value is zero, negative or unparseable.
 
 The image itself is never fetched, so the check reads the declared numbers rather than the real ones. A page declaring 1200 by 630 for a 400-pixel file passes. Severity warning, weight 4.
 

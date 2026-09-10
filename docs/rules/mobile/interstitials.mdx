@@ -16,7 +16,7 @@ The rule runs on every crawled page and looks for two things. Any `div` whose `c
 - Info when either was found. Message: `Popup/modal elements detected`, with `Ensure popups don't block content on mobile page load` as the value.
 - Pass when neither was. Message: `No intrusive interstitial patterns detected`.
 
-Nothing about timing, size or coverage is measured, and no distinction is made between an exempt consent banner and a full-screen email capture. A site using a modal for anything at all reports the informational finding. Severity for the rule is warning, weight 5.
+Nothing about timing, size or coverage is measured, and no distinction is made between an exempt consent banner and a full-screen email capture. Only a `div` whose class or id matches one of those four words, or one of the seven library strings in the HTML, triggers it. A native `<dialog>` with no matching class is not detected. Severity for the rule is warning, weight 5.
 
 ## How to fix it
 

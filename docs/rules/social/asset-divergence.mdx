@@ -19,7 +19,7 @@ The rule is site-wide and judges three axes against the site's own most common v
 - Pass when nothing diverges. Message: `All 240 page(s) share the site's favicon, theme-color and default OG image (…)`.
 - Warn when pages diverge, and fail at or above 20% of judged pages. Message: `12 of 240 page(s) diverge from the site's own favicon (…)`. Each item reads `12 of 240 page(s) load favicon "/old-favicon.ico" but the site norm is "/favicon.svg"`, with up to ten groups and ten example URLs each.
 
-Three guards apply: 10 crawled pages, 10 pages declaring the asset before an axis is judged, and 70% agreement on its most common value. A page that declares nothing never votes and is never a deviant, since a missing favicon belongs to `core/favicon` and a missing share image to the Open Graph rules.
+Three guards apply: 10 crawled pages, 10 pages declaring the asset before an axis is judged, and 70% agreement on its most common value. Only pages that returned a 2xx status vote or are judged; a non-2xx page still counts toward the crawl-size floor. A page that declares nothing never votes and is never a deviant, since a missing favicon belongs to `core/favicon` and a missing share image to the Open Graph rules.
 
 The OG axis has two exemptions. Pages classified as article, product, recipe, event, profile or media never vote on it and are never judged by it, because a per-page share image is correct. And an `og:image` carried by exactly one page is dropped, since a fallback is shared by definition while a stale template brings a pocket of pages with it. Values are truncated at 200 characters when stored, so two long data URIs sharing a prefix compare equal and the divergence is missed rather than invented. Severity warning, weight 3.
 
