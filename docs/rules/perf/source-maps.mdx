@@ -5,7 +5,7 @@ description: "A sourceMappingURL comment or SourceMap header pointing at a map a
 
 ## What a source map exposes
 
-A source map lets a debugger show original source instead of the minified bundle. It does that by carrying the original source: variable names, comments, file paths, and often whole files. A map served publicly beside the bundle hands all of that to anyone who asks for it.
+A source map lets a debugger show original source instead of the minified bundle. It always carries the original file paths and identifier names, and it usually embeds the source files themselves in `sourcesContent`. A map served publicly beside the bundle hands all of that to anyone who asks for it.
 
 There are three positions to take. Ship no maps, which makes production errors hard to read. Generate them and restrict access, so only your team can fetch them. Or use hidden maps, which are uploaded to an error tracker and never referenced from the bundle at all. The third is usually the right answer.
 
@@ -17,9 +17,9 @@ The rule runs on every crawled page and emits one or two checks:
 - `source-maps-inline`: warns with the message `N inline source map(s) found`, listing up to three sources.
 - `source-maps`: passes with the message `No exposed source maps detected` when neither list has anything in it.
 
-Three places are read. Inline `<script>` content is searched for `//# sourceMappingURL=` or the `//@` form. Inline `<style>` content is searched for the `/*# sourceMappingURL= */` form. The response headers `SourceMap` and `X-SourceMap` are read on the page itself. A reference to a `data:` URI is counted as inline; anything else is resolved against the page URL and counted as exposed. External URLs are deduplicated.
+Four places are read. Inline `<script>` content is searched for `//# sourceMappingURL=` or the `//@` form. Inline `<style>` content is searched for the `/*# ... */` or `/*@ ... */` form. The response headers `SourceMap` and `X-SourceMap` are read on the page itself. For an external script the crawl fetched, its own `SourceMap` header and its body are searched too, and a hit is labelled with the script URL. A reference to a `data:` URI inside a script or style body is counted as inline; anything else, including a header value, is resolved against the page URL and counted as exposed. External URLs are deduplicated.
 
-External scripts and stylesheets are not read, because the crawl does not fetch their bodies for this rule. That is where most production source maps are referenced from, so the finding is a floor rather than a total. The rule does not fetch the map either, so a URL that returns 404 is still reported as potential.
+External stylesheets are not read, because the crawl does not fetch their bodies, so a map referenced only from a linked CSS file is missed. The rule does not fetch the map itself either, so a URL that returns 404 is still reported as potential.
 
 ## How to fix it
 
@@ -31,7 +31,7 @@ export default {
 };
 ```
 
-`hidden` writes the map file without adding the `sourceMappingURL` comment, so the map exists for upload and nothing on the public site points at it. Deleting the map files from the deploy output is the other option, at the cost of readable production stack traces.
+`hidden` writes the map file without adding the `sourceMappingURL` comment, so nothing on the public site points at it. It is still written into the build output, so exclude it from the deploy or delete it after the upload step. An error tracker keeps readable stack traces from the uploaded copy either way.
 
 The common false positive is a development build audited by mistake. Source maps in a preview environment are normal and expected.
 

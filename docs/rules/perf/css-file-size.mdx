@@ -5,7 +5,7 @@ description: "Stylesheets over 150 KB warn and over 500 KB fail. squirrel measur
 
 ## What CSS file size costs
 
-A stylesheet blocks rendering. The browser will not paint until it has fetched and parsed every stylesheet in `<head>`, so the size of that file sits directly on first paint, on slow connections and on cheap phones most of all.
+A stylesheet in `<head>` normally blocks rendering. The browser will not paint until it has fetched and parsed every one whose `media` matches and that is not disabled, so the size of those files sits directly on first paint, on slow connections and on cheap phones most of all.
 
 Size usually comes from three places: a framework shipped whole rather than as the parts the site uses, selectors for pages that no longer exist, and no minification. Splitting a large stylesheet by route, inlining the styles the first screen needs and loading the rest asynchronously all attack the same number.
 
@@ -18,7 +18,7 @@ The rule runs once per crawl over the CSS resources the crawl collected, with th
 - `css-file-size-warn`, warning with the message `N CSS file(s) exceed 150.0 KB` for files above the warning threshold but not above the error one, with the same items.
 - `css-file-size`, passing with the message `All CSS files are within size limits` when nothing crossed either threshold.
 
-Both thresholds are measured against the transferred size the crawl observed. A file whose size could not be determined is counted in neither bucket, so a resource the crawl could not fetch is silently excluded rather than reported as oversized. The fail and warn checks can both appear on the same audit, since they cover different files.
+Both thresholds are measured against the size the crawl recorded, which is the transferred size where the response headers gave one and the decoded body length otherwise. A file whose size could not be determined is counted in neither bucket, so a resource the crawl could not fetch is silently excluded rather than reported as oversized. The fail and warn checks can both appear on the same audit, since they cover different files.
 
 ## How to fix it
 
@@ -84,7 +84,7 @@ disable = ["*"]
 
 - [perf/unminified-css](/rules/perf/unminified-css): whether the file is large because it was never minified.
 - [perf/render-blocking](/rules/perf/render-blocking): the resources holding up first paint, which these files are part of.
-- [perf/js-file-size](/rules/perf/js-file-size): the same thresholds applied to JavaScript, at a higher weight.
+- [perf/js-file-size](/rules/perf/js-file-size): the same check on JavaScript, at 250 KB and 1 MB and a higher weight.
 - [perf/asset-compression](/rules/perf/asset-compression): whether the file is at least served compressed.
 
 Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.

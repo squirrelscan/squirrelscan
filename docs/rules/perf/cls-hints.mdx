@@ -16,7 +16,7 @@ The rule runs on every crawled page and emits one or two checks:
 - `cls-images`: fails with the message `N image(s) without width/height (CLS risk)` when more than five images lack dimensions, warns with the same message for one to five, and passes with `All images have dimensions` when none do. Each offending image `src` is listed as an item.
 - `cls-iframes`: emitted only when at least one iframe lacks dimensions, warning with the message `N iframe(s) without dimensions` and listing each `src`.
 
-An `<img>` counts as dimensioned when it has a `width` attribute other than `auto`, or a `height` attribute other than `auto`, or an inline `style` containing both the strings `width` and `height`. One attribute is therefore enough to clear the check even though the browser needs both to compute a ratio. Only images with a `src` are considered. An `<iframe>` is flagged when either `width` or `height` is missing, which is the stricter test of the two.
+An `<img>` counts as dimensioned when it has a non-empty `width` attribute other than `auto`, or a non-empty `height` attribute other than `auto`, or an inline `style` containing both the strings `width` and `height`. One attribute is therefore enough to clear the check even though the browser needs both to compute a ratio, and `width=""` clears nothing. Only images with a `src` are considered. An `<iframe>` is flagged when it has a `src` and either `width` or `height` is missing, so a `srcdoc` iframe is never reported.
 
 The candidates come from a shared analysis of the page that six performance rules read, computed once per page.
 

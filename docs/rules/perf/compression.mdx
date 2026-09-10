@@ -7,7 +7,7 @@ description: "A text response served with no Content-Encoding, or with compressi
 
 A client advertises what it can decode with `Accept-Encoding`, and a server that supports it returns the body compressed and names the scheme in `Content-Encoding`. On HTML, CSS, JavaScript and JSON the saving is large, because text repeats itself.
 
-Brotli, sent as `br`, compresses text better than gzip at the same cost to decode, and every current browser supports it. gzip remains the safe default. `identity` means the server was asked for compression and deliberately returned none.
+Brotli, sent as `br`, compresses text better than gzip at the same cost to decode, and every current browser supports it. gzip remains the safe default. `identity` names the no-op coding: the response was sent without compression and says so explicitly.
 
 ## What squirrel checks
 

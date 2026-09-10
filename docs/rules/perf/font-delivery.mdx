@@ -17,7 +17,7 @@ The rule runs on every crawled page and emits one check:
 - `font-delivery`, warning with the message `N render-blocking third-party font stylesheet(s) in the critical path` and listing each offending href as an item.
 - `font-delivery`, passing with the message `No render-blocking third-party font stylesheets`.
 
-Two things are scanned. In `<head>`, every `link[rel~="stylesheet"]` whose href resolves to one of eight font hosts counts, unless its `media` attribute is exactly `print`, which is the asynchronous-load idiom. Anywhere in the document, every `<style>` element is searched for an `@import` of one of those hosts, reported as `@import <url>`; a print-only import is skipped, and `not print` is kept because it does apply to screen.
+Two things are scanned. In `<head>`, every `link[rel~="stylesheet"]` whose href resolves to one of eight font hosts counts, unless its `media` attribute, lowercased, is `print`, which is the asynchronous-load idiom. Anywhere in the document, every `<style>` element is searched for an `@import` of one of those hosts, reported as `@import <url>`; a print-only import is skipped, and `not print` is kept because it does apply to screen.
 
 The eight hosts are `fonts.googleapis.com`, `use.typekit.net`, `p.typekit.net`, `fast.fonts.net`, `fast.fonts.com`, `cloud.typography.com`, `fonts.bunny.net` and `use.fontawesome.com`. A subdomain of any of them matches too. A page with no parsed document emits nothing at all.
 

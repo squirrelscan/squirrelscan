@@ -7,29 +7,29 @@ description: "Scripts that read as source rather than build output. squirrel ana
 
 Minifying JavaScript strips whitespace and comments and shortens local identifiers, which is where most of the saving comes from: a bundle full of descriptive variable names compresses well but still parses every one of those characters.
 
-Every current bundler does this in production mode. An unminified bundle in production is normally a build that ran in development mode, or a script that was written by hand and never went through the build at all.
+Most bundlers do this in production mode, though esbuild needs it turned on explicitly. An unminified bundle in production is normally a build that ran in development mode, a minifier that was never configured, or a script that was written by hand and never went through the build at all.
 
 ## What squirrel checks
 
-The rule runs on every crawled page and looks at three sources. It emits one to three checks:
+The rule runs on every crawled page and looks at three sources. It emits one or two checks: either the pass, or one or both of the findings.
 
 - `unminified-js`: warns with the message `N JavaScript file(s) appear unminified`, listing up to five sources with their size and estimated saving. The details carry the total saving and how many more there were.
 - `potentially-unminified-js`: reports at info status with the message `N script(s) may not be minified`, listing up to five, with the note that these are files whose name has no `.min` in it.
 - `minified-js`: passes with the message `JavaScript appears to be minified` when neither list has anything in it.
 
-Content is analysed when the rule has it: inline `<script>` blocks over 2,048 characters, excluding any whose type mentions `json` or `template`, and external scripts the crawl fetched the body of. A leading `/*! ... */` licence banner is stripped first, and anything under 200 characters after that is treated as minified. A file counts as unminified when any of these fires: more than 0.5% newlines, more than three comments, more than one long variable declaration per 500 characters, more than five long function names, indentation on more than one line per 200 characters, or more than 5% of the file in runs of repeated whitespace.
+Content is analysed when the rule has it: inline `<script>` blocks of 2,048 characters or more, excluding any whose type mentions `json` or `template`, and external scripts the crawl fetched the body of, which are also skipped below 2,048 recorded bytes. Any run of leading `/*! ... */` or `//! ...` licence banners is stripped first, and anything under 200 characters before or after that is treated as minified. A file counts as unminified when any of these fires: more than 0.5% newlines, more than three comments, more than one long variable declaration per 500 characters, more than five long function names, indentation on more than one line per 200 characters, or more than 5% of the file in the surplus characters of repeated whitespace runs, counting each run's length minus one.
 
-A script the rule has no content for is judged by filename. It is suspected when the name contains none of `.min.`, `-min.` or `.prod.`, has no eight-character-or-longer hex hash, does not contain `chunk`, `bundle` or `vendor`, does not come from a URL containing `cdn`, `unpkg`, `jsdelivr` or `cloudflare`, and ends in `.js` or `.mjs`. A page with no parsed document emits nothing at all.
+A script the rule has no content for is judged by filename. It is suspected when the name contains none of `.min.`, `-min.` or `.prod.`, has no dot-or-hyphen followed by eight or more hex characters and another dot, does not contain `chunk`, `bundle` or `vendor`, does not come from a URL containing `cdn`, `unpkg` or `jsdelivr`, and ends in `.js` or `.mjs`. The `cloudflare` exclusion applies only to scripts from the crawl's own list, not to those found in the markup alone. A page with no parsed document emits nothing at all.
 
 ## How to fix it
 
-Run the production build:
+Run the production build, and check that minification is actually on:
 
 ```bash
-vite build
+esbuild app.js --bundle --minify --outfile=dist/app.js
 ```
 
-For a script outside the build, `esbuild --minify` does the same job in one command.
+Vite and webpack minify in production mode by default; esbuild does not unless asked.
 
 The common false positive is the filename half of the rule. A perfectly minified `app.js` is still reported at info status, because the rule read the name rather than the bytes. A content hash in the filename, which most bundlers add anyway, clears it.
 

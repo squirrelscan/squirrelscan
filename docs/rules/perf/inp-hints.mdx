@@ -7,14 +7,14 @@ description: "More than five known third-party scripts, or more than three that 
 
 Interaction to Next Paint measures the delay between a user acting and the browser painting the result. The delay comes from the main thread being busy: a long task started by a script has to finish before the browser can respond to a click.
 
-Third-party scripts are the usual source, because they are written for a different set of constraints and they run on every page whether the feature is used or not. A script with neither `async` nor `defer` is worse still: it blocks parsing while it downloads and executes, which delays everything after it. Neither number is a measurement of INP, and only a field measurement is. They are the two things a static read of the HTML can tell you about the main thread.
+Third-party scripts are the usual source, because they are written for a different set of constraints and they run on every page whether the feature is used or not. A classic script with neither `async` nor `defer` is worse still: it blocks parsing while it downloads and executes, which delays everything after it. A `type="module"` script defers by default and needs neither attribute. Neither number is a measurement of INP, which needs a real interaction to observe. They are the two things a static read of the HTML can tell you about the main thread.
 
 ## What squirrel checks
 
 The rule runs on every crawled page and emits one or two checks:
 
 - `inp-third-party`: warns with the message `N third-party scripts may impact INP` above five, reports at info status with `N third-party script(s) detected` from one to five, and passes with `No third-party scripts detected` at zero. Each script URL is listed as an item in the first two cases.
-- `inp-blocking-scripts`: warns with the message `N blocking scripts (consider async/defer)` when more than three `<script src>` elements have neither `async` nor `defer`. With three or fewer and at least one script on the page it passes with `Script loading patterns look good`. A page with no scripts at all emits nothing for this check.
+- `inp-blocking-scripts`: warns with the message `N blocking scripts (consider async/defer)` when more than three `<script src>` elements have neither `async` nor `defer`. With three or fewer and at least one `<script src>` on the page it passes with `Script loading patterns look good`. A page with no external scripts emits nothing for this check, and a `src` that is present but empty is not counted as blocking.
 
 A script counts as third-party only when its host differs from the page host and matches one of about twenty-five known analytics, advertising, support and monitoring domains, either exactly or as a subdomain. A script from an unlisted third-party host is not counted, so the number is a floor rather than a total.
 
@@ -27,11 +27,11 @@ The signals come from a shared analysis of the page that six performance rules r
 <script src="https://cdn.example.com/analytics.js" async></script>
 ```
 
-`defer` keeps execution order and runs after parsing. `async` runs as soon as it downloads, which suits an independent script that touches nothing else. Both stop the parser blocking.
+`defer` keeps execution order and runs after parsing. `async` downloads without blocking the parser and runs as soon as it arrives, which can still interrupt parsing but suits an independent script that touches nothing else.
 
 For the third-party count, the fix is deletion rather than an attribute. Each tag is a separate decision about whether the feature is worth the main thread it costs.
 
-The common false positive is a tag manager loading one script that pulls in ten more. The rule sees one script in the HTML, so the count understates the page.
+The limit worth knowing is a tag manager loading one script that pulls in ten more. The rule sees one script in the HTML, so the count understates the page.
 
 | | |
 |---|---|

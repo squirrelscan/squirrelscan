@@ -1,11 +1,11 @@
 ---
 title: "Large DOM: node count, depth and children per element"
-description: "A page over 1,500 DOM nodes, deeper than 32 levels, or with an element holding more than 60 children. squirrel counts all three."
+description: "A page at 1,500 DOM nodes or more, deeper than 32 levels, or with an element holding more than 60 children. squirrel counts all three."
 ---
 
 ## What DOM size costs
 
-Every element on a page is memory the browser holds, work the style engine repeats on each recalculation, and work the layout engine repeats on each reflow. Past a few thousand nodes the cost shows up as slow interactions rather than slow loading, because each click that changes a class forces the engine over the whole tree again.
+Every element on a page is memory the browser holds, work the style engine repeats on each recalculation, and work the layout engine repeats on each reflow. Past a few thousand nodes the cost shows up as slow interactions rather than slow loading, because a change that invalidates style or layout has more nodes to walk before the browser can paint.
 
 Three numbers describe the shape of the problem. Total node count is the size of the tree. Depth is how far nesting goes, and deep trees make selector matching and layout more expensive per node. The widest element, meaning the one with the most direct children, is usually a list that renders every row instead of the rows on screen.
 

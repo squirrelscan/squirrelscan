@@ -1,11 +1,11 @@
 ---
 title: "Total page weight: the 1600 KB and 5000 KB thresholds"
-description: "Everything the crawl measured, summed: HTML, CSS, JavaScript and images. squirrel warns over 1600 KB and fails over 5000 KB."
+description: "Everything the crawl measured, summed: CSS, JavaScript and images. squirrel warns at 1600 KB and fails at 5000 KB."
 ---
 
 ## What total page weight is
 
-Total page weight is the sum of everything a visitor downloads. It matters most on a metered or slow connection, where it converts directly into waiting, and it is the number that best predicts how a site behaves on a phone in a place with poor coverage.
+Total page weight is the sum of the sub-resources a visitor downloads. It matters most on a metered or slow connection, where it converts directly into waiting, and it is the number that best predicts how a site behaves on a phone in a place with poor coverage.
 
 Images are usually the largest share and the easiest to cut, through a modern format and a size that matches the layout rather than the original upload. JavaScript is the next largest and the hardest, because cutting it means removing a dependency rather than re-encoding a file.
 
@@ -14,12 +14,14 @@ Images are usually the largest share and the easiest to cut, through a modern fo
 The rule runs once per crawl and sums what it measured: inline CSS and inline JavaScript across every page, plus the external CSS, script and image resources the crawl collected, each counted once by URL. It emits one check named `total-byte-weight`:
 
 - Passing with the message `Total tracked resources: NKB` under 1,600 KB.
-- Warning with the message `Total tracked resources: NKB (heavy page)` from 1,600 to 4,999 KB.
+- Warning with the message `Total tracked resources: NKB (heavy page)` from 1,600 KB up to but not including 5,000 KB.
 - Failing with the message `Total tracked resources: NKB (very heavy)` at 5,000 KB or above.
 
-When the crawl collected no external resource sizes at all, the rule estimates instead, from the first page's counts at 30 KB per stylesheet, 50 KB per script and 100 KB per image. In that case the message opens `Estimated total:` rather than `Total tracked resources:` and the details record that it is an estimate.
+The threshold comparison uses the unrounded total, while the message prints it rounded, so a total of 1,599.6 KB warns and displays as `1600KB`.
 
-The details carry the breakdown: CSS, JavaScript and image totals, the inline against external split where both are present, and the number of distinct files in each pool. Inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. Fonts have their own bucket in the sum but the crawl does not populate it today, so a font-heavy site is undercounted.
+When the crawl produced no resource-size record and no script record at all, the rule estimates instead, from the first page's counts at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports 0 KB rather than an estimate. In that case the message opens `Estimated total:` rather than `Total tracked resources:` and the details record that it is an estimate.
+
+The details carry the breakdown: CSS, JavaScript and image totals, the inline against external split where both are present, and the number of distinct files in each pool. Inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. The HTML and font buckets exist in the sum but nothing ever writes to them, so the documents themselves and every font file are missing from the total.
 
 ## How to fix it
 

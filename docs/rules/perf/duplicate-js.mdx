@@ -5,7 +5,7 @@ description: "One library loaded from two script tags, or at two different versi
 
 ## What a duplicate library is
 
-Two script tags loading the same library cost the bytes twice and, worse, can leave two copies in memory that do not share state. With React that means hooks failing at runtime. With jQuery it means whichever loaded last winning and any plugin registered against the first one disappearing.
+Two script tags loading the same library from different URLs cost the bytes twice and, worse, can leave two copies in memory that do not share state. With React that means hooks failing at runtime. With jQuery it means whichever loaded last winning and any plugin registered against the first one disappearing.
 
 Two different versions is the sharper version of the problem. It usually happens when a third-party embed brings its own copy of a library the page already loads, or when a tag manager injects one.
 
@@ -17,7 +17,7 @@ The rule runs on every crawled page over its `<script src>` elements. It extract
 - `duplicate-js-same-version`: warns with the message `N library(s) loaded multiple times`, listing each as `<name> (2x)`.
 - `duplicate-js`: passes with the message `No duplicate JavaScript libraries detected`, recording how many scripts it analysed.
 
-Names are matched from four URL shapes, in order: an unpkg path, a jsDelivr npm path, a cdnjs path, and a generic `/<name>[.-]<version>.js` path. When none matches, the leading run of letters, digits and hyphens in the filename becomes the name. Everything is lowercased.
+Names are matched from four URL shapes, in order: an unpkg path, a jsDelivr npm path, a cdnjs path, and a generic `/<name>.js` path where the name may be followed by a dotted or hyphenated numeric version and by `.min`. When none matches, the leading run of letters, digits and hyphens in the filename becomes the name. Names are lowercased; versions are compared as written. The rule reads the `<script src>` elements on the page only.
 
 A page with no parsed document emits nothing at all.
 
@@ -31,7 +31,7 @@ Load each library once, from one place. Where a bundler is in use, that usually 
 
 Where a third-party embed brings its own copy, the vendor usually has a build that uses the page's copy instead.
 
-The common false positive comes from the last name-matching pattern. Two unrelated files whose names begin with the same word, such as `app-header.js` and `app-footer.js`, both reduce to `app` and are reported as one library loaded twice. Check the listed names before changing anything.
+The common false positive comes from matching on filenames. Two unrelated files that share a name, such as `/a/main.js` and `/b/main.js`, both reduce to `main` and are reported as one library loaded twice. Check the listed names before changing anything.
 
 | | |
 |---|---|

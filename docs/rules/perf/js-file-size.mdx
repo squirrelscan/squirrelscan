@@ -30,7 +30,7 @@ const Editor = lazy(() => import("./editor"));
 
 Then look at what the shared chunk contains. A bundle analyser against the production build names the dependency responsible far faster than reading imports, and the answer is usually one package that has a smaller equivalent or a per-function import path.
 
-The common false positive is a single bundle deliberately shipped for the whole application and cached across every route. The parse cost is still paid on the first visit, so the finding is true, but the second navigation pays nothing.
+The common false positive is a single bundle deliberately shipped for the whole application and cached across every route. The transfer is paid once, so the finding is true of the first visit, but a cached second navigation pays only the parse and execute cost.
 
 | | |
 |---|---|

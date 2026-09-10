@@ -7,23 +7,23 @@ description: "Stylesheets that read as source rather than build output. squirrel
 
 Minification strips what only a person needs: newlines, indentation, comments, and the spaces around punctuation. On CSS it typically removes a fifth to a third of the file, and it composes with compression rather than replacing it, because gzip still has less to work with afterwards.
 
-Every current bundler does this in production mode, so an unminified stylesheet in production usually means the build ran in development mode or the file bypassed the build entirely.
+Most bundlers minify CSS in production mode, though some need it turned on explicitly. An unminified stylesheet in production usually means the build ran in development mode, the minifier was never configured, or the file bypassed the build entirely.
 
 ## What squirrel checks
 
-The rule runs on every crawled page and looks at three sources. It emits one to three checks:
+The rule runs on every crawled page and looks at three sources. It emits one or two checks: either the pass, or one or both of the findings.
 
 - `unminified-css`: warns with the message `N CSS file(s) appear unminified`, listing up to five sources with their size and estimated saving. The details carry the total saving and how many more there were.
 - `potentially-unminified-css`: reports at info status with the message `N stylesheet(s) may not be minified`, listing up to five, with the note that these are files whose name has no `.min` in it.
 - `minified-css`: passes with the message `CSS appears to be minified` when neither list has anything in it.
 
-Inline `<style>` content over 2,048 characters is analysed directly. A block counts as unminified when any of four signals fires: more than 1% of its characters are newlines, more than three block comments, more than 15% whitespace, or more than ten selector openings followed by a newline. The reason string names whichever fired.
+Inline `<style>` content of 2,048 characters or more is analysed directly. A block counts as unminified when any of four signals fires: more than 1% of its characters are newlines, more than three block comments, more than 15% whitespace, or more than ten selector openings followed by a newline. The reason string names whichever fired.
 
-Linked stylesheets are judged by filename only, because the rule does not fetch them. A file is suspected when its name contains none of `.min.`, `-min.` or `.prod.`, has no eight-character-or-longer hex hash, and does not look like a framework, meaning the name contains `bootstrap`, `tailwind` or `normalize`. Files coming from the crawl's own resource list are also skipped below 2,048 bytes. A page with no parsed document emits nothing at all.
+Linked stylesheets are judged by filename only, because the rule does not fetch them. A file is suspected when its name contains none of `.min.`, `-min.` or `.prod.`, has no dot-or-hyphen followed by eight or more hex characters and another dot, and does not look like a framework, meaning the name contains `bootstrap`, `tailwind` or `normalize`. Files from the crawl's own resource list are skipped below 2,048 bytes. Stylesheets found only in the markup are judged the same way, with `cdn` added to the framework list and a required `.css` ending. A page with no parsed document emits nothing at all.
 
 ## How to fix it
 
-Run the production build. In Vite, esbuild and webpack that is the default in production mode; the failure is usually a deploy that ran the development build.
+Run the production build. In Vite that minifies CSS by default; esbuild needs `--minify` and webpack needs a CSS minimiser configured, so check the config as well as the mode.
 
 ```bash
 vite build

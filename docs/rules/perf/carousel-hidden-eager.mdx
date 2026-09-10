@@ -5,9 +5,9 @@ description: "Images in inactive carousel slides loaded eagerly, so the browser 
 
 ## Why a hidden slide still downloads
 
-`display: none` and `aria-hidden` change what is painted and what is announced. Neither stops a fetch. An `<img>` inside slide four of a carousel is downloaded at full priority the moment the parser reaches it, competing for bandwidth with the image on slide one that the visitor can actually see.
+`display: none` and `aria-hidden` change what is painted and what is announced. Neither stops a fetch. An `<img>` inside slide four of a carousel is requested as soon as the parser reaches it, competing for bandwidth with the image on slide one that the visitor can actually see.
 
-`loading="lazy"` is what defers it. The browser holds the request until the element approaches the viewport, which for a carousel slide means when it is shown. The first slide should stay eager, because deferring the visible one delays the paint that matters.
+`loading="lazy"` is what defers it. The browser holds the request until the element comes within its loading distance of the viewport, which for an off-screen slide usually means when the slide is shown. The first slide should stay eager, because deferring the visible one delays the paint that matters.
 
 ## What squirrel checks
 
@@ -29,7 +29,7 @@ Hidden means `aria-hidden="true"`, a `hidden` attribute, or an inline style cont
 
 Add `loading="lazy"` to every slide except the first. Most carousel libraries have an option that does this for you, which is more reliable than marking them by hand.
 
-The common false positive is a slide hidden by a class rather than an inline style, which this rule cannot see and so does not report. The finding is a floor rather than a total.
+The limit worth knowing is a slide hidden by a class rather than an inline style, which this rule cannot see and so does not report. The finding is a floor rather than a total, and there is no common false positive in the other direction.
 
 | | |
 |---|---|

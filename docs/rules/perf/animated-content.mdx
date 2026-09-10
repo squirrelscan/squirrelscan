@@ -7,7 +7,7 @@ description: "GIF images used for animation, and videos with no modern codec sou
 
 GIF encodes animation as a sequence of palette-indexed frames with no inter-frame compression worth the name. A video codec encodes the difference between frames instead, which is why the same clip is routinely a fraction of the size as MP4 or WebM.
 
-A muted, looping, autoplaying `<video>` behaves like an animated GIF for a reader and costs a small fraction of the bytes. Among video codecs, WebM and AV1 compress better than H.264, and offering them as extra `<source>` entries costs nothing for a browser that cannot use them.
+A muted, looping, autoplaying `<video>` behaves like an animated GIF for a reader and costs a small fraction of the bytes. A WebM file usually carries VP9 or AV1, both of which compress better than the H.264 in a typical MP4, and offering an extra `<source>` costs nothing for a browser that cannot use it.
 
 ## What squirrel checks
 

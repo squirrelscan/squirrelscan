@@ -5,7 +5,7 @@ description: "A server that takes over 600ms to send the first byte, or over 100
 
 ## What TTFB measures
 
-Time to First Byte is the gap between the request leaving and the first byte of the response arriving. It covers DNS, the connection, and everything the server did before it started writing: routing, database queries, template rendering, and any upstream call in the way.
+Time to First Byte is the time from the start of the request to the first byte of the response arriving. It covers DNS, the connection, and everything the server did before it started writing: routing, database queries, template rendering, and any upstream call in the way.
 
 It is not a Core Web Vital itself, but every one of them starts after it. A page cannot paint before the HTML arrives, so a slow TTFB moves the floor under Largest Contentful Paint by the same amount. The usual causes are an uncached page rendered per request, a slow query, and a long distance between the visitor and the origin.
 
@@ -13,9 +13,9 @@ It is not a Core Web Vital itself, but every one of them starts after it. A page
 
 The rule runs on every crawled page and emits one or two checks:
 
-- `ttfb`, skipped with the message `TTFB not measured` and the reason `No TTFB timing data (only available for fresh fetches)` when the response came from a cache rather than the network.
+- `ttfb`, skipped with the message `TTFB not measured` and the reason `No TTFB timing data (only available for fresh fetches)` when the crawl recorded no TTFB for the page, which is the case for a response served from the audit's own cache rather than fetched.
 - `ttfb`, passing with the message `Fast server response (Nms)` under 600ms, warning with `Slow server response (Nms)` from 600 to 999ms, and failing with `Very slow server response (Nms)` at 1000ms or above. The expected value shown is `< 600ms` on a pass or a warning and `< 1000ms` on a failure.
-- `download-time`, emitted only when the crawl recorded it, at info status with the message `Content download: Nms`.
+- `download-time`, at info status with the message `Content download: Nms`, emitted only when the crawl recorded a download time and a TTFB, since the skip above returns before this check.
 
 The rule uses the measured TTFB alone and never falls back to total load time, which includes the download and would overstate the server's share. Values are rounded to whole milliseconds.
 

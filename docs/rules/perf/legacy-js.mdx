@@ -14,7 +14,7 @@ The cost is bytes and parse time for every visitor, including the majority whose
 The rule runs on every crawled page and looks at three things. It emits one to three checks:
 
 - `legacy-polyfills`: warns with the message `N legacy polyfill(s) detected`, listing each by name. It matches eleven patterns in `<script src>` URLs: `core-js`, `regenerator-runtime`, `babel-polyfill`, `polyfill.io`, `es5-shim`, `es6-shim`, `promise-polyfill`, `fetch-polyfill`, `whatwg-fetch`, `@babel/runtime` and `tslib`.
-- `es5-code-patterns`: reports at info status with the message `N ES5 transpilation pattern(s) found`, listing up to five. It scans inline scripts over 500 characters, skipping any whose type mentions `json`, for nine signatures including `_classCallCheck`, `_createClass`, `_inherits`, `_typeof`, `__esModule`, `__spreadArray`, `__awaiter` and `__generator`.
+- `es5-code-patterns`: reports at info status with the message `N ES5 transpilation pattern(s) found`, listing up to five. It scans inline scripts of 500 characters or more, skipping any whose type mentions `json`, for nine signatures including `_classCallCheck`, `_createClass`, `_inherits`, `_typeof`, `__esModule`, `__spreadArray`, `__awaiter` and `__generator`.
 - `differential-serving`: passes with the message `Uses module/nomodule differential serving` when the page has both a `script[type="module"]` and a `nomodule` script.
 - `es-modules`: passes with the message `N ES module script(s) detected` when there are module scripts but no `nomodule` counterpart.
 - `legacy-js`: reports at info status with the message `No legacy JavaScript patterns detected` when there are no polyfills, no ES5 patterns and no module scripts.
@@ -31,7 +31,7 @@ Set the build target to the browsers you actually support:
 }
 ```
 
-Both Babel and TypeScript read that list, and a modern target removes most of the helpers and nearly all of the polyfills. Where a specific feature still needs one, importing that polyfill alone is far smaller than a whole `core-js` bundle.
+Babel and the bundlers read that list, and a modern target removes most of the helpers and nearly all of the polyfills. TypeScript has its own `target` compiler option, which controls the same thing for its helpers. Where a specific feature still needs one, importing that polyfill alone is far smaller than a whole `core-js` bundle.
 
 The common false positive is `tslib`. It is TypeScript's helper library rather than a polyfill, and importing it is usually the smaller option, because the alternative is inlining the same helpers into every file that needs them.
 

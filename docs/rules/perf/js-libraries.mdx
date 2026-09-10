@@ -13,11 +13,11 @@ Version is also the number that tells you whether a dependency is being maintain
 
 The rule runs on every crawled page and tries to detect twenty-two libraries: jQuery, React, Vue.js, Angular, Svelte, Next.js, Nuxt, Bootstrap, Tailwind CSS, Lodash, Underscore.js, Moment.js, Day.js, Axios, Redux, D3.js, Chart.js, Three.js, GSAP, Prototype.js, MooTools and YUI. It emits one or two checks:
 
-- `js-libraries-vulnerable`: fails with the message `N library/libraries with known vulnerabilities`, listing each as `<name> v<version>` with the advisory description as the label and the CVE in the metadata.
-- `js-libraries-detected`: reports the message `N JavaScript library/libraries detected`, at warn status when something vulnerable was found and at info status otherwise. Each item is `<name> v<version>`, labelled either `vulnerable` or with how it was detected.
+- `js-libraries-vulnerable`: fails with the message `N library/libraries with known vulnerabilities`, listing each as `<name> v<version>` with the advisory description as the label and the CVE in the metadata. The version suffix is omitted when none was extracted.
+- `js-libraries-detected`: reports the message `N JavaScript library/libraries detected`, at warn status when something vulnerable was found and at info status otherwise. Each item is `<name> v<version>`, without the version when none was found, labelled either `vulnerable` or with how it was detected.
 - `js-libraries`: reports at info status with the message `No common JavaScript libraries detected`.
 
-Detection is tried in three passes and stops at the first hit per library. First the `<script src>` URLs, reported as `script URL`. Then the inline and bundled script content, reported as `inline code`. Then the page HTML itself, reported as `HTML markers`, which is how a framework attribute such as Angular's version marker is found. A version is extracted where a pattern in the same pass yields one; without a version no vulnerability check runs.
+Detection is tried in three passes and stops once a library is both detected and versioned. First the script URLs, which are the page's `<script src>` values plus the URLs of any scripts the crawl fetched, reported as `script URL`. Then the inline and bundled script content, which is every inline script over 50 characters plus the bodies of the fetched scripts, reported as `inline code`. Then the page HTML itself, reported as `HTML markers`, which is how a framework attribute such as Angular's version marker is found. Without a version no vulnerability check runs.
 
 Only five of the twenty-two carry advisory data: jQuery, Bootstrap, Lodash, Prototype.js and YUI. A version is flagged when it is at or below the advisory's maximum affected version. A page with no parsed document, or no HTML, emits nothing at all.
 
@@ -31,7 +31,7 @@ Update the dependency. For a library loaded from a CDN that is one URL:
 
 For one that comes through a bundler, `npm audit` names the advisory and the version that fixes it, and a lockfile update ships it.
 
-The common false positive is a version this rule could not read. Detection by inline code or HTML markers often finds the library without a version, in which case nothing is checked against the advisories and the library is reported as present only. Absence from the vulnerable list is not evidence that the version is safe.
+The limit worth knowing is a version this rule could not read. Detection often finds the library without a version, in which case nothing is checked against the advisories and the library is reported as present only. Absence from the vulnerable list is not evidence that the version is safe.
 
 | | |
 |---|---|

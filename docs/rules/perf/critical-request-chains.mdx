@@ -14,10 +14,10 @@ Depth matters more than count. Four independent blocking resources fetch in para
 The rule runs on every crawled page and emits one check:
 
 - `critical-request-chains`, at info status with the message `No <head> element found` when the page has no head.
-- `critical-request-chains`, warning with the message `N critical request chain(s) found` and listing up to ten members as items, each written `CSS: <href>` or `JS: <src>`. The details record the blocking CSS count, the blocking JS count, the import count, the number of preloads and any overflow.
+- `critical-request-chains`, warning with the message `N critical request chain(s) found` and listing up to ten members as items. A stylesheet reads `CSS: <href>`, a script `JS: <src>`, and every `@import` on the page is folded into one entry reading `N CSS @import(s) found (each adds a network round-trip)`. The details record the blocking CSS count, the blocking JS count, the import count, the number of preloads and any overflow.
 - `critical-request-chains`, passing with the message `No critical request chains detected`, with the preload count in the details.
 
-Three things are counted, all from `<head>` except the imports. A blocking stylesheet is a `link[rel="stylesheet"]` that is neither `media="print"` nor `disabled`. A blocking script is a `script[src]` with none of `async`, `defer` or `type="module"`. Every `@import` in every `<style>` element on the page adds one entry, reported as a single item naming the count.
+Three things are counted, all from `<head>` except the imports. A blocking stylesheet is a `link[rel="stylesheet"]` that is neither `media="print"` nor `disabled`. A blocking script is a `script[src]` with none of `async`, `defer` or `type="module"`. Every `@import` in every `<style>` element on the page is counted, and the total contributes exactly one entry to the list rather than one entry each.
 
 The count is a count of blocking resources rather than a measured chain depth, since a static read of the HTML cannot see what a stylesheet fetches once parsed.
 
@@ -31,7 +31,7 @@ The count is a count of blocking resources rather than a measured chain depth, s
 
 Replace every `@import` with a `<link>`, which lets the browser fetch in parallel instead of serially. Add `defer` to scripts and inline the styles the first screen needs.
 
-The common false positive is `type="module"`, which this rule treats as non-blocking. A module script is deferred by default, so that is correct for parsing, but its dependency graph is itself a chain the rule cannot see.
+The limit worth knowing is `type="module"`, which this rule treats as non-blocking. A module script is deferred by default, so that is correct for parsing, but its dependency graph is itself a chain the rule cannot see, which makes the count a floor.
 
 | | |
 |---|---|

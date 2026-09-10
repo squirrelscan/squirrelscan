@@ -5,9 +5,9 @@ description: "A hero image loaded eagerly with neither fetchpriority='high' nor 
 
 ## What fetchpriority does
 
-`fetchpriority` is an HTML attribute that tells the browser how to rank a resource against everything else it is fetching. On the image that paints the largest element above the fold, `fetchpriority="high"` moves it out of the queue behind stylesheets and scripts. Chrome loads images at low priority until layout proves they are in the viewport, and that delay lands directly on Largest Contentful Paint.
+`fetchpriority` is an HTML attribute that hints how the browser should rank a resource against everything else it is fetching. On the image that paints the largest element above the fold, `fetchpriority="high"` raises it relative to the rest of the queue. Chrome starts most images at a low priority and raises them once layout shows they are in the viewport, and that delay lands on Largest Contentful Paint.
 
-A `<link rel="preload" as="image">` for the same URL does the same job by a different route: the browser starts the fetch as soon as it parses `<head>`, before it reaches the `<img>`. Either signal is enough and there is no gain from both. Neither belongs on a below-fold image, where raising priority steals bandwidth from the element that is actually visible.
+A `<link rel="preload" as="image">` for the same URL attacks a different delay: the browser starts the fetch as soon as it parses `<head>`, before it reaches the `<img>`. The two compose, and a preload can itself carry `fetchpriority`. Either one satisfies this rule. Neither belongs on a below-fold image, where raising priority steals bandwidth from the element that is actually visible.
 
 ## What squirrel checks
 
@@ -15,7 +15,7 @@ The rule runs on every crawled page. It picks one LCP candidate: the first `<img
 
 - `lcp-fetchpriority`, at info status with the message `No eager hero image candidate found` when nothing passes that filter.
 - `lcp-fetchpriority`, passing with the message `Hero image has fetchpriority='high'` when the candidate carries that exact attribute value, or `Hero image is preloaded` when its URL matches an image preload on the page.
-- `lcp-fetchpriority`, warning with the message `Hero/LCP image loaded eagerly without fetchpriority='high' or preload`, with the image's `src` as the item id, its filename as the label, and the tag itself as a snippet.
+- `lcp-fetchpriority`, warning with the message `Hero/LCP image loaded eagerly without fetchpriority='high' or preload`, with the image's `src` as the item id, its filename as the label, and a snippet rebuilt from the `src` and any `fetchpriority` value rather than the original tag.
 
 An image counts as declared small only when both `width` and `height` parse as numbers and the larger of the two is under 300, so an undimensioned hero stays eligible. Preload matching is by absolute URL: the rule collects the `href` and every `imagesrcset` URL from each `link[rel~="preload"][as="image"]`, then compares them against the candidate's `src` and its own `srcset` URLs. A preload for some other image is no evidence about this one, so an unmatched preload elsewhere on the page does not clear the check.
 

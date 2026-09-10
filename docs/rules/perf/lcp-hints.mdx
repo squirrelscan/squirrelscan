@@ -1,6 +1,6 @@
 ---
 title: "LCP image not preloaded: what squirrel counts as a hero"
-description: "Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eager images on every page."
+description: "Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three candidate images on every page."
 ---
 
 ## What LCP preloading is
@@ -16,7 +16,7 @@ The rule runs on every crawled page and emits one check:
 - `lcp-preload`, warning with the message `N likely-LCP images loaded without preload`, or `1 likely-LCP image loaded without preload` in the singular. The value is the count. There are no items: the count is per page rather than a list of every image across the site.
 - `lcp-preload`, passing with the message `LCP images appear to be optimized`.
 
-A candidate is one of the first three elements matching `img:not([loading="lazy"])` or `img[fetchpriority="high"]` in document order. It counts as unpreloaded when its `src` is not a `data:` URI and does not appear among the page's `link[rel="preload"]` hrefs that end in `.jpg`, `.jpeg`, `.png`, `.webp` or `.avif`.
+A candidate is one of the first three elements matching `img:not([loading="lazy"])` or `img[fetchpriority="high"]` in document order, so a lazily loaded image with a high fetch priority qualifies. It counts as unpreloaded when it has a `src` that is not a `data:` URI and that `src` does not appear among the page's `link[rel="preload"]` hrefs ending in `.jpg`, `.jpeg`, `.png`, `.webp` or `.avif`. A candidate with no `src` uses up one of the three slots without being reported.
 
 The candidates come from a shared analysis of the page that six performance rules read, computed once per page.
 

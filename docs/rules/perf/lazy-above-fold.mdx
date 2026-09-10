@@ -5,7 +5,7 @@ description: "An above-fold image marked loading=lazy, which delays the paint th
 
 ## What lazy loading does
 
-`loading="lazy"` tells the browser to hold the request until the element approaches the viewport. For an image below the fold that is exactly right: the bytes are never fetched if the visitor does not scroll.
+`loading="lazy"` tells the browser to hold the request until the element comes within its loading distance of the viewport. For an image well below the fold that is exactly right: the bytes are never fetched if the visitor does not scroll that far.
 
 For an image in the first screen it is the wrong instruction. The browser has to complete layout before it knows the element is visible, so the fetch starts later than it would have with no attribute at all. When that image is the Largest Contentful Paint element, the delay lands directly on the metric.
 
@@ -15,7 +15,7 @@ The rule runs on every crawled page. It walks `<img>` elements in document order
 
 - `lazy-above-fold`: warns with the message `N above-fold image(s) with lazy loading` and lists each `src`. Otherwise it passes with `No lazy loading on above-fold images`.
 
-Three kinds of image are skipped without using up one of the three slots, so a genuinely visible image further down the markup still gets judged. An image is skipped when an ancestor is `aria-hidden="true"`, `hidden`, `inert` or carries an inline `display: none`; when it sits in an inactive carousel slide; or when it is inside a `<footer>`.
+Three kinds of image are skipped without using up one of the three slots, so a genuinely visible image further down the markup still gets judged. An image is skipped when it or an ancestor is `aria-hidden="true"`, `hidden` or `inert`, or carries an inline `display: none`; when it sits in an inactive carousel slide; or when it is inside a `<footer>`.
 
 A slide counts as inactive when its group has at least two slides and it is not the active one. Active is read from an explicit marker where one exists, meaning `.active`, `.is-active`, `.swiper-slide-active`, `.slick-active`, `.splide__slide--active`, `aria-current="true"` or `aria-hidden="false"`, and falls back to the first slide in DOM order only when no slide in the group is marked. Images whose `src` is a `data:` URI or contains `pixel` or `spacer` are skipped too, also without using a slot. A page with no parsed document emits nothing at all.
 

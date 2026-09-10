@@ -5,7 +5,7 @@ description: "Stylesheets and scripts in head that hold up first paint. squirrel
 
 ## What render blocking is
 
-A stylesheet in `<head>` blocks rendering: the browser will not paint until it has downloaded and parsed every one of them, because painting with the wrong styles and repainting is worse than waiting. A `<script src>` in `<head>` with neither `async` nor `defer` blocks parsing as well, which stops the browser even discovering what comes next.
+A stylesheet in `<head>` normally blocks rendering: the browser will not paint until it has downloaded and parsed every one whose `media` matches and that is not disabled, because painting with the wrong styles and repainting is worse than waiting. A classic `<script src>` in `<head>` with neither `async` nor `defer` blocks parsing as well. The preload scanner still finds resources further down the document, but nothing after that script executes until it does.
 
 The fix is not to remove them but to change when they matter. Styles the first screen needs can be inlined. Styles it does not need can load with a media attribute that does not apply, then be switched on once loaded. Scripts almost always take `defer`.
 
@@ -15,7 +15,7 @@ The rule runs on every crawled page and emits one check:
 
 - `render-blocking`: warns with the message `N render-blocking resources` above three, reports at info status with `N render-blocking resource(s)` from one to three, and passes with `No significant render-blocking resources` at zero. Each URL is listed as an item.
 
-Only `<head>` is scanned. A stylesheet counts when it is a `link[rel="stylesheet"]` with no `media` attribute at all: any `media` value, including `media="all"`, excludes it. A script counts when it is a `<script src>` with neither `async` nor `defer`. Inline `<style>` blocks and inline scripts are not counted, and neither is anything in `<body>`.
+Only `<head>` is scanned. A stylesheet counts when it is a `link[rel="stylesheet"]` with a non-empty `href` and no `media` attribute at all: any `media` value, including `media="all"`, excludes it. A script counts when it is a `<script src>` with a non-empty `src` and neither `async` nor `defer`. Inline `<style>` blocks and inline scripts are not counted, and neither is anything in `<body>`.
 
 The signals come from a shared analysis of the page that six performance rules read, computed once per page.
 
@@ -29,7 +29,7 @@ The signals come from a shared analysis of the page that six performance rules r
 
 Inline what the first screen needs, load the rest with a `media` value that does not apply and switch it on once it has arrived, and give every script `defer`.
 
-The common false positive follows from how a stylesheet is counted. Adding `media="all"`, which changes nothing about the browser's behaviour, removes the link from this rule's count. Check the reported URLs rather than the number alone.
+The limit worth knowing follows from how a stylesheet is counted. Adding `media="all"`, which changes nothing about the browser's behaviour, removes the link from this rule's count even though it still blocks paint. Check the reported URLs rather than the number alone.
 
 | | |
 |---|---|

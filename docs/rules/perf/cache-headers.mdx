@@ -5,7 +5,7 @@ description: "A response with no caching headers, no-cache with no validator, or
 
 ## What Cache-Control does
 
-`Cache-Control` tells a browser and any cache in between how long a response may be reused and what has to happen before it is reused again. `max-age` is the freshness lifetime in seconds. `no-cache` allows storage but requires revalidation on every use. `no-store` forbids storage entirely. `immutable` promises the body will never change at that URL, which lets a browser skip revalidation altogether.
+`Cache-Control` tells a browser and any cache in between how long a response may be reused and what has to happen before it is reused again. `max-age` is the freshness lifetime in seconds. `no-cache` allows storage but requires revalidation on every use. `no-store` forbids storage entirely. `immutable` promises the body will not change while the response is fresh, which lets a browser skip revalidating it on a reload.
 
 The right value depends on the URL. HTML usually changes, so a short lifetime or `no-cache` with a validator is right. A hashed asset filename never changes its contents, so a year with `immutable` is right. A validator, meaning an `ETag` or `Last-Modified`, makes revalidation cheap: the server answers 304 with no body when nothing changed.
 
@@ -17,10 +17,10 @@ The rule runs on every crawled page and reads the response headers. It emits one
 - `cache-control`: reports at info status with `Caching disabled with no-store` and stops. With `no-cache` it passes with `Uses revalidation caching with no-cache` when an `ETag` or `Last-Modified` is present, and warns with `no-cache without ETag or Last-Modified` when neither is. With a `Cache-Control` that has no `max-age` at all it warns with `Cache-Control without max-age`.
 - `cache-control-html`: for a response treated as HTML, it reports at info status with `HTML cached for Ns (N.Nh)` above one hour and passes with `HTML cache appropriate (Ns)` at or below it.
 - `cache-control-static`: for anything else, it warns with `Short cache for static asset (Ns)` under 86,400 seconds and passes with `Good cache duration (N days)` at or above.
-- `cache-immutable`: emitted alongside the max-age result when the `immutable` directive is present, passing with `Uses immutable directive for optimal caching`.
+- `cache-immutable`: emitted after the max-age branch, whether or not a max-age was found, when the `immutable` directive is present. It passes with `Uses immutable directive for optimal caching`.
 - `cache-expires`: reports at info status with `Uses legacy Expires header` when there is an `Expires` header and no `Cache-Control`.
 
-A response counts as HTML when its content type contains `text/html`, when the URL ends in `.html`, or when the URL has no two-to-four-character extension at all. That last clause means an extensionless API path is judged by the HTML thresholds rather than the static ones.
+A response counts as HTML when its content type contains `text/html`, when the URL ends in `.html`, or when the whole URL string does not end in a dot followed by two to four lowercase letters. That last test runs against the URL including any query string, so `/app.css?v=2` and `/logo.PNG` are both judged by the HTML thresholds rather than the static ones.
 
 ## How to fix it
 
@@ -37,7 +37,7 @@ Cache-Control: public, max-age=0, s-maxage=600
 ETag: "a1b2c3"
 ```
 
-The common false positive follows from the HTML test. An extensionless URL that serves JSON is treated as HTML, so a long cache on it is reported as informational rather than praised as a good static duration.
+The common false positive follows from the HTML test. An extensionless URL, an uppercase extension and any URL carrying a query string are all treated as HTML, so a long cache on a hashed asset with a cache-busting parameter is reported as informational rather than as a good static duration.
 
 | | |
 |---|---|

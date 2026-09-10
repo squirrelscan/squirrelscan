@@ -5,9 +5,9 @@ description: "An @font-face block with no font-display, or Google Fonts loaded w
 
 ## What font-display does
 
-A web font arrives after the HTML. Until it does, the browser has to decide what to draw. The default is a short block period where the text is invisible, then a swap to the real font. On a slow connection that block period shows as a page with no text in it.
+A web font arrives after the HTML. Until it does, the browser has to decide what to draw. With no `font-display` the strategy is `auto`, which leaves the choice to the browser; in practice that is a short period with the text invisible, then a swap to the real font. On a slow connection that period shows as a page with no text in it.
 
-`font-display: swap` changes the choice: draw the fallback font immediately, swap when the web font arrives. The text moves once, which is a layout shift, but it is readable the whole time. `optional` is the stricter option, which uses the web font only if it arrives almost instantly and never shifts the text.
+`font-display: swap` makes the choice explicit: draw the fallback font immediately, swap when the web font arrives. The text reflows on the swap unless the fallback's metrics are matched to the web font, but it is readable the whole time. `optional` is the stricter option, which uses the web font only if it arrives almost instantly and never shifts the text.
 
 ## What squirrel checks
 
@@ -16,9 +16,9 @@ The rule runs on every crawled page and emits one or two checks:
 - `font-display`: warns with the message `N font(s) without font-display: swap` and lists each family name as an item. It passes with `All fonts have font-display set` when every block declares one.
 - `font-preconnect`: emitted only on a page that loads a stylesheet from `fonts.googleapis.com`. It warns with the message `Using Google Fonts without preconnect` and the value `Add <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>` when no `link[rel="preconnect"]` points at `fonts.googleapis.com` or `fonts.gstatic.com`. Otherwise it passes with `Google Fonts preconnect configured`.
 
-The `@font-face` scan is a regular expression over the page's raw HTML, so it sees blocks written inline in a `<style>` element and blocks that happen to appear anywhere else in the markup. It does not fetch external stylesheets, so a font declared in a linked CSS file is not checked. The family name is read from the block's `font-family` value, or reported as `Unknown font` when there is none.
+The `@font-face` scan is a regular expression over the page's raw HTML, so it sees blocks written inline in a `<style>` element and blocks that happen to appear anywhere else in the markup. It does not fetch external stylesheets, so a font declared in a linked CSS file is not checked. A block counts as declared when the case-sensitive text `font-display` appears anywhere inside it, including in a comment. The family name is read from the block's `font-family` value, or reported as `Unknown font` when there is none.
 
-The Google Fonts check reads only `<link href>` elements for the usage test, so fonts pulled in with `@import` are not detected as usage.
+The Google Fonts usage test matches any `<link href>` resolving to `fonts.googleapis.com`, whatever its `rel`, so a preconnect to that host on a page with no Google Fonts stylesheet counts as usage. Fonts pulled in with `@import` are not detected as usage at all.
 
 ## How to fix it
 
@@ -37,7 +37,7 @@ Add the descriptor to every block. When a hosted service serves the CSS, the `di
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter&display=swap" />
 ```
 
-The common false positive is a site whose `@font-face` blocks live in an external stylesheet. The rule reads the page HTML only, so it finds no blocks and passes, whatever those blocks say.
+The limit worth knowing is a site whose `@font-face` blocks live in an external stylesheet. The rule reads the page HTML only, so it finds no blocks and passes, whatever those blocks say.
 
 | | |
 |---|---|

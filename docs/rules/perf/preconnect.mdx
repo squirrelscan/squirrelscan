@@ -14,7 +14,7 @@ The budget is small. Each open connection costs memory and contends for bandwidt
 The rule runs on every crawled page and emits one or two checks:
 
 - `preconnect-missing`: emitted only when at least one known CDN is used without a preconnect. It warns with the message `Missing preconnect for N CDN(s)` and lists each hostname as an item.
-- `preconnect-usage`: passes with the message `Resource hints in use` when the page has any `link[rel="preconnect"]` or `link[rel="dns-prefetch"]`. With no hints and nothing missing, it reports at info status with `No preconnect hints (may not be needed)`. With no hints but a CDN missing one, this check is not emitted at all and only the warning appears.
+- `preconnect-usage`: passes with the message `Resource hints in use` when the page has any `link[rel="preconnect"]` or `link[rel="dns-prefetch"]` carrying a non-empty `href`. With no hints and nothing missing, it reports at info status with `No preconnect hints (may not be needed)`. With no hints but a CDN missing one, this check is not emitted at all and only the warning appears.
 
 The known list is thirteen hosts: `cdn.jsdelivr.net`, `cdnjs.cloudflare.com`, `unpkg.com`, `fonts.googleapis.com`, `fonts.gstatic.com`, `ajax.googleapis.com`, `code.jquery.com`, `stackpath.bootstrapcdn.com`, `maxcdn.bootstrapcdn.com`, `cdn.cloudflare.com`, `use.fontawesome.com`, `kit.fontawesome.com` and `cdn.tailwindcss.com`. One is reported only when the page loads a `script[src]`, `link[href]` or `img[src]` whose origin is exactly `https://<host>`, and no preconnect names that host. A CDN not on the list is never reported.
 
@@ -29,7 +29,7 @@ The signals come from a shared analysis of the page that six performance rules r
 
 Put them at the top of `<head>`, before the stylesheets and scripts that use those origins. Fonts and anything else fetched in CORS mode need the `crossorigin` attribute, because a connection opened without it cannot be reused for a CORS request.
 
-The common false positive is a page loading a listed CDN over a scheme or subdomain that does not match exactly. The origin comparison is literal, so anything other than `https://<host>` is not matched and the CDN is not reported.
+The limit worth knowing is a page loading a listed CDN over a scheme or subdomain that does not match exactly. The origin comparison is literal, so anything other than `https://<host>` is not matched and the CDN is not reported at all.
 
 | | |
 |---|---|

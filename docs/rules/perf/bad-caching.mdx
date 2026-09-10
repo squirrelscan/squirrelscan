@@ -5,7 +5,7 @@ description: "Most pages missing a freshness lifetime, an ETag, or compression. 
 
 ## What site-wide caching coverage is
 
-One page with weak caching headers is a nit. A site where most pages have them is a pattern, and it costs on every repeat visit and behind every CDN, because nothing can be reused and every request reaches the origin.
+One page with weak caching headers is a nit. A site where most pages have them is a pattern, and it costs on every repeat visit and behind every CDN. A response with no explicit lifetime and no validator is not uncacheable, since a cache may fall back to a heuristic, but nothing about how long it is reused is under your control.
 
 Three things are worth counting separately. A freshness lifetime, from `max-age`, `s-maxage` or `Expires`, decides whether a cache may reuse a response without asking. A validator, meaning an `ETag` or `Last-Modified`, decides whether asking is cheap: the server can answer 304 with no body. Compression decides how many bytes move when it is not cheap.
 
@@ -18,7 +18,7 @@ The rule runs once per crawl over every page whose status was 2xx, whose headers
 - `bad-caching-validators`: warns with `N/M pages lack an ETag or Last-Modified validator` under 60%, fails under 25%, and otherwise passes with `N/M pages expose a revalidation validator`.
 - `bad-caching-compression`: emitted only when at least one response was compressible. It warns with `N/M compressible pages served without gzip/Brotli` under 80%, fails under 50%, and otherwise passes with `N/M compressible pages compressed`.
 
-A page counts as having freshness only when it has neither `no-store` nor `no-cache` and declares a positive lifetime through `s-maxage`, `max-age` or `Expires`, with `s-maxage` taking precedence. Compression counts `br`, `gzip`, `deflate` and `zstd`. Each failing check carries up to five example URLs.
+A page counts as having freshness only when it has neither `no-store` nor `no-cache` and either declares a positive lifetime through `s-maxage` or `max-age`, with `s-maxage` taking precedence, or carries a non-empty `Expires` header. The `Expires` value is not parsed, so a date already in the past still counts. Compression counts `br`, `gzip`, `deflate` and `zstd`. Each failing check carries up to five example URLs.
 
 ## How to fix it
 
@@ -46,9 +46,9 @@ The common false positive is a site that is entirely personalised, where every p
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_freshness_ratio` | number | `0.6` | Minimum fraction of pages that should declare a freshness lifetime |
-| `min_validator_ratio` | number | `0.6` | Minimum fraction of pages that should expose a validator |
-| `min_compression_ratio` | number | `0.8` | Minimum fraction of compressible responses that should be compressed |
+| `min_freshness_ratio` | number | `0.6` | Minimum fraction of pages that should declare a freshness lifetime (Cache-Control max-age or Expires) before this passes |
+| `min_validator_ratio` | number | `0.6` | Minimum fraction of pages that should expose a validator (ETag or Last-Modified) for cheap revalidation |
+| `min_compression_ratio` | number | `0.8` | Minimum fraction of compressible responses that should be gzip/Brotli compressed |
 
 ### Configuration example
 

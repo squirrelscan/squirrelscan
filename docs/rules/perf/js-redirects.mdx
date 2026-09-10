@@ -17,7 +17,7 @@ The rule runs once per crawl over the script resources the crawl fetched. It emi
 - Warning with the message `N JavaScript resource(s) redirect`, one item per script carrying its URL, its status as the label, the pages that reference it, and its content type. The check's value holds the first five as `<path> (<status>)` lines, with `+N more` when there are others.
 - Passing with the message `No JavaScript resources are redirecting`.
 
-A script counts when its recorded status is 300 to 399. The rule reports the redirect rather than following it, so the destination is not shown; the fix is to read the `Location` header once and paste the final URL into the page.
+A script counts when its recorded status is 300 to 399. That range includes `304 Not Modified`, which is a cache revalidation rather than a redirect, so a conditional request answered from cache is reported alongside real redirects. The rule does not follow the redirect, so the destination is not shown; read the `Location` header once and paste the final URL into the page.
 
 ## How to fix it
 
@@ -29,7 +29,7 @@ Point the tag at the URL the redirect resolves to:
 
 `curl -sIL https://old.example.com/widget.js | grep -i location` gives the destination. For a third-party script, check the vendor's current documentation rather than following the chain, since they usually publish the URL they want you on.
 
-There is no common false positive. A 3xx on a script is unambiguous, though a redirect that exists to pin a version deliberately is a trade the site may want to keep.
+The common false positive is a `304`, which means the crawl's conditional request was answered from cache and nothing is redirecting at all. Check the reported status before changing a URL. A redirect that exists to pin a version deliberately is also a trade the site may want to keep.
 
 | | |
 |---|---|
