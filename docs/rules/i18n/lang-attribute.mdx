@@ -1,9 +1,35 @@
 ---
-title: "Lang Attribute"
-description: "Checks for lang attribute on html element"
+title: "lang attribute on <html>: declaring the page's language"
+description: "Without a lang attribute a screen reader guesses which voice to use and may read the page in the wrong language. squirrel checks it and its format."
 ---
 
-Checks for lang attribute on html element
+## What the lang attribute is
+
+`<html lang="en">` declares the natural language of a page's content. A screen reader uses it to pick a pronunciation model, and a browser uses it for hyphenation and for offering translation. Google is explicit that it ignores code-level language declarations and works out the language from the visible content instead, so treat this as an accessibility and browser-behaviour attribute rather than a ranking one.
+
+The value is a BCP 47 language tag: a two or three letter language subtag, optionally followed by a region, as in `en`, `es` or `en-AU`. Use a region subtag only when the regional variant matters; `en` is more useful than `en-US` on a page that is not specifically American.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the `lang` attribute on the `<html>` element. It emits a single check named `lang-attribute`:
+
+- Warn when the attribute is absent or empty. Message: `Missing lang attribute on <html> element`. Severity warning, weight 4.
+- Info when the value does not match `^[a-z]{2}(-[A-Z]{2})?$`. Message: `Lang attribute format: en_US`, with the value.
+- Pass when it does. Message: `Lang attribute present: en-AU`, with the value.
+
+The format test is narrower than BCP 47 allows. It accepts only a lowercase two-letter language with an optional uppercase two-letter region, so valid tags such as `pt-BR` pass while `zh-Hant`, `en-GB-oxendict` and three-letter language subtags are reported as an unexpected format rather than as an error. The informational status reflects that.
+
+Only the `<html>` element is checked. A `lang` on a section of the page in another language is not read here.
+
+## How to fix it
+
+```html
+<html lang="en-AU">
+```
+
+Set it in the base layout, from the same value the site uses to pick its content language. On a multilingual site, render the tag per locale rather than hardcoding one.
+
+Mark passages in another language with their own `lang` on the element that contains them, so a screen reader switches voice for them.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for lang attribute on html element
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-The lang attribute on the html element declares the page's language, helping browsers, screen readers, and search engines process content correctly. Add lang="xx" to your html tag using a valid ISO 639-1 code (e.g., "en", "es", "fr"). For regional variants, use lang="en-US" or "en-GB". This improves accessibility and helps search engines serve your content to the right audience.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["i18n/*"]
 enable = ["i18n/lang-attribute"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [i18n/hreflang](/rules/i18n/hreflang): the tags that connect this page to its other language versions.
+- [a11y/html-lang-valid](/rules/a11y/html-lang-valid): the accessibility check over the same attribute.
+- [core/charset](/rules/core/charset): the other declaration in the same part of the document.
+- [content/mojibake](/rules/content/mojibake): what a wrong encoding does to non-English text.
+
+Internationalization findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The lang global attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/lang)
+- [Declaring language in HTML, W3C Internationalization](https://www.w3.org/International/questions/qa-html-language-declarations)
+- [Managing multi-regional and multilingual sites, Google Search Central](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Internationalization section of the report. Each page is reported with the lang value it declares. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Internationalization section looks like on a real site.
+  </Card>
+</CardGroup>

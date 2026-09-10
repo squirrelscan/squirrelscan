@@ -1,9 +1,30 @@
 ---
-title: "Dead-End Pages"
-description: "Pages with no outgoing internal links, potentially trapping users"
+title: "Dead-end page: no outgoing internal links to continue with"
+description: "A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links."
 ---
 
-Pages with no outgoing internal links, potentially trapping users
+## What a dead-end page is
+
+A dead-end page has no internal links leading anywhere else. Whatever brought the reader here, nothing suggests what to read next, and a crawler that arrives finds no new URLs to follow.
+
+Some pages are meant to be terminal. A thank-you page after a form submission, a download confirmation, a success screen: those have done their job and the default exclusion list covers them. Everything else usually has related content it should be pointing at.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It counts internal links whose normalised URL differs from the page's own, so a self-link does not count. It emits a single check named `dead-end`:
+
+- Skipped when the page could not be parsed. Message: `Page could not be parsed`.
+- Skipped when the URL matches an exclusion pattern. Message: `Page excluded by pattern`.
+- Warn when the count is below `minLinks`, default 1. Message: `Page has no outgoing internal links (dead-end)`, with the count as the value. Severity warning, weight 3.
+- Pass otherwise. Message: `Page has outgoing internal links`, with the count as the value.
+
+The default exclusions are `/thank-you`, `/confirmation`, `/download`, `/success` and `/submitted`. Same-page anchor links are ignored unless `countAnchorLinks` is on, which is useful for a single-page app where the in-page navigation is the navigation.
+
+## How to fix it
+
+Add a related-content block, a breadcrumb back to the parent section, or links from the body copy to the pages this one references. One meaningful onward link is enough to clear the rule; three or four is better for a reader.
+
+For a single-page application whose whole navigation is fragment links, turn on `countAnchorLinks` rather than adding links that do not belong.
 
 | | |
 |---|---|
@@ -13,27 +34,21 @@ Pages with no outgoing internal links, potentially trapping users
 | **Severity** | warning |
 | **Weight** | 3/10 |
 
-## Solution
-
-Add navigation links or related content links to help users continue browsing. Internal links improve user experience and help search engines discover content.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `excludePatterns` | unknown | `undefined` |  |
-| `minLinks` | unknown | `undefined` |  |
-| `countAnchorLinks` | unknown | `undefined` | Count anchor links (#section) as valid internal links (useful for single-page apps) |
+| `excludePatterns` | array of strings | `["/thank-you", "/confirmation", "/download", "/success", "/submitted"]` | URL patterns that are allowed to be dead ends |
+| `minLinks` | number | `1` | Minimum outgoing internal links before the page is a dead end |
+| `countAnchorLinks` | boolean | `false` | Count anchor links (#section) as valid internal links (useful for single-page apps) |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."links/dead-end-pages"]
-excludePatterns = undefined
-minLinks = undefined
-countAnchorLinks = undefined
+[rule_options."links/dead-end-pages"]
+minLinks = 3
+countAnchorLinks = true
+excludePatterns = ["/thank-you", "/receipt"]
 ```
 
 ## Enable / disable
@@ -59,3 +74,29 @@ disable = ["links/*"]
 enable = ["links/dead-end-pages"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/internal-links](/rules/links/internal-links): the same count judged against a range rather than a floor.
+- [links/orphan-pages](/rules/links/orphan-pages): the inbound side of the same structure.
+- [links/anchor-text](/rules/links/anchor-text): what the onward links should say.
+- [content/article-links](/rules/content/article-links): whether the body copy links out at all.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every dead-end page is listed with its outgoing link count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

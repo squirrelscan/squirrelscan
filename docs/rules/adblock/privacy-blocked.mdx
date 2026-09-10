@@ -1,11 +1,29 @@
 ---
-title: "Privacy Filter Matches"
-description: "Checks for trackers and analytics that privacy filter lists (EasyPrivacy) would block"
+title: "EasyPrivacy matches: analytics that silently does not run"
+description: "Privacy filters block trackers by default in several browsers, so your analytics quietly under-counts. squirrel reports which resources they block."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`). All three [adblock rules](/rules/adblock) share a single blocklist check per audit, **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+## What privacy filtering blocks
 
-Checks for trackers and analytics that privacy filter lists (EasyPrivacy) would block.
+EasyPrivacy is the tracker list, separate from the advertising one. Blocking it is not a niche setting: uBlock Origin uses it by default, Brave blocks equivalent hosts, and Firefox's strict mode blocks a comparable set.
+
+The effect on your measurement is silent, even though the browser is not. A blocked script can raise an error event and show up in developer tools, but nothing reaches the analytics dashboard, so those visitors are absent from the numbers with no gap to notice. That skews the data most where your audience is most technical, which is often the audience you most want to understand.
+
+## What squirrel checks
+
+The rule is site-wide and reads a result the cloud blocklist service produced before the rules ran, matched server-side against the full EasyPrivacy rules. It emits a single check named `privacy-blocked`:
+
+- Skipped when no result is available. Message: `Privacy filter check skipped`, with a readable skip reason.
+- Pass when nothing matched. Message: `No resources match EasyPrivacy tracking filters`.
+- Warn otherwise. Message: `6 resource(s) would be blocked by privacy filters (EasyPrivacy)`, listing up to `maxMatchesToReport` of them. Severity warning, weight 2.
+
+The three blocking rules share one blocklist check per audit.
+
+## How to fix it
+
+Move measurement first-party or server-side, so it is a request to your own domain rather than to a host on the list. That may reduce blocking rather than end it: filters can match a first-party endpoint, and forwarding server-side cannot recover an event whose browser request was blocked. Privacy-focused analytics products are built for this and are usually a smaller change than proxying an existing tool.
+
+Whatever you do, treat the numbers you already have as an undercount rather than as the truth.
 
 | | |
 |---|---|
@@ -14,15 +32,19 @@ Checks for trackers and analytics that privacy filter lists (EasyPrivacy) would 
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 2/10 |
-| **Default** | Enabled |
 
-## What it checks
+## Options
 
-The site's scripts, pixels, and request URLs are matched server-side against the full **EasyPrivacy** filter list - the list used by privacy-focused browsers and extensions (uBlock Origin, Brave, Firefox strict mode). Matches are reported with the specific filter rule that would block them.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxMatchesToReport` | number | `10` | Maximum privacy-blocked matches to report in detail |
 
-## Solution
+### Configuration example
 
-Analytics, session replay, and tracking pixels on matched domains will silently fail for visitors using privacy tooling, skewing your measurement data. Consider first-party or privacy-respecting analytics so measurement survives tracker blocking.
+```toml squirrel.toml
+[rule_options."adblock/privacy-blocked"]
+maxMatchesToReport = 25
+```
 
 ## Enable / disable
 
@@ -39,3 +61,38 @@ disable = ["adblock/privacy-blocked"]
 [rules]
 disable = ["adblock/*"]
 ```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["adblock/privacy-blocked"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [analytics/gtm-present](/rules/analytics/gtm-present): the platforms this rule finds blocked.
+- [adblock/blocked-links](/rules/adblock/blocked-links): the advertising half, matched against EasyList.
+- [security/third-party-cookies](/rules/security/third-party-cookies): the same hosts seen from the privacy side.
+- [legal/cookie-consent](/rules/legal/cookie-consent): the consent gate those trackers also need.
+
+Blocking findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
+- [Privacy on the web, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Blocking section of the report. Each blocked tracker is listed, up to the configured maximum. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Blocking section looks like on a real site.
+  </Card>
+</CardGroup>

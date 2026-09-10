@@ -1,9 +1,31 @@
 ---
-title: "Disclaimers"
-description: "Checks for appropriate disclaimers on sensitive content"
+title: "Disclaimers on YMYL content: what to say and where"
+description: "Health, finance and legal content needs to say what it is not. squirrel looks for a dedicated disclaimer page by its URL."
 ---
 
-Checks for appropriate disclaimers on sensitive content
+## What a disclaimer does
+
+A disclaimer states the limits of what content is. On health writing that is this is not medical advice; on finance, not financial advice; on legal writing, not legal advice. Each one points the reader at the professional they should actually be asking.
+
+It is both a legal position and a trust signal. A page that is clear about what it is not is easier to trust about what it is, and the absence of one on content that reads like advice is itself a signal.
+
+## What squirrel checks
+
+The rule is site-wide. It matches each crawled page's URL path against five patterns and takes the first hit. It emits one check, named `disclaimers` for the skip and `disclaimer-page` for the other two:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when a page matches. Message: `Disclaimer page found`, with the URL as the value.
+- Info when none does. Message: `No dedicated disclaimer page found`, with `Consider adding if you have YMYL or affiliate content` as the value.
+
+The patterns are `/disclaimer`, `/legal-disclaimer`, `/medical-disclaimer`, `/affiliate-disclosure` and `/advertising-disclosure`, each anchored to the end of the path. The rule looks for a dedicated page only: a disclaimer rendered inline at the top of an article is not detected. Severity info, weight 4.
+
+The rule only runs when the audit classified the site as YMYL. A classification below medium confidence, or an audit with no site metadata at all, runs it anyway.
+
+## How to fix it
+
+Publish a disclaimer page and link it from the footer, then put the relevant sentence at the top of the articles it applies to. Fine print at the bottom of a long page is not where a reader looks before acting.
+
+Say what the content is not and who to ask instead. "This article is general information and is not medical advice. Speak to your doctor about your own situation." is the whole pattern.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for appropriate disclaimers on sensitive content
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 4/10 |
-
-## Solution
-
-Disclaimers protect you legally and build trust. Health content: 'This is not medical advice. Consult a healthcare professional.' Finance: 'Not financial advice. Consult a financial advisor.' Legal: 'Not legal advice. Consult an attorney.' Affiliate: 'We may earn commissions.' Make disclaimers visible, not hidden in fine print.
 
 ## Enable / disable
 
@@ -40,3 +58,29 @@ disable = ["eeat/*"]
 enable = ["eeat/disclaimers"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the classification that turns this rule on.
+- [eeat/affiliate-disclosure](/rules/eeat/affiliate-disclosure): the commercial version of the same obligation.
+- [eeat/author-expertise](/rules/eeat/author-expertise): the credentials the disclaimer sits alongside.
+- [legal/terms-of-service](/rules/legal/terms-of-service): the broader legal page in the footer.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The disclaimer page is reported with its URL when one is found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,34 @@
 ---
-title: "Stale Copyright Year"
-description: "Checks the footer copyright year against the current year"
+title: "Footer copyright year behind the current year"
+description: "An old year in the footer is the cheapest signal that a site is abandoned. squirrel reads the footer only, so dated body copy is left alone."
 ---
 
-Checks the footer copyright year against the current year
+## What a stale copyright year is
+
+The copyright line in a site footer is one of the few dates every visitor sees on every page. When it is a year or two behind, it reads as nobody has touched this site since then, whatever the content says.
+
+It is read as a maintenance signal, which is not what a copyright notice formally is: the conventional US notice carries the year of first publication, not the year the site was last touched. That is why the rule warns rather than fails, and why its weight is low.
+
+## What squirrel checks
+
+The rule runs on every crawled page over site-chrome regions only: `footer`, `[role=contentinfo]`, `.footer`, `#footer`, `.site-footer`, `.page-footer` and `#colophon`. Body copy is not read, so an archived post quoting an old copyright notice is not reported. It emits a single check named `footer-copyright-year`:
+
+- Skipped when no footer region was found. Message: `No footer or site-chrome region found on this page`.
+- Skipped when the footer has no copyright year. Message: `No copyright year in the footer`.
+- Warn when the year is behind the current one. Message: `Footer copyright year is 2024, behind the current year 2026`, with both as the value and expected value. Severity warning, weight 2.
+- Pass otherwise. Message: `Footer copyright year is 2026`.
+
+A notice is recognised from `©`, `(c)`, the `&copy;` entity or the word `copyright`, followed within thirty non-digit characters by a year, optionally a range. A range is judged on its end year, so `2019-2026` is current in 2026. A footer with several notices is judged on the newest. Years outside 1990 to 2999 are ignored as version numbers or identifiers. A year ahead of the current one passes, since sites legitimately roll over early.
+
+## How to fix it
+
+```html
+<p>&copy; 2019&ndash;{new Date().getFullYear()} Acme</p>
+```
+
+Render the year from the server or the build step rather than hardcoding it, or use a range whose end year updates.
+
+If the year is an accurate publication date rather than a maintenance signal, leave it as it is. Moving it out of the site chrome and into the page body makes it read as a statement about that content rather than about the site, which is what it is.
 
 | | |
 |---|---|
@@ -13,31 +38,18 @@ Checks the footer copyright year against the current year
 | **Severity** | warning |
 | **Weight** | 2/10 |
 
-## Solution
-
-A footer copyright year behind the current year is the most common "this site is abandoned" signal a visitor sees, and it costs nothing to fix. Render the year dynamically from the server or build step rather than hardcoding it, or use a range whose end year updates ("2019-2026"). If the date is a deliberate legal assertion tied to a fixed publication, move it out of site chrome and into the page body so it reads as a statement about that content rather than about the site.
-
-## What it checks
-
-Reads `©`, `(c)`, `&copy;` or the word "Copyright" followed by a year or a year range, and compares the **latest** year found against the current year.
-
-- **Ranges are judged on the end year.** In 2026, `© 2019-2026` is clean and `© 2019-2025` warns.
-- **A year ahead of now is not a finding.** Sites legitimately roll the year over early.
-- **Only site chrome is inspected**: `<footer>`, `[role=contentinfo]`, `.footer`, `#footer`, `.site-footer`, `.page-footer` and `#colophon`. A historical year in body copy is correct as written, and an archived post is supposed to say 2019, so neither is reported.
-- Pages with no footer, or a footer with no copyright notice, are **skipped** rather than passed.
-
 ## Options
 
 | Option | Type | Default | Description |
-|---|---|---|---|
-| `current_year` | number | current UTC year | Year to compare the footer against |
+|--------|------|---------|-------------|
+| `current_year` | integer, 1970 to 9999 | the current UTC year | Year to compare the footer against |
+
+### Configuration example
 
 ```toml squirrel.toml
-[rules.options."content/stale-copyright"]
+[rule_options."content/stale-copyright"]
 current_year = 2026
 ```
-
-Setting `current_year` pins the comparison, which is useful when auditing an archived snapshot of a site as of a particular year.
 
 ## Enable / disable
 
@@ -62,3 +74,29 @@ disable = ["content/*"]
 enable = ["content/stale-copyright"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/freshness](/rules/content/freshness): which date signals the page publishes about itself.
+- [content/date-agreement](/rules/content/date-agreement): dates on the page that disagree with each other.
+- [eeat/trust-signals](/rules/eeat/trust-signals): the other footer signals a reader checks.
+- [legal/privacy-policy](/rules/legal/privacy-policy): the other thing that lives in the footer.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is reported with the footer year it carries. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,35 @@
 ---
-title: "Author Info"
-description: "Checks for author markup and attribution"
+title: "Author attribution: schema, rel=author and visible bylines"
+description: "Who wrote a page is part of how a reader decides whether to trust it. squirrel inventories the author markup a page carries."
 ---
 
-Checks for author markup and attribution
+## What author attribution is
+
+Author attribution is naming who wrote a page and making that machine-readable. It can appear as a `Person` in the page's structured data, as a link with `rel="author"`, as the Open Graph `article:author` meta tag, or as a visible byline in the markup.
+
+It matters most where the reader is deciding whether to trust the content. Google's guidance on helpful content asks who wrote this and what makes them qualified, and for topics touching health, finance or safety, that question carries more weight than anywhere else.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check per signal it finds, plus a fallback:
+
+- `author-schema` passes when a JSON-LD block contains `"author"`. Message: `Author schema markup present`, with the author name when one can be pulled out of the text.
+- `author-links` passes when the page has any `a[rel="author"]`. Message: `2 author link(s) found`, with the first link's text.
+- `og-author` passes when `article:author` is present. Message: `Open Graph author meta present`, with its content.
+- `visible-author` reports info when the page matches `[class*="author"], [class*="byline"], [rel="author"]` but has no author schema and no author link. The `rel` half of that selector matches any element, not only anchors. Message: `Author element found but no structured data`, with `Consider adding author schema markup` as the value.
+- `author-info` reports info when none of the four were found. Message: `No author information detected`, with `Consider adding author attribution for E-E-A-T` as the value.
+
+The schema test is a substring match over the script text rather than a parse, and the name is extracted with a regular expression, so a deeply nested author object may be detected without a name. Severity info, weight 3.
+
+## How to fix it
+
+```html
+<a rel="author" href="/authors/jane-diaz">Jane Diaz</a>
+```
+
+Show the author's name where a reader will see it, link it to a bio page that says what they know about the subject, and mirror the same name in a `Person` node in the page's structured data.
+
+A byline with no link and no bio is weaker than none at all on a topic where expertise matters, because it raises the question without answering it.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for author markup and attribution
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Author information supports E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness). Use Person schema to mark up authors with name, url, and credentials. Link to author bio pages. Display author names visibly on content. For YMYL topics (health, finance), include author qualifications. Consider using rel='author' links.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["content/*"]
 enable = ["content/author-info"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/author-byline](/rules/eeat/author-byline): the same signal judged as a trust requirement.
+- [eeat/author-expertise](/rules/eeat/author-expertise): author pages and Person schema as expertise indicators.
+- [schema/article](/rules/schema/article): the structured data the author node belongs in.
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the topics where this matters most.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the author signals it carries. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

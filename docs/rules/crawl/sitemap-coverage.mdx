@@ -1,9 +1,31 @@
 ---
-title: "Sitemap Coverage"
-description: "Checks for indexable pages that are not in the sitemap"
+title: "Indexable pages missing from the sitemap: measuring the gap"
+description: "A page you want indexed that is in no sitemap depends entirely on link discovery. squirrel diffs the crawl against the sitemap in both directions."
 ---
 
-Checks for indexable pages that are not in the sitemap
+## What sitemap coverage is
+
+Coverage is the overlap between the pages a crawl reaches and the URLs a sitemap lists. Two gaps are possible and they mean different things.
+
+A crawled, indexable page that is not in the sitemap relies on internal links to be found. That is usually fine for a well-linked page and a real problem for one buried several levels deep. A sitemap URL the crawl never reached is the reverse: either the page is orphaned from the site's own navigation, or the crawl stopped before reaching it.
+
+## What squirrel checks
+
+The rule is site-wide. It uses the sitemap processor's precomputed missing and orphan lists, and falls back to computing the missing list itself when that is empty. The fallback skips pages whose status is not 200 and pages carrying a `noindex` in the `robots` meta, then checks both the page URL and its final URL against the normalised sitemap URLs.
+
+- Skipped when no sitemap was discovered. Message: `No sitemap to compare`.
+- Skipped when no pages were crawled. Message: `No pages to compare`.
+- `sitemap-coverage` warns when indexable pages are missing. Message: `23 indexable page(s) not in sitemap (18%)`, where the percentage is of all crawled pages. It passes otherwise with `All indexable pages are in sitemap`. Severity warning, weight 5.
+- `sitemap-orphans` warns for sitemap URLs the crawl did not reach. Message: `31 sitemap URL(s) were not crawled`.
+- `sitemap-orphans` reports info instead when the crawl hit its page cap and the sitemap holds more URLs than that cap. Message: `31 sitemap URL(s) not audited this run (crawl capped at 25 pages)`.
+
+The capped case matters because a shallow crawl profile against a large sitemap would otherwise report a crawl-budget artefact as a coverage defect.
+
+## How to fix it
+
+Generate the sitemap from the same route data the site renders from, filtered to indexable pages that return 200, and regenerate it on deploy.
+
+For sitemap URLs the crawl could not reach, check whether anything on the site links to them. A page that exists only in the sitemap is discoverable but not navigable, which is a different problem from a missing sitemap entry.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for indexable pages that are not in the sitemap
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Your sitemap should include all pages you want search engines to index. Pages that are crawlable and indexable (no noindex, not blocked by robots.txt) should generally be in your sitemap. Missing pages may not be discovered or indexed efficiently. Use a sitemap generator that automatically includes all indexable pages, or manually add important pages.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["crawl/*"]
 enable = ["crawl/sitemap-coverage"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): whether there is a sitemap to compare against.
+- [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap): the reverse mistake, submitting pages you have blocked.
+- [links/orphan-pages](/rules/links/orphan-pages): pages with too few inbound internal links to be found.
+- [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx): listed URLs that resolve to an error.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [Sitemaps overview, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Both gaps are listed by URL, with the missing-page share as a percentage. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

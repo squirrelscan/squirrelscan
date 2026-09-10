@@ -1,9 +1,26 @@
 ---
-title: "Cloaking / UA-Gated Content"
-description: "Detects pages that serve different content to Googlebot than to a normal visitor"
+title: "Cloaking: showing Googlebot a different page"
+description: "An injected payload can hide from you by branching on user-agent or a query token. squirrel re-fetches suspicious paths and compares the responses."
 ---
 
-Detects pages that serve materially different content to a **Googlebot** user-agent than to a normal visitor (UA cloaking), or that change their response when a URL query token is added (token-gating). Both are classic ways an injected SEO-spam or phishing payload hides from the site owner while still ranking: you see a clean page, the search engine (or a tokened link) sees the payload.
+## What cloaking is
+
+Cloaking is serving materially different content to a search engine crawler than to a person. Google's spam policies treat it as a violation on its own, but on a site that did not choose to do it, cloaking is usually a symptom: an injected payload branches on the user-agent so the owner sees a clean page while the crawler indexes the spam.
+
+Token-gating is the same idea keyed on the URL instead. The page returns nothing interesting until a query parameter the attacker distributes is appended, which keeps the payload out of ordinary crawls. Legitimate personalisation by geography or device is not cloaking as long as the indexable content stays the same.
+
+## What squirrel checks
+
+The rule reads the results of an opt-in differential probe that runs after the crawl and before the rules. The probe picks a small, capped set of suspicious paths, meaning pages that are orphaned, with no inbound internal links and absent from the sitemap, or recently modified according to sitemap `lastmod`. It re-fetches each one with the default user-agent, again with a Googlebot user-agent, and optionally once more with an appended query token, then compares HTTP status and visible-text similarity.
+
+The rule emits these checks:
+
+- `cloaking` passes when the probe ran but found no suspicious paths to test. Message: `No suspicious paths to probe for cloaking`.
+- `cloaking` fails for paths where the Googlebot response diverges. Message: `2 page(s) serve different content to googlebot than to a normal visitor — likely cloaking`. The reported value describes up to five of them, either as `/path: googlebot got 200, normal visitor got 404 (UA-gated response)` or as `/path: googlebot content only 12% similar to the normal-visitor page`.
+- `cloaking-token-gated` warns for paths whose response changes when a query token is appended, excluding any already reported as UA cloaking. Message: `1 page(s) change their response when a query token is appended — possible token-gated content`.
+- `cloaking` passes when paths were probed and neither pattern appeared. Message: `Probed 8 suspicious path(s) — no UA cloaking or token-gating detected`.
+
+When the probe is off, the rule emits nothing. It never reports a path it did not probe as clean. Severity error, weight 7.
 
 | | |
 |---|---|
@@ -13,22 +30,9 @@ Detects pages that serve materially different content to a **Googlebot** user-ag
 | **Severity** | error |
 | **Weight** | 7/10 |
 
-## How it works
-
-This rule reads the results of an **opt-in differential probe**. After the crawl, squirrelscan picks a small, capped set of **suspicious** paths, pages that are *orphaned* (no inbound internal links and absent from the sitemap) or *recently modified* (sitemap `lastmod` within a recent window), and re-fetches each one:
-
-1. with the **default** (normal-visitor) user-agent: the baseline,
-2. with a **Googlebot** user-agent, and
-3. optionally once more with an appended query token.
-
-It then compares the responses by HTTP status and visible-text similarity:
-
-- **UA cloaking** (→ failure): the Googlebot response materially diverges from the baseline: for example, the normal visitor gets a `403`/`404` while Googlebot gets a `200`, or the visible text barely overlaps.
-- **Token-gating** (→ warning): the response changes materially when a query token is appended, suggesting content gated behind a URL parameter.
-
-The probe is **off by default** and **bounded** (capped page count) so it never multiplies crawl cost. When it is off, this rule does nothing: it never reports "clean" for paths it never probed.
-
 ## Enable the probe
+
+The probe is off by default. It adds two requests per selected path, or three when query variation is on, and the page cap is what bounds that extra work.
 
 ```toml squirrel.toml
 [integrity.cloaking_probe]
@@ -39,9 +43,15 @@ query_variation = true    # also probe an appended query token (token-gating)
 # googlebot_user_agent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 ```
 
-## Solution
+## How to fix it
 
-A page that shows search engines (or tokened links) different content than it shows you is cloaking: almost always an injected payload or a deceptive doorway, and a likely compromise. Fetch the URL yourself with a Googlebot user-agent (e.g. `curl -A 'Googlebot' <url>`) to see the hidden content, then audit recently modified files/plugins and any server-side rules that branch on user-agent or query string. Legitimate UA/geo personalization should never change the core indexable content.
+```bash
+curl -A 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' https://example.com/path
+```
+
+Fetch the URL yourself with a Googlebot user-agent to see how the server responds to that string. A server can also identify Googlebot by reverse DNS on the request IP, so a spoofed user-agent shows you the user-agent branch and not necessarily what Google receives. Then look for server-side rules that branch on user-agent or query string, and audit recently modified files and plugins.
+
+Paywalls and A/B tests can produce a similarity divergence without being cloaking. Confirm what the Googlebot response actually contains before treating a finding as a compromise.
 
 ## Enable / disable
 
@@ -58,3 +68,30 @@ disable = ["integrity/cloaking"]
 [rules]
 disable = ["integrity/*"]
 ```
+
+## Related rules
+
+- [integrity/orphan-page](/rules/integrity/orphan-page): the hidden pages the probe selects from.
+- [integrity/known-malicious-url](/rules/integrity/known-malicious-url): reputation feeds that may already have seen the hidden payload.
+- [integrity/seo-doorway](/rules/integrity/seo-doorway): what cloaked pages usually turn out to contain.
+- [crawl/soft-404](/rules/crawl/soft-404): pages that return 200 while showing an error, a different status mismatch.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Cloaking, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#cloaking)
+- [Hacked content, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each probed path is listed with the two status codes and the similarity score. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,36 @@
 ---
-title: "Sitemap Lastmod Churn"
-description: "Checks that sitemap lastmod values aren't all stamped with the same build date"
+title: "Sitemap lastmod stamped at build time: how to detect it"
+description: "If every lastmod carries the same date, the field records your deploy, not your content. squirrel counts distinct days across the sitemap."
 ---
 
-Checks that sitemap lastmod values aren't all stamped with the same build date
+## What lastmod churn is
+
+`<lastmod>` records when a page's content last changed, so a crawler can prioritise what has actually moved. Its usefulness depends on the values being derived from the content rather than from the pipeline that publishes it.
+
+When several hundred URLs all carry the same date, that is what a build-time stamp looks like: the generator writing the current time onto every entry each run. It is not proof, since a site really can republish everything on one day, and this is why the rule reports rather than fails. But a `lastmod` that moves on every deploy tells a crawler nothing it can act on.
+
+## What squirrel checks
+
+The rule is site-wide. It walks every `<lastmod>` in every discovered sitemap, parses each into a calendar day, and counts distinct days. Google News sitemaps are excluded from the sample and counted separately.
+
+- Skipped when no sitemap was discovered. Message: `No sitemap to validate`.
+- Skipped when fewer than 20 non-news URLs carry a parseable `lastmod`. Message: `Only 8 sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`.
+- Skipped with different wording when every `lastmod` came from a news sitemap. Message: `Only news-sitemap URLs carry a lastmod (140); news sitemaps hold ~48 hours of articles by design, so their lastmod values are excluded from this check`.
+- Warn when the values collapse onto two distinct days or fewer. Message: `412 sitemap URL(s) with lastmod collapse onto 1 distinct day(s): 2026-09-08 (from https://example.com/sitemap.xml)`, with each date listed as an item carrying its count. Severity warning, weight 4.
+- Pass otherwise. Message: `412 sitemap URL(s) with lastmod spread across 96 distinct days`.
+
+A Google News sitemap holds roughly 48 hours of articles by specification, so its `lastmod` values always cluster. Pooling them in would accuse every news publisher of build-stamping, which is why they are set aside.
+
+## How to fix it
+
+```xml
+<url>
+  <loc>https://example.com/blog/post</loc>
+  <lastmod>2026-03-14T09:12:00Z</lastmod>
+</url>
+```
+
+Drive `lastmod` from the content's own modification timestamp, whether that comes from the CMS field or from version control, and leave it alone when a deploy does not change the page. Omitting the element entirely is better than stamping it: an absent `lastmod` says nothing, and a wrong one says something false.
 
 | | |
 |---|---|
@@ -12,18 +39,6 @@ Checks that sitemap lastmod values aren't all stamped with the same build date
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-If every URL in your sitemap carries the same (or nearly the same) lastmod date, the field is being stamped at build/deploy time rather than reflecting real content changes. This makes lastmod useless as a freshness signal - search engines may learn to ignore it entirely. Update lastmod only when a page's content actually changes, driven by your CMS or version control history, not by the deploy pipeline. Google News sitemaps are excluded from this check: they hold only about 48 hours of articles by design, so their lastmod values are supposed to cluster.
-
-## What this rule does not count
-
-**Google News sitemaps are excluded.** A news sitemap (one declaring the `xmlns:news` namespace) carries roughly the last 48 hours of articles by specification, so its `lastmod` values always fall on one or two days. Counting them would flag every publisher that has one. Detection is by namespace, not filename, so a news sitemap served from any path is recognised.
-
-If the only `lastmod` values found on your site come from a news sitemap, the check reports as skipped and says so, rather than reporting a problem you do not have.
-
-The check needs at least 20 URLs carrying a `lastmod` (news-sitemap URLs excluded) before it will judge anything. Below that it skips, because a handful of pages legitimately updated in the same week is indistinguishable from a build stamp.
 
 ## Enable / disable
 
@@ -48,3 +63,30 @@ disable = ["crawl/*"]
 enable = ["crawl/sitemap-lastmod-churn"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-lastmod-drift](/rules/crawl/sitemap-lastmod-drift): lastmod that disagrees with the page's own dateModified.
+- [content/freshness](/rules/content/freshness): which date signals the page publishes about itself.
+- [content/date-agreement](/rules/content/date-agreement): the dates a page shows in its markup and its text.
+- [crawl/sitemap-valid](/rules/crawl/sitemap-valid): structural problems in the same file.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Best practices for setting the lastmod element, Google Search Central](https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping)
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. The distinct dates are listed with how many URLs carry each one. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,30 @@
 ---
-title: "SEO Doorway Page"
-description: "Detects injected off-topic, keyword-stuffed affiliate doorway posts"
+title: "Doorway page: injected affiliate spam on a legitimate site"
+description: "An off-topic, keyword-stuffed affiliate post is how a compromise monetises your domain's authority. squirrel checks the title, the density and the body."
 ---
 
-Detects injected off-topic, keyword-stuffed affiliate doorway posts that diverge from the rest of the site's content.
+## What a doorway page is
+
+A doorway page is content published to rank for a query and funnel the visitor somewhere else, with no value of its own. When it appears on a site that has nothing to do with the topic, it is usually injected: an attacker with write access publishes affiliate posts to borrow the domain's standing in search.
+
+Google's spam policies treat doorways as a violation, so leaving them up risks the whole site's rankings, not just the injected pages. The give-away is topical: a plumbing site that suddenly carries posts about sales funnels and passive income.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits at most one check named `seo-doorway`. A page is a hit only when the title contains at least one term from the doorway lexicon, at least two distinct lexicon terms appear across the title and body, and the body is either thin or keyword-stuffed.
+
+The lexicon is `clickfunnels`, `kajabi`, `affiliate`, `make money online`, `passive income`, `best funnel` and `sales funnel`. Thin means the parser marked the content as thin or the body is under 500 words. Stuffed means the most repeated lexicon term, weighted by its own word count, exceeds 3% of the body's words.
+
+- Info when this is the only integrity signal on the page. Message: `Possible SEO doorway / affiliate spam page (single signal — review)`.
+- Fail when at least two distinct integrity signals fire on the page. Message: `Likely injected SEO doorway page (3 corroborating integrity signals)`.
+
+The reported value names up to two matched title terms and says whether the body was thin, stuffed, or both. The measured density appears only when the page was stuffed; a thin-only finding says `thin body` and no percentage.
+
+## How to fix it
+
+Delete the injected posts, then close the way in. Check for CMS accounts and plugins you did not add, look at what changed on disk around the publication date, and read the access logs. Request reprocessing in Search Console once the pages return 410 or 404.
+
+An affiliate site writing genuinely about funnels can satisfy every condition: a lexicon term in the title, two distinct terms overall, and a body under 500 words. That page fires a single signal and stays at info, which is the intended behaviour rather than a defect. It only becomes a failure if another integrity signal fires on the same page.
 
 | | |
 |---|---|
@@ -12,16 +33,6 @@ Detects injected off-topic, keyword-stuffed affiliate doorway posts that diverge
 | **Scope** | Page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## How it works
-
-The rule fires when a page's title carries doorway lexicon (affiliate funnel terms like ClickFunnels, Kajabi, "sales funnel", "make money online") **and** the body is either thin or keyword-stuffed with multiple distinct doorway terms. A single legitimate "affiliate disclosure" mention never fires: the rule needs real keyword stuffing, not one word.
-
-A lone doorway signal is reported as **info** (it could be legitimate affiliate content). It escalates to a **failure** only when another compromise signal corroborates: for example the post is also an off-template, hidden orphan page, the parasite-SEO shape from the real incident.
-
-## Solution
-
-Off-topic, thin, keyword-stuffed affiliate posts injected into a site are a parasite-SEO compromise: they hijack the domain's authority to rank spam. If you did not publish this content, treat the site as compromised: remove the injected posts, audit your CMS for unauthorized authors/plugins, and check server logs. Google penalizes doorway pages, so leaving them up risks ranking damage.
 
 ## Enable / disable
 
@@ -46,3 +57,30 @@ disable = ["integrity/*"]
 enable = ["integrity/seo-doorway"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [integrity/orphan-page](/rules/integrity/orphan-page): injected posts are usually linked from nowhere.
+- [integrity/template-discontinuity](/rules/integrity/template-discontinuity): whether they even use your theme.
+- [content/keyword-stuffing](/rules/content/keyword-stuffing): the same density measurement applied to your own content.
+- [eeat/affiliate-disclosure](/rules/eeat/affiliate-disclosure): what a legitimate affiliate page has to say.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Doorways, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#doorways)
+- [Hacked content, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each doorway page is listed with the matched terms and the measured keyword density. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

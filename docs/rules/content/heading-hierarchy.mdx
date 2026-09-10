@@ -1,9 +1,37 @@
 ---
-title: "Heading Hierarchy"
-description: "Validates heading structure and hierarchy"
+title: "Skipped heading levels: h1 to h3 and other outline problems"
+description: "Headings are the page's outline, and a skipped level breaks it for anyone navigating by structure. squirrel checks order, emptiness, length and repeats."
 ---
 
-Validates heading structure and hierarchy
+## What heading hierarchy is
+
+Headings from `h1` to `h6` describe the document's structure. Screen reader users navigate by them, jumping from heading to heading rather than reading linearly, and search engines use them to understand how a page is organised.
+
+The order carries the meaning. `h1` to `h2` to `h3` says each section is inside the last; `h1` straight to `h3` says a level is missing, and the reader is left to guess what. The common cause is choosing a heading level for how it looks rather than for where it sits, which is what CSS is for.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the heading analysis the parser produced. It emits up to four checks:
+
+- `heading-hierarchy` warns when a level was skipped. Message: `Skipped heading levels detected`, listing each skip. Severity warning, weight 5.
+- `heading-hierarchy` passes when nothing was skipped and the page has headings. Message: `Heading hierarchy is valid`.
+- `empty-headings` warns when a heading has no text. Message: `2 empty heading(s) found`.
+- `long-headings` reports info for headings over 70 characters. Message: `3 heading(s) over 70 characters`, each item naming the level with the first 50 characters of its text.
+- `duplicate-headings` reports info for repeated heading text. Message: `4 duplicate heading(s)`, listing the repeated text.
+
+A page with no headings at all emits nothing from the first check, since the pass branch requires at least one heading.
+
+## How to fix it
+
+```html
+<h1>URL structure</h1>
+<h2>Word separators</h2>
+<h3>Hyphens versus underscores</h3>
+```
+
+Pick the level from the position in the outline and style it with CSS. Reading only the headings should give a sensible summary of the page.
+
+An empty heading is usually a styling wrapper or a decorative element that ended up as an `h2`. Use a `div` and a class instead.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Validates heading structure and hierarchy
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Proper heading structure (H1 → H2 → H3) helps users and search engines understand your content organization. Skipping levels (H1 → H3) creates confusion. Use headings in sequential order without skipping levels. Each section should use the next heading level down. Think of headings as an outline: they should make sense when read alone. Avoid empty headings or using headings purely for styling.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["content/*"]
 enable = ["content/heading-hierarchy"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/h1](/rules/core/h1): whether the page has exactly one top-level heading.
+- [a11y/heading-order](/rules/a11y/heading-order): the accessibility check over the same structure.
+- [content/word-count](/rules/content/word-count): how much content sits under those headings.
+- [images/figure-figcaption](/rules/images/figure-figcaption): the other structural markup on a content page.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The heading elements, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements)
+- [Understanding headings and labels, WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with its skipped levels, empty headings and repeats. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

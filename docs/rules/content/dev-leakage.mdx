@@ -1,9 +1,37 @@
 ---
-title: "Development Host Leakage"
-description: "Detects localhost, private, staging and preview hosts on a production page"
+title: "localhost in production: dev hosts left in the markup"
+description: "A link or image pointing at localhost or a preview deployment is broken for every visitor. squirrel classifies the host and says whether it is yours."
 ---
 
-Detects localhost, private, staging and preview hosts on a production page
+## What development host leakage is
+
+A development host in production markup is a URL that was correct on someone's machine and is not correct on the live site. It reaches production through a hard-coded template value, a CMS field authored while working locally, or a base-URL environment variable that never got a production value.
+
+The consequence depends on where it sits. In an `href` or a `src` it is a broken reference a visitor can hit right now. In body copy it is a mention rather than a break. A preview deployment URL is a third case: it usually resolves, so nothing looks broken, but it points visitors and crawlers at a copy of the site nobody is maintaining.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits a single check named `dev-leakage`:
+
+- Skipped when there is no parsed document. Message: `No document available`.
+- Skipped when the page URL cannot be parsed. Message: `Page URL could not be parsed`.
+- Skipped when the audited origin is itself a development host. Message: `Audited origin is itself a non-production host (localhost:3000), so its own URLs are not leakage`.
+- Pass when nothing was found. Message: `No development, private or preview hosts referenced`.
+- Warn or fail otherwise. Message: `3 development host reference(s) on a production page (localhost, preview-host): example http://localhost:3000/api`.
+
+Five kinds are classified: `localhost` for a loopback host, `private-ip` for a private address range, `preview-host` for a deployment-preview domain, `dev-subdomain` for a development subdomain of the audited site, and `insecure-self-link` for an `http://` link back to your own host. Each hit also records whether it came from an attribute or from body copy, and whether the host is unmistakably this site's own.
+
+The status is fail when a live `href` or `src` points at a host that is clearly this site's own development artifact, since that is a reference a visitor can follow into nothing. An `insecure-self-link` is treated as soft and warns instead, as does any mention in copy and any preview host that could belong to someone else. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
+
+## How to fix it
+
+```html
+<a href="/api/docs">API documentation</a>
+```
+
+Replace the origin with a relative path where the target is on this site. That makes the reference correct in every environment at once, which is the actual fix; changing one absolute URL to the production one leaves the same bug in the next environment.
+
+Point a staging or preview link at the production equivalent, and check whether that staging site is publicly indexable while you are there. Make an `http://` self-link relative or `https://`, since the redirect it costs every visitor is avoidable.
 
 | | |
 |---|---|
@@ -12,54 +40,6 @@ Detects localhost, private, staging and preview hosts on a production page
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-A URL that was correct in development shipped to production. Find where it is stored, not just the page it appears on: a link or image pointing at localhost, a private address, or a preview deployment is usually a hard-coded value in a template, a CMS field written while working locally, or a base-URL environment variable that never got a production value, so the same URL is on every page that renders that component. Replace the origin with a relative path where the target is on this site, which is what makes the link correct in every environment at once. For a staging or preview host, point the link at the production equivalent and check whether the staging site is publicly indexable while you are there. For an `http://` link back to your own site, make it relative or `https://`, since the redirect it currently costs every visitor is avoidable.
-
-## What it checks
-
-Five kinds, in every `href` and `src` on the page and in the copy a visitor reads. The head is included: a `<link rel="canonical">` at localhost de-indexes the page and a stylesheet or script at localhost breaks it outright, so those are the highest-impact findings the rule has.
-
-| Kind | Example | Meaning |
-|---|---|---|
-| `localhost` | `http://localhost:3000/api` | a dev server address shipped to production |
-| `private-ip` | `http://192.168.1.10/logo.png` | an address only reachable inside one network |
-| `dev-subdomain` | `https://staging.example.com/pricing` | a non-production tier of this site's own domain |
-| `preview-host` | `https://example-git-main.vercel.app/` | an ephemeral deployment that will stop resolving |
-| `insecure-self-link` | `http://example.com/pricing` | this site's own URL, spelled without TLS |
-
-`localhost` covers the whole `127.0.0.0/8` block, the IPv6 loopback `[::1]`, the unspecified address `0.0.0.0`, and any `*.localhost` name. `private-ip` covers the three RFC 1918 blocks: `10.0.0.0/8`, `172.16.0.0/12` and `192.168.0.0/16`. Preview hosts are `vercel.app`, `netlify.app`, `pages.dev`, `ngrok.io`, `ngrok.app`, `ngrok-free.app` and `trycloudflare.com`.
-
-**Severity depends on whether the reference is live.** A dev host in an `href` or `src` is something a visitor can click or a browser will try to load, and it fails. A dev host that only appears in copy is embarrassing rather than broken, and it warns.
-
-## What is excluded
-
-The rule is mostly a list of ways to tell a leaked URL apart from a URL a page is talking about on purpose.
-
-- **Code samples.** `<code>`, `<pre>`, `<samp>` and `<kbd>` subtrees, `<template>` content, and the container classes syntax highlighters and in-page editors use (`hljs`, `shiki`, `prism`, `code-block`, `cm-editor`, `monaco-editor`, any `language-*`) are all dropped before the copy is read. A getting-started page printing `http://localhost:5173` in a code block stays clean. A live `<a href>` is still judged wherever it sits, including inside a `<pre>`, because a clickable link is clickable regardless of its surroundings.
-- **A bare `localhost` in a sentence.** "The app also runs on localhost during development" is a sentence people write. A scheme, a port or a path is required before a bare `localhost` counts, so `localhost:5173` and `http://localhost` do. A qualified name like `api.acme.localhost` has no second reading and counts on its own.
-- **A bare address in `10.0.0.0/8`.** Four dotted numbers starting at 10 is also how enterprise software spells a version, so `Contoso Server 10.0.0.1` is not reported. With a scheme, a port or a path it is unmistakably a host and is. The `192.168.*`, `172.16-31.*` and `127.*` blocks have no such reading and count bare.
-- **A bare platform name.** "We deploy to pages.dev" names a platform. `abc123.pages.dev` names a deployment, so at least one leading label is required.
-- **Non-production audits.** If the audited origin is itself a localhost, private, preview or `staging.`/`dev.`/`test.` host, the rule skips the page rather than passing it. Auditing a preview deploy would otherwise report every internal link on it as leakage. Both the seed URL and the URL the page finally resolved to are checked, so a page that redirected onto a preview host skips too. A tier word only counts when it really is a tier: `dev.to`, `test.com` and `staging.com` are registrable domains in their own right, and sites hosted on them are audited normally.
-
-## Subdomain matching
-
-`staging.`, `dev.` and `test.` are matched against the audited site's **registrable domain**, resolved through the Public Suffix List, not by a string suffix test. Two things follow.
-
-`notdev.example.com`, `webdev.example.com` and `development.example.com` are not reported, because the leftmost label has to be exactly `staging`, `dev` or `test`. Somebody else's `dev.other.com` is not reported either, because its registrable domain is not this site's. Multi-label public suffixes resolve correctly, so `dev.example.co.uk` is a dev tier of `example.co.uk` rather than of `co.uk`.
-
-## Preview hosts that are not yours
-
-Plenty of production sites live on `vercel.app` and `pages.dev`, and a page may legitimately link to somebody else's project there. A preview host whose leftmost label carries this site's own name (`example-git-main.vercel.app` for `example.com`) is treated as this site's own deployment and fails. One that does not is still reported, because linking production content at an ephemeral platform host is worth knowing about, but it only warns.
-
-The name has to be a whole hyphen-separated segment of the label, never a substring. Vercel, Netlify and Cloudflare all build the label out of hyphen-joined parts, so a project's own name is always a segment; a substring test would instead read `sandbox-demo.vercel.app` as `box.com`'s own deployment and fail a link its owner cannot do anything about.
-
-## Related rules
-
-[links/https-downgrade](/rules/links/https-downgrade) counts every `http://` anchor on an HTTPS page, including links to other people's sites, and owns the transport-security story. This rule looks at the same attribute from a different angle and deliberately stays narrower: it reports an `http://` URL only when it points back at **your own** registrable domain, where the fix is a template or a config value rather than a decision about whether to link somewhere at all. That kind never escalates this rule past `warn` and never decides its status by itself, so an HTTPS page whose only finding is a self-referential `http://` link gets one warning here and one from `links/https-downgrade`, describing the same href as two different problems: an avoidable redirect, and a baked-in absolute URL.
-
-[links/invalid-links](/rules/links/invalid-links) reports URLs that do not parse. There is no overlap: `http://localhost:3000/api` is a perfectly well-formed URL, so it never appears there, and a value this rule cannot parse is skipped rather than reported, so a malformed href is never counted twice. Broken-link rules would catch a dev host only when it happens to be unreachable from the crawler, which is the wrong signal at the wrong time: `staging.example.com` usually resolves, and `abc123.vercel.app` resolves right up until the deployment is garbage-collected.
 
 ## Enable / disable
 
@@ -84,3 +64,30 @@ disable = ["content/*"]
 enable = ["content/dev-leakage"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): credentials that shipped the same way.
+- [content/placeholder-text](/rules/content/placeholder-text): other values that reached production unfinished.
+- [links/https-downgrade](/rules/links/https-downgrade): the `http://` links this rule also reports.
+- [links/broken-links](/rules/links/broken-links): internal links that resolve to an error.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [RFC 1918: Address allocation for private internets](https://datatracker.ietf.org/doc/html/rfc1918)
+- [Why HTTPS matters, web.dev](https://web.dev/articles/why-https-matters)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the host kinds found and an example URL. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

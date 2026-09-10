@@ -3,22 +3,22 @@ title: "Legal Compliance"
 description: "Privacy policy and legal compliance signals"
 ---
 
-Privacy policy and legal compliance signals
+Legal Compliance rules check for the pages and mechanisms that privacy law and commercial practice expect: a consent gate before non-essential cookies, a privacy policy, terms of service, and a sub-processor disclosure for businesses that handle customer data. They confirm the thing exists and is reachable, not that its contents satisfy any particular regulator. Two of them escalate when the audit's site metadata places the audience under a stricter regime.
 
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Cookie Consent" icon="circle-info" href="/rules/legal/cookie-consent">
-    Checks for cookie consent mechanism
+  <Card title="Cookie consent banner: detecting a consent mechanism" icon="circle-info" href="/rules/legal/cookie-consent">
+    Setting non-essential cookies without consent is unlawful for an EU audience. squirrel looks for a consent platform or a consent-keyed banner.
   </Card>
-  <Card title="Privacy Policy" icon="triangle-exclamation" href="/rules/legal/privacy-policy">
-    Checks for privacy policy link presence
+  <Card title="Privacy policy link: finding one anywhere on the site" icon="triangle-exclamation" href="/rules/legal/privacy-policy">
+    A missing privacy policy is a legal exposure where the GDPR or CCPA applies. squirrel accepts a policy page or a link to one from any crawled page.
   </Card>
-  <Card title="Sub-processor Disclosure" icon="circle-info" href="/rules/legal/subprocessor-disclosure">
-    Checks for a sub-processor / data-processing (DPA) disclosure page or link
+  <Card title="Sub-processor disclosure: what a security review asks" icon="circle-info" href="/rules/legal/subprocessor-disclosure">
+    A processor has to name the sub-processors it engages. squirrel looks for a subprocessors page or a DPA link anywhere on the site.
   </Card>
-  <Card title="Terms of Service" icon="circle-info" href="/rules/legal/terms-of-service">
-    Checks for terms of service link presence
+  <Card title="Terms of service link: finding it in the page's links" icon="circle-info" href="/rules/legal/terms-of-service">
+    Terms of service belong in the footer of every page. squirrel checks each page's links by both href and anchor text, in five languages.
   </Card>
 </CardGroup>
 
@@ -28,3 +28,5 @@ Privacy policy and legal compliance signals
 [rules]
 disable = ["legal/*"]
 ```
+
+Every audit reports Legal Compliance findings next to the performance, security and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.

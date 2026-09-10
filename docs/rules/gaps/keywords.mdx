@@ -1,11 +1,32 @@
 ---
-title: "Keyword Gaps"
-description: "Finds keywords competitors rank for that this site doesn't rank for"
+title: "Keyword gaps: terms competitors rank for and you do not"
+description: "A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data."
 ---
 
 <Note>**Cloud rule, opt-in** - requires login (`squirrel auth login`), costs **25 credits per audit**, and is **disabled by default**. See [Cloud rules](/cloud/rules).</Note>
 
-Finds keywords competitors rank for (or seed-keyword opportunities) that this site doesn't rank for.
+## What a keyword gap is
+
+A keyword gap is a search term with real volume where competitors appear and you do not. It is a different question from how well your existing pages rank. A gap can mean you have nothing on the topic, or that what you have does not rank, and the fix differs: a new page in the first case, an expanded one in the second.
+
+The comparison needs competitors, either named by you or inferred, and live search data for volume. Without both, a keyword list is a guess. What comes back is demand, not a plan: a term with volume is only worth pursuing when it matches what your site is actually for.
+
+## What squirrel checks
+
+The rule is site-wide and reads a result the cloud keyword-gaps service produced before the rules ran. It emits up to two checks:
+
+- `keyword-gaps` is skipped when no result is available, because the rule was not enabled or the service skipped it. Message: `Keyword gap analysis skipped`, with a readable skip reason.
+- `keyword-gaps` passes when the service found none. Message: `No keyword gaps found`.
+- `keyword-gaps` reports info with the count. Message: `18 keyword gaps found`, or `1 keyword gap found` for one.
+- `keyword-gaps-high-volume` warns when more than 20 gaps each have at least 500 monthly searches. Message: `21 high-volume keyword gaps (≥500 searches/mo) — significant untapped search demand`.
+
+Severity for the rule is info and the weight is 1, so it never moves a score much: it is a research output rather than a defect. It is disabled by default and costs 25 credits per audit when enabled.
+
+## How to fix it
+
+Work through the high-volume gaps that match your site's intent and build a page per keyword cluster. A dedicated page generally outranks one that mentions the topic in passing.
+
+Name your real competitors in the `competitors` option. Without them the analysis falls back on seed keywords from your own content, which is a weaker comparison.
 
 | | |
 |---|---|
@@ -16,21 +37,21 @@ Finds keywords competitors rank for (or seed-keyword opportunities) that this si
 | **Weight** | 1/10 |
 | **Default** | Disabled (opt-in) |
 
-## What it checks
-
-Using live search data, the rule compares your site's ranking footprint against competitor domains (or seed keywords derived from your content) and reports keywords with real search volume where competitors rank and you don't.
-
-## Solution
-
-Review the listed gap keywords and prioritize the high-volume ones that match your site's intent. Create or expand pages targeting them - a dedicated page per keyword cluster generally outranks a page that mentions the topic in passing. Configure competitor domains via the `competitors` option to sharpen the analysis.
-
 ## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `country` | string | `US` | ISO country for search data |
+| `language` | string | `en` | Language code for search data |
+| `competitors` | array of strings | none | Competitor domains to compare against, up to 5 |
+
+### Configuration example
 
 ```toml squirrel.toml
 [rule_options."gaps/keywords"]
-country = "US"                       # ISO country for search data (default US)
-language = "en"                      # language code for search data (default en)
-competitors = ["competitor.com"]     # up to 5 competitor domains
+country = "AU"
+language = "en"
+competitors = ["competitor.com", "other.example"]
 ```
 
 ## Enable / disable
@@ -41,3 +62,30 @@ This rule is opt-in - enable it explicitly:
 [rules]
 enable = ["gaps/keywords"]
 ```
+
+## Related rules
+
+- [gaps/content](/rules/gaps/content): topic clusters rather than individual keywords.
+- [content/word-count](/rules/content/word-count): whether the pages you have say enough.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): which existing pages are thinner than their siblings.
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): whether new pages will be linked into the site.
+
+Gap Analysis findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [SEO starter guide, Google Search Central](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Gap Analysis section of the report. Each gap keyword is listed with its search volume. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Gap Analysis section looks like on a real site.
+  </Card>
+</CardGroup>

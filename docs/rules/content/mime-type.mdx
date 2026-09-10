@@ -1,9 +1,36 @@
 ---
-title: "MIME Type Validation"
-description: "Detects Content-Type header mismatches with file extensions"
+title: "Wrong Content-Type: header and extension disagree"
+description: "A stylesheet served as text/html is refused by the browser under nosniff. squirrel compares the response type against the URL extension."
 ---
 
-Detects Content-Type header mismatches with file extensions
+## What a MIME type mismatch is
+
+The `Content-Type` response header tells the client what a file is. The extension in the URL is a convention, not a declaration: the header is what the browser acts on.
+
+When they disagree, the header wins and things break in ways that look unrelated. A stylesheet served as `text/html` is refused outright when `X-Content-Type-Options: nosniff` is set, and a script served as `text/plain` will not execute. Without `nosniff` the browser may sniff its way to the right answer, which hides the misconfiguration until the day you add the header.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It takes the lowercased extension from the end of the URL path and compares the response `Content-Type`, with any charset parameter removed, against the types expected for that extension. It emits a single check named `mime-type`:
+
+- Skipped when the URL has no extension. Message: `No file extension detected`.
+- Info when the extension is not in the map. Message: `Unknown extension .xyz, skipping validation`.
+- Fail when there is no `Content-Type` header. Message: `Missing Content-Type header for .css file`, with the expected type.
+- Fail when the type does not match. Message: `Incorrect MIME type for .css file`, with the value found and the accepted types.
+- Pass otherwise. Message: `Correct MIME type for .css`, with the value.
+
+The map covers scripts, stylesheets, images, fonts, and the document types `.pdf`, `.json`, `.xml`, `.html` and `.htm`, each with the one or two types that are acceptable for it. Severity warning, weight 5.
+
+## How to fix it
+
+```nginx
+include mime.types;
+default_type application/octet-stream;
+```
+
+Fix it in the server configuration rather than per file. Both Apache and nginx ship a mime types map; the usual cause is a custom handler or a framework route that sets a default type for everything it serves.
+
+Serving a static file through an application route is where this most often goes wrong. Set the type explicitly there.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Detects Content-Type header mismatches with file extensions
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Incorrect MIME types break resource loading and waste crawl budget. Common issues include .js files served as text/html, images without image/* type, CSS without text/css. Fix server configuration to serve correct Content-Type headers. For Apache use .htaccess, for nginx use mime.types config.
 
 ## Enable / disable
 
@@ -40,3 +63,30 @@ disable = ["content/*"]
 enable = ["content/mime-type"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/x-content-type](/rules/security/x-content-type): the nosniff header that turns a mismatch into a refusal.
+- [core/charset](/rules/core/charset): the charset parameter on the same header.
+- [content/mojibake](/rules/content/mojibake): what a wrong charset does to the text.
+- [crawl/pdf-size](/rules/crawl/pdf-size): the PDFs this rule also validates the type of.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Content-Type, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Type)
+- [X-Content-Type-Options, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each mismatch is reported with the type sent and the type expected. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

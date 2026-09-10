@@ -3,19 +3,19 @@ title: "Video"
 description: "Video content markup and accessibility"
 ---
 
-Video content markup and accessibility
+Video rules cover the three things a video needs beyond the file itself: structured data so a search engine knows what it is, captions so it is usable without sound, and a poster frame so the box is not blank while it buffers. The caption and poster checks read HTML video elements only, so a page whose video is an embedded iframe reports that it has none.
 
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Video Accessibility" icon="triangle-exclamation" href="/rules/video/video-accessible">
-    Checks for video captions and transcripts
+  <Card title="Video captions: the track element and why it is required" icon="triangle-exclamation" href="/rules/video/video-accessible">
+    A video with no captions excludes anyone who cannot hear it. squirrel checks every HTML video element for a caption or subtitle track.
   </Card>
-  <Card title="Video Schema" icon="triangle-exclamation" href="/rules/video/video-schema">
-    Checks for VideoObject schema on pages with video
+  <Card title="VideoObject schema: video on a page with no markup for it" icon="triangle-exclamation" href="/rules/video/video-schema">
+    Without VideoObject markup a search engine cannot tell there is a video on the page. squirrel detects video elements and embeds, then checks the schema.
   </Card>
-  <Card title="Video Thumbnail" icon="circle-info" href="/rules/video/video-thumbnail">
-    Checks that videos have poster/thumbnail images
+  <Card title="Video poster attribute: the frame shown before playback" icon="circle-info" href="/rules/video/video-thumbnail">
+    A video with no poster renders as a blank box until it buffers. squirrel checks every HTML video element for the poster attribute.
   </Card>
 </CardGroup>
 
@@ -25,3 +25,5 @@ Video content markup and accessibility
 [rules]
 disable = ["video/*"]
 ```
+
+Every audit reports Video findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

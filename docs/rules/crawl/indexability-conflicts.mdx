@@ -1,9 +1,38 @@
 ---
-title: "Indexability Conflicts"
-description: "Detects conflicting signals between robots.txt and meta/headers"
+title: "robots.txt vs noindex: the two conflicts explained"
+description: "A page blocked in robots.txt can never be read for its noindex tag. squirrel compares the crawl rules against the page directives, both ways."
 ---
 
-Detects conflicting signals between robots.txt and meta/headers
+## What an indexability conflict is
+
+robots.txt controls crawling and a robots meta tag controls indexing. They are different mechanisms applied at different moments, and combining them wrongly produces two distinct situations.
+
+The first is a page robots.txt allows that then carries `noindex`. That is the combination that works, and it is how you keep a page out of the index: the crawler has to fetch the page to read the directive. It is reported here so you can confirm the exclusion was deliberate.
+
+The second is a page robots.txt blocks that carries no `noindex` at all. The crawler never fetches it, so nothing on the page can influence indexing either way, and the URL can still be listed from links elsewhere with no description. Adding a `noindex` to such a page would not help, which is the point of the informational status.
+
+## What squirrel checks
+
+The rule is site-wide. For each crawled page it tests robots.txt against the URL and runs the shared indexability test over the page's head and headers, then sorts the disagreements into two buckets.
+
+- Skipped when there is no robots.txt or no pages. Message: `Insufficient data (no robots.txt or pages)`.
+- `robots-allow-but-noindex` warns for pages robots.txt allows that are not indexable by meta or header. Message: `6 page(s) allowed in robots.txt but have noindex`, with up to three paths in the value and a `+N more` suffix.
+- `robots-block-without-noindex` reports info for pages robots.txt blocks that are otherwise indexable. Message: `12 page(s) blocked by robots.txt (noindex meta not needed)`.
+- `conflicts` passes when neither bucket has an entry. Message: `No indexability conflicts detected`.
+
+Severity is warning and the weight is 4.
+
+## How to fix it
+
+```
+# robots.txt: let the crawler in so it can read the directive
+User-agent: *
+Allow: /private-preview/
+```
+
+When you are relying on `noindex`, allow the crawl. The directive only works if the page is fetched, so a `Disallow` on the same path defeats it.
+
+When the goal is saving crawl budget on pages nobody should fetch, `Disallow` alone is the right tool, and the URL can still be listed without a description. Pick based on which of the two you want: `noindex` removes a page from results, `Disallow` stops the fetch.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Detects conflicting signals between robots.txt and meta/headers
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Conflicting signals confuse search engines and indicate configuration errors. Type 1 conflict: robots.txt allows BUT meta/header has noindex (works but confusing - choose one method). Type 2 conflict: robots.txt disallows BUT page crawlable (search engines can't crawl to see noindex anyway - remove unnecessary noindex or allow in robots.txt).
 
 ## Enable / disable
 
@@ -40,3 +65,30 @@ disable = ["crawl/*"]
 enable = ["crawl/indexability-conflicts"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): the same blocked-plus-noindex case, reported on its own.
+- [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages): the full list of blocked pages with their reasons.
+- [crawl/robots-txt](/rules/crawl/robots-txt): the syntax and rules of the file being compared.
+- [crawl/indexability](/rules/crawl/indexability): the per-page verdict for one URL.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Robots meta tag and X-Robots-Tag, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [Introduction to robots.txt, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots/intro)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Each conflicting page is listed by path, split by which conflict it is. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

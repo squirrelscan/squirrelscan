@@ -1,9 +1,30 @@
 ---
-title: "Keyword Stuffing"
-description: "Detects excessive keyword repetition in content"
+title: "Keyword stuffing: measuring density around your CTAs"
+description: "Repeating a term unnaturally is a spam policy violation. squirrel measures density while discounting repeated call-to-action labels."
 ---
 
-Detects excessive keyword repetition in content
+## What keyword stuffing is
+
+Keyword stuffing is repeating a word or phrase far beyond what the writing needs, in order to signal relevance to a search engine. Google's spam policies name it explicitly, and it has not worked for a long time.
+
+Measuring it naively produces false positives. A product listing with fifty "Add to cart" buttons repeats those words fifty times without saying anything, and a page about socks will legitimately use the word "socks" a lot. So density alone is not the test.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the body text with scripts, styles and noscript excluded, matching words of three or more letters. It emits a single check named `keyword-stuffing`:
+
+- Skipped when there is no `<body>`. Message: `No body content to analyze`.
+- Info below 100 words. Message: `Content too short for keyword density analysis`.
+- Warn when any word crosses both thresholds. Message: `2 word(s) may be overused`, each item labelled `"widget" (4.7%)` with its count and density. Severity warning, weight 5.
+- Pass otherwise. Message: `No keyword stuffing detected`.
+
+A word is flagged when its density is above `density_threshold`, 3% by default, and its count is above `min_occurrences`, 5 by default. Two subtractions come first. A list of roughly fifty function words and generic verbs is excluded outright, covering articles, pronouns, auxiliaries and words like `get` and `here` that read as high density on any page. Then generic call-to-action labels on `<a>` and `<button>` elements are counted, and their words are subtracted from both the word's own count and the denominator, so a page of "Learn more" buttons is measured on its prose. Nested controls are counted once, from the outermost element.
+
+## How to fix it
+
+Rewrite the passage. Use synonyms and related terms where the exact phrase is not needed, and write the sentence you would write if nobody were counting.
+
+Add your brand name or a genuinely repeated product term to `whitelist` rather than editing around it. A page about one product will name that product often, and that is not stuffing.
 
 | | |
 |---|---|
@@ -13,27 +34,20 @@ Detects excessive keyword repetition in content
 | **Severity** | warning |
 | **Weight** | 5/10 |
 
-## Solution
-
-Keyword stuffing is repeating words unnaturally to manipulate rankings. Search engines penalize this practice. Write naturally for users first. Use keywords where they fit naturally. Aim for 1-2% keyword density at most. Use synonyms and related terms instead of repeating the exact same phrase. Focus on providing value, not gaming algorithms.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `density_threshold` | unknown | `undefined` | Keyword density percentage threshold |
-| `min_occurrences` | unknown | `undefined` | Minimum word occurrences to flag |
-| `whitelist` | unknown | `undefined` | Words to ignore (e.g., brand name) |
+| `density_threshold` | number | `3` | Keyword density percentage threshold |
+| `min_occurrences` | number | `5` | Minimum word occurrences to flag |
+| `whitelist` | array of strings | `[]` | Words to ignore (for example a brand name) |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."content/keyword-stuffing"]
-density_threshold = undefined
-min_occurrences = undefined
-whitelist = undefined
+[rule_options."content/keyword-stuffing"]
+density_threshold = 4
+whitelist = ["acme", "squirrelscan"]
 ```
 
 ## Enable / disable
@@ -59,3 +73,30 @@ disable = ["content/*"]
 enable = ["content/keyword-stuffing"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/hidden-text](/rules/content/hidden-text): keywords hidden from readers rather than repeated at them.
+- [integrity/seo-doorway](/rules/integrity/seo-doorway): injected pages built entirely out of this pattern.
+- [content/quality](/rules/content/quality): an LLM read of whether the writing is any good.
+- [content/reading-level](/rules/content/reading-level): the other readability measurement over the same text.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Keyword stuffing, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#keyword-stuffing)
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each overused word is listed with its count and density. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

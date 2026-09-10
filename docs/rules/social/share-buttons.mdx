@@ -1,9 +1,33 @@
 ---
-title: "Share Buttons"
-description: "Checks for social sharing buttons on content pages"
+title: "Social share buttons: detecting them on content pages"
+description: "Share buttons make it one click instead of three to pass a page on. squirrel looks for share markup, share libraries and platform share URLs."
 ---
 
-Checks for social sharing buttons on content pages
+## What a share button is
+
+A share button is a link or control that opens a platform's compose window prefilled with the page URL. It saves a reader copying the address and switching apps, which is most of the friction in sharing something.
+
+They earn their place on content people share: articles, guides, research. On a pricing page or a contact form they are decoration. Three or four platforms is usually the whole useful set. A share button can be a plain link, but the widget versions bring a third-party script each.
+
+## What squirrel checks
+
+The rule runs on every crawled page and looks for two things. The lowercased page HTML matching one of four patterns: share plus facebook, share plus twitter, share plus linkedin, or the names `addthis`, `addtoany`, `shareaholic` and `sumo-share`. And links whose href contains `facebook.com/sharer`, `twitter.com/intent/tweet` or `linkedin.com/share`. It emits a single check named `share-buttons`:
+
+- Pass when either was found. Message: `Social share functionality detected`, with `3 share link(s)` as the value when share URLs were counted.
+- Info when neither was found and the page URL contains `/blog`, `/article`, `/post` or `/news`. Message: `No share buttons on content page`, with `Consider adding for better engagement` as the value.
+- Info otherwise. Message: `No social share buttons detected`.
+
+The HTML pattern test is loose: an article about sharing on Facebook can match it. Severity info, weight 2.
+
+## How to fix it
+
+```html
+<a href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fexample.com%2Fpost">Share on X</a>
+```
+
+Plain links to each platform's share endpoint need no third-party script and work without JavaScript. Note that this rule recognises `twitter.com/intent/tweet` and not the `x.com` form, so a site using the newer host is not detected. Put them where a reader finishes reading rather than before they start.
+
+The `navigator.share` API is a better fit on mobile, since it offers the platforms the reader actually uses.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for social sharing buttons on content pages
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-Social share buttons encourage content sharing and can drive traffic. Place them prominently on blog posts, articles, and shareable content. Include major platforms: Facebook, Twitter/X, LinkedIn. Consider sticky share bars for long content. Avoid too many buttons - 3-4 is optimal.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["social/*"]
 enable = ["social/share-buttons"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [social/social-profiles](/rules/social/social-profiles): links to your own accounts rather than share endpoints.
+- [core/og-tags](/rules/core/og-tags): the tags that decide what a share looks like.
+- [security/third-party-cookies](/rules/security/third-party-cookies): what a share widget loads alongside itself.
+- [perf/js-libraries](/rules/perf/js-libraries): the JavaScript libraries those widgets pull in, and their known flaws.
+
+Social Media findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Sharing best practices, Meta for Developers](https://developers.facebook.com/docs/sharing/webmasters)
+- [The Open Graph protocol](https://ogp.me/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Social Media section of the report. Each page is reported with whether share functionality was detected. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Social Media section looks like on a real site.
+  </Card>
+</CardGroup>

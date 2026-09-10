@@ -3,37 +3,37 @@ title: "URL Structure"
 description: "URL structure, length, and formatting"
 ---
 
-URL structure, length, and formatting
+URL Structure rules read the address of each crawled page: its case, its word separators, its length and depth, its query parameters and its trailing slash. Most of them are conventions rather than defects, so their severities are low and their findings are worth applying to new URLs rather than retrofitting to old ones. The exception is `url/slug-convention`, which measures the site against its own dominant form and reports the minority, because mixed conventions are how duplicate-content and canonical bugs start.
 
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Slug Keywords" icon="circle-info" href="/rules/url/slug-keywords">
-    Checks if URL slug contains relevant keywords
+  <Card title="Non-descriptive URL slug: numeric IDs and generic patterns" icon="circle-info" href="/rules/url/slug-keywords">
+    A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones.
   </Card>
-  <Card title="Trailing Slash" icon="circle-info" href="/rules/url/trailing-slash">
-    Checks for consistent trailing slash usage
+  <Card title="Trailing slash: /page and /page/ are two different URLs" icon="circle-info" href="/rules/url/trailing-slash">
+    A file URL with a trailing slash is a mistake; a directory URL either has one or does not, consistently. squirrel reports the state of each path.
   </Card>
-  <Card title="URL Convention Consistency" icon="triangle-exclamation" href="/rules/url/slug-convention">
-    Finds URLs that break the site's own URL conventions
+  <Card title="Mixed URL conventions: finding the minority form" icon="triangle-exclamation" href="/rules/url/slug-convention">
+    Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates.
   </Card>
-  <Card title="URL Hyphens" icon="triangle-exclamation" href="/rules/url/hyphens">
-    Checks that URLs use hyphens, not underscores
+  <Card title="Underscores in URLs: why hyphens separate words" icon="triangle-exclamation" href="/rules/url/hyphens">
+    Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore.
   </Card>
-  <Card title="URL Length" icon="circle-info" href="/rules/url/length">
-    Checks URL length for optimal SEO
+  <Card title="URL length: when a URL is long enough to be a problem" icon="circle-info" href="/rules/url/length">
+    Long URLs get truncated in results and shares, and usually signal deep nesting. squirrel measures the full URL and counts path segments.
   </Card>
-  <Card title="URL Lowercase" icon="triangle-exclamation" href="/rules/url/lowercase">
-    Checks that URLs are lowercase
+  <Card title="Uppercase in a URL: the duplicate content it creates" icon="triangle-exclamation" href="/rules/url/lowercase">
+    Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter.
   </Card>
-  <Card title="URL Parameters" icon="circle-info" href="/rules/url/parameters">
-    Checks for excessive URL parameters
+  <Card title="URL parameters: how many is too many, and what to do" icon="circle-info" href="/rules/url/parameters">
+    Every parameter combination is a separate URL to a crawler. squirrel counts the query parameters on each page and names the tracking ones.
   </Card>
-  <Card title="URL Special Characters" icon="triangle-exclamation" href="/rules/url/special-chars">
-    Checks for problematic special characters in URL path
+  <Card title="Special characters in a URL path: what breaks and why" icon="triangle-exclamation" href="/rules/url/special-chars">
+    Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds.
   </Card>
-  <Card title="URL Stop Words" icon="circle-info" href="/rules/url/stop-words">
-    Flags common stop words in URL slugs
+  <Card title="Stop words in a URL slug: when to drop them" icon="circle-info" href="/rules/url/stop-words">
+    the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups.
   </Card>
 </CardGroup>
 
@@ -43,3 +43,5 @@ URL structure, length, and formatting
 [rules]
 disable = ["url/*"]
 ```
+
+Every audit reports URL Structure findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

@@ -1,9 +1,35 @@
 ---
-title: "URL Lowercase"
-description: "Checks that URLs are lowercase"
+title: "Uppercase in a URL: the duplicate content it creates"
+description: "Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter."
 ---
 
-Checks that URLs are lowercase
+## What URL case sensitivity is
+
+The path portion of a URL is case-sensitive in the URI specification, and most origin servers treat it that way. `/Products` and `/products` are two different resources as far as the protocol is concerned.
+
+When both answer with the same page, you have two URLs for one document. Links split between them, and a search engine has to pick one, which is a choice you would rather make yourself. The host is a separate matter: hostnames are case-insensitive, so `EXAMPLE.com` and `example.com` are the same origin.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the URL path only. It emits a single check named `url-lowercase`:
+
+- Warn when the path contains any character in the range A to Z. Message: `URL contains uppercase characters`, with the path as the value and its lowercased form as the expected value. Severity warning, weight 4.
+- Pass otherwise. Message: `URL is lowercase`.
+
+The query string and the hostname are not examined. Percent-encoded sequences in the path, which are uppercase hexadecimal by convention, are read as they appear and can trigger the warning.
+
+## How to fix it
+
+```js
+// compute the lowercase destination, then redirect to it
+if (path !== path.toLowerCase()) {
+  return Response.redirect(new URL(path.toLowerCase(), origin), 301);
+}
+```
+
+Emit lowercase URLs from the CMS or the router, and redirect the mixed-case forms permanently rather than serving both. The redirect has to build the lowercase target itself. A plain nginx `rewrite` that captures and re-emits the path preserves its case and redirects `/Products` to `/Products`, which is a loop. Set a self-referencing canonical on the lowercase version so any remaining links consolidate.
+
+Do not lowercase the query string with the same rule. Parameter values are often case-sensitive, and tokens or signatures break when they are folded.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks that URLs are lowercase
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-URLs should be lowercase to prevent duplicate content issues. Most servers treat /Page and /page as different URLs, creating duplicates. Always use lowercase URLs and redirect uppercase variants. Configure your server or CMS to auto-lowercase URLs. This also improves URL consistency and readability.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["url/*"]
 enable = ["url/lowercase"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/slug-convention](/rules/url/slug-convention): whether the site mixes case rather than applying one rule.
+- [url/hyphens](/rules/url/hyphens): the other per-path convention check.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): the canonical tag that consolidates the variants.
+- [url/trailing-slash](/rules/url/trailing-slash): the other way one page becomes two URLs.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Keep a simple URL structure, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+- [RFC 3986, section 6.2.2.1: case normalization](https://datatracker.ietf.org/doc/html/rfc3986)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Every path containing a capital letter is listed with its lowercase form. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

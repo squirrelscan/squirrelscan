@@ -1,9 +1,38 @@
 ---
-title: "Modern Image Formats"
-description: "Checks for modern image formats like WebP or AVIF"
+title: "WebP and AVIF: converting from JPEG and PNG"
+description: "WebP and AVIF encode the same picture in far fewer bytes than JPEG or PNG. squirrel counts modern and legacy formats per page."
 ---
 
-Checks for modern image formats like WebP or AVIF
+## What the modern image formats are
+
+WebP and AVIF are image formats designed to replace JPEG, PNG and GIF. WebP is supported in every current browser. AVIF compresses harder still and has slightly narrower support, which is what `<picture>` with multiple `<source>` elements is for.
+
+The saving is large enough to be worth the conversion on its own. For a typical photograph, WebP produces a file well under the JPEG equivalent at matching visual quality, and AVIF smaller again. Neither changes anything about how the image is marked up.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It reads the `src` of every `img[src]` and the `srcset` and `type` of every `source[srcset]`, all lowercased, and classifies by substring. It emits at most one check named `modern-format`, and none at all when images are present but neither count is above zero, which an SVG-only page produces:
+
+- Skipped when the page has no images. Message: `No images found`.
+- Pass when modern formats are present and no legacy ones are. Message: `All 8 image(s) use modern formats`.
+- Info on a mix. Message: `8 modern format(s), 4 legacy format(s)`, with `Consider converting remaining images to WebP/AVIF` as the value.
+- Info when only legacy formats are present. Message: `12 image(s) using legacy formats (JPEG/PNG)`, with `Consider using WebP or AVIF for better compression` as the value.
+
+Modern means the URL contains `.webp` or `.avif`, or a `<source>` whose `type` contains `webp` or `avif`. Legacy means `.jpg`, `.jpeg`, `.png` or `.gif`. The match includes the leading dot, so `?format=webp` does not count and `?format=.webp` does. Legacy extensions are only counted on `<img src>`, never on a `<source srcset>`. An image served as WebP through content negotiation, with a `.jpg` URL, is counted as legacy. Severity info, weight 3.
+
+## How to fix it
+
+```html
+<picture>
+  <source srcset="/photo.avif" type="image/avif" />
+  <source srcset="/photo.webp" type="image/webp" />
+  <img src="/photo.jpg" width="800" height="533" alt="…" />
+</picture>
+```
+
+Convert at build time with `sharp` or `cwebp`, or let an image CDN negotiate the format per request. The `<picture>` form is what gives you AVIF with a WebP and JPEG fallback in one element.
+
+SVG needs no conversion. It is already the right format for anything vector.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks for modern image formats like WebP or AVIF
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Modern formats (WebP, AVIF) offer 25-50% better compression than JPEG/PNG with similar quality. Use `<picture>` with WebP/AVIF sources and fallbacks. Most browsers support WebP (97%+). AVIF offers even better compression but lower support (~92%). Convert images with tools like cwebp, squoosh, or sharp.
 
 ## Enable / disable
 
@@ -40,3 +65,30 @@ disable = ["images/*"]
 enable = ["images/modern-format"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/optimized](/rules/images/optimized): the wider optimisation view, including image CDNs.
+- [images/image-file-size](/rules/images/image-file-size): the byte counts the conversion reduces.
+- [images/picture-element](/rules/images/picture-element): the markup that carries multiple formats.
+- [images/srcset](/rules/images/srcset): serving several sizes alongside several formats.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Use WebP images, web.dev](https://web.dev/articles/serve-images-webp)
+- [The picture element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/picture)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each page is reported with its modern and legacy format counts. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

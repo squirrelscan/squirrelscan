@@ -1,9 +1,37 @@
 ---
-title: "HTTP to HTTPS Redirect"
-description: "Checks whether HTTP URLs redirect to HTTPS"
+title: "HTTP to HTTPS redirect: how squirrel probes for it"
+description: "squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop."
 ---
 
-Checks whether HTTP URLs redirect to HTTPS
+## What an HTTP to HTTPS redirect is
+
+An HTTP to HTTPS redirect is a response on port 80 that sends the client to the `https://` form of the same URL. It exists because links, bookmarks and typed addresses still arrive over plain HTTP, and without a redirect they either fail or serve a duplicate copy of the site on an insecure origin.
+
+Search engines treat `http://example.com/page` and `https://example.com/page` as separate URLs. A permanent redirect consolidates them and keeps the HTTPS version as the indexed one. HSTS eventually removes the need for the redirect in browsers that have already seen the header, but the redirect is what handles the first visit and every non-browser client.
+
+## What squirrel checks
+
+The rule is site-wide and makes live network requests. It builds a sample of same-hostname URLs starting with the base URL, adds crawled pages whose status code is under 400 until the sample limit is reached, rewrites each to `http://` and follows the redirect chain. It emits a single check named `http-to-https`:
+
+- Skipped when there is no base URL. Message: `No base URL available`.
+- Skipped when the base URL does not parse. Message: `Invalid base URL`.
+- Skipped when the base URL is not HTTPS. Message: `Base URL is not HTTPS`.
+- Warn when at least one probed URL redirects to HTTPS. Message: `12 HTTP URL(s) redirect to HTTPS`, with each entry labelled `http://example.com/ → https://example.com/ (301)`.
+- Pass when none do. Message: `No HTTP to HTTPS redirects detected in sample`.
+
+Read the warn status as an inventory rather than a defect: it lists the HTTP URLs that are still reachable and redirecting. Probes run five at a time with a 100 ms stagger, each hop times out after 10 seconds and chains stop at 10 hops. A 20 second budget stops workers picking up new URLs, so the rule reports on the subset it started; probes already in flight are still awaited and can finish after the budget expires. Redirect loops are skipped.
+
+## How to fix it
+
+```nginx
+server {
+  listen 80;
+  server_name example.com www.example.com;
+  return 301 https://example.com$request_uri;
+}
+```
+
+Redirect in one hop, preserving the path and query string, and use 301 rather than 302 so the target is the canonical URL. Chaining HTTP to HTTPS to a canonical host costs a round trip on every first visit.
 
 | | |
 |---|---|
@@ -13,23 +41,17 @@ Checks whether HTTP URLs redirect to HTTPS
 | **Severity** | warning |
 | **Weight** | 3/10 |
 
-## Solution
-
-Ensure all HTTP URLs redirect to their HTTPS equivalents using permanent (301) redirects. This consolidates link equity and avoids mixed indexing. Configure your server to enforce HTTPS globally and verify that both the homepage and key internal URLs redirect correctly. WARNING: This rule makes external HTTP requests to probe redirect behavior.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `sampleLimit` | unknown | `undefined` | Maximum number of pages to probe for HTTP→HTTPS redirects |
+| `sampleLimit` | integer, 1 to 100 | `20` | Maximum number of pages to probe for HTTP to HTTPS redirects |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."security/http-to-https"]
-sampleLimit = undefined
+[rule_options."security/http-to-https"]
+sampleLimit = 40
 ```
 
 ## Enable / disable
@@ -55,3 +77,30 @@ disable = ["security/*"]
 enable = ["security/http-to-https"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/https](/rules/security/https): the pages themselves, checked without any network probe.
+- [security/hsts](/rules/security/hsts): the header that lets browsers skip the redirect entirely.
+- [crawl/redirect-chain](/rules/crawl/redirect-chain): multi-hop chains, including the ones this redirect can create.
+- [links/https-downgrade](/rules/links/https-downgrade): internal links that make the browser take the redirect on every click.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Redirections in HTTP, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Redirections)
+- [301 redirects and Google Search, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/301-redirects)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Each probed HTTP URL is listed with its destination and status code. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

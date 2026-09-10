@@ -1,9 +1,36 @@
 ---
-title: "Hidden Text & Links"
-description: "Detects text and links hidden from users but left visible to search engines"
+title: "Hidden text and links: what Google's spam policy covers"
+description: "Text a crawler reads and a visitor cannot see is a spam policy violation. squirrel finds it while exempting screen-reader and collapsed-UI patterns."
 ---
 
-Detects text and links hidden from users but left visible to search engines
+## What hidden text is
+
+Hidden text is content present in the markup and invisible on screen. Google's spam policies treat text or links visible to crawlers but hidden from visitors as deceptive, and pages doing it can lose rankings or be removed from search.
+
+Most hiding is legitimate. The screen-reader-only pattern deliberately hides text visually while leaving it available to assistive technology. A collapsed accordion, a closed dialog and an inactive tab panel are all hidden until the user opens them. What is not legitimate is a block of keywords or links behind `display: none`, a zero font size, an off-screen offset or same-on-same colour, put there for a crawler.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits a single check named `hidden-text`:
+
+- Skipped when there is no `<body>`. Message: `No body content to analyze`.
+- Pass when nothing qualified. Message: `No hidden text or links detected`.
+- Warn when hidden elements were found. Message: `3 hidden element(s) containing 240 characters of text`.
+- Fail when the hidden links reach `min_hidden_links`. Message: `3 hidden element(s) containing 14 link(s) and 240 characters of text`.
+
+Each item names the element's selector and the techniques that hid it, and carries the character count, link count and a markup snippet. Hidden links are the stronger spam signal, which is why they alone escalate the finding to a failure.
+
+An element is exempt before any technique is considered when it carries a known screen-reader-only class such as `sr-only`, `visually-hidden` or `screen-reader-text`, or one you add through `a11y_classes`, and when it is marked as intentionally hidden UI through `aria-hidden`, the `hidden` attribute, or a role such as `tabpanel` or `dialog`. An element must hold at least `min_hidden_chars` characters to be reported. Severity for the rule is warning, weight 6.
+
+## How to fix it
+
+```html
+<span class="sr-only">Opens in a new window</span>
+```
+
+Delete the hidden block, or make it genuinely visible. For text meant only for screen readers, use the standard visually-hidden pattern, a clipped one-pixel box or a class named `sr-only` or `visually-hidden`, so it is recognisable as an accessibility affordance rather than as hiding.
+
+For UI that starts collapsed, mark the hidden state explicitly with `aria-hidden`, the `hidden` attribute, or a role such as `tabpanel` or `dialog`. That is what makes the state read as intentional.
 
 | | |
 |---|---|
@@ -13,73 +40,23 @@ Detects text and links hidden from users but left visible to search engines
 | **Severity** | warning (escalates to a failure when hidden links are involved) |
 | **Weight** | 6/10 |
 
-## Solution
-
-Google's spam policies treat text or links that are visible to crawlers but hidden from visitors as deceptive, and pages doing it can lose rankings or be removed from search entirely. Delete the hidden block, or make it genuinely visible to users.
-
-If the content is only meant for screen readers, use the standard visually-hidden pattern: a 1x1 clipped box, or a class named `sr-only` / `visually-hidden`, so it is recognisable as an accessibility affordance. If it is interactive UI that starts collapsed, mark it up as such with `aria-hidden`, the `hidden` attribute, or a role like `tabpanel` or `dialog`, so its hidden state reads as intentional.
-
-Never place keywords or links behind `display:none`, `opacity:0`, a zero font size, an off-screen offset, or same-on-same colour in order to reach a crawler.
-
-## What it checks
-
-squirrelscan reads the page's markup, not a rendered layout: there is no browser here to resolve the full CSS cascade. The rule therefore works from what is directly readable, and it is tuned for precision, so it would rather miss a spam page than accuse an honest one.
-
-**Where styles come from**
-
-- Inline `style` attributes on elements that carry text or links.
-- `<style>` blocks, but only rules whose selector is a bare class (`.promo`) or a bare id (`#promo`). Descendant, compound, pseudo and attribute selectors are skipped, because resolving them correctly needs a cascade.
-- Rules inside `@media`, `@supports`, `@layer` and `@keyframes` are never applied. `@media print { .no-print { display: none } }` hides nothing on screen, and honouring it would manufacture findings. They are not forgotten either: any class or id a conditional block mentions is treated as unresolvable, so the desktop copy of a responsive footer is left alone rather than reported.
-- External stylesheets are not fetched.
-
-**Techniques reported**
-
-| Technique | Example |
-|---|---|
-| `display:none` | `<div style="display:none">` |
-| `visibility:hidden` | `.promo { visibility: hidden }` |
-| `opacity:0` | `<span style="opacity:0">` |
-| Zero font size | `<p style="font-size:0">` |
-| Off-screen text indent | `text-indent: -9999px` |
-| Off-screen positioning | `position:absolute; left:-9999px` |
-| Off-screen margin | `margin-left: -9999px` |
-| Zero-size clipping | `height:0; overflow:hidden` |
-| Colour on colour | `color:#fff` painted on a `#fff` background, or `color:transparent` |
-
-An element is only reported when the hidden content is substantial: at least `min_hidden_chars` characters of text, or at least `min_hidden_links` links. Only the outermost hidden element is reported, so one hidden block produces one finding rather than one per descendant.
-
-The finding is a **warning** for hidden text and escalates to a **failure** once the page carries `min_hidden_links` hidden links or more, since hidden links are the stronger spam signal.
-
-## What it does not flag
-
-The rule deliberately stays quiet on every common, legitimate reason content is hidden.
-
-- **Screen-reader-only text.** The `clip` / `clip-path` idiom, a 1x1 off-screen box, and the usual class names: `sr-only`, `visually-hidden`, `visuallyhidden`, `screen-reader-text`, `skip-link` and friends.
-- **Interactive UI that starts collapsed.** Tab panels, accordions, dropdowns, modals, off-canvas navigation, carousels, toasts and cookie or consent banners, recognised through `role`, `aria-*`, `<dialog>` / `<details>` / `<nav>`, toggle attributes such as `data-bs-toggle`, and class names containing those words. A hidden element nested inside such a container is covered too.
-- **The `hidden` attribute and `aria-hidden="true"`.** These are the platform's own toggle and decoration markers and read as an explicit statement of intent, so they exempt an element rather than incriminate it.
-- **Elements whose class is also targeted by a selector the rule cannot resolve.** If `.drawer` is hidden by a simple rule but `.drawer.open` appears elsewhere in the stylesheet, the element is script-driven and is left alone.
-- **Idioms that look like hiding but are not.** `opacity:0` with a transition (a fade-in), `opacity:0` beside a displacing `transform` (the resting state of an entrance animation), `max-height:0` with a transition (a collapsing accordion), `text-indent:-9999px` with a background image (image replacement), `font-size:0` used only to close inline-block gaps, `color:transparent` with `background-clip:text` (gradient text), and invalid unitless offsets such as `left:-9999`, which no browser applies. A transition declared on a compound selector counts too, so `.card { opacity: 0 }` paired with `.card.in-view { transition: opacity .4s }` reads as a scroll reveal.
-- **Viewport and print variants.** Class names such as `nomobile`, `desktop-only` and `noprint` mark content shown in a medium the rule cannot evaluate.
-- **Elements the page's own JavaScript addresses.** When an inline script names an element by id or class, its hidden state is script-controlled: a form's success message, a tab, a footer revealed after hydration. This applies only to `display:none`, `visibility:hidden` and `opacity:0`, which every toggle library writes. Off-screen offsets, zero font sizes, zero-size clipping and colour-on-colour have no legitimate scripted use and are still reported.
-- **The `main` and `body` landmarks.** A hidden `<main>` is a page-load transition or a hydration shell waiting to be revealed, and the script that reveals it usually lives in an external bundle the rule cannot read. Concealment presupposes a visible page to conceal something on, so an element that *is* the page is not a hiding place. As above, this covers only `display:none`, `visibility:hidden` and `opacity:0`; an off-screen `<main>` is still reported. Wrapper `div`s doing the same fade are not exempt.
-- **Small amounts of hidden text** with no keyword or link payload.
-- **Light text over unknown backdrops.** Colour matching only fires when both the text colour and the paint behind it are resolvable. Positioned overlays, elements with a `text-shadow`, and anything sitting on a background image or gradient are left alone.
-
 ## Options
 
 | Option | Type | Default | Description |
-|---|---|---|---|
-| `min_hidden_chars` | number | `50` | Characters of hidden text on one element before it is reported |
-| `min_hidden_links` | number | `10` | Hidden links before the finding escalates from a warning to a failure |
+|--------|------|---------|-------------|
+| `min_hidden_chars` | integer, 1 or more | `50` | Characters of hidden text on one element before it is reported |
+| `min_hidden_links` | integer, 1 or more | `10` | Hidden links before the finding escalates from a warning to a failure |
 | `offscreen_px_threshold` | number | `-999` | Offsets at or below this many pixels count as pushed off-screen |
-| `a11y_classes` | string[] | `[]` | Extra screen-reader-only class names to treat as legitimate |
-| `safe_classes` | string[] | `[]` | Extra class names to exempt from hidden-text reporting |
+| `a11y_classes` | array of strings | `[]` | Extra screen-reader-only class names to treat as legitimate |
+| `safe_classes` | array of strings | `[]` | Extra class names to exempt from hidden-text reporting |
+
+### Configuration example
 
 ```toml squirrel.toml
-[rules.options."content/hidden-text"]
-min_hidden_chars = 120
-a11y_classes = ["acme-offscreen"]
-safe_classes = ["legacy-print-block"]
+[rule_options."content/hidden-text"]
+min_hidden_chars = 100
+a11y_classes = ["u-hide-visually"]
+safe_classes = ["mega-menu-panel"]
 ```
 
 ## Enable / disable
@@ -105,3 +82,30 @@ disable = ["content/*"]
 enable = ["content/hidden-text"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [integrity/cloaking](/rules/integrity/cloaking): serving different content to a crawler than to a visitor.
+- [content/keyword-stuffing](/rules/content/keyword-stuffing): the visible version of the same intent.
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): focusable elements hidden from assistive technology.
+- [integrity/seo-doorway](/rules/integrity/seo-doorway): injected pages carrying the same kind of block.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Spam policies for Google web search](https://developers.google.com/search/docs/essentials/spam-policies)
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Every hidden element is listed with its selector, the technique used and a snippet. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

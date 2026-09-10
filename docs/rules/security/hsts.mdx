@@ -1,9 +1,35 @@
 ---
-title: "HSTS Header"
-description: "Checks for HTTP Strict Transport Security header"
+title: "HSTS: what Strict-Transport-Security needs to be valid"
+description: "A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age."
 ---
 
-Checks for HTTP Strict Transport Security header
+## What HSTS is
+
+HTTP Strict Transport Security is a response header, `Strict-Transport-Security`, that tells a browser to use HTTPS for this hostname for a stated number of seconds and to refuse a plain HTTP connection during that window. Once the browser has seen it, a user typing `example.com` never issues the HTTP request that a redirect would otherwise answer.
+
+The header only takes effect over HTTPS, and it is ignored on a plain HTTP response. `includeSubDomains` extends the policy to every subdomain, which will break any subdomain that is still HTTP-only. The first request before the header is ever seen is still downgradeable, which is what the preload list at hstspreload.org addresses.
+
+## What squirrel checks
+
+The rule reads the response headers of the first crawled page and emits a single check named `hsts`:
+
+- Skipped when the crawl produced no pages. Message: `No pages to check`.
+- Info when that page's URL is not HTTPS, since the header would be ignored. Message: `HSTS not applicable - site not served over HTTPS`.
+- Warn when the header is absent. Message: `Missing Strict-Transport-Security header`, with `Add: Strict-Transport-Security: max-age=31536000` as the value.
+- Warn when the header is present but contains no `max-age=<digits>` directive, which makes it inert. Message: `Malformed HSTS header — no valid max-age directive`.
+- Warn when `max-age=0`, which instructs browsers to drop the policy. Message: `HSTS disabled — max-age=0 tells browsers to stop enforcing HTTPS`.
+- Warn when `max-age` is below 15768000 seconds, six months. Message: `HSTS max-age too short (30 days)`, with the age rounded to whole days.
+- Pass otherwise. Message: `HSTS configured correctly`, with the raw header as the value.
+
+Severity is warning and the scope is site-wide, so the verdict comes from one page's headers rather than from every page.
+
+## How to fix it
+
+```
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+Set the header on the HTTPS origin, not on the HTTP redirect. Start with a short `max-age` while you confirm that every subdomain serves HTTPS, then raise it to a year. The `preload` token is consent, not enrolment: the hostname joins the browser preload list only after you submit it at hstspreload.org and it is accepted. Getting an accepted entry removed again takes months, so treat submission as the hard-to-reverse step.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for HTTP Strict Transport Security header
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-HSTS forces browsers to only connect via HTTPS, preventing downgrade attacks. Add the header: Strict-Transport-Security: max-age=31536000; includeSubDomains. Start with a short max-age (1 day) to test, then increase to 1 year. The includeSubDomains directive protects all subdomains. Consider preloading via hstspreload.org for maximum protection.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["security/*"]
 enable = ["security/hsts"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/https](/rules/security/https): whether the pages themselves are served over HTTPS in the first place.
+- [security/http-to-https](/rules/security/http-to-https): the redirect that HSTS eventually makes unnecessary.
+- [security/mixed-content](/rules/security/mixed-content): what breaks first when a subdomain is not ready for `includeSubDomains`.
+- [security/csp](/rules/security/csp): the other response header the same server block should be setting.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Strict-Transport-Security, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security)
+- [RFC 6797: HTTP Strict Transport Security](https://datatracker.ietf.org/doc/html/rfc6797)
+- [HTTP Strict Transport Security cheat sheet, OWASP](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. The Strict-Transport-Security header and its max-age are reported with the exact value your server sent. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

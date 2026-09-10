@@ -1,9 +1,33 @@
 ---
-title: "Indexability Check"
-description: "Identifies pages blocked from search engine indexing"
+title: "Page is blocked from indexing: finding the directive"
+description: "A page can be excluded from search by a robots meta tag or an X-Robots-Tag header. squirrel reports which one, per page."
 ---
 
-Identifies pages blocked from search engine indexing
+## What indexability is
+
+Indexability is whether a search engine is permitted to keep a page in its index once it has fetched it. Two mechanisms say no: a `<meta name="robots" content="noindex">` tag in the head, and an `X-Robots-Tag: noindex` response header. Either one is enough.
+
+Being non-indexable is often correct. Thank-you pages, faceted filter combinations, internal search results and staging routes are all better left out. The problem is a directive nobody meant to ship, which is why this rule reports the state and the source rather than treating it as a defect.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits a single check named `indexability`, using the shared indexability test over the parsed head and the response headers.
+
+- Skipped when the page could not be parsed. Message: `Page could not be parsed`.
+- Info when the page is not indexable. Message: `Page is blocked from indexing via robots meta tag` or `via X-Robots-Tag header`. The value is `not indexable`. A third wording, `via unknown`, exists in the code but is unreachable: a page is only non-indexable here when one of those two strings contains `noindex`.
+- Pass when it is indexable. Message: `Page is indexable`, value `indexable`.
+
+The source is decided by looking for `noindex` in the lowercased `robots` meta first, then in the lowercased `x-robots-tag` header. Severity is info and the weight is 2, so this rule describes rather than penalises.
+
+## How to fix it
+
+```html
+<meta name="robots" content="index, follow" />
+```
+
+Remove the `noindex` from whichever source the report names. A header set at the CDN or reverse proxy is easy to miss because it does not appear in the page source, so check the response headers when the report says `X-Robots-Tag`.
+
+Leave the directive in place when the page is genuinely not meant for search. The info status exists for that case.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Identifies pages blocked from search engine indexing
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-If this page should be indexed by search engines, remove 'noindex' from robots meta tag or X-Robots-Tag header. If the page is intentionally blocked (e.g., admin pages, thank-you pages), this is expected behavior.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["crawl/*"]
 enable = ["crawl/indexability"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages): the same question rolled up across the whole site, with severity patterns.
+- [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap): noindexed pages you are still submitting in a sitemap.
+- [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts): robots.txt and the page directives disagreeing.
+- [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict): rich-result markup on a page that will never be indexed.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Robots meta tag and X-Robots-Tag, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [Block search indexing with noindex, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/block-indexing)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every blocked page is listed with the directive that blocked it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

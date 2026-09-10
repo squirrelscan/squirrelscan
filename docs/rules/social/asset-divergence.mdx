@@ -1,9 +1,33 @@
 ---
-title: "Site Asset Consistency"
-description: "Finds pages whose favicon, theme-color or default OG image differs from the rest of the site"
+title: "Favicon and theme-color that differ across the site"
+description: "Site chrome comes from one layout, so a page carrying a different favicon is running a different template. squirrel finds the minority."
 ---
 
-Finds pages whose favicon, theme-color or default OG image differs from the rest of the site
+## What site asset divergence is
+
+The favicon, the `theme-color` and the fallback share image all come from one layout, so on a healthy site every page carries the same three. A page carrying a different one is not making a per-page decision, it is running a different template: a section that missed a redesign, a cached shell, a second layout nobody remembers owning.
+
+Nothing about that page looks wrong on its own, which is why no per-page rule can see it. What a visitor notices is a tab icon that changes as they move around, and link previews that degrade for some pages and not others.
+
+## What squirrel checks
+
+The rule is site-wide and judges three axes against the site's own most common value: the primary `<link rel="icon">` href resolved absolute, the `<meta name="theme-color">` content, and the default `og:image`. It emits a single check named `asset-divergence`:
+
+- Skipped when there are no pages. Message: `No pages available for analysis`.
+- Skipped below 10 crawled pages. Message: `Only 7 page(s) crawled; 10 needed to establish a site-asset norm`.
+- Skipped when no axis qualifies. Message: `No favicon, theme-color or default OG image is declared by 10 page(s) with 70% agreement`.
+- Pass when nothing diverges. Message: `All 240 page(s) share the site's favicon, theme-color and default OG image (…)`.
+- Warn when pages diverge, and fail at or above 20% of judged pages. Message: `12 of 240 page(s) diverge from the site's own favicon (…)`. Each item reads `12 of 240 page(s) load favicon "/old-favicon.ico" but the site norm is "/favicon.svg"`, with up to ten groups and ten example URLs each.
+
+Three guards apply: 10 crawled pages, 10 pages declaring the asset before an axis is judged, and 70% agreement on its most common value. Only pages that returned a 2xx status vote or are judged; a non-2xx page still counts toward the crawl-size floor. A page that declares nothing never votes and is never a deviant, since a missing favicon belongs to `core/favicon` and a missing share image to the Open Graph rules.
+
+The OG axis has two exemptions. Pages classified as article, product, recipe, event, profile or media never vote on it and are never judged by it, because a per-page share image is correct. And an `og:image` carried by exactly one page is dropped, since a fallback is shared by definition while a stale template brings a pocket of pages with it. Values are truncated at 200 characters when stored, so two long data URIs sharing a prefix compare equal and the divergence is missed rather than invented. Severity warning, weight 3.
+
+## How to fix it
+
+Fix it where the assets are declared, in the shared head partial or the theme configuration, rather than page by page. The report names which pages carry the odd value, which is usually enough to identify the template.
+
+A deliberate per-page share image on an article or a product is not reported. What this rule compares is the fallback the rest of the site shares.
 
 | | |
 |---|---|
@@ -12,63 +36,6 @@ Finds pages whose favicon, theme-color or default OG image differs from the rest
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## How it works
-
-Your favicon, your `theme-color` and your fallback share image all come from one
-layout, so every page should carry the same three. When a pocket of pages carries
-different ones, those pages are usually running an older template: a section that
-missed a redesign, a cached shell, or a second layout nobody remembers owning.
-Nothing about such a page looks wrong on its own, which is why no per-page check
-can see it.
-
-Three axes are compared across the crawl:
-
-| Axis | What is read |
-|---|---|
-| Favicon | The first `<link rel="icon">` href, resolved to an absolute URL |
-| Theme color | `<meta name="theme-color">` content |
-| Default OG image | `og:image`, on the pages that should share one |
-
-Each axis is judged against your site's own modal value, and only the minority
-form is reported.
-
-### Per-page share images are not a finding
-
-Articles and products (plus recipes, events, profiles and media pages) **should**
-ship their own `og:image`. Those page types never vote on the OG axis and are
-never reported on it. Neither is any page whose `og:image` is used by that page
-alone, whatever its type: a fallback is by definition shared, so a one-off image
-is a per-page asset rather than a template running behind. What the rule compares
-there is the fallback the rest of the site shares. Favicon and theme-color have no
-such exemption: they are browser chrome, not content, and stay uniform even on an
-article.
-
-### It stays quiet unless it has grounds to speak
-
-- Fewer than 10 crawled pages: there is no norm to judge against, so the rule is
-  skipped.
-- Fewer than 10 pages declaring an asset: that axis is not judged at all.
-- No value reaching 70% agreement on any axis: your site genuinely varies its
-  chrome, so nothing in it is a deviant.
-- A page that declares nothing never votes and is never a deviant. A missing
-  favicon belongs to [Favicon](/rules/core/favicon) and a missing share image to
-  the Open Graph rules, so the two never both flag the same page.
-- Apple touch icons and mask icons legitimately differ from the tab icon and never
-  stand in for it. A light/dark `theme-color` pair is normal and reads as one
-  value.
-
-## Solution
-
-Your favicon, theme-color and fallback share image come from one layout, so every
-page should carry the same three. Pages that carry different ones are usually
-running an older template: a section that missed a redesign, a cached shell, or a
-second layout nobody remembers owning. The visible cost is inconsistent link
-previews and a tab icon that changes as visitors move around the site. Fix it
-where the assets are declared (the shared head partial or theme config) rather
-than page by page. Per-page share images on articles and products are correct and
-are not reported here: what this rule compares is the fallback the rest of the
-site shares.
 
 ## Enable / disable
 
@@ -93,3 +60,30 @@ disable = ["social/*"]
 enable = ["social/asset-divergence"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/favicon](/rules/core/favicon): whether a favicon is declared at all.
+- [core/og-tags](/rules/core/og-tags): the Open Graph tags this rule reads the fallback from.
+- [integrity/template-discontinuity](/rules/integrity/template-discontinuity): the same outlier idea applied to the whole template.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): the same idea applied to titles.
+
+Social Media findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [theme-color, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/theme-color)
+- [The Open Graph protocol](https://ogp.me/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Social Media section of the report. Each diverging group is listed with its value, the site norm and example URLs. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Social Media section looks like on a real site.
+  </Card>
+</CardGroup>

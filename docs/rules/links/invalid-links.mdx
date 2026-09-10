@@ -1,9 +1,30 @@
 ---
-title: "Invalid Links"
-description: "Detects invalid link formats on the page"
+title: "Invalid links: hrefs that do not parse as a URL"
+description: "A malformed href is a link that goes nowhere, and javascript:void(0) is a button wearing a link costume. squirrel reports every href the parser rejected."
 ---
 
-Detects invalid link formats on the page
+## What an invalid link is
+
+An invalid link is an `<a href>` whose value the parser could not turn into a URL, such as `http://[invalid` or an address with an unparseable host. It is a link that cannot go anywhere, usually produced by string concatenation or a template variable that resolved to something unexpected.
+
+Several things that look wrong are not reported here. An empty `href` and non-HTTP schemes are skipped by the extractor, surrounding whitespace is trimmed, and a space inside a path is encoded during parsing rather than rejected. A `javascript:void(0)` click target is a real accessibility problem and a real reason to use a `<button>`, but it is not what this rule counts.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reports the links the parser flagged with an error while extracting them. It emits a single check named `invalid-links`:
+
+- Pass when no link carries a parse error. Message: `No invalid link formats found`.
+- Warn otherwise. Message: `Found 3 invalid link(s)`, with each href listed alongside the parser's recorded error string. Severity warning, weight 2.
+
+The classification comes from the parser rather than from this rule, so what counts as invalid is whatever the link extractor could not resolve against the page URL.
+
+## How to fix it
+
+```html
+<button type="button" onclick="openDialog()">Open</button>
+```
+
+Replace a click-target anchor with a button. For a genuinely malformed href, fix the template that produced it: an empty `href=""` usually means a variable that was not set, and a link with a stray space usually means the value came from unsanitised content.
 
 | | |
 |---|---|
@@ -12,10 +33,6 @@ Detects invalid link formats on the page
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 2/10 |
-
-## Solution
-
-Invalid links (malformed URLs, javascript: links, or broken references) harm user experience and can indicate code issues. Fix or remove invalid links. Replace javascript:void(0) with proper href values or button elements. Ensure all links have valid URL formats. Check for typos in URLs and verify links work correctly. Remove empty href attributes.
 
 ## Enable / disable
 
@@ -40,3 +57,30 @@ disable = ["links/*"]
 enable = ["links/invalid-links"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/broken-links](/rules/links/broken-links): links that parse correctly and lead to an error page.
+- [links/anchor-text](/rules/links/anchor-text): links with no accessible name.
+- [a11y/link-text](/rules/a11y/link-text): the accessibility view of the same markup.
+- [url/special-chars](/rules/url/special-chars): characters in a URL that need encoding.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The anchor element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a)
+- [RFC 3986: Uniform Resource Identifier](https://datatracker.ietf.org/doc/html/rfc3986)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every unparseable href is listed with the error it produced. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

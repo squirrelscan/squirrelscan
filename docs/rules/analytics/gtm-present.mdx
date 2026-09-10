@@ -1,9 +1,30 @@
 ---
-title: "Analytics Tracking"
-description: "Checks for Google Tag Manager or analytics implementation"
+title: "Analytics tracking: which platforms a page loads"
+description: "squirrel inventories the analytics on each page, from Google Tag Manager and GA4 to Plausible, Matomo, Segment and session-replay tools."
 ---
 
-Checks for Google Tag Manager or analytics implementation
+## What this inventory is for
+
+Analytics tells you what happens on a site after someone arrives, which is the half a crawl cannot see. A measurement tag or a privacy-focused alternative does that job; a tag manager does not measure anything itself, it deploys the tags that do.
+
+The reason to inventory them is that they accumulate. A site often ends up carrying three overlapping tools nobody removed. What each one costs depends on how it is implemented: a third-party script is a request to someone else's host, a self-hosted or cookieless tool need not be, and whether consent is required turns on what is stored and where the visitor is.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It matches the raw HTML against three substring tests and reads every `script[src]` for nine more. It emits a single check named `gtm-present`:
+
+- Pass when any platform is detected. Message: `2 analytics platform(s) detected`, listing the deduplicated names.
+- Info when none is. Message: `No analytics tracking detected`, with `Consider adding analytics to measure performance` as the value.
+
+From the HTML it detects `GTM` from `googletagmanager.com` or `gtm.js`, `GA4` from `gtag/js` or `googletagmanager.com/gtag`, and `UA (legacy)` from `analytics.js` or `ga.js`. From script sources it detects Plausible, Fathom, Matomo including its former name Piwik, Segment, Mixpanel, Amplitude, Heap, Hotjar and Microsoft Clarity, each by a substring of the URL.
+
+A tool loaded through a tag manager rather than as its own script tag is not detected separately. Severity info, weight 3.
+
+## How to fix it
+
+Nothing to fix when the list is what you expect. When it is longer than you expect, remove the tools nobody reads, since each one costs a request and an entry in your privacy policy.
+
+When nothing is detected, check whether measurement is loaded through a tag manager or injected after render, which this rule cannot see.
 
 | | |
 |---|---|
@@ -12,10 +33,6 @@ Checks for Google Tag Manager or analytics implementation
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Analytics tracking helps understand user behavior and measure SEO success. Use Google Tag Manager (GTM) to manage all tags centrally. GTM should be in the `<head>` with a noscript fallback in `<body>`. Alternatives: Google Analytics 4 directly, Plausible, Fathom, or Matomo. Ensure tracking complies with privacy laws.
 
 ## Enable / disable
 
@@ -40,3 +57,30 @@ disable = ["analytics/*"]
 enable = ["analytics/gtm-present"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [analytics/consent-mode](/rules/analytics/consent-mode): whether Google Consent Mode markers appear in the markup.
+- [security/third-party-cookies](/rules/security/third-party-cookies): the same vendors seen from the privacy side.
+- [adblock/privacy-blocked](/rules/adblock/privacy-blocked): which of them privacy filters already block.
+- [legal/cookie-consent](/rules/legal/cookie-consent): the banner that should gate them.
+
+Analytics findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Google Tag Manager developer guide](https://developers.google.com/tag-platform/tag-manager)
+- [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Analytics section of the report. Each page is reported with the analytics platforms detected on it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Analytics section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,41 @@
 ---
-title: "Form CAPTCHA"
-description: "Checks for CAPTCHA protection on public forms"
+title: "Public forms without CAPTCHA: what counts as public"
+description: "A contact or newsletter form with no bot protection collects spam within days. squirrel classifies forms and flags the unprotected public ones."
 ---
 
-Checks for CAPTCHA protection on public forms
+## What form CAPTCHA protection is
+
+A CAPTCHA is a challenge in front of a form submission that a script cannot answer cheaply. Modern implementations are usually invisible. reCAPTCHA v3 never interrupts the visitor at all: it returns a score and your server decides what to do with a low one. Cloudflare Turnstile and hCaptcha run a background check and show a challenge only when they need one.
+
+Any form that anyone on the internet can reach and that ends in an email or a database row is a target. Contact forms, comment boxes, newsletter signups and registration forms attract automated submissions within days of going live. A search box or a login form is a different problem: rate limiting and account lockout apply there, not a challenge on every keystroke.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits a single check named `form-captcha`:
+
+- Info when the page contains no `<form>` at all. Message: `No forms on page`.
+- Info when no form on the page classifies as public. Message: `No public forms detected`.
+- Warn when at least one public form has no CAPTCHA signal. Message: `2 public form(s) without CAPTCHA`, with each form identified by its id, `name`, `action` or positional index. Severity warning.
+- Pass when every public form is covered. Message: `All 2 public form(s) have CAPTCHA`.
+
+A form is classified as excluded when it contains an `input[type="password"]` or when its `action`, `id`, `class` or `name` contains `search`, `login`, `signin`, `sign-in`, `admin`, `checkout` or `cart`. It is public when one of those attributes contains `contact`, `comment`, `feedback`, `newsletter`, `subscribe`, `register`, `signup`, `sign-up`, `inquiry`, `enquiry`, `request`, `support`, `message` or `email`, or when it holds a `<textarea>`, or an `input[type="email"]` with no password field. Anything else is unknown and is not checked.
+
+Protection is detected from the provider scripts, iframes and widget classes of reCAPTCHA, Turnstile, hCaptcha and Friendly Captcha, from their response fields such as `g-recaptcha-response`, from preload and modulepreload hints pointing at those scripts, from Shopify's `script#captcha-bootstrap` bootstrap, and from explicit-render containers whose id or class carries a provider token. FormShield is recognised from a `script[src]` that either carries a `data-fs-project-key` attribute or points at `formshield.dev` or a subdomain of it with a path of `/js/formshield.js` or `/js/formshield.esm.js`, and it covers every public form on the page. A page-level signal only credits a public form when that form is the only public form on the page and no other form owns a widget of its own.
+
+## How to fix it
+
+```html
+<form action="/contact" method="post">
+  <textarea name="message"></textarea>
+  <div class="cf-turnstile" data-sitekey="0x4AAA..."></div>
+  <button type="submit">Send</button>
+</form>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+```
+
+Put the widget inside the form it protects and verify the token server-side before accepting the submission. The client-side widget alone stops nothing.
+
+A form protected by something squirrel cannot see from the HTML, such as a server-side honeypot, a rate limiter or a challenge that only mounts after user interaction, still gets flagged. Disable the rule for that case rather than adding a widget you do not need.
 
 | | |
 |---|---|
@@ -12,14 +44,6 @@ Checks for CAPTCHA protection on public forms
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## What it detects
-
-Public-facing forms (contact, comment, newsletter, registration, etc.) with no detected CAPTCHA or bot-protection. Recognized providers: reCAPTCHA, Cloudflare Turnstile, hCaptcha, FriendlyCaptcha, and [FormShield](https://formshield.dev). FormShield protects an entire page invisibly via a single site-wide beacon script (no per-form widget), so its presence (the beacon script tag or its `data-fs-project-key` attribute) is treated as covering every public form on the page.
-
-## Solution
-
-Add CAPTCHA protection (reCAPTCHA, Cloudflare Turnstile, hCaptcha, FormShield, etc.) to public-facing forms to prevent spam and bot submissions. Contact forms, comment forms, newsletter signups, and registration forms are common targets for automated abuse. Modern solutions like Turnstile and FormShield offer invisible protection with minimal user friction.
 
 ## Enable / disable
 
@@ -44,3 +68,30 @@ disable = ["security/*"]
 enable = ["security/form-captcha"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/form-https](/rules/security/form-https): where the same forms submit to.
+- [a11y/form-labels](/rules/a11y/form-labels): whether those fields have accessible names.
+- [integrity/fake-auth-overlay](/rules/integrity/fake-auth-overlay): login prompts that were never yours.
+- [security/third-party-cookies](/rules/security/third-party-cookies): what the challenge provider loads alongside the widget.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Automated threats to web applications, OWASP](https://owasp.org/www-project-automated-threats-to-web-applications/)
+- [The form element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/form)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Every unprotected public form is listed by page with its selector. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

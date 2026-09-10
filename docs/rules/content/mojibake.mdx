@@ -1,9 +1,36 @@
 ---
-title: "Encoding Corruption"
-description: "Detects mojibake and replacement characters in visible text"
+title: "Mojibake: â€™ and other encoding corruption in page text"
+description: "Strange character sequences in your copy mean the bytes and the declared encoding disagree. squirrel finds them and names which of the two is wrong."
 ---
 
-Detects mojibake and replacement characters in visible text
+## What mojibake is
+
+Mojibake is text that was encoded one way and decoded another. The most common form on the web is UTF-8 bytes read as latin1 or cp1252, which turns a right single quote into `â€™`, an em dash into `â€”` and an accented `é` into `Ã©`.
+
+Two other shapes appear alongside it. The replacement character, U+FFFD, is what a decoder writes when it gave up on a byte sequence entirely, so it is unambiguous corruption. A literal `&amp;nbsp;` on screen means the source said `&amp;amp;nbsp;`, an entity that was encoded one time too many, usually during an import.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the prose in `<body>`, excluding `<script>`, `<style>`, `<noscript>` and the code-like elements `<code>`, `<pre>`, `<samp>` and `<kbd>`. Attributes and raw HTML are not read, since a reader never sees them. It emits a single check named `encoding-corruption`:
+
+- Skipped when there is no parsed document. Message: `No document available`.
+- Skipped when there is no `<body>`. Message: `No body element to read visible text from`.
+- Pass when nothing matched. Message: `No encoding corruption in visible text`.
+- Warn or fail otherwise. Message: `14 encoding corruption occurrence(s) in visible text (utf8-as-latin1): charset is correctly utf-8, so the source itself is double-encoded: re-import the content from its original source`.
+
+The status is fail when the replacement character was found, since that is not arguable, and warn for the other two families. The cause named in the message depends on the page's declared charset: no `<meta charset>` at all means the browser guessed; a correct `utf-8` means the source bytes are already double-encoded; any other value means the declaration is wrong and the source may be too.
+
+Eighteen byte sequences are matched, each a real UTF-8 lead byte rendered as its latin1 character, so legitimate French, German and Spanish copy stays clean. They are matched as one alternation ordered longest first, so a longer sequence is consumed whole rather than partly matched by a shorter entry.
+
+## How to fix it
+
+```html
+<meta charset="utf-8" />
+```
+
+Fix the declaration first: `<meta charset="utf-8">` as the first thing in the head, and `Content-Type: text/html; charset=utf-8` on the response. If the declaration is already correct, the stored content is corrupt and the fix is upstream.
+
+Re-import from the original source rather than replacing the visible symptoms. The same corruption is usually in fields you cannot see from the page: meta descriptions, alt text, structured data.
 
 | | |
 |---|---|
@@ -12,41 +39,6 @@ Detects mojibake and replacement characters in visible text
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Mojibake means the bytes and the declared encoding disagree. Fix the declaration first: serve `<meta charset="utf-8">` as the first thing in the head, and send `Content-Type: text/html; charset=utf-8`. If the declaration is already utf-8, the source itself was double-encoded, usually by a CMS migration that read utf-8 bytes as latin1 and re-encoded them. Re-import the affected content from the original source rather than search-and-replacing the visible symptoms, because the same corruption is usually present in fields you cannot see, such as meta descriptions and alt text.
-
-## What it checks
-
-Three families of corruption, in visible text only:
-
-| Kind | Example | Meaning |
-|---|---|---|
-| `utf8-as-latin1` | `Itâ€™s`, `cafÃ©` | utf-8 bytes decoded as latin1 or cp1252 |
-| `replacement-char` | `caf�` | the decoder gave up on those bytes |
-| `double-encoded-entity` | visible `&amp;nbsp;` | the source said `&amp;amp;nbsp;` |
-
-The check reads prose, never raw HTML, so an encoded sequence in an attribute is not reported. Two kinds of markup are excluded:
-
-- `<script>`, `<style>` and `<noscript>`, because a visitor never reads them.
-- `<code>`, `<pre>`, `<samp>` and `<kbd>`, because a visitor reads them as a quoted literal. A changelog entry or docs page that quotes `â€™` inside a code span is documenting the corruption, not suffering from it.
-
-A page with no body is skipped rather than passed.
-
-**Severity depends on certainty.** The replacement character is unambiguous corruption and fails. The other families warn.
-
-## Cause attribution
-
-The finding cross-checks `<meta charset>` so the message names the actual fix rather than just reporting odd characters:
-
-- **No charset declared**: the browser guessed. Add `<meta charset="utf-8">`.
-- **Charset is utf-8**: the declaration is right, so the source is double-encoded. Re-import the content.
-- **Charset is something else**: correct the declaration, then re-check whether the source is also double-encoded.
-
-## False positives
-
-Correctly-decoded accented text is not corruption. Copy such as `Un café à Paris`, `Grüße aus Köln`, `jalapeño`, `25°` or curly quotes stays clean, because the rule matches multi-character *sequences* that only arise from a bad decode, not individual accented letters.
 
 ## Enable / disable
 
@@ -71,3 +63,30 @@ disable = ["content/*"]
 enable = ["content/mojibake"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/unrendered-markup](/rules/content/unrendered-markup): literal markdown or escaped HTML reaching the reader.
+- [content/placeholder-text](/rules/content/placeholder-text): template leftovers in the same body copy.
+- [core/charset](/rules/core/charset): whether the page declares an encoding at all.
+- [content/mime-type](/rules/content/mime-type): the header that carries the same charset parameter.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Character encoding, MDN glossary](https://developer.mozilla.org/en-US/docs/Glossary/Character_encoding)
+- [Specifying the document's character encoding, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#charset)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the corruption families found, a sample and a count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

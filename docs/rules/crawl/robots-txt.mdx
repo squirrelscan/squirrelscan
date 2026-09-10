@@ -1,9 +1,39 @@
 ---
-title: "Robots.txt"
-description: "Checks if robots.txt exists and is properly configured"
+title: "robots.txt: what to put in it and how squirrel checks it"
+description: "A missing robots.txt, a Disallow: / left in production, or a syntax error changes what gets crawled. squirrel checks existence, syntax and rules."
 ---
 
-Checks if robots.txt exists and is properly configured
+## What robots.txt is
+
+`robots.txt` is a plain text file at the root of a host that tells automated clients which paths they may request. It is defined by RFC 9309 and consists of `User-agent` groups, each with `Allow` and `Disallow` rules, plus optional `Sitemap` lines that can appear anywhere in the file.
+
+It controls crawling, not indexing. A URL blocked in robots.txt can still be indexed from links elsewhere, because the crawler never fetches it and so never sees a `noindex`. It is also advisory: it constrains well-behaved crawlers and does nothing about anything else.
+
+## What squirrel checks
+
+The rule is site-wide and reads the robots.txt the crawl fetched. It emits up to five checks:
+
+- `robots-txt-exists` reports info when no robots.txt data is available at all. Message: `robots.txt data not available`.
+- `robots-txt-exists` reports info when the probe recorded an error, so absence was never established. Message: `robots.txt could not be checked`, with `The request did not complete, so this is unknown, not missing` as the value.
+- `robots-txt-exists` fails when the file is confirmed absent. Message: `No robots.txt found`, with `Search engines will crawl all accessible pages` as the value. Severity error, weight 8.
+- `robots-txt-exists` passes when the file exists. Message: `robots.txt exists`, with the file URL.
+- `robots-txt-syntax` warns when the parser recorded errors. Message: `2 syntax error(s) in robots.txt`, listing each. It passes otherwise with `robots.txt syntax is valid`.
+- `robots-txt-disallow` fails when the `*` group has `Disallow: /` and no `Allow` rule. Message: `robots.txt blocks all crawling`, with `Disallow: / with no Allow rules`. It reports info when there is a `Disallow: /` alongside `Allow` exceptions, and passes otherwise with `robots.txt does not block all crawling`.
+- `robots-txt-sitemap` passes when at least one `Sitemap` line is present, listing the URLs. Otherwise it reports info with `No sitemap referenced in robots.txt`.
+- `robots-txt-size` warns when the file exceeds 500 KB. Message: `robots.txt is very large`, with the size and Google's 500 KB limit as the value.
+
+## How to fix it
+
+```
+User-agent: *
+Allow: /
+
+Sitemap: https://example.com/sitemap.xml
+```
+
+Serve it from the host root with a `text/plain` content type. Keep `Disallow` for paths that genuinely waste crawl budget, such as faceted search and session URLs, and use `noindex` rather than `Disallow` when the goal is keeping a page out of results.
+
+Do not block the CSS, JavaScript or image paths a renderer needs. A page rendered without its stylesheet can be judged as broken or as having hidden text.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks if robots.txt exists and is properly configured
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-robots.txt tells search engines which pages to crawl. Place it at the root of your domain (example.com/robots.txt). Include your sitemap URL. Avoid blocking important resources (CSS, JS, images) that search engines need to render pages. Never use 'Disallow: /' unless you want to block all crawling. Use Google Search Console to test your robots.txt.
 
 ## Enable / disable
 
@@ -40,3 +66,31 @@ disable = ["crawl/*"]
 enable = ["crawl/robots-txt"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): the sitemap the `Sitemap` line should point at.
+- [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts): pages where robots.txt and the page directives disagree.
+- [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): noindex on a page robots.txt already blocks, so nobody reads it.
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): the same file read for AI crawler user-agents.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Introduction to robots.txt, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots/intro)
+- [How Google interprets the robots.txt specification](https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt)
+- [RFC 9309: Robots Exclusion Protocol](https://datatracker.ietf.org/doc/html/rfc9309)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. The file is reported with its syntax errors, its blocking rules and its sitemap references. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,30 @@
 ---
-title: "Placeholder Text"
-description: "Detects template leftovers and filler copy that shipped to production"
+title: "Lorem ipsum in production: placeholders and leftovers"
+description: "Filler copy, unrendered template syntax and a visible undefined all mean something shipped unfinished. squirrel names the family and shows a sample."
 ---
 
-Detects template leftovers and filler copy that shipped to production
+## What placeholder text is
+
+Placeholder text is anything on a live page that was never meant to be read: lorem ipsum, a theme's demo copy, a template expression that never evaluated, a JavaScript value that was concatenated into a sentence, a TODO note.
+
+Each family points at a different break in the publishing pipeline. Filler copy means the page was published before the copy was written. Unrendered template syntax means the engine never ran over that string. A visible `undefined` means the code printed a value it did not have; a visible `[object Object]` means it printed one it did have and coerced an object to a string on the way. All of them are visible to readers and to search engines exactly as written.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the prose in `<body>`, excluding scripts, styles and code-like elements. It emits a single check named `placeholder-content`:
+
+- Skipped when there is no parsed document. Message: `No document available`.
+- Skipped when there is no `<body>`. Message: `No body element to read visible text from`.
+- Pass when nothing matched. Message: `No placeholder or template leftovers in visible text`.
+- Warn or fail otherwise. Message: `3 placeholder occurrence(s) in visible text: lorem ipsum filler (lorem)`, naming each family with the marker token that matched rather than a passage excerpt. Each family is listed as an item with its own count and samples.
+
+Six families are detected, reported under these labels: `lorem ipsum filler`, `theme boilerplate`, `unrendered template syntax`, `stringified object in copy`, `JavaScript value in copy` and `source-comment marker`. The status is fail when lorem ipsum, unrendered template syntax or a stringified object was found, because none of those has an innocent reading, and warn for the other three. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
+
+## How to fix it
+
+Replace the copy, and add the affected fields to whatever check gates publishing. A theme's demo text usually survives because nobody knows which fields still hold it.
+
+For unrendered template syntax, render server-side or delete the stale copy. For a visible `undefined` or `NaN`, guard the field at the point of render rather than hiding it in CSS. For a TODO marker, finish it or remove it.
 
 | | |
 |---|---|
@@ -12,66 +33,6 @@ Detects template leftovers and filler copy that shipped to production
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Each family points at a different break in the publishing pipeline. Lorem ipsum and theme boilerplate mean a page was published before its copy was written: replace the text, and add the affected fields to whatever check gates publishing. Unrendered template syntax means the templating engine never ran over that string, usually because the value was interpolated into an already-escaped fragment or the template was served as static HTML: render it server-side, or delete the stale copy. A visible `undefined`, `NaN`, `null` or `[object Object]` means the value was missing and the code concatenated it into the copy anyway: guard the field at the point of render rather than in CSS. `TODO` and `FIXME` markers mean a draft shipped: finish or remove the note, since search engines and readers see it exactly as written.
-
-## What it checks
-
-Five families, in visible text only:
-
-| Kind | Example | Meaning |
-|---|---|---|
-| `lorem-ipsum` | `Lorem ipsum dolor sit amet` | latin filler was never replaced |
-| `boilerplate-copy` | `Your Company Name`, `Insert text here` | theme or page-builder filler |
-| `unrendered-template` | `{{ user.name }}`, `{% for x in y %}`, `<%= title %>`, `${total}`, `[[slug]]` | the template engine never ran |
-| `stringified-object` | `[object Object]` | an object was concatenated into a string |
-| `js-artifact` | `Rating: NaN`, a table cell reading `undefined` | a missing value was rendered anyway |
-| `todo-marker` | `TODO: write this`, `FIXME(alice)` | a draft note shipped |
-
-**Severity depends on certainty.** Lorem ipsum, unrendered template syntax and `[object Object]` are machine-generated and nothing legitimate produces them, so they fail. The rest warn, including the bare words `undefined`, `null` and `NaN`: an API reference whose defaults column reads `null` is ordinary, and telling it apart from a value that failed to render is not possible from the text alone.
-
-## What is not visible text
-
-The check reads rendered prose, never raw HTML, so a framework attribute such as `v-bind:title="{{ x }}"` is not reported. Four kinds of markup are excluded:
-
-- `<script>`, `<style>` and `<noscript>`, because a visitor never reads them.
-- `<code>`, `<pre>`, `<samp>` and `<kbd>`, because a visitor reads them as a quoted literal. This page is the proof: every example above is inside a code span, and this page passes its own rule.
-- `<template>`, because its content is inert markup for JavaScript to clone. Without this exclusion every Vue, Alpine, Handlebars and htmx page would report its own component templates.
-- Containers belonging to an in-page code editor or syntax highlighter, matched by class: `hljs`, `shiki`, `prism`, `torchlight`, `codeblock`, `code-block`, and anything starting `language-`, `cm-` or `monaco-`. CodeMirror and Monaco build their view from plain divs and spans with no `<pre>` or `<code>` anywhere, so a tag-only test reads a Liquid tutorial as a page full of unrendered Liquid.
-
-Text is read with a line break at every block boundary, so a value alone in a table cell or list item is seen as a value alone on its line. A page with no body is skipped rather than passed, and a [soft 404](/rules/crawl/soft-404) is skipped so one broken error template cannot spray warnings across a crawl.
-
-## False positives
-
-Each family is deliberately narrower than its name suggests, because every one of them is also a legitimate thing to write.
-
-**Lorem ipsum** needs corroboration: three distinct marker words, or the opening phrase `dolor sit amet`. The `Lorem ipsum` bigram alone is never enough at any position, so a page that mentions the filler, the way Jinja's documentation describes its `lipsum()` helper, stays clean. Words that are real in other languages, including `dolor`, `sit`, `amet`, `elit` and `sed`, are not markers at all, so Spanish and Latin copy stays clean.
-
-**Boilerplate copy** matches whole-word phrases, never single words and never substrings. `Request a sample of our placeholder API`, `we resample textures` and the headings `Placeholder Text` and `Example text` are all ordinary and stay clean.
-
-**JavaScript artifacts** match only the JavaScript spellings, case-sensitively, as standalone words. `NULL` in SQL prose, a sentence beginning `Undefined`, and identifiers such as `nullable` or `non-null` never match. Beyond that, the word has to sit where a **value** sits, not where a noun sits. It is reported only when it is alone on its line, which is what `<h1>{title}</h1>` renders as when the title is missing, or when a label such as `:` or `>` introduces it. A comma does not count as a label, and neither does a pipe: both read as prose far more often than as a list. All of these stay clean:
-
-```text
-This triggers undefined behaviour in C++.
-The function returns undefined when the key is missing.
-We reject the null hypothesis.
-Comparison with NaN
-If an operand is a quiet NaN, there is no exception.
-Accepts a string, null, or undefined.
-The parameter accepts string | null | undefined
-TypeError: null/undefined has no properties
-Reject the [null] hypothesis.
-```
-
-The cost of that strictness is deliberate: `Posted by undefined` at the end of a line is the same shape as `Comparison with NaN`, so the ambiguous shape is left alone.
-
-**Comment markers** match `TODO` and `FIXME` in annotation form: followed by `:` or `(`, preceded by a comment sigil such as `//`, or introducing a lowercase sentence on the same line. A bare standalone `TODO` is left alone, because it is the name of a column on every task board ever shipped. `XXX` is narrower still and needs the comment sigil, because `Super Bowl XXX: the box score` and `Rated XXX (explicit)` fit annotation form exactly. Redacted digits such as `555-XXX-XXXX` and `$XXX,XXX` are not markers either.
-
-## Known limit
-
-A page whose SUBJECT is one of these values is reported, as a warning. A JavaScript language reference that lists `null`, `undefined` and `NaN` as navigation entries, an API reference whose defaults column reads `null`, or an article whose visible heading is the bare word all look exactly like a page whose values failed to render, and no amount of reading the text can tell them apart. That is why this family warns rather than fails. Disable the rule for those pages.
 
 ## Enable / disable
 
@@ -96,3 +57,29 @@ disable = ["content/*"]
 enable = ["content/placeholder-text"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/unrendered-markup](/rules/content/unrendered-markup): markup that reached the reader as literal text.
+- [content/dev-leakage](/rules/content/dev-leakage): development hosts in the same production copy.
+- [content/mojibake](/rules/content/mojibake): encoding corruption in the same body text.
+- [content/word-count](/rules/content/word-count): pages that are short because the copy was never written.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the placeholder families found and a sample of each. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

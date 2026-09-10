@@ -1,9 +1,35 @@
 ---
-title: "Content Freshness"
-description: "Checks for last-modified and published date signals"
+title: "Freshness signals: the dates a page publishes about itself"
+description: "squirrel inventories the date signals on a page: the Last-Modified header, schema dates, time elements and Open Graph article dates."
 ---
 
-Checks for last-modified and published date signals
+## What a freshness signal is
+
+A freshness signal is anything on a page that says when its content was published or last changed. There are four common carriers: the `Last-Modified` response header, `datePublished` and `dateModified` in structured data, a `<time datetime>` element in the markup, and the Open Graph `article:published_time` and `article:modified_time` meta tags.
+
+None of them is required, and a page with none is not broken. They matter on content whose age changes its usefulness, where a visible date helps a reader decide whether to trust what they are reading.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check per signal it finds, plus a fallback:
+
+- `http-last-modified` passes when the response carries a `Last-Modified` header. Message: `Last-Modified header present`, with the header value.
+- `schema-dates` passes when any JSON-LD block contains the text `datePublished` or `dateModified`. Message: `Date schema markup present`.
+- `time-elements` passes when the page has any `time[datetime]`. Message: `3 <time> element(s) found`, with the first `datetime` value.
+- `og-article-dates` passes when either `article:published_time` or `article:modified_time` is present. Message: `Open Graph article dates present`.
+- `freshness` reports info when none of those were found. Message: `No freshness signals detected`, with `Consider adding date schema or Last-Modified header` as the value.
+
+The schema test is a substring match over the script text rather than a parse, so it does not check that the date belongs to the node describing the page. `content/date-agreement` is the rule that does. Severity info, weight 3.
+
+## How to fix it
+
+```html
+<time datetime="2026-03-12">12 March 2026</time>
+```
+
+Publish the date in the markup and in the structured data, both from the same content timestamp. A `<time datetime>` element is the piece that is visible to the reader as well as machine-readable.
+
+Update `dateModified` when you make a substantive change, and leave it alone when you do not. A date that moves on every deploy is not a freshness signal.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for last-modified and published date signals
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Date signals help search engines understand content freshness. Use Article schema with datePublished and dateModified. Show visible publication dates on content. Update dates when making significant changes. For evergreen content, periodic updates with new dateModified signal relevance. The Last-Modified HTTP header also helps crawlers.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["content/*"]
 enable = ["content/freshness"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/date-agreement](/rules/content/date-agreement): whether those signals agree with each other.
+- [crawl/sitemap-lastmod-drift](/rules/crawl/sitemap-lastmod-drift): the sitemap date compared against them.
+- [eeat/content-dates](/rules/eeat/content-dates): dates read as a trust signal.
+- [content/stale-copyright](/rules/content/stale-copyright): the footer year, a different claim entirely.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+- [Last-Modified, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Last-Modified)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the date signals it carries. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

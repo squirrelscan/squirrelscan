@@ -1,11 +1,32 @@
 ---
-title: "Content Gaps"
-description: "Finds topic clusters with search demand that lack dedicated coverage"
+title: "Content gaps: topic clusters your site does not cover"
+description: "A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters."
 ---
 
 <Note>**Cloud rule, opt-in** - requires login (`squirrel auth login`), costs **25 credits per audit**, and is **disabled by default**. See [Cloud rules](/cloud/rules).</Note>
 
-Finds topic clusters with search demand around the site's existing content that lack dedicated coverage.
+## What a content gap is
+
+A content gap is a topic cluster with search demand that sits next to your existing content and has no page of its own. Where a keyword gap is one term, a cluster is a group of related questions that one good page could answer together.
+
+Adjacency is what makes them worth doing first. A cluster next to something you already rank for benefits from the topical standing you have, so a new page there starts from a better position than one on an unrelated subject.
+
+## What squirrel checks
+
+The rule is site-wide and reads a result the cloud content-gaps service produced before the rules ran. It emits up to two checks:
+
+- `content-gaps` is skipped when no result is available, because the rule was not enabled or the service skipped it. Message: `Content gap analysis skipped`, with a readable skip reason.
+- `content-gaps` passes when the service found none. Message: `No content gaps found`.
+- `content-gaps` reports info with the count. Message: `6 content gap topics found`, or `1 content gap topic found` for one.
+- `content-gaps-high-volume` warns when more than 20 clusters each have at least 500 combined monthly searches. Message: `21 high-volume content gap topics (≥500 combined searches/mo) — significant uncovered demand`.
+
+Severity for the rule is info and the weight is 1. It is disabled by default and costs 25 credits per audit when enabled.
+
+## How to fix it
+
+Plan a page per cluster rather than per keyword, starting with the highest combined volume. A guide, a comparison or a genuine FAQ usually covers a cluster better than several thin pages splitting it.
+
+Link the new page from the existing content it sits next to. That is what connects it to the standing that made the cluster worth writing.
 
 | | |
 |---|---|
@@ -16,20 +37,21 @@ Finds topic clusters with search demand around the site's existing content that 
 | **Weight** | 1/10 |
 | **Default** | Disabled (opt-in) |
 
-## What it checks
-
-Using live search data, the rule maps topic clusters adjacent to what your site already covers and reports clusters with combined search volume that have no dedicated page on your site.
-
-## Solution
-
-Each gap is a topic cluster with combined search volume the site doesn't cover directly. Plan content (guides, comparisons, FAQs) around the highest-volume clusters first - they're adjacent to what you already rank for, so new pages benefit from existing topical authority.
-
 ## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `country` | string | `US` | ISO country for search data |
+| `language` | string | `en` | Language code for search data |
+| `competitors` | array of strings | none | Competitor domains to compare against, up to 5 |
+
+### Configuration example
 
 ```toml squirrel.toml
 [rule_options."gaps/content"]
-country = "US"        # ISO country for search data (default US)
-language = "en"       # language code for search data (default en)
+country = "AU"
+language = "en"
+competitors = ["competitor.com", "other.example"]
 ```
 
 ## Enable / disable
@@ -40,3 +62,30 @@ This rule is opt-in - enable it explicitly:
 [rules]
 enable = ["gaps/content"]
 ```
+
+## Related rules
+
+- [gaps/keywords](/rules/gaps/keywords): individual terms rather than clusters.
+- [content/article-links](/rules/content/article-links): linking a new page into the site.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): existing pages that under-cover their topic.
+- [links/orphan-pages](/rules/links/orphan-pages): making sure the new pages are reachable.
+
+Gap Analysis findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [SEO starter guide, Google Search Central](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Gap Analysis section of the report. Each gap cluster is listed with its combined search volume. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Gap Analysis section looks like on a real site.
+  </Card>
+</CardGroup>

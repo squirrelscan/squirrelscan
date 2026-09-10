@@ -1,9 +1,31 @@
 ---
-title: "Duplicate Title"
-description: "Checks for duplicate title tags across the site"
+title: "Duplicate title tags: the same title on several pages"
+description: "Two pages with the same title compete with each other in search and look identical in results. squirrel groups every crawled page by its title."
 ---
 
-Checks for duplicate title tags across the site
+## What a duplicate title is
+
+The `<title>` is the page's name: it is the search result heading, the browser tab label and the default text when someone shares the link. Two pages sharing one is two pages claiming to be the same thing.
+
+The usual causes are templated and mechanical: a category page and its first paginated page, a product available in several variants, a listing filtered by a parameter, or a template that falls back to the site name when the page has no title of its own.
+
+## What squirrel checks
+
+The rule is site-wide. It groups crawled pages by their title, trimmed and lowercased, and reports any title held by more than one page. Pages with no title are skipped. It emits a single check named `duplicate-title`:
+
+- Skipped below two pages. Message: `Insufficient pages to check for duplicates`.
+- Warn when duplicates exist. Message: `4 duplicate title(s) found across 11 pages`. Each item is the title, labelled `"Product listing page for..." (3 pages)`, with the URLs that share it. Severity warning, weight 6.
+- Pass otherwise. Message: `All pages have unique titles`.
+
+Comparison is exact after trimming and lowercasing, so two titles differing only by punctuation are counted as distinct.
+
+## How to fix it
+
+```html
+<title>Running shoes, page 2 | Acme</title>
+```
+
+Give each page a title that describes what is on it. For paginated series, add the page number. For variants, add the distinguishing attribute. For a filtered listing that should not be its own page, canonicalize it to the unfiltered version.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for duplicate title tags across the site
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Each page should have a unique title tag that accurately describes its content. Duplicate titles confuse search engines about which page to rank and make your pages less distinguishable in search results. Use unique, descriptive titles that include relevant keywords. For similar pages (e.g., pagination), add differentiating elements like page numbers or category names.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["content/*"]
 enable = ["content/duplicate-title"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/duplicate-description](/rules/content/duplicate-description): the same problem in the meta description.
+- [core/title-unique](/rules/core/title-unique): the per-page view of title uniqueness.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): titles that diverge from the site template.
+- [crawl/pagination](/rules/crawl/pagination): the paginated pages that most often share a title.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Influencing your title links in search results, Google Search Central](https://developers.google.com/search/docs/appearance/title-link)
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each duplicated title is listed with the pages that share it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

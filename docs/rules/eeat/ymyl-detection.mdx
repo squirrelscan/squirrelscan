@@ -1,9 +1,34 @@
 ---
-title: "YMYL Detection"
-description: "Detects Your Money Your Life (YMYL) content"
+title: "YMYL content: what it is and how squirrel detects it"
+description: "Health, finance and legal content is held to a higher standard. squirrel classifies the crawl by keyword and reports which categories it found."
 ---
 
-Detects Your Money Your Life (YMYL) content
+## What YMYL means
+
+YMYL stands for Your Money or Your Life. It is the label Google's quality rater guidelines use for topics where bad information can cause real harm: medical advice, financial decisions, legal matters, safety, civic information.
+
+Content in those areas is judged more strictly on expertise and trustworthiness than content that is merely wrong about a film. The practical consequence is that attribution, credentials, sourcing and disclaimers stop being nice-to-have.
+
+This rule does not judge the content. It reports which YMYL categories appear on the site, so you know which standard applies.
+
+## What squirrel checks
+
+The rule is site-wide. It searches each page's title, meta description and URL pathname for keywords in three groups, case-insensitively, and counts the pages matching each. The body copy is not searched. It emits up to two checks:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- `ymyl-content` reports info when any category matched. Message: `YMYL content detected - apply higher E-E-A-T standards`, listing what was found as `Health (14 pages)`, `Finance (3 pages)` and `Legal (1 pages)`.
+- `ymyl-requirements` reports info alongside it. Message: `YMYL content should have expert authors, disclaimers, and citations`.
+- `ymyl-detection` passes when nothing matched. Message: `No obvious YMYL content detected`.
+
+The three keyword groups cover health terms such as `symptoms`, `treatment`, `medication` and `surgery`; finance terms such as `investment`, `mortgage`, `tax` and `crypto`; and legal terms such as `lawyer`, `lawsuit` and `custody`. A keyword anywhere in the title, the description or the path is a match, so a page titled around an unrelated use of `credit` is counted. Read the counts as a prompt, not a classification. Severity info, weight 5.
+
+Several other E-E-A-T rules are gated on the audit's own site classification, which is a separate mechanism from this rule's keyword scan.
+
+## How to fix it
+
+Where the categories are right, apply the stricter standard to those sections: named authors with relevant credentials, a disclaimer that says what the content is not, sources a reader can check, and a visible review date.
+
+Where they are wrong, the keyword scan caught an incidental mention. Nothing needs fixing.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Detects Your Money Your Life (YMYL) content
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 5/10 |
-
-## Solution
-
-YMYL content (health, finance, legal, safety) is held to higher E-E-A-T standards by Google. If detected: ensure expert authors with credentials, add disclaimers ('not medical advice'), cite authoritative sources, show content review dates, and include professional credentials. YMYL errors can significantly impact rankings.
 
 ## Enable / disable
 
@@ -40,3 +61,29 @@ disable = ["eeat/*"]
 enable = ["eeat/ymyl-detection"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/disclaimers](/rules/eeat/disclaimers): the disclaimers YMYL content needs.
+- [eeat/author-expertise](/rules/eeat/author-expertise): the credentials that carry the most weight here.
+- [eeat/citations](/rules/eeat/citations): sourcing for claims a reader may act on.
+- [eeat/editorial-policy](/rules/eeat/editorial-policy): how the content is reviewed before it ships.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with the YMYL categories found and their page counts. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

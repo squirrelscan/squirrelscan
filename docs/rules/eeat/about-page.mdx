@@ -1,9 +1,30 @@
 ---
-title: "About Page"
-description: "Checks for an about/company page with content"
+title: "About page: what it establishes and how squirrel finds it"
+description: "An About page is where a reader decides whether you are a real organisation. squirrel finds it by URL or schema and checks it has content."
 ---
 
-Checks for an about/company page with content
+## What an About page is for
+
+An About page answers who is behind this site. For a reader deciding whether to trust what they are reading, it is often the second page they open, and for Google's helpful-content guidance it is where the who and the why of a site are supposed to be answerable.
+
+A page that exists and says three sentences does not do that job. What makes it work is specifics: who runs the organisation, what they have done, how long they have been doing it, and how to reach them.
+
+## What squirrel checks
+
+The rule is site-wide. It looks for an About page in two ways: a URL path matching one of the multilingual about patterns, or a page whose structured data declares the `AboutPage` type. The first match wins. It emits a single check named `about-page`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when the page is found and has 200 words or more. Message: `About page exists with substantial content`, with the URL as the value. Severity warning, weight 5.
+- Info when it is found with fewer than 200 words. Message: `About page exists but has limited content`, with `84 words - consider expanding` as the value.
+- Warn when no About page was found. Message: `No About page found`, with `Create /about or /about-us page` as the value.
+
+The schema fallback exists so a localised path the URL patterns do not recognise is still found.
+
+## How to fix it
+
+Write the page for someone who has never heard of you: who runs this, what you do, what you have done before, where you are. Link it from the main navigation or the footer so it is reachable from every page.
+
+The word threshold is a proxy for that. Padding the page to 200 words does not make it convincing.
 
 | | |
 |---|---|
@@ -12,10 +33,6 @@ Checks for an about/company page with content
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-An About page establishes credibility and trust. Include company history, mission, team overview, and credentials. Link from main navigation or footer. For E-E-A-T, explain your expertise and why visitors should trust you. Include contact information and physical location if applicable.
 
 ## Enable / disable
 
@@ -40,3 +57,30 @@ disable = ["eeat/*"]
 enable = ["eeat/about-page"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/contact-page](/rules/eeat/contact-page): the other page a reader opens to check you are real.
+- [eeat/physical-address](/rules/eeat/physical-address): the address that usually lives on both.
+- [eeat/author-expertise](/rules/eeat/author-expertise): who wrote the content, as opposed to who runs the site.
+- [eeat/trust-signals](/rules/eeat/trust-signals): the reviews and certifications a reader looks for next.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [AboutPage, Schema.org](https://schema.org/AboutPage)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The About page is reported with its URL when it passes, or its word count when the content is thin. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

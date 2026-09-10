@@ -1,9 +1,37 @@
 ---
-title: "Obfuscated Inline Script"
-description: "Detects large inline scripts with high entropy and obfuscation markers"
+title: "Obfuscated inline script: spotting an injected payload"
+description: "A large inline script with high entropy and eval or anti-tamper markers is rarely something a site ships on purpose. squirrel measures all three."
 ---
 
-Detects large inline scripts with high entropy and obfuscation markers (eval, char-code arithmetic, anti-tamper strings) typical of injected payloads.
+## What an obfuscated inline script is
+
+An obfuscated script is JavaScript deliberately rewritten so a reader cannot follow it: identifiers replaced with hex names such as `_0x4a2b`, strings encoded and rebuilt with `String.fromCharCode` or `atob`, and the whole body wrapped in an `eval` or a packer. Injected payloads use it to hide what they do from anyone who views source.
+
+Minification is a different goal. It shortens code without hiding intent, and a minified bundle is usually readable again once it is formatted. Minifiers do not forbid `eval` or runtime string rebuilding, so those markers are a signal rather than proof. What is worth looking at is the combination: a large, high-entropy blob shipped inline rather than as an external, source-mapped bundle.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every inline `<script>`. An inline script here means one whose `src` attribute is absent or empty. A script is a hit only when all three conditions hold: its text is at least 4096 characters long, counted as UTF-16 code units rather than encoded bytes; its lowercased body contains at least one packer marker; and its Shannon entropy is at least 4.5 bits per character. When several scripts qualify, the longest is reported.
+
+The packer markers are `eval(`, `function("return this")`, `function('return this')`, `atob(`, `unescape(`, `fromcharcode`, `the code has been tampered` and `_0x`.
+
+It emits at most one check named `obfuscated-script`:
+
+- Info when this is the only integrity signal on the page. Message: `Suspicious 152.4KB obfuscated inline script (single signal — review)`.
+- Fail when at least two distinct integrity signals fire on the page. Message: `Likely injected payload: 152.4KB obfuscated inline script (3 corroborating integrity signals)`.
+
+The size in the message is that character count divided by 1024, so it tracks the text length rather than the transferred bytes. The reported value carries that size, the entropy rounded to two decimals, and the list of markers that matched. Scripts with a real `src` are out of scope for this signal.
+
+## How to fix it
+
+```html
+<!-- serve heavy JavaScript as an external, readable bundle -->
+<script src="/assets/app.4f2c1a.js" defer></script>
+```
+
+If you did not add the inline blob, find the file or plugin that emits it, remove it, then look for dropped files and a loader that re-injects it. Rotate credentials and read the access logs.
+
+A tag manager or consent platform that ships a large inline loader using `atob` can match. Confirm the vendor and the exact bytes before treating it as an injection, and disable the rule for that page if it is expected.
 
 | | |
 |---|---|
@@ -12,16 +40,6 @@ Detects large inline scripts with high entropy and obfuscation markers (eval, ch
 | **Scope** | Page |
 | **Severity** | warning |
 | **Weight** | 8/10 |
-
-## How it works
-
-The rule scores inline `<script>` elements on three axes at once: **length** (the injected kit in the real incident was a single ~152KB inline blob), **Shannon entropy** (packed/encoded payloads are near-random), and **obfuscation markers** (`eval(`, `atob(`, `String.fromCharCode`, hex-mangled `_0x` identifiers, anti-tamper strings). A normal minified bundle is dense but lacks the eval/anti-tamper cues, and a small snippet never trips regardless of markers, so the rule fires only when all three line up.
-
-A lone obfuscated script is reported as **info**. It escalates to a **failure** only when another compromise signal corroborates on the same page.
-
-## Solution
-
-A large, high-entropy inline script using eval/packers or anti-tamper strings is rarely something a legitimate site ships inline. If you did not add it, treat the page as compromised: identify the file serving it, remove the injected script, scan for dropped PHP/JS, and rotate credentials. Legitimate heavy JS should be served as an external, source-mapped bundle, not an obfuscated inline blob.
 
 ## Enable / disable
 
@@ -46,3 +64,30 @@ disable = ["integrity/*"]
 enable = ["integrity/obfuscated-script"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [integrity/fake-auth-overlay](/rules/integrity/fake-auth-overlay): what an injected script usually builds.
+- [integrity/brand-impersonation](/rules/integrity/brand-impersonation): the second signal that turns this into a failure.
+- [security/leaked-secrets](/rules/security/leaked-secrets): credentials the same script would find in the page.
+- [security/csp](/rules/security/csp): the policy that stops an injected inline script from running.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [eval(), MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval)
+- [Malware and unwanted software, Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/malware)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each script is listed by page with its size, entropy and matched markers. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

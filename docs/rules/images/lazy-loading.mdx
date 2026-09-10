@@ -1,9 +1,33 @@
 ---
-title: "Lazy Loading"
-description: "Checks for lazy loading on below-fold images"
+title: "Lazy loading: how much of the page defers its load"
+description: "A page-wide count of images and iframes using loading=lazy. squirrel reports the mix rather than judging individual images."
 ---
 
-Checks for lazy loading on below-fold images
+## What this count measures
+
+This rule counts how much of a page defers loading, across both images and iframes. It is a summary, not a per-image verdict: `images/offscreen-lazy` is the rule that decides whether a particular image should have the attribute.
+
+Iframes are the part worth noticing. An embedded video or map is a whole document with its own scripts, and `loading="lazy"` on the `<iframe>` keeps all of it out of the initial load until the visitor scrolls near it.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It counts every `<img>` by its `loading` attribute and every `<iframe>` with `loading="lazy"`. It emits up to two checks:
+
+- Skipped when the page has no images. Message: `No images found`. Iframes are not considered in this branch.
+- `lazy-loading` passes when any image or iframe is lazy. Message: `9 element(s) use lazy loading`, counting both kinds together.
+- `lazy-loading-missing` reports info alongside that pass, counting every image whose `loading` value is neither exactly `lazy` nor exactly `eager`. That includes an absent attribute, an empty one, a misspelling and a different capitalisation. Message: `4 image(s) without loading attribute`, with `Consider adding loading='lazy' for below-fold images` as the value.
+- `lazy-loading` reports info when nothing is lazy and the page has more than three images. Message: `12 images without lazy loading`, with `Add loading='lazy' to below-fold images` as the value.
+- `lazy-loading` reports info when nothing is lazy and there are three images or fewer. Message: `2 image(s) found, no lazy loading detected`.
+
+Severity info, weight 3. Images explicitly marked `eager` are counted as neither lazy nor missing.
+
+## How to fix it
+
+```html
+<iframe src="https://www.youtube.com/embed/…" loading="lazy" title="…"></iframe>
+```
+
+Add `loading="lazy"` to embeds and to images the visitor has to scroll to. Leave the first screen alone, and see `images/offscreen-lazy` for which images those are.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for lazy loading on below-fold images
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Use loading='lazy' on images below the fold to defer loading until needed. This improves initial page load and saves bandwidth. Native lazy loading is supported by all modern browsers. Don't lazy load above-fold images (especially LCP candidates). Consider loading='eager' for critical images.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["images/*"]
 enable = ["images/lazy-loading"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/offscreen-lazy](/rules/images/offscreen-lazy): the per-image decision about which ones should be lazy.
+- [perf/lazy-above-fold](/rules/perf/lazy-above-fold): images lazy-loaded that should not be.
+- [perf/render-blocking](/rules/perf/render-blocking): the other resources delaying the first render.
+- [images/image-file-size](/rules/images/image-file-size): the weight deferring is meant to postpone.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Browser-level image lazy loading, web.dev](https://web.dev/articles/browser-level-image-lazy-loading)
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each page is reported with its lazy and non-lazy element counts. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

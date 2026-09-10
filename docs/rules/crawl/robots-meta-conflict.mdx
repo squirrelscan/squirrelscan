@@ -1,9 +1,35 @@
 ---
-title: "Robots Meta Conflict"
-description: "Detects conflicts between robots meta tags and robots.txt"
+title: "Redundant noindex: a blocked page nobody reads it on"
+description: "A page disallowed in robots.txt is never fetched, so its noindex is never seen. squirrel lists the pages carrying both."
 ---
 
-Detects conflicts between robots meta tags and robots.txt
+## What a redundant noindex is
+
+When robots.txt disallows a path, a compliant crawler does not request it. Any directive in that page's HTML, including `noindex`, is therefore never read.
+
+The combination is common because both look like ways to keep a page out of search. They are not interchangeable. `Disallow` prevents the fetch; `noindex` removes the page from the index after a fetch. Applying both means the second has no effect, and the URL can still appear in results as a bare link discovered elsewhere.
+
+## What squirrel checks
+
+The rule is site-wide. For each crawled page it takes the URL path and tests it against the `*` user-agent group in robots.txt, matching a `Disallow` whose path is `/` or which the page path starts with. It then looks for a `noindex` token in the `robots` meta tag.
+
+- Skipped when there is no robots.txt or no pages. Message: `Insufficient data to check for conflicts`.
+- `redundant-noindex` reports info for pages that are both blocked and carry `noindex`. Message: `4 page(s) blocked in robots.txt also have noindex`, with `noindex won't be seen if page is blocked from crawling` as the value.
+- `robots-conflict` passes. Message: `No robots meta/robots.txt conflicts detected`.
+
+The `robots-conflict` check always passes in the current implementation: its warn branch is never reached, so the only finding this rule produces is the informational one. Severity for the rule is warning, weight 5.
+
+The path test only reads the `*` group, so a `Disallow` written for a named user-agent such as `Googlebot` is not considered here.
+
+## How to fix it
+
+```
+# robots.txt: remove the Disallow so the noindex is readable
+User-agent: *
+Allow: /archive/
+```
+
+Pick one. If the goal is keeping the page out of results, allow the crawl and keep `noindex`. If the goal is saving crawl budget on a section nobody should fetch, keep the `Disallow` and drop the meta tag.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Detects conflicts between robots meta tags and robots.txt
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Robots.txt and robots meta tags should work together, not conflict. If robots.txt blocks a URL, search engines won't see the meta robots tag at all. Common conflicts: blocking a page in robots.txt while trying to noindex it (unnecessary), or allowing in robots.txt but noindexing (works but confusing). For noindex, let the page be crawled so the directive is seen. For blocked pages, robots.txt alone is sufficient.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["crawl/*"]
 enable = ["crawl/robots-meta-conflict"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts): the same comparison, plus the allowed-but-noindexed case.
+- [crawl/robots-txt](/rules/crawl/robots-txt): the file this rule reads its rules from.
+- [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages): every blocked page with the reason it is blocked.
+- [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap): noindexed pages you are still submitting.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Robots meta tag and X-Robots-Tag, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [How Google interprets the robots.txt specification](https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Each page carrying both directives is counted and named. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

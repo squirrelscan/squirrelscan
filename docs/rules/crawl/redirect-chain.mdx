@@ -1,9 +1,37 @@
 ---
-title: "Redirect Chains"
-description: "Detects multi-hop redirect chains that waste crawl budget"
+title: "Redirect chains: when one hop turns into three"
+description: "Each redirect hop costs latency and crawl budget, and search engines stop following after a few. squirrel counts the hops on every crawled URL."
 ---
 
-Detects multi-hop redirect chains that waste crawl budget
+## What a redirect chain is
+
+A redirect chain is more than one redirect between the requested URL and the page that answers. `http://example.com/page` to `https://example.com/page` to `https://www.example.com/page` to `https://www.example.com/page/` is three redirects for one request.
+
+Chains accumulate rather than being designed. Each migration adds a layer: a protocol switch, a host consolidation, a slash convention, a site restructure. The cost is a round trip per hop for every visitor who takes the old URL, and a crawler that may give up before the end. The fix is to collapse the rules so each source URL points at the final destination in one step.
+
+## What squirrel checks
+
+The rule is site-wide and reads the redirect chain the crawler recorded for each page. It emits up to two kinds of check:
+
+- Skipped when no pages are available. Message: `No pages available for redirect chain analysis`.
+- `entry-url-redirect`, one per finding, when the site's base URL itself redirected. It warns above `maxHops` with `Entry URL has 3-hop redirect chain`, and reports info at or below it with `Entry URL redirects (1 hop)`. The entry URL is reported even for a single hop, because the address people type should answer directly.
+- `redirect-chain` warns for other pages whose chain exceeds `maxHops`. Message: `4 page(s) have redirect chains >2 hops`, listing each URL with its hop count and the chain rendered as `/old (301) → /new (301) → /final (200)`.
+- `redirect-chain` passes when neither fired. Message: `No redirect chains exceed 2 hops`.
+
+The default `maxHops` is 2. The count is the number of entries in the recorded chain, and that includes the final non-redirect response, so `/old (301) → /new (301) → /final (200)` counts as three hops rather than two redirects. Severity warning, weight 5.
+
+## How to fix it
+
+```nginx
+# scheme and host in a single hop
+server {
+  listen 80;
+  server_name example.com www.example.com;
+  return 301 https://www.example.com$request_uri;
+}
+```
+
+Collapse the rules so each source URL reaches its destination in one hop. `$request_uri` carries the original path and query through unchanged, so a slash convention needs its own routing rule rather than falling out of this one. Then update internal links, canonical tags and the sitemap to the final URLs, so no ordinary navigation takes a redirect at all.
 
 | | |
 |---|---|
@@ -13,23 +41,17 @@ Detects multi-hop redirect chains that waste crawl budget
 | **Severity** | warning |
 | **Weight** | 5/10 |
 
-## Solution
-
-Each redirect hop adds latency and consumes crawl budget. Search engines may stop following after 5+ hops. Consolidate redirect chains to a single hop by updating the source URL to point directly to the final destination. Common causes: HTTP→HTTPS→www→trailing slash combinations, or legacy domain migrations.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `maxHops` | unknown | `undefined` | Flag redirect chains exceeding this many hops |
+| `maxHops` | integer, 1 or more | `2` | Flag redirect chains exceeding this many hops |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."crawl/redirect-chain"]
-maxHops = undefined
+[rule_options."crawl/redirect-chain"]
+maxHops = 1
 ```
 
 ## Enable / disable
@@ -55,3 +77,30 @@ disable = ["crawl/*"]
 enable = ["crawl/redirect-chain"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): a canonical tag that points into one of these chains.
+- [links/redirect-chains](/rules/links/redirect-chains): internal links that walk a chain on every click.
+- [security/http-to-https](/rules/security/http-to-https): the HTTP to HTTPS hop that usually starts one.
+- [url/trailing-slash](/rules/url/trailing-slash): the slash convention that usually adds the last one.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [301 redirects and Google Search](https://developers.google.com/search/docs/crawling-indexing/301-redirects)
+- [Managing crawl budget for large sites, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every chain is listed with its hop count and the full path it takes. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

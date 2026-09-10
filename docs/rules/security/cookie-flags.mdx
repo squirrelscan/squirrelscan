@@ -1,9 +1,36 @@
 ---
-title: "Cookie Flags"
-description: "Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes"
+title: "Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie"
+description: "SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie."
 ---
 
-Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes
+## What the cookie flags are
+
+`Set-Cookie` carries attributes that decide where a cookie may travel and who may read it. `Secure` stops the cookie being sent over plain HTTP. `HttpOnly` stops client-side JavaScript reading it, which closes the usual path from a cross-site scripting bug to a stolen session. `SameSite` decides whether the cookie rides along on requests started by other sites.
+
+Browsers now default an absent `SameSite` to `Lax`, so omitting it is weaker documentation rather than an open door. `SameSite=None` is the exception: it re-enables cross-site sending for cases like an embedded widget, and browsers reject the cookie entirely unless `Secure` is set alongside it.
+
+## What squirrel checks
+
+The rule reads the `set-cookie` response header of each crawled page, splits it into individual cookies, and emits these checks:
+
+- `cookie-flags` passes when the page sets no cookies at all. Message: `No cookies set on this page`.
+- `cookie-samesite-none-insecure` fails when a cookie declares `SameSite=None` without `Secure`. Message: `1 cookie(s) set SameSite=None without Secure — modern browsers reject this combination`, with the cookie names listed.
+- `cookie-secure` warns when a cookie on an HTTPS page has no `Secure` attribute. Message: `2 cookie(s) missing the Secure flag`. The check is skipped on HTTP pages, where there is no secure connection to pin the cookie to.
+- `cookie-httponly` warns when a cookie has no `HttpOnly` attribute. Message: `2 cookie(s) missing the HttpOnly flag`.
+- `cookie-samesite` reports info when a cookie declares no `SameSite`, or declares it with an empty value such as `SameSite=`. Message: `2 cookie(s) don't explicitly declare SameSite (browsers default to Lax)`.
+- `cookie-flags` passes when cookies were set and none of the above fired. Message: `3 cookie(s) set with Secure, HttpOnly, and SameSite configured correctly`.
+
+Multiple cookies in one header value are split on newlines and on commas that are followed by a `name=` pair, so an `Expires` date containing a comma does not split a cookie in two. Only cookies your server sets in a response header are seen; cookies written by JavaScript are not.
+
+## How to fix it
+
+```
+Set-Cookie: session=abc123; Path=/; Secure; HttpOnly; SameSite=Lax
+```
+
+Set the flags where the cookie is created, in the session middleware or the framework's cookie helper. Drop `HttpOnly` only for a cookie your own frontend genuinely reads, such as a CSRF token mirrored into the DOM. When you need `SameSite=None`, add `Secure` in the same change.
+
+Only cookies your server sets in a `Set-Cookie` response header are inspected. A cookie written by JavaScript, whether yours or a third party's, never reaches this rule.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Cookies set by your server should carry the flags appropriate to their purpose. Secure stops a cookie from ever being sent over plain HTTP, so it can't be intercepted on a downgraded connection. HttpOnly stops client-side JavaScript from reading it, closing off a common XSS cookie-theft path — omit it only for cookies your own frontend genuinely needs to read. SameSite=Lax or SameSite=Strict blocks the cookie from being sent on cross-site requests, mitigating CSRF; if you need SameSite=None for a legitimate cross-site use case (e.g. an embedded widget), it must be paired with Secure or browsers will reject the cookie outright.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["security/*"]
 enable = ["security/cookie-flags"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/third-party-cookies](/rules/security/third-party-cookies): cookies set by domains other than yours.
+- [legal/cookie-consent](/rules/legal/cookie-consent): whether a cookie consent mechanism is present.
+- [security/https](/rules/security/https): the precondition for `Secure` to mean anything.
+- [security/csp](/rules/security/csp): the policy that limits the injected script `HttpOnly` protects against.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Set-Cookie, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)
+- [Using HTTP cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies)
+- [Session management cheat sheet, OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Every cookie missing a flag is listed by name and page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,34 @@
 ---
-title: "Brand Impersonation"
-description: "Detects pages impersonating a third-party brand's login or booking surface"
+title: "Brand impersonation: a sign-in page that is not the brand's"
+description: "A 'Sign in with Google' control pointing at a host that is not Google is a phishing pattern. squirrel checks where credential controls actually go."
 ---
 
-Detects pages impersonating a third-party brand's login or booking surface (Calendly, Google/Microsoft login, ClickFunnels, Kajabi, DocuSign) where credentials are sent off-brand.
+## What brand impersonation is
+
+Brand impersonation, in this context, is a page on your own site that presents another company's sign-in or booking surface while sending the credentials somewhere that company does not own. It is the shape of an injected phishing kit: the attacker uses your domain's reputation to make the fake login look trustworthy.
+
+A legitimate integration always targets the provider's own host, `accounts.google.com` for Google or `calendly.com` for Calendly. Merely naming a brand is not impersonation, and neither is your own app's generic sign-in form. The defect is the mismatch between what the control says and where it points.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits at most one check named `brand-impersonation`. It fires only when all of the following hold on the same page: the page has a credential affordance, meaning an `input[type="password"]` or sign-in copy in the title or body text; the text matches a brand's lexicon; the text also matches one of that brand's action cues; and a credential control whose own label names that brand points at a host that is neither the brand's legitimate host nor the site's own registrable domain.
+
+- Info when this is the only integrity signal on the page. Message: `Possible Calendly brand impersonation (single signal — review)`.
+- Fail when at least two distinct integrity signals fire on the page. Message: `Likely phishing kit impersonating Calendly (3 corroborating integrity signals)`.
+
+Six brands are covered: Google, Microsoft, Calendly, DocuSign, ClickFunnels and Kajabi, each with its own lexicon, action cues and legitimate hosts. The credential surface is deliberately narrow: form actions on forms that contain a password field, and links whose own text matches `sign in`, `log in`, `login`, `continue with` or `verify`. A footer link to an unrelated third party is not read as a credential destination. Sibling subdomains count as the site's own surface, resolved through the Public Suffix List, so a link from `www.acme.com` to `app.acme.com` is spared.
+
+The four page-level integrity rules share one detector module and each computes the full signal set for its own page. Escalation to fail requires two distinct signals from `brand-impersonation`, `obfuscated-script`, `fake-auth-overlay` and `seo-doorway`.
+
+## How to fix it
+
+```html
+<a href="https://accounts.google.com/o/oauth2/v2/auth?client_id=...">Sign in with Google</a>
+```
+
+Point the control at the provider's own host. If you did not build the page, treat the site as compromised: remove the page, look for recently modified files and unexpected CMS entries, rotate credentials and read the server access logs.
+
+An OAuth flow proxied through your own authentication service is not flagged, because the destination shares your registrable domain. A flow proxied through a separate vendor domain will be flagged as a single signal, which is info rather than a failure.
 
 | | |
 |---|---|
@@ -12,16 +37,6 @@ Detects pages impersonating a third-party brand's login or booking surface (Cale
 | **Scope** | Page |
 | **Severity** | warning |
 | **Weight** | 8/10 |
-
-## How it works
-
-The rule fires only when a page combines a brand's lexicon **and** an action cue (sign in, book a call) **and** a credential affordance (a password field or login control) whose target is **not** that brand's legitimate host and **not** your own origin. A bare mention (e.g. "we integrate with Calendly") never fires, and a real "Sign in with Google" button pointing at `accounts.google.com` is spared.
-
-A lone brand-impersonation signal is reported as **info**. It escalates to a **failure** only when at least one other compromise signal corroborates on the same page (for example an obfuscated script or a full-viewport auth overlay): the classic phishing-kit shape.
-
-## Solution
-
-A page presenting a third-party brand's sign-in or booking surface whose credential target is NOT that brand's legitimate host is a classic phishing-kit pattern. If you did not create this page, your site is likely compromised: look for recently added files, unexpected pages not in your CMS, and injected PHP/JS. Remove the page, rotate credentials, and review server access logs. A legitimate integration must link to the brand's real domain (e.g. accounts.google.com, calendly.com).
 
 ## Enable / disable
 
@@ -46,3 +61,30 @@ disable = ["integrity/*"]
 enable = ["integrity/brand-impersonation"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [integrity/fake-auth-overlay](/rules/integrity/fake-auth-overlay): the iframe version of the same credential grab.
+- [integrity/obfuscated-script](/rules/integrity/obfuscated-script): the second signal that turns this finding into a failure.
+- [integrity/orphan-page](/rules/integrity/orphan-page): whether the page is linked from anywhere on your site.
+- [integrity/kit-signature](/rules/integrity/kit-signature): threat-intel signatures for the same kits, when the intel feature is on.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Social engineering (phishing and deceptive sites), Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/social-engineering)
+- [Hacked content, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each impersonation is listed by page with the brand and the off-brand host it targets. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

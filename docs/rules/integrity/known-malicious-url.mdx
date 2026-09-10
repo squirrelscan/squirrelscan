@@ -1,9 +1,23 @@
 ---
-title: "Known Malicious URL"
-description: "Cross-references the site's own URLs and outbound links against threat-intel feeds"
+title: "Known malicious URL: checking against threat feeds"
+description: "A page can be listed by Safe Browsing before you notice anything wrong. squirrel checks your URLs and outbound links against reputation feeds."
 ---
 
-Cross-references the site's own URLs (its domain and each page's final URL) and its outbound external links against threat-intel feeds and on-demand lookups. This catches token-gated or cloaked kits that never render for the crawler but are already listed by a reputation provider, and it flags outbound links that point visitors at a known-malicious host.
+## What a threat-intel URL check is
+
+Reputation feeds are lists of URLs that security vendors have observed serving phishing or malware. Safe Browsing, URLhaus, ThreatFox, urlscan, VirusTotal, OpenPhish and PhishTank each publish such lists or answer queries against them. Browsers show interstitial warnings from their own protection service, which for Chrome is Safe Browsing and for Edge is Microsoft Defender SmartScreen, so a listing in one feed does not mean every browser will warn.
+
+Checking your own URLs against those lists catches two things a crawler cannot. A page that only serves its payload to a specific referrer or token never renders the payload for your audit, but the feed may already have a sample of it. And an outbound link on your site may point at a host that was compromised after you linked to it.
+
+## What squirrel checks
+
+The rule is part of the opt-in threat-intel feature. All feed pulls and lookups happen before the rules run; the rule itself reads memoized verdicts. It collects candidates from the site base URL, every crawled page's URL and final URL, and every outbound external link, deduplicated by URL and tagged as `site` or `external-link`. It emits a check named `known-malicious-url`:
+
+- Fail, once per listed URL that belongs to the site. Message: `Site URL flagged as malicious by urlhaus, openphish (phishing)`, naming the provider ids that listed it and any threat labels they attached.
+- Fail, once per listed outbound link. Message: `Outbound link to a known-malicious URL flagged by urlhaus (malware_download)`.
+- Pass, once, when at least one provider was consulted and nothing matched. Message: `No site URLs or outbound links matched any threat-intel feed`.
+
+When no provider was consulted for any candidate, because the feature is off or nothing was prefetched, the rule emits nothing. Absence of data is never reported as a clean result. Severity error, weight 9.
 
 | | |
 |---|---|
@@ -13,28 +27,17 @@ Cross-references the site's own URLs (its domain and each page's final URL) and 
 | **Severity** | error |
 | **Weight** | 9/10 |
 
-## How it works
-
-This rule is part of the opt-in **threat-intel** feature (`[intel]`). When the feature is on, squirrelscan gathers every candidate URL (the base domain, each crawled page's URL and final URL, and every outbound external link), then checks each one against the configured providers:
-
-- **Daily-pull feeds:** URLhaus, ThreatFox, OpenPhish, and PhishTank. These are pulled once per day into a cached blocklist.
-- **On-demand lookups:** Google Safe Browsing, urlscan, and VirusTotal. These are queried per URL and their results are memoized for the run.
-
-A flagged **site** URL means one of your own pages is serving (or hosting an injected) phishing or malware payload, a likely compromise. A flagged **outbound** link means the page links out to a known-malicious host.
-
-The rule reports honestly when data is incomplete: if no provider was consulted for a URL (the feature is off, or nothing was prefetched), it stays silent for that URL rather than implying it is clean. When at least one provider was consulted and nothing matched, it records a single reassuring pass for the report.
-
 ## Enable the feature
 
-Threat-intel is off by default. Turn it on and configure at least one provider so this rule has feeds to check against:
+Threat-intel is off by default. Turn it on and configure at least one provider so this rule has feeds to check against. URLhaus, ThreatFox, OpenPhish and PhishTank are daily-pull feeds; Safe Browsing, urlscan and VirusTotal are on-demand lookups. URLhaus and ThreatFox both take an abuse.ch key, which squirrel sends as the `Auth-Key` header.
 
 ```toml squirrel.toml
 [intel]
 enabled = true            # off by default
 
-# Keyless daily-pull feeds: just switch them on.
+# Daily-pull feeds.
 [intel.providers.urlhaus]
-enabled = true
+api_key = "your-abuse-ch-key" # pragma: allowlist secret
 
 [intel.providers.openphish]
 enabled = true
@@ -47,9 +50,11 @@ api_key = "your-safe-browsing-key" # pragma: allowlist secret
 api_key = "your-virustotal-key" # pragma: allowlist secret
 ```
 
-## Solution
+## How to fix it
 
-A site URL flagged by a threat feed means the page is serving (or is hosting an injected) phishing or malware payload, almost always a compromise. Remove the offending content, rotate credentials, and request a review from the listing provider once the page is clean. A flagged **outbound** link points your visitors at a malicious host: remove or replace the link, and check whether it was injected, which is a compromise signal in its own right.
+A listing is a report of suspected malicious activity, not proof, and false positives happen. Open the URL and confirm before acting. Once you have confirmed it, remove the content, rotate credentials, read the access logs, then request a review from the provider that listed it.
+
+A listed outbound link points your visitors at a malicious host. Remove or replace it, and check whether you put it there. A link you did not add is itself a compromise signal.
 
 ## Enable / disable
 
@@ -66,3 +71,30 @@ disable = ["integrity/known-malicious-url"]
 [rules]
 disable = ["integrity/*"]
 ```
+
+## Related rules
+
+- [integrity/kit-signature](/rules/integrity/kit-signature): the other half of the threat-intel feature, matching page content rather than URLs.
+- [integrity/cloaking](/rules/integrity/cloaking): pages that hide the payload from your own crawl.
+- [links/broken-external-links](/rules/links/broken-external-links): outbound links that no longer resolve at all.
+- [security/new-tab](/rules/security/new-tab): the attributes those outbound links should carry.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Malware and unwanted software, Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/malware)
+- [Social engineering (phishing and deceptive sites), Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/social-engineering)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each listed URL is named with the providers that flagged it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

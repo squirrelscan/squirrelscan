@@ -1,9 +1,33 @@
 ---
-title: "URL Special Characters"
-description: "Checks for problematic special characters in URL path"
+title: "Special characters in a URL path: what breaks and why"
+description: "Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds."
 ---
 
-Checks for problematic special characters in URL path
+## What counts as a problematic character
+
+A URL path is limited by RFC 3986 to a defined set of characters. Anything else has to be percent-encoded, which is why a space becomes `%20`. Some characters are reserved because they delimit parts of the URL: `?` starts the query, `#` starts the fragment, `&` and `=` separate parameters.
+
+Encoding is correct and works. What varies is how the software around it behaves: link parsers that stop at the first unexpected character, systems that encode an already-encoded path a second time, tools that display the raw percent sequence rather than decoding it. Non-ASCII characters in a path are valid, and browsers show them decoded, but whether anything else does depends on the application. Sticking to unreserved characters removes the question.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the URL path only, decoded first with `decodeURIComponent`. It emits up to two checks:
+
+- `url-special-chars` warns when the decoded path contains any of `% & = # [ ] { } | \ ^ ~ \` < >`, or a space, or any character outside printable ASCII. Message: `URL path contains problematic characters`, with the categories found listed as items: `spaces`, `special characters`, `non-ASCII characters`. Severity warning, weight 4.
+- `url-special-chars` passes otherwise. Message: `URL path uses clean characters`.
+- `url-double-slash` warns when the path contains `//` anywhere after the first character. Message: `URL path contains double slashes`, with the path as the value.
+
+The space test looks at both the raw path, for a literal `%20` or whitespace, and the decoded path. The query string is not examined.
+
+## How to fix it
+
+```
+https://example.com/blog/cafe-guide
+```
+
+Generate slugs by transliterating to ASCII, lowercasing, and replacing anything left with a hyphen. Collapse repeated separators so a title with a colon and a space does not produce `--`.
+
+A site whose audience reads a non-Latin script has a real reason to use those characters in URLs, and browsers display them correctly. Disable the rule rather than transliterating a language into something its readers cannot recognise.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for problematic special characters in URL path
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Avoid special characters in URL paths. Characters like %, &, #, ?, = have special meanings and can cause issues. Spaces should be avoided (they become %20). Use only lowercase letters, numbers, and hyphens. Special characters can break links when copied, cause encoding issues, and look unprofessional. URL-encode if unavoidable.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["url/*"]
 enable = ["url/special-chars"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/lowercase](/rules/url/lowercase): case, the other thing a slug generator should normalise.
+- [url/hyphens](/rules/url/hyphens): the separator the generator should be using.
+- [i18n/lang-attribute](/rules/i18n/lang-attribute): the correct way to declare a page's language.
+- [links/invalid-links](/rules/links/invalid-links): links whose href does not parse at all.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [RFC 3986: Uniform Resource Identifier](https://datatracker.ietf.org/doc/html/rfc3986)
+- [Percent-encoding, MDN](https://developer.mozilla.org/en-US/docs/Glossary/Percent-encoding)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Each path is listed with the categories of character it contains. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

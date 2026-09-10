@@ -1,9 +1,39 @@
 ---
-title: "Horizontal Scroll"
-description: "Checks for elements that may cause horizontal scrolling"
+title: "Horizontal scroll on mobile: the usual causes"
+description: "A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes."
 ---
 
-Checks for elements that may cause horizontal scrolling
+## What causes horizontal scroll
+
+Horizontal scrolling happens when something on the page is wider than the viewport. On a phone that means the reader has to pan to read a line, and text that runs off the edge is often not seen at all.
+
+Three things cause most of it. A fixed pixel width wider than a phone screen, which was a desktop measurement that survived. A table, which lays out to its content rather than to its container. And an iframe with a `width` attribute, most often an embedded video or map.
+
+## What squirrel checks
+
+The rule runs on every crawled page and collects three signals from the markup:
+
+- Elements whose inline style declares a `width` as an integer number of pixels above 500. A fractional value such as `width: 500.5px` is not matched.
+- Every `table` on the page.
+- Every `iframe` carrying a `width` attribute.
+
+It emits a single check named `horizontal-scroll`:
+
+- Info when any signal was found. Message: `Elements may cause horizontal scroll on mobile`, listing what was found as `2 fixed-width element(s)`, `3 table(s) - ensure responsive` and `1 iframe(s) with fixed width`.
+- Pass when none was. Message: `No obvious horizontal scroll issues detected`.
+
+Nothing is rendered or measured, so these are candidates rather than confirmed overflow. Every table on the page is listed regardless of how wide it is, and a fixed width in an external stylesheet is not seen at all. Severity for the rule is warning, weight 5.
+
+## How to fix it
+
+```css
+img, video { max-width: 100%; height: auto; }
+.table-wrap { overflow-x: auto; }
+```
+
+Replace fixed widths with `max-width`, wrap tables in a container that scrolls on its own, and give embedded iframes a responsive aspect-ratio box instead of `width` and `height` attributes.
+
+Confirm in a browser at a narrow viewport. Comparing `document.documentElement.scrollWidth` with `clientWidth` finds the actual overflow.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks for elements that may cause horizontal scrolling
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Horizontal scrolling on mobile is a poor user experience and fails Google's mobile-friendly test. Common causes: fixed-width elements, images without max-width, wide tables. Use max-width: 100% on images, responsive tables, and avoid fixed pixel widths. Test on mobile devices.
 
 ## Enable / disable
 
@@ -40,3 +66,30 @@ disable = ["mobile/*"]
 enable = ["mobile/horizontal-scroll"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [mobile/viewport](/rules/mobile/viewport): the tag that makes the viewport the device width.
+- [images/dimensions](/rules/images/dimensions): image sizing, another overflow source.
+- [a11y/touch-targets](/rules/a11y/touch-targets): the other check that depends on a page fitting the screen.
+- [mobile/font-size](/rules/mobile/font-size): text that does not fit for a different reason.
+
+Mobile findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Understanding reflow, WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html)
+- [Page experience, Google Search Central](https://developers.google.com/search/docs/appearance/page-experience)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Mobile section of the report. Each page is listed with the elements that might overflow it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Mobile section looks like on a real site.
+  </Card>
+</CardGroup>

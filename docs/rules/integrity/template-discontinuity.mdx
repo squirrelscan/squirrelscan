@@ -1,9 +1,34 @@
 ---
-title: "Template Discontinuity"
-description: "Detects pages whose markup diverges hard from the site's common template"
+title: "Template discontinuity: a page that is not on your theme"
+description: "An injected standalone page loads none of your site's CSS, hosts or chrome. squirrel fingerprints every page and scores it against the site baseline."
 ---
 
-Detects pages whose markup diverges hard from the site's common template: a standalone page with none of the site's theme is a classic injected-page signal.
+## What template discontinuity is
+
+Most pages a CMS renders share theme markers: the same stylesheets, the same asset hosts, overlapping body classes, a navigation element and a footer. It is not a rule. WordPress supports per-page templates and page-specific body classes, and injected content can also inherit the theme it was injected into. What the pattern catches is the standalone case, a page written to look like something else that loads none of the site's own assets.
+
+Measuring the gap turns "this page looks wrong" into a number. A page can legitimately be off-theme, a bare landing page or a hosted form, so a low score on its own is a review item rather than a verdict.
+
+## What squirrel checks
+
+The rule is site-wide. It fingerprints each page on five theme markers: stylesheet hrefs, asset hostnames from `link`, `script` and `img` references including same-origin ones, body class tokens, CSS custom-property names declared in `<style>` elements or in an inline `style` on `<html>` or `<body>`, and whether the page matches `nav, [role='navigation']` and `footer, [role='contentinfo']`.
+
+The baseline is not a cluster. Each marker is tallied across every fingerprint and kept when it appears on at least `max(2, ceil(n / 2))` pages. Similarity is then a weighted sum: Jaccard overlap for stylesheets at 0.35, asset hosts at 0.25, body classes at 0.15 and CSS variables at 0.1, plus a chrome term at 0.15 that is the average of two boolean matches on nav and footer.
+
+- Skipped when the crawl produced fewer pages than `minPages`. Message: `Need >=4 pages to establish a template baseline`.
+- Skipped when too few pages had a parseable document. Message: `Too few parseable pages for a template baseline`.
+- Skipped when the baseline has no shared stylesheets and no shared asset hosts, so there is no theme to diverge from. Message: `No shared template baseline detected across the site`.
+- Pass when every page scores at or above the threshold. Message: `All pages share the site's common template`.
+- `template-discontinuity` fails for below-threshold pages that also carry at least one page-level integrity signal. Message: `1 off-template page(s) carrying compromise signals — likely injected`, listing up to five as `/path (sim 0.04)`.
+- `template-discontinuity-review` reports info for below-threshold pages with no other signal. Message: `3 page(s) diverge from the site template (review)`.
+
+Severity is warning, weight 6.
+
+## How to fix it
+
+Open the listed pages and compare them with a normal page from the same site. If a page is yours, load the shared stylesheet and the site chrome on it, which also fixes the inconsistency a visitor would notice. If it is not, treat the site as compromised: remove it, audit recently modified files and read the access logs.
+
+A marketing landing page that deliberately ships its own CSS scores low and is reported for review. A site with no shared stylesheets or asset hosts at all produces a skip instead, because there is no baseline to measure against. Lower `similarityThreshold`, or disable the rule, when off-template pages are the design.
 
 | | |
 |---|---|
@@ -13,27 +38,19 @@ Detects pages whose markup diverges hard from the site's common template: a stan
 | **Severity** | warning |
 | **Weight** | 6/10 |
 
-## How it works
-
-The rule fingerprints every crawled page on stable theme markers: shared stylesheets, asset hosts, body classes, CSS custom properties, and the presence of a nav and footer. It then builds a baseline from the markers shared by the majority of pages (your theme). Pages whose similarity to that baseline falls below the threshold are reported.
-
-A lone off-theme page is reported as **info** (it might be a legitimate off-theme landing page). It escalates to a **failure** only when the divergent page also carries page-level compromise signals (brand impersonation, an obfuscated script, an auth overlay, or doorway content): the correlation gating that keeps false positives down.
-
-## Solution
-
-A page that shares almost none of your site's theme (no shared stylesheets, asset hosts, nav/footer, or CSS variables) may be an injected standalone page rather than something your CMS produced. Confirm the page is one you created; if not, treat the site as compromised: remove the page, audit recently modified files, and check server access logs. Legitimate off-theme landing pages should still load your shared assets.
-
 ## Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `minPages` | `4` | Minimum pages needed to establish a reliable baseline |
-| `similarityThreshold` | `0.2` | Pages below this similarity to the baseline are flagged |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `minPages` | integer, 3 or more | `4` | Minimum pages needed to establish a reliable baseline |
+| `similarityThreshold` | number, 0 to 1 | `0.2` | Pages below this similarity to the baseline are flagged |
+
+### Configuration example
 
 ```toml squirrel.toml
-[rules."integrity/template-discontinuity"]
-minPages = 4
-similarityThreshold = 0.2
+[rule_options."integrity/template-discontinuity"]
+minPages = 10
+similarityThreshold = 0.1
 ```
 
 ## Enable / disable
@@ -59,3 +76,30 @@ disable = ["integrity/*"]
 enable = ["integrity/template-discontinuity"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [integrity/orphan-page](/rules/integrity/orphan-page): whether the off-template page is linked from anywhere.
+- [integrity/seo-doorway](/rules/integrity/seo-doorway): the content that usually sits on an off-template page.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): the same outlier idea applied to title formats.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): pages whose length diverges from the rest of the site.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Hacked content, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+- [Malware and unwanted software, Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/malware)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Each outlier is listed by path with its similarity score. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

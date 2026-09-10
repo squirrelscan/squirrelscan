@@ -1,9 +1,31 @@
 ---
-title: "Citations"
-description: "Checks for citations to authoritative external sources"
+title: "Authoritative citations: sources a reader can check"
+description: "A factual claim with a source a reader can follow is stronger than one without. squirrel counts outbound links to a list of authoritative domains."
 ---
 
-Checks for citations to authoritative external sources
+## What a citation is here
+
+A citation is an outbound link to the source a claim rests on. It lets a reader verify the claim without taking your word for it, and it is one of the few outward signals that content was researched rather than assembled.
+
+Which sources count depends on the topic. For health content that is health authorities and peer-reviewed research; for anything statistical it is the body that published the numbers. This rule uses a fixed list as a proxy rather than judging relevance, so treat a low count as a prompt rather than a verdict.
+
+## What squirrel checks
+
+The rule is site-wide. It walks the external links on every crawled page and counts those whose hostname matches one of its authoritative domains. It emits a single check named `citations`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when any authoritative link was found. Message: `24 authoritative citation(s) found`, with `Across 9 page(s)` as the value.
+- Info when none was. Message: `No authoritative citations detected`, with `Consider citing .gov, .edu, or industry sources` as the value.
+
+The list has fourteen entries: `gov`, `edu`, `who.int`, `cdc.gov`, `nih.gov`, `fda.gov`, `mayo.clinic`, `webmd`, `healthline`, `wikipedia.org`, `reuters.com`, `bbc.com`, `nytimes.com`, `wsj.com`. Matching is a substring test on the hostname, so `gov` and `edu` catch any `.gov` or `.edu` domain and also anything else containing those letters in its hostname. The list is US and English-centric, and a site citing national statistics offices or journals outside it will report zero. Severity info, weight 3.
+
+The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider, an education site or a nonprofit. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
+
+## How to fix it
+
+Link the claim to its source, in the sentence where the claim is made rather than in a list at the end. Prefer the primary source over an article about it.
+
+A zero here on a site that cites journals or a national statistics office is a limitation of the list, not a finding. Check the outbound links yourself before acting on it.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for citations to authoritative external sources
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Citing authoritative sources builds credibility and supports E-E-A-T. Link to: government sites (.gov), educational institutions (.edu), peer-reviewed research, industry authorities. For health: cite NIH, CDC, WHO, medical journals. Include a sources/references section. Don't cite low-quality or unverified sources.
 
 ## Enable / disable
 
@@ -40,3 +58,29 @@ disable = ["eeat/*"]
 enable = ["eeat/citations"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/article-links](/rules/content/article-links): the external link minimum by article length.
+- [eeat/authority-signals](/rules/eeat/authority-signals): the cloud assessment of what reads as a citation.
+- [links/broken-external-links](/rules/links/broken-external-links): whether those sources still resolve.
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the topics where sourcing matters most.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with its authoritative citation count and the pages carrying them. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,39 @@
 ---
-title: "Responsive Images"
-description: "Checks for responsive images with srcset attribute"
+title: "srcset: serving the right image size for the screen"
+description: "Without srcset every visitor downloads the same file, sized for the largest screen. squirrel counts responsive images against fixed-size ones."
 ---
 
-Checks for responsive images with srcset attribute
+## What srcset is
+
+`srcset` lists several versions of the same image. In its width form each candidate carries a `w` descriptor and `sizes` tells the browser how wide the image will be rendered; in its density form each carries `1x` or `2x` and no `sizes` is used. Either way the browser picks one file before it downloads anything.
+
+Without it there is one file for everyone. A hero sized for a 2560-pixel display is downloaded in full by a phone that will render it 390 pixels wide, which is most of the wasted bytes on a typical page. In a width-descriptor set, `sizes` matters as much as the candidates: with no `sizes` the browser assumes the image fills the viewport. `<picture>` solves a related but different problem: choosing between formats, or between differently cropped images at different breakpoints.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It counts every `img[src]` with and without a `srcset` attribute, and separately counts `<picture>` elements. It emits a single check named `srcset`:
+
+- Skipped when the page has no images. Message: `No images found`.
+- Pass when responsive images exist and none are fixed-size. Message: `All 8 image(s) are responsive`.
+- Info when both exist. Message: `8 responsive, 4 fixed-size image(s)`, with `Consider adding srcset for remaining images` as the value.
+- Info when none are responsive. Message: `12 image(s) without responsive srcset`, with `Add srcset for multiple image sizes` as the value.
+
+Severity info, weight 3. The responsive count adds the `srcset` images and the `<picture>` elements together, so an `<img srcset>` inside a `<picture>` contributes to both halves of that sum.
+
+## How to fix it
+
+```html
+<img
+  src="/photo-800.jpg"
+  srcset="/photo-400.jpg 400w, /photo-800.jpg 800w, /photo-1600.jpg 1600w"
+  sizes="(max-width: 640px) 100vw, 50vw"
+  width="800" height="533" alt="…"
+/>
+```
+
+Generate the variants at build time or through an image CDN. For a fixed-size image, the density form is shorter: `srcset="/logo.png 1x, /logo@2x.png 2x"` and no `sizes` at all.
+
+Icons, logos and anything rendered at a fixed small size do not need this.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks for responsive images with srcset attribute
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Use srcset and sizes attributes to serve appropriately sized images for each viewport. This reduces bandwidth on mobile and improves LCP. Example: srcset='img-320.jpg 320w, img-640.jpg 640w, img-1280.jpg 1280w' sizes='(max-width: 640px) 100vw, 50vw'. Use `<picture>` element for art direction.
 
 ## Enable / disable
 
@@ -40,3 +66,30 @@ disable = ["images/*"]
 enable = ["images/srcset"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/picture-element](/rules/images/picture-element): the picture markup this rule also counts.
+- [images/responsive-size](/rules/images/responsive-size): small images with no responsive variants.
+- [images/image-file-size](/rules/images/image-file-size): the file weight srcset is there to reduce.
+- [images/modern-format](/rules/images/modern-format): the other half of the same optimisation.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Responsive images, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Responsive_images)
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each page is reported with its responsive and fixed-size image counts. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

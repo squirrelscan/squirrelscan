@@ -1,9 +1,29 @@
 ---
-title: "Orphan Pages"
-description: "Detects pages with no internal links pointing to them"
+title: "Orphan pages: pages with too few inbound internal links"
+description: "A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page."
 ---
 
-Detects pages with no internal links pointing to them
+## What an orphan page is
+
+An orphan page is one that almost nothing on the site links to. Internal links are how a crawler moves between pages and how a site says which of its pages matter, so a page with no inbound links is both harder to find and weaker when it is found.
+
+Some pages are orphaned on purpose. A campaign landing page or a page reachable only from an email is a normal thing to have, and the exclusion list exists for those.
+
+## What squirrel checks
+
+The rule is site-wide. It counts inbound internal links for every crawled page, counting only links that are internal, resolvable and not `rel="nofollow"`. The homepage is never flagged, and neither is any URL matching an exclusion pattern.
+
+- Skipped when fewer than two pages were crawled. Message: `Insufficient pages for orphan analysis`.
+- Warn when any page has fewer inbound links than `minInboundLinks`. Message: `6 orphan page(s) with <2 incoming links`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 5.
+- Pass otherwise. Message: `All pages have sufficient internal links pointing to them`.
+
+The default threshold is 2, so a page with exactly one inbound link is reported here and also, separately, by `links/weak-internal-links`. URLs are normalised on both sides before counting.
+
+## How to fix it
+
+Link to the page from somewhere that makes sense: a hub or category page, the body of a related article, or the navigation if it belongs there. Use anchor text that says what the page is.
+
+Sitemap membership is not a substitute. A sitemap makes a URL discoverable; internal links are what tell a search engine where the page sits in the site.
 
 | | |
 |---|---|
@@ -13,25 +33,19 @@ Detects pages with no internal links pointing to them
 | **Severity** | warning |
 | **Weight** | 5/10 |
 
-## Solution
-
-Orphan pages have no internal links and are hard for search engines to discover. They may not get indexed or rank well. Add internal links from relevant pages. Include in navigation or sidebar. Add to sitemap. Create contextual links from related content. If intentionally orphaned (e.g., landing pages), ensure they're accessible via sitemap.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `minInboundLinks` | unknown | `undefined` | Minimum inbound links required (pages below this are flagged) |
-| `excludePatterns` | unknown | `undefined` | URL patterns to exclude from orphan detection |
+| `minInboundLinks` | integer, 0 or more | `2` | Minimum inbound links required (pages below this are flagged) |
+| `excludePatterns` | array of strings | `[]` | URL patterns to exclude from orphan detection |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."links/orphan-pages"]
-minInboundLinks = undefined
-excludePatterns = undefined
+[rule_options."links/orphan-pages"]
+minInboundLinks = 1
+excludePatterns = ["/lp/", "/campaign/"]
 ```
 
 ## Enable / disable
@@ -57,3 +71,29 @@ disable = ["links/*"]
 enable = ["links/orphan-pages"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/weak-internal-links](/rules/links/weak-internal-links): pages with exactly one inbound link.
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): pages linked only from the nav and footer.
+- [integrity/orphan-page](/rules/integrity/orphan-page): the compromise-signal version, hidden from sitemap and links both.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): whether these pages are at least in the sitemap.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every orphan is listed by path with its inbound link count threshold. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

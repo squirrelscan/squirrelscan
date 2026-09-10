@@ -1,9 +1,35 @@
 ---
-title: "Picture Element Validation"
-description: "Validates <picture> elements have required <img> fallback"
+title: "<picture> without an <img>: the fallback that is required"
+description: "A picture element with no img child renders nothing at all. squirrel checks every picture on the page for its required fallback."
 ---
 
-Validates `<picture>` elements have required `<img>` fallback
+## What the img inside a picture is for
+
+`<picture>` is a wrapper that lets the browser choose between `<source>` candidates by media query or MIME type. It does not render anything itself. The `<img>` inside it is the element that actually displays, and the HTML specification requires it.
+
+Without one, a browser that matches a `<source>` still has nothing to draw, and one that matches none has no fallback. The `<img>` is also where `alt`, `width` and `height` live, so leaving it out costs the accessible name and the layout reservation at the same time.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `<picture>` element. It emits a single check named `picture-element`:
+
+- Skipped when the page has no `<picture>` elements. Message: `No <picture> elements found`.
+- Pass when every one contains an `<img>`. Message: `All 4 <picture> element(s) have <img> fallback`.
+- Fail otherwise. Message: `1 of 4 <picture> element(s) missing <img> fallback`, identifying each by the `srcset` of its first `<source>`, or `unknown source` when it has none. Severity error, weight 6.
+
+This is a structural check. It does not look at whether the `<source>` candidates are valid or whether their types are correct.
+
+## How to fix it
+
+```html
+<picture>
+  <source srcset="/photo.avif" type="image/avif" />
+  <source srcset="/photo.webp" type="image/webp" />
+  <img src="/photo.jpg" width="800" height="533" alt="…" />
+</picture>
+```
+
+Put the `<img>` last, after every `<source>`, and give it the widest-support format. The `alt` belongs on the `<img>`. `width` and `height` can go on a `<source>` as well, which is how a source with a different aspect ratio reserves the right space.
 
 | | |
 |---|---|
@@ -12,23 +38,6 @@ Validates `<picture>` elements have required `<img>` fallback
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## Solution
-
-Every `<picture>` element MUST contain an `<img>` child element as fallback.
-
-Correct structure:
-`<picture>`
-  `<source srcset="image.webp" type="image/webp">`
-  `<source srcset="image.jpg" type="image/jpeg">`
-  `<img src="image.jpg" alt="Description">`
-`</picture>`
-
-The `<img>` provides fallback for:
-- Browsers without `<picture>` support
-- Screen readers
-- Search engine crawlers
-- Failed srcset loading
 
 ## Enable / disable
 
@@ -53,3 +62,30 @@ disable = ["images/*"]
 enable = ["images/picture-element"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/srcset](/rules/images/srcset): the simpler responsive form, when you only need sizes.
+- [images/modern-format](/rules/images/modern-format): the format sources this element usually carries.
+- [images/alt-text](/rules/images/alt-text): the alt that lives on the img inside.
+- [images/dimensions](/rules/images/dimensions): the width and height that also belong on that img.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [The picture element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/picture)
+- [The picture element, HTML Standard](https://html.spec.whatwg.org/multipage/images.html#the-picture-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Every picture element missing its fallback is listed by its first source. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

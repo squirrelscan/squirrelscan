@@ -9,22 +9,24 @@ The **Blocking** category covers content, links, and trackers that ad blockers a
 
 <Note>Rule IDs and config filters keep the `adblock/` prefix (e.g. `adblock/*`) - only the report category was renamed to Blocking.</Note>
 
+The three rules answer one question from three angles: what does a visitor running a blocker not get? A resource on an EasyList domain is never requested, a tracker on EasyPrivacy is blocked in several browsers by default, and an element whose class matches a cosmetic filter is hidden whatever is in it. All three share a single blocklist check per audit.
+
 ## Ad blocking
 
 <CardGroup cols={2}>
-  <Card title="Adblock Element Hiding" icon="triangle-exclamation" href="/rules/adblock/element-hiding">
-    Checks for elements that would be hidden by common adblockers
+  <Card title="Adblock cosmetic filters: classes that get hidden" icon="triangle-exclamation" href="/rules/adblock/element-hiding">
+    A block named .ad-container is hidden for anyone running an ad blocker, whatever is in it. squirrel matches your selectors against EasyList.
   </Card>
-  <Card title="Blocked Tracking Links" icon="circle-info" href="/rules/adblock/blocked-links">
-    Checks for links and resources pointing to blocked tracking domains
+  <Card title="Requests ad blockers stop: links and resources on EasyList" icon="circle-info" href="/rules/adblock/blocked-links">
+    A resource on an EasyList domain never loads for a visitor running a blocker. squirrel reports each one with what it is.
   </Card>
 </CardGroup>
 
 ## Privacy blocking
 
 <CardGroup cols={2}>
-  <Card title="Privacy Filter Matches" icon="circle-info" href="/rules/adblock/privacy-blocked">
-    Checks for trackers and analytics that EasyPrivacy would block
+  <Card title="EasyPrivacy matches: analytics that silently does not run" icon="circle-info" href="/rules/adblock/privacy-blocked">
+    Privacy filters block trackers by default in several browsers, so your analytics quietly under-counts. squirrel reports which resources they block.
   </Card>
 </CardGroup>
 
@@ -34,3 +36,5 @@ The **Blocking** category covers content, links, and trackers that ad blockers a
 [rules]
 disable = ["adblock/*"]
 ```
+
+Every audit reports Blocking findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

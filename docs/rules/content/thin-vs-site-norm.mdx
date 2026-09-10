@@ -1,9 +1,35 @@
 ---
-title: "Thin Content vs Site Norm"
-description: "Finds pages far shorter than the site's own norm for their page type"
+title: "Thin against your own site: outliers by page type"
+description: "A 200 word product page is normal and a 200 word article is not. squirrel compares each page against the median for its own page type."
 ---
 
-Finds pages far shorter than the site's own norm for their page type
+## What a site-relative thin page is
+
+An absolute word-count threshold is wrong on most sites. Product pages, documentation pages and long-form articles all have different natural lengths, and one number cannot judge them together.
+
+Your own site already sets the expectation. If your articles median 1800 words, a 300-word article is an outlier against its siblings whatever an absolute floor says. This rule groups pages by type and reports only the low outliers within a group.
+
+## What squirrel checks
+
+The rule is site-wide. It groups crawled pages by page type, then computes the median and the median absolute deviation of the word count in each group. It emits a single check named `thin-vs-site-norm`:
+
+- Skipped when there are no pages. Message: `No pages available for analysis`.
+- Skipped below the site floor of 10 crawled pages. Message: `Only 6 page(s) crawled; 10 needed to establish a site norm`.
+- Skipped when no page type qualifies. Message: `No page type has 8+ comparable pages with a clear word-count norm`.
+- Pass when no page is an outlier. Message: `All 210 comparable page(s) sit within their page type's word-count norm (median words: article 1840, product 320)`.
+- Warn when outliers exist, and fail when they cover 20% or more of the judged pages. Message: `7 of 210 page(s) are far shorter than the norm for their page type (median words: article 1840)`. Each item reads `340 words vs the article norm of 1840 (18%)`, with up to ten listed.
+
+Four guards apply in order. The site needs 10 crawled pages. A page type needs 8. At least 70% of a group must sit within half its median for that median to count as a norm. And a flagged page must be both under half the group median and more than three deviations below it, where a deviation is the larger of 1.4826 times the median absolute deviation and a tenth of the median, so neither a tight nor a wide distribution can fire on its own.
+
+Only pages that returned a 2xx status and carry a known page type are sampled.
+
+Pages below 300 words are never reported here, because `content/word-count` owns them, but they do still count toward their group's size, median, deviation and agreement, and toward the judged-page total in the message. Severity warning, weight 3.
+
+## How to fix it
+
+Expand the page to the depth its siblings have, consolidate it into a fuller page, or `noindex` it if it exists only for navigation.
+
+A deliberate stub or a landing page that is short on purpose will be reported. The finding is that it does not match what the rest of its page type promises, which is worth confirming rather than padding.
 
 | | |
 |---|---|
@@ -12,40 +38,6 @@ Finds pages far shorter than the site's own norm for their page type
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## How it works
-
-There is no universal "enough words" number, so this rule never uses one. It groups
-the crawled pages by page type (article, product, category, docs, and so on),
-computes the median and MAD (median absolute deviation) of the word count within
-each group, and flags only the pages that sit far below their own group.
-
-A 200-word product page on a site whose products all run to 200 words is normal. A
-200-word article on a site whose articles median 1,800 words is not, and that is the
-only case this rule reports.
-
-It stays quiet unless it has grounds to speak:
-
-- Fewer than 10 crawled pages: no site norm exists, so the rule is skipped.
-- Fewer than 8 pages of a given page type: that type is dropped, not guessed at.
-- A page type whose word counts do not cluster (under 70% of its pages within 50%
-  of the median): the type is legitimately varied, so nothing in it is a deviant.
-- Pages under 300 words: those belong to [Word Count](/rules/content/word-count),
-  which stays absolute-only. The two rules never both flag the same page.
-
-A flagged page must be both under half its group's median and more than three
-robust deviations below it, so template-uniform pages with small natural variation
-are never reported.
-
-## Solution
-
-These pages are much shorter than the other pages of the same type on your own site,
-which is a stronger thin-content signal than any absolute word count: your articles
-set the expectation for what an article on this site looks like. Either expand each
-page to the depth its siblings have, consolidate it into a fuller page, or noindex it
-if it exists only for navigation. If a page is deliberately short (a stub, a redirect
-landing page), that is fine: the point is that it does not match what the rest of its
-page type promises.
 
 ## Enable / disable
 
@@ -70,3 +62,29 @@ disable = ["content/*"]
 enable = ["content/thin-vs-site-norm"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/word-count](/rules/content/word-count): the absolute floor this rule defers to.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): the same outlier approach applied to titles.
+- [url/slug-convention](/rules/url/slug-convention): the same approach applied to URL conventions.
+- [content/duplicate-title](/rules/content/duplicate-title): pages that are similar in a different way.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each outlier is listed with its word count and its page type's median. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

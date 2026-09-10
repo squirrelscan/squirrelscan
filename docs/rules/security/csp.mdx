@@ -1,9 +1,39 @@
 ---
-title: "Content Security Policy"
-description: "Checks for Content-Security-Policy header and validates directives"
+title: "Content-Security-Policy: what to set and how to check it"
+description: "A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap."
 ---
 
-Checks for Content-Security-Policy header and validates directives
+## What a Content Security Policy is
+
+`Content-Security-Policy` is a response header that lists, per resource type, which origins a page is allowed to load from and whether inline code may run. The browser enforces it and blocks anything outside the policy. Its main job is to contain cross-site scripting: an injected `<script>` cannot execute if the policy has no matching source.
+
+A policy is only worth what its `script-src` says. `'unsafe-inline'` re-permits exactly the injected code CSP exists to stop, unless the same source list also carries a nonce or a hash, in which case browsers ignore it. A wildcard source lets any host serve executable code. `Content-Security-Policy-Report-Only` sends violation reports without blocking anything, which is the right way to develop a policy and the wrong way to ship one.
+
+## What squirrel checks
+
+The rule reads the response headers of the first crawled page and can emit several checks:
+
+- `csp` skipped when the crawl produced no pages. Message: `No pages to check`.
+- `csp-missing` warns when neither `Content-Security-Policy` nor `Content-Security-Policy-Report-Only` is present. Message: `No Content-Security-Policy header`. No further checks run.
+- `csp-report-only` warns when only the report-only header is set. Message: `CSP in report-only mode (not enforced)`.
+- `csp-present` passes when the enforcing header is set. Message: `CSP header present and enforced`, with the first 100 characters of the policy as the value.
+- `csp-no-script-control` warns when the policy declares neither `script-src` nor `default-src`. Message: `CSP has no script-src or default-src directive`.
+- `csp-unsafe-scripts` warns when the effective script source contains `'unsafe-inline'` or `'unsafe-eval'`. Message: `CSP allows 'unsafe-inline' and 'unsafe-eval'`, naming whichever of the two it found.
+- `csp-wildcard` warns when that same source list contains `*`. Message: `CSP script-src allows wildcard (*)`.
+- `csp-no-frame-ancestors` reports info when `frame-ancestors` is absent and no `X-Frame-Options` header is set either. Message: `CSP missing frame-ancestors directive`.
+- `csp-no-object-src` reports info when neither `object-src` nor `default-src` is declared. Message: `CSP missing object-src directive`.
+
+The effective script source is `script-src` when it is present and non-empty, otherwise `default-src`. Severity is warning and the scope is site-wide.
+
+## How to fix it
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-r4nd0m'; object-src 'none'; frame-ancestors 'self'
+```
+
+Set the header at the edge or in the application response, and generate a fresh nonce per response for the inline scripts you cannot remove. Develop the policy under `Content-Security-Policy-Report-Only` first, then move the same value to the enforcing header.
+
+A policy that legitimately allows a wildcard for images or fonts is not flagged. Only the script source list is checked for `*`, `'unsafe-inline'` and `'unsafe-eval'`.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks for Content-Security-Policy header and validates directives
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-CSP prevents XSS attacks by restricting which resources can load. Start with a report-only policy to identify issues. Key directives: default-src 'self', script-src (avoid 'unsafe-inline'), img-src, style-src, frame-ancestors. Use nonces or hashes instead of 'unsafe-inline' for scripts. Test thoroughly as strict CSP can break functionality.
 
 ## Enable / disable
 
@@ -40,3 +66,31 @@ disable = ["security/*"]
 enable = ["security/csp"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/x-frame-options](/rules/security/x-frame-options): the older header that `frame-ancestors` replaces.
+- [security/sri](/rules/security/sri): per-file hashes for the third-party origins your policy allows.
+- [security/permissions-policy](/rules/security/permissions-policy): the companion header for device and browser features.
+- [security/leaked-secrets](/rules/security/leaked-secrets): what an attacker collects once a script does run.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Content-Security-Policy, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy)
+- [Content Security Policy Level 3, W3C](https://www.w3.org/TR/CSP3/)
+- [Mitigate cross-site scripting with a strict CSP, web.dev](https://web.dev/articles/strict-csp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. The policy is parsed and each weak directive is named. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

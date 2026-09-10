@@ -1,9 +1,36 @@
 ---
-title: "Pagination"
-description: "Checks that paginated pages have proper canonicals"
+title: "Pagination canonicals: why page 2 is not page 1"
+description: "Canonicalizing every paginated page to page 1 hides the rest of the sequence. squirrel detects paginated URLs and checks where their canonical points."
 ---
 
-Checks that paginated pages have proper canonicals
+## What pagination canonicals are
+
+A paginated listing splits one set of items across several URLs. Each of those URLs holds different items, so each is a distinct page rather than a duplicate of the first.
+
+Pointing every page's canonical at page 1 tells search engines the rest do not exist as separate documents, which is how items that only appear on page 4 stop being discovered. The correct arrangement is a self-referencing canonical on each page. The `rel="next"` and `rel="prev"` link relations describe the sequence; Google stopped using them as an indexing signal in 2019, and they remain valid HTML that other clients may read.
+
+## What squirrel checks
+
+The rule runs on every crawled page. A page counts as paginated when its URL carries a `page`, `p`, `pg`, `offset` or `start` query parameter, or when its path ends in `/page/<number>`. It also looks for `link[rel="next"]` and `link[rel="prev"]` in the head.
+
+- Skipped when the page is neither paginated nor carrying pagination links. Message: `Page does not appear to be paginated`.
+- `pagination-canonical` warns when a paginated page has a canonical that is not itself paginated. Message: `Paginated page canonicalizes to non-paginated URL`, with the value `Page 3 → https://example.com/blog`. It passes otherwise with `Paginated page has appropriate canonical`. This check only runs when a canonical tag is present.
+- `pagination-links` reports info when `rel="next"` or `rel="prev"` is present. Message: `Pagination links present`, with `prev, next` as the value.
+- `pagination-links` reports info when the page is paginated with neither link. Message: `No rel=next/prev links (optional)`.
+
+Severity is info and the weight is 4, so this rule surfaces the pattern rather than penalising it.
+
+## How to fix it
+
+```html
+<link rel="canonical" href="https://example.com/blog?page=3" />
+<link rel="prev" href="https://example.com/blog?page=2" />
+<link rel="next" href="https://example.com/blog?page=4" />
+```
+
+Give each paginated URL a canonical that points at itself. Make sure the items on each page are reachable by a crawler without JavaScript, and consider a view-all page as the canonical target only when it genuinely lists everything.
+
+A filtered listing whose parameters happen to include `p` or `start` is treated as paginated by the URL test. Disable the rule for those routes if the canonical is deliberate.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks that paginated pages have proper canonicals
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 4/10 |
-
-## Solution
-
-Paginated pages should NOT all canonicalize to page 1. Each page should have a self-referencing canonical. Use rel='next' and rel='prev' links to indicate pagination sequence (though Google no longer uses these for indexing, they help users). Consider view-all pages or infinite scroll as alternatives. Ensure each paginated page has unique, valuable content.
 
 ## Enable / disable
 
@@ -40,3 +63,30 @@ disable = ["crawl/*"]
 enable = ["crawl/pagination"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): canonical tags that resolve through a redirect.
+- [links/dead-end-pages](/rules/links/dead-end-pages): listing pages that lead nowhere further.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): whether the paginated URLs are in the sitemap at all.
+- [content/duplicate-title](/rules/content/duplicate-title): paginated pages sharing one title.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Pagination and incremental page loading, Google Search Central](https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading)
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every paginated page is listed with where its canonical points. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

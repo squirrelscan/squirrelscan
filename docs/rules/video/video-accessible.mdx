@@ -1,9 +1,37 @@
 ---
-title: "Video Accessibility"
-description: "Checks for video captions and transcripts"
+title: "Video captions: the track element and why it is required"
+description: "A video with no captions excludes anyone who cannot hear it. squirrel checks every HTML video element for a caption or subtitle track."
 ---
 
-Checks for video captions and transcripts
+## What a caption track is
+
+A `<track>` element inside a `<video>` points at a timed text file, usually WebVTT, that the browser renders as captions. `kind="captions"` additionally carries relevant non-speech audio, such as sound effects and speaker identification, for a viewer who cannot hear the track. `kind="subtitles"` carries dialogue, either translated or in the same language as the audio.
+
+WCAG success criterion 1.2.2 requires captions for prerecorded audio in synchronised media at Level A, the lowest conformance level. They also help anyone watching without sound, which is most people on a phone in public, and the text is indexable in a way audio is not.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `<video>` element, looking for a child `track[kind="captions"]` or `track[kind="subtitles"]`. It emits a single check named `video-accessible`:
+
+- Info when the page has no `<video>` element. Message: `No HTML5 video elements found`.
+- Pass when every video has a caption or subtitle track. Message: `All 3 video(s) have caption tracks`.
+- Info when some do. Message: `2/3 video(s) have caption tracks`.
+- Warn when none do. Message: `No videos have caption tracks`, with `Add <track> elements for accessibility` as the value. Severity warning, weight 4.
+
+Only HTML `<video>` elements are checked. A YouTube or Vimeo embed carries its own captions inside the iframe, which this rule cannot see, so a page whose video is entirely embedded reports `No HTML5 video elements found`.
+
+## How to fix it
+
+```html
+<video controls poster="/thumb.jpg">
+  <source src="/talk.mp4" type="video/mp4" />
+  <track kind="captions" src="/talk.en.vtt" srclang="en" label="English" default />
+</video>
+```
+
+Ship a WebVTT file alongside the video and reference it with `<track>`. Auto-generated captions are a starting point, not a deliverable: they get names, jargon and punctuation wrong, which is exactly the content someone relying on them needs.
+
+Publish a transcript on the page as well. It is readable, searchable and useful to people who would rather not watch.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks for video captions and transcripts
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Videos need captions for deaf/hard-of-hearing users and transcripts for SEO. Use `<track>` elements for captions. Provide text transcripts on the page. Auto-generated captions should be reviewed for accuracy. Captions also help when audio can't be played. Required by WCAG 2.1 Level A.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["video/*"]
 enable = ["video/video-accessible"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [video/video-schema](/rules/video/video-schema): the markup that describes the same video.
+- [video/video-thumbnail](/rules/video/video-thumbnail): the poster image on the same element.
+- [a11y/video-captions](/rules/a11y/video-captions): the accessibility check over the same markup.
+- [content/word-count](/rules/content/word-count): the transcript text that counts toward the page.
+
+Video findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The track element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/track)
+- [Understanding captions (prerecorded), WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/captions-prerecorded.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Video section of the report. Each page is reported with how many of its videos carry a caption track. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Video section looks like on a real site.
+  </Card>
+</CardGroup>

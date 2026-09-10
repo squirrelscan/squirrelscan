@@ -1,9 +1,33 @@
 ---
-title: "URL Hyphens"
-description: "Checks that URLs use hyphens, not underscores"
+title: "Underscores in URLs: why hyphens separate words"
+description: "Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore."
 ---
 
-Checks that URLs use hyphens, not underscores
+## What the hyphen convention is
+
+A URL path has no built-in idea of words. Search engines infer them from separators, and Google's URL structure guidance says to use hyphens rather than underscores, because a hyphen is read as a word break and an underscore is not.
+
+`blue-shoes` is therefore two tokens and `blue_shoes` is one. That matters where the slug carries the terms a page should be found for. It is a small effect on its own, and the reason to prefer hyphens is that it costs nothing and is what every other site does.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the URL path only. It emits a single check named `url-hyphens`:
+
+- Warn when the path contains an underscore. Message: `URL uses underscores (2) instead of hyphens`, with the path as the value. Severity warning, weight 4.
+- Pass when the path contains a hyphen and no underscore. Message: `URL uses hyphens for word separation`.
+- Info when the path contains neither. Message: `URL has no word separators`.
+
+The query string is not examined, so `?sort_by=price` is not flagged. A path containing both characters is reported as an underscore finding.
+
+## How to fix it
+
+```
+https://example.com/blog/blue-running-shoes
+```
+
+Change the slug at the source, in the CMS field or the route definition, then 301-redirect the old path so links and rankings follow.
+
+Renaming URLs is not free. A correct permanent redirect does not throw away ranking signals, but a migration still costs implementation time and usually produces a period of ranking movement. Fix the convention going forward and migrate old URLs only when you are changing them anyway.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that URLs use hyphens, not underscores
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Use hyphens (-) to separate words in URLs, not underscores (_). Google treats hyphens as word separators but treats underscores as word joiners. 'blue-shoes' = 'blue' + 'shoes', but 'blue_shoes' = 'blueshoes'. This affects keyword matching and SEO. Replace underscores with hyphens and set up redirects from old URLs.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["url/*"]
 enable = ["url/hyphens"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [url/slug-convention](/rules/url/slug-convention): whether the site mixes separators rather than using one.
+- [url/lowercase](/rules/url/lowercase): the other per-path convention check.
+- [url/slug-keywords](/rules/url/slug-keywords): whether the slug says anything about the page.
+- [url/special-chars](/rules/url/special-chars): characters that need encoding rather than replacing.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Keep a simple URL structure, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+- [RFC 3986: Uniform Resource Identifier](https://datatracker.ietf.org/doc/html/rfc3986)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Every path containing an underscore is listed with its page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

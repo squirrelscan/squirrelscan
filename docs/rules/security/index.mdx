@@ -4,10 +4,7 @@ description: "The Security score group: transport security, compromise signals, 
 icon: "shield-check"
 ---
 
-Security is one of the four score groups on every report. It spans four
-categories: transport and header hardening (this page), signs of compromise,
-legal compliance signals, and content blocked by ad blockers and privacy
-filters.
+Security is one of the four score groups on every report. This page covers transport and header hardening: HTTPS, response headers, cookie flags, form submission and secrets that reached the browser. Signs of compromise, legal compliance signals and content blocked by privacy filters are scored in the same group but documented in the categories below.
 
 ## Categories
 
@@ -28,53 +25,53 @@ filters.
 HTTPS, headers, and safe link practices (16 rules).
 
 <CardGroup cols={2}>
-  <Card title="Content Security Policy" icon="triangle-exclamation" href="/rules/security/csp">
-    Checks for Content-Security-Policy header and validates directives
+  <Card title="Content-Security-Policy: what to set and how to check it" icon="triangle-exclamation" href="/rules/security/csp">
+    A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap.
   </Card>
-  <Card title="Cookie Flags" icon="triangle-exclamation" href="/rules/security/cookie-flags">
-    Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes
+  <Card title="Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie" icon="triangle-exclamation" href="/rules/security/cookie-flags">
+    SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie.
   </Card>
-  <Card title="External Link Security" icon="triangle-exclamation" href="/rules/security/new-tab">
-    Checks external target=_blank links for noopener (security) and noreferrer (privacy)
+  <Card title="rel=noopener: external target=_blank links and tabnabbing" icon="triangle-exclamation" href="/rules/security/new-tab">
+    An external link with target=_blank and no rel gives the opened page a handle on yours. squirrel lists every one, per page.
   </Card>
-  <Card title="Form CAPTCHA" icon="triangle-exclamation" href="/rules/security/form-captcha">
-    Checks for CAPTCHA protection on public forms
+  <Card title="Public forms without CAPTCHA: what counts as public" icon="triangle-exclamation" href="/rules/security/form-captcha">
+    A contact or newsletter form with no bot protection collects spam within days. squirrel classifies forms and flags the unprotected public ones.
   </Card>
-  <Card title="Form HTTPS" icon="triangle-exclamation" href="/rules/security/form-https">
-    Checks that form actions use HTTPS
+  <Card title="Form action over HTTP: the insecure form submission warning" icon="triangle-exclamation" href="/rules/security/form-https">
+    A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction.
   </Card>
-  <Card title="HSTS Header" icon="triangle-exclamation" href="/rules/security/hsts">
-    Checks for HTTP Strict Transport Security header
+  <Card title="HSTS: what Strict-Transport-Security needs to be valid" icon="triangle-exclamation" href="/rules/security/hsts">
+    A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age.
   </Card>
-  <Card title="HTTP to HTTPS Redirect" icon="triangle-exclamation" href="/rules/security/http-to-https">
-    Checks whether HTTP URLs redirect to HTTPS
+  <Card title="HTTP to HTTPS redirect: how squirrel probes for it" icon="triangle-exclamation" href="/rules/security/http-to-https">
+    squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop.
   </Card>
-  <Card title="HTTPS" icon="circle-exclamation" href="/rules/security/https">
-    Checks for HTTPS usage
+  <Card title="HTTPS: what it means when a page is not served over HTTPS" icon="circle-exclamation" href="/rules/security/https">
+    A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https.
   </Card>
-  <Card title="Leaked Environment Variables" icon="circle-exclamation" href="/rules/security/leaked-secrets">
-    Checks for exposed API keys, secrets, and credentials in HTML/JS
+  <Card title="Leaked API key in client-side code: how to find one" icon="circle-exclamation" href="/rules/security/leaked-secrets">
+    An API key shipped in HTML or a bundle can be read by anyone who views source. squirrel scans every page and script against 87 key patterns.
   </Card>
-  <Card title="Mixed Content" icon="circle-exclamation" href="/rules/security/mixed-content">
-    Checks for HTTP resources on HTTPS pages
+  <Card title="Mixed content: HTTP resources on an HTTPS page" icon="circle-exclamation" href="/rules/security/mixed-content">
+    An HTTPS page that loads a script or stylesheet over HTTP is not secure and browsers block it. squirrel lists every HTTP resource per page.
   </Card>
-  <Card title="Permissions-Policy" icon="circle-info" href="/rules/security/permissions-policy">
-    Checks for Permissions-Policy (Feature-Policy) header
+  <Card title="Permissions-Policy: what the header does and how to set it" icon="circle-info" href="/rules/security/permissions-policy">
+    Without a Permissions-Policy, embedded frames inherit access to camera, microphone and geolocation. squirrel reads the header once per site.
   </Card>
-  <Card title="Referrer-Policy" icon="circle-info" href="/rules/security/referrer-policy">
-    Checks for Referrer-Policy header
+  <Card title="Referrer-Policy: which value to send and what leaks" icon="circle-info" href="/rules/security/referrer-policy">
+    unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values.
   </Card>
-  <Card title="Subresource Integrity" icon="triangle-exclamation" href="/rules/security/sri">
-    Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)
+  <Card title="Subresource Integrity: which scripts need an integrity hash" icon="triangle-exclamation" href="/rules/security/sri">
+    Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page.
   </Card>
-  <Card title="Third-Party Cookies" icon="circle-info" href="/rules/security/third-party-cookies">
-    Detects third-party resources that may set cookies
+  <Card title="Third-party cookies: which external domains a page loads" icon="circle-info" href="/rules/security/third-party-cookies">
+    Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page.
   </Card>
-  <Card title="X-Content-Type-Options" icon="circle-info" href="/rules/security/x-content-type">
-    Checks for MIME type sniffing protection
+  <Card title="X-Content-Type-Options: nosniff and why it matters" icon="circle-info" href="/rules/security/x-content-type">
+    Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site.
   </Card>
-  <Card title="X-Frame-Options" icon="triangle-exclamation" href="/rules/security/x-frame-options">
-    Checks for clickjacking protection header
+  <Card title="X-Frame-Options: how to stop your pages being framed" icon="triangle-exclamation" href="/rules/security/x-frame-options">
+    With no X-Frame-Options and no frame-ancestors, any site can iframe your pages and overlay them. squirrel checks both headers together.
   </Card>
 </CardGroup>
 
@@ -84,3 +81,5 @@ HTTPS, headers, and safe link practices (16 rules).
 [rules]
 disable = ["security/*"]
 ```
+
+Every audit reports Security findings next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.

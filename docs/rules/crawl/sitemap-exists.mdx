@@ -1,9 +1,34 @@
 ---
-title: "Sitemap Exists"
-description: "Checks if XML sitemap exists and is referenced in robots.txt"
+title: "No XML sitemap found: where squirrel looks and what to add"
+description: "Without a sitemap, discovery depends entirely on internal links. squirrel checks the common locations and robots.txt, and counts the URLs it found."
 ---
 
-Checks if XML sitemap exists and is referenced in robots.txt
+## What an XML sitemap is
+
+An XML sitemap is a file listing the URLs on a site that you want search engines to know about, each in a `<loc>` element with optional `<lastmod>`. It supplements link discovery rather than replacing it: a URL in a sitemap is a suggestion to crawl, not an instruction to index.
+
+It matters most where link discovery is weak. New sites with few inbound links, large archives where old pages are many clicks deep, and sections reachable only through search or filters all benefit. A single sitemap file holds at most 50,000 URLs and 50 MB uncompressed; beyond that you use a sitemap index that points at several files.
+
+## What squirrel checks
+
+The rule is site-wide and reads what sitemap discovery found. It emits up to three checks:
+
+- `sitemap-exists` reports info when no sitemap data is available. Message: `Sitemap data not available`.
+- `sitemap-exists` reports info when discovery was truncated before every candidate location was tried and found nothing at all, so nothing was established. Message: `Sitemap discovery did not complete, so no sitemap check was made`, with `Not all candidate locations were reached` as the value. A truncated walk that did find a sitemap reports the pass below instead.
+- `sitemap-exists` fails when discovery finished and found nothing. Message: `No XML sitemap found`, with `Checked common locations and robots.txt` as the value. Severity error, weight 10, the highest in the Crawlability category.
+- `sitemap-exists` passes when sitemaps were found. Message: `2 sitemap(s) found`, listing each with its URL count.
+- `sitemap-in-robots` runs only when robots.txt exists. It passes when a `Sitemap` line was one of the discovery sources, and otherwise reports info with `Sitemap not referenced in robots.txt`.
+- `sitemap-urls` reports info with the total. Message: `Sitemap contains 412 URL(s)`.
+
+## How to fix it
+
+```
+Sitemap: https://example.com/sitemap.xml
+```
+
+Generate the sitemap from the same source of truth your routes come from, serve it at a stable URL, and add the `Sitemap` line to robots.txt so discovery does not depend on guessing filenames.
+
+List only canonical, indexable URLs that return 200. A sitemap full of redirects and noindexed pages is worse than a smaller accurate one.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks if XML sitemap exists and is referenced in robots.txt
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 10/10 |
-
-## Solution
-
-XML sitemaps help search engines discover and index your pages. Create a sitemap.xml at your domain root listing all important pages. Reference it in robots.txt with 'Sitemap: https://yoursite.com/sitemap.xml'. Submit it to Google Search Console and Bing Webmaster Tools. Keep it under 50MB and 50,000 URLs per file; use a sitemap index for larger sites.
 
 ## Enable / disable
 
@@ -40,3 +61,30 @@ disable = ["crawl/*"]
 enable = ["crawl/sitemap-exists"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/sitemap-valid](/rules/crawl/sitemap-valid): whether the sitemap that exists parses and respects the protocol limits.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): indexable pages the sitemap leaves out.
+- [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx): sitemap URLs that no longer resolve.
+- [crawl/robots-txt](/rules/crawl/robots-txt): the file that should carry the `Sitemap` line.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [Sitemaps overview, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Each discovered sitemap is listed with its URL count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

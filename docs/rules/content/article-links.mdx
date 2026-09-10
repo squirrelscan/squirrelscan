@@ -1,9 +1,29 @@
 ---
-title: "Article Link Density"
-description: "Articles should have appropriate internal and external links based on length"
+title: "Article link density: how many links an article needs"
+description: "An article that cites nothing and links nowhere is a dead end. squirrel scales the minimum with the article's length."
 ---
 
-Articles should have appropriate internal and external links based on length
+## What link density means for an article
+
+An article carries two kinds of link. Internal links connect it to the rest of the site, which is how a reader continues and how the site says what belongs together. External links cite the sources the argument rests on.
+
+The right number scales with length. A 500-word post that links out twice is well connected; a 3000-word guide that does the same is not. This rule sets a floor by length band rather than a target, so it only fires when an article is clearly under-linked.
+
+## What squirrel checks
+
+The rule runs on every crawled page, and only on pages the parser classified as an article or that carry Article structured data. It picks thresholds from the word count and emits two checks:
+
+- `article-links` reports info when the page is not an article. Message: `Not an article page`. No further checks run.
+- `internal-links` warns below the minimum. Message: `long article has 1 internal links (min 3)`, with the count and the threshold. It passes otherwise with `4 internal links`.
+- `external-links` warns below the minimum. Message: `medium article has 0 external links (min 2)`. It passes otherwise with `3 external links`.
+
+The bands are short below `short_max_words`, 800 by default; medium from there up to but not including `long_min_words`, 1500 by default; and long from 1500 up. The defaults are 1 internal and 1 external for short, 2 and 2 for medium, and 3 internal and 2 external for long. Severity warning, weight 4.
+
+## How to fix it
+
+Link to the pages on your site that the article assumes or extends, from the sentences where they come up rather than from a list at the end. Cite the sources you actually used.
+
+A reference page or a changelog that legitimately links nowhere is best excluded by disabling the rule for that section rather than by adding links to satisfy it.
 
 | | |
 |---|---|
@@ -13,37 +33,25 @@ Articles should have appropriate internal and external links based on length
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## Solution
-
-Add relevant internal links to other pages on your site and cite authoritative external sources. Short articles (under 800 words) need at least 1 of each, medium (800-1500) need 2 of each, long (over 1500) need 3 internal and 2 external.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `short_max_words` | unknown | `undefined` |  |
-| `long_min_words` | unknown | `undefined` |  |
-| `short_min_internal` | unknown | `undefined` |  |
-| `medium_min_internal` | unknown | `undefined` |  |
-| `long_min_internal` | unknown | `undefined` |  |
-| `short_min_external` | unknown | `undefined` |  |
-| `medium_min_external` | unknown | `undefined` |  |
-| `long_min_external` | unknown | `undefined` |  |
+| `short_max_words` | number | `800` | Upper word count for the short band |
+| `long_min_words` | number | `1500` | Word count at which the long band starts |
+| `short_min_internal` | number | `1` | Minimum internal links for a short article |
+| `medium_min_internal` | number | `2` | Minimum internal links for a medium article |
+| `long_min_internal` | number | `3` | Minimum internal links for a long article |
+| `short_min_external` | number | `1` | Minimum external links for a short article |
+| `medium_min_external` | number | `2` | Minimum external links for a medium article |
+| `long_min_external` | number | `2` | Minimum external links for a long article |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."content/article-links"]
-short_max_words = undefined
-long_min_words = undefined
-short_min_internal = undefined
-medium_min_internal = undefined
-long_min_internal = undefined
-short_min_external = undefined
-medium_min_external = undefined
-long_min_external = undefined
+[rule_options."content/article-links"]
+long_min_internal = 5
+long_min_external = 3
 ```
 
 ## Enable / disable
@@ -69,3 +77,30 @@ disable = ["content/*"]
 enable = ["content/article-links"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): whether other articles link back to this one.
+- [links/dead-end-pages](/rules/links/dead-end-pages): pages with no outgoing internal links at all.
+- [eeat/citations](/rules/eeat/citations): the external links read as a trust signal.
+- [links/anchor-text](/rules/links/anchor-text): what those links say.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each article is reported with its internal and external link counts. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

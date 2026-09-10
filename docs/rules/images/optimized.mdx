@@ -1,9 +1,36 @@
 ---
-title: "Image Optimization"
-description: "Checks for image optimization indicators"
+title: "Image optimization signals: CDNs and modern formats"
+description: "squirrel reads image URLs for the marks of an optimization pipeline: a known image CDN, a modern format, or a format parameter in the query."
 ---
 
-Checks for image optimization indicators
+## What the optimization signals are
+
+There are two common ways an image ends up small enough. Either it was converted and resized as part of the build, which shows up as a `.webp` or `.avif` extension, or it goes through an image CDN that transforms on request, which shows up as a recognisable hostname and often a format parameter in the query string.
+
+This rule reads those marks off the URLs. It is inference rather than measurement: `images/image-file-size` is the rule that actually weighs the files. What this one adds is a view of whether a pipeline exists at all.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `img[src]`, skipping `data:` sources. Six check names are possible and at most four appear in one result, since the optimization warning requires both the CDN and the modern-format counts to be zero:
+
+- `image-optimization` reports info when the page has no images. Message: `No images found`.
+- `image-cdn` passes when any image comes from a known image CDN. Message: `14 image(s) served from image CDN`.
+- `modern-image-formats` passes when any image is in a modern format. Message: `14 image(s) use modern formats`.
+- `legacy-image-formats` reports info for legacy-format images that are not on a CDN. Message: `6 image(s) could use WebP/AVIF`, listing up to ten filenames.
+- `picture-elements` passes when the page has any `<picture>`. Message: `2 <picture> element(s) for responsive images`.
+- `image-optimization-needed` warns when there is no CDN, no modern format, and more than three legacy images. Message: `Images may not be optimized - consider using an image CDN`.
+
+Modern means a `.webp` or `.avif` extension, or a URL containing `format=webp`, `fm=webp`, `f_webp` or `format=avif`. SVG and ICO are counted as modern, since neither needs converting. Legacy means `.jpg`, `.jpeg`, `.png` or `.gif`. The CDN list covers around twenty hostnames including Cloudinary, imgix, ImageKit, Shopify, Sanity, Contentful and Cloudflare Images, matched as a substring of the hostname. Severity info, weight 4.
+
+## How to fix it
+
+```html
+<img src="https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,w_800/photo.jpg" alt="…" />
+```
+
+Either convert during the build and reference the modern file, or put an image CDN in front and let it negotiate format and size per request. `f_auto` and its equivalents pick AVIF or WebP based on what the browser accepts.
+
+An image served as WebP through content negotiation, on a `.jpg` URL, is counted as legacy here because the rule can only read the URL.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for image optimization indicators
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 4/10 |
-
-## Solution
-
-Optimize images to reduce file sizes without visible quality loss. Use tools like Squoosh, ImageOptim, or TinyPNG. Consider using an image CDN (Cloudinary, Imgix, Cloudflare Images) for automatic optimization and responsive delivery. Modern formats (WebP, AVIF) offer 25-50% better compression.
 
 ## Enable / disable
 
@@ -40,3 +63,30 @@ disable = ["images/*"]
 enable = ["images/optimized"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/modern-format](/rules/images/modern-format): the format count on its own.
+- [images/image-file-size](/rules/images/image-file-size): the measured weight, which is the real test.
+- [images/srcset](/rules/images/srcset): serving several sizes as well as several formats.
+- [images/responsive-size](/rules/images/responsive-size): thumbnail-sized images that may need responsive variants.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Use WebP images, web.dev](https://web.dev/articles/serve-images-webp)
+- [Google Images best practices](https://developers.google.com/search/docs/appearance/google-images)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each page is reported with its CDN, modern-format and legacy-format counts. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,36 @@
 ---
-title: "Responsive Image Size"
-description: "Checks if images are sized appropriately for their display size"
+title: "Thumbnails without srcset: small images serving large files"
+description: "A 60 by 60 avatar that loads a 2000 pixel photo wastes almost all of it. squirrel flags small declared sizes with no responsive variants."
 ---
 
-Checks if images are sized appropriately for their display size
+## What the size mismatch is
+
+An image is served at one size and displayed at another. When the displayed size is much smaller, most of the downloaded bytes are discarded by the resize.
+
+The clearest case is a thumbnail: an avatar, a product grid tile, a logo in a list. Those are rendered at a hundred pixels or less, and if the same file is also used as a full-size image elsewhere, every thumbnail on the page pays for it. `srcset` or `<picture>` is what lets the browser take a smaller file instead.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `img[src]` that has both `width` and `height` attributes as parseable non-zero numbers. Images without those attributes are not examined.
+
+- Skipped when there is no parsed document. Message: `No document available`.
+- Info when the page has no images. Message: `No images found on page`.
+- `images-possibly-oversized` warns for images whose declared width and height are both at or below `max_thumbnail_dimension`, and which have no `srcset` and no `<picture>` ancestor. Message: `6 small image(s) may be serving oversized files`, listing up to ten as `avatar.jpg (64x64, no srcset)`. Severity warning, weight 5.
+- `responsive-size` passes when images with dimensions were examined and none qualified. Message: `Image sizes appear appropriate`.
+- `responsive-size` reports info when no image yielded two dimensions that parse as non-zero integers. An absent attribute reaches this branch, and so does `width="0"` or `height="invalid"`. Message: `No images with explicit dimensions to check`.
+
+SVG and ICO files and `data:` sources are skipped. The rule does not fetch the images, so it cannot tell whether the file really is oversized: a small declared size with no responsive variants is the signal.
+
+## How to fix it
+
+```html
+<img src="/avatar-64.jpg" srcset="/avatar-64.jpg 64w, /avatar-128.jpg 128w"
+     sizes="64px" width="64" height="64" alt="…" />
+```
+
+Generate a thumbnail variant and reference it, or hand the resize to an image CDN with a width parameter. Two candidates are enough for a fixed-size thumbnail: one for standard displays and one for high-density ones.
+
+The exclusions are a lowercase `.svg` or `.ico` filename and a `data:` source. A small PNG or WebP icon is not excluded and will be reported.
 
 | | |
 |---|---|
@@ -13,23 +40,17 @@ Checks if images are sized appropriately for their display size
 | **Severity** | warning |
 | **Weight** | 5/10 |
 
-## Solution
-
-Serve images at appropriate sizes for their display dimensions. Oversized images waste bandwidth and slow page load. Undersized images look blurry on high-DPI displays. Use srcset to serve different sizes for different screens. For responsive images, serve 1x, 2x, and optionally 3x versions. Image CDNs can automatically resize images on-the-fly.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `max_thumbnail_dimension` | unknown | `undefined` | Max dimension to consider as thumbnail |
+| `max_thumbnail_dimension` | number | `100` | Max dimension to consider as thumbnail |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."images/responsive-size"]
-max_thumbnail_dimension = undefined
+[rule_options."images/responsive-size"]
+max_thumbnail_dimension = 200
 ```
 
 ## Enable / disable
@@ -55,3 +76,30 @@ disable = ["images/*"]
 enable = ["images/responsive-size"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/srcset](/rules/images/srcset): the responsive markup this rule looks for.
+- [images/image-file-size](/rules/images/image-file-size): the measured weight of the files being served.
+- [images/dimensions](/rules/images/dimensions): the width and height attributes this rule reads.
+- [images/optimized](/rules/images/optimized): image CDN hosts and other optimization markers in the URLs.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Responsive images, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Responsive_images)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Every small image without responsive variants is listed with its declared size. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

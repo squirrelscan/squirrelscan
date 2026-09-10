@@ -1,9 +1,32 @@
 ---
-title: "Tap Targets"
-description: "Checks for properly sized touch targets"
+title: "Tap target size: the 44 by 44 pixel guideline"
+description: "A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions."
 ---
 
-Checks for properly sized touch targets
+## What a tap target is
+
+A tap target is anything a finger has to hit: a link, a button, a form control, a checkbox. Unlike a cursor, a fingertip covers several millimetres and the contact point is not where the user is looking.
+
+The common guideline is around 44 by 44 CSS pixels with space between adjacent targets. WCAG 2.2 sets a minimum of 24 by 24 with exceptions for inline links and spacing. Padding is the usual way to reach it: the tappable area grows while the visible element stays the size the design wants.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It counts `button` and `[role="button"]` elements, `a[href]` links, and `input`, `select` and `textarea` controls. It then looks at the inline `style` on the buttons and links for a `font-size`, `height` or `width` declared as an integer number of pixels below 30. The patterns are case-sensitive and unanchored, so `min-width: 20px` matches the width test and a fractional `width: 20.5px` matches nothing. It emits up to two checks:
+
+- `tap-targets` reports info when the page has any interactive element. Message: `84 interactive element(s) found`, with `Ensure tap targets are at least 44x44px` as the value.
+- `small-tap-targets` warns when any of those carries a small inline dimension. Message: `3 element(s) may have small tap targets`, with `Check inline styles for small dimensions` as the value. Severity warning, weight 5.
+
+The counts are sums of selector matches with no deduplication, so an `<a href>` carrying `role="button"` is counted twice, in the small-target count as well when it qualifies. Nothing is measured either: static markup carries no computed size, so the rule reports the count as context and uses inline styles as a weak proxy. A page whose sizes come from an external stylesheet produces the informational count and nothing else.
+
+## How to fix it
+
+```css
+.icon-button { padding: 12px; min-width: 44px; min-height: 44px; }
+```
+
+Give small controls padding rather than a larger icon, and keep at least 8 pixels between adjacent targets. Navigation links and icon-only buttons are where this usually goes wrong.
+
+Measure it in a browser. This rule tells you how many targets there are, not how big they render.
 
 | | |
 |---|---|
@@ -12,10 +35,6 @@ Checks for properly sized touch targets
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Touch targets (buttons, links) should be at least 44x44 CSS pixels with 8px spacing between them. This ensures users can tap accurately on mobile. Google's mobile-friendly test checks this. Use padding to increase tap area without changing visual size. Pay special attention to navigation links and form inputs.
 
 ## Enable / disable
 
@@ -40,3 +59,30 @@ disable = ["mobile/*"]
 enable = ["mobile/tap-targets"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/touch-targets](/rules/a11y/touch-targets): inline sizing hints for potentially small touch targets.
+- [mobile/font-size](/rules/mobile/font-size): text sized too small for the same reason.
+- [mobile/horizontal-scroll](/rules/mobile/horizontal-scroll): layout problems on the same screens.
+- [links/anchor-text](/rules/links/anchor-text): whether those targets are named at all.
+
+Mobile findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Understanding target size (minimum), WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+- [Page experience, Google Search Central](https://developers.google.com/search/docs/appearance/page-experience)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Mobile section of the report. Each page is reported with its interactive element count and any small inline dimensions. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Mobile section looks like on a real site.
+  </Card>
+</CardGroup>

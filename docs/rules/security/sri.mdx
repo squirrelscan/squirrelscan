@@ -1,9 +1,37 @@
 ---
-title: "Subresource Integrity"
-description: "Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)"
+title: "Subresource Integrity: which scripts need an integrity hash"
+description: "Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page."
 ---
 
-Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)
+## What Subresource Integrity is
+
+Subresource Integrity (SRI) is an `integrity` attribute on a `<script>` or a `<link rel="stylesheet">` that carries a cryptographic hash of the file the page expects. The browser fetches the resource, hashes it, and refuses to run or apply it when the hash does not match. That closes the gap where a third-party host serves different bytes than the ones you reviewed.
+
+SRI only works on assets whose content never changes at a given URL. A versioned CDN build qualifies. A script that updates itself server-side does not, because the pinned hash goes stale on the vendor's next deploy and the embed stops loading. Same-origin resources do not need it: anyone who can change them can change the page that references them.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It looks at every `<script src>` and every `<link rel~="stylesheet" href>` whose URL resolves to a cross-origin `http:` or `https:` address, and emits a single check named `sri`:
+
+- Warn when one or more of those resources has a missing or empty `integrity` attribute. Report message: `2 cross-origin resources without Subresource Integrity` (`resource`, singular, when there is one). Each URL is listed and labelled `script` or `stylesheet`. Severity warning.
+- Pass when every cross-origin resource carries `integrity`. Message: `All cross-origin scripts and stylesheets use Subresource Integrity`.
+- Info when the page loads no cross-origin scripts or stylesheets at all. Message: `No cross-origin scripts or stylesheets on this page — SRI not applicable`.
+
+Relative and protocol-relative URLs are resolved against the page URL before the origin comparison, so `//cdn.example.com/x.js` counts as cross-origin and `/local.js` does not. Eleven hostnames are exempt because their vendors document SRI as unsupported: `js.stripe.com`, `checkout.stripe.com`, `www.paypal.com`, `www.paypalobjects.com`, `www.google.com`, `www.gstatic.com`, `js.hcaptcha.com`, `www.googletagmanager.com`, `www.google-analytics.com`, `ssl.google-analytics.com` and `connect.facebook.net`.
+
+## How to fix it
+
+```html
+<script
+  src="https://cdn.example.com/lib@1.4.2/lib.min.js"
+  integrity="sha384-BASE64_HASH_OF_THE_FILE"
+  crossorigin="anonymous"
+></script>
+```
+
+The attribute goes on the tag that loads the resource. For a cross-origin classic script like this one, add `crossorigin="anonymous"` and make sure the host returns a permissive `Access-Control-Allow-Origin`, or the browser cannot read the body to hash it. Module scripts already fetch with CORS, and a same-origin resource needs no `crossorigin` attribute at all. jsDelivr, cdnjs and unpkg publish the hash next to the file URL.
+
+A self-updating third-party script that is not on the exemption list still gets flagged. Pinning a hash there breaks the embed on the vendor's next release, so disable the rule instead of inventing an `integrity` value.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Cross-origin scripts and stylesheets can be tampered with in transit or at the source (a compromised CDN or third-party host), and the browser has no way to detect it without help. Add an integrity attribute with a sha256/sha384/sha512 hash of the expected file, plus crossorigin="anonymous": `<script src="..." integrity="sha384-..." crossorigin="anonymous"></script>`. Most CDNs (jsDelivr, cdnjs, unpkg) publish the hash alongside the URL. This only works for pinned/versioned assets — scripts that update themselves server-side (analytics, payment SDKs, CAPTCHAs) intentionally don't support it.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["security/*"]
 enable = ["security/sri"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/csp](/rules/security/csp): restricts which origins may serve scripts at all, one layer above per-file hashes.
+- [security/mixed-content](/rules/security/mixed-content): the same third-party assets pulled over plain HTTP.
+- [security/third-party-cookies](/rules/security/third-party-cookies): an inventory of the external domains a page loads from.
+- [integrity/obfuscated-script](/rules/integrity/obfuscated-script): scripts that are already on the page and are hiding what they do.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Subresource Integrity, MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity)
+- [Subresource Integrity, W3C](https://www.w3.org/TR/SRI/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. Every cross-origin script and stylesheet without an integrity hash is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

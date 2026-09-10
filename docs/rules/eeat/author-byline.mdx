@@ -1,9 +1,37 @@
 ---
-title: "Author Bylines"
-description: "Checks for visible author names on content pages"
+title: "Author bylines on content pages: what share carry one"
+description: "Content published by nobody in particular is harder to trust. squirrel measures what share of your content pages attribute an author."
 ---
 
-Checks for visible author names on content pages
+## What an author byline is
+
+A byline names who wrote a page. It can be structured data, a `rel="author"` link, or visible markup in the page's entry header, and it is the first half of the experience and expertise part of E-E-A-T.
+
+It matters most where the reader is being asked to act on what they read. Google's guidance asks whether content presents information in a way that makes you want to trust it, and an unattributed article on a topic where expertise matters answers that badly.
+
+## What squirrel checks
+
+The rule is site-wide. It counts content pages and how many of them attribute an author. A page counts as content when its path matches `/blog`, `/article`, `/post`, `/news`, `/guide`, `/how-to` or `/review`, when its schema declares `Article`, `BlogPosting` or `NewsArticle`, or when the parser found visible byline markup. On a crawl of five pages or fewer, every page is counted as content.
+
+An author is found from the parser's extracted author, from any flattened JSON-LD node carrying an `author` property, or from visible byline markup such as an hCard or a `rel="author"` link. It emits a single check named `author-byline`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Info when no content pages were detected. Message: `No content pages detected for author analysis`.
+- Pass when the coverage percentage, rounded to a whole number, is 80 or above. Message: `92% of content pages have author attribution`, with `46/50 pages` as the value. Severity warning, weight 5.
+- Info from 50. Message: `64% of content pages have author attribution`, with `Consider adding authors to more content` as the value.
+- Warn below 50. Message: `Only 20% of content pages have author attribution`, or `No content pages have author attribution` when none do.
+
+The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider, an education site or a nonprofit. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
+
+## How to fix it
+
+```html
+<a rel="author" href="/authors/jane-diaz">Jane Diaz</a>
+```
+
+Show the name where the reader sees it, link it to a bio, and mirror it in the page's `Article` schema as a `Person`. Put it in the article template so it applies to everything published through it.
+
+An organisation byline is legitimate for institutional content. A named person with a bio is stronger where the claim rests on individual expertise.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks for visible author names on content pages
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Author bylines demonstrate experience and accountability. Show author names prominently on articles, blog posts, and expert content. Include author credentials where relevant. Link author names to bio pages. For YMYL content (health, finance), author transparency is especially important for Google's E-E-A-T assessment.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["eeat/*"]
 enable = ["eeat/author-byline"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/author-info](/rules/content/author-info): the per-page inventory of the same markup.
+- [eeat/author-expertise](/rules/eeat/author-expertise): author pages and Person schema as expertise indicators.
+- [eeat/authority-signals](/rules/eeat/authority-signals): the cloud assessment of attribution in context.
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the topics where attribution matters most.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with the share of content pages that attribute an author. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

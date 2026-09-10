@@ -1,9 +1,38 @@
 ---
-title: "OG Image Size"
-description: "Checks og:image meets recommended size (1200x630)"
+title: "og:image size: the 1200 by 630 recommendation"
+description: "A share image below the recommended size is cropped or upscaled in the preview card. squirrel reads og:image and its declared dimensions."
 ---
 
-Checks og:image meets recommended size (1200x630)
+## What og:image is
+
+`og:image` is the Open Graph property naming the picture a platform shows when someone shares the page. It is what turns a bare link into a card.
+
+Facebook's sharing guidance recommends at least 1200 by 630 pixels, a ratio of about 1.91 to 1, with a file under 8MB. Below that, a platform crops to its own ratio or upscales, and either result looks worse than the image you chose. `og:image:width` and `og:image:height` let the platform lay out the card before it has downloaded the file, which is why declaring them is worth doing.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads `meta[property="og:image"]` along with the `og:image:width` and `og:image:height` properties. It emits up to two checks:
+
+- `og-image-size` reports info when there is no `og:image`. Message: `No og:image tag found`. No further checks run.
+- `og-image-exists` passes when the tag is present. Message: `og:image is set`, with the first 60 characters of the URL.
+- `og-image-size` passes when both declared dimensions parse as positive numbers and are at least 1200 and 630. Message: `og:image dimensions meet recommendations`, with `1200x630` as the value.
+- `og-image-size` warns when both parse as positive and at least one is below its recommendation. Message: `og:image may be too small (600x315)`, with the recommendation as the value.
+- `og-image-size` reports info in every other case. Message: `og:image dimensions not specified`, with `Add og:image:width and og:image:height` as the value. That covers an absent tag and also a present one whose value is zero, negative or unparseable.
+
+The image itself is never fetched, so the check reads the declared numbers rather than the real ones. A page declaring 1200 by 630 for a 400-pixel file passes. Severity warning, weight 4.
+
+## How to fix it
+
+```html
+<meta property="og:image" content="https://example.com/share.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="…" />
+```
+
+Generate a 1200 by 630 image per page or per template, and declare the dimensions alongside it. Use an absolute URL: several platforms will not resolve a relative one.
+
+Keep the important part of the image away from the edges. Different platforms crop to different ratios from the same file.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks og:image meets recommended size (1200x630)
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-og:image should be at least 1200x630 pixels for optimal display on Facebook and LinkedIn. Smaller images may appear cropped or low quality. Use 1.91:1 aspect ratio. Keep file size under 8MB. Test with Facebook Sharing Debugger. Consider creating dedicated social images for key pages.
 
 ## Enable / disable
 
@@ -40,3 +65,30 @@ disable = ["social/*"]
 enable = ["social/og-image-size"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/og-tags](/rules/core/og-tags): the rest of the Open Graph tags on the page.
+- [social/asset-divergence](/rules/social/asset-divergence): pages falling back to a different share image.
+- [core/twitter-cards](/rules/core/twitter-cards): the equivalent tags for X.
+- [images/image-file-size](/rules/images/image-file-size): the weight of the file being referenced.
+
+Social Media findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Sharing best practices, Meta for Developers](https://developers.facebook.com/docs/sharing/webmasters)
+- [The Open Graph protocol](https://ogp.me/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Social Media section of the report. Each page is reported with its og:image URL and declared dimensions. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Social Media section looks like on a real site.
+  </Card>
+</CardGroup>

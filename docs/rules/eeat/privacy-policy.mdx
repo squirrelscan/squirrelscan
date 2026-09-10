@@ -1,9 +1,36 @@
 ---
-title: "Privacy Policy"
-description: "Checks for privacy policy page linked from footer"
+title: "Privacy policy: the page and how widely it is linked"
+description: "A privacy policy nobody can find does not do its job. squirrel finds the page and measures what share of your pages link to it."
 ---
 
-Checks for privacy policy page linked from footer
+## What a privacy policy is
+
+A privacy policy states what data a site collects, why, who it goes to and what a visitor can do about it. Several jurisdictions require one, including the GDPR in the EU and the CCPA in California, and analytics or advertising vendors usually require one in their terms as well.
+
+Being reachable is part of the requirement. The convention is a footer link on every page, which is why this rule measures link coverage rather than just existence.
+
+## What squirrel checks
+
+The rule is site-wide. It finds the privacy page by a known multilingual slug, or by a crawled page whose title or `h1` reads as a privacy policy, which catches unusual slugs and redirects. There is no standard schema type for a privacy page, so there is no schema fallback. It emits up to two checks:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- `privacy-policy` warns when no page is found. Message: `No Privacy Policy page found`, with `Create /privacy-policy page` as the value. No further checks run. Severity warning, weight 5.
+- `privacy-policy` passes when one is found. Message: `Privacy Policy page exists`, with the URL as the value.
+- `privacy-linked` passes when the coverage percentage, rounded to a whole number, is 80 or above. Message: `Privacy policy linked from 94% of pages`.
+- `privacy-linked` reports info from 50. Message: `Privacy policy linked from 62% of pages`, with `Consider adding to all page footers` as the value.
+- `privacy-linked` warns below 50%. Message: `Privacy policy only linked from 12% of pages`, with `Add privacy link to footer on all pages` as the value.
+
+Coverage is measured by matching the link href against the known privacy slugs, not by anchor text. `legal/privacy-policy` is the rule that also reads anchor text.
+
+## How to fix it
+
+```html
+<a href="/privacy-policy">Privacy policy</a>
+```
+
+Put the link in the footer component so every page inherits it. Cover what you collect, why, who you share it with, how long you keep it, and how someone exercises their rights.
+
+Update it when the practices change, and check what periodic requirement applies to you: a business covered by the CCPA has to refresh the specified disclosures at least every twelve months. A policy that describes vendors you stopped using is worse than useless.
 
 | | |
 |---|---|
@@ -12,14 +39,6 @@ Checks for privacy policy page linked from footer
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-A privacy policy is required by law in many jurisdictions (GDPR, CCPA) and signals trustworthiness. Link it from your footer on every page. Cover: what data you collect, how you use it, third-party sharing, user rights, and contact for privacy concerns. Keep it updated when practices change.
-
-## Detection
-
-A crawled page is credited as your privacy policy when its URL matches a known privacy slug (`/privacy`, `/privacy-policy`, `/legal/privacy`, and localized variants) or when its title or h1 reads "Privacy Policy" / "Privacy Notice" (a dated qualifier like "(Updated July 2026)" is fine), so a page with an unusual slug is still recognized.
 
 ## Enable / disable
 
@@ -44,3 +63,29 @@ disable = ["eeat/*"]
 enable = ["eeat/privacy-policy"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [legal/privacy-policy](/rules/legal/privacy-policy): the compliance view, which also reads anchor text.
+- [legal/cookie-consent](/rules/legal/cookie-consent): whether a cookie consent mechanism is present.
+- [eeat/terms-of-service](/rules/eeat/terms-of-service): the other legal page in the footer.
+- [security/third-party-cookies](/rules/security/third-party-cookies): the vendors the policy has to name.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The privacy page is reported with its URL and the share of pages that link to it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

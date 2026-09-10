@@ -1,9 +1,36 @@
 ---
-title: "Hreflang Tags"
-description: "Checks for hreflang link elements"
+title: "hreflang: x-default and the self-referencing tag"
+description: "hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them."
 ---
 
-Checks for hreflang link elements
+## What hreflang is
+
+`<link rel="alternate" hreflang="…">` tells a search engine that a page has versions for other languages or regions, and where they are. Without it, the versions compete as near-duplicates and the wrong one is shown.
+
+Two rules make a set work. Every page in the set lists every version including itself, so the set is confirmed from every direction. And `x-default` names the version to show a visitor whose language matches none of the others, usually a language selector or the primary version.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `link[rel="alternate"][hreflang]`. It emits up to three checks:
+
+- Info when the page has no hreflang tags. Message: `No hreflang tags found (not required for single-language sites)`. No further checks run.
+- `hreflang-xdefault` warns when no tag has `hreflang="x-default"`. Message: `No x-default hreflang found`.
+- `hreflang-self` warns when no tag's resolved href equals the page URL exactly. Message: `No self-referencing hreflang found`.
+- `hreflang` passes, listing the language codes found. Message: `4 hreflang tag(s) found`.
+
+The final pass check is always emitted alongside any warnings, so a page can report both a missing `x-default` and a count of its tags. The self-reference comparison is on the fully resolved URL, so a self-tag that differs by a trailing slash or a query string does not count. Language codes are not validated, and the return links from the other versions cannot be checked from this page. Severity info, weight 3.
+
+## How to fix it
+
+```html
+<link rel="alternate" hreflang="en-au" href="https://example.com/au/pricing" />
+<link rel="alternate" hreflang="en-gb" href="https://example.com/uk/pricing" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/pricing" />
+```
+
+Generate the full set from one source of truth so every version lists every other, including itself, with URLs matching the canonical form exactly.
+
+Keep `hreflang` and the canonical tag consistent: each version should be canonical to itself, not to the primary language.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for hreflang link elements
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Hreflang tags tell search engines about language and regional variations of pages, preventing duplicate content issues and ensuring users see the right version. Add hreflang link tags for each language/region version of a page. Include x-default for the fallback. Every page referenced should link back to all variants (bidirectional). Use correct ISO language and country codes.
 
 ## Enable / disable
 
@@ -40,3 +63,30 @@ disable = ["i18n/*"]
 enable = ["i18n/hreflang"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [i18n/lang-attribute](/rules/i18n/lang-attribute): the language of this page, as opposed to its alternates.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): the canonical tag each version needs.
+- [content/duplicate-title](/rules/content/duplicate-title): what language versions look like without hreflang.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): whether every version is in the sitemap.
+
+Internationalization findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Localized versions of your pages, Google Search Central](https://developers.google.com/search/docs/specialty/international/localized-versions)
+- [Declaring language in HTML, W3C Internationalization](https://www.w3.org/International/questions/qa-html-language-declarations)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Internationalization section of the report. Each page is reported with its hreflang codes and any missing x-default or self-reference. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Internationalization section looks like on a real site.
+  </Card>
+</CardGroup>

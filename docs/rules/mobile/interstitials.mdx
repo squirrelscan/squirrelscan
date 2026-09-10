@@ -1,9 +1,28 @@
 ---
-title: "Interstitials"
-description: "Detects potentially intrusive mobile interstitials"
+title: "Intrusive interstitials: popups that cover mobile content"
+description: "A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries."
 ---
 
-Detects potentially intrusive mobile interstitials
+## What an intrusive interstitial is
+
+An intrusive interstitial is an overlay that covers the main content on a mobile page, either immediately on arrival or before the content is reachable. Google announced in 2016 that pages doing this may rank lower, because a visitor arriving from search is shown a dialog instead of the page they chose.
+
+Some overlays are exempt. Cookie consent and age verification are required by law in places, and a login wall on genuinely gated content is not deceptive. The distinction is whether the overlay stands between a search visitor and the content the result promised.
+
+## What squirrel checks
+
+The rule runs on every crawled page and looks for two things. Any `div` whose `class` or `id` matches `popup`, `modal`, `overlay` or `interstitial`. And the raw HTML, lowercased, containing any of `popup.js`, `modal.js`, `mailchimp`, `sumo`, `optinmonster`, `hello-bar` or `leadpages`. It emits a single check named `interstitials`:
+
+- Info when either was found. Message: `Popup/modal elements detected`, with `Ensure popups don't block content on mobile page load` as the value.
+- Pass when neither was. Message: `No intrusive interstitial patterns detected`.
+
+Nothing about timing, size or coverage is measured, and no distinction is made between an exempt consent banner and a full-screen email capture. Only a `div` whose class or id matches one of those four words, or one of the seven library strings in the HTML, triggers it. A native `<dialog>` with no matching class is not detected. Severity for the rule is warning, weight 5.
+
+## How to fix it
+
+Delay any promotional overlay until the reader has engaged with the page, or replace it with an inline banner that takes a reasonable amount of the screen. On mobile, an in-content form usually converts better than an overlay anyway.
+
+Keep consent and age gates as small as the law allows, and make sure the content behind them is what a search visitor was promised.
 
 | | |
 |---|---|
@@ -12,10 +31,6 @@ Detects potentially intrusive mobile interstitials
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Google penalizes intrusive interstitials that cover main content on mobile. Avoid: popups that cover the content immediately on page load, standalone interstitials before the main content, above-the-fold layouts that look like interstitials. Allowed: age verification, cookie consent (small), login walls for paywalled content.
 
 ## Enable / disable
 
@@ -40,3 +55,30 @@ disable = ["mobile/*"]
 enable = ["mobile/interstitials"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [legal/cookie-consent](/rules/legal/cookie-consent): the consent banner that is exempt from this.
+- [integrity/fake-auth-overlay](/rules/integrity/fake-auth-overlay): overlays that are not yours at all.
+- [mobile/viewport](/rules/mobile/viewport): the tag that decides how the overlay is sized.
+- [perf/cls-hints](/rules/perf/cls-hints): images and iframes missing the dimensions that prevent shift.
+
+Mobile findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Helping users easily access content on mobile, Google Search Central](https://developers.google.com/search/blog/2016/08/helping-users-easily-access-content-on)
+- [Page experience, Google Search Central](https://developers.google.com/search/docs/appearance/page-experience)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Mobile section of the report. Each page is reported with whether popup markup or a popup library was detected. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Mobile section looks like on a real site.
+  </Card>
+</CardGroup>

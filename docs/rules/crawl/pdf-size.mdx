@@ -1,9 +1,35 @@
 ---
-title: "PDF Size"
-description: "Checks linked PDF sizes against Googlebot 60MB truncation limit"
+title: "PDF size: large linked documents and what gets indexed"
+description: "A very large PDF may only be read in part by a crawler. squirrel measures every internal PDF the crawl fetched and reports the outliers."
 ---
 
-Checks linked PDF sizes against Googlebot 60MB truncation limit
+## What the PDF size question is
+
+Search engines index PDFs as documents in their own right, extracting text, title and links. Like HTML, a PDF is read up to a limit rather than in full, and content past that point does not contribute to what the document ranks for.
+
+Google documents a 64 MB fetch limit for PDFs, against 2 MB for any other individual URL. squirrel's thresholds sit just under it: 30 MB for a warning and 60 MB for a failure, both configurable. Either way, a 60 MB PDF is a slow download for a person as well as a crawler, and is usually a scanned document that could be compressed or split.
+
+## What squirrel checks
+
+The rule is site-wide and reads PDF sizes the crawl fetched ahead of time. When no size data is present it first looks for internal PDF links, meaning links ending in `.pdf` whose origin matches the site base URL.
+
+- Skipped when no PDF sizes were fetched and no pages were crawled. Message: `No pages crawled`. A non-empty size list is processed regardless of the page count.
+- Pass when there is no size data and no internal PDF link exists. Message: `No internal PDF links found`.
+- Skipped when internal PDF links exist but no sizes were fetched. Message: `PDF size data not available`.
+- `pdf-size` fails at or above `error_bytes`, 60 MB by default. Message: `2 PDF(s) exceed Googlebot 60MB limit`, each listed with its size in megabytes. Severity error, weight 4.
+- `pdf-size-warn` warns at or above `warn_bytes`, 30 MB by default. Message: `3 PDF(s) exceed 30MB — approaching Googlebot 60MB limit`.
+- `pdf-size` passes when every measured PDF is under the warning threshold. Message: `14 PDF(s) checked — all under 30MB`.
+- `pdf-size-errors` reports info for PDFs whose size could not be fetched. Message: `Could not check 2 PDF(s)`.
+
+The messages name a 60 MB Googlebot limit. That is the rule's own default threshold; the figure Google documents is 64 MB.
+
+## How to fix it
+
+```
+X-Robots-Tag: noindex
+```
+
+Compress the images inside the document, split a long report into chapters, or serve an HTML version and keep the PDF as a download. Where a PDF does not need to appear in search at all, send `X-Robots-Tag: noindex` on its response, which works for non-HTML files that cannot carry a meta tag.
 
 | | |
 |---|---|
@@ -13,27 +39,19 @@ Checks linked PDF sizes against Googlebot 60MB truncation limit
 | **Severity** | error |
 | **Weight** | 4/10 |
 
-## Solution
-
-Googlebot truncates PDFs at 60MB: content beyond that limit is ignored during indexing. Split large documents into smaller parts, compress images within PDFs, or add a noindex X-Robots-Tag header if the PDF doesn't need to appear in search results.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `warn_bytes` | number | `31457280` (30MB) | Byte size to trigger warning |
-| `error_bytes` | number | `62914560` (60MB) | Byte size to trigger error (Googlebot truncation limit) |
-| `max_pdfs_to_check` | number | `50` | Maximum number of PDF links to check |
+| `warn_bytes` | number | `31457280` | Byte size to trigger warning |
+| `error_bytes` | number | `62914560` | Byte size to trigger error (Googlebot truncation limit) |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."crawl/pdf-size"]
-warn_bytes = 31457280
-error_bytes = 62914560
-max_pdfs_to_check = 50
+[rule_options."crawl/pdf-size"]
+warn_bytes = 10485760
+error_bytes = 26214400
 ```
 
 ## Enable / disable
@@ -59,3 +77,30 @@ disable = ["crawl/*"]
 enable = ["crawl/pdf-size"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/html-size](/rules/crawl/html-size): the same measurement applied to HTML documents.
+- [crawl/indexability](/rules/crawl/indexability): the `X-Robots-Tag` header this rule's fix uses.
+- [links/broken-links](/rules/links/broken-links): PDF links that no longer resolve.
+- [content/mime-type](/rules/content/mime-type): documents served with the wrong content type.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Inside Googlebot: crawling, fetching and the bytes we process, Google Search Central](https://developers.google.com/search/blog/2026/03/crawler-blog-post)
+- [Robots meta tag and X-Robots-Tag, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every measured PDF over the threshold is listed with its size. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

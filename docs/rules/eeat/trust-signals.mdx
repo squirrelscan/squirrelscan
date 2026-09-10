@@ -1,9 +1,35 @@
 ---
-title: "Trust Signals"
-description: "Checks for trust badges, certifications, and social proof"
+title: "Trust signals: reviews, testimonials and social proof"
+description: "Reviews and testimonials are what a hesitant visitor looks for. squirrel checks for review schema and testimonial pages across the crawl."
 ---
 
-Checks for trust badges, certifications, and social proof
+## What a trust signal is
+
+A trust signal is evidence from somewhere other than your own marketing copy: customer reviews, testimonials, certifications, membership of a professional body, awards.
+
+They work by being checkable. A rating with reviews behind it, or a named customer who can be looked up, carries weight that a claim about quality does not. Marked up as structured data, an aggregate rating can also appear in search results.
+
+## What squirrel checks
+
+The rule is site-wide. It looks for two signals: any page whose structured data declares `Review` or `AggregateRating`, and any page whose URL path matches `testimonial`, `review` or `customer-stories`. It emits a single check named `trust-signals`:
+
+- Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Pass when either was found. Message: `2 trust signal(s) detected`, listing them as `Review/Rating schema` and `Testimonials section`.
+- Info when neither was. Message: `Limited trust signals detected`, with `Consider adding reviews, testimonials, or certifications` as the value.
+
+Both tests are coarse. Security and payment badges are not detected, certifications are not detected, and testimonials rendered on a page whose URL says nothing about them are not detected either. A pass means these two markers were present, not that the site is well trusted. Severity info, weight 3.
+
+## How to fix it
+
+```json
+{"@context":"https://schema.org","@type":"Product","name":"Widget","aggregateRating":{"@type":"AggregateRating","ratingValue":"4.6","reviewCount":"128"}}
+```
+
+Publish real reviews with names and dates, and mark up the aggregate rating so it is machine-readable. Put the strongest proof where the decision happens: the product page, the pricing page, the checkout.
+
+Note that this example alone will not satisfy the rule. The parser collects top-level and `@graph` node types, so an `AggregateRating` nested inside a `Product` is recorded as `Product`. Detection needs a `Review` or `AggregateRating` node of its own, or a URL matching the testimonial patterns.
+
+Do not mark up ratings you cannot back with visible reviews on the page. Google's review snippet guidelines require the rating to be about the page's own subject and visible to the reader.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for trust badges, certifications, and social proof
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Trust signals help visitors feel confident. Include: security badges (Norton, McAfee), payment badges (Visa, PayPal), certifications (BBB, industry-specific), customer reviews/testimonials, and social proof (customer count, awards). Place trust signals prominently on homepage, checkout, and contact pages.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["eeat/*"]
 enable = ["eeat/trust-signals"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/review](/rules/schema/review): the review markup and its requirements.
+- [schema/rating-scope](/rules/schema/rating-scope): whether the rating is attached to the right thing.
+- [eeat/about-page](/rules/eeat/about-page): the page that carries the rest of the case.
+- [eeat/citations](/rules/eeat/citations): evidence of a different kind.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Review snippet structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/review-snippet)
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. The site is reported with the trust signals detected. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

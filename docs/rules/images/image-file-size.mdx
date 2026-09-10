@@ -1,9 +1,34 @@
 ---
-title: "Image File Size Too Large"
-description: "Checks for image files that exceed recommended size limits"
+title: "Oversized image files: the 200KB and 1MB thresholds"
+description: "One unoptimised photo can outweigh every other asset on the page. squirrel measures the images the crawl fetched and reports the heavy ones."
 ---
 
-Checks for image files that exceed recommended size limits
+## What an oversized image is
+
+Images are usually the largest thing a page downloads. A camera JPEG straight out of a phone is several megabytes; the same picture, resized to the width it is displayed at and encoded as WebP, is often under 100 KB with no visible difference.
+
+Weight shows up directly in Largest Contentful Paint, because the LCP element is an image on most content pages, and it costs the visitor real bandwidth. squirrel's default thresholds are 200 KB for a warning and 1 MB for a failure.
+
+## What squirrel checks
+
+The rule is site-wide and reads the image sizes the crawl fetched. It emits up to two checks:
+
+- Pass when the crawl recorded no image resources at all. Message: `No image files detected`. A recorded resource whose size could not be read falls through to the pass below instead.
+- `image-file-size` fails for files above `error_bytes`, 1 MB by default. Message: `2 image(s) exceed 1.0 MB`, each listed with its URL, size, status and content type, and the pages it appears on. Severity error, weight 7.
+- `image-file-size-warn` warns for files above `warn_bytes` and at or below the error threshold. Message: `9 image(s) exceed 200.0 KB`.
+- `image-file-size` passes when neither fired. Message: `All image files are within size limits`.
+
+Only images the crawl actually fetched are measured, so an image loaded by script after render does not appear.
+
+## How to fix it
+
+```bash
+cwebp -q 80 photo.jpg -o photo.webp
+```
+
+Resize to the largest dimension the image is displayed at, then encode as WebP or AVIF at a quality around 75 to 85. An image CDN does both on request, which is usually less work than a build step.
+
+Serving several sizes with `srcset` is what stops a phone downloading the desktop file. Compression alone does not fix that.
 
 | | |
 |---|---|
@@ -13,25 +38,19 @@ Checks for image files that exceed recommended size limits
 | **Severity** | error |
 | **Weight** | 7/10 |
 
-## Solution
-
-Large images slow down page loads and impact Core Web Vitals. Compress oversized images, use modern formats (WebP/AVIF), and resize images to the display dimensions. Consider responsive images with srcset to serve smaller files on mobile.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `warn_bytes` | number | `204800` (200KB) | Byte size to trigger warning |
-| `error_bytes` | number | `1048576` (1MB) | Byte size to trigger error |
+| `warn_bytes` | number | `204800` | Byte size to trigger warning |
+| `error_bytes` | number | `1048576` | Byte size to trigger error |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."images/image-file-size"]
-warn_bytes = 204800
-error_bytes = 1048576
+[rule_options."images/image-file-size"]
+warn_bytes = 102400
+error_bytes = 512000
 ```
 
 ## Enable / disable
@@ -57,3 +76,30 @@ disable = ["images/*"]
 enable = ["images/image-file-size"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/modern-format](/rules/images/modern-format): the format change that usually fixes the size.
+- [images/srcset](/rules/images/srcset): serving a smaller file to smaller screens.
+- [images/responsive-size](/rules/images/responsive-size): thumbnail-sized images with no srcset or picture markup.
+- [perf/total-byte-weight](/rules/perf/total-byte-weight): how much of the page total these images are.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Use WebP images, web.dev](https://web.dev/articles/serve-images-webp)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Every oversized image is listed with its size and the pages it appears on. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

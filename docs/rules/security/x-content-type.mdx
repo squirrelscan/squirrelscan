@@ -1,9 +1,34 @@
 ---
-title: "X-Content-Type-Options"
-description: "Checks for MIME type sniffing protection"
+title: "X-Content-Type-Options: nosniff and why it matters"
+description: "Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site."
 ---
 
-Checks for MIME type sniffing protection
+## What X-Content-Type-Options is
+
+`X-Content-Type-Options: nosniff` tells the browser to trust the `Content-Type` you sent and never guess a different type from the bytes. MIME sniffing exists because early servers were unreliable about content types, and it is still on by default.
+
+Sniffing turns a mislabelled upload into a script. A file served as `text/plain` that happens to start like JavaScript can be loaded in a `<script>` tag and executed under your origin. `nosniff` also makes the browser refuse a stylesheet or script whose declared type is wrong, which surfaces server misconfiguration instead of hiding it. The header has one valid value and no compatibility cost.
+
+## What squirrel checks
+
+The rule reads the response headers of the first crawled page and emits a single check named `x-content-type`:
+
+- Skipped when the crawl produced no pages. Message: `No pages to check`.
+- Pass when the header value, lowercased, is exactly `nosniff`. Message: `X-Content-Type-Options: nosniff is set`.
+- Warn when the header is present with any other value. Message: `X-Content-Type-Options has unexpected value`, with the value found and `nosniff` as expected.
+- Info when the header is absent. Message: `Missing X-Content-Type-Options header`, with `Add: X-Content-Type-Options: nosniff` as the value.
+
+Severity is info and the weight is 3, so a missing header nudges the Security score rather than dominating it.
+
+## How to fix it
+
+```
+X-Content-Type-Options: nosniff
+```
+
+Set it on every response, not only on HTML. The header matters most on the paths that serve user uploads and generated files, and it is easiest to add once at the edge or in a global middleware.
+
+The one thing to check after enabling it is that scripts and stylesheets go out with correct types. `nosniff` makes the browser reject a script served as `text/html`, which is a real bug it was previously hiding.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks for MIME type sniffing protection
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-X-Content-Type-Options: nosniff prevents browsers from MIME-sniffing responses, which could lead to security vulnerabilities. This is especially important for sites that allow file uploads or serve user-generated content. Simply add the header: X-Content-Type-Options: nosniff. This has no downside and improves security.
 
 ## Enable / disable
 
@@ -40,3 +61,29 @@ disable = ["security/*"]
 enable = ["security/x-content-type"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/x-frame-options](/rules/security/x-frame-options): the other single-value header to set in the same place.
+- [security/csp](/rules/security/csp): the policy that decides which scripts may run once the type is settled.
+- [content/mime-type](/rules/content/mime-type): pages whose declared content type is wrong to begin with.
+- [security/referrer-policy](/rules/security/referrer-policy): the remaining response header in this group.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [X-Content-Type-Options, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. The header is reported once for the site with the exact value your server sent. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

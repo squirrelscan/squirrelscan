@@ -1,9 +1,35 @@
 ---
-title: "HTML Size"
-description: "Checks HTML document size against Googlebot crawl limits"
+title: "HTML document size: when a page is too big to crawl fully"
+description: "A very large HTML document risks being read only in part. squirrel measures the response body and warns at 1MB, failing at 2MB by default."
 ---
 
-Checks HTML document size against Googlebot crawl limits
+## What the HTML size limit is
+
+Crawlers do not read an unlimited amount of markup. Google documents that Googlebot fetches up to 2 MB from any individual URL other than a PDF, response headers included, and stops there. The bytes past the cutoff are not fetched, not rendered and not indexed. Referenced resources such as stylesheets and scripts have their own separate per-URL counter and do not consume the document's allowance.
+
+Most pages are nowhere near it. A page gets there through inline base64 images, large blocks of inline CSS or JavaScript, or a serialised framework payload, and what falls off the end is whatever came last in the file.
+
+squirrel's default failure threshold is that same 2 MB, with a warning at 1 MB so a page is flagged before it starts losing content.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It measures the UTF-8 byte length of the response HTML and emits a single check named `html-size`:
+
+- Fail at or above `error_bytes`, 2 MB by default. Message: `HTML is 2.4MB — exceeds Googlebot 2MB limit, content will be truncated`, with the byte count as the value and the threshold as the expected value. Severity error, weight 5.
+- Warn at or above `warn_bytes`, 1 MB by default. Message: `HTML is 1180KB — approaching Googlebot 2MB limit`.
+- Pass otherwise. Message: `HTML size OK: 84KB`.
+
+Both thresholds are configurable. The default failure threshold matches the 2 MB per-URL limit Google documents for Googlebot.
+
+## How to fix it
+
+```js
+const catalogue = await fetch("/data/catalogue.json").then((r) => r.json());
+```
+
+Move large inline blobs out of the document and fetch them instead. A `<script type="application/json">` block only holds inline data, so an external file has to be requested rather than referenced with `src`. Serialised state, base64 images, inline SVG sprites and inline CSS are the usual culprits. Paginate or lazy-load long lists rather than rendering ten thousand rows.
+
+Keep the title, meta description, headings and main body near the top of the file. If anything is ever cut, it should be the parts that do not describe the page.
 
 | | |
 |---|---|
@@ -13,25 +39,19 @@ Checks HTML document size against Googlebot crawl limits
 | **Severity** | error |
 | **Weight** | 5/10 |
 
-## Solution
-
-Googlebot truncates HTML documents at 2MB: content beyond that limit is silently ignored during indexing. Move inline styles and scripts to external files, defer non-critical content, lazy-load below-the-fold sections, and remove unnecessary markup. Keep critical SEO content (title, meta, headings, main body) near the top of the document so it's indexed even if truncation occurs.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `warn_bytes` | unknown | `undefined` | Byte size to trigger warning |
-| `error_bytes` | unknown | `undefined` | Byte size to trigger error (Googlebot truncation limit) |
+| `warn_bytes` | number | `1048576` | Byte size to trigger warning |
+| `error_bytes` | number | `2097152` | Byte size to trigger error (Googlebot truncation limit) |
 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."crawl/html-size"]
-warn_bytes = undefined
-error_bytes = undefined
+[rule_options."crawl/html-size"]
+warn_bytes = 512000
+error_bytes = 1048576
 ```
 
 ## Enable / disable
@@ -57,3 +77,30 @@ disable = ["crawl/*"]
 enable = ["crawl/html-size"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/pdf-size](/rules/crawl/pdf-size): the same measurement applied to linked PDF documents.
+- [content/word-count](/rules/content/word-count): how much of that markup is actually text.
+- [crawl/soft-404](/rules/crawl/soft-404): pages whose body is an error shell rather than content.
+- [perf/dom-size](/rules/perf/dom-size): the parsed cost of the same document.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+## References
+
+- [Inside Googlebot: crawling, fetching and the bytes we process, Google Search Central](https://developers.google.com/search/blog/2026/03/crawler-blog-post)
+- [Managing crawl budget for large sites, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. Every oversized page is listed with its exact byte count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

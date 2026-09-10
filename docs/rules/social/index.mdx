@@ -3,25 +3,25 @@ title: "Social Media"
 description: "Open Graph and social sharing metadata"
 ---
 
-Open Graph and social sharing metadata
+Social Media rules read the tags that decide what a shared link looks like: the Open Graph image and its declared size, the canonical identity in og:url, and the profile links that say which accounts are yours. One of them works across the corpus instead, finding pages whose favicon, theme-color or fallback share image says they are running an older template.
 
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Site Asset Consistency" icon="triangle-exclamation" href="/rules/social/asset-divergence">
-    Finds pages whose favicon, theme-color or default OG image differs from the rest of the site
+  <Card title="Favicon and theme-color that differ across the site" icon="triangle-exclamation" href="/rules/social/asset-divergence">
+    Site chrome comes from one layout, so a page carrying a different favicon is running a different template. squirrel finds the minority.
   </Card>
-  <Card title="OG Image Size" icon="triangle-exclamation" href="/rules/social/og-image-size">
-    Checks og:image meets recommended size (1200x630)
+  <Card title="og:image size: the 1200 by 630 recommendation" icon="triangle-exclamation" href="/rules/social/og-image-size">
+    A share image below the recommended size is cropped or upscaled in the preview card. squirrel reads og:image and its declared dimensions.
   </Card>
-  <Card title="OG URL Match" icon="triangle-exclamation" href="/rules/social/og-url-match">
-    Checks that og:url matches canonical URL
+  <Card title="og:url versus canonical: why they should be the same URL" icon="triangle-exclamation" href="/rules/social/og-url-match">
+    When og:url and the canonical disagree, share counts split across two addresses. squirrel normalises both and compares them.
   </Card>
-  <Card title="Share Buttons" icon="circle-info" href="/rules/social/share-buttons">
-    Checks for social sharing buttons on content pages
+  <Card title="Social share buttons: detecting them on content pages" icon="circle-info" href="/rules/social/share-buttons">
+    Share buttons make it one click instead of three to pass a page on. squirrel looks for share markup, share libraries and platform share URLs.
   </Card>
-  <Card title="Social Profiles" icon="circle-info" href="/rules/social/social-profiles">
-    Checks for links to social media profiles
+  <Card title="Social profile links: which platforms a page links to" icon="circle-info" href="/rules/social/social-profiles">
+    Linking your official accounts confirms which ones are yours. squirrel detects profile links and cross-checks the accounts the audit knows about.
   </Card>
 </CardGroup>
 
@@ -31,3 +31,5 @@ Open Graph and social sharing metadata
 [rules]
 disable = ["social/*"]
 ```
+
+Every audit reports Social Media findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

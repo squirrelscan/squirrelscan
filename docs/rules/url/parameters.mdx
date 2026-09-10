@@ -1,9 +1,36 @@
 ---
-title: "URL Parameters"
-description: "Checks for excessive URL parameters"
+title: "URL parameters: how many is too many, and what to do"
+description: "Every parameter combination is a separate URL to a crawler. squirrel counts the query parameters on each page and names the tracking ones."
 ---
 
-Checks for excessive URL parameters
+## What URL parameters cost
+
+A query parameter creates a new URL. Three filters with five values each produce well over a hundred addresses for one listing, and a crawler has no way to know in advance that most of them return near-identical content.
+
+The cost is crawl budget spent on combinations nobody searches for, and index entries competing with each other. Tracking parameters are the simplest case: `utm_source` and `gclid` change nothing about the page, so a URL carrying one is a duplicate of the same URL without it, and pointing its canonical at the clean URL is the signal that says so. Canonical selection is still the search engine's decision, not an instruction it has to follow.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the query string. It emits up to two checks:
+
+- `url-parameters` passes when there is no query string. Message: `URL has no query parameters`. No further checks run.
+- `url-parameters` warns above three parameters. Message: `URL has 5 parameters (excessive)`, with each parameter name listed.
+- `url-parameters` reports info at one to three parameters. Message: `URL has 2 parameter(s)`, with the names listed.
+- `tracking-parameters` reports info when any parameter name matches `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `fbclid`, `gclid`, `ref` or `source`, compared lowercased. Message: `URL contains tracking parameters`, with `Use canonical tags to prevent duplicate content` as the value.
+
+Severity for the rule is info and the weight is 3. The threshold of three is fixed and not configurable.
+
+## How to fix it
+
+```html
+<link rel="canonical" href="https://example.com/shoes" />
+```
+
+Point a tracking or otherwise equivalent variant at the clean URL. Parameters that select different content are different pages: `?page=2` gets its own self-referencing canonical, not one pointing at page one.
+
+For faceted navigation, decide which combinations deserve to be indexable. Not linking the rest with crawlable hrefs limits discovery but does not keep them out of the index, because a URL can be found elsewhere. Keeping a URL out of the index takes a `noindex` the crawler is allowed to fetch and read.
+
+Move content-defining values into the path where they matter: `/shoes/running` reads better and behaves better than `/products?category=shoes&type=running`.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for excessive URL parameters
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Excessive URL parameters can cause crawl budget waste and duplicate content. Each parameter combination creates a unique URL. Use parameter handling in Google Search Console to tell Google how to handle parameters. Consider using path segments instead of parameters for important content. Filter/sort parameters should be handled with canonical tags or robots meta.
 
 ## Enable / disable
 
@@ -40,3 +63,30 @@ disable = ["url/*"]
 enable = ["url/parameters"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): where the canonical for these URLs points.
+- [url/length](/rules/url/length): the length parameters usually add.
+- [crawl/pagination](/rules/crawl/pagination): the parameter pattern that should stay indexable.
+- [analytics/gtm-present](/rules/analytics/gtm-present): the tags that generate the tracking parameters.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Faceted navigation best practices, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/crawling-managing-faceted-navigation)
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Each URL is listed with its parameter names and count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

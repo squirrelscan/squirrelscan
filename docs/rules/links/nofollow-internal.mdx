@@ -1,9 +1,32 @@
 ---
-title: "Nofollow Internal"
-description: "Flags internal links with rel=nofollow"
+title: "rel=nofollow on an internal link: usually a mistake"
+description: "Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it."
 ---
 
-Flags internal links with rel=nofollow
+## What nofollow does
+
+`rel="nofollow"` marks a link as one you do not vouch for. It was introduced for comment spam, and Google now treats it as a hint alongside `sponsored` and `ugc` rather than a strict instruction.
+
+On an external link it is a reasonable qualification. On an internal link it is a statement that you do not endorse your own page, which is almost never what the author meant. The pattern usually comes from an old technique called PageRank sculpting, which stopped working in 2009, or from a plugin applying it indiscriminately.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `a[href][rel]`. A link counts when its `rel`, lowercased, contains `nofollow` and its resolved hostname equals the page's hostname. It emits a single check named `nofollow-internal`:
+
+- Warn when any such link exists. Message: `3 internal link(s) have nofollow`, with each href listed. Severity warning, weight 5.
+- Pass otherwise. Message: `No internal links with nofollow`.
+
+The hostname comparison is exact, so a link to a subdomain of the same site is treated as external and is not flagged. Note that `links/orphan-pages` and the other inbound-count rules ignore nofollow links entirely, so a nofollowed internal link does not count toward a target page's inbound total.
+
+## How to fix it
+
+```html
+<a href="/pricing">Pricing</a>
+```
+
+Remove the attribute. If the link points at something you genuinely do not want crawled, such as a faceted filter URL, the tool is a robots.txt `Disallow`. If you want it crawled but not indexed, the tool is `noindex` on the target, which only works when the crawler is allowed to fetch it. Neither job belongs to nofollow on the link.
+
+Keep it for user-generated content, where `rel="ugc nofollow"` is the correct marking even on an internal profile link.
 
 | | |
 |---|---|
@@ -12,10 +35,6 @@ Flags internal links with rel=nofollow
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Nofollow on internal links wastes PageRank and is generally bad practice. Internal links should flow link equity freely throughout your site. Remove nofollow from internal links unless you have a specific reason (e.g., user-generated content links). Use nofollow for external links you don't endorse.
 
 ## Enable / disable
 
@@ -40,3 +59,29 @@ disable = ["links/*"]
 enable = ["links/nofollow-internal"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/orphan-pages](/rules/links/orphan-pages): the inbound counts that skip nofollowed links.
+- [links/weak-internal-links](/rules/links/weak-internal-links): pages left with a single counted inbound link.
+- [crawl/robots-txt](/rules/crawl/robots-txt): the right tool for keeping a crawler off a URL.
+- [links/external-links](/rules/links/external-links): the links where nofollow does belong.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Qualify your outbound links, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every nofollowed internal link is listed with its href. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

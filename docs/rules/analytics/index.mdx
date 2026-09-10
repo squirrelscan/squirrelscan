@@ -3,16 +3,16 @@ title: "Analytics"
 description: "Tracking and measurement implementation"
 ---
 
-Tracking and measurement implementation
+Analytics rules read what a page loads for measurement and whether it respects consent. One inventories the platforms present, from tag managers to privacy-focused alternatives. The other checks for Google Consent Mode v2, which Google requires for advertising traffic from the EEA. Both are informational: what you measure with is your decision, and this category reports it rather than judging it.
 
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Analytics Tracking" icon="circle-info" href="/rules/analytics/gtm-present">
-    Checks for Google Tag Manager or analytics implementation
+  <Card title="Analytics tracking: which platforms a page loads" icon="circle-info" href="/rules/analytics/gtm-present">
+    squirrel inventories the analytics on each page, from Google Tag Manager and GA4 to Plausible, Matomo, Segment and session-replay tools.
   </Card>
-  <Card title="Consent Mode" icon="circle-info" href="/rules/analytics/consent-mode">
-    Checks for Google Consent Mode v2 implementation
+  <Card title="Google Consent Mode v2: the four consent parameters" icon="circle-info" href="/rules/analytics/consent-mode">
+    Google Ads in the EEA requires Consent Mode v2. squirrel checks for the consent call and for the two parameters v2 added.
   </Card>
 </CardGroup>
 
@@ -22,3 +22,5 @@ Tracking and measurement implementation
 [rules]
 disable = ["analytics/*"]
 ```
+
+Every audit reports Analytics findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

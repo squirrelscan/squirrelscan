@@ -1,9 +1,31 @@
 ---
-title: "Cookie Consent"
-description: "Checks for cookie consent mechanism"
+title: "Cookie consent banner: detecting a consent mechanism"
+description: "Setting non-essential cookies without consent is unlawful for an EU audience. squirrel looks for a consent platform or a consent-keyed banner."
 ---
 
-Checks for cookie consent mechanism
+## What a consent mechanism is
+
+A cookie consent mechanism asks a visitor before non-essential cookies are set, records the answer, and holds the tracking until it has one. Under the EU ePrivacy rules and the GDPR, that ordering is the requirement: consent comes before the cookie, not after.
+
+What counts is behaviour rather than appearance. A banner that says cookies are in use while the analytics tag has already run is not a consent mechanism. Strictly necessary cookies, the ones without which the site cannot work, do not need consent.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It emits a single check named `cookie-consent`:
+
+- Pass when a consent mechanism is found. Message: `Cookie consent mechanism detected`.
+- Warn when none is found and the site metadata places the audience under the GDPR. Message: `No cookie consent mechanism detected — required for your EU/UK (GDPR) audience`.
+- Info when none is found otherwise. Message: `No cookie consent mechanism detected`, with `Required for GDPR compliance if using cookies` as the value.
+
+Three kinds of signal count. A script or stylesheet URL matching one of about twenty consent platform patterns, covering Cookiebot, OneTrust, Usercentrics, CookieYes, iubenda, Didomi, Osano, Quantcast, Termly, TrustArc, Axeptio, Complianz, Klaro, Sourcepoint and others, plus Shopify's first-party privacy banner. A known platform banner container, matched by id or class such as `#onetrust-banner-sdk` or `#CybotCookiebotDialog`. Or an element whose id or class carries an unambiguous consent token such as `cookie-banner` or `cookie-consent`.
+
+The third path is the one that reads text. A region is eligible when its id, class or role marks it as a cookie or consent widget or a dialog; it then qualifies either because its id or class carries an unambiguous consent token, or because the region mentions cookies, in its attributes or its own text, and contains a control whose label, `value` or `aria-label` reads as an accept or reject action. So a cookie dialog with an accept button passes without any consent-keyed class, while a blog post about cookies does not, because it has no such control. Severity info, weight 4. The rule is skipped on soft 404 pages, and it does not run for personal sites or portfolios.
+
+## How to fix it
+
+Install a consent platform, or build one that holds every non-essential tag until the visitor has answered. The technical half is the important half: the banner is easy and the gating is what makes it lawful.
+
+Do not pre-tick optional categories, make rejecting as easy as accepting, and store the answer so the question is not asked again.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for cookie consent mechanism
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 4/10 |
-
-## Solution
-
-Cookie consent is required under GDPR and ePrivacy regulations for EU users. Implement a consent banner that: allows users to accept/reject non-essential cookies, doesn't pre-check optional cookies, stores consent preferences, and blocks tracking cookies until consent. Use tools like CookieYes, OneTrust, or Cookiebot.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["legal/*"]
 enable = ["legal/cookie-consent"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [analytics/consent-mode](/rules/analytics/consent-mode): whether Google Consent Mode markers appear in the markup.
+- [security/third-party-cookies](/rules/security/third-party-cookies): the vendors the banner has to gate.
+- [security/cookie-flags](/rules/security/cookie-flags): the flags on the cookies your own server sets.
+- [legal/privacy-policy](/rules/legal/privacy-policy): the policy the banner links to.
+
+Legal Compliance findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Using HTTP cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies)
+- [Third-party cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Legal Compliance section of the report. Each page is reported with whether a consent mechanism was detected. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Legal Compliance section looks like on a real site.
+  </Card>
+</CardGroup>

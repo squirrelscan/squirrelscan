@@ -1,9 +1,32 @@
 ---
-title: "Permissions-Policy"
-description: "Checks for Permissions-Policy (Feature-Policy) header"
+title: "Permissions-Policy: what the header does and how to set it"
+description: "Without a Permissions-Policy, embedded frames inherit access to camera, microphone and geolocation. squirrel reads the header once per site."
 ---
 
-Checks for Permissions-Policy (Feature-Policy) header
+## What Permissions-Policy is
+
+`Permissions-Policy` is a response header that lists which browser features the page and anything it embeds may use. Each entry names a feature and an allowlist of origins, so `camera=()` disables the camera entirely and `geolocation=(self)` limits it to your own origin.
+
+It matters most on pages that embed third-party frames. A cross-origin frame gets no camera, microphone or geolocation access unless you delegate it, and the header is where you decide which features are available to delegate at all. The header was called `Feature-Policy` until 2020 and the old name still parses in some browsers, with a different syntax.
+
+## What squirrel checks
+
+The rule reads the response headers of the first crawled page and emits a single check named `permissions-policy`:
+
+- Skipped when the crawl produced no pages. Message: `No pages to check`.
+- Pass when a `Permissions-Policy` header is present, whatever it contains. Message: `Permissions-Policy header present`, with the first 100 characters of the policy as the value.
+- Info when only the legacy `Feature-Policy` header is present. Message: `Using deprecated Feature-Policy header`, with `Migrate to Permissions-Policy` as the value.
+- Info when neither header is present. Message: `No Permissions-Policy header`, with `Consider restricting browser features` as the value.
+
+The policy is not parsed and individual directives are not validated. Severity is info and the weight is 2, the lowest in the Security category.
+
+## How to fix it
+
+```
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+```
+
+Set it on HTML responses. Empty parentheses disable a feature for the document and every frame inside it. Name your own origin, as in `geolocation=(self)`, for the features the page genuinely uses. Delegating a feature to an embedded partner takes two steps: list their origin in the header and add a matching `allow` attribute on the iframe.
 
 | | |
 |---|---|
@@ -12,10 +35,6 @@ Checks for Permissions-Policy (Feature-Policy) header
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-Permissions-Policy controls which browser features your site can use (camera, microphone, geolocation, etc.). This limits what embedded iframes can access. Example: Permissions-Policy: camera=(), microphone=(), geolocation=(). Empty parentheses disable the feature entirely. This is especially important if you embed third-party content.
 
 ## Enable / disable
 
@@ -40,3 +59,29 @@ disable = ["security/*"]
 enable = ["security/permissions-policy"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/csp](/rules/security/csp): which origins may load code, as opposed to which features that code may reach.
+- [security/x-frame-options](/rules/security/x-frame-options): who may embed you, the mirror of what you embed.
+- [security/third-party-cookies](/rules/security/third-party-cookies): an inventory of the frames and scripts a policy would apply to.
+- [security/referrer-policy](/rules/security/referrer-policy): the other privacy-facing response header.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Permissions-Policy, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Permissions-Policy)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. The header your server sent is reported once for the site. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

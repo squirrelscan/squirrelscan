@@ -1,9 +1,36 @@
 ---
-title: "Tel & Mailto Links"
-description: "Validates tel: and mailto: link formats"
+title: "tel: and mailto: links: format and href/text mismatches"
+description: "A phone link whose href differs from the number on screen dials the wrong person. squirrel validates both formats and compares them with the visible text."
 ---
 
-Validates tel: and mailto: link formats
+## What tel: and mailto: links are
+
+`tel:` and `mailto:` are URI schemes that hand a phone number or an email address to the device's own application. RFC 3966 defines the phone form: it requires the global form, a leading `+` and the full number, whenever the number can be represented that way, permits the visual separators `-`, `.`, `(` and `)`, and requires a `phone-context` parameter for a local number. RFC 6068 defines the mail form, including the `?subject=` and `?body=` parameters.
+
+The failure that matters is a mismatch. When the href and the visible text carry different numbers or addresses, tapping the link contacts someone other than the person shown on screen. That is usually an edit applied to one and not the other.
+
+## What squirrel checks
+
+The rule runs on every crawled page over every `a[href]` starting with `tel:` or `mailto:`. Five check names are possible and at most four appear in one result, since the last only fires when neither link type is present:
+
+- `tel-links` warns when a phone value has no digit or `+`, or is shorter than seven characters. Message: `1/4 tel: link(s) may be invalid`. It passes otherwise with `4 tel: link(s) found`.
+- `mailto-links` warns when an address is present but has no `@` or no dot. Message: `1/3 mailto: link(s) may be invalid`. It passes otherwise with `3 mailto: link(s) found`. Format validation is skipped only for an empty recipient followed by a `?`, the `mailto:?subject=…` share pattern; a bare `mailto:` with nothing after it still warns.
+- `tel-mismatch` warns when the link text contains three or more consecutive digits that do not match the href. Message: `2 tel link(s) have mismatched phone number in href vs display text`, each item labelled `href "+61414123456" ≠ text "0400 000 000"` with a markup snippet.
+- `mailto-mismatch` warns when the link text looks like an email address and differs from the href, compared case-insensitively. Message: `1 mailto link(s) have mismatched email in href vs display text`.
+- `tel-mailto` reports info when the page has neither kind of link. Message: `No tel: or mailto: links found`.
+
+Numbers match on an exact digit comparison, on either digit string ending with the other, or on a trunk-prefix comparison. That last one drops a single leading zero from either side and accepts the pair when the shared suffix is at least five digits and the other number carries exactly two or three extra leading digits, the length of a country calling code. It works in both directions and does not require a literal `+`, so `+61414123456` and `0414 123 456` are not a mismatch. Severity for the rule is info, weight 2.
+
+## How to fix it
+
+```html
+<a href="tel:+61292223333">(02) 9222 3333</a>
+<a href="mailto:sales@example.com">sales@example.com</a>
+```
+
+Put the E.164 form in the href and the locally readable form in the text. Generate both from one stored value so an edit cannot change only one of them.
+
+A share link with no recipient, `mailto:?subject=Look%20at%20this`, is valid and is deliberately not validated.
 
 | | |
 |---|---|
@@ -12,17 +39,6 @@ Validates tel: and mailto: link formats
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## What it detects
-
-- **Invalid tel: links**, phone numbers missing digits or too short
-- **Invalid mailto: links**, email addresses missing `@` or `.`
-- **Tel href/text mismatch**: the phone number in the `href` doesn't match the displayed text (e.g. `<a href="tel:+15551234567">+15559876543</a>`). Comparison is formatting-insensitive, allows omitted country codes, and treats an E.164 `href` (e.g. `+61414007351`) paired with national-format display text carrying a trunk prefix (e.g. `0414 007 351`) as the same number, which is the recommended markup pattern.
-- **Mailto href/text mismatch**: the email in the `href` doesn't match the displayed text (e.g. `<a href="mailto:sales@example.com">support@example.com</a>`). Comparison is case-insensitive and ignores query parameters.
-
-## Solution
-
-Tel links should use format: tel:+1234567890 (E.164 format preferred, no spaces/dashes). Mailto links should have valid email format: mailto:user@example.com. You can add subject and body parameters: mailto:user@example.com?subject=Hi&body=Hello. Invalid formats may not work on all devices. Ensure the displayed text matches the href: a mismatched phone number or email misleads users and may dial/email the wrong contact.
 
 ## Enable / disable
 
@@ -47,3 +63,30 @@ disable = ["links/*"]
 enable = ["links/tel-mailto"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [eeat/contact-page](/rules/eeat/contact-page): whether the site publishes contact details at all.
+- [eeat/physical-address](/rules/eeat/physical-address): the address that usually sits next to them.
+- [schema/local-business](/rules/schema/local-business): the structured data carrying the same phone number.
+- [links/invalid-links](/rules/links/invalid-links): hrefs that do not parse at all.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [RFC 3966: The tel URI for telephone numbers](https://datatracker.ietf.org/doc/html/rfc3966)
+- [RFC 6068: The mailto URI scheme](https://datatracker.ietf.org/doc/html/rfc6068)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every mismatch is listed with the href, the visible text and a markup snippet. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

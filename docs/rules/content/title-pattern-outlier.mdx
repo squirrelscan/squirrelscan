@@ -1,9 +1,34 @@
 ---
-title: "Title Template Consistency"
-description: "Finds pages whose title breaks the template the rest of the site follows"
+title: "Inconsistent page titles: pages breaking the template"
+description: "Most sites title pages the same way and then ship a pocket that does not. squirrel infers your template and reports the pages that break it."
 ---
 
-Finds pages whose title breaks the template the rest of the site follows
+## What a title template is
+
+Most sites title their pages from one layout: a page name, a separator, and the brand. `URL structure | Acme` on every page, and the brand always at the same end with the same separator.
+
+Per-page rules cannot see when that breaks. `core/meta-title` checks that a title exists and is a reasonable length, which a title with the brand missing or at the wrong end passes. The inconsistency is invisible on any single page and obvious across the corpus, so the template is inferred from the site itself and only the minority form is reported.
+
+## What squirrel checks
+
+The rule is site-wide. It splits each title on a separator set: `|`, `::` and `»` with optional surrounding whitespace; `-`, `–`, `—`, `·` and `>` with whitespace required on both sides; `>>`; and `:` followed by whitespace. It infers the brand affix that most titles carry at the same end, then infers the separator that sits next to it. Only pages that returned a 2xx status with a parseable URL are sampled. It emits a single check named `title-pattern-outlier`:
+
+- Skipped when there are no pages. Message: `No pages available for analysis`.
+- Skipped below 10 crawled pages. Message: `Only 6 page(s) crawled; 10 needed to establish a title template`.
+- Skipped below 10 titled pages. Message: `Only 7 page(s) have a title; 10 needed to establish a title template`.
+- Skipped when no brand affix reaches 70% agreement. Message: `No title template reaches 70% agreement across the crawled titles`.
+- Pass when nothing deviates. Message: `All 240 titled page(s) follow the site's own title template (brand "Acme" last 100%, separator "|" 100%)`.
+- Warn when deviations exist, and fail at or above 20% of titled pages. Message: `9 of 240 titled page(s) break the site's own title template (brand "Acme" last 96%, separator "|" 100%)`.
+
+Deviations are grouped into four classes and ordered by group size, with the class order breaking ties. Each item is labelled in full: `3 of 240 page(s) have a title that is only the brand "Acme"`; `4 of 240 page(s) never mention "Acme", which 96% of titles carry`; `1 of 240 page(s) put "Acme" first but the norm is last`; `1 of 210 page(s) separate "Acme" with "-" but the norm is "|"`. Up to ten groups are listed with up to ten example URLs each. The separator norm needs its own sample of at least 10 votes and its own 70% agreement before a separator deviation is reported at all.
+
+Two guards keep it honest. On a multi-section site the brand candidate must appear in at least two sections, so a section label such as `Blog` cannot be mistaken for the brand in a lopsided crawl. And the homepage is exempt, since `Acme - tools for X` is a normal home title. A page with no title never votes and is never a deviant, because `core/meta-title` owns that case. Severity warning, weight 3.
+
+## How to fix it
+
+Fix the template at its source, in the layout or the CMS field that builds the title, rather than page by page. Keep the brand on the same side with the same separator everywhere.
+
+A page that deliberately differs, a campaign landing page for instance, will be reported. The finding is that a handful of pages are the exception, which is worth confirming.
 
 | | |
 |---|---|
@@ -12,55 +37,6 @@ Finds pages whose title breaks the template the rest of the site follows
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## How it works
-
-Most sites title their pages with one template: a page name, a separator, and the
-brand. No per-page check can see that template, because it only exists across the
-corpus. This rule infers it from your own crawled titles and reports the pages that
-break it.
-
-It works out two things from the titles themselves:
-
-- the **brand affix**: the segment most titles carry at the same end, first or last
-- the **separator** that sits next to that brand (`|`, `::`, `»`, `>`, ` - `, `: `)
-
-Then it reports four kinds of deviation:
-
-| Deviation | What it means |
-|---|---|
-| Missing brand | The title never mentions the brand the rest of the site carries |
-| Inverted order | The brand is at the opposite end from the norm |
-| Different separator | The brand is separated by something other than the modal separator |
-| Brand only | The title is nothing but the brand, so the page has no name of its own |
-
-Each page is reported once, for its most meaningful deviation.
-
-It stays quiet unless it has grounds to speak:
-
-- Fewer than 10 crawled pages, or fewer than 10 pages with a title: there is no
-  template to infer, so the rule is skipped.
-- No brand affix reaching 70% agreement: the site's titles genuinely follow no
-  single template, so nothing in it is a deviant.
-- On a site with more than one section, a candidate brand only ever seen inside one
-  section is treated as a section label, not the brand.
-- The homepage is exempt: "Acme - tools for X" is a normal home title and a normal
-  departure from the template every other page follows.
-- Pages with no title at all belong to [Meta Title](/rules/core/meta-title), which
-  stays per-page. The two rules never both flag the same page.
-
-Pages generated from the same template sit inside the norm by construction, so a
-large templated site is clean here unless a pocket of pages genuinely drifted.
-
-## Solution
-
-Most of your pages title themselves the same way - a page name, a separator, and your
-brand - and these pages do not. Inconsistent titles cost you brand recall in the
-search results and make templated pages look hand-edited or broken. Fix the template
-at its source (the layout or CMS field that builds the title) rather than page by
-page, keeping the brand on the same side with the same separator everywhere. A page
-that deliberately differs, like the homepage or a campaign landing page, is fine: the
-point is that a handful of pages should not be the exception.
 
 ## Enable / disable
 
@@ -85,3 +61,29 @@ disable = ["content/*"]
 enable = ["content/title-pattern-outlier"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/meta-title](/rules/core/meta-title): the per-page title checks this rule defers to.
+- [content/duplicate-title](/rules/content/duplicate-title): titles that repeat rather than diverge.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): the same outlier approach applied to length.
+- [url/slug-convention](/rules/url/slug-convention): the same approach applied to URL conventions.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Influencing your title links in search results, Google Search Central](https://developers.google.com/search/docs/appearance/title-link)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each deviation class is listed with its page count and example URLs. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

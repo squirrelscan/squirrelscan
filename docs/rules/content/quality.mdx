@@ -1,9 +1,36 @@
 ---
-title: "Content Quality"
-description: "LLM-based content quality analysis for SEO"
+title: "LLM content quality score: what it measures"
+description: "An optional language-model read of the page copy, scored 0 to 100 with written feedback. Off by default and needs an OpenRouter key."
 ---
 
-LLM-based content quality analysis for SEO
+<Note>
+This rule requires `OPENROUTER_API_KEY` environment variable to be set.
+</Note>
+
+## What the quality score is
+
+This rule sends the page's visible text to a language model and asks it to score the content out of 100 on clarity and readability, depth of information, structure, value to the reader, grammar and spelling, and originality. It returns the score and two or three sentences of feedback.
+
+It is a second opinion rather than a measurement. The score is a model's judgement of prose, so it is useful for finding the pages on a large site that most need a human read, and not useful as a target to optimise. The rule is disabled by default for that reason, and because it costs an API call per page.
+
+## What squirrel checks
+
+The rule runs on every crawled page when it is enabled and a key is available. It extracts the visible text, excluding scripts, styles, nav, footer and header, and sends the first 3000 characters. It emits a single check named `content-quality`:
+
+- Skipped when no API key is configured. Message: `Content quality analysis skipped`, with the reason `OPENROUTER_API_KEY not set`.
+- Skipped when the page has no text. Message: `No content to analyze`.
+- Fail when the model call itself failed. Message: `LLM analysis failed: <error>`.
+- Pass at a score of 70 or above. Message: `Content quality score: 84/100`.
+- Warn from 40 to 69. Message: `Content quality needs improvement: 52/100`.
+- Fail below 40. Message: `Poor content quality: 31/100`.
+
+The model's feedback is carried as the check value, truncated to 200 characters. Severity for the rule is info and the weight is 3, and it is disabled by default.
+
+## How to fix it
+
+Read the feedback and the page together. The score on its own does not tell you what to change, and a model's opinion of prose is worth exactly as much as your agreement with the reasons it gives.
+
+Enable this on a section you suspect rather than site-wide. It costs one model call per page.
 
 | | |
 |---|---|
@@ -14,43 +41,7 @@ LLM-based content quality analysis for SEO
 | **Weight** | 3/10 |
 | **Default** | Disabled |
 
-<Note>
-This rule requires `OPENROUTER_API_KEY` environment variable to be set.
-</Note>
-
-## How it works
-
-This rule uses an LLM to analyze page content and provide a quality score (0-100) based on:
-
-- Clarity and readability
-- Depth of information
-- Structure and organization
-- Engagement and value to readers
-- Grammar and spelling
-- Originality and uniqueness
-
-## Scoring
-
-| Score | Status | Meaning |
-|-------|--------|---------|
-| 70-100 | Pass | Good content quality |
-| 40-69 | Warning | Content needs improvement |
-| 0-39 | Fail | Poor content quality |
-
-## Solution
-
-Content quality affects both user engagement and search rankings. High-quality content is clear, well-structured, informative, and free of errors. Review flagged pages for clarity and depth. Ensure content provides genuine value to readers. Check for grammar and spelling errors. Break up long paragraphs, use subheadings, and include relevant examples. Consider whether the content fully answers user questions.
-
 ## Enable / disable
-
-### Enable this rule
-
-This rule is disabled by default. To enable:
-
-```toml squirrel.toml
-[rules]
-enable = ["content/quality"]
-```
 
 ### Disable this rule
 
@@ -65,3 +56,37 @@ disable = ["content/quality"]
 [rules]
 disable = ["content/*"]
 ```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/quality"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [content/word-count](/rules/content/word-count): length, which the score is not a substitute for.
+- [content/reading-level](/rules/content/reading-level): a formula-based readability measurement.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): length judged against your own site.
+- [eeat/authority-signals](/rules/eeat/authority-signals): the trust signals a reader weighs alongside the writing.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each scored page is reported with its score and the model's written feedback. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

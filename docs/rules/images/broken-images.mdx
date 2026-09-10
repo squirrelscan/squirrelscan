@@ -1,9 +1,33 @@
 ---
-title: "Broken Images"
-description: "Checks for images returning 404 errors"
+title: "Broken images: empty and placeholder src attributes"
+description: "An img with an empty or placeholder src renders as a broken icon. squirrel collects image sources across the crawl and flags the malformed ones."
 ---
 
-Checks for images returning 404 errors
+## What this rule detects
+
+A broken image is one whose `src` does not resolve to a file, so the browser shows its broken-image placeholder. The usual causes are a template variable that rendered empty, a path that moved, and a `src="#"` placeholder that was never filled in.
+
+This rule catches the malformed sources rather than the missing files. It reads the markup and reports sources that are empty, a bare `#`, or an error data URI. An image URL that looks correct but returns 404 is not detected here, which is why the pass message says "no obviously broken images" rather than none.
+
+## What squirrel checks
+
+The rule is site-wide. It walks the images of every crawled page, deduplicating by source, and emits a single check named `broken-images`:
+
+- Skipped when there is no site data. Message: `Site data not available`.
+- Fail when any source is empty, is exactly `#`, or starts with `data:error`. Message: `2 potentially broken image(s) found`, each listed by source or as `(empty)`, with the page it appeared on. Severity error, weight 6.
+- Pass otherwise. Message: `No obviously broken images detected`.
+
+No HTTP request is made for image URLs, so a well-formed URL that 404s passes this rule. `images/image-file-size` reports on the images the crawl did fetch.
+
+## How to fix it
+
+```html
+{photo?.url ? <img src={photo.url} alt={photo.alt} /> : null}
+```
+
+Guard the render on the source being present rather than emitting an `<img>` with an empty `src`. An empty `src` is worse than no element: some browsers re-request the current page for it.
+
+Replace `src="#"` placeholders with the real path or remove the element.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks for images returning 404 errors
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## Solution
-
-Broken images hurt user experience and can indicate neglected content. Fix 404 images by: updating the src URL, restoring the missing file, or removing the img element. Use automated monitoring to detect broken images. Consider implementing fallback images with onerror handlers.
 
 ## Enable / disable
 
@@ -40,3 +60,29 @@ disable = ["images/*"]
 enable = ["images/broken-images"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/image-file-size](/rules/images/image-file-size): the images the crawl actually fetched and weighed.
+- [links/broken-links](/rules/links/broken-links): the same idea for anchor targets.
+- [images/alt-text](/rules/images/alt-text): the alt text a broken image falls back to showing.
+- [security/mixed-content](/rules/security/mixed-content): images blocked because they load over HTTP.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Every malformed image source is listed with the page it appeared on. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

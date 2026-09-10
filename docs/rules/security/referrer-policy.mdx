@@ -1,9 +1,35 @@
 ---
-title: "Referrer-Policy"
-description: "Checks for Referrer-Policy header"
+title: "Referrer-Policy: which value to send and what leaks"
+description: "unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values."
 ---
 
-Checks for Referrer-Policy header
+## What Referrer-Policy is
+
+`Referrer-Policy` is a response header that controls how much of the current URL the browser puts in the `Referer` header of the next request. The choices run from `no-referrer`, which sends nothing, through origin-only values, to `unsafe-url`, which sends the full URL including path and query string on every request.
+
+Modern browsers default to `strict-origin-when-cross-origin`: the full URL on same-origin requests, the origin alone cross-origin, and nothing when moving from HTTPS to HTTP. That default is a reasonable policy, so the absence of the header is not itself a defect. Setting `unsafe-url` is, because password-reset tokens, search terms and session identifiers in URLs all travel to third parties.
+
+## What squirrel checks
+
+The rule reads the response headers of the first crawled page and emits a single check named `referrer-policy`:
+
+- Skipped when the crawl produced no pages. Message: `No pages to check`.
+- Info when the header is absent. Message: `No Referrer-Policy header (browser default applies)`, with `Modern browsers default to strict-origin-when-cross-origin` as the value.
+- Warn when the comma-separated value list includes `unsafe-url`. Message: `Referrer-Policy includes unsafe-url`, with `This leaks full URLs cross-origin` as the value.
+- Pass when the list includes any of `no-referrer`, `same-origin`, `strict-origin` or `strict-origin-when-cross-origin`. Message: `Referrer-Policy header present`, with the raw header value.
+- Info when the header is present with some other value, such as `origin` or `no-referrer-when-downgrade`. Message: `Referrer-Policy header present`, with the raw value.
+
+Values are lowercased and trimmed before comparison. Severity is info and the weight is 3.
+
+## How to fix it
+
+```
+Referrer-Policy: strict-origin-when-cross-origin
+```
+
+Set it on the HTML responses at the edge. Use `no-referrer` for pages whose URLs carry tokens or personal data, and `same-origin` when no external site should learn where the user came from. Remove `unsafe-url` wherever it appears.
+
+Analytics tools that attribute traffic by referrer see less detail under a stricter policy. That is the trade the header exists to make. Origin-level attribution survives `strict-origin-when-cross-origin` and `strict-origin`, but not `no-referrer` or `same-origin`, and no policy sends a referrer from HTTPS to HTTP except the ones that leak more.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks for Referrer-Policy header
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Referrer-Policy controls what referrer information is sent with requests. Recommended: 'strict-origin-when-cross-origin' (default in modern browsers) sends origin only cross-site. 'no-referrer' for maximum privacy, 'same-origin' to only send referrer to same origin. Avoid 'unsafe-url' which leaks full URLs including paths.
 
 ## Enable / disable
 
@@ -40,3 +62,30 @@ disable = ["security/*"]
 enable = ["security/referrer-policy"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [security/new-tab](/rules/security/new-tab): the per-link version of the same leak, `rel="noreferrer"`.
+- [security/permissions-policy](/rules/security/permissions-policy): the other privacy-facing response header.
+- [security/third-party-cookies](/rules/security/third-party-cookies): which external domains are receiving requests at all.
+- [security/x-content-type](/rules/security/x-content-type): the remaining one-line header in this group.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Referrer-Policy, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy)
+- [Referrer Policy, W3C](https://www.w3.org/TR/referrer-policy/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. The policy value your server sent is reported once for the site. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

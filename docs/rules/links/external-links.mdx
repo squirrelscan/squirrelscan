@@ -1,9 +1,28 @@
 ---
-title: "External Links"
-description: "Reports on external link count"
+title: "External link count: how many outbound links a page has"
+description: "External links are normal and this rule does not penalise them. squirrel counts them per page so you can see where they concentrate."
 ---
 
-Reports on external link count
+## What this count is for
+
+Outbound links are how a page cites its sources and points a reader at things worth reading. They are a normal part of good content, and there is no threshold at which they become a defect.
+
+The count is here because it is useful context next to the other link rules. A page with forty outbound links is a different kind of page from one with two, and it is usually the one worth checking for broken links, for `rel` attributes and for whether the links still say what you meant.
+
+## What squirrel checks
+
+The rule runs on every crawled page and counts links the parser marked as not internal. It emits a single check named `external-links`:
+
+- Info when there are none. Message: `No external links on page`, with a value of 0.
+- Pass otherwise. Message: `12 external link(s)`, with the count as the value.
+
+Severity info, weight 2. There is no failing outcome: the rule never warns and never fails regardless of the count.
+
+## How to fix it
+
+Nothing to fix. Use the count to decide where to look: pages with many outbound links are where `links/broken-external-links` and `security/new-tab` findings concentrate.
+
+Where an outbound link is paid, sponsored or user-generated, mark it with the matching `rel` value so it is qualified correctly.
 
 | | |
 |---|---|
@@ -12,10 +31,6 @@ Reports on external link count
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-
-## Solution
-
-External links provide additional resources for users and signal content relevance to search engines. They're normal and healthy for most content pages. This check is informational: external links aren't inherently problematic. Ensure external links go to reputable sources and open in new tabs when appropriate. Use rel="nofollow" for untrusted or paid links. Avoid excessive external links that distract from your content.
 
 ## Enable / disable
 
@@ -40,3 +55,29 @@ disable = ["links/*"]
 enable = ["links/external-links"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/broken-external-links](/rules/links/broken-external-links): whether those destinations still resolve.
+- [security/new-tab](/rules/security/new-tab): the rel attributes on external links that open in a new tab.
+- [links/https-downgrade](/rules/links/https-downgrade): external links that drop back to HTTP.
+- [eeat/citations](/rules/eeat/citations): whether the page cites sources at all.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Qualify your outbound links, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Each page is reported with its external link count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

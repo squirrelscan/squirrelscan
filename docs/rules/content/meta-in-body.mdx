@@ -1,9 +1,34 @@
 ---
-title: "Meta Tags in Body"
-description: "Detects meta tags incorrectly placed in document body"
+title: "Meta tags in the body: why they are silently ignored"
+description: "A meta description or robots tag inside body is not read by anything. squirrel finds every meta element that ended up outside the head."
 ---
 
-Detects meta tags incorrectly placed in document body
+## What a meta tag in the body is
+
+`<meta>` elements belong in `<head>`. A meta element in the body is parsed as content, not as metadata, so browsers and search engines ignore it. The page looks fine and the tag does nothing.
+
+It usually means the head was closed earlier than intended, or that a component injecting head content rendered in place instead. A malformed tag before it, or content emitted before `<head>` was finished, can also cause the parser to open the body early and put everything after it in the wrong place.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the selector `body meta`. It emits a single check named `meta-in-body`:
+
+- Pass when there are none. Message: `All meta tags correctly placed in <head>`.
+- Fail otherwise. Message: `Found 3 meta tags in <body>`, or `Found 1 meta tag in <body>` for one. Each item is identified by its `name`, its `property`, or `unknown`, labelled with its content truncated to 50 characters. Severity error, weight 8.
+
+The selector reads the parsed DOM, so it reflects where the browser's own parser placed the element, not where it appeared in the source. A meta element written inside the head but pushed into the body by a parse error is reported here, which is the correct result: that is where it ends up.
+
+## How to fix it
+
+```html
+<head>
+  <meta name="description" content="…" />
+</head>
+```
+
+Move the tag into the head. When a whole group of tags is in the body, look for what closed the head early: an unclosed tag, a stray character, or a component rendering head content into the page.
+
+A framework's head component has to hoist its output into the document head. Rendering it inline produces exactly this finding.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Detects meta tags incorrectly placed in document body
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Move all meta tags from `<body>` to `<head>`. Meta tags in the body are ignored by browsers and search engines. Common offenders: meta description, viewport, robots, and Open Graph tags. This is often caused by incorrect HTML structure or dynamic rendering issues.
 
 ## Enable / disable
 
@@ -40,3 +61,30 @@ disable = ["content/*"]
 enable = ["content/meta-in-body"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/broken-html](/rules/content/broken-html): the structural problems that cause an early body.
+- [core/meta-description](/rules/core/meta-description): the description that is being ignored.
+- [core/robots-meta](/rules/core/robots-meta): the robots directive that is being ignored.
+- [core/og-tags](/rules/core/og-tags): Open Graph tags with the same placement requirement.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The meta element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta)
+- [The head element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-head-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Every misplaced meta tag is listed by name with its content. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

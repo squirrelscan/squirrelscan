@@ -1,11 +1,31 @@
 ---
-title: "Dead Links (Cloud)"
-description: "Verifies external links through the cloud dead-links service with a shared global cache"
+title: "Cloud dead-link checking: the shared external link cache"
+description: "Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead."
 ---
 
 <Note>**Cloud rule** - requires login (`squirrel auth login`); **included in the audit base charge**. WAF-blocked links retried via a rendered fetch bill as rendered requests (2 credits per link). Skipped when not logged in (external links are then checked locally as usual). See [Cloud rules](/cloud/rules).</Note>
 
-Verifies external links through the cloud dead-links service, which shares a global link-check cache across all audits.
+## What the cloud dead-links service is
+
+Verifying external links means at least one HTTP request per link, and often more: the checker tries `HEAD`, falls back to `GET`, and follows redirects. On a site with a few thousand outbound links, that is a slow phase for you and a burst of automated traffic for everyone you link to.
+
+The cloud service moves that work behind a cache shared across every audit. A link any recent audit checked comes back immediately, working links stay cached for seven days and failures for 24 hours. This rule is the gate that turns it on: enabling it routes the audit's external-link phase through the service instead of fetching each link locally.
+
+## What squirrel checks
+
+The rule is a summary. The per-link findings belong to `links/broken-external-links`, and this check never re-scores them, which is why its status is always informational. It emits a single check named `dead-links`:
+
+- Skipped when external link checking did not run. Message: `No external link check data available`.
+- Info when the site has no external links. Message: `No external links found to verify`, with a value of 0.
+- Info otherwise, with one of two wordings: `Checked 128 external link(s); none are dead` or `Checked 128 external link(s); 4 dead`. When some targets were throttled, `; 2 rate-limited (status unverifiable)` is appended.
+
+A link counts as dead on the same basis as `links/broken-external-links`: a fetch error, or a status of 400 or above that is neither a firewall-blocked 403 nor a rate-limit response. Severity info, weight 1, the lowest of any rule in the Links category.
+
+## How to fix it
+
+Log in with `squirrel auth login` to use the service. Dead-link checking is included in the audit base charge, so it does not produce a separate spend prompt. Being logged out falls back to local per-link checking.
+
+The findings themselves are on `links/broken-external-links`. Fix them there.
 
 | | |
 |---|---|
@@ -15,16 +35,6 @@ Verifies external links through the cloud dead-links service, which shares a glo
 | **Severity** | info |
 | **Weight** | 1/10 |
 | **Default** | Enabled |
-
-## What it does
-
-This rule is the **enable gate** for cloud external-link checking. When it's enabled and you're logged in, the audit's external-link phase routes through the cloud service instead of fetching every link from your machine:
-
-- **Shared global cache** - links checked by any recent audit (yours or anyone's) return instantly from cache, so repeat audits are much faster and third-party sites aren't hammered.
-- **Fresh results** - working links are cached for 7 days, failures for 24 hours.
-- **Same report shape** - broken links found this way are detailed by [`links/broken-external-links`](/rules/links/broken-external-links), exactly as with local checking.
-
-If an audit's estimated dead-link spend exceeds your `confirm_threshold`, you're prompted before the phase runs. Declining (or being logged out) falls back to local per-link checking.
 
 ## Enable / disable
 
@@ -41,3 +51,29 @@ disable = ["links/dead-links"]
 [external_links]
 enabled = false
 ```
+
+## Related rules
+
+- [links/broken-external-links](/rules/links/broken-external-links): where the per-link findings are reported.
+- [links/external-links](/rules/links/external-links): how many external links each page carries.
+- [links/broken-links](/rules/links/broken-links): internal links, which are always checked locally.
+- [integrity/known-malicious-url](/rules/integrity/known-malicious-url): the reputation check over the same outbound links.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. The summary line reports how many external links were checked and how many are dead. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

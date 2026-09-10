@@ -1,9 +1,31 @@
 ---
-title: "No Contextual Inbound Links"
-description: "Detects pages whose only internal inbound links come from sitewide chrome"
+title: "Linked only from the nav and footer: no editorial links"
+description: "A footer link on every page looks like hundreds of inbound links and carries none of the signal. squirrel counts only links outside sitewide chrome."
 ---
 
-Detects pages whose only internal inbound links come from sitewide chrome (nav, header, footer, sidebar)
+## What a contextual inbound link is
+
+A contextual link sits inside the content: a sentence in an article, a description on a hub page, a related-reading list written for that page. A chrome link is one whose anchor has a `nav`, `header`, `footer` or `aside` ancestor. That is an element test rather than a repetition test, so an article's own `<header>` or a per-page `<aside>` counts as chrome too.
+
+Counting the two together hides a real problem. A page reachable only through the footer has a large raw inbound count and no editorial support at all: nothing on the site says what the page is about or why it matters, only that it exists. This rule counts contextual links only.
+
+## What squirrel checks
+
+The rule is site-wide. For each crawled page it counts internal, resolvable, dofollow inbound links twice: all of them, and only those whose anchor sat outside a `nav`, `header`, `footer` or `aside` landmark. It emits a single check named `no-contextual-inbound`:
+
+- Skipped when there are too few pages. Message: `Insufficient pages for contextual inbound link analysis`.
+- Warn for pages with zero contextual inbound links. Message: `9 page(s) are linked only from sitewide chrome`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 4.
+- Pass otherwise. Message: `All pages have at least one contextual inbound link`.
+
+A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design.
+
+Crawls stored before the chrome flag existed report every link as contextual, so an old crawl passes rather than producing a site-wide false alarm.
+
+## How to fix it
+
+Link to the page from the body of the content it belongs with, using anchor text that describes it. A category page that introduces its members in prose, rather than only listing them, produces contextual links as a side effect.
+
+A whole site that links only through chrome reports every page that is not the homepage, is not excluded, and has at least `minInboundLinks` raw inbound links. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
 
 | | |
 |---|---|
@@ -13,57 +35,19 @@ Detects pages whose only internal inbound links come from sitewide chrome (nav, 
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## What it checks
-
-Every internal link the crawl finds is recorded with whether its anchor sat inside site
-chrome - an ancestor `<nav>`, `<header>`, `<footer>` or `<aside>`. A link from any of those
-is repeated verbatim on every page of the site, so it carries no signal about what the
-target page is about or how important it is. A link from body copy does.
-
-This rule counts only the **contextual** (non-chrome) inbound links per page and warns when
-that count is zero.
-
-Chrome detection is deliberately strict: only those four landmark elements count. A wrapper
-named `class="post-nav"` is *not* treated as chrome, because misclassifying body copy would
-turn a genuinely well-linked page into a false warning.
-
-## Why the existing link rules miss this
-
-[Orphan Pages](/rules/links/orphan-pages) and [Weak Internal Links](/rules/links/weak-internal-links)
-both count **raw** inbound links, with no distinction by container. A page linked from the
-sitewide footer of a 200-page site has 200 inbound links and passes both - while receiving no
-editorial support at all.
-
-To keep the three rules from reporting the same page twice, this rule speaks only about the
-gap the other two cannot see: a page is flagged when it has **zero** contextual inbound links
-**and** a raw inbound count at or above the orphan threshold (`minInboundLinks`, default `2`).
-Below that threshold the page is already reported as an orphan.
-
-The homepage is always skipped - it is reached from every page's header and footer by design.
-
-## Solution
-
-These pages look well-linked but receive no editorial support: every link pointing at them is repeated on every page of the site, so it carries no signal about what the page is about or how important it is. Add links from the body copy of related articles, hub pages, or category descriptions using descriptive anchor text. Sitewide navigation links help discovery, but contextual links are what pass topical relevance and internal link equity.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `minInboundLinks` | number | `2` | Raw inbound-link threshold from links/orphan-pages; only pages at or above it are considered here (below it they are already reported as orphans) |
-| `excludePatterns` | array | `[]` | URL patterns to exclude from contextual inbound link detection |
+| `minInboundLinks` | integer, 0 or more | `2` | Raw inbound-link threshold from links/orphan-pages; only pages at or above it are considered here |
+| `excludePatterns` | array of strings | `[]` | URL patterns to exclude from contextual inbound link detection |
 
-Keep `minInboundLinks` in sync with the same option on
-[Orphan Pages](/rules/links/orphan-pages) - the two are the same threshold viewed from
-either side.
-
-### Configuration Example
+### Configuration example
 
 ```toml squirrel.toml
 [rule_options."links/no-contextual-inbound"]
 minInboundLinks = 2
-excludePatterns = ["/tags/", "/authors/"]
+excludePatterns = ["/lp/"]
 ```
 
 ## Enable / disable
@@ -89,3 +73,29 @@ disable = ["links/*"]
 enable = ["links/no-contextual-inbound"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/orphan-pages](/rules/links/orphan-pages): pages below the raw inbound threshold, which this rule leaves alone.
+- [links/weak-internal-links](/rules/links/weak-internal-links): pages with exactly one dofollow internal inbound link.
+- [links/anchor-text](/rules/links/anchor-text): what those contextual links should say.
+- [content/article-links](/rules/content/article-links): whether the body copy links out at all.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every chrome-only page is listed by path. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>
