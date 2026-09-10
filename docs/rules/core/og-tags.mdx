@@ -7,7 +7,7 @@ description: "A page missing og:title, og:description or og:image, so shares ren
 
 Open Graph is a set of `<meta property="og:...">` tags that tell a link preview what to show. Facebook defined it, and LinkedIn, Slack, Discord, WhatsApp and most other clients read the same tags. Without them a share falls back to whatever the client can scrape, which is usually the title element and the first image it finds.
 
-Four tags carry the preview: `og:title`, `og:description`, `og:image` and `og:type`. `og:url` names the canonical address for the shared object. `og:image` is the one that changes how a link looks in a feed, and the recommended size is 1200 by 630 pixels.
+The protocol requires four: `og:title`, `og:type`, `og:image` and `og:url`. `og:description` is optional in the protocol and is what most clients render under the title. `og:image` is the one that changes how a link looks in a feed, and 1200 by 630 pixels is the size that renders correctly in the widest set of clients.
 
 ## What squirrel checks
 
@@ -16,10 +16,10 @@ The rule runs on every crawled page against the parsed Open Graph values. It emi
 - `og-title`: warns with the message `Missing og:title` and a null value.
 - `og-description`: warns with the message `Missing og:description` and a null value.
 - `og-image`: warns with the message `Missing og:image - social shares will lack imagery` and a null value.
-- `og-type`: reports at info status with the message `Missing og:type (defaults to website)` and a null value.
+- `og-type`: reports at info status with the message `Missing og:type (defaults to website)` and a null value. The message reflects what most clients assume rather than a default the protocol defines; the protocol requires the property.
 - `og-tags`: passes with the message `Essential Open Graph tags present` and a value showing the first 30 characters of the title, emitted only when title, description and image are all present.
 
-`og:type` is informational and does not stop the summary passing, because the protocol's default of `website` is right for most pages. Each missing tag is its own check, so a page missing all three essentials produces three warnings rather than one. The rule checks presence and never validates a value, so an `og:image` pointing at a URL that returns 404 passes.
+`og:type` is informational and does not stop the summary passing, because most clients treat a missing type as `website` and render the preview anyway. Each missing tag is its own check, so a page missing all three essentials produces three warnings rather than one. The rule checks presence and never validates a value, so an `og:image` pointing at a URL that returns 404 passes.
 
 ## How to fix it
 
@@ -79,7 +79,7 @@ Core SEO findings ship in every audit next to the performance, security and agen
 ## References
 
 - [The Open Graph protocol](https://ogp.me/)
-- [meta name and property, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name)
+- [The meta element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-meta-element)
 
 ## Check your site
 

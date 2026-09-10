@@ -15,11 +15,11 @@ The rule runs once per crawl and emits a single check named `canonical-form-drif
 
 - Skipped with the message `Only N page(s) crawled; 10 needed to establish a canonical-form norm`.
 - Skipped with the message `No canonical form is shared by 70% of at least 10 comparable pages`.
-- Skipped with the message `No pages available for analysis` when the crawl produced no pages.
-- Passing with the message `All N comparable canonical(s) share one form (host apex, scheme https)` when nothing drifts. The summary lists up to ten judged axes, each as the axis name, its section where it has one, and the winning form.
-- Warning, or failing, with the message `N of M canonical(s) are declared in a different form than the rest of the site (host apex, scheme https)`. Each item reads `40 of 45 canonicals in /blog use trailing slash, these 5 use no trailing slash` and carries up to 20 example URLs. The status is `fail` when the deviant pages are 20% or more of the judged pages, and `warn` below.
+- Skipped with the message `No pages available for analysis` when the crawl produced no pages. That wording comes from the non-streaming path; a streaming crawl with no pages takes the `Only 0 page(s) crawled` branch instead.
+- Passing with the message `All N comparable canonical(s) share one form (scheme https, host apex)` when nothing drifts. The summary lists up to ten judged axes in a fixed order, scheme then host then trailing slash then tracking params, each as the axis name, its section where it has one, and the winning form.
+- Warning, or failing, with the message `N of M canonical(s) are declared in a different form than the rest of the site (scheme https, host apex)`. Each item reads `40 of 45 canonicals in /blog use trailing slash, these 5 use no trailing slash` and carries up to 20 example URLs. The status is `fail` when the deviant pages are 20% or more of the judged pages, and `warn` below.
 
-A page enters the comparison only when its status was 2xx and its canonical is present, absolute and points at the same registrable host. Missing, relative, unparseable and cross-host canonicals all belong to [core/canonical](/rules/core/canonical) and are dropped here rather than reported twice.
+A page enters the comparison only when its status was 2xx and its canonical is present, absolute and points at the same hostname as the page once a leading `www.` is stripped from both. A canonical pointing at a sibling subdomain is treated as cross-host and dropped. Missing, relative, unparseable and cross-host canonicals all belong to [core/canonical](/rules/core/canonical) and are dropped here rather than reported twice.
 
 The trailing-slash axis is compared inside a section rather than site-wide, because using a slash in `/blog` and not in `/product` is a normal pattern. The section is the first path segment, or `/` for a flat path, and each section has to clear the sample floor and the agreement bar on its own. The site root and any path whose last segment contains a dot are excluded from that axis entirely, since neither had a choice.
 

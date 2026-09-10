@@ -5,7 +5,7 @@ description: "A page with no meta description, or one outside 120 to 160 charact
 
 ## What the meta description is
 
-The meta description is a summary a page offers for use in a search result snippet. Google is explicit that it is not a ranking factor and that it uses the description only when it judges it a better summary than text drawn from the page, which happens for roughly half of results.
+The meta description is a summary a page offers for use in a search result snippet. Google documents that it may use the description for the snippet, and may instead draw text from the page when that better matches what the reader searched for.
 
 That still makes it worth writing. When the page has no description, the snippet is assembled from whatever text sits near the query terms, which on a page with a long navigation or a cookie banner can be nothing useful. Length matters for the same reason as the title: a snippet is truncated at display width, and text past that is written for nobody.
 
@@ -14,7 +14,7 @@ That still makes it worth writing. When the page has no description, the snippet
 The rule runs on every crawled page against the parsed description. It emits one check named `meta-description`:
 
 - Failing with the message `Missing meta description` and a null value when there is none.
-- Warning with the message `Description too short` under 120 characters, or `Description too long` over 160. Both carry the description as the value, `120-160 characters` as the expectation, and an item holding the page URL with the first 50 characters and the length.
+- Warning with the message `Description too short` under the minimum, or `Description too long` over the maximum. Both carry the description as the value, `<min>-<max> characters` as the expectation, and an item holding the page URL with the first 50 characters and the length. The defaults are 120 and 160 and both are configurable below.
 - Passing with the message `Description length OK` and the description as the value.
 
 Length is counted in characters of the parsed description. Severity is error and weight is 7.

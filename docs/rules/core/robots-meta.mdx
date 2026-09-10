@@ -5,7 +5,7 @@ description: "A page declaring noindex or nofollow in its robots meta. squirrel 
 
 ## What the robots meta tag does
 
-`<meta name="robots">` controls how a search engine treats one page. Absent, the default is `index, follow`: index the page and follow its links. `noindex` keeps the page out of the index. `nofollow` stops link signals passing to the pages it links to.
+`<meta name="robots">` controls how a search engine treats one page. Absent, the default is `index, follow`: index the page and follow its links. `noindex` keeps the page out of the index. `nofollow` asks a search engine not to follow the page's links or pass signals through them. Google documents it as a hint rather than a directive.
 
 Both have legitimate uses. A thank-you page after a form submission should be `noindex`. A page of user-submitted links might be `nofollow`. What matters is whether the directive is on the pages you meant, which is the question a crawl answers and a single page view does not.
 
@@ -16,7 +16,7 @@ The rule runs on every crawled page against the parsed robots meta value, lowerc
 - Passing with the message `No robots meta tag (defaults to index, follow)` and a null value when there is no tag.
 - Warning with the message `Page is set to noindex and nofollow` when both appear.
 - Warning with the message `Page is set to noindex` when only that appears.
-- At info status with the message `Page is set to nofollow (links won't pass equity)` when only that appears.
+- At info status with the message `Page is set to nofollow (links won't pass equity)` when only that appears. The wording is the report's; Google treats the directive as a hint.
 - Passing with the message `Robots meta tag allows indexing` when the tag is present and carries neither.
 
 The value is always reported alongside the message, so the full directive list is visible in the report.

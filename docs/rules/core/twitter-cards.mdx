@@ -7,7 +7,7 @@ description: "A page with no twitter:card, an unrecognised type, or a large-imag
 
 `<meta name="twitter:card">` chooses how a link renders on X. Four types are defined: `summary` for a small square thumbnail, `summary_large_image` for a wide banner, `player` for embedded media, and `app` for a mobile app listing.
 
-The other `twitter:` tags are optional, because X falls back to Open Graph for the title, description and image when they are absent. That makes a page with good Open Graph tags and no `twitter:card` a perfectly reasonable configuration, and it is why this rule reports at info severity rather than warning.
+For a `summary` or `summary_large_image` card the other `twitter:` tags are optional, because X falls back to Open Graph for the title, description and image. A `player` or `app` card is different: each needs its own tags, which Open Graph has no equivalent for. That is why a page with good Open Graph tags and no `twitter:card` is a reasonable configuration, and why this rule reports at info severity rather than warning.
 
 ## What squirrel checks
 
@@ -30,7 +30,7 @@ The card type is matched exactly, so a value with different casing or surroundin
 <meta name="twitter:image" content="https://example.com/og/build-cache.png" />
 ```
 
-Note that these use `name`, not `property`, which is the opposite of Open Graph. Declaring `twitter:card` alone and letting the rest fall back to Open Graph is enough, and keeps one set of values to maintain.
+Note that these use `name`, not `property`, which is the opposite of Open Graph. For a summary card, declaring `twitter:card` alone and letting the rest fall back to Open Graph is enough and keeps one set of values to maintain. A `player` or `app` card needs its own full set.
 
 The common false positive is a page deliberately relying on the fallback. That is reported at info status, which is the correct outcome and not something to fix.
 
@@ -79,7 +79,7 @@ Core SEO findings ship in every audit next to the performance, security and agen
 
 - [About X Cards, X developer docs](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards)
 - [Getting started with Cards, X developer docs](https://developer.x.com/en/docs/x-for-websites/cards/guides/getting-started)
-- [meta name and property, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name)
+- [meta name, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name)
 
 ## Check your site
 

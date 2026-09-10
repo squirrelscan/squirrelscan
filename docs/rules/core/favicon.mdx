@@ -16,7 +16,7 @@ The rule runs on every crawled page over its `<link>` elements. It emits one or 
 - `favicon`: warns with the message `No favicon found` and the value `Add <link rel='icon'> for brand recognition` when nothing matched. It passes with `Favicon found: <format>` and a value suggesting more formats when exactly one distinct format was found, and with `Multiple favicon formats found` and one item per format when there were several.
 - `apple-touch-icon`: emitted only when at least one favicon was found and none of them was an Apple touch icon, at info status with the message `No Apple touch icon found` and the value `Add for iOS home screen bookmarks`.
 
-A link counts when its `rel` is `icon`, `shortcut icon`, `apple-touch-icon` or `apple-touch-icon-precomposed`, or contains `icon` anywhere, and it has an `href`. The format recorded is `apple-touch-icon` when the rel says so, otherwise `svg`, `ico` or `png` from the href's file extension, and `icon` when the extension is none of those. Formats are deduplicated, so ten PNG sizes count as one.
+A link counts when its `rel` is `icon`, `shortcut icon`, `apple-touch-icon` or `apple-touch-icon-precomposed`, or contains `icon` anywhere, and it has an `href`. The format recorded is `apple-touch-icon` when the rel says so, otherwise `svg`, `ico` or `png` when the href ends with that exact lowercase suffix, and `icon` otherwise. The test is on the end of the whole href, so `/favicon.svg?v=2` and `/favicon.SVG` are both recorded as `icon`. Formats are deduplicated, so ten PNG sizes count as one.
 
 The rule does not fetch the file, so a `<link rel="icon">` pointing at a URL that returns 404 still passes. A page with no parsed document emits nothing at all.
 

@@ -18,7 +18,7 @@ The rule runs on every crawled page. It parses the `Link` response header, split
 - Passing with the message `HTML canonical matches Link header` when both are present and agree.
 - Failing with the message `Canonical mismatch between HTML and Link header`, the value `HTML: <url>, Header: <url>` and the expectation `Both should match`.
 
-The comparison normalises both URLs first: the fragment is dropped, a trailing slash is removed except on the site root, and the whole string is lowercased. So `https://example.com/Page/` in the header and `https://example.com/page` in the markup are treated as agreeing.
+The comparison normalises both URLs first: the fragment is dropped, a trailing slash is removed from the end of the whole serialised URL except on the site root, and the string is lowercased. Because the trim is on the serialised form rather than the path, `https://example.com/page/?x=1` keeps its path slash. So `https://example.com/Page/` in the header and `https://example.com/page` in the markup are treated as agreeing.
 
 The comma split is a simplification of the `Link` header grammar. A URL containing a literal comma can be split across two entries, though a comma in a path is rare enough that it does not come up in practice.
 

@@ -5,7 +5,7 @@ description: "A page with no H1, more than one, or an empty one. squirrel checks
 
 ## What the H1 is for
 
-The H1 names what the page is about. A screen reader user jumping through headings lands on it first, and a search engine reads it alongside the title element as the page's own statement of its subject.
+The H1 names what the page is about. A screen reader user jumping through headings meets it in document order, usually at the top of the content, and a search engine reads it alongside the title element as the page's own statement of its subject.
 
 One per page is the working convention. HTML5's outline algorithm was meant to make multiple H1s meaningful inside sections, but no browser implemented it and assistive technology does not use it, so several H1s just means several competing claims about the page's subject. The H1 should say the same thing as the title element, usually with more room.
 
@@ -18,7 +18,7 @@ The rule runs on every crawled page against the parsed heading data. It emits on
 - Warning with the message `H1 tag is empty` and an empty value when there is exactly one H1 with no text.
 - Passing with the message `Single H1 tag present` and the heading text as the value.
 
-The four outcomes are exclusive and the rule stops at the first that applies, so a page with two H1s is reported for the count and never checked for emptiness. Severity is error and weight is 7, the joint highest in this category, because a missing H1 is one of the few purely structural defects that is always worth fixing.
+The four outcomes are exclusive and the rule stops at the first that applies, so a page with two H1s is reported for the count and never checked for emptiness. Severity is error and weight is 7, behind only the title and description checks in this category.
 
 ## How to fix it
 

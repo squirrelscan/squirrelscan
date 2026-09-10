@@ -5,7 +5,7 @@ description: "A page with no title element, or one outside 30 to 75 characters. 
 
 ## What the title element is
 
-The title element names the page. It is what a browser puts in the tab, what a bookmark saves, and what search engines use as the starting point for the link text in a result. Google rewrites it when it thinks the page's own headings describe the content better, but the title is what it reads first.
+The title element names the page. It is what a browser puts in the tab, what a bookmark saves, and one of the sources Google draws the link text of a result from. Google documents that it may use other text on the page instead when that describes the content better.
 
 Length matters because of where it is displayed rather than because of any rule. A desktop search result truncates at roughly 600 pixels, which is around 60 characters of typical text, so anything past that is written for nobody. Too short usually means the title is a single word that could describe any page on the site.
 
@@ -14,7 +14,7 @@ Length matters because of where it is displayed rather than because of any rule.
 The rule runs on every crawled page against the parsed title. It emits one or two checks:
 
 - `meta-title` and `document-title`, both failing with the messages `Missing page title` and `Missing document title` and a null value, when there is no title. These are the only two checks emitted in that case.
-- `meta-title`, warning with the message `Title too short` when the title is under 30 characters, or `Title too long` over 75. Both carry the title as the value, `30-75 characters` as the expectation, and an item holding the page URL with the first 50 characters of the title and its length.
+- `meta-title`, warning with the message `Title too short` when the title is under the minimum, or `Title too long` when it is over the maximum. Both carry the title as the value, `<min>-<max> characters` as the expectation, and an item holding the page URL with the first 50 characters of the title and its length. The defaults are 30 and 75 and both are configurable below.
 - `meta-title`, passing with the message `Title length OK` and the title as the value.
 
 Length is counted in characters of the parsed title, so an emoji counted by the browser as one glyph may count as two. Severity is error and weight is 8, the highest in this category.

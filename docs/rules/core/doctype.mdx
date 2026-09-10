@@ -7,7 +7,7 @@ description: "A page with no doctype, an old one, or a doctype that is not the f
 
 `<!DOCTYPE html>` is the first line of an HTML document. It has one job: it puts the browser in standards mode. Without it, or with something the browser does not recognise, the page renders in quirks mode, which emulates rendering bugs from browsers of the late 1990s. Box sizing, table cell heights, and inline element layout all change.
 
-The declaration has to come before anything else. A comment, a blank template line, or a stray character in front of it can push the browser into quirks mode even though the doctype is present. Two things are allowed first: a byte order mark, and an XML declaration in an XHTML document.
+The parser tolerates whitespace and comments before the doctype, so those do not by themselves cause quirks mode. Text does: a stray character or a template fragment emitted before the declaration makes the parser treat the document as having no doctype. This rule is stricter than the parser and reports anything in front of the declaration except a byte order mark and an XML declaration.
 
 ## What squirrel checks
 
@@ -16,10 +16,10 @@ The rule runs on every crawled page against the raw response body, before parsin
 - Skipped with the message `No HTML content available` and the reason `Empty response` when the body is empty.
 - Passing with the message `Valid HTML5 doctype found` and the value `<!DOCTYPE html>`. The details note a byte order mark or an XML declaration when either was present.
 - Warning with the message `HTML5 doctype not at document start` and the expectation `<!DOCTYPE html> at very start` when the doctype is correct but something precedes it.
-- Warning with the message `Non-HTML5 doctype found: XHTML`, `Non-HTML5 doctype found: HTML4` or `Non-HTML5 doctype found: legacy`, with the declaration itself as the value, truncated to 50 characters.
+- Warning with the message `Non-HTML5 doctype found: XHTML`, `Non-HTML5 doctype found: HTML4` or `Non-HTML5 doctype found: legacy`, with the declaration itself as the value, truncated to 50 characters followed by an ellipsis when it is longer.
 - Failing with the message `Missing doctype declaration` and the expectation `<!DOCTYPE html>` when there is no doctype at all.
 
-A byte order mark is stripped before the check, and an XML declaration matching `<?xml ... ?>` at the very start is skipped over, so neither on its own causes a failure. The doctype match is case-insensitive and allows leading whitespace, so `<!doctype html>` and a leading newline both pass.
+A byte order mark is stripped before the check, and an XML declaration matching `<?xml ... ?>` at the very start is skipped over, so neither on its own causes a failure. The doctype match is case-insensitive and allows leading whitespace, so `<!doctype html>` and a leading newline both pass. A comment before the doctype does not.
 
 ## How to fix it
 
@@ -30,7 +30,7 @@ A byte order mark is stripped before the check, and an XML declaration matching 
 
 Put it on the first line of the document with nothing before it. In a templating system the usual cause is a partial or a PHP block that emits a newline or a comment before the layout starts.
 
-The common false positive is a page served as XHTML with an XML declaration, which this rule handles, followed by a comment, which it does not. Anything other than a byte order mark or an XML declaration in front of the doctype is reported.
+The common false positive is a comment before the doctype, which HTML parsers accept and this rule reports. Anything other than a byte order mark, whitespace or an XML declaration in front of the declaration is reported.
 
 | | |
 |---|---|

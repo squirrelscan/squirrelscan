@@ -5,7 +5,7 @@ description: "Two or more pages sharing a title after case and whitespace are no
 
 ## Why titles should be unique
 
-A title that appears on twenty pages tells a reader choosing between twenty search results nothing. It also gives a search engine no way to tell which of those pages answers a query, which is one of the signals that leads to the wrong one being shown.
+A title that appears on twenty pages tells a reader choosing between twenty search results nothing. It also removes one of the clearer signals a search engine has for telling those pages apart, leaving it to work from content alone.
 
 Duplicates are almost never written by hand. They come from a template that falls back to the site name when a page has no title of its own, from paginated listings that repeat page one's title, and from filter or sort parameters that produce many URLs for one page of content.
 
@@ -17,7 +17,7 @@ The rule runs once per crawl. It normalises every non-empty page title by lowerc
 - Passing with the message `All page titles are unique` when no normalised title appears more than once.
 - Warning with the message `N duplicate title(s) affecting M pages`. Each item is one group, identified by the first 60 characters of the title, labelled with the first 40 characters and the page count, and carrying every URL in the group.
 
-Pages with no title are skipped rather than grouped together, so a site where fifty pages have no title at all produces nothing here. That case belongs to [core/meta-title](/rules/core/meta-title), which reports each of them individually.
+Pages with no title are skipped rather than grouped together, so a site where fifty pages have no title at all passes this check with `All page titles are unique`. That case belongs to [core/meta-title](/rules/core/meta-title), which reports each of them individually.
 
 The normalisation here is stricter than [content/duplicate-title](/rules/content/duplicate-title), which lowercases but does not collapse whitespace. Two titles differing only by a double space are duplicates to this rule and distinct to that one.
 

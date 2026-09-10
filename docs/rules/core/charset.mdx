@@ -7,7 +7,7 @@ description: "A page with no charset declaration, one that is not UTF-8, or a me
 
 A charset declaration tells the browser how to turn bytes into characters. Get it wrong and text renders as mojibake, because the bytes for an accented character in one encoding mean something else in another.
 
-There are three places to declare it, in the order a browser prefers them: the `Content-Type` response header, a `<meta charset>` element, and a `<meta http-equiv="Content-Type">` element. The meta element has to appear within the first 1,024 bytes of the document, because the browser starts guessing before then and reparses if it guessed wrong. UTF-8 is the encoding to use; the HTML Standard requires it.
+There are three places to declare it: the `Content-Type` response header, a `<meta charset>` element, and a `<meta http-equiv="Content-Type">` element. The header wins over both meta forms, and between the two meta forms the browser takes whichever comes first in the document. The meta element has to appear within the first 1,024 bytes of the document, because the browser starts guessing before then and reparses if it guessed wrong. UTF-8 is the encoding to use; the HTML Standard requires it.
 
 ## What squirrel checks
 

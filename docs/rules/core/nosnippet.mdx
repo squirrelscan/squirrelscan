@@ -5,7 +5,7 @@ description: "A robots directive that stops search engines showing any descripti
 
 ## What nosnippet does
 
-`nosnippet` tells a search engine not to show any text snippet for the page. The result becomes a title and a URL with nothing underneath it, which is a large drop in click-through rate for anything that competes on a results page. `max-snippet:0` does the same thing by setting the allowed length to zero.
+`nosnippet` tells a search engine not to show any text snippet for the page. The result becomes a title and a URL with nothing underneath it, which gives a reader far less to act on than a competing result that shows a summary. `max-snippet:0` does the same thing by setting the allowed length to zero.
 
 `max-snippet` with a positive number is different and harmless: it caps the snippet length rather than removing it. There are pages where suppressing the snippet is the right call, such as a login page or licensed content a publisher may not excerpt, but on an ordinary page it is nearly always an accident.
 
@@ -15,9 +15,9 @@ The rule runs on every crawled page against the parsed robots meta value. It spl
 
 - Passing with the message `No snippet restrictions found` when there is no robots meta at all, or when it has neither directive.
 - Warning with the message `Page has nosnippet directive - prevents SERP snippets` or `Page has max-snippet:0 directive - prevents SERP snippets`, with the whole robots value and the expectation `Remove to allow search snippets`.
-- At info status with the message `Snippet length limited: max-snippet:120` when a positive limit is set.
+- At info status with the message `Snippet length limited: <token>` when a `max-snippet:` token is present that was not recognised as zero. That branch matches on the prefix alone, so `max-snippet:-1`, `max-snippet:abc` and a bare `max-snippet:` all land here rather than being reported as malformed.
 
-`nosnippet` has to be its own directive to match; it is not found as a substring of something else. `max-snippet` matches only the exact form `max-snippet:<digits>`, so a value with a space around the colon is not recognised. When both directives are present, the message names `nosnippet`.
+`nosnippet` has to be its own directive to match; it is not found as a substring of something else. The zero test matches only the exact form `max-snippet:0`, so a value with a space around the colon is not recognised as zero and falls through to the informational branch. When both directives are present, the message names `nosnippet`.
 
 This rule reads the robots meta element only. An `X-Robots-Tag` response header carrying the same directive is not checked here.
 

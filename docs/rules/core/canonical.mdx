@@ -7,7 +7,7 @@ description: "A page with no canonical link, a relative one, or one that points 
 
 `<link rel="canonical">` names the URL a page wants search engines to treat as its address. When the same content is reachable at several URLs, through parameters, a trailing slash, or both `www` and the apex domain, the canonical is what consolidates the signals onto one of them.
 
-It is a hint rather than an instruction, and search engines can pick a different URL when the evidence disagrees with the declaration. The common case is a self-referential canonical: every page names itself, which costs nothing and makes the parameterised copies point somewhere real. It has to be an absolute URL.
+It is a hint rather than an instruction, and search engines can pick a different URL when the evidence disagrees with the declaration. The common case is a self-referential canonical: every page names itself, which costs nothing and makes the parameterised copies point somewhere real. A relative reference is valid HTML, and Google recommends an absolute URL because a relative one is easy to resolve against the wrong base.
 
 ## What squirrel checks
 
@@ -29,7 +29,7 @@ The comparison is between the two full URLs after parsing, so a difference in tr
 
 Emit it from the router's own knowledge of the route, so it is absolute, uses one scheme and one host, and matches whatever form the rest of the site uses.
 
-The common false positive is a paginated listing, where pages two onward legitimately canonicalise to themselves rather than to page one, or a filtered view that canonicalises to the unfiltered page. Both report as pointing to a different URL, which is informational and correct.
+The common false positive is a filtered or sorted view that canonicalises to the unfiltered page, which is correct and reports as pointing to a different URL. That result is informational, not a defect. A paginated listing whose pages canonicalise to themselves passes normally.
 
 | | |
 |---|---|
