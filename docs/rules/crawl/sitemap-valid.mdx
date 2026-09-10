@@ -15,7 +15,7 @@ The rule is site-wide. It emits up to five checks:
 
 - `sitemap-fetch-failed` fails when a sitemap named in robots.txt could not be fetched, excluding ones the walk never requested. Message: `1 sitemap(s) from robots.txt failed to fetch`, listing each URL with its error.
 - `sitemap-valid` reports info when discovery was truncated with nothing found. Message: `Sitemap discovery did not complete, so no sitemap was validated`.
-- `sitemap-valid` is skipped when there is simply no sitemap. Message: `No sitemap to validate`.
+- `sitemap-valid` is skipped when no sitemap was found. Message: `No sitemap to validate`.
 
 Both of those branches only run when there was no reportable robots.txt fetch failure. When a sitemap named in robots.txt failed to fetch and discovery found nothing, the fetch failure is the only check returned.
 

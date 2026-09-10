@@ -1,5 +1,5 @@
 ---
-title: "Empty and generic anchor text: click here, read more, and icons"
+title: "Empty and generic anchor text: click here and icons"
 description: "A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name."
 ---
 
@@ -9,7 +9,7 @@ Anchor text is the visible name of a link. It tells a reader where the link goes
 
 Two failures matter. A link with no accessible name at all, usually an icon or a wrapped image with no `alt` and no `aria-label`, is announced by a screen reader as "link" and nothing more. A link whose text is `click here` or `read more` has a name that describes nothing, which fails WCAG's link purpose criterion when the surrounding context does not supply it.
 
-Cards complicate the count. A card often links to the same destination three times, from the image, the headline and a "Read more". squirrel treats those as one group and asks whether any member is named, which is a heuristic rather than a rule of the platform: assistive technology names each link separately. The robust fix is one link wrapping the whole card, or a name on each.
+Cards complicate the count. A card often links to the same destination three times, from the image, the headline and a "Read more". squirrel treats those as one group and asks whether any member is named, which is a heuristic rather than a rule of the platform: assistive technology names each link separately. The reliable fix is one link wrapping the whole card, or a name on each.
 
 ## What squirrel checks
 

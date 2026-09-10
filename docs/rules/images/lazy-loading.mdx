@@ -1,5 +1,5 @@
 ---
-title: "Lazy loading: how many elements on the page defer their load"
+title: "Lazy loading: how much of the page defers its load"
 description: "A page-wide count of images and iframes using loading=lazy. squirrel reports the mix rather than judging individual images."
 ---
 
@@ -64,8 +64,8 @@ disable = ["*"]
 ## Related rules
 
 - [images/offscreen-lazy](/rules/images/offscreen-lazy): the per-image decision about which ones should be lazy.
-- [performance/lazy-above-fold](/rules/performance/lazy-above-fold): images lazy-loaded that should not be.
-- [performance/render-blocking](/rules/performance/render-blocking): the other resources delaying the first render.
+- [performance/lazy-above-fold](/rules/perf/lazy-above-fold): images lazy-loaded that should not be.
+- [performance/render-blocking](/rules/perf/render-blocking): the other resources delaying the first render.
 - [images/image-file-size](/rules/images/image-file-size): the weight deferring is meant to postpone.
 
 Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
