@@ -1,9 +1,43 @@
 ---
-title: "API & OAuth Discovery"
-description: "Detects api-catalog, OpenAPI, and OAuth discovery documents"
+title: "api-catalog and OpenAPI: how an agent finds your API"
+description: "No OpenAPI spec at a conventional path, or OAuth metadata with no way for an agent to register a client. squirrel probes both."
 ---
 
-Detects the machine-readable documents that let an agent go from "I found this site" to "I can call its API": an [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) API catalog, an OpenAPI specification, and OAuth discovery documents ([RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) authorization server metadata, [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) protected-resource metadata). Together these turn an API from something a human has to read docs for into something an agent can introspect and use directly.
+## What API discovery is
+
+An agent that wants to call an API needs three things it can fetch rather than read: a description of the endpoints, the location of the authorization server, and a way to obtain client credentials.
+
+- An OpenAPI document describes the endpoints. `/.well-known/api-catalog`, defined by RFC 9727, is a link set pointing at one or more of them.
+- RFC 8414 defines `/.well-known/oauth-authorization-server`, the authorization server metadata. RFC 9728 defines `/.well-known/oauth-protected-resource`, which points a client from a resource back at the server that guards it.
+- RFC 7591 Dynamic Client Registration adds a `registration_endpoint` to that metadata, so a client can register itself. Client ID Metadata Documents are the newer alternative, signalled by `client_id_metadata_document_supported`.
+
+Without the last one, an agent can find the authorization server and then stop, because a human still has to create a client by hand.
+
+## What squirrel checks
+
+The rule runs once per crawl against probed well-known paths. A probe counts as a hit when it returned 200, the body parsed as JSON, and it did not sniff as HTML. It emits one or two checks:
+
+- `api-discovery`: reports at info status with the message `well-known probe data not available` when the probes did not run. Otherwise it reports at info status with `No api-catalog or OpenAPI specification found` and the value `absent`, or with `API discovery document(s) found: api-catalog (/.well-known/api-catalog), OpenAPI spec (/openapi.json)` listing what it found. The OpenAPI paths probed are `/openapi.json`, `/swagger.json` and `/api/openapi.json`, and a hit at one of them counts only when the document names its own spec version, meaning a top-level `openapi` or `swagger` key or that key visible in the excerpt.
+- `api-discovery-oauth`: reports at info status with `No OAuth discovery documents found` when neither OAuth path is a hit. With the protected-resource document but no authorization server metadata, the message is `OAuth discovery found: protected-resource metadata (RFC 9728)`. With the authorization server metadata and a self-onboarding mechanism, it is `OAuth discovery found: authorization server metadata (RFC 8414); agent self-onboarding available via Dynamic Client Registration (RFC 7591) and Client ID Metadata Documents (CIMD)`. With the metadata and neither mechanism, it is `OAuth discovery found: authorization server metadata (RFC 8414), but no registration_endpoint (DCR) or client_id_metadata_document_supported (CIMD) — an agent can find the authorization server but a human still has to register a client by hand`.
+
+Every result here is info. Not every site has an API, so absence is never a defect and the rule cannot move the score.
+
+## How to fix it
+
+Publish the spec at a conventional path and, if you already have a `.well-known` directory, point at it:
+
+```json
+{
+  "linkset": [{
+    "anchor": "https://example.com",
+    "service-desc": [{ "href": "https://example.com/openapi.json", "type": "application/json" }]
+  }]
+}
+```
+
+That document goes at `/.well-known/api-catalog`. If the API uses OAuth, add `registration_endpoint` to your authorization server metadata so an agent can register a client without a support ticket.
+
+The common false positive is an API documented under a path this rule does not probe, such as `/v2/openapi.yaml`. The check reports absence because it looks at three fixed paths. Adding an `api-catalog` that points at the real location resolves it and is the point of the RFC.
 
 | | |
 |---|---|
@@ -12,61 +46,6 @@ Detects the machine-readable documents that let an agent go from "I found this s
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 1/10 |
-
-<Note>This rule is a **recommendation**: it never penalizes your score. Not every site has (or needs) a public API; absence is expected for content-only sites.</Note>
-
-## What it checks
-
-The audit probes, once per crawl:
-
-- **`/.well-known/api-catalog`** (RFC 9727): a directory of the site's APIs, each entry pointing to its own description document.
-- **`/openapi.json`**, `/swagger.json`, and `/api/openapi.json`: common conventional paths for an OpenAPI specification.
-- **`/.well-known/oauth-authorization-server`** (RFC 8414): metadata describing an OAuth authorization server, if the API requires auth.
-- **`/.well-known/oauth-protected-resource`** (RFC 9728): metadata describing which authorization server protects a given resource, and what scopes it expects.
-- **Agent self-onboarding**: within the RFC 8414 metadata, whether the authorization server advertises `registration_endpoint` ([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) dynamic client registration) or sets `client_id_metadata_document_supported: true` (Client ID Metadata Documents, the CIMD pattern popularized by client.dev).
-
-For each, it reports presence and whether the body parses as valid JSON matching the expected shape.
-
-Discovering an OAuth server is only half the job: an agent still needs a client ID to start an authorization flow, and by default that means a human has to pre-register one by hand in a developer dashboard. Dynamic Client Registration and CIMD both remove that step — DCR lets a client register itself against `registration_endpoint` at connect time, and CIMD lets a client present a URL to a signed metadata document as its identity instead of a pre-issued ID, so no registration call happens at all. This is the mechanism MCP clients rely on to connect to a new MCP server without a human copying credentials around first; squirrelscan's own hosted MCP server implements CIMD for exactly this reason. A site with `/.well-known/oauth-authorization-server` but no `registration_endpoint` and no CIMD support is discoverable but not truly self-service: an agent can find the door, but a person still has to unlock it.
-
-## Solution
-
-If you expose a public API, publish an OpenAPI spec at a conventional path and, if practical, an `api-catalog` pointing to it:
-
-```json .well-known/api-catalog
-{
-  "linkset": [
-    {
-      "anchor": "https://example.com/",
-      "service-desc": [
-        { "href": "https://example.com/openapi.json", "type": "application/json" }
-      ]
-    }
-  ]
-}
-```
-
-If the API requires OAuth, publish the discovery documents so an agent can find the authorization server and required scopes without hardcoded configuration:
-
-```json .well-known/oauth-protected-resource
-{
-  "resource": "https://example.com/api",
-  "authorization_servers": ["https://auth.example.com"],
-  "scopes_supported": ["read", "write"]
-}
-```
-
-To let an agent onboard itself instead of waiting on a human to register a client, add `registration_endpoint` (DCR) and/or `client_id_metadata_document_supported` (CIMD) to your authorization server metadata:
-
-```json .well-known/oauth-authorization-server
-{
-  "issuer": "https://auth.example.com",
-  "authorization_endpoint": "https://auth.example.com/authorize",
-  "token_endpoint": "https://auth.example.com/token",
-  "registration_endpoint": "https://auth.example.com/register",
-  "client_id_metadata_document_supported": true
-}
-```
 
 ## Enable / disable
 
@@ -91,3 +70,31 @@ disable = ["ax/*"]
 enable = ["ax/api-discovery"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/well-known-agent](/rules/ax/well-known-agent): MCP and A2A manifests, the other machine-readable descriptors under `.well-known`.
+- [ax/agents-md](/rules/ax/agents-md): the human-readable instructions for a coding agent working on the codebase.
+- [ax/llms-txt](/rules/ax/llms-txt): the curated index that can link to the API docs.
+- [security/https](/rules/security/https): the transport requirement every OAuth flow depends on.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [llms.txt](https://squirrelscan.com/learn/llms-txt) for how an agent works through a report.
+
+## References
+
+- [The api-catalog Well-Known URI, RFC 9727](https://www.rfc-editor.org/rfc/rfc9727.html)
+- [OAuth 2.0 Authorization Server Metadata, RFC 8414](https://www.rfc-editor.org/rfc/rfc8414.html)
+- [OAuth 2.0 Protected Resource Metadata, RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each document found is listed with its path. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

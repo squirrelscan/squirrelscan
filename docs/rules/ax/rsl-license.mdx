@@ -1,57 +1,42 @@
 ---
-title: "RSL License"
-description: "Checks for a robots.txt License directive pointing to a valid RSL document"
+title: "robots.txt License: directive and RSL document validation"
+description: "A License: reference in robots.txt pointing at a document that does not resolve as valid RSL. squirrel fetches it and checks."
 ---
 
-Checks for a `License:` directive in `robots.txt` pointing to a valid [Really Simple Licensing (RSL)](https://rslstandard.org) document, plus a matching `rel="license"` link on pages. RSL is a machine-readable licensing standard (v1.0, December 2025) that lets a site state usage terms — including AI-training terms and pay-per-crawl pricing — in a format crawlers can parse instead of a prose page a bot can't act on.
+## What RSL is
+
+Really Simple Licensing is an XML format for stating machine-readable terms for a site's content, including whether it may be used for AI training and what a crawl costs. The document is referenced from robots.txt with a `License:` directive, or from a response with a `Link: <...>; rel="license"` header.
+
+It answers a question robots.txt cannot. A `Disallow` says a crawler may not fetch a path. A licence says what may be done with content that was fetched. Publishing one is optional and this rule never asks for one. A reference that points at nothing is the defect it exists to catch.
+
+## What squirrel checks
+
+The rule runs once per crawl. It looks for a `License:` directive in robots.txt, a `Link: rel=license` header, and any licence URLs those produce, then reads the result of fetching each URL. It emits one or two checks:
+
+- `rsl-license`: reports at info status with the message `RSL licensing data not available` when the probe did not run.
+- `rsl-license-present`: reports at info status with `No machine-readable licensing declared (no robots.txt License: directive or Link: rel=license)` and the value `absent` when there is no signal at all. No further checks run. Otherwise it reports at info status with `License reference declared via robots.txt License: via Link: rel=license (2 URLs)`, naming whichever sources were present.
+- `rsl-license-valid`: reports at info status with `Valid RSL document found at https://example.com/license.xml` when a referenced document returned 200, parsed as XML and read as RSL, adding ` (+1 more)` when several did. When nothing resolved and no document was actually requested, it reports at info status with `License declared but the referenced document was not checked (1 URL)` and the value `unknown`. Otherwise it warns with `License declared but the referenced document didn't resolve as valid RSL (https://example.com/license.xml: HTTP 404)`, listing each broken URL with its error or status.
+
+The distinction in the last bullet is deliberate. A URL the crawl tried and could not fetch is a broken reference and warns. A URL the crawl never requested proves nothing, and the check says it does not know rather than reporting a defect the audit did not establish. Both look like a status of 0, so the recorded reason is the only thing separating them.
+
+## How to fix it
+
+```
+User-agent: *
+License: https://example.com/license.xml
+```
+
+Put the directive in robots.txt and serve a valid RSL XML document at that URL. A `Link: <https://example.com/license.xml>; rel="license"` response header does the same job for consumers that never read robots.txt.
+
+The common false positive is a licence document behind a redirect chain or a WAF that answers the audit differently from a browser. Check the reported status before assuming the file is missing.
 
 | | |
 |---|---|
 | **Rule ID** | `ax/rsl-license` |
 | **Category** | [Agent Experience](/rules/ax) |
 | **Scope** | Site-wide |
-| **Severity** | warning (only when the declared license reference is broken; otherwise informational) |
+| **Severity** | warning |
 | **Weight** | 1/10 |
-
-<Note>This rule is a **recommendation**: it never penalizes your score. RSL is a young standard; most sites won't have adopted it yet, and that's expected.</Note>
-
-## What it checks
-
-The audit looks for a `License:` line in `robots.txt`:
-
-```txt robots.txt
-License: https://example.com/license.xml
-```
-
-When present, it fetches the referenced document and validates it as well-formed RSL XML per the v1.0 schema (permissions, prohibitions, and optional payment terms). It also checks representative pages for a matching `<link rel="license" href="...">` tag, which gives page-level tooling (not just crawler-level `robots.txt` readers) a path to the same terms.
-
-Reported outcomes:
-
-- No `License:` directive: informational, no license declared.
-- `License:` present but the target doesn't parse as valid RSL: a warning — a declared reference that is broken or malformed misleads the crawlers that honor it.
-- Valid RSL document found: informational summary of the declared terms.
-
-## Solution
-
-Publish an RSL document describing your terms and reference it from `robots.txt`:
-
-```txt robots.txt
-User-agent: *
-License: https://example.com/license.xml
-```
-
-```xml license.xml
-<rsl xmlns="https://rslstandard.org/rsl">
-  <content url="https://example.com/*">
-    <license>
-      <permits type="train-ai">false</permits>
-      <permits type="ai-input">true</permits>
-    </license>
-  </content>
-</rsl>
-```
-
-Add the matching `rel="license"` link to your page templates so both crawler-level and page-level tooling resolve to the same document.
 
 ## Enable / disable
 
@@ -76,3 +61,30 @@ disable = ["ax/*"]
 enable = ["ax/rsl-license"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/content-signals](/rules/ax/content-signals): per-purpose AI policy in robots.txt, the lighter declaration.
+- [ax/pay-per-crawl](/rules/ax/pay-per-crawl): crawl pricing enforced at the edge rather than described in a licence.
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): the robots.txt blocks that enforce access policy.
+- [legal/terms-of-service](/rules/legal/terms-of-service): the human-readable terms the licence sits alongside.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
+
+## References
+
+- [Really Simple Licensing](https://rslstandard.org/)
+- [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each licence URL is listed with the status it returned. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

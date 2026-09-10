@@ -3,9 +3,9 @@ title: "Agent Experience"
 description: "How ready a site is for AI agents to read, discover, and operate on it"
 ---
 
-**Agent Experience (AX)** measures how ready a site is for AI agents — chat assistants, answer engines, and autonomous browsers — to read it, find their way around it, and act on it. AX is to agents what UX is to people and DX is to developers: a first-class audit pillar alongside SEO, Performance, and Security, not an afterthought bolted onto them.
+Agent experience is how well a site works for something other than a browser with a person behind it: a chat assistant, an answer engine, or an autonomous agent. These rules ask whether such a client can read the content, reach the site at all, discover an entry point, understand the policy the site declares, and act on what it finds. Agent experience is scored as one of the four groups on every report, alongside SEO, performance and security.
 
-Two things pushed AX from "nice to have" to something worth measuring in 2026: Cloudflare shipped an [Agent Readiness score](https://blog.cloudflare.com/agent-readiness/) across its network, and Vercel published an Agent Readability spec. Both formalize what this category already tracked informally — whether a page is legible and reachable by something other than a browser with a human behind it.
+See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
 
 <Note>Most AX signals are emerging standards, not settled ones. These rules are deliberately **informational / recommendation**: they surface what an agent sees without penalizing your health score, with the exception of genuine misconfigurations: [AI Crawler Access](/rules/ax/ai-crawlers), [Agent Blocking](/rules/ax/agent-blocking), and [Token Weight](/rules/ax/token-weight) always score, and [Content Signals](/rules/ax/content-signals), [RSL License](/rules/ax/rsl-license), [Pay Per Crawl](/rules/ax/pay-per-crawl), and a masquerading [llms.txt](/rules/ax/llms-txt) warn only when something you declared is contradictory, broken, or misfiring. Even those keep training-crawler blocks informational — it's blocking an AI-search indexer or a user-action fetcher that carries the warning.</Note>
 

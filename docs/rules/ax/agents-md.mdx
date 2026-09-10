@@ -1,9 +1,41 @@
 ---
-title: "AGENTS.md"
-description: "Detects /AGENTS.md and variants: instructions for coding agents working against the site"
+title: "AGENTS.md: the paths squirrel probes and what counts"
+description: "No AGENTS.md at the repository root or any conventional path, or an SPA fallback served in its place. squirrel probes four paths and sniffs the body."
 ---
 
-Detects an [`AGENTS.md`](https://agents.md) file: a plain-Markdown instructions file aimed at coding agents (Claude Code, Cursor, Codex, and similar) that work against a repository or a documentation site. Where `llms.txt` curates content for an agent *reading* a site, `AGENTS.md` tells an agent *working on* the underlying project how to build, test, and contribute to it.
+## What AGENTS.md is
+
+`AGENTS.md` is a plain Markdown file that tells a coding agent how to work in a codebase: how to install dependencies, how to run the tests, which commands to use, and the conventions the project expects. It lives at the repository root and is read by the agent before it starts changing files.
+
+It is aimed at a repository rather than at a website, so it matters for a site that has a public codebase behind it and not for a site that does not. Absence is never a defect here.
+
+## What squirrel checks
+
+The rule runs once per crawl against four probed paths, in this order: `/AGENTS.md`, `/agents.md`, `/.well-known/agents.md` and `/docs/AGENTS.md`. It emits one check:
+
+- `agents-md`: reports at info status with the message `well-known probe data not available` when the probes did not run.
+- `agents-md-present`: reports at info status with `AGENTS.md found at /AGENTS.md (4096 bytes)` when a probe returned 200 with a body that did not sniff as HTML and read as Markdown. When a probe returned 200 with an HTML body it reports at info status with `/AGENTS.md responded 200 but returned an HTML page (SPA fallback) — not a real AGENTS.md`. With no hit at all, the result depends on the rest of the site: a site that publishes `/llms.txt` gets a warning with `No AGENTS.md found — this site publishes llms.txt, so consider an AGENTS.md for coding agents too`, and every other site gets an info result with `No AGENTS.md found — consider adding one if this site has an associated codebase`.
+
+That last condition is the whole design. Recommending `AGENTS.md` to every site would be noise on a restaurant's website, so the recommendation only fires where the site has already shown it is developer-facing by publishing `llms.txt`. The rule's severity is info, so even the warning is a recommendation and does not move the score.
+
+## How to fix it
+
+```markdown
+# AGENTS.md
+
+## Setup
+`bun install`
+
+## Tests
+`bun test <file>` runs one file. Never run the suite bare.
+
+## Conventions
+TypeScript only. Format with oxfmt before committing.
+```
+
+Commit it at the repository root. Publishing it on the website is optional; this rule probes the site because that is what an audit can see.
+
+The common false positive is a single-page application whose server returns `index.html` for every unmatched path, which is why the rule sniffs the body rather than trusting the status code.
 
 | | |
 |---|---|
@@ -12,43 +44,6 @@ Detects an [`AGENTS.md`](https://agents.md) file: a plain-Markdown instructions 
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 1/10 |
-
-<Note>This rule is a **recommendation**: it never penalizes your score. `AGENTS.md` is most relevant for product and documentation sites with an associated codebase; a marketing site with no repository behind it has nothing to point one at. The recommendation only appears in your report when the site already publishes an `llms.txt` — the strongest signal a site is developer-oriented; for everyone else, absence is a quiet informational note.</Note>
-
-## What it checks
-
-The audit probes, once per crawl, for `AGENTS.md` at a few conventional locations, in order:
-
-- `/AGENTS.md` (root, canonical casing)
-- `/agents.md` (lowercase)
-- `/.well-known/agents.md`
-- `/docs/AGENTS.md`
-
-It reports which path (if any) responds, and does a basic content sanity check: the response should be plain text or Markdown, non-empty, and not an HTML error or SPA-fallback page mistakenly served with a `200`.
-
-## Solution
-
-If the site has an associated codebase, publish an `AGENTS.md` at the repository root (it will typically be served at `/AGENTS.md` if the site is generated from that repo, or link to it from your docs). Cover what a coding agent needs to be productive without asking:
-
-```markdown AGENTS.md
-# Agent Instructions
-
-## Setup
-Run `bun install` then `bun run dev`.
-
-## Testing
-Run `bun test` before committing. All tests must pass.
-
-## Conventions
-- TypeScript strict mode, no `any`.
-- Components in `src/components`, one per file.
-
-## Do not
-- Do not edit generated files in `src/generated/`.
-- Do not commit directly to `main`.
-```
-
-For a documentation site without its own codebase, `AGENTS.md` is less relevant — prioritize [llms.txt](/rules/ax/llms-txt) instead.
 
 ## Enable / disable
 
@@ -73,3 +68,30 @@ disable = ["ax/*"]
 enable = ["ax/agents-md"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/llms-txt](/rules/ax/llms-txt): the site-facing equivalent, and the signal that turns this rule's note into a recommendation.
+- [ax/well-known-agent](/rules/ax/well-known-agent): MCP and A2A manifests, the machine-readable half of agent discovery.
+- [ax/api-discovery](/rules/ax/api-discovery): OpenAPI and OAuth documents an agent needs before it can call anything.
+- [ax/markdown-response](/rules/ax/markdown-response): serving Markdown for the site's own pages.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [llms.txt](https://squirrelscan.com/learn/llms-txt) for how an agent works through a report.
+
+## References
+
+- [AGENTS.md](https://agents.md/)
+- [text/markdown media type, RFC 7763](https://www.rfc-editor.org/rfc/rfc7763.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. The path and file size are listed when one is found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,44 @@
 ---
-title: "Well-Known Agent Files"
-description: "Detects MCP server cards, A2A agent cards, and agent-skills manifests"
+title: "MCP and A2A manifests under .well-known: what squirrel finds"
+description: "No MCP server card, A2A agent card or agent-skills manifest, or a leftover ai-plugin.json from the ChatGPT plugin era. squirrel probes for all four."
 ---
 
-Detects the newer generation of `.well-known` machine-readable agent descriptors: an [MCP server card](https://datatracker.ietf.org/doc/draft-modelcontextprotocol-mcp-server-card/) (SEP-1649), an [A2A agent card](https://a2aprotocol.ai), or an agent-skills manifest. These let an agent discover, without a human in the loop, that a site exposes an MCP endpoint, an A2A-compatible agent, or a packaged set of skills it can use.
+## What a well-known agent manifest is
+
+A manifest at a fixed path lets an agent discover a service without a person reading documentation first. Three are in use.
+
+- An MCP server card describes a Model Context Protocol endpoint: where it is and what transport it speaks.
+- An A2A agent card, at `/.well-known/agent-card.json`, describes an agent another agent can talk to.
+- An agent-skills manifest, at `/.well-known/agent-skills/index.json`, lists a packaged set of skills.
+
+One older path is worth removing rather than adding. `/.well-known/ai-plugin.json` described a ChatGPT plugin, a format that has been retired. A stale one still sitting on a server describes a service that no longer works.
+
+## What squirrel checks
+
+The rule runs once per crawl against probed well-known paths. A probe counts as a hit when it returned 200, the body parsed as JSON, and it did not sniff as HTML. It emits one or more checks:
+
+- `well-known-agent`: reports at info status with the message `well-known probe data not available` when the probes did not run. With probes but no hits it reports at info status with `No MCP server card, A2A agent card, or agent-skills manifest found` and the value `absent`.
+- `well-known-agent-present`: one check per manifest found, at info status, with the message `MCP server card found at /.well-known/mcp.json`. When the JSON carries none of the keys `url`, `name`, `transport`, `endpoint` or `version`, the message gains the suffix ` (JSON present, but no plausible manifest fields recognized)`.
+- `well-known-agent-deprecated`: emitted only when `/ai-plugin.json` or `/.well-known/ai-plugin.json` is a hit. It warns with the message `Found deprecated OpenAI plugin manifest at /.well-known/ai-plugin.json — this format was retired; remove it to avoid confusing modern agents`.
+
+The MCP card is probed at four paths: `/.well-known/mcp/server-card.json`, `/.well-known/mcp.json`, `/.well-known/mcp` and `/.well-known/mcp-server`. Absence of every manifest is a single quiet info result and never a warning, because adoption is still rare. The one thing this rule warns about is the stale file.
+
+## How to fix it
+
+There is nothing to add unless the site backs an MCP server, an A2A agent or a skill set. If it does, publish the manifest at its conventional path:
+
+```json
+{
+  "name": "Acme MCP",
+  "version": "1.0.0",
+  "url": "https://mcp.example.com",
+  "transport": "streamable-http"
+}
+```
+
+If the report names a deprecated plugin manifest, delete the file. It describes a format that no client uses.
+
+There is no common false positive. A JSON document that happens to 200 at one of these paths is reported with the note about unrecognised fields rather than being counted as a working manifest.
 
 | | |
 |---|---|
@@ -12,33 +47,6 @@ Detects the newer generation of `.well-known` machine-readable agent descriptors
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 1/10 |
-
-<Note>This is **detect-and-inform only**: adoption of these descriptors sits under 0.01% of sites as of 2026, so absence is never penalized. The rule exists to surface early adoption, not to expect it.</Note>
-
-## What it checks
-
-The audit probes, once per crawl, for:
-
-- **MCP server card**: `/.well-known/mcp/server-card.json`, plus the variants `/.well-known/mcp.json`, `/.well-known/mcp`, and `/.well-known/mcp-server`.
-- **A2A agent card**: `/.well-known/agent-card.json`.
-- **agent-skills manifest**: `/.well-known/agent-skills/index.json`.
-
-For each, it reports presence, whether the body parses as valid JSON, and a summary of declared capabilities where the schema makes that straightforward. It also checks for **`/.well-known/ai-plugin.json`**, the deprecated OpenAI plugin manifest format: if present, it's flagged as stale — the plugin system it described was retired, and a lingering manifest is more likely to confuse a modern agent than help it.
-
-## Solution
-
-If the site backs an MCP server, an A2A-compatible agent, or a packaged skill set, publish the corresponding manifest at its `.well-known` path so agents can discover it without prior knowledge of your API:
-
-```json .well-known/mcp/server-card.json
-{
-  "name": "example-mcp",
-  "version": "1.0.0",
-  "description": "MCP server for Example Co's API",
-  "endpoint": "https://example.com/mcp"
-}
-```
-
-Remove any leftover `/.well-known/ai-plugin.json` from the ChatGPT-plugins era — it's dead weight now, not a discoverability signal.
 
 ## Enable / disable
 
@@ -63,3 +71,30 @@ disable = ["ax/*"]
 enable = ["ax/well-known-agent"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/api-discovery](/rules/ax/api-discovery): OpenAPI and OAuth documents, the other half of what an agent needs to call something.
+- [ax/agents-md](/rules/ax/agents-md): the human-readable instructions for a coding agent.
+- [ax/llms-txt](/rules/ax/llms-txt): the curated content index at the site root.
+- [ax/markdown-response](/rules/ax/markdown-response): serving clean Markdown for the pages themselves.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [llms.txt](https://squirrelscan.com/learn/llms-txt) for how an agent works through a report.
+
+## References
+
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [Agent2Agent protocol specification](https://a2a-protocol.org/latest/specification/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each manifest is listed with its path and the JSON keys it declared. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

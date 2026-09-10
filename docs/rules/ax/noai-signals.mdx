@@ -1,44 +1,41 @@
 ---
-title: "noai Signals"
-description: "Reports noai/noimageai tags and AI-search-quoting opt-outs"
+title: "noai and nosnippet: the AI opt-out tags squirrel reports"
+description: "Which pages declare noai, noimageai, nosnippet or max-snippet:0, and where the directive came from. squirrel reports, and never penalises."
 ---
 
-Reports declared `noai` / `noimageai` opt-outs, and the related `nosnippet` / `max-snippet:0` directives that gate whether AI-search answer engines can quote a page directly in a generated answer. All of these are the same shape of signal: a site saying "don't use this for X" without blocking access to the page itself.
+## What noai and nosnippet are
+
+`noai` and `noimageai` are an informal convention. Some AI companies said they would honour them for text and image use, no specification defines them, and nothing enforces them. They express intent, which is worth recording even where it is not binding.
+
+`nosnippet` and `max-snippet:0` are different. They are long-standing robots directives that Google documents, they tell a search engine not to show a text snippet from the page, and answer engines treat them as instructions not to quote the page verbatim. All four can be declared in a `<meta name="robots">` tag or in an `X-Robots-Tag` response header.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It reads the `X-Robots-Tag` response header and every `<meta>` element whose `name` is `robots`, `ai`, `googlebot` or `bingbot`, and matches four tokens case-insensitively in each: `noai`, `noimageai`, `nosnippet`, and `max-snippet:0` with optional spaces around the colon. It emits one check:
+
+- `noai-signals`: passes with the message `No noai / noimageai / snippet-limit signals declared` and the value `none` when nothing matched. Otherwise it reports at info status with `Declares AI opt-out signals:` followed by the signals found, each described in place, joined with `, `. The four descriptions are `noai (advisory opt-out from AI text use)`, `noimageai (advisory opt-out from AI image use)`, `nosnippet (limits AI-search quoting)` and `max-snippet:0 (limits AI-search quoting)`. When `noai` or `noimageai` is among them the message ends with ` noai/noimageai are advisory only — honoring them is up to each crawler, with no enforcement behind the tag.` Each item names the token and the source it came from, such as `noai in X-Robots-Tag header`.
+
+The `noai` match is word-bounded, so it never fires inside `noimageai`. When the page has no parsed document, which happens on an error page or a stored parse, the rule falls back to the extracted robots meta value alone. This rule reports and never penalises: the only non-info result is the pass.
+
+## How to fix it
+
+There is nothing to fix unless the declaration is missing or wrong. To declare the intent:
+
+```html
+<meta name="robots" content="noai, noimageai, nosnippet" />
+```
+
+Put it in `<head>`, or send the same directives in an `X-Robots-Tag` header when you want them on non-HTML responses too.
+
+Treat these tags as the declared-intent layer and robots.txt crawler blocks, covered by [ax/ai-crawlers](/rules/ax/ai-crawlers), as the enforcement layer. A `noai` tag with no matching robots.txt block is a request, not a control.
 
 | | |
 |---|---|
 | **Rule ID** | `ax/noai-signals` |
 | **Category** | [Agent Experience](/rules/ax) |
-| **Scope** | Per page |
+| **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 1/10 |
-
-<Note>This rule is purely informational: it reports what's declared and never penalizes a page for declaring or omitting an opt-out. These signals are also **advisory-only** — honoring them depends entirely on the crawler, with no enforcement mechanism behind the tag itself.</Note>
-
-## What it checks
-
-For each page, the rule reads:
-
-- **`X-Robots-Tag` header** and **`<meta name="robots">`** for the `noai` and `noimageai` tokens (an early, informally-adopted convention some AI companies said they'd respect for text and image use respectively).
-- **`nosnippet`** and **`max-snippet:0`**, which are the older, better-established snippet-control directives — they were built for classic search-result snippets, but AI-search answer engines that quote pages verbatim treat them as the same signal: don't display extracted text from this page.
-
-It reports which opt-outs are declared, at page or site scope, and notes the gap between `noai`/`noimageai` (aspirational, no enforcement guarantee) and `nosnippet`/`max-snippet:0` (long-standing directives most crawlers already implement).
-
-## Solution
-
-If you want a page kept out of AI-generated answers and snippets, declare it explicitly:
-
-```html
-<meta name="robots" content="noai, noimageai, nosnippet">
-```
-
-or as a header:
-
-```http
-X-Robots-Tag: noai, noimageai, nosnippet
-```
-
-Remember `noai`/`noimageai` are advisory: treat `robots.txt` crawler blocks (see [AI Crawler Access](/rules/ax/ai-crawlers)) as the enforcement layer, and these tags as the declared-intent layer on top of it.
 
 ## Enable / disable
 
@@ -63,3 +60,30 @@ disable = ["ax/*"]
 enable = ["ax/noai-signals"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): the robots.txt blocks that actually enforce a policy.
+- [ax/content-signals](/rules/ax/content-signals): the site-wide per-purpose declaration in robots.txt.
+- [core/nosnippet](/rules/core/nosnippet): the same directive read for its effect on search snippets.
+- [core/robots-meta](/rules/core/robots-meta): the indexing directives declared alongside these tokens.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
+
+## References
+
+- [Robots meta tag, data-nosnippet, and X-Robots-Tag specifications, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [meta name, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each declared token is listed with the tag or header it came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

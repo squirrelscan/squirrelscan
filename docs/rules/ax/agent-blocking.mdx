@@ -1,42 +1,46 @@
 ---
-title: "Agent Blocking"
-description: "Probes whether agent user-agents get 403s or challenge pages that browsers don't"
+title: "Blocking AI agents at the edge: what robots.txt hides"
+description: "A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three."
 ---
 
-`robots.txt` only tells you what a site *says* it allows. This rule checks what actually happens: it fetches the homepage with a plain browser user-agent, then again as `GPTBot`, then again as `Claude-User`, and compares the results. A site can declare `ChatGPT-User: Allow: /` in `robots.txt` and still WAF-block that same user-agent at the edge — [AI Crawler Access](/rules/ax/ai-crawlers) wouldn't catch that; this rule does.
+## What edge blocking is
+
+robots.txt states a policy. It does not enforce one. A site can allow an AI user-agent in robots.txt and still block it in front of the origin, through a WAF rule, a CDN bot-management toggle, or a managed rule set with a "block AI bots" switch. The crawler gets a challenge page, a 403, or a stripped-down interstitial, and nothing in robots.txt shows it.
+
+The two cases differ in cost. Blocking a training crawler such as `GPTBot` is often the intent behind flipping that switch. Blocking `Claude-User` is not: that user-agent fetches a page because a person asked for it inside an assistant and is waiting for the answer.
+
+## What squirrel checks
+
+The rule runs once per crawl. It uses three homepage fetches made during the prefetch phase, one with a browser user-agent, one as `GPTBot` and one as `Claude-User`, and compares each AI response against the browser baseline. It emits one to three checks:
+
+- `agent-blocking`, skipped with the message `Agent-access probe data not available` when the prefetch did not run, or `Browser baseline did not return 2xx (status 503) — cannot compare agent access` when the browser fetch itself failed. Without a healthy baseline the site may simply be down, so the rule declines to blame the agents.
+- `agent-access-payment`: reports at info status with the message `GPTBot hit a pay-per-crawl wall (crawler-price) — reported by ax/pay-per-crawl, not a block` when the response is a 402 or carries a payment signal. A deliberate payment wall is not an access block.
+- `agent-access`: at info status with `GPTBot probe was inconclusive (network error)` when the request never completed. At warn status with `GPTBot got the same status as the browser but only 12% of the body — likely a soft-block / interstitial served to the agent` when the status matched but the body came back under a fifth of the browser's size. At warn status with `GPTBot is blocked (HTTP 403) while the browser gets 200 — often an intentional training opt-out, but confirm it was deliberate` for a challenge, a 401, a 403 or a 5xx. The same condition on `Claude-User` is a fail with `Claude-User is blocked (bot challenge (cf-chl)) while the browser gets 200 — this breaks a live fetch a real user triggered inside an assistant, the worst case for agent access`.
+- `agent-blocking`: passes with `GPTBot and Claude-User reached the homepage like a browser` when every AI probe matched the baseline.
+
+The soft-block threshold is a fifth of the browser body size. That is the shape of an interstitial: same 200, a fraction of the content. The rule's severity is error so that a blocked user-action fetcher badges as an error; a training-crawler block emits a warn check, which the report downgrades to a warning on its own.
+
+## How to fix it
+
+Allow-list the user-action fetchers in the edge rules, whatever the bot-management preset does by default:
+
+```
+ChatGPT-User
+Claude-User
+Perplexity-User
+```
+
+These three fetch on behalf of a person who is waiting. Blocking a training crawler alongside them is a separate decision, and this rule reports it without penalising the score.
+
+The common false positive is a rate limit that happens to catch the probe. A single homepage fetch is unlikely to trip one, but a site already under load can return a 5xx to the agent and a 200 to the browser by luck of timing. Re-run the audit after any WAF, CDN or bot-management change and check whether the finding is stable.
 
 | | |
 |---|---|
 | **Rule ID** | `ax/agent-blocking` |
 | **Category** | [Agent Experience](/rules/ax) |
 | **Scope** | Site-wide |
-| **Severity** | error (when a user-action fetcher like Claude-User is blocked; blocking only training crawlers downgrades to a warning) |
+| **Severity** | error |
 | **Weight** | 3/10 |
-
-<Note>This rule can penalize your score. Blocking training crawlers on purpose is a legitimate, common choice (see [AI Crawler Access](/rules/ax/ai-crawlers)); blocking a user-action fetcher like `Claude-User` breaks a live request a real user is waiting on, which is a genuine defect rather than a policy choice. The rule badge is **warning** either way — a blocked `Claude-User` is the worst case the check flags, called out explicitly in the finding message, but it doesn't carry a separate error-severity badge.</Note>
-
-## What it checks
-
-The audit issues three requests to the homepage: one with a standard browser user-agent, one as `GPTBot`, and one as `Claude-User`. It flags the site when the browser request returns `200` but an agent request comes back as:
-
-- an HTTP `403`,
-- a Cloudflare challenge response (`cf-mitigated: challenge` header, or a body containing `__cf_chl_`), or
-- another bot-challenge pattern that a browser wouldn't hit.
-
-Both cases are reported as a warning-level check:
-
-- **`GPTBot` blocked**: often intentional (opting out of training) but worth surfacing if it wasn't a deliberate choice.
-- **`Claude-User` blocked**: the more serious case — this is a live user-action fetcher, so blocking it breaks a request a real person initiated inside an AI assistant, not a background crawl. The finding message calls this out explicitly, even though the rule's severity badge stays warning.
-
-## Why it matters
-
-Cloudflare has said it will flip AI-crawler blocking on by default for many zones from **September 15, 2026**, and most bot-management products bundle training crawlers, AI-search bots, and user-action fetchers into one "AI bots" toggle. That bundling is the risk: a site owner who intends to opt out of model training can end up blocking the fetcher behind their own customers' AI-assistant requests without knowing it, because a single dashboard switch controls all three categories at once. Whatever policy a site chooses, it should be the one that's actually in effect at the edge, not whatever a bot-management default silently applied.
-
-## Solution
-
-- Check your WAF / bot-management rules for a blanket "block AI bots" or "block AI crawlers" toggle and confirm it's scoped to the crawler classes you actually want to block (see [AI Crawler Access](/rules/ax/ai-crawlers) for the training vs. search vs. user-action breakdown).
-- Explicitly allow-list `ChatGPT-User`, `Claude-User`, and `Perplexity-User` in your edge rules if you want AI-assistant users to be able to browse your site through their tools.
-- Re-run this probe after any change to bot-management, WAF, or CDN configuration.
 
 ## Enable / disable
 
@@ -61,3 +65,31 @@ disable = ["ax/*"]
 enable = ["ax/agent-blocking"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): the declared policy in robots.txt, which this rule tests against reality.
+- [ax/pay-per-crawl](/rules/ax/pay-per-crawl): the 402 responses this rule hands off rather than reporting as blocks.
+- [ax/content-without-js](/rules/ax/content-without-js): content an agent cannot see even when it does reach the page.
+- [security/csp](/rules/security/csp): the other edge configuration that changes what a client receives.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
+
+## References
+
+- [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)
+- [403 Forbidden, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/403)
+- [OpenAI crawlers, OpenAI platform docs](https://platform.openai.com/docs/bots)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each probe shows its status and body size against the browser. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>
