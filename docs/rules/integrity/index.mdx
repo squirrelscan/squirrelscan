@@ -14,32 +14,32 @@ These rules run **locally and free**, no login required.
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Template Discontinuity" icon="triangle-exclamation" href="/rules/integrity/template-discontinuity">
-    Detects pages whose markup diverges hard from the site's common template
+  <Card title="Template discontinuity: a page that is not on your theme" icon="triangle-exclamation" href="/rules/integrity/template-discontinuity">
+    An injected standalone page loads none of your site's CSS, hosts or chrome. squirrel fingerprints every page and scores it against the site baseline.
   </Card>
-  <Card title="Hidden Orphan Page" icon="triangle-exclamation" href="/rules/integrity/orphan-page">
-    Detects crawled pages absent from every sitemap AND linked from nowhere
+  <Card title="Hidden orphan page: reachable but linked from nowhere" icon="triangle-exclamation" href="/rules/integrity/orphan-page">
+    An injected page hides by being in no sitemap and linked from no page. squirrel finds crawled pages with zero inbound links and no sitemap entry.
   </Card>
-  <Card title="Brand Impersonation" icon="triangle-exclamation" href="/rules/integrity/brand-impersonation">
-    Detects pages impersonating a third-party brand's login or booking surface
+  <Card title="Brand impersonation: a sign-in page that is not the brand's" icon="triangle-exclamation" href="/rules/integrity/brand-impersonation">
+    A 'Sign in with Google' control pointing at a host that is not Google is a phishing pattern. squirrel checks where credential controls actually go.
   </Card>
-  <Card title="Obfuscated Inline Script" icon="triangle-exclamation" href="/rules/integrity/obfuscated-script">
-    Detects large inline scripts with high entropy and obfuscation markers
+  <Card title="Obfuscated inline script: spotting an injected payload" icon="triangle-exclamation" href="/rules/integrity/obfuscated-script">
+    A large inline script with high entropy and eval or anti-tamper markers is rarely something a site ships on purpose. squirrel measures all three.
   </Card>
-  <Card title="Fake Authentication Overlay" icon="triangle-exclamation" href="/rules/integrity/fake-auth-overlay">
-    Detects full-viewport credential overlays and off-brand sign-in controls
+  <Card title="Fake authentication overlay: full-screen login iframes" icon="triangle-exclamation" href="/rules/integrity/fake-auth-overlay">
+    A fixed, full-viewport, high z-index iframe with an auth identifier is a credential-harvesting overlay. squirrel measures the geometry and the intent.
   </Card>
-  <Card title="SEO Doorway Page" icon="triangle-exclamation" href="/rules/integrity/seo-doorway">
-    Detects injected off-topic, keyword-stuffed affiliate doorway posts
+  <Card title="Doorway page: injected affiliate spam on a legitimate site" icon="triangle-exclamation" href="/rules/integrity/seo-doorway">
+    An off-topic, keyword-stuffed affiliate post is how a compromise monetises your domain's authority. squirrel checks the title, the density and the body.
   </Card>
-  <Card title="Cloaking / UA-Gated Content" icon="triangle-exclamation" href="/rules/integrity/cloaking">
-    Detects pages serving different content to Googlebot than to a normal visitor
+  <Card title="Cloaking: showing Googlebot a different page" icon="triangle-exclamation" href="/rules/integrity/cloaking">
+    An injected payload can hide from you by branching on user-agent or a query token. squirrel re-fetches suspicious paths and compares the responses.
   </Card>
-  <Card title="Kit Signature" icon="triangle-exclamation" href="/rules/integrity/kit-signature">
-    Matches a page against threat-intel signatures of known phishing and malware kits
+  <Card title="Kit signature: matching a page against known phishing kits" icon="triangle-exclamation" href="/rules/integrity/kit-signature">
+    A phishing kit reuses the same markup and strings on every site it lands on. squirrel matches each page against bundled kit signatures.
   </Card>
-  <Card title="Known Malicious URL" icon="triangle-exclamation" href="/rules/integrity/known-malicious-url">
-    Cross-references site URLs and outbound links against threat-intel feeds
+  <Card title="Known malicious URL: checking against threat feeds" icon="triangle-exclamation" href="/rules/integrity/known-malicious-url">
+    A page can be listed by Safe Browsing before you notice anything wrong. squirrel checks your URLs and outbound links against reputation feeds.
   </Card>
 </CardGroup>
 

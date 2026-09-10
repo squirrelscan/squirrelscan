@@ -8,65 +8,65 @@ Crawlability rules cover the layer before ranking: whether a search engine can r
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="4XX Pages in Sitemap" icon="triangle-exclamation" href="/rules/crawl/sitemap-4xx">
-    Checks for sitemap URLs returning 4XX status codes
+  <Card title="4XX pages in sitemap: dead URLs you are still submitting" icon="triangle-exclamation" href="/rules/crawl/sitemap-4xx">
+    A sitemap entry that returns 404 wastes a crawl and teaches search engines to trust the file less. squirrel reports the status of every checked entry.
   </Card>
-  <Card title="All Non-Indexed Pages" icon="circle-info" href="/rules/crawl/all-noindex-pages">
-    Lists all pages blocked from indexing for user audit
+  <Card title="All non-indexed pages: the full blocked list for review" icon="circle-info" href="/rules/crawl/all-noindex-pages">
+    One list of every page a search engine will not index, with the reason. squirrel can raise severity for URL patterns that must never be blocked.
   </Card>
-  <Card title="Canonical Chain" icon="triangle-exclamation" href="/rules/crawl/canonical-chain">
-    Checks for redirect chains on canonical URLs
+  <Card title="Canonical URL resolves through a redirect: how to spot it" icon="triangle-exclamation" href="/rules/crawl/canonical-chain">
+    A canonical that redirects sends search engines on an extra hop before the real URL. squirrel checks the tag against the page's own redirect chain.
   </Card>
-  <Card title="HTML Size" icon="triangle-exclamation" href="/rules/crawl/html-size">
-    Checks HTML document size against Googlebot crawl limits
+  <Card title="HTML document size: when a page is too big to crawl fully" icon="triangle-exclamation" href="/rules/crawl/html-size">
+    A very large HTML document risks being read only in part. squirrel measures the response body and warns at 1MB, failing at 2MB by default.
   </Card>
-  <Card title="Indexability Check" icon="circle-info" href="/rules/crawl/indexability">
-    Identifies pages blocked from search engine indexing
+  <Card title="Page is blocked from indexing: finding the directive" icon="circle-info" href="/rules/crawl/indexability">
+    A page can be excluded from search by a robots meta tag or an X-Robots-Tag header. squirrel reports which one, per page.
   </Card>
-  <Card title="Indexability Conflicts" icon="triangle-exclamation" href="/rules/crawl/indexability-conflicts">
-    Detects conflicting signals between robots.txt and meta/headers
+  <Card title="robots.txt vs noindex: the two conflicts explained" icon="triangle-exclamation" href="/rules/crawl/indexability-conflicts">
+    A page blocked in robots.txt can never be read for its noindex tag. squirrel compares the crawl rules against the page directives, both ways.
   </Card>
-  <Card title="Noindex in Sitemap" icon="triangle-exclamation" href="/rules/crawl/noindex-in-sitemap">
-    Checks for noindexed pages listed in sitemap
+  <Card title="Noindexed page in sitemap: why it is a contradiction" icon="triangle-exclamation" href="/rules/crawl/noindex-in-sitemap">
+    A sitemap says crawl this, noindex says do not index it. squirrel cross-references every crawled page's robots meta against your sitemap URLs.
   </Card>
-  <Card title="Pagination" icon="circle-info" href="/rules/crawl/pagination">
-    Checks that paginated pages have proper canonicals
+  <Card title="Pagination canonicals: why page 2 is not page 1" icon="circle-info" href="/rules/crawl/pagination">
+    Canonicalizing every paginated page to page 1 hides the rest of the sequence. squirrel detects paginated URLs and checks where their canonical points.
   </Card>
-  <Card title="PDF Size" icon="triangle-exclamation" href="/rules/crawl/pdf-size">
-    Checks linked PDF sizes against a 60MB default truncation threshold
+  <Card title="PDF size: large linked documents and what gets indexed" icon="triangle-exclamation" href="/rules/crawl/pdf-size">
+    A very large PDF may only be read in part by a crawler. squirrel measures every internal PDF the crawl fetched and reports the outliers.
   </Card>
-  <Card title="Redirect Chains" icon="triangle-exclamation" href="/rules/crawl/redirect-chain">
-    Detects multi-hop redirect chains that waste crawl budget
+  <Card title="Redirect chains: when one hop turns into three" icon="triangle-exclamation" href="/rules/crawl/redirect-chain">
+    Each redirect hop costs latency and crawl budget, and search engines stop following after a few. squirrel counts the hops on every crawled URL.
   </Card>
-  <Card title="Robots Meta Conflict" icon="triangle-exclamation" href="/rules/crawl/robots-meta-conflict">
-    Detects conflicts between robots meta tags and robots.txt
+  <Card title="Redundant noindex: a blocked page nobody reads it on" icon="triangle-exclamation" href="/rules/crawl/robots-meta-conflict">
+    A page disallowed in robots.txt is never fetched, so its noindex is never seen. squirrel lists the pages carrying both.
   </Card>
-  <Card title="Robots.txt" icon="circle-exclamation" href="/rules/crawl/robots-txt">
-    Checks if robots.txt exists and is properly configured
+  <Card title="robots.txt: what to put in it and how squirrel checks it" icon="circle-exclamation" href="/rules/crawl/robots-txt">
+    A missing robots.txt, a Disallow: / left in production, or a syntax error changes what gets crawled. squirrel checks existence, syntax and rules.
   </Card>
-  <Card title="Schema + Noindex Conflict" icon="circle-exclamation" href="/rules/crawl/schema-noindex-conflict">
-    Detects pages with rich result schema that are blocked from indexing
+  <Card title="Rich result schema on a noindexed page: wasted markup" icon="circle-exclamation" href="/rules/crawl/schema-noindex-conflict">
+    Structured data on a page search engines cannot index will never produce a rich result. squirrel finds pages carrying both.
   </Card>
-  <Card title="Sitemap Coverage" icon="triangle-exclamation" href="/rules/crawl/sitemap-coverage">
-    Checks for indexable pages that are not in the sitemap
+  <Card title="Indexable pages missing from the sitemap: measuring the gap" icon="triangle-exclamation" href="/rules/crawl/sitemap-coverage">
+    A page you want indexed that is in no sitemap depends entirely on link discovery. squirrel diffs the crawl against the sitemap in both directions.
   </Card>
-  <Card title="Sitemap Domain" icon="circle-exclamation" href="/rules/crawl/sitemap-domain">
-    Checks that all sitemap URLs belong to the expected domain
+  <Card title="Cross-domain sitemap URL: why search engines ignore it" icon="circle-exclamation" href="/rules/crawl/sitemap-domain">
+    A sitemap can only vouch for URLs on its own host. squirrel compares every sitemap entry's hostname against your base URL.
   </Card>
-  <Card title="Sitemap Exists" icon="circle-exclamation" href="/rules/crawl/sitemap-exists">
-    Checks if XML sitemap exists and is referenced in robots.txt
+  <Card title="No XML sitemap found: where squirrel looks and what to add" icon="circle-exclamation" href="/rules/crawl/sitemap-exists">
+    Without a sitemap, discovery depends entirely on internal links. squirrel checks the common locations and robots.txt, and counts the URLs it found.
   </Card>
-  <Card title="Sitemap Lastmod Churn" icon="triangle-exclamation" href="/rules/crawl/sitemap-lastmod-churn">
-    Detects build-stamped lastmod values that carry no real freshness signal
+  <Card title="Sitemap lastmod stamped at build time: how to detect it" icon="triangle-exclamation" href="/rules/crawl/sitemap-lastmod-churn">
+    If every lastmod carries the same date, the field records your deploy, not your content. squirrel counts distinct days across the sitemap.
   </Card>
-  <Card title="Sitemap Lastmod Drift" icon="triangle-exclamation" href="/rules/crawl/sitemap-lastmod-drift">
-    Checks that sitemap lastmod matches the page's own dateModified
+  <Card title="Sitemap lastmod disagrees with the page's dateModified" icon="triangle-exclamation" href="/rules/crawl/sitemap-lastmod-drift">
+    When lastmod and the page's own dateModified disagree, one of them is wrong. squirrel compares them per URL and separates the two directions.
   </Card>
-  <Card title="Sitemap Valid" icon="circle-exclamation" href="/rules/crawl/sitemap-valid">
-    Validates sitemap structure and URL limits
+  <Card title="Sitemap validation: XML errors and the 50,000 entry limit" icon="circle-exclamation" href="/rules/crawl/sitemap-valid">
+    A sitemap that fails to parse or exceeds the protocol limits is ignored past the break. squirrel reports errors per file and checks entry counts.
   </Card>
-  <Card title="Soft 404" icon="triangle-exclamation" href="/rules/crawl/soft-404">
-    Detects pages that serve 404/error content with an HTTP 200 status
+  <Card title="Soft 404: error content served with an HTTP 200 status" icon="triangle-exclamation" href="/rules/crawl/soft-404">
+    A not-found page that answers 200 gets crawled and can be indexed as thin content. squirrel detects the error shell and re-checks it before reporting.
   </Card>
 </CardGroup>
 

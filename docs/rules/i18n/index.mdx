@@ -8,11 +8,11 @@ Internationalization rules cover two declarations. The `lang` attribute on the `
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Hreflang Tags" icon="circle-info" href="/rules/i18n/hreflang">
-    Checks for hreflang link elements
+  <Card title="hreflang: x-default and the self-referencing tag" icon="circle-info" href="/rules/i18n/hreflang">
+    hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them.
   </Card>
-  <Card title="Lang Attribute" icon="triangle-exclamation" href="/rules/i18n/lang-attribute">
-    Checks for lang attribute on html element
+  <Card title="lang attribute on <html>: declaring the page's language" icon="triangle-exclamation" href="/rules/i18n/lang-attribute">
+    Without a lang attribute a screen reader guesses which voice to use and may read the page in the wrong language. squirrel checks it and its format.
   </Card>
 </CardGroup>
 

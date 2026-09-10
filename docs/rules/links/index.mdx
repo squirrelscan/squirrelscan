@@ -8,50 +8,50 @@ Links rules read the link graph the crawl built. Half of them are health checks:
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Anchor Text" icon="triangle-exclamation" href="/rules/links/anchor-text">
-    Checks for empty or generic anchor text
+  <Card title="Empty and generic anchor text: click here and icons" icon="triangle-exclamation" href="/rules/links/anchor-text">
+    A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name.
   </Card>
-  <Card title="Broken External Links" icon="triangle-exclamation" href="/rules/links/broken-external-links">
-    Detects external links returning 4xx/5xx errors or timeouts
+  <Card title="Broken external links: link rot on pages you cannot fix" icon="triangle-exclamation" href="/rules/links/broken-external-links">
+    External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones.
   </Card>
-  <Card title="Broken Links" icon="circle-exclamation" href="/rules/links/broken-links">
-    Detects links returning 404 or 5xx errors
+  <Card title="Broken internal links: 404s inside your own site" icon="circle-exclamation" href="/rules/links/broken-links">
+    An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl.
   </Card>
-  <Card title="Dead Links (Cloud)" icon="circle-info" href="/rules/links/dead-links">
-    Verifies external links through the cloud service with a shared global cache
+  <Card title="Cloud dead-link checking: the shared external link cache" icon="circle-info" href="/rules/links/dead-links">
+    Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead.
   </Card>
-  <Card title="Dead-End Pages" icon="triangle-exclamation" href="/rules/links/dead-end-pages">
-    Pages with no outgoing internal links, potentially trapping users
+  <Card title="Dead-end page: no outgoing internal links to continue with" icon="triangle-exclamation" href="/rules/links/dead-end-pages">
+    A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links.
   </Card>
-  <Card title="External Links" icon="circle-info" href="/rules/links/external-links">
-    Reports on external link count
+  <Card title="External link count: how many outbound links a page has" icon="circle-info" href="/rules/links/external-links">
+    External links are normal and this rule does not penalise them. squirrel counts them per page so you can see where they concentrate.
   </Card>
-  <Card title="HTTPS Downgrade" icon="triangle-exclamation" href="/rules/links/https-downgrade">
-    Detects links from HTTPS pages to HTTP destinations
+  <Card title="Links from an HTTPS page to an http:// destination" icon="triangle-exclamation" href="/rules/links/https-downgrade">
+    A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page.
   </Card>
-  <Card title="Internal Links" icon="triangle-exclamation" href="/rules/links/internal-links">
-    Validates internal link count
+  <Card title="Internal link count per page: too few and too many" icon="triangle-exclamation" href="/rules/links/internal-links">
+    A page with no internal links leads nowhere and a page with hundreds dilutes each one. squirrel counts internal links against a configurable range.
   </Card>
-  <Card title="Invalid Links" icon="triangle-exclamation" href="/rules/links/invalid-links">
-    Detects invalid link formats on the page
+  <Card title="Invalid links: hrefs that do not parse as a URL" icon="triangle-exclamation" href="/rules/links/invalid-links">
+    A malformed href is a link that goes nowhere, and javascript:void(0) is a button wearing a link costume. squirrel reports every href the parser rejected.
   </Card>
-  <Card title="No Contextual Inbound Links" icon="triangle-exclamation" href="/rules/links/no-contextual-inbound">
-    Detects pages whose only internal inbound links come from sitewide chrome (nav, header, footer, sidebar)
+  <Card title="Linked only from the nav and footer: no editorial links" icon="triangle-exclamation" href="/rules/links/no-contextual-inbound">
+    A footer link on every page looks like hundreds of inbound links and carries none of the signal. squirrel counts only links outside sitewide chrome.
   </Card>
-  <Card title="Nofollow Internal" icon="triangle-exclamation" href="/rules/links/nofollow-internal">
-    Flags internal links with rel=nofollow
+  <Card title="rel=nofollow on an internal link: usually a mistake" icon="triangle-exclamation" href="/rules/links/nofollow-internal">
+    Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it.
   </Card>
-  <Card title="Orphan Pages" icon="triangle-exclamation" href="/rules/links/orphan-pages">
-    Detects pages with no internal links pointing to them
+  <Card title="Orphan pages: pages with too few inbound internal links" icon="triangle-exclamation" href="/rules/links/orphan-pages">
+    A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page.
   </Card>
-  <Card title="Redirect Chains" icon="triangle-exclamation" href="/rules/links/redirect-chains">
-    Detects URLs that redirect and links pointing to redirects
+  <Card title="Links pointing at redirecting URLs: the hop on every click" icon="triangle-exclamation" href="/rules/links/redirect-chains">
+    An internal link to a URL that redirects costs a round trip every time anyone follows it. squirrel finds redirecting pages and who links to them.
   </Card>
-  <Card title="Tel & Mailto Links" icon="circle-info" href="/rules/links/tel-mailto">
-    Validates tel: and mailto: link formats
+  <Card title="tel: and mailto: links: format and href/text mismatches" icon="circle-info" href="/rules/links/tel-mailto">
+    A phone link whose href differs from the number on screen dials the wrong person. squirrel validates both formats and compares them with the visible text.
   </Card>
-  <Card title="Weak Internal Links" icon="triangle-exclamation" href="/rules/links/weak-internal-links">
-    Detects pages with only 1 dofollow internal link pointing to them
+  <Card title="Pages with only one internal link pointing to them" icon="triangle-exclamation" href="/rules/links/weak-internal-links">
+    One inbound link is enough to be found and not enough to look important. squirrel lists every page whose dofollow inbound count is exactly one.
   </Card>
 </CardGroup>
 

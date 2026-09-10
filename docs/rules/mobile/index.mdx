@@ -8,23 +8,23 @@ Mobile rules check whether a page works on a phone: the viewport tag that decide
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Font Size" icon="triangle-exclamation" href="/rules/mobile/font-size">
-    Checks for readable font sizes on mobile
+  <Card title="Font size under 12px: text too small to read on a phone" icon="triangle-exclamation" href="/rules/mobile/font-size">
+    Body text below about 16px is hard to read on a phone without zooming. squirrel checks inline styles for sizes under 12px.
   </Card>
-  <Card title="Horizontal Scroll" icon="triangle-exclamation" href="/rules/mobile/horizontal-scroll">
-    Checks for elements that may cause horizontal scrolling
+  <Card title="Horizontal scroll on mobile: the usual causes" icon="triangle-exclamation" href="/rules/mobile/horizontal-scroll">
+    A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes.
   </Card>
-  <Card title="Interstitials" icon="triangle-exclamation" href="/rules/mobile/interstitials">
-    Detects potentially intrusive mobile interstitials
+  <Card title="Intrusive interstitials: popups that cover mobile content" icon="triangle-exclamation" href="/rules/mobile/interstitials">
+    A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries.
   </Card>
-  <Card title="Tap Targets" icon="triangle-exclamation" href="/rules/mobile/tap-targets">
-    Checks for properly sized touch targets
+  <Card title="Tap target size: the 44 by 44 pixel guideline" icon="triangle-exclamation" href="/rules/mobile/tap-targets">
+    A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions.
   </Card>
-  <Card title="Viewport Meta" icon="circle-exclamation" href="/rules/mobile/viewport">
-    Checks for proper viewport meta tag
+  <Card title="Missing viewport meta tag: what it does and what to set" icon="circle-exclamation" href="/rules/mobile/viewport">
+    Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties.
   </Card>
-  <Card title="Viewport Zoom" icon="circle-exclamation" href="/rules/mobile/viewport-zoom">
-    Checks that viewport doesn't disable user zoom
+  <Card title="user-scalable=no: the viewport setting that blocks zoom" icon="circle-exclamation" href="/rules/mobile/viewport-zoom">
+    Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale.
   </Card>
 </CardGroup>
 

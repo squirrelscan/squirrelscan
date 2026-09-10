@@ -8,71 +8,71 @@ Content rules read the words a visitor actually sees. Some of them catch pipelin
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Article Link Density" icon="triangle-exclamation" href="/rules/content/article-links">
-    Articles should have appropriate internal and external links based on length
+  <Card title="Article link density: how many links an article needs" icon="triangle-exclamation" href="/rules/content/article-links">
+    An article that cites nothing and links nowhere is a dead end. squirrel scales the minimum with the article's length.
   </Card>
-  <Card title="Author Info" icon="circle-info" href="/rules/content/author-info">
-    Checks for author markup and attribution
+  <Card title="Author attribution: schema, rel=author and visible bylines" icon="circle-info" href="/rules/content/author-info">
+    Who wrote a page is part of how a reader decides whether to trust it. squirrel inventories the author markup a page carries.
   </Card>
-  <Card title="Broken HTML" icon="triangle-exclamation" href="/rules/content/broken-html">
-    Checks for malformed HTML structure
+  <Card title="Malformed HTML: doctype, nesting and deprecated tags" icon="triangle-exclamation" href="/rules/content/broken-html">
+    Browsers recover from bad markup silently and other parsers may not. squirrel checks document structure, nesting and deprecated elements.
   </Card>
-  <Card title="Content Freshness" icon="circle-info" href="/rules/content/freshness">
-    Checks for last-modified and published date signals
+  <Card title="Freshness signals: the dates a page publishes about itself" icon="circle-info" href="/rules/content/freshness">
+    squirrel inventories the date signals on a page: the Last-Modified header, schema dates, time elements and Open Graph article dates.
   </Card>
-  <Card title="Content Quality" icon="circle-info" href="/rules/content/quality">
-    LLM-based content quality analysis for SEO
+  <Card title="LLM content quality score: what it measures" icon="circle-info" href="/rules/content/quality">
+    An optional language-model read of the page copy, scored 0 to 100 with written feedback. Off by default and needs an OpenRouter key.
   </Card>
-  <Card title="Date Agreement" icon="triangle-exclamation" href="/rules/content/date-agreement">
-    Checks the visible date, schema dates and URL/title year agree
+  <Card title="Visible date disagrees with schema: which date is wrong" icon="triangle-exclamation" href="/rules/content/date-agreement">
+    A page states its date in several places and presence checks pass as soon as one exists. squirrel compares the byline, the schema and the URL year.
   </Card>
-  <Card title="Development Host Leakage" icon="triangle-exclamation" href="/rules/content/dev-leakage">
-    Detects localhost, private, staging and preview hosts on a production page
+  <Card title="localhost in production: dev hosts left in the markup" icon="triangle-exclamation" href="/rules/content/dev-leakage">
+    A link or image pointing at localhost or a preview deployment is broken for every visitor. squirrel classifies the host and says whether it is yours.
   </Card>
-  <Card title="Duplicate Description" icon="triangle-exclamation" href="/rules/content/duplicate-description">
-    Checks for duplicate meta descriptions across the site
+  <Card title="Duplicate meta descriptions across pages" icon="triangle-exclamation" href="/rules/content/duplicate-description">
+    One description reused across a section describes none of those pages well. squirrel groups every crawled page by its meta description.
   </Card>
-  <Card title="Duplicate Title" icon="triangle-exclamation" href="/rules/content/duplicate-title">
-    Checks for duplicate title tags across the site
+  <Card title="Duplicate title tags: the same title on several pages" icon="triangle-exclamation" href="/rules/content/duplicate-title">
+    Two pages with the same title compete with each other in search and look identical in results. squirrel groups every crawled page by its title.
   </Card>
-  <Card title="Encoding Corruption" icon="triangle-exclamation" href="/rules/content/mojibake">
-    Detects mojibake and replacement characters in visible text
+  <Card title="Mojibake: â€™ and other encoding corruption in page text" icon="triangle-exclamation" href="/rules/content/mojibake">
+    Strange character sequences in your copy mean the bytes and the declared encoding disagree. squirrel finds them and names which of the two is wrong.
   </Card>
-  <Card title="Heading Hierarchy" icon="triangle-exclamation" href="/rules/content/heading-hierarchy">
-    Validates heading structure and hierarchy
+  <Card title="Skipped heading levels: h1 to h3 and other outline problems" icon="triangle-exclamation" href="/rules/content/heading-hierarchy">
+    Headings are the page's outline, and a skipped level breaks it for anyone navigating by structure. squirrel checks order, emptiness, length and repeats.
   </Card>
-  <Card title="Hidden Text and Links" icon="triangle-exclamation" href="/rules/content/hidden-text">
-    Detects text and links hidden from users but left visible to search engines
+  <Card title="Hidden text and links: what Google's spam policy covers" icon="triangle-exclamation" href="/rules/content/hidden-text">
+    Text a crawler reads and a visitor cannot see is a spam policy violation. squirrel finds it while exempting screen-reader and collapsed-UI patterns.
   </Card>
-  <Card title="Keyword Stuffing" icon="triangle-exclamation" href="/rules/content/keyword-stuffing">
-    Detects excessive keyword repetition in content
+  <Card title="Keyword stuffing: measuring density around your CTAs" icon="triangle-exclamation" href="/rules/content/keyword-stuffing">
+    Repeating a term unnaturally is a spam policy violation. squirrel measures density while discounting repeated call-to-action labels.
   </Card>
-  <Card title="Meta Tags in Body" icon="circle-exclamation" href="/rules/content/meta-in-body">
-    Detects meta tags incorrectly placed in document body
+  <Card title="Meta tags in the body: why they are silently ignored" icon="circle-exclamation" href="/rules/content/meta-in-body">
+    A meta description or robots tag inside body is not read by anything. squirrel finds every meta element that ended up outside the head.
   </Card>
-  <Card title="MIME Type Validation" icon="triangle-exclamation" href="/rules/content/mime-type">
-    Detects Content-Type header mismatches with file extensions
+  <Card title="Wrong Content-Type: header and extension disagree" icon="triangle-exclamation" href="/rules/content/mime-type">
+    A stylesheet served as text/html is refused by the browser under nosniff. squirrel compares the response type against the URL extension.
   </Card>
-  <Card title="Placeholder Text" icon="triangle-exclamation" href="/rules/content/placeholder-text">
-    Detects template leftovers and filler copy that shipped to production
+  <Card title="Lorem ipsum in production: placeholders and leftovers" icon="triangle-exclamation" href="/rules/content/placeholder-text">
+    Filler copy, unrendered template syntax and a visible undefined all mean something shipped unfinished. squirrel names the family and shows a sample.
   </Card>
-  <Card title="Reading Level" icon="circle-info" href="/rules/content/reading-level">
-    Analyzes content readability using Flesch-Kincaid
+  <Card title="Flesch reading ease: measuring how hard a page is to read" icon="circle-info" href="/rules/content/reading-level">
+    squirrel computes a Flesch reading ease score and a Flesch-Kincaid grade level from the page text, and reports both without judging them.
   </Card>
-  <Card title="Stale Copyright Year" icon="circle-info" href="/rules/content/stale-copyright">
-    Checks the footer copyright year against the current year
+  <Card title="Footer copyright year behind the current year" icon="circle-info" href="/rules/content/stale-copyright">
+    An old year in the footer is the cheapest signal that a site is abandoned. squirrel reads the footer only, so dated body copy is left alone.
   </Card>
-  <Card title="Thin Content vs Site Norm" icon="triangle-exclamation" href="/rules/content/thin-vs-site-norm">
-    Finds pages far shorter than the site's own norm for their page type
+  <Card title="Thin against your own site: outliers by page type" icon="triangle-exclamation" href="/rules/content/thin-vs-site-norm">
+    A 200 word product page is normal and a 200 word article is not. squirrel compares each page against the median for its own page type.
   </Card>
-  <Card title="Title Template Consistency" icon="triangle-exclamation" href="/rules/content/title-pattern-outlier">
-    Finds pages whose title breaks the template the rest of the site follows
+  <Card title="Inconsistent page titles: pages breaking the template" icon="triangle-exclamation" href="/rules/content/title-pattern-outlier">
+    Most sites title pages the same way and then ship a pocket that does not. squirrel infers your template and reports the pages that break it.
   </Card>
-  <Card title="Unrendered Markup" icon="triangle-exclamation" href="/rules/content/unrendered-markup">
-    Detects literal markdown or escaped HTML leaking into rendered copy
+  <Card title="Literal **bold** on the page: markdown that never rendered" icon="triangle-exclamation" href="/rules/content/unrendered-markup">
+    Visible asterisks, bracket links or escaped tags mean a value printed as text instead of markup. squirrel reads the prose and names the mistake.
   </Card>
-  <Card title="Word Count" icon="triangle-exclamation" href="/rules/content/word-count">
-    Checks content length for thin content issues
+  <Card title="Thin content: the 300 word floor and what to do below it" icon="triangle-exclamation" href="/rules/content/word-count">
+    A page under a few hundred words rarely answers the question it ranks for. squirrel counts the words and reports against two thresholds.
   </Card>
 </CardGroup>
 

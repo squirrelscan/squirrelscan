@@ -8,50 +8,50 @@ Images rules cover the two things images most often break: page weight and layou
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Broken Images" icon="circle-exclamation" href="/rules/images/broken-images">
-    Checks for images returning 404 errors
+  <Card title="Broken images: empty and placeholder src attributes" icon="circle-exclamation" href="/rules/images/broken-images">
+    An img with an empty or placeholder src renders as a broken icon. squirrel collects image sources across the crawl and flags the malformed ones.
   </Card>
-  <Card title="Figure Captions" icon="circle-info" href="/rules/images/figure-figcaption">
-    Checks for proper use of figure and figcaption elements
+  <Card title="figure and figcaption: captions that are associated" icon="circle-info" href="/rules/images/figure-figcaption">
+    A caption in a plain div is text near an image; a figcaption is the image's caption. squirrel checks figures for captions and notes standalone images.
   </Card>
-  <Card title="Image Alt Text" icon="triangle-exclamation" href="/rules/images/alt-text">
-    Validates image alt attributes
+  <Card title="Missing alt attribute: what an empty alt means" icon="triangle-exclamation" href="/rules/images/alt-text">
+    An image with no alt attribute has no name for a screen reader. An empty alt is the correct way to say decorative, and squirrel accepts it.
   </Card>
-  <Card title="Image Dimensions" icon="triangle-exclamation" href="/rules/images/dimensions">
-    Checks for width/height attributes (prevents CLS)
+  <Card title="Image width and height attributes: preventing layout shift" icon="triangle-exclamation" href="/rules/images/dimensions">
+    An image with no width and height reserves no space, so the page jumps when it loads. squirrel checks both attributes on every image.
   </Card>
-  <Card title="Image Aspect Ratio Mismatch" icon="triangle-exclamation" href="/rules/images/aspect-mismatch">
-    Flags images whose width/height attributes conflict with their CSS box aspect ratio
+  <Card title="Image aspect ratio mismatch: attributes versus the CSS box" icon="triangle-exclamation" href="/rules/images/aspect-mismatch">
+    When width and height describe one ratio and CSS forces another, the image stretches. squirrel compares the two and allows for object-fit.
   </Card>
-  <Card title="Image File Size Too Large" icon="circle-exclamation" href="/rules/images/image-file-size">
-    Checks for image files that exceed recommended size limits
+  <Card title="Oversized image files: the 200KB and 1MB thresholds" icon="circle-exclamation" href="/rules/images/image-file-size">
+    One unoptimised photo can outweigh every other asset on the page. squirrel measures the images the crawl fetched and reports the heavy ones.
   </Card>
-  <Card title="Image Filename Quality" icon="circle-info" href="/rules/images/filename-quality">
-    Checks for descriptive image filenames
+  <Card title="IMG_1234.jpg: image filenames that describe nothing" icon="circle-info" href="/rules/images/filename-quality">
+    A filename straight off a camera or a hash tells nobody what the picture is. squirrel matches image filenames against a list of generic patterns.
   </Card>
-  <Card title="Image Optimization" icon="circle-info" href="/rules/images/optimized">
-    Checks for image optimization indicators
+  <Card title="Image optimization signals: CDNs and modern formats" icon="circle-info" href="/rules/images/optimized">
+    squirrel reads image URLs for the marks of an optimization pipeline: a known image CDN, a modern format, or a format parameter in the query.
   </Card>
-  <Card title="Inline SVG Size" icon="circle-info" href="/rules/images/svg-inline">
-    Checks for large inline SVGs bloating HTML
+  <Card title="Large inline SVG: when to move it to an external file" icon="circle-info" href="/rules/images/svg-inline">
+    Inline SVG cannot be cached separately from the HTML, so a big one is paid for on every page view. squirrel measures inline SVG size per page.
   </Card>
-  <Card title="Lazy Loading" icon="circle-info" href="/rules/images/lazy-loading">
-    Checks for lazy loading on below-fold images
+  <Card title="Lazy loading: how much of the page defers its load" icon="circle-info" href="/rules/images/lazy-loading">
+    A page-wide count of images and iframes using loading=lazy. squirrel reports the mix rather than judging individual images.
   </Card>
-  <Card title="Modern Image Formats" icon="circle-info" href="/rules/images/modern-format">
-    Checks for modern image formats like WebP or AVIF
+  <Card title="WebP and AVIF: converting from JPEG and PNG" icon="circle-info" href="/rules/images/modern-format">
+    WebP and AVIF encode the same picture in far fewer bytes than JPEG or PNG. squirrel counts modern and legacy formats per page.
   </Card>
-  <Card title="Offscreen Image Lazy Loading" icon="triangle-exclamation" href="/rules/images/offscreen-lazy">
-    Checks if offscreen images use lazy loading
+  <Card title="loading=lazy: which images need it and which must not" icon="triangle-exclamation" href="/rules/images/offscreen-lazy">
+    Images below the fold that load eagerly compete with the ones the visitor can see. squirrel treats the first few images as above the fold.
   </Card>
-  <Card title="Picture Element Validation" icon="circle-exclamation" href="/rules/images/picture-element">
-    Validates `<picture>` elements have required `<img>` fallback
+  <Card title="<picture> without an <img>: the fallback that is required" icon="circle-exclamation" href="/rules/images/picture-element">
+    A picture element with no img child renders nothing at all. squirrel checks every picture on the page for its required fallback.
   </Card>
-  <Card title="Responsive Image Size" icon="triangle-exclamation" href="/rules/images/responsive-size">
-    Checks if images are sized appropriately for their display size
+  <Card title="Thumbnails without srcset: small images serving large files" icon="triangle-exclamation" href="/rules/images/responsive-size">
+    A 60 by 60 avatar that loads a 2000 pixel photo wastes almost all of it. squirrel flags small declared sizes with no responsive variants.
   </Card>
-  <Card title="Responsive Images" icon="circle-info" href="/rules/images/srcset">
-    Checks for responsive images with srcset attribute
+  <Card title="srcset: serving the right image size for the screen" icon="circle-info" href="/rules/images/srcset">
+    Without srcset every visitor downloads the same file, sized for the largest screen. squirrel counts responsive images against fixed-size ones.
   </Card>
 </CardGroup>
 
