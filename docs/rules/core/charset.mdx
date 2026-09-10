@@ -1,9 +1,39 @@
 ---
-title: "Charset"
-description: "Checks for proper character encoding declaration"
+title: "meta charset UTF-8: where it goes and what squirrel checks"
+description: "A page with no charset declaration, one that is not UTF-8, or a meta charset that is not first in head. squirrel checks all three sources."
 ---
 
-Checks for proper character encoding declaration
+## What the charset declaration does
+
+A charset declaration tells the browser how to turn bytes into characters. Get it wrong and text renders as mojibake, because the bytes for an accented character in one encoding mean something else in another.
+
+There are three places to declare it: the `Content-Type` response header, a `<meta charset>` element, and a `<meta http-equiv="Content-Type">` element. The header wins over both meta forms, and between the two meta forms the browser takes whichever comes first in the document. The meta element has to appear within the first 1,024 bytes of the document, because the browser starts guessing before then and reparses if it guessed wrong. UTF-8 is the encoding to use; the HTML Standard requires it.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads all three sources: any `<meta>` with a `charset` attribute, a `<meta http-equiv="Content-Type">` whose content names a charset, and the `Content-Type` response header. The first of those that yields a value wins, in that order. It emits one check named `charset`:
+
+- Skipped with the message `No document available` and the reason `Parse error` when the page did not parse.
+- Passing with the message `UTF-8 charset declared early in head` when the value is UTF-8 and the meta element is the first child of `<head>`, or the second child directly after a `<title>`.
+- Warning with the message `UTF-8 charset declared but not at start of head` and the expectation `charset meta should be first element in head` when it is UTF-8 but sits later.
+- Passing with the message `UTF-8 charset declared via http-equiv` or `UTF-8 charset declared via header` when there is no `<meta charset>` element but one of the other two sources declared UTF-8.
+- Warning with the message `Non-UTF-8 charset declared: <value>` and the expectation `UTF-8` for anything else.
+- Failing with the message `No charset declaration found` and the expectation `<meta charset="UTF-8">` when none of the three declared anything.
+
+The `charset` and `http-equiv` attribute names are matched case-insensitively, so React's `charSet` and `httpEquiv` output is recognised. The UTF-8 test accepts `utf8` and `utf-8` in any case. The position check allows a `<title>` before the charset meta, which is a common template ordering, even though the standard's advice is to put the charset first.
+
+## How to fix it
+
+```html
+<head>
+  <meta charset="UTF-8" />
+  <title>Page title</title>
+</head>
+```
+
+Make it the first element in `<head>`. Sending `Content-Type: text/html; charset=utf-8` from the server as well is worth doing, because a header removes the guessing entirely.
+
+The common false positive is a site whose origin sets the charset in the header on some routes and not others. The rule falls back to the header when there is no meta element, so two pages from the same template can pass and fail. Declaring it in the markup makes the result stable.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks for proper character encoding declaration
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Add `<meta charset="UTF-8">` as the first element in your `<head>` section. This tells browsers how to interpret the text on your page. UTF-8 is the standard encoding that supports all languages and special characters. Placing it first ensures browsers know the encoding before parsing any other content.
 
 ## Enable / disable
 
@@ -40,3 +66,30 @@ disable = ["core/*"]
 enable = ["core/charset"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/mojibake](/rules/content/mojibake): the mis-decoded text a wrong charset produces.
+- [core/doctype](/rules/core/doctype): the other declaration that has to come first.
+- [content/mime-type](/rules/content/mime-type): the content type the header declares alongside the charset.
+- [i18n/lang-attribute](/rules/i18n/lang-attribute): the language declaration that sits next to it.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Specifying the document's character encoding, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#charset)
+- [meta charset, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta#charset)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each page reports the charset it declared and where. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,41 @@
 ---
-title: "Canonical Form Drift"
-description: "Finds canonical URLs that disagree in form (www, scheme, trailing slash, tracking params) across the site"
+title: "Canonicals in two forms: www, scheme and trailing slash"
+description: "Half the site canonicalising to www and half to the apex domain. squirrel compares four form axes across the crawl."
 ---
 
-Finds canonical URLs that disagree in form (www, scheme, trailing slash, tracking params) across the site
+## What canonical form drift is
+
+Every canonical on the site can be individually valid and the set can still be wrong. If half the pages canonicalise to `https://www.example.com/thing/` and half to `https://example.com/thing`, the two halves consolidate onto different hosts and the ranking signal splits between them.
+
+No per-page rule can see this, because a page only knows its own canonical. Four things are one decision for a whole site: the scheme, whether the host carries `www`, whether tracking parameters survive into the canonical, and, within a section, whether paths end in a slash.
+
+## What squirrel checks
+
+The rule runs once per crawl and emits a single check named `canonical-form-drift`. It compares four axes: `scheme`, `host`, `trailing slash` and `tracking params`.
+
+- Skipped with the message `Only N page(s) crawled; 10 needed to establish a canonical-form norm`.
+- Skipped with the message `No canonical form is shared by 70% of at least 10 comparable pages`.
+- Skipped with the message `No pages available for analysis` when the crawl produced no pages. That wording comes from the non-streaming path; a streaming crawl with no pages takes the `Only 0 page(s) crawled` branch instead.
+- Passing with the message `All N comparable canonical(s) share one form (scheme https, host apex)` when nothing drifts. The summary lists up to ten judged axes in a fixed order, scheme then host then trailing slash then tracking params, each as the axis name, its section where it has one, and the winning form.
+- Warning, or failing, with the message `N of M canonical(s) are declared in a different form than the rest of the site (scheme https, host apex)`. Each item reads `40 of 45 canonicals in /blog use trailing slash, these 5 use no trailing slash` and carries up to 20 example URLs. The status is `fail` when the deviant pages are 20% or more of the judged pages, and `warn` below.
+
+A page enters the comparison only when its status was 2xx and its canonical is present, absolute and points at the same hostname as the page once a leading `www.` is stripped from both. A canonical pointing at a sibling subdomain is treated as cross-host and dropped. Missing, relative, unparseable and cross-host canonicals all belong to [core/canonical](/rules/core/canonical) and are dropped here rather than reported twice.
+
+The trailing-slash axis is compared inside a section rather than site-wide, because using a slash in `/blog` and not in `/product` is a normal pattern. The section is the first path segment, or `/` for a flat path, and each section has to clear the sample floor and the agreement bar on its own. The site root and any path whose last segment contains a dot are excluded from that axis entirely, since neither had a choice.
+
+Tracking parameters are matched by name: `_ga`, `fbclid`, `gclid`, `igshid`, `mkt_tok`, `msclkid`, `ref`, `source`, `ttclid`, `yclid`, and anything starting `utm_` or `mc_`. Having a query string at all is not the test, because a paginated canonical legitimately carries one.
+
+## How to fix it
+
+Build the canonical from one function that everything calls, rather than from a template string per route:
+
+```ts
+const canonical = new URL(path, "https://example.com").href;
+```
+
+That fixes scheme and host by construction. For the trailing slash, pick one convention per section and let the router enforce it. For tracking parameters, strip them before building the canonical rather than after.
+
+The common false positive is a site mid-migration, where the new form is correct and the old pages have not caught up. The finding is accurate and the fix is the migration.
 
 | | |
 |---|---|
@@ -12,79 +44,6 @@ Finds canonical URLs that disagree in form (www, scheme, trailing slash, trackin
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 3/10 |
-
-## How it works
-
-Every canonical this rule looks at is individually valid. What is wrong is
-collective: half your site canonicalises to `https://www.example.com/thing/` and
-half to `https://example.com/thing`, so the two halves consolidate onto different
-URLs and the ranking signal splits between them. No per-page rule can see this,
-because a page only knows its own canonical.
-
-The rule compares four axes of URL form across every canonical in the crawl:
-
-- **Scheme**: `https` versus `http`.
-- **Host**: `www` versus apex.
-- **Trailing slash**: present versus absent.
-- **Tracking parameters**: retained versus stripped (`utm_*`, `gclid`, `fbclid`,
-  `ref`, and friends).
-
-For each axis it works out the site's dominant form and reports only the pages that
-break it.
-
-It stays quiet unless it has grounds to speak:
-
-- Fewer than 10 crawled pages: no site norm exists, so the rule is skipped.
-- Fewer than 10 comparable canonicals on an axis: that axis is dropped, not guessed
-  at.
-- No form reaching 70% on an axis: the site has no convention there, so nobody on
-  that axis is a deviant. A site that genuinely mixes forms is a judgement call for
-  a human, not an accusation from a rule.
-
-Pages built from one template emit canonicals in one form, so they define the norm
-rather than deviate from it. A consistently param-bearing canonical is a form like
-any other: if every page does it, the site is not contradicting itself and nothing
-is reported.
-
-Two refinements keep the trailing-slash axis honest, because it is the one most
-likely to accuse a healthy site:
-
-- It is compared **within a section** (the first path segment of the canonical),
-  not site-wide. Using a slash in `/blog/how-to/` and none in `/product` is a normal
-  shape, so each section is judged against itself and needs its own 10 pages and 70%
-  agreement.
-- The site root (`/`) and file-like paths (`/feed.xml`) never carry a trailing slash,
-  so they are left out of that comparison entirely.
-
-## Validity is a different rule
-
-This rule reports **form only**, so one root cause is never reported twice:
-
-- A missing, relative or unparseable canonical is [Canonical URL](/rules/core/canonical).
-- A `Link: rel="canonical"` header that disagrees with the tag is
-  [Canonical Header](/rules/core/canonical-header).
-- A canonical pointing at another host is [Canonical URL](/rules/core/canonical)
-  as well, and its form follows the other site's conventions, so it is excluded here.
-
-Pages in any of those states are dropped before the comparison runs.
-
-[Canonical URL](/rules/core/canonical) also notes, as `info`, that a page's canonical
-points somewhere other than itself. That is a per-page observation with no claim
-about the rest of the site, and it is exactly the input this rule reads: the finding
-here is the site-wide pattern those individual notes add up to.
-
-## Solution
-
-Each of these canonicals is valid on its own, but the site does not agree with
-itself: some pages canonicalise to one URL form and some to another. Search engines
-treat the two forms as different URLs, so links, crawl budget and ranking signals
-split between them.
-
-Pick one form, the one your redirects already send traffic to, and emit it
-everywhere: one scheme (`https`), one host (`www` or apex, not both), one
-trailing-slash convention, and never any tracking parameters in the canonical.
-Canonicals are usually generated in one template or middleware, so this is normally
-a single fix in the place that builds the URL rather than a per-page edit.
 
 ## Enable / disable
 
@@ -109,3 +68,30 @@ disable = ["core/*"]
 enable = ["core/canonical-form-drift"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/canonical](/rules/core/canonical): validity of each canonical, which this rule assumes and never repeats.
+- [core/canonical-header](/rules/core/canonical-header): the header declaration and whether it agrees with the tag.
+- [url/trailing-slash](/rules/url/trailing-slash): the same question asked of the page URLs rather than the canonicals.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): canonicals pointing at URLs that redirect instead of answering.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [How to specify a canonical URL, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [rel=canonical, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#canonical)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each drifting axis is listed with the norm, the deviant form and the URLs. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

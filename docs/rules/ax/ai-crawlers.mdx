@@ -1,9 +1,45 @@
 ---
-title: "AI Crawler Access"
-description: "Classifies and reports which training, AI-search, user-action, and archive crawlers robots.txt allows or blocks"
+title: "AI crawlers in robots.txt: which bots you block, by class"
+description: "robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs."
 ---
 
-Reports which AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, …) your `robots.txt` allows or blocks at the site root, classified into the three purposes those crawlers actually serve. AI assistants and answer engines reach your content through these named user-agents, so blocking them keeps your pages out of those tools — but "AI crawlers" isn't one policy decision, it's three.
+## What an AI crawler block is
+
+"Block AI crawlers" is not one decision. The named bots serve four different purposes, each with its own robots.txt user-agent token, so a rule aimed at one never covers another. Blocking `ClaudeBot`, a training crawler, does not block `Claude-User`, a live fetch a person triggered inside an assistant.
+
+- Training crawlers, such as `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `Meta-ExternalAgent`, `Amazonbot` and `Bytespider`, collect pages for a vendor's future model training.
+- AI-search indexers, such as `OAI-SearchBot`, `Claude-SearchBot`, `PerplexityBot`, `DuckAssistBot` and `YouBot`, build the index an answer engine cites from.
+- User-action fetchers, such as `ChatGPT-User`, `Claude-User`, `Perplexity-User`, `MistralAI-User` and `Meta-ExternalFetcher`, fetch a page because a person asked for it right now.
+- Archive crawlers, `CCBot` and the Internet Archive's `ia_archiver` and `archive.org_bot`, feed the Common Crawl corpus and the Wayback Machine, which are the shared sources training sets are built from.
+
+Blocking a training crawler is a policy choice about one vendor. Blocking an archive crawler is wider, because the corpus it feeds is shared: a `CCBot` block keeps future pages out of Common Crawl, which many training sets are built from. robots.txt is a request that cooperative crawlers honour, and it does not remove captures that already exist.
+
+## What squirrel checks
+
+The rule runs once per crawl against the parsed robots.txt and evaluates 24 known crawler tokens. For each one it resolves the groups that apply, preferring a group naming the token over `User-agent: *`, and treats the bot as blocked when those groups carry `Disallow: /` with no `Allow: /`. Token matching is case-insensitive. It emits one to three checks:
+
+- `ai-crawler-access`: always emitted, at info status. With no robots.txt, or one that does not exist, the message is `No robots.txt — all AI crawlers are allowed by default` and nothing else runs. Otherwise the message is `N/24 known AI crawlers allowed`, followed by `; M blocked (<tokens>)` only when something is blocked, listing the tokens in the order the crawler list declares them. The blocked tokens are also listed as items showing vendor and class.
+- `ai-answer-access`: emitted only when an AI-search indexer or a user-action fetcher is blocked. It warns with the message `robots.txt blocks <clauses>. These are separate user-agents from the training bots — blocking ClaudeBot (training) does not block Claude-User (user-action); check the block was intended.` The clauses are `AI-search indexers (<tokens>) — lost AI citations` and `user-action fetchers (<tokens>) — breaks live requests users made inside an assistant`, joined with `; `, and a class with nothing blocked is left out.
+- `archive-crawler-access`: emitted only when an archive crawler is blocked. It warns with the message `robots.txt blocks archive crawlers — this removes the site from the Wayback Machine and/or the Common Crawl corpus, the archives AI training sets are built from. Blocking CCBot opts you out of every model trained on Common Crawl, not just one vendor.`
+
+Blocking training crawlers alone produces no warning. The summary check reports it and the score is untouched, because opting out of one vendor's training is a legitimate choice. Ambiguous data harvesters such as `Diffbot` are classified as training for the same reason: that is the class whose blocking never penalises.
+
+## How to fix it
+
+```
+User-agent: GPTBot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+```
+
+Put the groups in robots.txt at the site root. This example opts out of OpenAI's training crawl while keeping the site citable in ChatGPT search and reachable when a person asks for it.
+
+The common false positive is a block that lives at the edge rather than in robots.txt. A WAF rule or a bot-management toggle can serve a challenge to the same user-agent that robots.txt allows, and this rule reads robots.txt only. [ax/agent-blocking](/rules/ax/agent-blocking) probes the actual responses and catches that case.
 
 | | |
 |---|---|
@@ -12,42 +48,6 @@ Reports which AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, �
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 1/10 |
-
-<Note>The rule badge is **warning**, but training-bot policy stays informational either way: opting out of model training is a legitimate choice and never counts against you. Blocking an AI-search indexer or a user-action fetcher is what actually emits a warning-level check, since that's more often an accidental side effect than a deliberate policy.</Note>
-
-## What it checks
-
-For each well-known AI crawler, the rule reads your parsed `robots.txt` and reports whether the user-agent is **allowed** or **fully blocked** (`Disallow: /` with no re-permitting `Allow: /`). A user-agent with its own group takes precedence over the wildcard `*` group, matching how real crawlers resolve robots.txt.
-
-Crawlers are classified into four purposes, each with a different blocking implication:
-
-- **Training crawlers** — bulk-crawl content to train or fine-tune one vendor's models. Blocking these has no effect on whether an assistant can answer questions about your site right now; it only affects that vendor's future model training, and is reported informationally regardless of policy. Covers `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `Meta-ExternalAgent`, `Bytespider`, `Amazonbot`, `anthropic-ai`, `cohere-ai`, `AI2Bot`, `Diffbot`.
-- **AI-search indexers** — crawl to power AI-generated search results and citations, similar in spirit to a classic search-engine crawler. Blocking one of these emits a warning-level check. Covers `OAI-SearchBot`, `Claude-SearchBot`, `PerplexityBot`, `DuckAssistBot`, `YouBot`.
-- **User-action fetchers** — fetch a specific page on behalf of a live user request inside an AI assistant (someone pasted your URL, or asked the assistant to look something up). Blocking one of these also emits a warning-level check. Covers `ChatGPT-User`, `Claude-User`, `Perplexity-User`, `MistralAI-User`, `Meta-ExternalFetcher`.
-- **Archive crawlers** — feed the shared public archives rather than one vendor: `CCBot` builds the Common Crawl corpus and `ia_archiver` / `archive.org_bot` build the Wayback Machine. Blocking these opts you out of *every* model and pipeline built on those archives at once — a much bigger decision than blocking one training bot — so it emits a warning-level check. See [Archive Indexing](/rules/ax/archive-indexing) for whether the archives actually have you.
-
-**Each of these is a separate user-agent token with its own `robots.txt` group.** Blocking `ClaudeBot` (training) does **not** block `Claude-User` (user-action) — they are unrelated as far as `robots.txt` parsing goes, even though both come from Anthropic. Sites that intend to opt out of training only, but write one blanket rule, often block all three by accident.
-
-<Note>This rule only reads declared policy in `robots.txt`. A crawler can be allowed here and still get blocked in practice by a WAF or bot-challenge page — see [Agent Blocking](/rules/ax/agent-blocking) for the behavioral probe that catches that gap.</Note>
-
-## Solution
-
-Decide policy per crawler class, not per site-wide toggle. To opt out of model training while staying answerable in assistants and AI search, block the training bots but keep AI-search indexers and user-action fetchers allowed:
-
-```txt robots.txt
-# Block training, allow live answer engines
-User-agent: GPTBot
-Disallow: /
-
-User-agent: Google-Extended
-Disallow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
-```
 
 ## Enable / disable
 
@@ -58,6 +58,13 @@ Allow: /
 disable = ["ax/ai-crawlers"]
 ```
 
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
 ### Enable only this rule
 
 ```toml squirrel.toml
@@ -65,3 +72,31 @@ disable = ["ax/ai-crawlers"]
 enable = ["ax/ai-crawlers"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/agent-blocking](/rules/ax/agent-blocking): the same question asked of the live responses, which catches edge blocks robots.txt cannot show.
+- [ax/content-signals](/rules/ax/content-signals): per-purpose policy declared in robots.txt, cross-checked against these blocks.
+- [ax/archive-indexing](/rules/ax/archive-indexing): whether the archive crawlers reached the site in the end.
+- [crawl/robots-txt](/rules/crawl/robots-txt): whether robots.txt exists and parses at all.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
+
+## References
+
+- [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)
+- [Google crawlers and fetchers, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers)
+- [OpenAI crawlers, OpenAI platform docs](https://platform.openai.com/docs/bots)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Every blocked bot is listed with its vendor and class. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

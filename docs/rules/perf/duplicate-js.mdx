@@ -1,9 +1,37 @@
 ---
-title: "Duplicate JavaScript"
-description: "Detects duplicate JavaScript libraries loaded multiple times"
+title: "Same library loaded twice: duplicate JavaScript on a page"
+description: "One library loaded from two script tags, or at two different versions. squirrel reads library names out of the script URLs."
 ---
 
-Detects duplicate JavaScript libraries loaded multiple times
+## What a duplicate library is
+
+Two script tags loading the same library from different URLs cost the bytes twice and, worse, can leave two copies in memory that do not share state. With React that means hooks failing at runtime. With jQuery it means whichever loaded last winning and any plugin registered against the first one disappearing.
+
+Two different versions is the sharper version of the problem. It usually happens when a third-party embed brings its own copy of a library the page already loads, or when a tag manager injects one.
+
+## What squirrel checks
+
+The rule runs on every crawled page over its `<script src>` elements. It extracts a library name and, where the URL carries one, a version, then groups by name. It emits one or two checks:
+
+- `duplicate-js-version-mismatch`: fails with the message `N library(s) loaded with different versions`, listing each as `<name> (versions: 3.6.0, 3.7.1)`.
+- `duplicate-js-same-version`: warns with the message `N library(s) loaded multiple times`, listing each as `<name> (2x)`.
+- `duplicate-js`: passes with the message `No duplicate JavaScript libraries detected`, recording how many scripts it analysed.
+
+Names are matched from four URL shapes, in order: an unpkg path, a jsDelivr npm path, a cdnjs path, and a generic `/<name>.js` path where the name may be followed by a dotted or hyphenated numeric version and by `.min`. When none matches, the leading run of letters, digits and hyphens in the filename becomes the name. Names are lowercased; versions are compared as written. The rule reads the `<script src>` elements on the page only.
+
+A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+Load each library once, from one place. Where a bundler is in use, that usually means marking the library external and providing it yourself rather than letting two chunks each include it:
+
+```html
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+```
+
+Where a third-party embed brings its own copy, the vendor usually has a build that uses the page's copy instead.
+
+The common false positive comes from matching on filenames. Two unrelated files that share a name, such as `/a/main.js` and `/b/main.js`, both reduce to `main` and are reported as one library loaded twice. Check the listed names before changing anything.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Detects duplicate JavaScript libraries loaded multiple times
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Remove duplicate JavaScript library loads to reduce page weight and avoid conflicts. Check for the same library loaded from different CDNs or versions. Use a single source for each dependency. Consider using a module bundler to deduplicate shared dependencies.
 
 ## Enable / disable
 
@@ -40,3 +64,30 @@ disable = ["perf/*"]
 enable = ["perf/duplicate-js"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/js-file-size](/rules/perf/js-file-size): the size those duplicated bytes add up to.
+- [perf/js-libraries](/rules/perf/js-libraries): which libraries the page loads and whether any version is vulnerable.
+- [perf/legacy-js](/rules/perf/legacy-js): polyfills, another kind of code shipped more than once.
+- [perf/inp-hints](/rules/perf/inp-hints): the main-thread cost of executing all of it.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [The script element, HTML Standard](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element)
+- [Interaction to Next Paint, web.dev](https://web.dev/articles/inp)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each duplicated library is listed with its versions. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

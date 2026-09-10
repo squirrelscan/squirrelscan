@@ -1,9 +1,45 @@
 ---
-title: "Article Schema"
-description: "Validates Article schema required properties"
+title: "Article schema: headline, author and datePublished checks"
+description: "Article JSON-LD missing headline, author or datePublished, or carrying a date that is not ISO 8601. squirrel checks both on every page."
 ---
 
-Validates Article schema required properties
+## What Article schema is
+
+`Article` is the schema.org type for a piece of written content, with `NewsArticle` and `BlogPosting` as its two common subtypes. It states the headline, the author, the publication date and the date of the last change as named properties, rather than leaving them to be inferred from the page layout.
+
+The dates are typed as schema.org `Date` or `DateTime`, which means ISO 8601. `2026-03-14` and `2026-03-14T09:30:00Z` are valid; a raw database timestamp such as `2026-03-14 09:30:00`, an epoch number, or `14/03/2026` are not. Article markup belongs on the article itself, not on an index or a category listing.
+
+## What squirrel checks
+
+The rule reads the page's parsed JSON-LD nodes, which are already flattened out of any `@graph` wrapper, and keeps the last node whose `@type` is `Article`, `NewsArticle` or `BlogPosting`, or whose `@type` array contains one of them. It emits one to three checks:
+
+- `article-schema`: reports at info status with the message `No Article schema found` and the value `Consider adding for blog/news content` when no such node exists. No further checks run.
+- `article-required`: warns with the message `Article schema missing required properties` and lists the missing names as items. The required set is `headline`, `author` and `datePublished`. When all three are present it passes with `Article schema has required properties`.
+- `article-recommended`: emitted only when at least one of `dateModified`, `image` and `publisher` is absent, at info status, with the message `Article schema could include recommended properties` and the missing names as items.
+- `article-date-format`: emitted only when `datePublished` or `dateModified` is present but not valid ISO 8601. It warns with the message `Article schema dates are not valid ISO 8601` and lists each offending property with its literal value.
+
+The date check tests the shape and then the calendar. Month must be 01 to 12, day 01 to 31, hour 00 to 23, and the day must exist in that month and year, so `2026-02-31` and `2026-04-31` are both rejected. A time part is optional, and a UTC offset on a time part is optional too. Every property test is a truthiness test rather than a presence test, so an empty string, `0` or `false` counts as missing. That is why an empty `datePublished` is reported as missing rather than as malformed, and never appears in both checks at once.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "How we cut our build time in half",
+  "author": { "@type": "Person", "name": "Dana Reed" },
+  "datePublished": "2026-03-14T09:30:00Z",
+  "dateModified": "2026-04-02T11:00:00Z",
+  "image": "https://example.com/build-time.png",
+  "publisher": { "@type": "Organization", "name": "Acme" }
+}
+</script>
+```
+
+Put it in the `<head>` of the article page and emit the dates from a formatter that produces ISO 8601, not from string concatenation.
+
+There is no common false positive here. When the rule reports a bad date it prints the value it read, so the fix is visible in the report.
 
 | | |
 |---|---|
@@ -12,10 +48,6 @@ Validates Article schema required properties
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Article schema helps search engines understand news and blog content. Required: headline, author (Person with name), datePublished. Recommended: dateModified, image (ImageObject), publisher (Organization). Use Article for general content, NewsArticle for news, BlogPosting for blogs. Ensure author links to real author pages.
 
 ## Enable / disable
 
@@ -40,3 +72,31 @@ disable = ["schema/*"]
 enable = ["schema/article"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/date-agreement](/rules/content/date-agreement): whether the schema dates, the visible date and the year in the URL or title agree.
+- [content/author-info](/rules/content/author-info): author markup and attribution on the page, alongside the schema property.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
+- [schema/coverage-outlier](/rules/schema/coverage-outlier): article pages missing the markup the rest of the site's articles carry.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+- [Article, schema.org](https://schema.org/Article)
+- [Date and time formats, ISO 8601 profile, W3C](https://www.w3.org/TR/NOTE-datetime)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each article page lists the properties it is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

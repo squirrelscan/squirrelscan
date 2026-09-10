@@ -1,9 +1,39 @@
 ---
-title: "Open Graph Tags"
-description: "Validates Open Graph meta tags for social sharing"
+title: "Missing og:image: the Open Graph tags squirrel checks"
+description: "A page missing og:title, og:description or og:image, so shares render without a preview. squirrel checks four tags per page."
 ---
 
-Validates Open Graph meta tags for social sharing
+## What Open Graph tags are
+
+Open Graph is a set of `<meta property="og:...">` tags that tell a link preview what to show. Facebook defined it, and LinkedIn, Slack, Discord, WhatsApp and most other clients read the same tags. Without them a share falls back to whatever the client can scrape, which is usually the title element and the first image it finds.
+
+The protocol requires four: `og:title`, `og:type`, `og:image` and `og:url`. `og:description` is optional in the protocol and is what most clients render under the title. `og:image` is the one that changes how a link looks in a feed, and 1200 by 630 pixels is the size that renders correctly in the widest set of clients.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the parsed Open Graph values. It emits one to four checks, one per missing tag plus a summary:
+
+- `og-title`: warns with the message `Missing og:title` and a null value.
+- `og-description`: warns with the message `Missing og:description` and a null value.
+- `og-image`: warns with the message `Missing og:image - social shares will lack imagery` and a null value.
+- `og-type`: reports at info status with the message `Missing og:type (defaults to website)` and a null value. The message reflects what most clients assume rather than a default the protocol defines; the protocol requires the property.
+- `og-tags`: passes with the message `Essential Open Graph tags present` and a value showing the first 30 characters of the title, emitted only when title, description and image are all present.
+
+`og:type` is informational and does not stop the summary passing, because most clients treat a missing type as `website` and render the preview anyway. Each missing tag is its own check, so a page missing all three essentials produces three warnings rather than one. The rule checks presence and never validates a value, so an `og:image` pointing at a URL that returns 404 passes.
+
+## How to fix it
+
+```html
+<meta property="og:title" content="Configuring the build cache" />
+<meta property="og:description" content="How the build cache stores compiled output between runs." />
+<meta property="og:image" content="https://example.com/og/build-cache.png" />
+<meta property="og:url" content="https://example.com/guides/build-cache" />
+<meta property="og:type" content="article" />
+```
+
+Use an absolute URL for the image, since some clients do not resolve a relative one. 1200 by 630 pixels is the size that renders correctly in the widest set of clients.
+
+The common false positive is a page whose tags are injected on the client. squirrel reads the HTML the server sent unless [browser rendering](/guides/browser-rendering) is on, and no share client runs JavaScript either, so a client-injected Open Graph tag is genuinely absent for the audience that matters.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Validates Open Graph meta tags for social sharing
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Open Graph tags control how your content appears when shared on Facebook, LinkedIn, and other platforms. Required tags: og:title, og:description, og:image, og:url, and og:type. Add OG tags in your page head. Use images at least 1200x630 pixels for best display. Keep og:title under 60 characters and og:description under 200. Test shares using Facebook's Sharing Debugger tool.
 
 ## Enable / disable
 
@@ -40,3 +66,30 @@ disable = ["core/*"]
 enable = ["core/og-tags"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [social/og-image-size](/rules/social/og-image-size): whether that image is the right dimensions.
+- [social/og-url-match](/rules/social/og-url-match): whether `og:url` agrees with the page's canonical.
+- [core/twitter-cards](/rules/core/twitter-cards): the X-specific tags, which fall back to these.
+- [social/asset-divergence](/rules/social/asset-divergence): a favicon, theme colour or default share image that differs from the rest of the site.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The Open Graph protocol](https://ogp.me/)
+- [The meta element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-meta-element)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each missing tag is reported by name, page by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

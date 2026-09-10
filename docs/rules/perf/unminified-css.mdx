@@ -1,9 +1,37 @@
 ---
-title: "Unminified CSS"
-description: "Detects unminified CSS that could be optimized"
+title: "Unminified CSS: how squirrel tells minified from formatted"
+description: "Stylesheets that read as source rather than build output. squirrel analyses inline CSS and judges linked files by their filename."
 ---
 
-Detects unminified CSS that could be optimized
+## What minification removes
+
+Minification strips what only a person needs: newlines, indentation, comments, and the spaces around punctuation. On CSS it typically removes a fifth to a third of the file, and it composes with compression rather than replacing it, because gzip still has less to work with afterwards.
+
+Most bundlers minify CSS in production mode, though some need it turned on explicitly. An unminified stylesheet in production usually means the build ran in development mode, the minifier was never configured, or the file bypassed the build entirely.
+
+## What squirrel checks
+
+The rule runs on every crawled page and looks at three sources. It emits one or two checks: either the pass, or one or both of the findings.
+
+- `unminified-css`: warns with the message `N CSS file(s) appear unminified`, listing up to five sources with their size and estimated saving. The details carry the total saving and how many more there were.
+- `potentially-unminified-css`: reports at info status with the message `N stylesheet(s) may not be minified`, listing up to five, with the note that these are files whose name has no `.min` in it.
+- `minified-css`: passes with the message `CSS appears to be minified` when neither list has anything in it.
+
+Inline `<style>` content of 2,048 characters or more is analysed directly. A block counts as unminified when any of four signals fires: more than 1% of its characters are newlines, more than three block comments, more than 15% whitespace, or more than ten selector openings followed by a newline. The reason string names whichever fired.
+
+Linked stylesheets are judged by filename only, because the rule does not fetch them. A file is suspected when its name contains none of `.min.`, `-min.` or `.prod.`, has no dot-or-hyphen followed by eight or more hex characters and another dot, and does not look like a framework, meaning the name contains `bootstrap`, `tailwind` or `normalize`. Files from the crawl's own resource list are skipped below 2,048 bytes. Stylesheets found only in the markup are judged the same way, with `cdn` added to the framework list and a required `.css` ending. A page with no parsed document emits nothing at all.
+
+## How to fix it
+
+Run the production build. In Vite that minifies CSS by default; esbuild needs `--minify` and webpack needs a CSS minimiser configured, so check the config as well as the mode.
+
+```bash
+vite build
+```
+
+For a stylesheet outside the build, `cssnano` or `clean-css` does the same job as a standalone step.
+
+The common false positive is the whole second half of this rule. A file named `styles.css` that is perfectly minified is still reported at info status, because the rule reads the name rather than the bytes. Renaming to `styles.min.css`, or letting the bundler hash it, clears it.
 
 | | |
 |---|---|
@@ -13,25 +41,19 @@ Detects unminified CSS that could be optimized
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## Solution
-
-Minify CSS to reduce file size and improve load times. Use build tools like cssnano, clean-css, or PostCSS with cssnano plugin. Most bundlers (Webpack, Vite, esbuild) can minify CSS automatically in production mode. Minification removes whitespace, comments, and optimizes syntax.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_size_bytes` | unknown | `undefined` | Minimum CSS size in bytes to check for minification |
-| `newline_ratio_threshold` | unknown | `undefined` | Newlines per character ratio threshold for unminified detection |
+| `min_size_bytes` | number | `2048` | Minimum CSS size in bytes to check for minification |
+| `newline_ratio_threshold` | number | `0.01` | Newlines per character ratio threshold for unminified detection |
 
 ### Configuration example
 
 ```toml squirrel.toml
 [rules."perf/unminified-css"]
-min_size_bytes = undefined
-newline_ratio_threshold = undefined
+min_size_bytes = 2048
+newline_ratio_threshold = 0.01
 ```
 
 ## Enable / disable
@@ -57,3 +79,30 @@ disable = ["perf/*"]
 enable = ["perf/unminified-css"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/css-file-size](/rules/perf/css-file-size): the size those bytes add up to.
+- [perf/unminified-js](/rules/perf/unminified-js): the same analysis on scripts.
+- [perf/asset-compression](/rules/perf/asset-compression): compression, which minification composes with rather than replaces.
+- [perf/source-maps](/rules/perf/source-maps): the other sign that a build shipped its development output.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Reduce network payloads using text compression, web.dev](https://web.dev/articles/reduce-network-payloads-using-text-compression)
+- [CSS syntax, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_syntax/Syntax)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each stylesheet is listed with the reason it was flagged. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

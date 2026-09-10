@@ -1,9 +1,42 @@
 ---
-title: "JSON-LD Valid"
-description: "Validates JSON-LD structured data"
+title: "Invalid JSON-LD syntax: what breaks it and how to fix"
+description: "A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property."
 ---
 
-Validates JSON-LD structured data
+## What JSON-LD is
+
+JSON-LD is the format Google and other consumers read structured data in: a JSON document inside a `<script type="application/ld+json">` tag, with a `@context` pointing at `https://schema.org` and a `@type` naming what the node describes. It sits beside the page content rather than inside it, so nothing about the rendered page changes when it is wrong.
+
+Two different faults show up here. A syntax error means the block is not valid JSON at all, usually from a trailing comma, an unescaped quote in a value, or a template that emitted a raw newline inside a string. A validation error means the JSON parsed but a type is missing a property squirrel's schema validator expects for it. The first makes the whole block unreadable; the second narrows what a consumer can do with it.
+
+## What squirrel checks
+
+The rule reads the page's parsed JSON-LD and emits exactly one check:
+
+- `json-ld`, at info status with the message `No JSON-LD structured data found`, when the page's parsed JSON-LD is empty.
+- `json-ld`, at info status with the message `JSON-LD detected but schema metadata unavailable`, when a block was found but the parser could not produce validation metadata for it.
+- `json-ld-valid`, failing when the parser marked the JSON-LD invalid, when any block failed to parse, or when at least one validation issue was recorded. The message is `Invalid JSON-LD syntax` if there is a parse error and `Schema.org validation errors detected` otherwise. Items list the parse errors verbatim, then one entry per validation issue labelled `<type> missing <property>` and carrying the property path.
+- `json-ld-types`, warning with the message `JSON-LD present but no @type found`, when the JSON-LD parsed cleanly but declares no type.
+- `json-ld`, passing with the message `Valid JSON-LD with N type(s)` and one item per type name.
+
+A parse error anywhere in the page's JSON-LD takes priority over a validation issue, so a page with both reports only `Invalid JSON-LD syntax`. The severity is warning, and the check status is `fail`, so the finding appears at warning weight in the score.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Acme Coffee",
+  "url": "https://example.com/"
+}
+</script>
+```
+
+Serialise the block from a real object with `JSON.stringify` rather than assembling it from a string template, which is where unescaped quotes and trailing commas come from.
+
+The common false positive is a block injected by client-side JavaScript. squirrel reads the HTML the server sent unless [browser rendering](/guides/browser-rendering) is on, so markup added after load is not there to parse and the page reports `No JSON-LD structured data found`.
 
 | | |
 |---|---|
@@ -12,10 +45,6 @@ Validates JSON-LD structured data
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-JSON-LD structured data helps search engines understand your content and can unlock rich results. Validate against schema.org rules (headline, author, datePublished for articles, name/url for organizations, etc.) and keep the JSON well-formed. Use SquirrelScan's built-in schema validator to expose the exact missing property path before verifying on Google's Rich Results Test, and ensure each required field points to a canonical resource.
 
 ## Enable / disable
 
@@ -40,3 +69,31 @@ disable = ["schema/*"]
 enable = ["schema/json-ld-valid"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/article](/rules/schema/article): the per-type check for articles, which names the specific properties it wants.
+- [schema/product](/rules/schema/product): the same for product pages, including offers and pricing.
+- [schema/organization](/rules/schema/organization): the same for the site's own identity markup.
+- [content/broken-html](/rules/content/broken-html): markup faults in the page body, which often share a root cause with a malformed script block.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Introduction to structured data markup, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data)
+- [JSON-LD 1.1, W3C Recommendation](https://www.w3.org/TR/json-ld11/)
+- [Getting started with schema.org using microdata and JSON-LD, schema.org](https://schema.org/docs/gs.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each failing page names the type and the property it is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

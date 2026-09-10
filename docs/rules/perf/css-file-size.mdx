@@ -1,15 +1,37 @@
 ---
-title: "CSS File Size Too Large"
-description: "How large is too large for a CSS file: squirrelscan warns at 150KB per stylesheet, fails at 500KB, and both thresholds are configurable."
+title: "CSS file too large: the 150 KB and 500 KB thresholds"
+description: "Stylesheets over 150 KB warn and over 500 KB fail. squirrel measures every CSS file the crawl found and names the pages that load it."
 ---
 
-Checks for CSS files that exceed recommended size limits
+## What CSS file size costs
 
-## How large is too large for a CSS file
+A stylesheet in `<head>` normally blocks rendering. The browser will not paint until it has fetched and parsed every one whose `media` matches and that is not disabled, so the size of those files sits directly on first paint, on slow connections and on cheap phones most of all.
 
-squirrelscan warns on any single stylesheet over 150KB and fails the check at 500KB. The measurement is per file, not per page, and it is the size the server actually transfers (`Content-Length`), so a stylesheet served with gzip or brotli is judged on its compressed bytes and both thresholds are configurable below. Compressed CSS above 150KB is unusual outside an unpurged utility framework or a theme that ships every component's styles on every page, which is why the default sits there.
+Size usually comes from three places: a framework shipped whole rather than as the parts the site uses, selectors for pages that no longer exist, and no minification. Splitting a large stylesheet by route, inlining the styles the first screen needs and loading the rest asynchronously all attack the same number.
 
-Size matters here more than the download time suggests: CSS is render blocking, so the browser paints nothing until it has fetched and parsed the whole file, and one oversized stylesheet is usually loaded by every page on the site, including the pages that use a fraction of it.
+## What squirrel checks
+
+The rule runs once per crawl over the CSS resources the crawl collected, with their sizes and the pages that referenced them. It emits one or two checks:
+
+- `css-file-size`, passing with the message `No CSS files detected` when the crawl found none.
+- `css-file-size`, failing with the message `N CSS file(s) exceed 500.0 KB` and one item per file, carrying its size, HTTP status, content type and the pages that load it.
+- `css-file-size-warn`, warning with the message `N CSS file(s) exceed 150.0 KB` for files above the warning threshold but not above the error one, with the same items.
+- `css-file-size`, passing with the message `All CSS files are within size limits` when nothing crossed either threshold.
+
+Both thresholds are measured against the size the crawl recorded, which is the transferred size where the response headers gave one and the decoded body length otherwise. A file whose size could not be determined is counted in neither bucket, so a resource the crawl could not fetch is silently excluded rather than reported as oversized. The fail and warn checks can both appear on the same audit, since they cover different files.
+
+## How to fix it
+
+Split the stylesheet so a page loads only what it needs, and load the rest without blocking:
+
+```html
+<link rel="stylesheet" href="/critical.css" />
+<link rel="stylesheet" href="/rest.css" media="print" onload="this.media='all'" />
+```
+
+Then remove what nothing uses. A build-time purge against the templates is more reliable than reading the file, because a class used only in a rarely rendered branch is easy to delete by hand and hard to notice missing.
+
+The common false positive is a single stylesheet deliberately shipped for the whole site and cached across every page. It still blocks the first render, so the finding is true, but the second page view pays nothing.
 
 | | |
 |---|---|
@@ -19,18 +41,12 @@ Size matters here more than the download time suggests: CSS is render blocking, 
 | **Severity** | error |
 | **Weight** | 6/10 |
 
-## Solution
-
-Large CSS files slow down rendering and increase bandwidth. Split large stylesheets into smaller chunks, remove unused selectors, and minify CSS. Consider critical CSS inlining for above-the-fold styles and lazy-loading non-critical CSS.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `warn_bytes` | number | `153600` (150KB) | Byte size to trigger warning |
-| `error_bytes` | number | `512000` (500KB) | Byte size to trigger error |
+| `warn_bytes` | number | `153600` (150 KB) | Byte size to trigger warning |
+| `error_bytes` | number | `512000` (500 KB) | Byte size to trigger error |
 
 ### Configuration example
 
@@ -63,3 +79,30 @@ disable = ["perf/*"]
 enable = ["perf/css-file-size"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/unminified-css](/rules/perf/unminified-css): whether the file is large because it was never minified.
+- [perf/render-blocking](/rules/perf/render-blocking): the resources holding up first paint, which these files are part of.
+- [perf/js-file-size](/rules/perf/js-file-size): the same check on JavaScript, at 250 KB and 1 MB and a higher weight.
+- [perf/asset-compression](/rules/perf/asset-compression): whether the file is at least served compressed.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Reduce network payloads using text compression, web.dev](https://web.dev/articles/reduce-network-payloads-using-text-compression)
+- [link rel=stylesheet, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#stylesheet)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every oversized file is listed with its size and the pages that load it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

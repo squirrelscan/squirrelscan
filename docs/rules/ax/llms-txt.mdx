@@ -1,9 +1,39 @@
 ---
-title: "llms.txt"
-description: "Detects /llms.txt (and /llms-full.txt) at the domain root and checks its basic Markdown format"
+title: "llms.txt: what the file is and how squirrel validates it"
+description: "No /llms.txt at the root, an SPA fallback served in its place, or a file with no H1 and no links. squirrel checks the file and its format."
 ---
 
-Detects a [`llms.txt`](https://llmstxt.org) file at your domain root (and the optional `llms-full.txt` companion) and checks its basic Markdown shape. `llms.txt` is an emerging standard that gives AI agents and answer engines a curated, machine-readable map of your most useful content: a discoverability signal alongside `robots.txt` and `sitemap.xml`.
+## What llms.txt is
+
+`llms.txt` is a Markdown file at a site's root that points AI agents and answer engines at the content worth reading. The convention from llmstxt.org is an H1 with the site or project name, a short summary, then sections of Markdown links to key pages. A companion `llms-full.txt` inlines that content rather than linking to it.
+
+It is a proposal, not a standard, and no crawler is obliged to fetch it. It costs one static file and it gives an agent a curated entry point instead of a sitemap of every URL you have. Absence is never a defect here.
+
+## What squirrel checks
+
+The rule runs once per crawl against the root `/llms.txt`, with `/.well-known/llms.txt` and `/docs/llms.txt` as fallbacks probed by the crawler. It emits one or two checks:
+
+- `llms-txt`: reports at info status with the message `llms.txt data not available` when the probe did not run.
+- `llms-txt-present`: fails with the message `/llms.txt returned 200 but the body is an HTML page (SPA fallback) — not a real llms.txt` when the file exists and its first 512 characters, trimmed and lowercased, start with `<!doctype html` or `<html`. With no root file but a real hit at one of the two alternate paths, it reports at info status with `No /llms.txt at the root, but found one at <path>`. With nothing anywhere it warns with `No /llms.txt found — consider adding one so AI agents can discover your key content`. With a real root file it reports at info status with `/llms.txt found (N bytes)`, adding `; /llms-full.txt also present` when that exists too.
+- `llms-txt-format`: emitted only when a root file was found. It passes at info status with `Valid llms.txt format (N links)`, or warns with `llms.txt format notes:` followed by the problems joined with `; `. The three possible notes are ``missing H1 title (should start with `# Name`)``, `no Markdown links found` and `N malformed link URL(s)`.
+
+An alternate-path hit counts only when the probe returned 200, the body did not sniff as HTML, and the content read as Markdown. The format check tests that the first non-empty line matches an H1 with text after the hash, counts every `[text](url)` link, and tries to parse each link URL against the site's base URL. The rule's severity is info, so a `warn` check surfaces as a recommendation and does not move the score. The SPA-fallback result is the exception: a file that claims to be curated content and is not is a `fail`.
+
+## How to fix it
+
+```markdown
+# Acme Docs
+
+> Deployment and configuration guides for Acme.
+
+## Guides
+- [Quickstart](https://example.com/docs/quickstart): install and first deploy.
+- [Configuration](https://example.com/docs/config): every option, with defaults.
+```
+
+Serve it at `https://example.com/llms.txt` with a `text/plain` or `text/markdown` content type.
+
+The common false positive is a single-page application whose server returns `index.html` for every unmatched path. The file appears to exist with a 200 status, which is why the rule sniffs the body and reports the fallback rather than reporting a valid file.
 
 | | |
 |---|---|
@@ -12,45 +42,6 @@ Detects a [`llms.txt`](https://llmstxt.org) file at your domain root (and the op
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 1/10 |
-
-<Note>This rule is a **recommendation**: `llms.txt` is optional, and neither its absence nor a formatting nit penalizes your score. The one exception is a fallback-masked `/llms.txt` (see SPA-fallback detection below), which fails the check — that's not a missing-but-optional signal, it's an actively misleading response.</Note>
-
-## What it checks
-
-The audit fetches `/llms.txt` and `/llms-full.txt` from your domain root **once per crawl** (next to `robots.txt`), so the check itself does no extra network requests. It then reports:
-
-- **Presence**: whether `/llms.txt` exists, its size, and whether the optional `/llms-full.txt` is also present.
-- **Alternate paths**: if the root path 404s, the rule also checks `/.well-known/llms.txt` and `/docs/llms.txt` before concluding the file is absent — some sites (especially docs subdomains and monorepo-style deployments) publish it at one of these instead of the domain root.
-- **SPA-fallback detection**: single-page-app hosts commonly rewrite every unmatched path to `index.html` with a `200` status instead of a real `404`. The rule checks the response `Content-Type` and body shape against this pattern; when `/llms.txt` matches it, that's reported as a **failed check**, not as absent — a masquerading `llms.txt` actively misleads agents (it looks present, it returns `200`, but it's the app shell, not content), which is worse than a clean 404.
-- **Format**: basic [llmstxt.org](https://llmstxt.org) conformance of `/llms.txt`:
-  - starts with an H1 title (`# Name`),
-  - contains at least one Markdown link,
-  - every link URL is well-formed (absolute or root-relative).
-
-Format problems (missing H1, no links, malformed URLs) are reported as informational notes and never fail the audit. The SPA-fallback case is the one exception: it's reported as a failed check rather than a note, since it isn't a formatting nit — it's a masquerading file that would actively mislead an agent.
-
-## Solution
-
-Add a concise `/llms.txt` at your domain root. The format is plain Markdown: an H1 title, an optional blockquote summary, then sections of links to your key pages.
-
-<Note>If your site is a single-page app that rewrites unmatched routes to `index.html`, make sure `/llms.txt` is served as a real static file with `Content-Type: text/plain` or `text/markdown` and a genuine `200` — not caught by the SPA fallback. A fallback-masked `/llms.txt` fails this check outright, since it misleads any agent that fetches it into thinking the file exists when it's actually the app shell.</Note>
-
-```markdown llms.txt
-# Example Co
-
-> Short summary of what this site is and who it's for.
-
-## Docs
-
-- [Getting started](https://example.com/docs/start): install and first run
-- [API reference](https://example.com/docs/api): endpoints and types
-
-## About
-
-- [Pricing](https://example.com/pricing): plans and limits
-```
-
-Optionally add `/llms-full.txt` with the full text of those pages inlined, for agents that want everything in one fetch.
 
 ## Enable / disable
 
@@ -75,3 +66,30 @@ disable = ["ax/*"]
 enable = ["ax/llms-txt"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/agents-md](/rules/ax/agents-md): the repository-facing equivalent, which is only recommended to sites that already publish llms.txt.
+- [ax/markdown-response](/rules/ax/markdown-response): serving Markdown for the pages themselves rather than a curated index.
+- [ax/well-known-agent](/rules/ax/well-known-agent): the machine-readable manifests an agent looks for under `.well-known`.
+- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): the equivalent entry point for search crawlers.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [llms.txt](https://squirrelscan.com/learn/llms-txt) for how an agent works through a report.
+
+## References
+
+- [The /llms.txt file proposal](https://llmstxt.org/)
+- [text/markdown media type, RFC 7763](https://www.rfc-editor.org/rfc/rfc7763.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. The file size, link count and any format note are listed together. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,39 @@
 ---
-title: "Archive Indexing"
-description: "Checks whether the site is present in the Wayback Machine and the Common Crawl index, the archives that feed AI training corpora"
+title: "Common Crawl and Wayback: is your site in the archives"
+description: "A site missing from the Common Crawl index or the Wayback Machine, or archived only with a capture over a year old. squirrel checks both."
 ---
 
-Checks whether your domain is present in the two web archives that matter for AI visibility: the **Wayback Machine** (Internet Archive) and the **Common Crawl index**. Common Crawl is a primary training and discovery corpus for the major AI labs, so a site absent from it is invisible to every model trained on it.
+## What archive indexing is
+
+Two archives sit upstream of most AI training data. Common Crawl runs its own crawler, `CCBot`, and publishes a monthly corpus that the major labs build training sets from. The Internet Archive's Wayback Machine captures pages through `ia_archiver` and also ingests Common Crawl's crawls.
+
+They are not the same thing and neither implies the other. A site can have Wayback snapshots and no Common Crawl presence, because the ingest goes one way. Common Crawl has no submission form: inclusion follows from being crawlable and linked, and the next crawl is monthly.
+
+## What squirrel checks
+
+The rule runs once per crawl and looks the domain up in both archives. The lookup is a cloud service, so the check needs a cloud audit. It emits one or two checks:
+
+- `archive-indexing`, skipped with the message `Archive indexing check skipped` when the lookup did not run or returned nothing, with the reason naming why.
+- `common-crawl-indexed`: passes with the message `Site is in the Common Crawl index`, adding ` (<source>)` when the record names the crawl it came from. It warns with `Site is in the Common Crawl index but the latest capture is over a year old — recent content is missing from CC-derived AI training data` when the newest capture is more than 365 days before the lookup. With no record it warns with `Site is not in the Common Crawl index — Common Crawl feeds the training corpora of the major AI labs, so the site is invisible to models trained on it`.
+- `wayback-archived`: passes with the message `Site is archived in the Wayback Machine`. It warns with `Site is in the Wayback Machine but the latest snapshot is over a year old` past the same 365-day threshold, and with `Site has no Wayback Machine snapshot — the Internet Archive has never captured it, a strong signal the archive crawlers can't reach or discover it` when there is no snapshot at all.
+
+The staleness threshold is 365 days, measured from the time the lookup was captured. When that timestamp is missing or unparseable the rule falls back to the current time, and a capture with no date is never called stale.
+
+## How to fix it
+
+Check that robots.txt does not block the archive crawlers:
+
+```
+User-agent: CCBot
+Allow: /
+
+User-agent: ia_archiver
+Allow: /
+```
+
+Then request a Wayback snapshot at `web.archive.org/save`. Common Crawl has no equivalent: fix crawlability, make sure something links to the site, and wait for the next monthly crawl.
+
+The common false positive is a site that launched recently. Common Crawl runs monthly and the Internet Archive captures on its own schedule, so a new domain can be absent from both while nothing is wrong with it.
 
 | | |
 |---|---|
@@ -13,32 +43,54 @@ Checks whether your domain is present in the two web archives that matter for AI
 | **Severity** | warning |
 | **Weight** | 1/10 |
 
-<Note>This is a **cloud check**: it runs the archive lookups through the squirrelscan API (credit-gated, `archive_indexing`). Results are cached per domain — a repeat audit inside the cache window is a free hit. Negative results re-check after 7 days (a site can get archived any week); positive results after 30. Logged-out CLI audits skip it gracefully.</Note>
+## Enable / disable
 
-## What it checks
+### Disable this rule
 
-Two independent lookups per domain:
+```toml squirrel.toml
+[rules]
+disable = ["ax/archive-indexing"]
+```
 
-- **Wayback Machine**: does at least one snapshot of the site exist, and how recent is the latest capture?
-- **Common Crawl**: does the domain appear in the most recent Common Crawl collection?
+### Disable all Agent Experience rules
 
-These are separate corpora. Common Crawl runs its own crawler (**CCBot**), and the Internet Archive *ingests* Common Crawl's data — so a Wayback snapshot does **not** prove Common Crawl inclusion, and each is checked directly against its own index.
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
 
-The rule warns when:
+### Enable only this rule
 
-- the domain is **not in the Common Crawl index** — the check with real teeth, since CC feeds AI training sets,
-- the domain has **no Wayback snapshot at all** — a strong signal archive crawlers can't reach or discover the site,
-- either archive's latest capture is **more than a year old** — the archives only have a stale copy of you.
+```toml squirrel.toml
+[rules]
+enable = ["ax/archive-indexing"]
+disable = ["*"]
+```
 
-## Why it matters
+## Related rules
 
-Being in Common Crawl is the closest thing to a checkbox for "will AI models know this site exists". The major labs build training sets on top of CC-derived corpora, and some agent discovery pipelines consult the same indexes. A site that blocks or evades the archive crawlers opts out of all of that at once — usually by accident, via a WAF rule or an over-broad robots.txt.
+- [ax/ai-crawlers](/rules/ax/ai-crawlers): whether robots.txt blocks `CCBot` or `ia_archiver` in the first place.
+- [ax/agent-blocking](/rules/ax/agent-blocking): edge rules that block crawlers robots.txt allows.
+- [crawl/robots-txt](/rules/crawl/robots-txt): whether robots.txt exists and parses at all.
+- [crawl/indexability](/rules/crawl/indexability): the directives that keep pages out of any index.
 
-The Wayback Machine matters for the same reason plus one more: it is the public record of your site. No snapshot at all almost always means a crawlability problem, not a policy choice.
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [AI crawlers](https://squirrelscan.com/learn/ai-crawlers) for how an agent works through a report.
 
-## Solution
+## References
 
-1. **Allow the archive crawlers in robots.txt.** Make sure `CCBot` (Common Crawl) and `ia_archiver` / `archive.org_bot` (Internet Archive) are not disallowed — the [`ax/ai-crawlers`](/rules/ax/ai-crawlers) rule checks this. Blocking CCBot opts you out of every model trained on Common Crawl, not just one vendor.
-2. **Check your WAF/CDN bot rules.** Challenge pages block archive crawlers just as effectively as robots.txt.
-3. **Seed a Wayback snapshot** at [web.archive.org/save](https://web.archive.org/save) — this is instant and free.
-4. **Wait for the next crawl** for Common Crawl: there is no manual submission. CC crawls roughly monthly and discovers sites through links, so being crawlable and linked from indexed pages is what gets you in.
+- [Common Crawl](https://commoncrawl.org/)
+- [Internet Archive Wayback Machine](https://web.archive.org/)
+- [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each archive shows its latest capture date. Cloud audits run the lookup.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

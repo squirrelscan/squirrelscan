@@ -1,9 +1,31 @@
 ---
-title: "Service Area Pages"
-description: "Checks for service area/location pages"
+title: "Service area pages: the location URLs squirrel looks for"
+description: "A local business with no /locations or /service-areas page. squirrel scans the crawled paths and reports which location hubs it found."
 ---
 
-Checks for service area/location pages
+## What a service area page is
+
+A service area page is a page about one place a business serves, usually one per city or neighbourhood. Sites that publish them normally put an index at a path such as `/locations` or `/service-areas` and hang the individual pages under it. That index is what this rule looks for.
+
+They apply to a business that travels to customers, such as a plumber, a mover or a clinic with several branches. The same coverage is expressed in markup with `areaServed` on the business node, which squirrel's [schema/local-business](/rules/schema/local-business) rule accepts in place of a street address.
+
+## What squirrel checks
+
+The rule runs once per crawl and emits one check:
+
+- `service-area`: tests the pathname of every crawled URL against five patterns, matched case-insensitively and anchored to the end of the path, with an optional trailing slash: `/location` or `/locations`, `/service-area` or `/service-areas`, `/area-served` or `/areas-served`, `/cities`, and `/neighborhood` or `/neighborhoods`. Any match passes with the message `N location/service area page(s) found` and lists the matching paths as items. No match reports at info status with the message `No dedicated location pages found` and the value `Consider adding for multi-location businesses`. Severity info.
+
+A crawl with no pages emits the same check as skipped, with the message `No pages available for analysis`. The whole rule is skipped, with the reason shown in the report, when the site profile says the site is not a local business.
+
+## How to fix it
+
+```html
+<a href="/locations">Locations</a>
+```
+
+Publish a hub at one of the paths above and link it from the main navigation so the crawl reaches it.
+
+The patterns are anchored to the end of the pathname, so only the hub matches. A site with `/locations/san-francisco` and `/locations/oakland` but no `/locations` index reports `No dedicated location pages found`, because neither child path ends in `locations`. Adding the index page fixes the finding and is worth doing anyway. A hub under a different name, such as `/where-we-work`, is also not matched.
 
 | | |
 |---|---|
@@ -12,10 +34,6 @@ Checks for service area/location pages
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 3/10 |
-
-## Solution
-
-Service area pages help rank for '[service] in [location]' searches. Create pages for each major city/area you serve. Include location-specific content, testimonials, and case studies. Use unique content - don't just swap city names. Add LocalBusiness schema with areaServed property.
 
 ## Enable / disable
 
@@ -40,3 +58,30 @@ disable = ["local/*"]
 enable = ["local/service-area"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/local-business](/rules/schema/local-business): the LocalBusiness JSON-LD each location page should carry, including `areaServed`.
+- [local/geo-meta](/rules/local/geo-meta): the geo meta tags that belong on a location page.
+- [local/nap-consistency](/rules/local/nap-consistency): whether those location pages agree on one phone number and address.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): pages far shorter than the site's own norm for their page type, which is what templated city pages look like.
+
+Local SEO findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+- [areaServed, schema.org](https://schema.org/areaServed)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Local SEO section of the report. Every matching location path is listed. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Local SEO section looks like on a real site.
+  </Card>
+</CardGroup>

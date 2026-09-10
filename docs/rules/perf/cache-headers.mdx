@@ -1,9 +1,43 @@
 ---
-title: "Cache Headers"
-description: "Checks Cache-Control header configuration"
+title: "Cache-Control on a page: what squirrel reads and expects"
+description: "A response with no caching headers, no-cache with no validator, or a static asset cached for under a day. squirrel reads the headers per page."
 ---
 
-Checks Cache-Control header configuration
+## What Cache-Control does
+
+`Cache-Control` tells a browser and any cache in between how long a response may be reused and what has to happen before it is reused again. `max-age` is the freshness lifetime in seconds. `no-cache` allows storage but requires revalidation on every use. `no-store` forbids storage entirely. `immutable` promises the body will not change while the response is fresh, which lets a browser skip revalidating it on a reload.
+
+The right value depends on the URL. HTML usually changes, so a short lifetime or `no-cache` with a validator is right. A hashed asset filename never changes its contents, so a year with `immutable` is right. A validator, meaning an `ETag` or `Last-Modified`, makes revalidation cheap: the server answers 304 with no body when nothing changed.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the response headers. It emits one or two checks:
+
+- `cache-headers-missing`: warns with the message `No caching headers found` and the expectation `Cache-Control header recommended` when neither `Cache-Control` nor `Expires` is present. Nothing else runs.
+- `cache-control`: reports at info status with `Caching disabled with no-store` and stops. With `no-cache` it passes with `Uses revalidation caching with no-cache` when an `ETag` or `Last-Modified` is present, and warns with `no-cache without ETag or Last-Modified` when neither is. With a `Cache-Control` that has no `max-age` at all it warns with `Cache-Control without max-age`.
+- `cache-control-html`: for a response treated as HTML, it reports at info status with `HTML cached for Ns (N.Nh)` above one hour and passes with `HTML cache appropriate (Ns)` at or below it.
+- `cache-control-static`: for anything else, it warns with `Short cache for static asset (Ns)` under 86,400 seconds and passes with `Good cache duration (N days)` at or above.
+- `cache-immutable`: emitted after the max-age branch, whether or not a max-age was found, when the `immutable` directive is present. It passes with `Uses immutable directive for optimal caching`.
+- `cache-expires`: reports at info status with `Uses legacy Expires header` when there is an `Expires` header and no `Cache-Control`.
+
+A response counts as HTML when its content type contains `text/html`, when the URL ends in `.html`, or when the whole URL string does not end in a dot followed by two to four lowercase letters. That last test runs against the URL including any query string, so `/app.css?v=2` and `/logo.PNG` are both judged by the HTML thresholds rather than the static ones.
+
+## How to fix it
+
+For a hashed asset filename, the value can be as long as you like:
+
+```
+Cache-Control: public, max-age=31536000, immutable
+```
+
+For HTML, keep the browser lifetime short and let a shared cache hold it longer:
+
+```
+Cache-Control: public, max-age=0, s-maxage=600
+ETag: "a1b2c3"
+```
+
+The common false positive follows from the HTML test. An extensionless URL, an uppercase extension and any URL carrying a query string are all treated as HTML, so a long cache on a hashed asset with a cache-busting parameter is reported as informational rather than as a good static duration.
 
 | | |
 |---|---|
@@ -13,23 +47,17 @@ Checks Cache-Control header configuration
 | **Severity** | warning |
 | **Weight** | 4/10 |
 
-## Solution
-
-Use Cache-Control headers to enable browser caching. For static assets (CSS, JS, images), set long max-age (1 year) with immutable when using hashed filenames. For HTML, use shorter max-age or no-cache with revalidation. Example: 'Cache-Control: public, max-age=31536000, immutable' for versioned assets.
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_static_max_age` | unknown | `undefined` | Minimum max-age for static assets in seconds (1 day) |
+| `min_static_max_age` | number | `86400` | Minimum max-age for static assets in seconds (1 day) |
 
 ### Configuration example
 
 ```toml squirrel.toml
 [rules."perf/cache-headers"]
-min_static_max_age = undefined
+min_static_max_age = 86400
 ```
 
 ## Enable / disable
@@ -55,3 +83,31 @@ disable = ["perf/*"]
 enable = ["perf/cache-headers"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/bad-caching](/rules/perf/bad-caching): the same headers judged across the whole crawl rather than page by page.
+- [perf/ttfb](/rules/perf/ttfb): the origin time caching is meant to avoid paying twice.
+- [perf/compression](/rules/perf/compression): the other response header that decides transfer size.
+- [security/cookie-flags](/rules/security/cookie-flags): Secure, HttpOnly and SameSite on the Set-Cookie headers of the same response.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Cache-Control, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control)
+- [ETag, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag)
+- [Prevent unnecessary network requests with the HTTP Cache, web.dev](https://web.dev/articles/http-cache)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each page shows the Cache-Control value it returned. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

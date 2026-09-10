@@ -1,9 +1,48 @@
 ---
-title: "Product Schema"
-description: "Validates Product schema for e-commerce"
+title: "Product schema: name, image, offers and review checks"
+description: "Product markup with no name or image, an Offer missing price or availability, and no rating data. squirrel checks each product page."
 ---
 
-Validates Product schema for e-commerce
+## What Product schema is
+
+`Product` is the schema.org type for a thing being sold. It names the product with `name` and `image`, describes what it costs through an `offers` property holding an `Offer` with `price`, `priceCurrency` and `availability`, and identifies it with `brand`, `sku` or `gtin`. Ratings hang off it as `aggregateRating` or an array of `review` nodes.
+
+Google's guidance is to put the markup on the page that is about that product. A listing page that shows many products is described with `ItemList` and product snippets rather than a full `Product` node for each one.
+
+## What squirrel checks
+
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `Product` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It emits one to three checks:
+
+- `product-schema`: reports at info status with the message `No Product schema found` when no such node exists. No further checks run.
+- `product-required`: warns with the message `Product schema missing required properties` and lists the missing names as items. The required set is `name` and `image`. When both are present it passes with `Product schema has required properties`.
+- `product-offers`: reports at info status with the message `Product schema has no offers/pricing` and the value `Add Offer with price and availability` when `offers` is absent.
+- `product-offer-details`: warns with the message `Product Offer missing price or availability` when the offer lacks either property.
+- `product-reviews`: emitted only when `review` or `aggregateRating` is present, passing with the message `Product has review/rating data`.
+
+When `offers` is an array only the first entry is checked, so a product with several offers is judged on one of them. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A price of `0` is therefore treated as missing, and so is an `image` of `""`.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Ceramic pour-over dripper",
+  "image": "https://example.com/dripper.jpg",
+  "offers": {
+    "@type": "Offer",
+    "price": "32.00",
+    "priceCurrency": "USD",
+    "availability": "https://schema.org/InStock"
+  }
+}
+</script>
+```
+
+Put it in the `<head>` of the product page and keep the price and availability in step with what the page shows a shopper.
+
+The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so a `Product` node nested inside one reports as `No Product schema found`.
 
 | | |
 |---|---|
@@ -12,10 +51,6 @@ Validates Product schema for e-commerce
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
-
-## Solution
-
-Product schema enables rich results in search. Required: name, image. For offers, include price, priceCurrency, availability. Add reviews with AggregateRating for star ratings. Include brand, sku, gtin for product identification. Ensure price and availability are accurate and updated.
 
 ## Enable / disable
 
@@ -40,3 +75,31 @@ disable = ["schema/*"]
 enable = ["schema/product"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [schema/review](/rules/schema/review): the shape of the `aggregateRating` and `review` nodes this rule only checks for presence.
+- [schema/rating-scope](/rules/schema/rating-scope): whether a rating is visible to readers and about the page it sits on.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
+- [schema/coverage-outlier](/rules/schema/coverage-outlier): product pages missing the markup the rest of the site's product pages carry.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Product structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/product)
+- [Product, schema.org](https://schema.org/Product)
+- [Offer, schema.org](https://schema.org/Offer)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each product page lists the properties it is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

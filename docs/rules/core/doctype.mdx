@@ -1,9 +1,36 @@
 ---
-title: "Doctype"
-description: "Checks for valid HTML5 doctype declaration"
+title: "Doctype must be declared first: what it means and the fix"
+description: "A page with no doctype, an old one, or a doctype that is not the first thing in the document. squirrel reads the raw response."
 ---
 
-Checks for valid HTML5 doctype declaration
+## What the doctype does
+
+`<!DOCTYPE html>` is the first line of an HTML document. It has one job: it puts the browser in standards mode. Without it, or with something the browser does not recognise, the page renders in quirks mode, which emulates rendering bugs from browsers of the late 1990s. Box sizing, table cell heights, and inline element layout all change.
+
+The parser tolerates whitespace and comments before the doctype, so those do not by themselves cause quirks mode. Text does: a stray character or a template fragment emitted before the declaration makes the parser treat the document as having no doctype. This rule is stricter than the parser and reports anything in front of the declaration except a byte order mark and an XML declaration.
+
+## What squirrel checks
+
+The rule runs on every crawled page against the raw response body, before parsing. It emits one check named `doctype`:
+
+- Skipped with the message `No HTML content available` and the reason `Empty response` when the body is empty.
+- Passing with the message `Valid HTML5 doctype found` and the value `<!DOCTYPE html>`. The details note a byte order mark or an XML declaration when either was present.
+- Warning with the message `HTML5 doctype not at document start` and the expectation `<!DOCTYPE html> at very start` when the doctype is correct but something precedes it.
+- Warning with the message `Non-HTML5 doctype found: XHTML`, `Non-HTML5 doctype found: HTML4` or `Non-HTML5 doctype found: legacy`, with the declaration itself as the value, truncated to 50 characters followed by an ellipsis when it is longer.
+- Failing with the message `Missing doctype declaration` and the expectation `<!DOCTYPE html>` when there is no doctype at all.
+
+A byte order mark is stripped before the check, and an XML declaration matching `<?xml ... ?>` at the very start is skipped over, so neither on its own causes a failure. The doctype match is case-insensitive and allows leading whitespace, so `<!doctype html>` and a leading newline both pass. A comment before the doctype does not.
+
+## How to fix it
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+```
+
+Put it on the first line of the document with nothing before it. In a templating system the usual cause is a partial or a PHP block that emits a newline or a comment before the layout starts.
+
+The common false positive is a comment before the doctype, which HTML parsers accept and this rule reports. Anything other than a byte order mark, whitespace or an XML declaration in front of the declaration is reported.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for valid HTML5 doctype declaration
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Add `<!DOCTYPE html>` at the very start of your HTML document, before the `<html>` tag. This declaration tells browsers to render the page in standards mode rather than quirks mode, ensuring consistent rendering across browsers. Without a proper doctype, browsers may render the page inconsistently.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["core/*"]
 enable = ["core/doctype"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [core/charset](/rules/core/charset): the other declaration that has to come early in the document.
+- [content/broken-html](/rules/content/broken-html): other structural markup faults in the same response.
+- [content/mime-type](/rules/content/mime-type): the content type the server declared for the document.
+- [content/unrendered-markup](/rules/content/unrendered-markup): template output that reached the page unprocessed.
+
+Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [The DOCTYPE, HTML Standard](https://html.spec.whatwg.org/multipage/syntax.html#the-doctype)
+- [Doctype, MDN](https://developer.mozilla.org/en-US/docs/Glossary/Doctype)
+- [Quirks Mode and Standards Mode, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Quirks_mode_and_standards_mode)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Core SEO section of the report. Each page reports the doctype it found, or that it found none. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Core SEO section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,35 @@
 ---
-title: "Uncompressed Assets"
-description: "Checks for large CSS, JavaScript, and other text assets served without gzip or Brotli"
+title: "Uncompressed CSS and JS: assets served without gzip"
+description: "Large text sub-resources served with no Content-Encoding, while the HTML around them is compressed. squirrel checks every crawled asset."
 ---
 
-Checks for large CSS, JavaScript, and other text assets served without gzip or Brotli.
+## What asset compression is
+
+Server configuration usually compresses `text/html` and stops there. The MIME types a page spends most of its bytes on, `text/css` and `application/javascript`, have to be listed separately in nginx `gzip_types` or Apache `AddOutputFilterByType`, and it is easy to ship a site where the document is compressed and everything it loads is not.
+
+The saving on text is large enough that this is worth checking separately from the document. Brotli beats gzip on text and every current browser accepts it; `zstd` and the shared-dictionary codings are newer and also count.
+
+## What squirrel checks
+
+The rule runs once per crawl over the CSS, image and script resources the crawl collected. Images are included because SVG lands in that pool and is text. It emits one check named `asset-compression`:
+
+- Skipped with the message `No sub-resources were crawled` when the crawl collected none.
+- Skipped with the message `No compressible text assets with observed response headers` when none of them can be judged.
+- Passing with the message `All N compressible asset(s) are compressed or under 100.0 KB`.
+- Warning with the message `N text asset(s) over 100.0 KB served without compression`, the expectation `gzip, Brotli, or zstd on every large text asset`, and one item per asset, largest first.
+
+An asset is judged only when its status was 2xx, it recorded no error, it was fetched on this run rather than reused from a cached record, its content encoding was observed on that fetch, and its content type is compressible. Those exclusions are the point: a record with no observed encoding cannot prove the server sent none, and reporting on it would invent a finding. Any declared coding counts as compressed, so a coding newer than this rule is never reported as uncompressed. `identity`, including a list of nothing but `identity` tokens, means no coding and does count.
+
+## How to fix it
+
+```nginx
+gzip_types text/css application/javascript image/svg+xml application/json;
+brotli_types text/css application/javascript image/svg+xml application/json;
+```
+
+Behind a CDN, check that compression is enabled for static file extensions rather than only for documents. The default on some configurations covers HTML alone.
+
+There is no common false positive. The rule stays silent rather than judging an asset whose response headers it did not observe on this run.
 
 | | |
 |---|---|
@@ -13,70 +39,11 @@ Checks for large CSS, JavaScript, and other text assets served without gzip or B
 | **Severity** | warning |
 | **Weight** | 6/10 |
 
-## What it checks
-
-[`perf/compression`](/rules/perf/compression) judges the HTML document's own
-response. This rule judges everything the page pulls in afterwards.
-
-A server that compresses `text/html` but not `text/css` is a common
-misconfiguration, and it is invisible to the size rules:
-[`perf/css-file-size`](/rules/perf/css-file-size) and
-[`perf/js-file-size`](/rules/perf/js-file-size) measure bytes but never look at
-`Content-Encoding`. So a 300 KB stylesheet shipped uncompressed costs every
-visitor the full 300 KB while the audit reports only that the file is large.
-
-For each crawled sub-resource this rule reports the asset when all of the
-following hold:
-
-- the response is **2xx** and its `Content-Type` is compressible text: `text/*`,
-  `application/json`, `application/javascript`, `application/xml`, or any
-  `+json`/`+xml` type (this is what includes SVG and excludes PNG, WebP, fonts,
-  and PDFs, which are already compressed),
-- no `Content-Encoding` of `gzip`, `br`, `deflate`, or `zstd` was returned, and
-- the asset is larger than the size threshold (100 KB by default).
-
-Findings list each asset URL biggest-first with its size, the pages that
-reference it, and the estimated saving.
-
-<Note>
-The rule stays silent about any asset whose encoding it could not observe
-first-hand on this run, rather than guessing. That covers sub-resources reused
-from a previous crawl's cache, whose headers belong to that older run: a
-re-audit with `--refresh` re-fetches everything and judges the full set.
-
-Proving an asset is genuinely uncompressed also costs an extra request.
-Stylesheets and images are normally sized with a `HEAD`, but a `HEAD` has no
-body, and a server whose compression runs as a body filter (nginx's `gzip`
-module, and many CDNs on range requests) answers it with no `Content-Encoding`
-at all. Reporting that as uncompressed would be wrong, so when an asset still
-looks uncompressed the crawler confirms with an ordinary `GET` before the rule
-will name it. If that confirming request cannot be made, because the origin
-rate-limited it or the check ran out of time, the asset's encoding stays
-unknown and the rule leaves it alone rather than assuming the worst.
-</Note>
-
-## Solution
-
-Enable gzip or Brotli for static text assets, not just HTML. Server config often
-compresses `text/html` but omits `text/css` and `application/javascript`: add
-those MIME types to your compression list (nginx `gzip_types`, Apache
-`AddOutputFilterByType`). On a CDN, check that compression is on for static file
-extensions. Brotli beats gzip on text and every current browser accepts it.
-
-```nginx nginx.conf
-gzip on;
-gzip_types text/plain text/css application/json application/javascript
-           application/xml image/svg+xml;
-gzip_min_length 1024;
-```
-
 ## Options
-
-This rule supports the following configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `min_bytes` | number | `102400` | Only report uncompressed assets larger than this many bytes |
+| `min_bytes` | number | `102400` (100 KB) | Only report uncompressed assets larger than this many bytes |
 
 ### Configuration example
 
@@ -84,10 +51,6 @@ This rule supports the following configuration options:
 [rules."perf/asset-compression"]
 min_bytes = 102400
 ```
-
-Lower `min_bytes` to catch smaller assets. Compression starts paying off at
-around 1 KB, so `min_bytes = 1024` is a reasonable strict setting; the 100 KB
-default keeps the report focused on assets whose size is already worth acting on.
 
 ## Enable / disable
 
@@ -112,3 +75,30 @@ disable = ["perf/*"]
 enable = ["perf/asset-compression"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/compression](/rules/perf/compression): the same question asked of the HTML document itself.
+- [perf/css-file-size](/rules/perf/css-file-size): the size of those stylesheets before compression.
+- [perf/js-file-size](/rules/perf/js-file-size): the same for scripts.
+- [perf/bad-caching](/rules/perf/bad-caching): compression coverage across every crawled document.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [Content-Encoding, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Encoding)
+- [Reduce network payloads using text compression, web.dev](https://web.dev/articles/reduce-network-payloads-using-text-compression)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Every uncompressed asset is listed with its size, largest first. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

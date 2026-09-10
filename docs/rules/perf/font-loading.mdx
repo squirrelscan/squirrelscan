@@ -1,9 +1,43 @@
 ---
-title: "Font Loading"
-description: "Checks for font loading best practices"
+title: "font-display swap: the @font-face rule squirrel looks for"
+description: "An @font-face block with no font-display, or Google Fonts loaded without a preconnect. squirrel reads the inline CSS on every page."
 ---
 
-Checks for font loading best practices
+## What font-display does
+
+A web font arrives after the HTML. Until it does, the browser has to decide what to draw. With no `font-display` the strategy is `auto`, which leaves the choice to the browser; in practice that is a short period with the text invisible, then a swap to the real font. On a slow connection that period shows as a page with no text in it.
+
+`font-display: swap` makes the choice explicit: draw the fallback font immediately, swap when the web font arrives. The text reflows on the swap unless the fallback's metrics are matched to the web font, but it is readable the whole time. `optional` is the stricter option, which uses the web font only if it arrives almost instantly and never shifts the text.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one or two checks:
+
+- `font-display`: warns with the message `N font(s) without font-display: swap` and lists each family name as an item. It passes with `All fonts have font-display set` when every block declares one.
+- `font-preconnect`: emitted only on a page that loads a stylesheet from `fonts.googleapis.com`. It warns with the message `Using Google Fonts without preconnect` and the value `Add <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>` when no `link[rel="preconnect"]` points at `fonts.googleapis.com` or `fonts.gstatic.com`. Otherwise it passes with `Google Fonts preconnect configured`.
+
+The `@font-face` scan is a regular expression over the page's raw HTML, so it sees blocks written inline in a `<style>` element and blocks that happen to appear anywhere else in the markup. It does not fetch external stylesheets, so a font declared in a linked CSS file is not checked. A block counts as declared when the case-sensitive text `font-display` appears anywhere inside it, including in a comment. The family name is read from the block's `font-family` value, or reported as `Unknown font` when there is none.
+
+The Google Fonts usage test matches any `<link href>` resolving to `fonts.googleapis.com`, whatever its `rel`, so a preconnect to that host on a page with no Google Fonts stylesheet counts as usage. Fonts pulled in with `@import` are not detected as usage at all.
+
+## How to fix it
+
+```css
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter.woff2") format("woff2");
+  font-display: swap;
+}
+```
+
+Add the descriptor to every block. When a hosted service serves the CSS, the `display` parameter does the same thing:
+
+```html
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter&display=swap" />
+```
+
+The limit worth knowing is a site whose `@font-face` blocks live in an external stylesheet. The rule reads the page HTML only, so it finds no blocks and passes, whatever those blocks say.
 
 | | |
 |---|---|
@@ -12,10 +46,6 @@ Checks for font loading best practices
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Optimize font loading to prevent FOIT (Flash of Invisible Text) and FOUT (Flash of Unstyled Text): 1) Use font-display: swap in @font-face to show fallback text immediately. 2) Preconnect to font CDNs with `<link rel='preconnect'>`. 3) Use WOFF2 format for best compression. 4) Self-host fonts when possible for faster loading. 5) Limit font families and weights to reduce downloads.
 
 ## Enable / disable
 
@@ -40,3 +70,31 @@ disable = ["perf/*"]
 enable = ["perf/font-loading"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [perf/font-delivery](/rules/perf/font-delivery): the third-party stylesheet that carries those font declarations, checked for blocking.
+- [perf/preconnect](/rules/perf/preconnect): the same preconnect question across every known CDN.
+- [perf/cls-hints](/rules/perf/cls-hints): layout shift, which a font swap contributes to.
+- [perf/render-blocking](/rules/perf/render-blocking): the stylesheets holding up first paint.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+## References
+
+- [font-display, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display)
+- [Best practices for fonts, web.dev](https://web.dev/articles/font-best-practices)
+- [rel=preconnect, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preconnect)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Performance section of the report. Each font family without a display descriptor is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

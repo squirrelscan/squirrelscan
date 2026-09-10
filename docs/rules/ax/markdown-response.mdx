@@ -1,9 +1,37 @@
 ---
-title: "Markdown Response"
-description: "Checks whether the site serves text/markdown via content negotiation or a .md variant of the homepage"
+title: "Accept: text/markdown: serving Markdown to AI agents"
+description: "No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header. squirrel probes all three."
 ---
 
-Checks whether your site can return **Markdown** to an agent instead of rendered HTML, either by honoring `Accept: text/markdown` (content negotiation) on the homepage, or by exposing a `.md` variant (e.g. `/index.md`). AI agents and answer engines parse clean Markdown far more reliably than a full HTML document, so a Markdown representation is an emerging agent-experience signal alongside `llms.txt`.
+## What a Markdown response is
+
+Content negotiation lets one URL serve more than one representation. A client sends `Accept: text/markdown`, the server returns Markdown instead of HTML, and a `Vary: Accept` header tells caches that the response depends on the request header. `text/markdown` has been a registered media type since RFC 7763.
+
+Two simpler routes exist. A `.md` twin of the page, such as `/index.md`, is a second URL with the same content. A `Link: <...>; rel="alternate"; type="text/markdown"` header on the HTML page advertises where that twin lives, which is how a site whose homepage is an application shell can still point an agent at readable content.
+
+## What squirrel checks
+
+The rule runs once per crawl against the homepage and emits one or two checks:
+
+- `markdown-response`: reports at info status with the message `markdown probe data not available` when the probe did not run. Otherwise it reports at info status with `Serves Markdown for agents via <signals>`, joining whichever it found with ` and `. The three are `content negotiation (<content type>)`, `.md variant (<url>)` and `link rel=alternate (<url>)`. With none of them it warns with `No Markdown response — consider honoring Accept: text/markdown or publishing a .md variant so agents get clean content`.
+- `markdown-response-headers`: emitted only when a supplementary signal is present, at info status, with the message `Additional Markdown-negotiation signals:` followed by the signals joined with `; `. Two are recognised. A `Vary` header on the negotiated response that mentions `Accept` is reported as `Vary: <header value>`. Cloudflare's markdown-transform fingerprint needs both token headers and is reported as `Cloudflare markdown-transform fingerprint (x-markdown-tokens: <n>, x-original-tokens: <n>)`, gaining a `, ~N% of original` suffix only when both parse as finite numbers and the original count is above zero.
+
+The rule's severity is info, so the warning surfaces as a recommendation and does not move the score. The `link rel=alternate` signal is counted in the first check and deliberately not repeated in the second.
+
+## How to fix it
+
+Honour the header and advertise the twin:
+
+```
+HTTP/1.1 200 OK
+Content-Type: text/markdown; charset=utf-8
+Vary: Accept
+Link: <https://example.com/index.md>; rel="alternate"; type="text/markdown"
+```
+
+Serving the `.md` twin alone is enough to satisfy the check, and it is the least invasive of the three. Set `Vary: Accept` whenever the same URL returns different bodies for different `Accept` headers, or a cache will hand the HTML to an agent that asked for Markdown.
+
+There is no common false positive. Absence is a recommendation and never a defect.
 
 | | |
 |---|---|
@@ -12,47 +40,6 @@ Checks whether your site can return **Markdown** to an agent instead of rendered
 | **Scope** | Site-wide |
 | **Severity** | info |
 | **Weight** | 1/10 |
-
-<Note>This rule is a **recommendation**: it never penalizes your score. Serving Markdown is optional; the rule just surfaces whether an agent can get it.</Note>
-
-## What it checks
-
-The audit probes your **homepage only**, **once per crawl** (next to `robots.txt` / `llms.txt`), so the check itself does minimal extra network requests. It reports:
-
-- **Content negotiation**: the homepage is requested with `Accept: text/markdown`; the rule passes the signal if the response `Content-Type` is `text/markdown`.
-- **`Vary: Accept`**: whether the response declares `Vary: Accept`. Without it, caches (CDN, browser, intermediate proxies) may serve the wrong representation to the next requester with a different `Accept` header — a site can pass the content-negotiation check on a cold request and still fail it in production once a cache is in front of it.
-- **`link rel="alternate"`**: whether the HTML response advertises its Markdown counterpart via `<link rel="alternate" type="text/markdown" href="...">`, letting an agent discover the Markdown variant without guessing a `.md` path or retrying with a different `Accept` header.
-- **`x-markdown-tokens` / `x-original-tokens` fingerprints**: where present, response headers carrying token-count estimates for the Markdown body and the original HTML respectively. The rule uses the pair as a sanity check that the "Markdown" response isn't just the HTML page mislabeled with a different `Content-Type` — a real Markdown conversion should carry a meaningfully lower token count than the HTML original.
-
-If content negotiation is present, the site "serves Markdown for agents" on the homepage. `Vary`, `rel="alternate"`, and the token fingerprints are supporting signals reported alongside it. None are required: this is purely informational.
-
-<Note>This rule checks the homepage's `/index.md` variant and content negotiation only — it does not currently probe per-page `.md` siblings (e.g. `/about` → `/about.md`). Publishing a `.md` mirror for every page is still good practice for agent access; the rule just doesn't verify it site-wide yet.</Note>
-
-## Solution
-
-Give agents a Markdown representation of your key pages:
-
-- **Content negotiation:** when a request carries `Accept: text/markdown`, return the Markdown source instead of HTML, and declare `Vary: Accept` so caches don't serve the wrong representation to the next request.
-- **`.md` variant:** publish a `.md` version of the homepage at `/index.md`. As a recommended practice beyond what this rule checks, consider doing the same for other key pages (e.g. `/about.md`).
-- **Discovery link:** advertise the Markdown variant from the HTML page itself, so an agent that only fetched the HTML can find it.
-
-```http
-GET / HTTP/1.1
-Accept: text/markdown
-
-HTTP/1.1 200 OK
-Content-Type: text/markdown; charset=utf-8
-Vary: Accept
-x-markdown-tokens: 412
-x-original-tokens: 1380
-
-# Example Co
-Short Markdown representation of the page…
-```
-
-```html
-<link rel="alternate" type="text/markdown" href="/index.md">
-```
 
 ## Enable / disable
 
@@ -77,3 +64,31 @@ disable = ["ax/*"]
 enable = ["ax/markdown-response"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [ax/token-weight](/rules/ax/token-weight): the markup cost a Markdown response removes.
+- [ax/llms-txt](/rules/ax/llms-txt): the curated index that points an agent at these pages.
+- [ax/content-without-js](/rules/ax/content-without-js): whether the HTML carries the content in the first place.
+- [content/mime-type](/rules/content/mime-type): the content type the server declares for its pages.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [llms.txt](https://squirrelscan.com/learn/llms-txt) for how an agent works through a report.
+
+## References
+
+- [text/markdown media type, RFC 7763](https://www.rfc-editor.org/rfc/rfc7763.html)
+- [Content negotiation, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation)
+- [Vary, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Vary)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each Markdown signal is listed with the URL or content type it came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,45 @@
 ---
-title: "Video Schema"
-description: "Validates VideoObject schema for video content"
+title: "VideoObject schema: required props and duration format"
+description: "A page with an embedded video and no VideoObject markup, or markup missing thumbnailUrl, uploadDate or an ISO 8601 duration. squirrel checks both."
 ---
 
-Validates VideoObject schema for video content
+## What VideoObject schema is
+
+`VideoObject` is the schema.org type for a video. It names the video with `name` and `description`, points at a still with `thumbnailUrl`, dates it with `uploadDate`, and locates the file with `contentUrl` for the video itself or `embedUrl` for a player.
+
+`duration` is typed as an ISO 8601 duration, which starts with `P` and puts a `T` before any time component: `PT1H30M` for ninety minutes, `PT45S` for forty-five seconds. A plain number of seconds or a `1:30:00` clock string is not valid. The markup describes a video present on the page, so it belongs on the watch page rather than on an index of videos.
+
+## What squirrel checks
+
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `VideoObject` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It also looks for a `<video>` element, or an `<iframe>` whose `src` contains `youtube` or `vimeo`. It emits one to three checks:
+
+- `video-schema`: with no `VideoObject` node and a video element present, it warns with the message `Page has video but no VideoObject schema` and the value `Add schema for video rich results`. With no `VideoObject` node and no video element it reports at info status with the message `No VideoObject schema found`. Either way no further checks run.
+- `video-required`: warns with the message `VideoObject missing required properties` and lists the missing names as items. The required set is `name`, `description`, `thumbnailUrl` and `uploadDate`. When all four are present it passes with `VideoObject has required properties`.
+- `video-recommended`: emitted only when at least one of `duration`, `contentUrl` and `embedUrl` is absent, at info status, with the message `VideoObject could include recommended properties`.
+- `video-duration`: emitted only when `duration` is a string that does not begin with `PT`. It warns with the message `Duration should use ISO 8601 format` and the value `Got: <value>, expected: PT1H30M`.
+
+The duration check tests the `PT` prefix and nothing else, so `PTbanana` passes and a valid date-only duration such as `P1D` is reported as malformed. A `duration` given as a number rather than a string is not checked at all. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A `<video>` element is detected whatever domain it plays from; only the iframe match is restricted to `src` values containing `youtube` or `vimeo`, so a third-party player under another domain does not count as video on the page.
+
+## How to fix it
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  "name": "Setting up the build cache",
+  "description": "A six-minute walkthrough of the cache configuration.",
+  "thumbnailUrl": "https://example.com/thumbs/build-cache.jpg",
+  "uploadDate": "2026-03-14T09:30:00Z",
+  "duration": "PT6M12S",
+  "embedUrl": "https://www.youtube.com/embed/abc123"
+}
+</script>
+```
+
+Put it in the `<head>` of the page the video plays on, and generate `duration` from the source file rather than typing it.
+
+The common false positive is a video loaded by a script after page load. squirrel reads the HTML the server sent unless [browser rendering](/guides/browser-rendering) is on, so the element is not there and the page reports `No VideoObject schema found` instead of warning about missing markup.
 
 | | |
 |---|---|
@@ -12,10 +48,6 @@ Validates VideoObject schema for video content
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-VideoObject schema enables video rich results and carousels. Required: name, description, thumbnailUrl, uploadDate. Recommended: duration (ISO 8601), contentUrl, embedUrl. For video courses, use Course with hasCourseInstance. Ensure thumbnailUrl is high quality (min 160x90, max 1920x1080).
 
 ## Enable / disable
 
@@ -40,3 +72,31 @@ disable = ["schema/*"]
 enable = ["schema/video"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [video/video-schema](/rules/video/video-schema): the Video category's own view of the same markup.
+- [video/video-thumbnail](/rules/video/video-thumbnail): whether the thumbnail this markup points at is usable.
+- [video/video-accessible](/rules/video/video-accessible): captions and transcripts for the video itself.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
+
+Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Video structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/video)
+- [VideoObject, schema.org](https://schema.org/VideoObject)
+- [Duration, schema.org](https://schema.org/Duration)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Structured Data section of the report. Each video page lists the properties it is missing. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>
