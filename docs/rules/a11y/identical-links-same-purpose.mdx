@@ -1,9 +1,34 @@
 ---
-title: "Identical Links Same Purpose"
-description: "Checks that links with identical text go to the same destination"
+title: "Identical link text pointing at different pages"
+description: "Two links reading 'Learn more' that go to different places are indistinguishable in a screen reader's link list. squirrel finds them."
 ---
 
-Checks that links with identical text go to the same destination
+## What the problem is
+
+Screen readers can present every link on a page as a list, sorted and read out of context. In that list two entries reading "Learn more" are the same entry twice, and there is no way to tell which one leads where.
+
+The opposite case is fine and expected: the same text pointing at the same page, in a nav bar and again in the footer, is one destination described consistently.
+
+## What squirrel checks
+
+One check, `identical-links-same-purpose`, at severity warning. It reads every `a[href]`, taking the link's trimmed and lowercased text along with its `href`, and skips links with no text, text shorter than two characters, or an `href` beginning with `#`.
+
+Destinations are normalized before comparison: the `href` is lowercased, trailing slashes are stripped and the query string is dropped. So `/pricing`, `/pricing/` and `/pricing?ref=nav` all count as one destination.
+
+- Warn when one text maps to more than one destination. Report message: `N link text(s) lead to different destinations`. Items read `"learn more" → 3 different URLs`, capped at the first ten, carrying the suggestion `Make link text unique to differentiate destinations`.
+- Pass with `Identical link texts go to same destinations`.
+- Info with `No links found`.
+
+URLs are compared as written, so a link to `/pricing` and one to `https://example.com/pricing` are treated as different destinations even though they resolve to the same page. That is the most common false positive here.
+
+## How to fix it
+
+```html
+<a href="/plans/team">Learn more about the Team plan</a>
+<a href="/plans/enterprise">Learn more about Enterprise</a>
+```
+
+Extend the visible text. Where the design cannot take more words, keep the short label visible and put the full phrase in `aria-label`, making sure the visible words appear inside it.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that links with identical text go to the same destination
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Links with the same visible text should go to the same URL. When identical link text leads to different destinations, it confuses screen reader users who navigate by listing links. Make link text unique or more descriptive to differentiate destinations.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/identical-links-same-purpose"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/link-text](/rules/a11y/link-text): generic phrases and links with no text at all.
+- [a11y/label-content-name-mismatch](/rules/a11y/label-content-name-mismatch): an `aria-label` that does not contain the visible words.
+- [links/anchor-text](/rules/links/anchor-text): the same text judged as a ranking signal.
+- [a11y/link-in-text-block](/rules/a11y/link-in-text-block): links in body text whose markup removes the underline.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Understanding SC 2.4.4 Link Purpose (In Context), W3C](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html)
+- [Understanding SC 3.2.4 Consistent Identification, W3C](https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html)
+- [The a element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each repeated phrase is listed with how many destinations it points at. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

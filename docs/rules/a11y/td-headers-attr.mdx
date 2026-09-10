@@ -1,9 +1,42 @@
 ---
-title: "Table Cell Headers"
-description: "Checks that td headers attribute references valid th ids"
+title: "td headers attribute pointing at a missing th id"
+description: "A headers attribute naming an id that does not exist leaves the cell unassociated. squirrel checks every reference in every table."
 ---
 
-Checks that td headers attribute references valid th ids
+## What the headers attribute is
+
+In a complex table, `headers` on a `<td>` names the ids of the `<th>` cells that describe it. A screen reader reads those headers before the value, which is how a cell in a multi-level table announces "Revenue, Europe, Q3, 6.8M".
+
+Simple tables do not need it. One row of column headers and one column of row headers is fully described by `scope="col"` and `scope="row"`. `headers` is for tables with split or stacked headers, where scope cannot express the relationship.
+
+## What squirrel checks
+
+One check, `td-headers-attr`, at severity error and weight 6. For each `<table>` it collects the ids of every `th[id]` in that table, then reads every `td[headers]` and splits the value on whitespace.
+
+- Fail when a referenced id does not belong to a `<th>` in the same table. Report message: `N invalid header reference(s) in table cells`. Items read `td references non-existent header "q3" (content: "6.8M...")`, quoting the first 15 characters of the cell. Up to ten are shown with a count of the rest.
+- Pass with `All td headers attributes reference valid th ids`.
+- Info with `No td elements with headers attribute found`, or `No tables found`.
+
+References are scoped per table, so a `headers` value pointing at a `<th>` in a different table is reported even though the id exists on the page.
+
+## How to fix it
+
+```html
+<table>
+  <tr>
+    <td></td>
+    <th id="q3" scope="col">Q3</th>
+  </tr>
+  <tr>
+    <th id="eu" scope="row">Europe</th>
+    <td headers="eu q3">6.8M</td>
+  </tr>
+</table>
+```
+
+Every id in the `headers` value has to exist on a `<th>` in the same table. Ids that were renamed during a refactor are the usual cause, and so are ids generated per row that do not match the ones generated per header.
+
+If the table is simple enough for `scope` alone, drop the `headers` attributes entirely. Fewer references means fewer to keep in sync.
 
 | | |
 |---|---|
@@ -12,10 +45,6 @@ Checks that td headers attribute references valid th ids
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## Solution
-
-When using the headers attribute on `<td>` elements to associate cells with headers, ensure each id in the headers attribute matches an existing `<th>` element's id in the same table.
 
 ## Enable / disable
 
@@ -40,3 +69,31 @@ disable = ["a11y/*"]
 enable = ["a11y/td-headers-attr"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/table-headers](/rules/a11y/table-headers): whether the table has `<th>` cells to point at.
+- [a11y/th-has-data-cells](/rules/a11y/th-has-data-cells): headers with no data in their row or column.
+- [a11y/duplicate-id-active](/rules/a11y/duplicate-id-active): duplicated ids on focusable elements. It does not cover `<th>` ids, so header collisions have to be caught by hand.
+- [a11y/table-duplicate-name](/rules/a11y/table-duplicate-name): telling several tables apart.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The headers attribute, HTML Standard](https://html.spec.whatwg.org/multipage/tables.html#attr-tdth-headers)
+- [Tables with multi-level headers, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/tables/multi-level/)
+- [The td element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/td)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each broken reference is listed with the id it names and the cell's opening text. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

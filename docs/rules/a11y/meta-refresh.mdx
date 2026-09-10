@@ -1,9 +1,40 @@
 ---
-title: "Meta Refresh"
-description: "Checks for meta refresh redirects that can disorient users"
+title: "meta http-equiv=refresh: redirects and auto-refresh"
+description: "A timed redirect moves the page out from under a screen reader user mid-sentence. squirrel reads the content value and grades it."
 ---
 
-Checks for meta refresh redirects that can disorient users
+## What meta refresh is
+
+`<meta http-equiv="refresh" content="5;url=/new">` asks the browser to load another page after a delay. With no `url` it reloads the current page on a timer instead.
+
+Both take control away from the reader. Someone using a screen reader, or reading slowly, or filling in a form, gets moved without warning and with no way to stop it. WCAG success criterion 2.2.1 Timing Adjustable, Level A, covers time limits like this, and techniques F40 and F41 name meta refresh specifically as a way to fail it.
+
+## What squirrel checks
+
+One check name per case, at rule severity error. The rule finds the first `<meta>` whose `http-equiv` is `refresh`, matched case-insensitively, and parses its `content` as a number of seconds optionally followed by `;url=`.
+
+- `meta-refresh-redirect` warns with `Immediate meta refresh redirect found` when a url is present and the delay is zero, carrying the issue `Use server-side 301/302 redirect instead`.
+- `meta-refresh-redirect` fails with `Meta refresh redirect after N seconds` when a url is present and the delay is anything other than zero, which includes a negative or unparsable value, carrying the issue `Timed redirects disorient users`.
+- `meta-refresh-auto` fails with `Page auto-refreshes every N seconds` when there is no url and the delay parses to a number above zero and under 20, carrying the issue `Frequent refresh disrupts screen reader users`.
+- `meta-refresh-auto` warns with `Page auto-refreshes every N seconds` when there is no url and the delay is 20 seconds or more, suggesting `Provide user control over refresh`.
+- `meta-refresh` passes with `No meta refresh found`.
+
+Every finding carries the raw `content` string as its value. The 20 second boundary is squirrel's own, not a threshold from the standard.
+
+Two gaps are worth knowing. Only the first matching `<meta>` is examined, and a `content="0"` with no url matches none of the branches, so it produces no finding at all.
+
+## How to fix it
+
+For a redirect, do it on the server:
+
+```
+HTTP/1.1 301 Moved Permanently
+Location: https://example.com/new
+```
+
+A 301 or 302 never renders the old page, so nothing is read out and then replaced. It is also the version search engines follow cleanly.
+
+For content that has to stay current, fetch and update the region in place with `aria-live="polite"` rather than reloading the document, and give the user a control to pause it.
 
 | | |
 |---|---|
@@ -12,10 +43,6 @@ Checks for meta refresh redirects that can disorient users
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Avoid using `<meta http-equiv='refresh'>` for redirects or auto-refresh. They can disorient users, especially those using screen readers. Use server-side redirects (301/302) instead. If content must refresh, provide a user control and warn users beforehand.
 
 ## Enable / disable
 
@@ -40,3 +67,31 @@ disable = ["a11y/*"]
 enable = ["a11y/meta-refresh"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [links/redirect-chains](/rules/links/redirect-chains): URLs that redirect and links pointing at them, once the redirect moves to the server.
+- [a11y/zoom-disabled](/rules/a11y/zoom-disabled): another meta tag that takes control away from the user.
+- [core/robots-meta](/rules/core/robots-meta): the other directives that live in the same `<head>`.
+- [a11y/skip-link](/rules/a11y/skip-link): whether the page offers any way past its repeated navigation.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [F40: Failure due to using meta redirect with a time limit, W3C](https://www.w3.org/WAI/WCAG22/Techniques/failures/F40)
+- [F41: Failure due to using meta refresh to reload the page, W3C](https://www.w3.org/WAI/WCAG22/Techniques/failures/F41)
+- [meta http-equiv=refresh, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#attr-meta-http-equiv-refresh)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The finding quotes the raw content value so you can see the delay and the target. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

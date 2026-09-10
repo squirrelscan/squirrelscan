@@ -1,9 +1,33 @@
 ---
-title: "HTML Lang Valid"
-description: "Checks that the html lang attribute has a valid language code"
+title: "html lang: valid values and what a missing one breaks"
+description: "Without a lang attribute a screen reader guesses the pronunciation, often wrongly. squirrel checks the html element on every page."
 ---
 
-Checks that the html lang attribute has a valid language code
+## What the lang attribute is
+
+`lang` on `<html>` declares what language the document is written in, as a BCP 47 tag. A screen reader uses it to choose a voice and a set of pronunciation rules. Read English with a French synthesiser and most of it is unintelligible.
+
+The tag has a primary subtag, `en`, optionally followed by script and region subtags, `en-GB` or `zh-Hans-CN`. The primary subtag is the part that matters for pronunciation; the region subtag usually selects an accent.
+
+## What squirrel checks
+
+Two check names, at rule severity error. Only one runs per page.
+
+- `html-has-lang` fails when `<html>` has no `lang` attribute, and also when it has `lang=""`, since the rule tests the attribute for truthiness. Report message: `HTML element missing lang attribute`, with the expected value `lang="en" or appropriate language code`. Nothing else is checked.
+- `html-lang-valid` fails when the value is whitespace only, or when its primary subtag is neither one of the 190 ISO 639-1 codes the rule knows nor a plain two or three letter sequence. Report message: `Invalid lang attribute: empty value` or `Invalid lang attribute: invalid primary language 'english'`, with the expected value `Valid BCP 47 language tag (e.g., 'en', 'en-US', 'es')`.
+- `html-lang-valid` passes with `Valid lang attribute: "en-GB"`.
+
+Two limits follow from that shape check. Any two or three lowercase letters pass, so an invented code such as `qq` is accepted. And script and region subtags are not validated at all, so `en-ZZ` passes.
+
+## How to fix it
+
+```html
+<html lang="en-GB">
+```
+
+Set it on the `<html>` element of every page, including error pages and pages rendered by a framework's fallback layout. A region subtag is worth adding when the accent matters, and harmless when it does not.
+
+For a page whose main content is in another language, change this attribute rather than adding `lang` further down. Marking individual passages is what `a11y/valid-lang` covers.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that the html lang attribute has a valid language code
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-The lang attribute on `<html>` should be a valid BCP 47 language tag. Use two-letter ISO 639-1 codes like 'en' for English, 'es' for Spanish, 'fr' for French. You can add region subtags like 'en-US' or 'en-GB'. This helps screen readers use correct pronunciation.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/html-lang-valid"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/valid-lang](/rules/a11y/valid-lang): `lang` on every other element on the page.
+- [a11y/html-xml-lang-mismatch](/rules/a11y/html-xml-lang-mismatch): `lang` and `xml:lang` disagreeing.
+- [i18n/lang-attribute](/rules/i18n/lang-attribute): the same declaration seen from the internationalization side.
+- [i18n/hreflang](/rules/i18n/hreflang): the language signals sent to search engines instead.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The lang attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/lang)
+- [Declaring language in HTML, W3C Internationalization](https://www.w3.org/International/questions/qa-html-language-declarations)
+- [Understanding SC 3.1.1 Language of Page, W3C](https://www.w3.org/WAI/WCAG22/Understanding/language-of-page.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. A missing attribute and an invalid value are reported as different checks. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

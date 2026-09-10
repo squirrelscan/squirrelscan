@@ -1,9 +1,34 @@
 ---
-title: "Form Labels"
-description: "Checks that form inputs have associated labels"
+title: "Form labels: which inputs need one and how to check"
+description: "An input labelled only by its placeholder loses its label the moment someone types. squirrel lists every unlabeled input, textarea and select."
 ---
 
-Checks that form inputs have associated labels
+## What a form label is
+
+A `<label>` gives a form control its accessible name, and clicking the label moves focus into the control. Two forms work: `<label for="id">` matching the control's `id`, or a `<label>` that wraps the control.
+
+Where a visible label does not fit the design, `aria-label` or `aria-labelledby` supplies the name instead. A `placeholder` is only a last-resort fallback in the name computation, and squirrel does not accept it: it disappears the moment the user types, so a form labelled that way is unusable as soon as it is filled in. Buttons, hidden inputs and image inputs are named by other means and are out of scope.
+
+## What squirrel checks
+
+One check, `form-labels`, at severity error. It covers every `<input>` except types `hidden`, `submit`, `button`, `reset` and `image`, plus every `<textarea>` and `<select>`.
+
+- Fail when a control has none of the following: an ancestor `<label>`; a `<label for="...">` whose value matches the control's `id`; an `aria-label`; an `aria-labelledby`; a `title`. Report message: `N form input(s) without labels`. Each control is listed by its `name`, falling back to its `id` and then to its type.
+- Pass with `All form inputs have labels`.
+- Info with `No form inputs found`.
+
+A `title` attribute satisfies this check. It shows only on hover, so it is a weaker fix than a real label, but it does produce an accessible name.
+
+## How to fix it
+
+```html
+<label for="email">Email address</label>
+<input id="email" name="email" type="email" autocomplete="email">
+```
+
+The `for` value and the `id` must match exactly, and `id` must be unique on the page or the association silently lands on the wrong control.
+
+A search field sitting next to a magnifying-glass button is the usual false positive to argue about. The button has a name, the input does not, and squirrel is right to report it: give the input its own `aria-label`.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that form inputs have associated labels
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## Solution
-
-Every form input needs an accessible label for screen readers. Options: 1) Use `<label for='inputId'>`Label`</label>` with matching id. 2) Wrap the input inside `<label>`Label `<input>``</label>`. 3) Use aria-label or aria-labelledby for inputs where visible labels aren't feasible. Placeholders are not sufficient substitutes for labels. Hidden inputs, submit buttons, and image buttons don't need labels.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/form-labels"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): the same sweep including elements with input ARIA roles.
+- [a11y/select-name](/rules/a11y/select-name): dropdowns specifically.
+- [a11y/form-field-multiple-labels](/rules/a11y/form-field-multiple-labels): the opposite failure, two labels on one control.
+- [a11y/autocomplete-tokens](/rules/a11y/autocomplete-tokens): the autofill token that belongs on the same field.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The label element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/label)
+- [Labeling controls, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/forms/labels/)
+- [H44: Using label elements to associate text labels with form controls, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H44)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unlabeled control is listed by its name attribute. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

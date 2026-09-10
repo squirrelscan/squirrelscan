@@ -1,195 +1,197 @@
 ---
 title: "Accessibility"
-description: "Accessibility for users with disabilities"
+description: "61 audit rules covering accessible names, ARIA, forms, structure, tables, language and zoom, run on every crawled page."
 ---
 
-Accessibility for users with disabilities
+squirrelscan runs 61 accessibility rules against every page it crawls. They cover accessible names for buttons, links and form controls, ARIA roles and attributes, heading and landmark structure, tables, language declarations and viewport settings. Each page below quotes the exact report message a rule emits, and most findings identify the offending element by selector, id or quoted text, so a coding agent can go straight to the markup that needs changing.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 
 ## Rules
 
 <CardGroup cols={2}>
-  <Card title="Access Keys" icon="triangle-exclamation" href="/rules/a11y/accesskeys">
-    Checks that accesskey values are unique
+  <Card title="accesskey: why duplicate shortcuts break and how to check" icon="triangle-exclamation" href="/rules/a11y/accesskeys">
+    Two elements claiming the same accesskey means one shortcut is unreachable.
   </Card>
-  <Card title="ARIA Allowed Attributes" icon="triangle-exclamation" href="/rules/a11y/aria-allowed-attr">
-    Checks that ARIA attributes are allowed on their elements
+  <Card title="ARIA attributes that are not allowed on an element" icon="triangle-exclamation" href="/rules/a11y/aria-allowed-attr">
+    role=presentation with an aria-label, or a decorative image with one, contradicts itself.
   </Card>
-  <Card title="ARIA Command Name" icon="circle-exclamation" href="/rules/a11y/aria-command-name">
-    Checks that command elements have accessible names
+  <Card title="Command roles: buttons, links and menu items need names" icon="circle-exclamation" href="/rules/a11y/aria-command-name">
+    Anything that performs an action has to announce what it does.
   </Card>
-  <Card title="ARIA Dialog Name" icon="circle-exclamation" href="/rules/a11y/aria-dialog-name">
-    Checks that dialog elements have accessible names
+  <Card title="Dialog accessible name: role=dialog and the dialog element" icon="circle-exclamation" href="/rules/a11y/aria-dialog-name">
+    A modal with no name leaves screen reader users guessing what just opened.
   </Card>
-  <Card title="ARIA Hidden Body" icon="circle-exclamation" href="/rules/a11y/aria-hidden-body">
-    Ensures document body is not set to aria-hidden
+  <Card title="aria-hidden on body or html: what it breaks" icon="circle-exclamation" href="/rules/a11y/aria-hidden-body">
+    aria-hidden=true on the body or html element asks assistive technology to ignore the entire page.
   </Card>
-  <Card title="ARIA Hidden Focus" icon="circle-exclamation" href="/rules/a11y/aria-hidden-focus">
-    Ensures aria-hidden elements do not contain focusable content
+  <Card title="Focusable elements inside aria-hidden: the tab trap" icon="circle-exclamation" href="/rules/a11y/aria-hidden-focus">
+    A hidden element that still takes focus lets keyboard users tab into nothing.
   </Card>
-  <Card title="ARIA Input Field Name" icon="circle-exclamation" href="/rules/a11y/aria-input-field-name">
-    Checks that input fields have accessible names
+  <Card title="Input fields with no accessible name, ARIA and native" icon="circle-exclamation" href="/rules/a11y/aria-input-field-name">
+    Text boxes, comboboxes and sliders that announce nothing.
   </Card>
-  <Card title="ARIA Labels" icon="circle-exclamation" href="/rules/a11y/aria-labels">
-    Checks that interactive elements have accessible names
+  <Card title="aria-label: which elements need one and how to check" icon="circle-exclamation" href="/rules/a11y/aria-labels">
+    Buttons, links and inputs with no visible text and no aria-label have no name for screen readers.
   </Card>
-  <Card title="ARIA Meter Name" icon="circle-exclamation" href="/rules/a11y/aria-meter-name">
-    Checks that meter elements have accessible names
+  <Card title="Accessible name for a meter element and role=meter" icon="circle-exclamation" href="/rules/a11y/aria-meter-name">
+    A gauge that announces only a number tells a screen reader user nothing.
   </Card>
-  <Card title="ARIA Progressbar Name" icon="circle-exclamation" href="/rules/a11y/aria-progressbar-name">
-    Checks that progressbar elements have accessible names
+  <Card title="Accessible name for a progress bar and role=progressbar" icon="circle-exclamation" href="/rules/a11y/aria-progressbar-name">
+    A progress bar with no name announces a percentage and nothing else.
   </Card>
-  <Card title="ARIA Required Attributes" icon="circle-exclamation" href="/rules/a11y/aria-required-attr">
-    Checks that elements have required ARIA attributes for their roles
+  <Card title="Required ARIA attributes for a role, and what is missing" icon="circle-exclamation" href="/rules/a11y/aria-required-attr">
+    role=checkbox with no aria-checked has a state screen readers cannot read.
   </Card>
-  <Card title="ARIA Required Children" icon="circle-exclamation" href="/rules/a11y/aria-required-children">
-    Checks that elements with certain roles have required child roles
+  <Card title="ARIA roles that require particular child roles" icon="circle-exclamation" href="/rules/a11y/aria-required-children">
+    role=list with no listitem, or role=tablist with no tab, is an incomplete widget.
   </Card>
-  <Card title="ARIA Required Parent" icon="circle-exclamation" href="/rules/a11y/aria-required-parent">
-    Checks that elements with certain roles have required parent roles
+  <Card title="ARIA roles that require a particular parent role" icon="circle-exclamation" href="/rules/a11y/aria-required-parent">
+    role=listitem outside a list, or a tab outside a tablist, loses its meaning.
   </Card>
-  <Card title="ARIA Text" icon="triangle-exclamation" href="/rules/a11y/aria-text">
-    Checks that elements with role='text' have no focusable descendants
+  <Card title="role=text with focusable children: why it breaks" icon="triangle-exclamation" href="/rules/a11y/aria-text">
+    role=text flattens a subtree into one announced string, so a link inside it cannot be operated.
   </Card>
-  <Card title="ARIA Toggle Field Name" icon="circle-exclamation" href="/rules/a11y/aria-toggle-field-name">
-    Checks that toggle fields (checkbox, radio, switch) have accessible names
+  <Card title="Checkboxes, radios and switches with no accessible name" icon="circle-exclamation" href="/rules/a11y/aria-toggle-field-name">
+    A checkbox that announces only its role gives no reason to tick it.
   </Card>
-  <Card title="ARIA Tooltip Name" icon="circle-exclamation" href="/rules/a11y/aria-tooltip-name">
-    Checks that tooltip elements have accessible names
+  <Card title="role=tooltip with no content: what to check" icon="circle-exclamation" href="/rules/a11y/aria-tooltip-name">
+    A tooltip with nothing to announce leaves the control it explains unexplained.
   </Card>
-  <Card title="ARIA Treeitem Name" icon="circle-exclamation" href="/rules/a11y/aria-treeitem-name">
-    Checks that treeitem elements have accessible names
+  <Card title="role=treeitem: naming every node in a tree" icon="circle-exclamation" href="/rules/a11y/aria-treeitem-name">
+    A tree node that announces only its position in the tree is unusable.
   </Card>
-  <Card title="ARIA Valid Attribute Values" icon="circle-exclamation" href="/rules/a11y/aria-valid-attr-value">
-    Checks for valid values in ARIA attributes
+  <Card title="Invalid ARIA attribute values and the types they need" icon="circle-exclamation" href="/rules/a11y/aria-valid-attr-value">
+    aria-checked=yes and aria-level=two are ignored by browsers.
   </Card>
-  <Card title="ARIA Valid Attributes" icon="circle-exclamation" href="/rules/a11y/aria-valid-attr">
-    Checks for valid ARIA attribute names
+  <Card title="Invalid aria-* attribute names, aria-labeledby included" icon="circle-exclamation" href="/rules/a11y/aria-valid-attr">
+    A misspelled ARIA attribute is ignored by every browser and warns nobody.
   </Card>
-  <Card title="ARIA Valid Roles" icon="circle-exclamation" href="/rules/a11y/aria-roles">
-    Checks for valid ARIA role values
+  <Card title="Invalid ARIA role values and how to check them" icon="circle-exclamation" href="/rules/a11y/aria-roles">
+    A misspelled or invented role gives an element no semantics at all.
   </Card>
-  <Card title="Autocomplete Tokens" icon="triangle-exclamation" href="/rules/a11y/autocomplete-tokens">
-    Checks that name, email, phone, address and payment fields carry the correct autocomplete token
+  <Card title="autocomplete: the right token for every form field" icon="triangle-exclamation" href="/rules/a11y/autocomplete-tokens">
+    Name, email, address and payment fields with a missing or wrong autocomplete token break autofill.
   </Card>
-  <Card title="Button Name" icon="circle-exclamation" href="/rules/a11y/button-name">
-    Checks that all buttons have accessible names
+  <Card title="Accessible names for buttons: what counts and how to check" icon="circle-exclamation" href="/rules/a11y/button-name">
+    A button with only an icon has no name for a screen reader.
   </Card>
-  <Card title="Color Contrast" icon="triangle-exclamation" href="/rules/a11y/color-contrast">
-    Checks for color contrast issues in styles and classes
+  <Card title="Color contrast: the 4.5:1 rule and how to check it" icon="triangle-exclamation" href="/rules/a11y/color-contrast">
+    Light gray text on white fails WCAG AA.
   </Card>
-  <Card title="Definition List Item" icon="circle-exclamation" href="/rules/a11y/dlitem">
-    Checks that dt and dd elements are inside a dl
+  <Card title="dt and dd outside a dl: orphaned definition list items" icon="circle-exclamation" href="/rules/a11y/dlitem">
+    A dt or dd that is not inside a dl loses the term-description pairing entirely.
   </Card>
-  <Card title="Definition List Structure" icon="circle-exclamation" href="/rules/a11y/definition-list">
-    Checks that definition lists contain only dt and dd elements
+  <Card title="Definition list structure: what belongs inside a dl" icon="circle-exclamation" href="/rules/a11y/definition-list">
+    A stray paragraph between the terms of a dl breaks the pairing screen readers rely on.
   </Card>
-  <Card title="Deprecated ARIA Roles" icon="circle-exclamation" href="/rules/a11y/aria-deprecated-role">
-    Checks for deprecated or abstract ARIA roles
+  <Card title="Deprecated and abstract ARIA roles, and what to use instead" icon="circle-exclamation" href="/rules/a11y/aria-deprecated-role">
+    role=directory is deprecated and abstract roles were never meant for markup.
   </Card>
-  <Card title="Duplicate ID Active" icon="circle-exclamation" href="/rules/a11y/duplicate-id-active">
-    Checks that active, focusable elements have unique IDs
+  <Card title="Duplicate id on a focusable element: what it breaks" icon="circle-exclamation" href="/rules/a11y/duplicate-id-active">
+    Two inputs sharing an id break label association and focus management.
   </Card>
-  <Card title="Duplicate ID ARIA" icon="circle-exclamation" href="/rules/a11y/duplicate-id-aria">
-    Checks that IDs used in ARIA attributes are unique
+  <Card title="ARIA references pointing at duplicate or missing ids" icon="circle-exclamation" href="/rules/a11y/duplicate-id-aria">
+    aria-labelledby resolving to two elements, or to none, names the wrong thing silently.
   </Card>
-  <Card title="Empty Headings" icon="triangle-exclamation" href="/rules/a11y/empty-heading">
-    Checks that heading elements have visible content
+  <Card title="Empty headings: what counts as empty and how to check" icon="triangle-exclamation" href="/rules/a11y/empty-heading">
+    A heading with no text still shows up in the screen reader outline, as a blank entry.
   </Card>
-  <Card title="Focus Visible" icon="triangle-exclamation" href="/rules/a11y/focus-visible">
-    Checks for focus indicator styles
+  <Card title="focus-visible: keeping a visible keyboard focus ring" icon="triangle-exclamation" href="/rules/a11y/focus-visible">
+    Removing the focus outline leaves keyboard users with no idea where they are.
   </Card>
-  <Card title="Form Labels" icon="circle-exclamation" href="/rules/a11y/form-labels">
-    Checks that form inputs have associated labels
+  <Card title="Form labels: which inputs need one and how to check" icon="circle-exclamation" href="/rules/a11y/form-labels">
+    An input labelled only by its placeholder loses its label the moment someone types.
   </Card>
-  <Card title="Frame Title" icon="circle-exclamation" href="/rules/a11y/frame-title">
-    Checks that iframes and frames have title attributes
+  <Card title="iframe title: naming embedded frames for screen readers" icon="circle-exclamation" href="/rules/a11y/frame-title">
+    An iframe with no title is announced as just 'frame'.
   </Card>
-  <Card title="Heading Order" icon="triangle-exclamation" href="/rules/a11y/heading-order">
-    Checks that heading levels don't skip
+  <Card title="Heading order: why skipping from h1 to h3 matters" icon="triangle-exclamation" href="/rules/a11y/heading-order">
+    Screen reader users navigate by heading level, and a skipped level makes the outline harder to follow.
   </Card>
-  <Card title="HTML Lang Valid" icon="circle-exclamation" href="/rules/a11y/html-lang-valid">
-    Checks that the html lang attribute has a valid language code
+  <Card title="html lang: valid values and what a missing one breaks" icon="circle-exclamation" href="/rules/a11y/html-lang-valid">
+    Without a lang attribute a screen reader guesses the pronunciation, often wrongly.
   </Card>
-  <Card title="HTML XML Lang Mismatch" icon="circle-exclamation" href="/rules/a11y/html-xml-lang-mismatch">
-    Checks that lang and xml:lang attributes match on html element
+  <Card title="lang and xml:lang disagreeing on the html element" icon="circle-exclamation" href="/rules/a11y/html-xml-lang-mismatch">
+    When both attributes are present and name different languages, a screen reader can pick the wrong voice.
   </Card>
-  <Card title="Identical Links Same Purpose" icon="triangle-exclamation" href="/rules/a11y/identical-links-same-purpose">
-    Checks that links with identical text go to the same destination
+  <Card title="Identical link text pointing at different pages" icon="triangle-exclamation" href="/rules/a11y/identical-links-same-purpose">
+    Two links reading 'Learn more' that go to different places are indistinguishable in a screen reader's link list.
   </Card>
-  <Card title="Input Image Alt" icon="circle-exclamation" href="/rules/a11y/input-image-alt">
-    Checks that input type='image' elements have alt text
+  <Card title="input type=image without alt: an unnamed submit button" icon="circle-exclamation" href="/rules/a11y/input-image-alt">
+    An image input is a submit button drawn as a picture, and with no alt it announces nothing.
   </Card>
-  <Card title="Input Types" icon="triangle-exclamation" href="/rules/a11y/input-types">
-    Checks that fields use the right input type and keyboard hint, and that forms keep native validation
+  <Card title="Input type, enterkeyhint and novalidate on forms" icon="triangle-exclamation" href="/rules/a11y/input-types">
+    type=text where type=email belongs costs mobile users the right keyboard.
   </Card>
-  <Card title="Label Content Name Mismatch" icon="circle-exclamation" href="/rules/a11y/label-content-name-mismatch">
-    Checks that visible label text is part of accessible name
+  <Card title="Visible label missing from the accessible name" icon="circle-exclamation" href="/rules/a11y/label-content-name-mismatch">
+    A button showing 'Search' with aria-label 'Find products' may not respond when a user speaks its visible label.
   </Card>
-  <Card title="Landmark Regions" icon="circle-info" href="/rules/a11y/landmark-regions">
-    Checks for proper landmark regions (main, nav, footer)
+  <Card title="Landmark regions: main, nav and footer on every page" icon="circle-info" href="/rules/a11y/landmark-regions">
+    Screen reader users jump between landmarks instead of reading top to bottom.
   </Card>
-  <Card title="Link in Text Block" icon="triangle-exclamation" href="/rules/a11y/link-in-text-block">
-    Checks that links in text blocks are visually distinguishable
+  <Card title="Links in a paragraph told apart by color alone" icon="triangle-exclamation" href="/rules/a11y/link-in-text-block">
+    A link inside body text needs more than color to be visible.
   </Card>
-  <Card title="Link Text" icon="triangle-exclamation" href="/rules/a11y/link-text">
-    Checks for descriptive link text
+  <Card title="Link text: why 'click here' fails and what to use" icon="triangle-exclamation" href="/rules/a11y/link-text">
+    Links reading 'click here', and links wrapping an unlabeled icon, give screen reader users nothing to go on.
   </Card>
-  <Card title="List Item Context" icon="circle-exclamation" href="/rules/a11y/listitem">
-    Checks that li elements are inside ul, ol, or menu
+  <Card title="Orphaned li: list items outside ul, ol or menu" icon="circle-exclamation" href="/rules/a11y/listitem">
+    An li whose parent is not a list is announced as a plain block of text.
   </Card>
-  <Card title="List Structure" icon="circle-exclamation" href="/rules/a11y/list-structure">
-    Checks that ul and ol elements contain only li elements
+  <Card title="ul and ol with children that are not list items" icon="circle-exclamation" href="/rules/a11y/list-structure">
+    A div between the li elements of a list changes what a screen reader announces.
   </Card>
-  <Card title="Meta Refresh" icon="circle-exclamation" href="/rules/a11y/meta-refresh">
-    Checks for meta refresh redirects that can disorient users
+  <Card title="meta http-equiv=refresh: redirects and auto-refresh" icon="circle-exclamation" href="/rules/a11y/meta-refresh">
+    A timed redirect moves the page out from under a screen reader user mid-sentence.
   </Card>
-  <Card title="Multiple Labels" icon="triangle-exclamation" href="/rules/a11y/form-field-multiple-labels">
-    Checks that form fields don't have multiple labels
+  <Card title="One control, two labels: why multiple labels confuse" icon="triangle-exclamation" href="/rules/a11y/form-field-multiple-labels">
+    A control with two labels is announced inconsistently across screen readers.
   </Card>
-  <Card title="Object Alt Text" icon="triangle-exclamation" href="/rules/a11y/object-alt">
-    Checks that object elements have alternative content
+  <Card title="object elements with no alternative content" icon="triangle-exclamation" href="/rules/a11y/object-alt">
+    An embedded object with no fallback is announced as nothing at all.
   </Card>
-  <Card title="One Main Landmark" icon="triangle-exclamation" href="/rules/a11y/landmark-one-main">
-    Checks that the page has exactly one main landmark
+  <Card title="One main landmark per page, and what happens without" icon="triangle-exclamation" href="/rules/a11y/landmark-one-main">
+    A page with no main landmark, or with two, breaks the jump-to-content shortcut screen reader users rely on.
   </Card>
-  <Card title="Paste Inputs" icon="triangle-exclamation" href="/rules/a11y/paste-inputs">
-    Detects form inputs that prevent pasting
+  <Card title="Inputs that block paste, and why that fails users" icon="triangle-exclamation" href="/rules/a11y/paste-inputs">
+    Blocking paste forces people to retype passwords by hand.
   </Card>
-  <Card title="Redundant Image Alt" icon="triangle-exclamation" href="/rules/a11y/image-redundant-alt">
-    Checks that image alt text is not redundant with surrounding text
+  <Card title="Redundant alt text: image of, filenames and captions" icon="triangle-exclamation" href="/rules/a11y/image-redundant-alt">
+    Screen readers already announce that it is an image, so alt starting with 'photo of' wastes the announcement.
   </Card>
-  <Card title="Select Name" icon="circle-exclamation" href="/rules/a11y/select-name">
-    Checks that select elements have accessible names
+  <Card title="Dropdowns with no accessible name: naming a select" icon="circle-exclamation" href="/rules/a11y/select-name">
+    A select announced only as 'combo box' gives no clue what it changes.
   </Card>
-  <Card title="Skip Link" icon="triangle-exclamation" href="/rules/a11y/skip-link">
-    Checks for bypass mechanisms for keyboard navigation
+  <Card title="Skip to content: bypassing repeated navigation" icon="triangle-exclamation" href="/rules/a11y/skip-link">
+    Keyboard users tab through the whole navigation on every page without a bypass.
   </Card>
-  <Card title="Tabindex Values" icon="triangle-exclamation" href="/rules/a11y/tabindex">
-    Checks for appropriate tabindex values
+  <Card title="Positive tabindex and why it breaks the tab order" icon="triangle-exclamation" href="/rules/a11y/tabindex">
+    tabindex=1 pulls an element to the front of the tab order for the entire page.
   </Card>
-  <Card title="Table Cell Headers" icon="circle-exclamation" href="/rules/a11y/td-headers-attr">
-    Checks that td headers attribute references valid th ids
+  <Card title="td headers attribute pointing at a missing th id" icon="circle-exclamation" href="/rules/a11y/td-headers-attr">
+    A headers attribute naming an id that does not exist leaves the cell unassociated.
   </Card>
-  <Card title="Table Duplicate Name" icon="triangle-exclamation" href="/rules/a11y/table-duplicate-name">
-    Checks that data tables have unique accessible names
+  <Card title="Tables sharing a name, and tables with none" icon="triangle-exclamation" href="/rules/a11y/table-duplicate-name">
+    Several tables on one page need distinct names or a screen reader's table list is unusable.
   </Card>
-  <Card title="Table Headers" icon="triangle-exclamation" href="/rules/a11y/table-headers">
-    Checks that data tables have proper headers
+  <Card title="Table headers: why a data table needs th cells" icon="triangle-exclamation" href="/rules/a11y/table-headers">
+    A table built from styled td cells has no header relationships for a screen reader.
   </Card>
-  <Card title="TH Has Data Cells" icon="triangle-exclamation" href="/rules/a11y/th-has-data-cells">
-    Checks that table headers have associated data cells
+  <Card title="th cells with no data cells: a layout table in disguise" icon="triangle-exclamation" href="/rules/a11y/th-has-data-cells">
+    A header with no data in its row or column usually means the table is really a layout.
   </Card>
-  <Card title="Touch Targets" icon="triangle-exclamation" href="/rules/a11y/touch-targets">
-    Checks for minimum touch target sizing hints
+  <Card title="Touch target size: the 24 and 44 pixel minimums" icon="triangle-exclamation" href="/rules/a11y/touch-targets">
+    Buttons and links smaller than a fingertip are hard to hit on a phone.
   </Card>
-  <Card title="Valid Lang Attributes" icon="triangle-exclamation" href="/rules/a11y/valid-lang">
-    Checks that all lang attributes on the page have valid values
+  <Card title="lang on elements below html: validating every tag" icon="triangle-exclamation" href="/rules/a11y/valid-lang">
+    A quoted passage marked with a bad lang tag is read in the wrong voice.
   </Card>
-  <Card title="Video Captions" icon="triangle-exclamation" href="/rules/a11y/video-captions">
-    Checks that videos have captions or transcripts
+  <Card title="Video captions: track elements and embedded players" icon="triangle-exclamation" href="/rules/a11y/video-captions">
+    A video with no caption track excludes deaf and hard of hearing viewers.
   </Card>
-  <Card title="Zoom Disabled" icon="circle-exclamation" href="/rules/a11y/zoom-disabled">
-    Checks if viewport meta tag disables user zoom
+  <Card title="user-scalable=no: viewport settings that block zoom" icon="circle-exclamation" href="/rules/a11y/zoom-disabled">
+    A viewport that caps the zoom level stops low-vision users enlarging text.
   </Card>
 </CardGroup>
 

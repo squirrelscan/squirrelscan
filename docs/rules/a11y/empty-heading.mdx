@@ -1,9 +1,35 @@
 ---
-title: "Empty Headings"
-description: "Checks that heading elements have visible content"
+title: "Empty headings: what counts as empty and how to check"
+description: "A heading with no text still shows up in the screen reader outline, as a blank entry. squirrel flags every one on every page."
 ---
 
-Checks that heading elements have visible content
+## What an empty heading is
+
+Screen readers build a navigable outline from the headings on a page, and users jump between them to find a section. A heading with nothing to announce becomes a blank rung in that ladder: it is counted, it is landed on, and it says nothing.
+
+Headings usually end up empty for one of two reasons. A `<h2>` is used as a styling hook around an image or an icon, or a heading is rendered before its content arrives and left in place when the content does not.
+
+## What squirrel checks
+
+One check, `empty-heading`, at severity warning. It reads every `<h1>` through `<h6>`, skipping any with `aria-hidden="true"`.
+
+Content is accepted from the heading's text, a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, or a nested `<img>` with non-empty `alt`.
+
+- Warn with `N empty heading(s) found`. Items read `h2#promo`, `h3.subtitle` or a bare tag name, up to ten with a count of the rest.
+- Pass with `All headings have content`.
+- Info with `No headings found`.
+
+## How to fix it
+
+```html
+<h2>
+  <img src="/logo-partner.svg" alt="Northwind Traders">
+</h2>
+```
+
+Give the heading text, or a name through `alt` on the image inside it. A heading that only exists for its styling is better written as a `<div>` or a `<p>`, which keeps the visual design and takes the blank entry out of the outline.
+
+A heading whose text is supplied by CSS, through `content` on a pseudo-element, is reported. That is correct: pseudo-element text is not reliably exposed to assistive technology, so the fix is to put the words in the markup.
 
 | | |
 |---|---|
@@ -12,10 +38,6 @@ Checks that heading elements have visible content
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Headings (h1-h6) must have text content for screen readers to announce. Empty headings create confusing navigation. Either add text content, use aria-label, or remove the empty heading element.
 
 ## Enable / disable
 
@@ -40,3 +62,31 @@ disable = ["a11y/*"]
 enable = ["a11y/empty-heading"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/heading-order](/rules/a11y/heading-order): levels that skip, once the headings have content.
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): the same outline judged for structure and SEO.
+- [core/h1](/rules/core/h1): whether the page has a single top-level heading at all.
+- [a11y/aria-text](/rules/a11y/aria-text): `role="text"` containers that swallow focusable elements, a role sometimes reached for on split headings.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The heading elements, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements)
+- [Understanding SC 2.4.6 Headings and Labels, W3C](https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html)
+- [H42: Using h1-h6 to identify headings, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H42)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each blank heading is listed by level and by id or class. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

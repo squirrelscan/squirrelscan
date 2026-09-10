@@ -1,9 +1,37 @@
 ---
-title: "Duplicate ID Active"
-description: "Checks that active, focusable elements have unique IDs"
+title: "Duplicate id on a focusable element: what it breaks"
+description: "Two inputs sharing an id break label association and focus management. squirrel checks every focusable element that carries an id."
 ---
 
-Checks that active, focusable elements have unique IDs
+## What a duplicate id breaks
+
+An `id` has to be unique in a document. When it is not, everything that resolves an id takes the first match and ignores the rest: `document.getElementById`, a `<label for>`, an `aria-labelledby`, a fragment link, a focus call.
+
+On a focusable element that means the second control silently loses its label, and code that moves focus by id always lands on the first one. The page looks correct and behaves wrongly, usually only for the users who navigate by keyboard.
+
+## What squirrel checks
+
+One check, `duplicate-id-active`, at severity error. It gathers focusable elements that carry an `id`: `a[href]`, `button`, `input`, `select` and `textarea` with an `id`, plus any element that has both an `id` and a `tabindex` other than `-1`. The `tabindex` lookup is case-insensitive, so React's `tabIndex` in server-rendered markup counts.
+
+- Fail with `N duplicate ID(s) on focusable elements`. Items read `"submit" (3 occurrences)`, up to ten with a count of the rest.
+- Pass with `All focusable elements have unique IDs`.
+- Info with `No focusable elements with IDs found`.
+
+Counting happens only across that focusable set. A collision between a focusable `<input id="main">` and a non-focusable `<section id="main">` is not reported here, so this check is narrower than a full duplicate-id sweep.
+
+## How to fix it
+
+```html
+<label for="email-header">Email</label>
+<input id="email-header" name="email" type="email">
+
+<label for="email-footer">Email</label>
+<input id="email-footer" name="email" type="email">
+```
+
+Give each instance its own id. A repeated newsletter form in the header and the footer is the classic source, and prefixing by location is enough.
+
+Where a component can appear more than once on a page, generate the id inside the component and pass it to both the `<label for>` and the control, so the pair can never drift apart.
 
 | | |
 |---|---|
@@ -12,10 +40,6 @@ Checks that active, focusable elements have unique IDs
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Duplicate IDs on focusable elements (links, buttons, inputs) break keyboard navigation and label associations. Browsers only recognize the first element with a given ID, so labels, focus management, and ARIA references will target the wrong element. Ensure every focusable element with an id attribute has a unique value.
 
 ## Enable / disable
 
@@ -40,3 +64,31 @@ disable = ["a11y/*"]
 enable = ["a11y/duplicate-id-active"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/duplicate-id-aria](/rules/a11y/duplicate-id-aria): ids referenced by ARIA attributes, duplicated or missing.
+- [a11y/form-labels](/rules/a11y/form-labels): controls with no associated label, which is what a duplicate id leaves behind.
+- [a11y/form-field-multiple-labels](/rules/a11y/form-field-multiple-labels): the same collision seen from the label side.
+- [a11y/accesskeys](/rules/a11y/accesskeys): the other identifier that has to be unique.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The id attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/id)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+- [H44: Using label elements to associate text labels with form controls, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H44)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each repeated id is listed with the number of elements claiming it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

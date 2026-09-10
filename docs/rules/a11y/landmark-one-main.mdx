@@ -1,9 +1,39 @@
 ---
-title: "One Main Landmark"
-description: "Checks that the page has exactly one main landmark"
+title: "One main landmark per page, and what happens without"
+description: "A page with no main landmark, or with two, breaks the jump-to-content shortcut screen reader users rely on. squirrel counts them."
 ---
 
-Checks that the page has exactly one main landmark
+## What the main landmark is
+
+`<main>` marks the primary content of a page, the part that is not header, navigation, sidebar or footer. Screen readers offer a shortcut straight to it, which is how a user skips the same navigation on every page without a skip link.
+
+Exactly one per page is the rule. Zero means the shortcut has nowhere to go. Two means the user has to guess which one holds the content they came for.
+
+## What squirrel checks
+
+One check, `landmark-one-main`, at rule severity warning. It counts every `<main>` element and every element with `role="main"`.
+
+- Warn with `Page has no main landmark` when the count is zero, expecting `One <main> element or role='main'`.
+- Pass with `Page has exactly one main landmark` when the count is one.
+- Fail with `Page has N main landmarks (should be 1)` when the count is above one. Each is listed by its own tag, as `tag#id`, `tag.class` or a bare tag name, so a `<div role="main">` appears as `div#content`. The finding carries the issue `Multiple main landmarks confuse navigation`.
+
+Having none is a warning while having several is a failure. That is deliberate: a missing landmark degrades navigation, while duplicated ones actively mislead.
+
+## How to fix it
+
+```html
+<header>...</header>
+<nav aria-label="Primary">...</nav>
+<main>
+  <h1>Pricing</h1>
+  ...
+</main>
+<footer>...</footer>
+```
+
+Wrap the page's own content, and only that, in a single `<main>`. Headers, navigation and footers stay outside it.
+
+Two main landmarks usually means a layout component renders one and a page component renders another. Decide which layer owns it, and take it out of the other.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks that the page has exactly one main landmark
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Each page should have exactly one `<main>` element or element with role='main'. This helps screen reader users quickly navigate to the primary content. Multiple main landmarks confuse navigation. Use `<aside>`, `<nav>`, or other landmarks for secondary content.
 
 ## Enable / disable
 
@@ -40,3 +66,31 @@ disable = ["a11y/*"]
 enable = ["a11y/landmark-one-main"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/landmark-regions](/rules/a11y/landmark-regions): the wider sweep across `main`, `nav` and `footer`.
+- [a11y/skip-link](/rules/a11y/skip-link): the bypass check, which accepts `<main>` only alongside a `<nav>` landmark or an early heading.
+- [a11y/heading-order](/rules/a11y/heading-order): heading levels that skip, the other structure screen readers navigate by.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): roles such as `listitem` and `tab` that need a particular container role above them.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The main element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/main)
+- [Landmark regions, WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/)
+- [Page regions, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/page-structure/regions/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. A missing landmark warns, duplicated landmarks fail and are listed individually. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

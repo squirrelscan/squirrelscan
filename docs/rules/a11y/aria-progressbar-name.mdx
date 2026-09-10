@@ -1,9 +1,34 @@
 ---
-title: "ARIA Progressbar Name"
-description: "Checks that progressbar elements have accessible names"
+title: "Accessible name for a progress bar and role=progressbar"
+description: "A progress bar with no name announces a percentage and nothing else. squirrel checks native progress elements and role=progressbar."
 ---
 
-Checks that progressbar elements have accessible names
+## What a progress bar is
+
+`<progress>` shows how far a task has got: an upload, an install, a multi-step form. ARIA's `role="progressbar"` says the same thing about a custom widget.
+
+The text between the tags is fallback content for browsers without support, not a name. Without `aria-label`, `aria-labelledby`, `title` or a `<label>`, a screen reader announces "progress bar, 50 percent" and leaves the user to guess what is at 50 percent.
+
+## What squirrel checks
+
+One check, `aria-progressbar-name`, at severity error. It covers every element with `role="progressbar"`, and every native `<progress>` that carries no explicit `role`.
+
+A name is accepted from a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, a non-empty `title`, or a `<label for="...">` matching the element's `id`.
+
+- Fail with `N progressbar element(s) without accessible names`. Every offender is listed, as `progress#id` or `div[role="progressbar"]`.
+- Pass with `All progressbar elements have accessible names`.
+- Info with `No progressbar elements found`.
+
+## How to fix it
+
+```html
+<label for="upload">Upload progress</label>
+<progress id="upload" value="50" max="100">50%</progress>
+```
+
+An indeterminate progress bar, one with no `value`, still needs a name. It is announced as busy, and the name is the only thing that says what is busy.
+
+For a custom `role="progressbar"`, add `aria-valuenow` alongside the name so the widget reports its position. Leave `aria-valuenow` off when the progress is indeterminate, which is how that state is signalled, and leave `aria-valuemin` and `aria-valuemax` off unless the range differs from the default 0 to 100.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that progressbar elements have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Progressbar elements must have accessible names to describe what process is being tracked. Add aria-label, aria-labelledby, or an associated `<label>`. Example: `<progress aria-label='Upload progress' value='50' max='100'>`50%`</progress>`
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-progressbar-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-meter-name](/rules/a11y/aria-meter-name): the same check for `<meter>` and `role="meter"`.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): required state attributes for the widget roles that have them, `meter` and `slider` among them.
+- [a11y/aria-valid-attr-value](/rules/a11y/aria-valid-attr-value): those values having to be numbers.
+- [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): the sibling naming check over input roles.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The progress element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/progress)
+- [The progressbar role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/progressbar_role)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unnamed progress bar is listed, with no cap on the count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

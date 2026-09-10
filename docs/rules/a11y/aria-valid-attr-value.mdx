@@ -1,9 +1,43 @@
 ---
-title: "ARIA Valid Attribute Values"
-description: "Checks for valid values in ARIA attributes"
+title: "Invalid ARIA attribute values and the types they need"
+description: "aria-checked=yes and aria-level=two are ignored by browsers. squirrel type-checks 26 ARIA attributes against their allowed values."
 ---
 
-Checks for valid values in ARIA attributes
+## What a valid ARIA value is
+
+Each ARIA attribute declares a value type. ARIA specifies how a user agent should handle a value outside that type, and the handling is per attribute: some fall back to a default, some are ignored. `aria-checked="yes"` cannot be relied on to produce a checked state, which is worse than omitting the attribute, because the markup looks correct.
+
+The types are: booleans that take only `true` or `false`; booleans that also accept `undefined`; tristates that add `mixed`; enumerated tokens with a fixed list; token lists; integers; and numbers.
+
+## What squirrel checks
+
+One check, `aria-valid-attr-value`, at severity error. It reads every `aria-*` attribute on every element, trims and lowercases the value, and validates it against a table of 26 attributes:
+
+| Type | Attributes | Accepted |
+|---|---|---|
+| Boolean | `aria-busy`, `aria-disabled`, `aria-modal`, `aria-multiline`, `aria-multiselectable`, `aria-readonly`, `aria-required` | `true`, `false` |
+| Boolean or undefined | `aria-expanded`, `aria-grabbed`, `aria-hidden`, `aria-selected` | `true`, `false`, `undefined`, empty |
+| Tristate | `aria-checked`, `aria-pressed` | `true`, `false`, `mixed` |
+| Token | `aria-autocomplete`, `aria-current`, `aria-haspopup`, `aria-invalid`, `aria-live`, `aria-orientation`, `aria-sort` | each attribute's own list |
+| Token list | `aria-dropeffect`, `aria-relevant` | one or more of that attribute's tokens |
+| Integer | `aria-level` | a whole number, negative allowed |
+| Number | `aria-valuemax`, `aria-valuemin`, `aria-valuenow` | a decimal number, or empty |
+
+- Fail with `N ARIA attribute(s) with invalid values`. Items name the element, the attribute and the reason: `div[aria-checked]: must be 'true', 'false', or 'mixed', got 'yes'`, or `h2[aria-level]: must be an integer, got 'two'`. Up to ten are shown with a count of the rest.
+- Pass with `All ARIA attribute values are valid`.
+
+Attributes outside the table are skipped, so a name that is not in the ARIA vocabulary passes here and fails `a11y/aria-valid-attr`.
+
+## How to fix it
+
+```html
+<button aria-pressed="false" aria-controls="filters">Filters</button>
+<div id="filters" aria-live="polite">...</div>
+```
+
+Use the literal strings the type expects. `aria-expanded="1"` and `aria-expanded="yes"` are both outside the type and neither reliably produces a collapsed state. `aria-expanded="false"` is the value.
+
+Comparison is case-insensitive, so `aria-checked="TRUE"` passes. Write the values in lowercase anyway, so the markup matches the specification and the next reader.
 
 | | |
 |---|---|
@@ -12,10 +46,6 @@ Checks for valid values in ARIA attributes
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 8/10 |
-
-## Solution
-
-Ensure ARIA attribute values match the expected type. Boolean attributes should be 'true' or 'false'. Enumerated attributes like aria-current have specific allowed values. Numeric attributes like aria-level must be numbers. Check the WAI-ARIA specification for valid values.
 
 ## Enable / disable
 
@@ -40,3 +70,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-valid-attr-value"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-valid-attr](/rules/a11y/aria-valid-attr): the attribute name itself not existing.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): the attributes a role must declare in the first place.
+- [a11y/aria-allowed-attr](/rules/a11y/aria-allowed-attr): ARIA attributes that are not allowed on the element carrying them.
+- [a11y/aria-progressbar-name](/rules/a11y/aria-progressbar-name): progress bars with no accessible name, the widget whose `aria-valuenow` this check type-checks.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [ARIA attributes, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes)
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+- [aria-current, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-current)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each finding names the attribute, the value you supplied and the type it needed. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

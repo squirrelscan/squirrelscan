@@ -1,9 +1,34 @@
 ---
-title: "ARIA Tooltip Name"
-description: "Checks that tooltip elements have accessible names"
+title: "role=tooltip with no content: what to check"
+description: "A tooltip with nothing to announce leaves the control it explains unexplained. squirrel checks every role=tooltip element on the page."
 ---
 
-Checks that tooltip elements have accessible names
+## What a tooltip is
+
+`role="tooltip"` marks a small pop-up that describes the control it belongs to. Unlike a dialog, its own content is its accessible name, and the control points at it with `aria-describedby` so a screen reader reads the two together.
+
+That makes an empty tooltip pointless. The control announces a description that resolves to nothing, and the user is left with the same question the tooltip was there to answer.
+
+## What squirrel checks
+
+One check, `aria-tooltip-name`, at severity error. It finds every `[role="tooltip"]` element.
+
+A name is accepted from a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, or the tooltip's own text content. Unlike the other naming rules, `title` does not count here.
+
+- Fail with `N tooltip(s) without accessible content`. Every offender is listed, as `div#tip-save` or bare tag name.
+- Pass with `N tooltip(s) have accessible names`.
+- Info with `No tooltip elements found`.
+
+## How to fix it
+
+```html
+<button aria-describedby="tip-save">Save</button>
+<div role="tooltip" id="tip-save">Saves without leaving the page</div>
+```
+
+Put the description in the tooltip's text. The `id` and the `aria-describedby` value have to match, and the `id` has to be unique or the reference lands on the wrong node.
+
+A tooltip rendered empty and filled by script when it opens is reported. Ship the text in the markup and toggle visibility instead, which keeps the description available to the control at all times.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that tooltip elements have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Tooltip elements with role='tooltip' must have accessible content. The tooltip content serves as its accessible name. Ensure tooltips have text content or use aria-label for icon-based tooltips.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-tooltip-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/duplicate-id-aria](/rules/a11y/duplicate-id-aria): the `aria-describedby` reference resolving to a duplicated or missing id.
+- [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name): the naming rule for the heavier pop-up.
+- [a11y/aria-labels](/rules/a11y/aria-labels): the icon button most tooltips are attached to.
+- [a11y/aria-valid-attr](/rules/a11y/aria-valid-attr): typos in `aria-describedby` itself.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The tooltip role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/tooltip_role)
+- [aria-describedby, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-describedby)
+- [Providing accessible names and descriptions, WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/practices/names-and-descriptions/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every empty tooltip is listed, with no cap on the count. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

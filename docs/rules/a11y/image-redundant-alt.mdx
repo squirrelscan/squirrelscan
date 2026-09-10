@@ -1,9 +1,38 @@
 ---
-title: "Redundant Image Alt"
-description: "Checks that image alt text is not redundant with surrounding text"
+title: "Redundant alt text: image of, filenames and captions"
+description: "Screen readers already announce that it is an image, so alt starting with 'photo of' wastes the announcement. squirrel checks four ways."
 ---
 
-Checks that image alt text is not redundant with surrounding text
+## What redundant alt text is
+
+A screen reader announces an image as an image before it reads the `alt`. Starting the text with "Image of" or "Photo of" repeats that, and the user hears "image, image of a woman at a laptop".
+
+The other kind of redundancy is duplication. Alt text that repeats the caption underneath it, or the paragraph around it, gets announced twice. Alt text that is just the filename is worse: it is announced once and means nothing.
+
+## What squirrel checks
+
+One check, `image-redundant-alt`, at severity warning. It reads every `img[alt]` with a non-empty `alt` and runs four tests. An empty `alt`, which marks a decorative image, is skipped.
+
+- The alt matches one of 42 patterns. Those cover the prefixes `image of`, `photo of`, `photograph of`, `picture of`, `graphic of`, `icon of`, `illustration of`, `diagram of`, `screenshot of`, `chart of`, `graph of`, `figure of` and `infographic of`, the bare nouns on their own, `logo`, `banner`, `img`, `thumbnail`, `hero image`, `cover image`, `featured image`, `placeholder`, `untitled`, `spacer`, `divider`, and bare file extensions such as `.jpg` and `.png`.
+- The alt matches the `src` filename. Both are lowercased and stripped of hyphens, underscores and spaces, and the filename must be longer than three characters. Item: `alt="hero-banner" matches filename`.
+- The alt is repeated in the parent element's text. This needs the parent's text to be strictly longer than the alt and shorter than three times it, and the alt itself longer than ten characters, so a caption-sized repeat is caught while an exact-match parent and a long article are both left alone. Item: `"Annual revenue chart..." duplicates surrounding text`.
+- The alt is repeated in a `<figcaption>`. The image has to be inside a `<figure>`, the alt longer than five characters, and the caption has to equal or contain it. Item: `"Annual revenue chart..." duplicates figcaption`.
+
+Findings are deduplicated, then reported as `N image(s) with redundant alt text`, up to ten with a count of the rest. With nothing found the check passes as `No redundant image alt text found`, and a page with no `alt` at all returns info with `No images with alt text found`.
+
+## How to fix it
+
+```html
+<figure>
+  <img src="q3-revenue.png"
+       alt="Revenue rising from 4.1M to 6.8M between January and September">
+  <figcaption>Q3 revenue</figcaption>
+</figure>
+```
+
+Write what the image shows, not what kind of file it is. Where a caption already describes the image, the alt should add what the caption leaves out, or be empty if it adds nothing.
+
+A logo whose correct alt is the company name, sitting in a file named after the company, trips the filename test. `<img src="northwind.svg" alt="Northwind">` is right, and reported.
 
 | | |
 |---|---|
@@ -12,10 +41,6 @@ Checks that image alt text is not redundant with surrounding text
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Image alt text should not start with 'image of', 'photo of', 'picture of', etc. Screen readers already announce that it's an image. Alt text should describe the content or function, not state the obvious. Also avoid duplicating adjacent text in the alt.
 
 ## Enable / disable
 
@@ -40,3 +65,31 @@ disable = ["a11y/*"]
 enable = ["a11y/image-redundant-alt"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [images/alt-text](/rules/images/alt-text): images with no `alt` attribute at all.
+- [images/figure-figcaption](/rules/images/figure-figcaption): whether `<figure>` and `<figcaption>` are used correctly in the first place.
+- [a11y/input-image-alt](/rules/a11y/input-image-alt): `<input type="image">`, which needs `alt` as a button name.
+- [images/filename-quality](/rules/images/filename-quality): whether those filenames are descriptive to begin with.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+- [Understanding SC 1.1.1 Non-text Content, W3C](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html)
+- [Tips and tricks for images, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/images/tips/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each finding says which of the four tests it tripped. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

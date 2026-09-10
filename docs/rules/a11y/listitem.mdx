@@ -1,9 +1,36 @@
 ---
-title: "List Item Context"
-description: "Checks that li elements are inside ul, ol, or menu"
+title: "Orphaned li: list items outside ul, ol or menu"
+description: "An li whose parent is not a list is announced as a plain block of text. squirrel checks the immediate parent of every list item."
 ---
 
-Checks that li elements are inside ul, ol, or menu
+## What an orphaned list item is
+
+An `<li>` gets its meaning from the list around it. Outside one, the browser exposes it as a generic container: no item count, no position, no way to move between siblings with a screen reader shortcut.
+
+It usually happens when a wrapper is inserted for layout, or when a component renders items without rendering the list.
+
+## What squirrel checks
+
+One check, `listitem`, at severity error. For every `<li>` it reads the immediate parent.
+
+- Fail when that parent is not `<ul>`, `<ol>`, `<menu>` or an element with `role="list"`. Report message: `N li element(s) not inside a list`. Items read `li#step-2`, or `li: "Enter your email add..."` quoting the first 20 characters of the text, up to ten with a count of the rest.
+- Pass with `N list item(s) are inside lists`.
+- Info with `No li elements found`.
+
+Only the immediate parent counts. A `<div>` between the `<ul>` and its items is reported here, while `a11y/aria-required-parent` walks the whole ancestor chain and lets it through.
+
+## How to fix it
+
+```html
+<ul class="grid">
+  <li>Team</li>
+  <li>Business</li>
+</ul>
+```
+
+Delete the wrapper and style the `<ul>` directly. CSS grid and flexbox both work on a list element, so the wrapper is rarely doing anything the list cannot.
+
+Where a component renders one item, move the `<ul>` up into the parent that renders the collection, so every item is emitted inside a list.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks that li elements are inside ul, ol, or menu
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-The `<li>` element must be contained within a `<ul>`, `<ol>`, or `<menu>` element. Orphaned list items lose their semantic meaning. Wrap them in an appropriate list container.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/listitem"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/list-structure](/rules/a11y/list-structure): the same problem seen from the list.
+- [a11y/dlitem](/rules/a11y/dlitem): the equivalent for `<dt>` and `<dd>`.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): the ancestor-chain version of this check.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): a non-empty `role="list"` container with no item descendant. Empty containers are skipped there.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The li element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/li)
+- [The listitem role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/listitem_role)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each orphan is listed by id, or by the opening words of its text. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

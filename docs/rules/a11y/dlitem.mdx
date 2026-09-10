@@ -1,9 +1,36 @@
 ---
-title: "Definition List Item"
-description: "Checks that dt and dd elements are inside a dl"
+title: "dt and dd outside a dl: orphaned definition list items"
+description: "A dt or dd that is not inside a dl loses the term-description pairing entirely. squirrel finds every orphan on every page."
 ---
 
-Checks that dt and dd elements are inside a dl
+## What an orphaned dt or dd is
+
+`<dt>` and `<dd>` earn their meaning from the `<dl>` that contains them: this term goes with that description. Outside a `<dl>` the elements still map to term and definition roles, but the grouping that pairs them is gone, so a screen reader has no relationship to announce and the reader hears two unrelated blocks of text.
+
+The usual cause is a component that renders a term-description pair without rendering the list around it, or a refactor that moved the wrapper and left the items behind.
+
+## What squirrel checks
+
+One check, `dlitem`, at severity error. For every `<dt>` and `<dd>` it looks at the immediate parent. That parent is valid when it is a `<dl>`, or a `<div>` whose own parent is a `<dl>`.
+
+- Fail with `N dt/dd element(s) not inside a dl`. Items quote the first 20 characters of the element's text, as `dt: "Shipping address for..."`, up to ten with a count of the rest.
+- Pass with `All dt/dd elements are inside definition lists`.
+- Info with `No dt/dd elements found`.
+
+Exactly one wrapper level is allowed. A `<dl>` containing a `<section>` containing the `<dt>` is reported, which matches HTML: only `<div>` may wrap a group.
+
+## How to fix it
+
+```html
+<dl>
+  <dt>Shipping address</dt>
+  <dd>12 Rue de Rivoli, Paris</dd>
+</dl>
+```
+
+Wrap the orphans in a `<dl>`. If the pair is not really a term and a description, use a heading and a paragraph instead, which carry the right semantics without a container.
+
+Where a component renders one pair at a time, render the `<dl>` in the parent and the `<div>` group in the component, so every item ships inside a list.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks that dt and dd elements are inside a dl
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-The `<dt>` and `<dd>` elements must be contained within a `<dl>` (definition list). Move orphaned dt/dd elements inside a `<dl>` container.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/dlitem"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/definition-list](/rules/a11y/definition-list): the container's own structure.
+- [a11y/listitem](/rules/a11y/listitem): the same orphan problem for `<li>`.
+- [a11y/list-structure](/rules/a11y/list-structure): `<ul>` and `<ol>` with children that do not belong.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): the ARIA equivalent of a missing container.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The dt element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dt)
+- [The dl element, HTML Standard](https://html.spec.whatwg.org/multipage/grouping-content.html#the-dl-element)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each orphan is listed with the opening words of its text. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

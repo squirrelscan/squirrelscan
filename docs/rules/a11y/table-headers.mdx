@@ -1,9 +1,47 @@
 ---
-title: "Table Headers"
-description: "Checks that data tables have proper headers"
+title: "Table headers: why a data table needs th cells"
+description: "A table built from styled td cells has no header relationships for a screen reader. squirrel checks every data table for th elements."
 ---
 
-Checks that data tables have proper headers
+## What a table header is
+
+A `<th>` is what turns a grid of text into a table a screen reader can navigate. Moving between cells, it announces the column and row header along with the value, so a user hears "Revenue, Q3, 6.8M" instead of "6.8M".
+
+Styling a `<td>` to look like a header gives none of that. It looks identical and reads as another data cell.
+
+## What squirrel checks
+
+One check, `table-headers`, at severity warning. It covers every `<table>` except those with `role="presentation"` or `role="none"`.
+
+- Warn when a table contains no `<th>` at all. Report message: `N table(s) without <th> headers`. Each is listed as `Table 1`, numbered in document order across the tables the rule looked at, and every offender is listed.
+- Pass with `All N data table(s) have headers`.
+- Info with `No data tables found`.
+
+The check tests presence only. It does not look at `scope` or at `<caption>`, and no rule in this category does. Whether each header has data under it is `a11y/th-has-data-cells`, and whether explicit `headers` references resolve is `a11y/td-headers-attr`.
+
+## How to fix it
+
+```html
+<table>
+  <caption>Revenue by quarter</caption>
+  <thead>
+    <tr>
+      <th scope="col">Quarter</th>
+      <th scope="col">Revenue</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Q3</th>
+      <td>6.8M</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+Use `<th>` for both the column headings and the row labels, and add `scope` so the direction is unambiguous. Two lines of CSS restore whatever styling the `<td>` had.
+
+A table used purely for layout should carry `role="presentation"`, which removes it from this check and from the table list a screen reader builds.
 
 | | |
 |---|---|
@@ -12,10 +50,6 @@ Checks that data tables have proper headers
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Data tables need proper headers for screen reader users to understand relationships. Use `<th>` for header cells, not styled `<td>`. Add scope='col' or scope='row' to clarify header direction. For complex tables, use id and headers attributes to associate data cells with headers. Include a `<caption>` to describe the table's purpose. Layout tables should have role='presentation'.
 
 ## Enable / disable
 
@@ -40,3 +74,31 @@ disable = ["a11y/*"]
 enable = ["a11y/table-headers"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/th-has-data-cells](/rules/a11y/th-has-data-cells): headers with no data cell in their row or column.
+- [a11y/td-headers-attr](/rules/a11y/td-headers-attr): explicit header associations for complex tables.
+- [a11y/table-duplicate-name](/rules/a11y/table-duplicate-name): naming several tables on one page.
+- [a11y/list-structure](/rules/a11y/list-structure): the other structure that loses its meaning when built from generic elements.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Tables tutorial, W3C WAI](https://www.w3.org/WAI/tutorials/tables/)
+- [The table element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/table)
+- [H51: Using table markup to present tabular information, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H51)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Table 3 means the third non-presentational table in document order. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

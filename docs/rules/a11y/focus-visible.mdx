@@ -1,9 +1,39 @@
 ---
-title: "Focus Visible"
-description: "Checks for focus indicator styles"
+title: "focus-visible: keeping a visible keyboard focus ring"
+description: "Removing the focus outline leaves keyboard users with no idea where they are. squirrel flags outline:none with no :focus-visible fallback."
 ---
 
-Checks for focus indicator styles
+## What a focus indicator is
+
+When a keyboard user tabs through a page the browser draws a ring around the focused element. `outline: none` deletes it, and without a replacement the user is navigating blind. WCAG success criterion 2.4.7 Focus Visible, Level AA, requires that the indicator exist.
+
+`:focus-visible` is the modern way to restyle it. The browser decides when an indicator is warranted rather than matching every focus event, so in practice a keyboard user gets the ring and someone clicking a button does not. The heuristic is the browser's, not the page's: text inputs generally match on a mouse click too, and a user preference can force the indicator on everywhere.
+
+## What squirrel checks
+
+This rule scans the page source as text, covering inline `<style>` blocks and `style` attributes. Rules in a linked stylesheet are not fetched, so they are invisible to it. Severity is warning.
+
+- `focus-outline-global` fails when the source contains a universal-selector rule that removes the outline, matching the shape `* { ... outline: none }` or `outline: 0`. Report message: `Global outline removal detected`, with the value `* { outline: none } removes focus for all elements`.
+- `focus-outline` warns when no global removal pattern matched, `outline: none` or `outline: 0` appears anywhere, and `:focus-visible` does not. The two branches are exclusive, so a page with global removal never produces this warning. Report message: `outline:none found - ensure alternative focus styles exist`, with the value `Consider using :focus-visible for custom focus styles`.
+- `focus-modern` passes when `:focus-visible` or `:focus-within` appears, with the message `Modern focus selectors in use` and the matched selector as its value.
+- `focus-visible` returns info with `Focus styles not analyzed (requires CSS inspection)` when none of the above matched.
+
+## How to fix it
+
+```css
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+```
+
+Keep both rules together: the first draws the ring where the browser judges an indicator useful, the second removes the default ring everywhere else. Between them nobody navigating by keyboard is left without an indicator.
+
+Because the match is textual, `outline: none` inside a comment or a minified vendor bundle is still reported. The reverse is more common: a site whose focus styles live in an external stylesheet returns info even when the styles are correct.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks for focus indicator styles
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Keyboard users need visible focus indicators to know where they are on the page. Never use outline: none without providing an alternative focus style. Modern approach: use :focus-visible to show focus only for keyboard users, not mouse clicks. Ensure focus indicators have at least 3:1 contrast. Test by tabbing through your page - can you always see where focus is?
 
 ## Enable / disable
 
@@ -40,3 +66,31 @@ disable = ["a11y/*"]
 enable = ["a11y/focus-visible"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/tabindex](/rules/a11y/tabindex): positive `tabindex` values that scramble the order the ring moves in.
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): elements that take focus while hidden from assistive technology.
+- [a11y/skip-link](/rules/a11y/skip-link): letting keyboard users jump past repeated navigation.
+- [a11y/color-contrast](/rules/a11y/color-contrast): text against its background, the contrast check squirrel does run. It does not measure the ring itself.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [:focus-visible, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/:focus-visible)
+- [Understanding SC 2.4.7 Focus Visible, W3C](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html)
+- [F78: Failure due to styling out the focus indicator, W3C](https://www.w3.org/WAI/WCAG22/Techniques/failures/F78)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Global outline removal is reported first, since it affects every control. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

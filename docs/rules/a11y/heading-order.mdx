@@ -1,9 +1,36 @@
 ---
-title: "Heading Order"
-description: "Checks that heading levels don't skip"
+title: "Heading order: why skipping from h1 to h3 matters"
+description: "Screen reader users navigate by heading level, and a skipped level makes the outline harder to follow. squirrel checks document order on every page."
 ---
 
-Checks that heading levels don't skip
+## What heading order is
+
+Heading levels are an outline, not a type scale. A screen reader user pressing 2 moves between second-level headings and expects everything under one of them to belong to it. Skipping from `<h1>` to `<h3>` implies a missing section, and the user has to guess whether they missed something.
+
+Going back up a level is not a skip. An `<h3>` followed by an `<h2>` closes one section and opens the next.
+
+## What squirrel checks
+
+One check, `heading-order`, at severity warning. It reads every `<h1>` through `<h6>` in document order and compares each level with the one before it.
+
+- Warn when a heading is more than one level deeper than its predecessor. Report message: `N heading level skip(s) detected`. Every skip is listed, as `H3 after H1`.
+- Pass with `Heading levels follow correct order`.
+- Info with `No headings found`.
+
+The first heading on a page is never counted as a skip, whatever its level, so a page that starts at `<h3>` passes this check. Whether the page has a top-level heading at all is `core/h1`.
+
+## How to fix it
+
+```html
+<h1>Pricing</h1>
+<h2>Plans</h2>
+<h3>Team</h3>
+<h2>Frequently asked questions</h2>
+```
+
+Pick the level from the position in the outline and set the size in CSS. If an `<h3>` looks right because you want smaller text, style the `<h2>` instead.
+
+Two independent components stacked on a page are the usual source. Each renders a sensible internal outline, and the combination skips a level at the seam. Passing the starting level into the component as a prop solves it.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks that heading levels don't skip
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Headings should follow a logical hierarchy without skipping levels. Screen reader users navigate by headings, so skipping from H1 to H3 is confusing. Correct order: H1 -> H2 -> H3 (not H1 -> H3). You can have multiple headings at the same level, and you can go back up (H3 -> H2 is fine). Think of headings as an outline - they should make sense when read alone.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/heading-order"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): the same outline judged for structure and SEO.
+- [a11y/empty-heading](/rules/a11y/empty-heading): headings in the outline with nothing to announce.
+- [core/h1](/rules/core/h1): whether the page has an `<h1>`, and only one of them.
+- [a11y/landmark-regions](/rules/a11y/landmark-regions): the other structure screen readers navigate by.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The heading elements, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+- [G141: Organizing a page using headings, W3C](https://www.w3.org/WAI/WCAG22/Techniques/general/G141)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each skip is listed with the level that jumped and the level before it. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,9 +1,36 @@
 ---
-title: "Color Contrast"
-description: "Checks for color contrast issues in styles and classes"
+title: "Color contrast: the 4.5:1 rule and how to check it"
+description: "Light gray text on white fails WCAG AA. squirrel flags low-contrast inline styles, CSS colors and known low-contrast utility classes."
 ---
 
-Checks for color contrast issues in styles and classes
+## What color contrast is
+
+Contrast ratio compares the relative luminance of text and its background on a scale from 1:1 to 21:1. WCAG success criterion 1.4.3 Contrast (Minimum), Level AA, requires 4.5:1 for normal text and 3:1 for large text, where large means 18 point, or 14 point bold, and up.
+
+The ratio is a property of the rendered pixels, so it depends on the stylesheet, the theme and any image behind the text. Static markup can only ever show part of the picture.
+
+## What squirrel checks
+
+One check, `color-contrast`, at severity warning. It runs four passes over what the HTML makes visible, and applies the 4.5:1 threshold to everything it measures. The 3:1 large-text allowance is not applied, so a large heading at 3.5:1 is still reported.
+
+- Inline styles: any element whose `style` sets both `color` and `background` or `background-color` to a hex value, an `rgb()`/`rgba()` value or one of 32 named colors. squirrel computes the WCAG ratio and reports anything under 4.5:1 as `span: #999 on #fff (2.85:1)`. `transparent` is treated as white.
+- Class names: elements whose `class` matches a known low-contrast pattern. That covers Tailwind-style `text-gray-3xx` and `text-gray-4xx` and the slate, zinc, neutral and stone equivalents, Bootstrap's `text-muted` and `text-secondary`, the generic `text-light`, `text-subtle`, `text-disabled` and `text-placeholder`, and `opacity-2x`/`opacity-3x`.
+- `<style>` blocks: any rule that declares a `color` and contains a known-light value anywhere inside it. That covers `#ccc`, `#ddd`, `#eee`, `#999`, `#aaa`, `#bbb`, `#c0c0c0`, `#d3d3d3`, `#dcdcdc` and an `rgb()` whose first channel falls between 180 and 229. The match is over the whole rule, so `.x { color: #000; background: #ccc }` is reported even though the light value is the background. Capped at five findings.
+- Raw source: four separate patterns over the whole HTML, each counted on its own. `color: #ccc`, `#ddd`, `#eee`, `#999`, `#aaa` or `#bbb` and `color: lightgray`, `lightgrey` or `silver` are both counted as `Light gray text: N instance(s)`; `color: white` or `color: #fff` as `White text (verify background): N instance(s)`; and a `color:` set to a three-digit hex drawn from `d`, `e` and `f`, such as `#eef`, as `Very light text color: N instance(s)`.
+
+Findings are deduplicated, and the check reports `N potential color contrast issue(s)` with up to ten items. With nothing found it passes as `No obvious contrast issues detected`, and on a page with no styled elements at all it returns info with `Limited contrast analysis available`.
+
+## How to fix it
+
+```css
+.muted {
+  color: #595959; /* 7:1 on white */
+}
+```
+
+Darken the foreground or lighten the background until the pair clears 4.5:1, and check the pair, not the color alone.
+
+White text is the usual false positive. `color: white` is reported without knowing the background, so a dark theme trips it on every heading. The class-name pass has the same problem in reverse: a utility class named for a color says nothing about the surface it lands on.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks for color contrast issues in styles and classes
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
-
-## Solution
-
-Text must have sufficient contrast with its background for readability. WCAG AA requires 4.5:1 for normal text and 3:1 for large text (18px+ or 14px+ bold). Use tools like WebAIM Contrast Checker to verify. Common issues: light gray text, text over images without overlay. Don't rely on color alone to convey information - add icons or text labels.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/color-contrast"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/link-in-text-block](/rules/a11y/link-in-text-block): links told apart from body text by color alone.
+- [content/hidden-text](/rules/content/hidden-text): text hidden outright rather than made faint.
+- [a11y/focus-visible](/rules/a11y/focus-visible): `outline: none` in the page source with no `:focus-visible` fallback.
+- [mobile/font-size](/rules/mobile/font-size): small type, which makes a marginal ratio worse.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Understanding SC 1.4.3 Contrast (Minimum), W3C](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+- [Contrast ratio, WCAG 2.2](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)
+- [Color contrast, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/Guides/Understanding_WCAG/Perceivable/Color_contrast)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The first ten deduplicated findings are listed, and inline color pairs carry their computed ratio. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

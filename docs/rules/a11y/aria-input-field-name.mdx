@@ -1,9 +1,36 @@
 ---
-title: "ARIA Input Field Name"
-description: "Checks that input fields have accessible names"
+title: "Input fields with no accessible name, ARIA and native"
+description: "Text boxes, comboboxes and sliders that announce nothing. squirrel checks the nine ARIA input roles alongside native inputs and selects."
 ---
 
-Checks that input fields have accessible names
+## What an input field name is
+
+Every field a user types into or drags needs a name, or the screen reader announces only its role: "edit text", "slider", "combo box". The name normally comes from a `<label>`, and from `aria-label` or `aria-labelledby` where a visible label does not fit.
+
+ARIA defines nine input roles for custom widgets: `checkbox`, `combobox`, `listbox`, `radio`, `searchbox`, `slider`, `spinbutton`, `switch` and `textbox`. A `<div>` carrying one of them needs a name exactly as a native control does, and gets nothing for free.
+
+## What squirrel checks
+
+One check, `aria-input-field-name`, at severity error. It covers three sets: every element with one of the nine input roles; every `<input>` with no explicit `role`, excluding types `hidden`, `submit`, `button`, `reset` and `image`; and every `<textarea>` and `<select>` with no explicit `role`.
+
+A name is resolved from, in order: `aria-label`, `aria-labelledby`, a `<label for="...">` matching the field's `id`, a wrapping `<label>`, `title`, then `placeholder`.
+
+- Fail with `N input field(s) without accessible names`. Items are listed as `div[role="textbox"]`, `input[name="q"]`, `input[type="text"]`, `textarea` or `select`, up to ten with a count of the rest.
+- Pass with `All input fields have accessible names`.
+
+`placeholder` counts here as a last resort. That makes this rule more forgiving than `a11y/form-labels`, which rejects it, so a placeholder-only field passes this check and fails that one.
+
+## How to fix it
+
+```html
+<div role="slider" aria-label="Volume"
+     aria-valuenow="60" aria-valuemin="0" aria-valuemax="100"
+     tabindex="0"></div>
+```
+
+Name the element that carries the role. A custom widget also needs the state attributes its role requires, which is a separate check.
+
+For native controls a visible `<label>` is still the better answer, because it names the field and enlarges its click target at the same time.
 
 | | |
 |---|---|
@@ -12,10 +39,6 @@ Checks that input fields have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-All input fields need accessible names. Best options: 1) Use `<label for='inputId'>`. 2) Use aria-label or aria-labelledby. 3) Wrap input in `<label>`. Placeholder alone is not sufficient as it disappears when typing.
 
 ## Enable / disable
 
@@ -40,3 +63,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-input-field-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/form-labels](/rules/a11y/form-labels): the stricter pass over native controls, where `placeholder` does not count.
+- [a11y/aria-toggle-field-name](/rules/a11y/aria-toggle-field-name): checkboxes, radios and switches specifically.
+- [a11y/select-name](/rules/a11y/select-name): dropdowns specifically.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): the state attributes a custom input role has to declare.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Labeling controls, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/forms/labels/)
+- [ARIA roles, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Custom widgets and native controls are listed together, each with a selector. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

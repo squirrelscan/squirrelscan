@@ -1,9 +1,39 @@
 ---
-title: "Link in Text Block"
-description: "Checks that links in text blocks are visually distinguishable"
+title: "Links in a paragraph told apart by color alone"
+description: "A link inside body text needs more than color to be visible. squirrel flags links whose markup removes the underline."
 ---
 
-Checks that links in text blocks are visually distinguishable
+## What the requirement is
+
+A link inside a paragraph has to be distinguishable from the words around it. Color alone does not do that, because a reader with a color vision deficiency may see the link and the surrounding text as the same shade.
+
+WCAG success criterion 1.4.1 Use of Color, Level A, covers this. An underline is the simplest answer. The alternative documented in WCAG technique G183 is a link color with at least 3:1 contrast against the surrounding static text, on top of each color meeting its own contrast requirement against the background.
+
+## What squirrel checks
+
+One check, `link-in-text-block`, at severity warning. It looks inside text-bearing elements only: `<p>`, `<li>`, `<td>`, `<th>`, `<dd>`, `<blockquote>` and `<figcaption>`.
+
+For each `a[href]` inside one of those, it flags two markup patterns:
+
+- an inline `style` that contains the substring `text-decoration` and either contains `none` anywhere in the value or does not contain `underline`. The tests are plain substring matches over the whole attribute, so `text-decoration: underline; display: none` also matches.
+- a `class` containing `no-underline` or `text-decoration-none`
+
+Findings are reported as `N link(s) in text may lack underlines`, quoting the first 30 characters of each link's text, capped at the first ten. The finding carries the note `Links need visual distinction beyond color` and the suggestion `Ensure 3:1 contrast with surrounding text or add underlines`. With nothing flagged the check passes as `Links in text blocks appear distinguishable`, and with no links in text at all it returns info with `No links found in text blocks`.
+
+Only inline styles and those two class names are visible to it. A stylesheet rule setting `a { text-decoration: none }` is not fetched, so a pass here is not evidence that the links are distinguishable.
+
+## How to fix it
+
+```css
+article a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+```
+
+Underline links in running text and reserve the undecorated style for navigation and buttons, where position already says what they are.
+
+`text-underline-offset` and `text-decoration-thickness` make an underline sit comfortably under the text, which removes most of the reason designers take it off.
 
 | | |
 |---|---|
@@ -12,10 +42,6 @@ Checks that links in text blocks are visually distinguishable
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 4/10 |
-
-## Solution
-
-Links within text blocks must be distinguishable by more than just color (for color-blind users). Use underlines, bold, borders, or other visual indicators. Exception: Links can rely on color alone if the contrast ratio between link and surrounding text is at least 3:1 and you provide additional cues on hover/focus.
 
 ## Enable / disable
 
@@ -40,3 +66,31 @@ disable = ["a11y/*"]
 enable = ["a11y/link-in-text-block"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/color-contrast](/rules/a11y/color-contrast): text against its background. It does not measure link text against the words around it, which is what G183 needs.
+- [a11y/link-text](/rules/a11y/link-text): what those links say once they are visible.
+- [a11y/focus-visible](/rules/a11y/focus-visible): the keyboard equivalent of the same problem.
+- [links/anchor-text](/rules/links/anchor-text): the same links judged as ranking signals.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Understanding SC 1.4.1 Use of Color, W3C](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html)
+- [G183: Using a contrast ratio of 3:1 with surrounding text, W3C](https://www.w3.org/WAI/WCAG22/Techniques/general/G183)
+- [text-decoration, MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each flagged link is quoted by its opening words. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

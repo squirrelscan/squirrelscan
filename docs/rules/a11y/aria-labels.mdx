@@ -1,9 +1,33 @@
 ---
-title: "ARIA Labels"
-description: "Checks that interactive elements have accessible names"
+title: "aria-label: which elements need one and how to check"
+description: "Buttons, links and inputs with no visible text and no aria-label have no name for screen readers. squirrel finds every one on every page."
 ---
 
-Checks that interactive elements have accessible names
+## What aria-label is
+
+`aria-label` gives an element a name that assistive technology reads out when the element has no visible text. A button whose only content is an unlabeled icon, an `<a>` wrapping an image with no `alt`, or an `<svg>` with a click handler and no `<title>` has nothing a screen reader can announce. The user hears "button" and nothing else.
+
+Most elements do not need it. Visible text is the accessible name, so `<button>Save</button>` is complete. `aria-label` is for the cases where the visible label is a picture, or the visible text is not the whole story ("Close" on a dialog is clearer as `aria-label="Close settings"`). `aria-labelledby` does the same job by pointing at existing text, and `<title>` inside an `<svg>` names the graphic.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reports two checks:
+
+- `aria-buttons`: every `<button>` and every element with `role="button"`. A button fails when it has no text content, no `aria-label`, no `aria-labelledby`, no `title`, no `<img alt>` inside it and no `<svg><title>` inside it. Report message: `N button(s) without accessible names`, with the id or class of each one. Severity error.
+- `aria-svg`: every `<svg>` that carries an `onclick` or a `tabindex`. It warns when the svg has no `aria-label`, no `aria-labelledby` and no `<title>` child. Report message: `N interactive SVG(s) without accessible names`.
+
+
+## How to fix it
+
+```html
+<button aria-label="Close settings">
+  <svg aria-hidden="true">...</svg>
+</button>
+```
+
+Put the label on the interactive element, not on the icon inside it, and hide the icon from assistive technology with `aria-hidden="true"`. For an svg that is itself clickable, add `<title>` as its first child or an `aria-label` on the `<svg>`.
+
+A common false positive is a button whose only content is an icon font glyph in a pseudo-element. squirrel sees an empty button. Add `aria-label`, which is the correct fix anyway.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Checks that interactive elements have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 6/10 |
-
-## Solution
-
-All interactive elements (buttons, links, inputs) need accessible names for screen readers. Use: visible text content, aria-label for icon-only buttons, aria-labelledby to reference existing text, or the title attribute as a fallback. Icon buttons especially need aria-label: `<button aria-label='Close'>`×`</button>`. Test with a screen reader or browser accessibility inspector.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-labels"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/button-name](/rules/a11y/button-name): the same defect checked over a wider set, including `<input type="button">` and nested labels.
+- [a11y/link-text](/rules/a11y/link-text): links whose text is "click here" or an image with no alt.
+- [a11y/form-labels](/rules/a11y/form-labels): inputs with no `<label>` or `aria-label`.
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): focusable elements hidden from assistive technology, the mirror problem.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [aria-label, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-label)
+- [Providing accessible names and descriptions, WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/practices/names-and-descriptions/)
+- [Accessible name and description computation, W3C](https://www.w3.org/TR/accname-1.2/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unlabeled button is listed by page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

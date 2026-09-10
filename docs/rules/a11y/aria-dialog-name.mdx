@@ -1,9 +1,34 @@
 ---
-title: "ARIA Dialog Name"
-description: "Checks that dialog elements have accessible names"
+title: "Dialog accessible name: role=dialog and the dialog element"
+description: "A modal with no name leaves screen reader users guessing what just opened. squirrel checks ARIA dialogs and native dialogs separately."
 ---
 
-Checks that dialog elements have accessible names
+## What a dialog name is
+
+A dialog interrupts the page, so a screen reader announces it on open. With no accessible name the announcement is just "dialog", and the user has to explore to find out what appeared.
+
+The name comes from `aria-labelledby` pointing at the dialog's own heading, from `aria-label`, or from `title`. Text inside the dialog does not become its name: unlike a button, a dialog's content is its content, not its label.
+
+## What squirrel checks
+
+Two checks, at rule severity error. Both accept the same three name sources: a non-empty `aria-label`, a non-empty `title`, or an `aria-labelledby` pointing at an element that has text.
+
+- `aria-dialog-name` covers elements with `role="dialog"` or `role="alertdialog"`. It fails with `N ARIA dialog(s) without accessible names`, listing each as `dialog#id` or bare role name, up to ten with a count of the rest. It passes with `All N ARIA dialog(s) have accessible names`.
+- `dialog-name` covers native `<dialog>` elements that carry no explicit dialog role. Browsers announce the native element's role on their own, so a missing name here warns rather than fails: `N native <dialog>(s) without accessible names`. It passes with `All N native <dialog>(s) have accessible names`.
+- When the page has neither kind, one info check reports `No dialog elements found`.
+
+## How to fix it
+
+```html
+<div role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <h2 id="settings-title">Settings</h2>
+  ...
+</div>
+```
+
+Point `aria-labelledby` at the heading the dialog already shows. That keeps the announced name and the visible title in step, which is what a voice control user needs to open and close it by name.
+
+A dialog rendered into the page but never opened is still reported, because the rule reads a static snapshot of the markup. A name your script adds at open time is invisible to it, so keeping the name in the markup is the simplest way to satisfy both the audit and the announcement.
 
 | | |
 |---|---|
@@ -12,10 +37,6 @@ Checks that dialog elements have accessible names
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Elements with role='dialog' or role='alertdialog' (and native `<dialog>`) must have an accessible name. Add aria-label with a descriptive label, or use aria-labelledby pointing to a visible heading inside the dialog. A title attribute also works but is less preferred. Without a name, screen reader users won't know the purpose of the dialog.
 
 ## Enable / disable
 
@@ -40,3 +61,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-dialog-name"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): the page behind a modal, hidden but still tabbable.
+- [a11y/aria-required-attr](/rules/a11y/aria-required-attr): states a role must declare, such as `aria-checked` on a checkbox.
+- [a11y/aria-labels](/rules/a11y/aria-labels): the close button most dialogs put in the corner.
+- [a11y/frame-title](/rules/a11y/frame-title): the same naming problem for embedded frames.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The dialog element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog)
+- [The dialog role, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/dialog_role)
+- [Dialog (Modal) pattern, WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. ARIA dialogs are reported as errors and native ones as warnings, in separate checks. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

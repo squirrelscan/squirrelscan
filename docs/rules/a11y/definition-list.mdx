@@ -1,9 +1,42 @@
 ---
-title: "Definition List Structure"
-description: "Checks that definition lists contain only dt and dd elements"
+title: "Definition list structure: what belongs inside a dl"
+description: "A stray paragraph between the terms of a dl breaks the pairing screen readers rely on. squirrel checks every definition list on the page."
 ---
 
-Checks that definition lists contain only dt and dd elements
+## What a definition list is
+
+`<dl>` pairs terms with descriptions: a glossary, a set of metadata fields, a key-value table without the table. Screen readers announce the pairing, so a term is read together with the description that follows it.
+
+The pairing only works when the structure is intact. HTML allows `<dt>` and `<dd>` as the direct children of a `<dl>`, or a set of `<div>` wrappers each holding one group. Anything else between them, a `<p>` or a `<span>` or a loose `<li>`, breaks the grouping.
+
+## What squirrel checks
+
+One check, `definition-list`, at severity error. It reads the direct children of every `<dl>`.
+
+- Fail when a direct child is anything other than `<dt>`, `<dd>` or `<div>`, or when a `<div>` child holds anything other than `<dt>` and `<dd>`. Report message: `N definition list(s) with invalid structure`. Each list is named `dl#id`, `dl.class` or bare `dl`, and every offending list is listed.
+- Pass with `N definition list(s) are properly structured`.
+- Info with `No definition lists found`.
+
+The check reports the list, not the child, and stops at the first bad child in each one. It also inspects `<div>` wrappers one level deep, so a `<div>` containing another `<div>` is reported.
+
+## How to fix it
+
+```html
+<dl>
+  <div>
+    <dt>Shipping</dt>
+    <dd>Free over 50 EUR</dd>
+  </div>
+  <div>
+    <dt>Returns</dt>
+    <dd>30 days, no questions</dd>
+  </div>
+</dl>
+```
+
+Move anything that is not a term or a description outside the `<dl>`, or wrap each pair in a `<div>` and put your styling hooks there.
+
+HTML also permits `<script>` and `<template>` as children of a `<dl>`. squirrel reports those, so a list with an inline template inside it is a false positive worth ignoring.
 
 | | |
 |---|---|
@@ -12,10 +45,6 @@ Checks that definition lists contain only dt and dd elements
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Definition lists (`<dl>`) should only contain `<dt>` (term) and `<dd>` (description) elements as direct children. Optionally, they can be wrapped in `<div>` for styling. Do not put other elements like `<p>`, `<span>`, or `<li>` directly inside `<dl>`.
 
 ## Enable / disable
 
@@ -40,3 +69,31 @@ disable = ["a11y/*"]
 enable = ["a11y/definition-list"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/dlitem](/rules/a11y/dlitem): `<dt>` and `<dd>` sitting outside a `<dl>` altogether.
+- [a11y/list-structure](/rules/a11y/list-structure): the same check for `<ul>` and `<ol>`.
+- [a11y/listitem](/rules/a11y/listitem): orphaned `<li>` elements.
+- [a11y/table-headers](/rules/a11y/table-headers): data tables with no `<th>` cells, the other way to present key-value data.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [The dl element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dl)
+- [The dl element, HTML Standard](https://html.spec.whatwg.org/multipage/grouping-content.html#the-dl-element)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Each malformed list is listed by id or class. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

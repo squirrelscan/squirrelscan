@@ -1,9 +1,33 @@
 ---
-title: "ARIA Hidden Focus"
-description: "Ensures aria-hidden elements do not contain focusable content"
+title: "Focusable elements inside aria-hidden: the tab trap"
+description: "A hidden element that still takes focus lets keyboard users tab into nothing. squirrel finds them, and tells anti-spam honeypots apart."
 ---
 
-Ensures aria-hidden elements do not contain focusable content
+## What the conflict is
+
+`aria-hidden="true"` removes a subtree from the accessibility tree. It does not remove it from the tab order. A link or button inside a hidden region can still be reached with Tab, and when it is, a screen reader user has focus on something their screen reader refuses to describe.
+
+The two states have to agree. Either the region is available, in which case it should not be `aria-hidden`, or it is not, in which case nothing inside it should be focusable.
+
+## What squirrel checks
+
+Two checks, at rule severity error. The rule walks every `[aria-hidden="true"]` element and tests the element itself first. A focusable container is reported and its descendants are not examined; otherwise every descendant is tested. Focusable means matching `a[href]`, `button:not([disabled])`, `input:not([disabled]):not([type="hidden"])`, `select:not([disabled])`, `textarea:not([disabled])`, `[contenteditable="true"]`, `audio[controls]`, `video[controls]` or `details > summary`, or carrying any `tabindex` other than `-1`. The `tabindex` lookup is case-insensitive, so React's `tabIndex` in server-rendered markup is caught.
+
+- `aria-hidden-focus` fails with `N focusable element(s) inside aria-hidden`. Items read `a#archive`, or `div (self is focusable)` when the hidden container is itself focusable. Up to ten are listed with a count of the rest.
+- `aria-hidden-focus-honeypot` warns with `N focusable element(s) inside aria-hidden appear to be an anti-spam honeypot`, carrying the value `Add tabindex="-1" (and autocomplete="off") to remove the honeypot from the tab order`. An element qualifies only when all three hold: it is an `<input>`, its `id` or `name` contains `hp`, `honeypot` or `trap` as a hyphen- or underscore-delimited token, and it sits inside a `<form>`. Requiring all three keeps a genuine bug on an unrelated hidden control from being quietly downgraded.
+- With nothing focusable found, the check passes as `No focusable elements inside aria-hidden regions`, or returns info with `No aria-hidden elements found`.
+
+## How to fix it
+
+```html
+<div aria-hidden="true">
+  <a href="/archive" tabindex="-1">Archive</a>
+</div>
+```
+
+Either drop `aria-hidden` from the container or set `tabindex="-1"` on every focusable descendant.
+
+Where the region is meant to be invisible as well, `display: none` or the `hidden` attribute is the better fix. Neither leaves the element focusable, so the two states cannot drift apart again.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Ensures aria-hidden elements do not contain focusable content
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 7/10 |
-
-## Solution
-
-Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden or make children non-focusable with tabindex='-1'.
 
 ## Enable / disable
 
@@ -40,3 +60,31 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-hidden-focus"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-hidden-body](/rules/a11y/aria-hidden-body): the same attribute applied to the whole document.
+- [a11y/tabindex](/rules/a11y/tabindex): positive values that reorder the tab sequence.
+- [a11y/focus-visible](/rules/a11y/focus-visible): the static scan for `outline: none` shipped without a `:focus-visible` fallback.
+- [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name): the modal pattern that produces most of these.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [aria-hidden, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-hidden)
+- [tabindex, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/tabindex)
+- [aria-hidden element is not focusable, W3C ACT rules](https://www.w3.org/WAI/standards-guidelines/act/rules/6cfa84/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Honeypot fields are reported separately, as warnings rather than errors. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

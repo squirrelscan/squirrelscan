@@ -1,9 +1,33 @@
 ---
-title: "ARIA Hidden Body"
-description: "Ensures document body is not set to aria-hidden"
+title: "aria-hidden on body or html: what it breaks"
+description: "aria-hidden=true on the body or html element asks assistive technology to ignore the entire page. squirrel checks both, at the highest weight."
 ---
 
-Ensures document body is not set to aria-hidden
+## What aria-hidden does
+
+`aria-hidden="true"` removes an element and everything inside it from the accessibility tree. The element stays on screen and stays in the tab order. It stops existing only for a screen reader.
+
+That is the right tool for a decorative icon next to a text label. On `<body>` or `<html>` it asks for the whole document to be ignored. Browsers differ in how far they honor that, and some refuse it outright on those two elements, but the markup is wrong either way and no page should depend on which browser is reading it.
+
+## What squirrel checks
+
+One check, `aria-hidden-body`, at severity error and weight 10, the highest in the category.
+
+- Fail when `<html>` or `<body>` carries `aria-hidden="true"`. The message names the culprit: `Document <html> element is aria-hidden`, or `Document <body> is aria-hidden`. The finding carries the issue `Page content is inaccessible to assistive technology` and the fix `Remove aria-hidden from body/html element`.
+- Pass with `Document body is not hidden from assistive technology`.
+
+The value comparison is exact, so `aria-hidden="True"` is not reported even though it has the same effect in some browsers.
+
+## How to fix it
+
+```html
+<body>
+  <div id="app">...</div>
+  <div role="dialog" aria-modal="true">...</div>
+</body>
+```
+
+Remove the attribute. The usual reason it got there is a modal library trying to hide the page behind an open dialog. Use `aria-modal="true"` on the dialog, or apply `aria-hidden` to the dialog's siblings, never to an ancestor of the dialog itself.
 
 | | |
 |---|---|
@@ -12,10 +36,6 @@ Ensures document body is not set to aria-hidden
 | **Scope** | Per-page |
 | **Severity** | error |
 | **Weight** | 10/10 |
-
-## Solution
-
-Never set aria-hidden='true' on the `<body>` element. This makes the entire page invisible to assistive technology. If you need to hide content when a modal is open, add aria-hidden to sibling elements of the modal, not to body.
 
 ## Enable / disable
 
@@ -40,3 +60,30 @@ disable = ["a11y/*"]
 enable = ["a11y/aria-hidden-body"]
 disable = ["*"]
 ```
+
+## Related rules
+
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): hidden regions that still contain tabbable elements.
+- [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name): the modal that usually causes this.
+- [a11y/aria-allowed-attr](/rules/a11y/aria-allowed-attr): other ARIA attributes that contradict what the element is.
+- [content/hidden-text](/rules/content/hidden-text): content hidden visually rather than from assistive technology.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [aria-hidden, MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-hidden)
+- [WAI-ARIA 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. This one is either present or it is not, so a single finding covers the page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>
