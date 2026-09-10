@@ -1,11 +1,29 @@
 ---
-title: "AI Content Detection"
-description: "Detects if content appears to be AI-generated"
+title: "AI content detection: why this rule is retired, and what runs"
+description: "The AI-generated content check no longer runs. squirrel emits a skip on every page and never calls a model."
 ---
 
-<Warning>**Beta Rule** - This rule is experimental and may change significantly in future releases.</Warning>
+<Warning>**Retired rule** - this rule is disabled by default and its check is a no-op. It cannot invoke a model. See [Cloud rules](/cloud/rules) for the checks that do run.</Warning>
 
-Detects if content appears to be AI-generated
+## What AI content detection is
+
+AI content detection estimates whether a passage was written by a language model. Detectors work on statistical fingerprints of the text and they are not reliable at the level of a single page: human writing on technical subjects scores as machine-written often enough that acting on the result costs more than it saves.
+
+Google's guidance on the subject is about the content, not its production method. Its documentation on AI-generated content says the reward goes to content that is helpful and original, however it was made, and that using automation to game rankings is what its spam policies address.
+
+## What squirrel checks
+
+Nothing. The rule is retired and hard-guarded so that it can never call a model. Its previous implementation made one model call per page with no credit charge wired to it, which was an uncatalogued cost, and it was replaced with a no-op rather than left running.
+
+- `ai-content`, skipped with the message `AI content detection is retired` and the skip reason `Retired pending a metered opt-in endpoint`. This is the only result the rule can produce.
+
+The rule is also marked disabled in its metadata, so it does not run unless it is explicitly enabled, and enabling it produces the same skip. Re-enabling detection for real requires a metered server endpoint and an opt-in before any model call.
+
+## How to fix it
+
+There is nothing to fix. The check is a no-op and the skip carries no weight in the score.
+
+If you want the checks that do read the content with a model, [ai/llm-parsability](/rules/ai/llm-parsability) scores how well a model can extract a page's facts and [ai/page-type-match](/rules/ai/page-type-match) compares what a page reads as against what its markup declares. Both are included in the audit base charge on a logged-in run.
 
 | | |
 |---|---|
@@ -15,38 +33,6 @@ Detects if content appears to be AI-generated
 | **Severity** | info |
 | **Weight** | 2/10 |
 | **Default** | Disabled |
-
-## Prerequisites
-
-This rule requires an OpenRouter API key:
-
-```bash
-export OPENROUTER_API_KEY=your_key_here
-```
-
-## Solution
-
-This rule detects content that may be AI-generated. While AI content isn't inherently bad, search engines may scrutinize it more heavily. If flagged, review the content for quality regardless of how it was created. Ensure it provides genuine value, is factually accurate, and has a human editorial review. Add personal insights, original research, or unique perspectives to differentiate from generic AI output.
-
-## Detection criteria
-
-The rule analyzes text for signs of AI generation:
-
-- Repetitive sentence structures
-- Overly formal or generic language
-- Lack of personal voice or unique perspective
-- Perfect grammar but bland style
-- Common AI phrases ("In conclusion", "It's important to note", etc.)
-
-## Scoring
-
-| Score | Status | Meaning |
-|-------|--------|---------|
-| 0-40 | Pass | Content appears human-written |
-| 41-60 | Warning | Content may have AI elements |
-| 61-100 | Warning | Content appears AI-generated |
-
-<Note>High AI scores result in warnings, not failures. AI-generated content isn't necessarily bad - this is informational only.</Note>
 
 ## Enable / disable
 
@@ -70,3 +56,30 @@ disable = ["ai/ai-content"]
 [rules]
 enable = ["ai/*"]
 ```
+
+## Related rules
+
+- [ai/llm-parsability](/rules/ai/llm-parsability): how well a model can extract the page's facts, which does run.
+- [ai/page-type-match](/rules/ai/page-type-match): the classified page type against the declared structured data.
+- [content/quality](/rules/content/quality): the content quality analysis that runs on a cloud audit.
+- [content/placeholder-text](/rules/content/placeholder-text): unedited template text, which is a defect a rule can actually establish.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [Generative engine optimization](https://squirrelscan.com/learn/generative-engine-optimization) for how an agent works through a report.
+
+## References
+
+- [AI-generated content and Google Search](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Spam policies for Google web search](https://developers.google.com/search/docs/essentials/spam-policies)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. This rule reports a skip on every page. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

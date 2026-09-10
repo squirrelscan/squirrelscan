@@ -1,11 +1,46 @@
 ---
-title: "Site Profile"
-description: "Resolves the durable per-domain site profile that anchors the audit decision graph"
+title: "Site profile: the per-domain classification rules run against"
+description: "The resolved site type, business category, country and audience for a domain. squirrel reports it, and other rules use it to decide what applies."
 ---
 
 <Note>**Cloud rule** - requires login (`squirrel auth login`); **included in the audit base charge** (resolved once per domain, cached ~30 days). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
 
-Resolves the durable per-domain site profile (type, business category, country, audience, identity, contacts, socials, domain age): the root of the audit decision graph.
+## What the site profile is
+
+The site profile is a per-domain classification resolved once and reused: what kind of site this is, its business category, its primary country, who it is for, the entity behind it, its contacts and social accounts, and how old the domain is. It is resolved before the rules run and cached for about thirty days.
+
+Other rules read it to decide whether they apply. [local/nap-consistency](/rules/local/nap-consistency), [local/geo-meta](/rules/local/geo-meta), [local/service-area](/rules/local/service-area) and [schema/local-business](/rules/schema/local-business) are all skipped, with a visible reason, when the profile says the site is not a local business. That is why a global product site is never marked down for having no opening hours.
+
+## What squirrel checks
+
+The rule runs once per crawl. Profile resolution is a cloud service, so the check needs a logged-in audit. It emits one check:
+
+- `site-metadata`, skipped with the message `Site profile resolution skipped` when the service was not available for the audit, with the skip reason naming why.
+- `site-metadata`, at info status with the message `Site profile: type "ecommerce", category "coffee equipment", country US, audience national, domain ~7y old (high confidence)`.
+
+The summary always opens with the site type. Business category, primary country and audience scope are appended only when the service resolved them. Domain age is rendered in whole years once it passes one year and in days below that. The confidence value closes the message in parentheses.
+
+The check carries more in its details than it prints: the entity name and type, whether the site is YMYL, whether it is a local business, the registrar, and the counts of contacts and social accounts found. Weight is 0, so this rule is report-only and cannot move the score in either direction.
+
+## How to fix it
+
+There is nothing to fix unless the classification is wrong. When it is, the signals it reads from are the ones to sharpen:
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Acme Coffee",
+  "url": "https://example.com/",
+  "sameAs": ["https://www.linkedin.com/company/acme-coffee"]
+}
+</script>
+```
+
+A homepage that states plainly what the site sells and to whom, [Organization or LocalBusiness JSON-LD](/rules/schema/organization), Open Graph and Twitter meta tags, and visible contact details are what the profile is resolved from. A wrong classification usually means one of those is missing rather than that the classifier is broken.
+
+The common false positive is a holding page or a site mid-redesign, where the homepage carries little content. The profile follows what is on the page.
 
 | | |
 |---|---|
@@ -15,14 +50,6 @@ Resolves the durable per-domain site profile (type, business category, country, 
 | **Severity** | info |
 | **Weight** | 0/10 (report-only, non-scoring) |
 | **Default** | Enabled |
-
-## What it does
-
-The site profile is Stage 0 of the cloud decision graph. The resolved profile (site type, business category, primary country, audience scope, identity, contacts, socials, and domain age) gates every downstream cloud feature and informs which audit rules apply to the site. It is report-only and never fails the audit.
-
-## Solution
-
-Informational: the resolved profile anchors which cloud features and audit rules apply to this site. If the classification looks wrong, the site's purpose and identity may not be coming through: sharpen the homepage value proposition, Organization/LocalBusiness JSON-LD, `og`/`twitter` meta, and contact details.
 
 ## Enable / disable
 
@@ -39,3 +66,30 @@ disable = ["ai/site-metadata"]
 [rules]
 disable = ["ai/*"]
 ```
+
+## Related rules
+
+- [schema/organization](/rules/schema/organization): the identity markup the profile reads, and which reads the profile back for its `sameAs` cross-check.
+- [schema/local-business](/rules/schema/local-business): one of the rules gated on the local-business flag in this profile.
+- [social/social-profiles](/rules/social/social-profiles): the accounts the profile collects.
+- [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the other classification that changes which rules apply.
+
+Agent experience findings ship in every audit next to the SEO, performance and security rules. See [Generative engine optimization](https://squirrelscan.com/learn/generative-engine-optimization) for how an agent works through a report.
+
+## References
+
+- [Organization, schema.org](https://schema.org/Organization)
+- [Organization structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/organization)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. The resolved profile is printed with its confidence. Cloud audits resolve it.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>
