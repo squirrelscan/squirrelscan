@@ -33,6 +33,9 @@ set -euo pipefail
 #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
 #   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
 #   SQUIRREL_BIN_DIR   - Override bin directory for symlink
+#   SQUIRREL_FORCE_MIRROR - Skip github.com and download from
+#                        install.squirrelscan.com (for networks that block
+#                        GitHub). Any value but empty, 0 or false enables it.
 #   GITHUB_TOKEN       - GitHub token to avoid API rate limits (optional)
 
 REPO="squirrelscan/squirrelscan"
@@ -95,6 +98,12 @@ INSTALLER_REPORT_VERSION="2"
 ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 RELEASES_ENDPOINT="${SQUIRREL_RELEASES_ENDPOINT:-https://install.squirrelscan.com/releases}"
+# Release assets, mirrored through our own origin. A GitHub release-asset URL
+# redirects to githubusercontent.com (objects.* historically, release-assets.*
+# today), which some networks cannot reach: the metadata fetch above succeeds
+# and the binary download then fails on every retry, forever (#2064). Every
+# asset therefore has two sources.
+DOWNLOAD_ENDPOINT="${SQUIRREL_DOWNLOAD_ENDPOINT:-https://install.squirrelscan.com/dl}"
 ERROR_LINE_MAX=200
 # Chars of captured command output carried in a report. The worker clamps again.
 ERROR_OUTPUT_MAX=1000
@@ -748,6 +757,204 @@ fetch_with_retry() {
   return 1
 }
 
+# --- Release asset download (two sources) ---------------------------------
+# GitHub is the origin and always has every asset, so it is tried first; the
+# mirror at DOWNLOAD_ENDPOINT proxies the same bytes through Cloudflare, which
+# reaches GitHub even when the client cannot. The manifest's sha256 is verified
+# over whatever comes back either way, so a second source adds no trust.
+#
+# A mirror that answers 404 is treated as "nothing here", which is also what a
+# worker deployed before the route existed answers: the script degrades to the
+# GitHub failure it would have reported anyway rather than breaking.
+DOWNLOAD_URL_GITHUB=""
+DOWNLOAD_URL_MIRROR=""
+DOWNLOAD_SOURCE=""
+
+# Opt-in flag semantics, matching the CLI's SQUIRREL_NO_UPDATE: empty, 0 and
+# false are off, anything else is on. Presence semantics (as NO_TELEMETRY uses)
+# would make a stray `SQUIRREL_FORCE_MIRROR=` in a profile silently reroute
+# every install.
+force_mirror_enabled() {
+  local value
+  value=$(printf '%s' "${SQUIRREL_FORCE_MIRROR:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+  case "$value" in
+    "" | 0 | false) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# A 200 is not the same as the file we asked for. A captive portal, a proxy
+# error page, or a bucket that answers every path with its index all return
+# HTML with a 200, and the transport is perfectly happy. Without this the HTML
+# reached the manifest parser, jq died on it, and `set -e` took the script down
+# with an empty report: exit 5, no message, no URLs, nothing anyone could act
+# on. Content that is not a manifest means this SOURCE failed, so the mirror
+# still gets its turn.
+manifest_looks_valid() {
+  local file="$1"
+  [ -s "$file" ] || return 1
+  # `${USE_JQ:-false}`, not `$USE_JQ`: check_deps sets it, and under `set -u` a
+  # bare reference is fatal anywhere this helper is reached first (a test
+  # sourcing the script, or a future caller moved above check_deps). Same
+  # defensive form json_get already uses.
+  if [ "${USE_JQ:-false}" = true ]; then
+    jq -e 'type == "object" and has("version") and has("binaries")
+           and (.binaries | type == "object")' "$file" > /dev/null 2>&1
+    return $?
+  fi
+
+  # No jq: the same facts by hand, and the two paths have to agree or a machine
+  # without jq gets a different verdict on the same bytes.
+  #
+  # First non-whitespace byte must be `{`. That is what separates a manifest
+  # from a page that merely mentions one: an HTML error page carrying
+  # `{"version":...}` inside a <script> tag passes any test that only looks for
+  # the keys, and the jq path rejects it, so without this the two disagree.
+  local first
+  first=$(tr -d '[:space:]' < "$file" 2> /dev/null | cut -c1)
+  [ "$first" = "{" ] || return 1
+
+  # Flattened before matching: JSON may put the value on the line after its key,
+  # and grep is line-based, so a pretty-printed manifest that happens to wrap
+  # after `"binaries":` would otherwise be rejected as invalid. Rejecting a
+  # GOOD manifest is the worse failure of the two.
+  local flat
+  flat=$(tr -d '\n' < "$file" 2> /dev/null)
+  case "$flat" in
+    *'"version"'*) ;;
+    *) return 1 ;;
+  esac
+  case "$flat" in
+    *'"binaries"'*) ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+
+# fetch_release_asset <version> <asset> <output> <label> [validator]
+# Leaves both attempted URLs in DOWNLOAD_URL_GITHUB / DOWNLOAD_URL_MIRROR for
+# the failure report, and the winner in DOWNLOAD_SOURCE. `validator` is an
+# optional function name run on the downloaded file; a source whose bytes do not
+# pass it is a failed source, not a successful download of the wrong thing.
+fetch_release_asset() {
+  local version="$1" asset="$2" output="$3" label="$4" validator="${5:-}"
+
+  DOWNLOAD_URL_GITHUB="https://github.com/${REPO}/releases/download/${version}/${asset}"
+  DOWNLOAD_URL_MIRROR="${DOWNLOAD_ENDPOINT}/${version}/${asset}"
+  DOWNLOAD_SOURCE=""
+
+  if force_mirror_enabled; then
+    info "SQUIRREL_FORCE_MIRROR is set, skipping github.com"
+  elif fetch_with_retry "$DOWNLOAD_URL_GITHUB" "$output"; then
+    if [ -z "$validator" ] || "$validator" "$output"; then
+      DOWNLOAD_SOURCE="github.com"
+      return 0
+    fi
+    warn "github.com returned something that is not a $label, trying install.squirrelscan.com..."
+  else
+    warn "github.com could not serve the $label, trying install.squirrelscan.com..."
+  fi
+
+  if fetch_with_retry "$DOWNLOAD_URL_MIRROR" "$output"; then
+    if [ -z "$validator" ] || "$validator" "$output"; then
+      DOWNLOAD_SOURCE="install.squirrelscan.com"
+      return 0
+    fi
+    warn "install.squirrelscan.com returned something that is not a $label"
+  fi
+  return 1
+}
+
+# Reduce a URL to scheme, host and path before it is printed or reported.
+# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and every part of it that can hold
+# a secret has to go: it can sit in the userinfo before the host, in the query
+# after the path, or in the fragment. The report scrubber strips home paths and
+# clamps length; it knows nothing about URL structure, so anything left here
+# reaches the reporting endpoint verbatim. Scheme, host and path are all a reader needs to tell which host was
+# tried, which is the whole point of carrying the URL at all.
+# Order is load-bearing, and getting it wrong leaks. `[^/@]*@` happily crosses a
+# `?`, so run against `https://host?token=user@secret/path` the userinfo rule
+# ate `host?token=user@` and promoted the token's value to the host: the secret
+# survived, in the report and on screen. Cut the query and fragment off first,
+# then strip userinfo from what is left, and bound that pattern so it cannot
+# cross a delimiter even if the order is ever changed back.
+redact_url() {
+  printf '%s' "$1" | sed -E -e 's|[?#].*$||' -e 's#^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/?#@]*@#\1#'
+}
+
+# Single-quote a value so the recipe we print is copy-pasteable even when the
+# path holds a space or a shell metacharacter. A literal quote inside closes the
+# string, escapes, and reopens: it's -> 'it'\''s'.
+shell_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# The report line and the user-facing guidance for a download that ran out of
+# sources. error() carries the first to Sentry (clamped to ERROR_LINE_MAX, which
+# two full URLs would blow past) and prints the second to the user only; the
+# URLs themselves ride along in error_output, which has room for them.
+#
+# The line names the hosts AND the way out, because it is the one line that
+# reaches both the user's terminal and the Sentry issue title area — the
+# guidance below it is local only.
+download_failure_report_line() {
+  local label="$1"
+  if force_mirror_enabled; then
+    echo "Failed to download the $label from install.squirrelscan.com (SQUIRREL_FORCE_MIRROR is set, github.com was skipped)"
+  else
+    echo "Failed to download the $label from github.com and install.squirrelscan.com (retry with SQUIRREL_FORCE_MIRROR=1 to skip github.com)"
+  fi
+}
+
+# Skipped is not failed: with SQUIRREL_FORCE_MIRROR set we never asked GitHub,
+# and a report claiming we did would send whoever reads it after the wrong host.
+download_failure_output() {
+  if force_mirror_enabled; then
+    printf 'skipped %s (SQUIRREL_FORCE_MIRROR)\ntried %s (failed)\n' \
+      "$(redact_url "$DOWNLOAD_URL_GITHUB")" \
+      "$(redact_url "$DOWNLOAD_URL_MIRROR")"
+  else
+    printf 'tried %s (failed)\ntried %s (failed)\n' \
+      "$(redact_url "$DOWNLOAD_URL_GITHUB")" \
+      "$(redact_url "$DOWNLOAD_URL_MIRROR")"
+  fi
+}
+
+# download_failure_guidance <asset> <kind> <bin_dir>
+# `kind` is `binary` or `manifest`: only the binary has a by-hand recipe worth
+# printing, because only the binary is the thing the user ultimately needs on
+# disk. Telling someone to move a manifest.json to ~/.local/bin/squirrel would
+# be worse than saying nothing. `bin_dir` is the directory this run actually
+# resolved, so the recipe names the same place a successful install would use.
+download_failure_guidance() {
+  local asset="$1" kind="$2" bin_dir="$3" quoted_bin_dir
+  quoted_bin_dir=$(shell_quote "$bin_dir")
+  echo "  Tried:"
+  if force_mirror_enabled; then
+    echo "    github.com               skipped (SQUIRREL_FORCE_MIRROR is set)"
+  else
+    echo "    github.com               $(redact_url "$DOWNLOAD_URL_GITHUB")"
+  fi
+  echo "    install.squirrelscan.com $(redact_url "$DOWNLOAD_URL_MIRROR")"
+  echo ""
+  if ! force_mirror_enabled; then
+    # The variable has to reach the bash that runs the SCRIPT, not the curl
+    # that fetches it, so it goes on the right-hand side of the pipe.
+    echo "  If github.com is blocked on this network, skip it and retry:"
+    echo "    curl -fsSL https://install.squirrelscan.com | SQUIRREL_FORCE_MIRROR=1 bash"
+    echo ""
+  fi
+  if [ "$kind" = binary ]; then
+    echo "  If both hosts are blocked, download $asset on a machine that can"
+    echo "  reach one of them, copy it here, then:"
+    echo "    chmod +x $asset && mkdir -p $quoted_bin_dir && mv $asset $(shell_quote "$bin_dir/squirrel")"
+  else
+    echo "  If both hosts are blocked, this machine cannot reach anywhere the"
+    echo "  release is published. Allowlist github.com or install.squirrelscan.com,"
+    echo "  or install from a network that already reaches one of them."
+  fi
+}
+
 # Detect libc (glibc vs musl)
 detect_libc() {
   # Method 1: Check for musl loader (most reliable)
@@ -977,14 +1184,12 @@ download_and_install() {
   # here or it clobbers the failure-reporting trap.
   TMPDIR_TO_CLEAN="$tmpdir"
 
-  local release_url="https://github.com/${REPO}/releases/download/${version}"
-
   # Download manifest to get binary filename and checksum
   CURRENT_STEP="download_manifest"
   log "Downloading manifest..."
-  local manifest_url="${release_url}/manifest.json"
-  if ! fetch_with_retry "$manifest_url" "$tmpdir/manifest.json"; then
-    error "Failed to download manifest\n  URL: $manifest_url"
+  if ! fetch_release_asset "$version" "manifest.json" "$tmpdir/manifest.json" "manifest" manifest_looks_valid; then
+    LAST_ERROR_OUTPUT=$(download_failure_output)
+    error "$(download_failure_report_line manifest)" "$(download_failure_guidance manifest.json manifest "$bin_dir")"
   fi
 
   # Read manifest content
@@ -992,13 +1197,22 @@ download_and_install() {
   manifest=$(cat "$tmpdir/manifest.json")
 
   # Extract binary info
+  # `|| true` on both: a command substitution carries its command's exit status
+  # to the assignment, so a jq that chokes would take the whole script down
+  # under `set -e` before the empty-value check below could say anything useful.
+  # manifest_looks_valid already rejected a non-manifest, so this is the
+  # belt-and-braces half of the same fix.
   local filename sha256
   if [ "$USE_JQ" = true ]; then
-    filename=$(echo "$manifest" | jq -r ".binaries[\"${platform}\"].filename // empty")
-    sha256=$(echo "$manifest" | jq -r ".binaries[\"${platform}\"].sha256 // empty")
+    filename=$(echo "$manifest" | jq -r ".binaries[\"${platform}\"].filename // empty" 2> /dev/null || true)
+    sha256=$(echo "$manifest" | jq -r ".binaries[\"${platform}\"].sha256 // empty" 2> /dev/null || true)
   else
-    filename=$(json_get_nested "$manifest" "$platform" "filename")
-    sha256=$(json_get_nested "$manifest" "$platform" "sha256")
+    # `|| true` for the same reason as the jq branch above: json_get_nested ends
+    # in a pipeline, and under `pipefail` a grep that matches nothing makes the
+    # whole substitution non-zero, which `set -e` turns into a silent death
+    # before the empty-value check below can say anything useful.
+    filename=$(json_get_nested "$manifest" "$platform" "filename" || true)
+    sha256=$(json_get_nested "$manifest" "$platform" "sha256" || true)
   fi
 
   if [ -z "$filename" ] || [ -z "$sha256" ]; then
@@ -1008,9 +1222,14 @@ download_and_install() {
   # Download binary
   CURRENT_STEP="download_binary"
   log "Downloading squirrel ${version}..."
-  local binary_url="${release_url}/${filename}"
-  if ! fetch_with_retry "$binary_url" "$tmpdir/squirrel"; then
-    error "Failed to download binary\n  URL: $binary_url"
+  if ! fetch_release_asset "$version" "$filename" "$tmpdir/squirrel" "binary"; then
+    LAST_ERROR_OUTPUT=$(download_failure_output)
+    error "$(download_failure_report_line binary)" "$(download_failure_guidance "$filename" binary "$bin_dir")"
+  fi
+  # Only when the mirror answered. The GitHub path is the one almost every
+  # install takes, and its output stays byte-identical to before this change.
+  if [ "$DOWNLOAD_SOURCE" != "github.com" ]; then
+    info "Downloaded from ${DOWNLOAD_SOURCE}"
   fi
 
   # Verify checksum

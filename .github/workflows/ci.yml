@@ -157,19 +157,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # install.ps1 only ever runs on Windows machines, and the install test
       # workflow fetches the PUBLISHED script from main — so nothing here ever
-      # parsed a change to it before users did. pwsh ships on the ubuntu runner
-      # and exposes the same parser Windows PowerShell uses.
-      - name: Parse install.ps1
-        shell: pwsh
+      # exercised a change to it before users did. pwsh ships on the
+      # GitHub-hosted ubuntu image and exposes the same parser and runtime
+      # Windows PowerShell uses.
+      #
+      # The step runs from bash and probes for pwsh rather than declaring
+      # `shell: pwsh`. That declaration is resolved before the step's command
+      # runs, so on a runner without pwsh (a self-hosted or slimmed image) the
+      # step fails with a shell-not-found error that reads like an installer
+      # bug. Probing degrades to a skip with a notice instead.
+      #
+      # The script parses install.ps1 in full and then runs its download helpers
+      # against a stubbed Invoke-WebRequest. Parsing alone proved only that the
+      # file is syntactically PowerShell, which is how a script-scope Join-Path
+      # on a null LOCALAPPDATA got through review: it parses, and it kills the
+      # installer on its first line.
+      - name: Check install.ps1
         run: |
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path './install.ps1').Path, [ref]$null, [ref]$errors) | Out-Null
-          if ($errors) {
-            $errors | ForEach-Object { Write-Host $_ }
-            exit 1
-          }
-          Write-Host 'install.ps1 parsed clean'
+          if ! command -v pwsh > /dev/null 2>&1; then
+            echo "::notice::pwsh is not available on this runner; skipping the install.ps1 checks"
+            exit 0
+          fi
+          pwsh -NoProfile -File ./scripts/install-ps-contract.test.ps1
       - name: Parse install.sh
         run: bash -n install.sh
 

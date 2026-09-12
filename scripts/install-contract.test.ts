@@ -19,6 +19,10 @@ const powershellInstaller = await Bun.file(new URL("../install.ps1", import.meta
 const npmPostinstall = await Bun.file(
   new URL("../npm/scripts/postinstall.js", import.meta.url),
 ).text();
+const ciWorkflow = await Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text();
+const powershellContract = await Bun.file(
+  new URL("../scripts/install-ps-contract.test.ps1", import.meta.url),
+).text();
 
 // --- curl test double -----------------------------------------------------
 // install.sh pins every curl to HTTPS (#165), so a plaintext loopback server
@@ -41,6 +45,16 @@ if [ -n "\${SHIM_FAIL_MATCH:-}" ]; then
   done
 fi
 
+# A second body for URLs matching SHIM_ALT_MATCH, so one source can answer with
+# something the other does not: a 200 carrying HTML from one host and a real
+# manifest from the other is the scenario this whole fallback exists for.
+body="\${SHIM_BODY:-}"
+if [ -n "\${SHIM_ALT_MATCH:-}" ]; then
+  for a in "$@"; do
+    case "$a" in *"$SHIM_ALT_MATCH"*) body="\${SHIM_ALT_BODY:-}" ;; esac
+  done
+fi
+
 out=""
 prev=""
 for a in "$@"; do
@@ -49,9 +63,9 @@ for a in "$@"; do
 done
 
 if [ -n "$out" ]; then
-  printf '%s' "\${SHIM_BODY:-}" > "$out"
+  printf '%s' "$body" > "$out"
 else
-  printf '%s' "\${SHIM_BODY:-}"
+  printf '%s' "$body"
 fi
 exit 0
 `;
@@ -86,6 +100,8 @@ const runWithCurlShim = async (
     cut = "body",
     body = "",
     failMatch = "",
+    altMatch = "",
+    altBody = "",
     env = {},
     settleMs = 0,
   }: {
@@ -94,6 +110,9 @@ const runWithCurlShim = async (
     body?: string;
     /** The shim exits 22 (curl's HTTP-error code) when any argv contains this. */
     failMatch?: string;
+    /** URLs containing this get `altBody` instead of `body`. */
+    altMatch?: string;
+    altBody?: string;
     env?: Record<string, string | undefined>;
     /** How long to wait for a detached (backgrounded) curl to log its argv. */
     settleMs?: number;
@@ -125,6 +144,8 @@ const runWithCurlShim = async (
         SHIM_LOG: log,
         SHIM_BODY: body,
         SHIM_FAIL_MATCH: failMatch,
+        SHIM_ALT_MATCH: altMatch,
+        SHIM_ALT_BODY: altBody,
         ...env,
       } as Record<string, string>,
       stdout: "pipe",
@@ -1019,4 +1040,408 @@ describe("by-hand install after a killed self install (#2023)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 15_000);
+});
+
+// --- the mirror fallback (#2064) ------------------------------------------
+// GitHub release-asset URLs redirect to release-assets.githubusercontent.com,
+// which some networks cannot reach. Every asset now has a second source at
+// install.squirrelscan.com/dl.
+describe("release asset download falls back to the mirror (#2064)", () => {
+  const GITHUB_ASSET =
+    "https://github.com/squirrelscan/squirrelscan/releases/download/v1.2.3/squirrel-1.2.3-linux-x64";
+  const MIRROR_ASSET =
+    "https://install.squirrelscan.com/dl/v1.2.3/squirrel-1.2.3-linux-x64";
+  const fetchAsset =
+    'out=$(mktemp); fetch_release_asset v1.2.3 squirrel-1.2.3-linux-x64 "$out" binary; rc=$?; cat "$out"; rm -f "$out"; exit $rc';
+  const GITHUB_MANIFEST =
+    "https://github.com/squirrelscan/squirrelscan/releases/download/v1.2.3/manifest.json";
+  const MANIFEST = '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}';
+  const HTML = "<!DOCTYPE html><html><body>Sign in to continue</body></html>";
+
+  test("GitHub is tried first and the mirror is not touched when it answers", async () => {
+    const { calls, code, stdout } = await runWithCurlShim(fetchAsset, { body: "BYTES" });
+    expect(code).toBe(0);
+    expect(stdout).toContain("BYTES");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain(GITHUB_ASSET);
+  });
+
+  test("a blocked github.com is followed by the mirror, and the bytes still arrive", async () => {
+    const { calls, code, stdout, stderr } = await runWithCurlShim(fetchAsset, {
+      body: "BYTES",
+      failMatch: "github.com",
+    });
+    expect(code).toBe(0);
+    expect(stdout).toContain("BYTES");
+    // Three attempts at GitHub (fetch_with_retry), then the mirror answers.
+    expect(calls.filter((argv) => argv.includes(GITHUB_ASSET))).toHaveLength(3);
+    expect(calls[calls.length - 1]).toContain(MIRROR_ASSET);
+    expect(stderr).toContain("trying install.squirrelscan.com");
+  }, 30_000);
+
+  test("the mirror leg is hardened like every other curl", async () => {
+    const { calls } = await runWithCurlShim(fetchAsset, {
+      body: "BYTES",
+      failMatch: "github.com",
+    });
+    expect(calls.map(missingFromArgv)).toEqual(calls.map(() => []));
+  }, 30_000);
+
+  test("SQUIRREL_FORCE_MIRROR skips github.com entirely", async () => {
+    const { calls, code } = await runWithCurlShim(fetchAsset, {
+      body: "BYTES",
+      env: { SQUIRREL_FORCE_MIRROR: "1" },
+    });
+    expect(code).toBe(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain(MIRROR_ASSET);
+    // The exact URL, not a "github.com" substring: fetch_release_asset builds
+    // only this one GitHub URL, so its absence is the whole claim, and a
+    // substring host test is the shape of a real sanitiser bug elsewhere.
+    expect(calls.flat()).not.toContain(GITHUB_ASSET);
+  });
+
+  test.each([
+    ["", false],
+    ["0", false],
+    ["false", false],
+    ["FALSE", false],
+    ["  ", false],
+    ["1", true],
+    ["true", true],
+    ["yes", true],
+  ])("SQUIRREL_FORCE_MIRROR=%p enables the mirror-only path: %p", async (value, expected) => {
+    // Value semantics, not presence: a stray empty assignment in a profile must
+    // not silently reroute every install (SQUIRREL_NO_UPDATE reads the same).
+    const { code } = await runWithCurlShim("force_mirror_enabled", {
+      env: { SQUIRREL_FORCE_MIRROR: value },
+    });
+    expect(code === 0).toBe(expected);
+  });
+
+  test("SQUIRREL_DOWNLOAD_ENDPOINT redirects the mirror leg", async () => {
+    const { calls } = await runWithCurlShim(fetchAsset, {
+      body: "BYTES",
+      env: {
+        SQUIRREL_FORCE_MIRROR: "1",
+        SQUIRREL_DOWNLOAD_ENDPOINT: "https://mirror.test/dl",
+      },
+    });
+    expect(calls[0]).toContain("https://mirror.test/dl/v1.2.3/squirrel-1.2.3-linux-x64");
+  });
+
+  test("both sources failing leaves both URLs for the report", async () => {
+    const { code, stdout } = await runWithCurlShim(
+      'out=$(mktemp); fetch_release_asset v1.2.3 squirrel-1.2.3-linux-x64 "$out" binary || true; rm -f "$out"; download_failure_output',
+      { body: "BYTES", failMatch: "http" },
+    );
+    expect(code).toBe(0);
+    expect(stdout).toContain(`tried ${GITHUB_ASSET} (failed)`);
+    expect(stdout).toContain(`tried ${MIRROR_ASSET} (failed)`);
+  }, 30_000);
+
+  test("a secret anywhere in the mirror URL is gone before it is shown or reported", async () => {
+    // SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and a token can hide in the
+    // userinfo, the query or the fragment. The report scrubber strips home
+    // paths and clamps length; it knows nothing about URL structure.
+    const { stdout } = await runWithCurlShim(
+      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://alice:dummy-secret@mirror.test/dl/a?token=querysecret#fragsecret"; download_failure_output; download_failure_guidance a binary /tmp/bin',  // pragma: allowlist secret -- a synthetic credential is the input under test
+    );
+    for (const secret of ["dummy-secret", "querysecret", "fragsecret"]) {
+      expect(stdout).not.toContain(secret);
+    }
+    // Still enough to tell which host was tried, which is why we carry it.
+    expect(stdout).toContain("https://mirror.test/dl/a");
+  });
+
+  test("the telemetry payload itself carries no part of a credentialed endpoint", async () => {
+    // The helper being clean is not the claim; what leaves the machine is.
+    const { calls } = await runWithCurlShim(
+      'CURRENT_STEP=download_binary; DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://u:pw@host/x?token=y#z"; report_error download_binary 1 "$(download_failure_report_line binary)" "$(download_failure_output)"; sleep 1',  // pragma: allowlist secret -- a synthetic credential is the input under test
+      { env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
+    );
+    const payload = calls[0]?.[calls[0].indexOf("--data") + 1] ?? "";
+    expect(payload).not.toBe("");
+    for (const secret of ["pw@", "token=y", "#z"]) {
+      expect(payload).not.toContain(secret);
+    }
+    expect(payload).toContain("https://host/x");
+    expect(JSON.parse(payload).step).toBe("download_binary");
+  }, 15_000);
+
+  test("redaction leaves an ordinary URL and an @ in the path alone", async () => {
+    const { stdout } = await runWithCurlShim(
+      'redact_url "https://install.squirrelscan.com/dl/v1/a"; echo; redact_url "https://host/p@th/a"',
+    );
+    expect(stdout.trim().split("\n")).toEqual([
+      "https://install.squirrelscan.com/dl/v1/a",
+      "https://host/p@th/a",
+    ]);
+  });
+
+  test("the printed recipe survives a bin dir with a space, a quote and a dollar", async () => {
+    // The recipe is meant to be copy-pasted, so it has to be valid shell for
+    // the path this run actually resolved.
+    const { stdout } = await runWithCurlShim(
+      `download_failure_guidance asset binary "/tmp/Test User/it's \\$weird/bin"`,
+    );
+    const recipe = stdout.split("\n").find((l) => l.includes("mv asset")) ?? "";
+    expect(recipe).toContain(`mkdir -p '/tmp/Test User/it'\\''s $weird/bin'`);
+    // Round-trip it: eval must reproduce exactly one argument.
+    const check = await runWithCurlShim(
+      `set -- ${recipe.slice(recipe.indexOf("mv asset") + "mv asset ".length)}; echo "$#"; echo "$1"`,
+    );
+    expect(check.stdout.trim().split("\n")).toEqual([
+      "1",
+      "/tmp/Test User/it's $weird/bin/squirrel",
+    ]);
+  });
+
+  test("a skipped GitHub leg is reported as skipped, not failed", async () => {
+    const { stdout } = await runWithCurlShim(
+      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://m.test/dl/a"; download_failure_output',
+      { env: { SQUIRREL_FORCE_MIRROR: "1" } },
+    );
+    expect(stdout).toContain("skipped https://github.com/x/y (SQUIRREL_FORCE_MIRROR)");
+    expect(stdout).toContain("tried https://m.test/dl/a (failed)");
+    expect(stdout).not.toContain("tried https://github.com/x/y (failed)");
+  });
+
+  test("the reported line names the escape hatch, and changes when it is already set", async () => {
+    const normal = await runWithCurlShim("download_failure_report_line binary");
+    expect(normal.stdout).toContain("SQUIRREL_FORCE_MIRROR=1");
+    const forced = await runWithCurlShim("download_failure_report_line binary", {
+      env: { SQUIRREL_FORCE_MIRROR: "1" },
+    });
+    expect(forced.stdout).toContain("github.com was skipped");
+    expect(forced.stdout).not.toContain("retry with SQUIRREL_FORCE_MIRROR=1");
+  });
+
+  test("the reported line names both hosts and stays inside ERROR_LINE_MAX", async () => {
+    // Two full asset URLs are ~170 chars and would be truncated out of
+    // error_line, so the hosts go there and the URLs ride in error_output.
+    const { stdout } = await runWithCurlShim(
+      'download_failure_report_line binary; echo "MAX=$ERROR_LINE_MAX"',
+    );
+    const [line, max] = stdout.trim().split("\n");
+    expect(line).toContain("github.com");
+    expect(line).toContain("install.squirrelscan.com");
+    expect(line.length).toBeLessThanOrEqual(Number(max.replace("MAX=", "")));
+  });
+
+  test("the retry recipe puts the flag on the bash side of the pipe", async () => {
+    // `VAR=1 curl … | bash` sets VAR for curl, not for the bash that runs the
+    // script, so the recipe would be a no-op written that way.
+    const { stdout } = await runWithCurlShim(
+      'download_failure_guidance squirrel-1.2.3-linux-x64 binary /home/u/.local/bin',
+    );
+    expect(stdout).toContain(
+      "curl -fsSL https://install.squirrelscan.com | SQUIRREL_FORCE_MIRROR=1 bash",
+    );
+    expect(stdout).not.toMatch(/SQUIRREL_FORCE_MIRROR=1\s+curl/);
+  });
+
+  test("the by-hand recipe is offered for a binary and withheld for a manifest", async () => {
+    // Telling someone to mv a manifest.json to <bin>/squirrel is worse than
+    // saying nothing.
+    const binary = await runWithCurlShim(
+      'download_failure_guidance squirrel-1.2.3-linux-x64 binary /home/u/.local/bin',
+    );
+    expect(binary.stdout).toContain(
+      "mv squirrel-1.2.3-linux-x64 '/home/u/.local/bin/squirrel'",
+    );
+
+    const manifest = await runWithCurlShim(
+      'download_failure_guidance manifest.json manifest /home/u/.local/bin',
+    );
+    expect(manifest.stdout).not.toContain("mv manifest.json");
+    expect(manifest.stdout).toContain("Allowlist github.com or install.squirrelscan.com");
+  });
+
+  test("guidance says github was skipped rather than printing a URL it never tried", async () => {
+    const { stdout } = await runWithCurlShim(
+      'download_failure_guidance squirrel-1.2.3-linux-x64 binary /home/u/.local/bin',
+      { env: { SQUIRREL_FORCE_MIRROR: "1" } },
+    );
+    expect(stdout).toContain("skipped (SQUIRREL_FORCE_MIRROR is set)");
+    expect(stdout).not.toContain("If github.com is blocked on this network");
+  });
+
+  test("both download steps go through the two-source helper, not a bare GitHub URL", () => {
+    // A call site that reconstructs the GitHub URL by hand would silently lose
+    // the fallback, and nothing else here would notice.
+    expect(shellInstaller).toContain(
+      'fetch_release_asset "$version" "manifest.json" "$tmpdir/manifest.json" "manifest"',
+    );
+    expect(shellInstaller).toContain(
+      'fetch_release_asset "$version" "$filename" "$tmpdir/squirrel" "binary"',
+    );
+    const downloadUrls = shellInstaller.match(/https:\/\/github\.com\/\$\{REPO\}\/releases\/download/g);
+    expect(downloadUrls).toHaveLength(1); // only the one inside fetch_release_asset
+  });
+
+  test("a 200 carrying HTML is a failed source, not a manifest", async () => {
+    // A captive portal, a proxy error page and an index-for-every-path bucket
+    // all return HTML with a 200. Before this, that reached jq, which died, and
+    // `set -e` took the script down with an empty report: exit 5, no message,
+    // no URLs.
+    const html = "<!DOCTYPE html><html><body>Sign in to continue</body></html>";
+    const { code, stderr } = await runWithCurlShim(
+      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid; rc=$?; rm -f "$out"; exit $rc',
+      { body: html },
+    );
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("returned something that is not a manifest");
+  }, 30_000);
+
+  test.each([
+    ["an HTML page", "<!DOCTYPE html><html><body>hi</body></html>", false],
+    ["an empty body", "", false],
+    ["valid JSON that is not a manifest", '{"message":"Not Found"}', false],
+    ["a JSON array", "[]", false],
+    ["a real manifest", '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}', true],
+  ])("manifest_looks_valid rejects %s", async (_name, body, expected) => {
+    const { code } = await runWithCurlShim(
+      `USE_JQ=true; f=$(mktemp); printf '%s' ${JSON.stringify(body)} > "$f"; manifest_looks_valid "$f"; rc=$?; rm -f "$f"; exit $rc`,
+    );
+    expect(code === 0).toBe(expected);
+  });
+
+  test("manifest_looks_valid agrees with itself without jq", async () => {
+    // The grep fallback is the path a machine without jq takes, and it is the
+    // one nobody exercises by hand.
+    const real = '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}';
+    const html = "<!DOCTYPE html><html><body>hi</body></html>";
+    const run = (body: string) =>
+      runWithCurlShim(
+        `USE_JQ=false; f=$(mktemp); printf '%s' ${JSON.stringify(body)} > "$f"; manifest_looks_valid "$f"; rc=$?; rm -f "$f"; exit $rc`,
+      );
+    expect((await run(real)).code).toBe(0);
+    expect((await run(html)).code).not.toBe(0);
+  });
+
+  test("a GitHub 200 carrying HTML falls through to the mirror's real manifest", async () => {
+    // The recovery half, with GitHub actually SERVING the HTML rather than
+    // failing at transport: a 200 is the whole point of the scenario.
+    const { calls, code, stdout, stderr } = await runWithCurlShim(
+      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid; rc=$?; cat "$out"; rm -f "$out"; echo "SOURCE=$DOWNLOAD_SOURCE"; exit $rc',
+      { body: MANIFEST, altMatch: "github.com", altBody: HTML },
+    );
+    expect(code).toBe(0);
+    // GitHub answered 200, so the only reason we moved on is the content check.
+    // Exact URL, not a host substring: one attempt, no retry, then the mirror.
+    expect(calls.filter((argv) => argv.includes(GITHUB_MANIFEST))).toHaveLength(1);
+    expect(calls[calls.length - 1]).toContain(
+      "https://install.squirrelscan.com/dl/v1.2.3/manifest.json",
+    );
+    expect(stderr).toContain("github.com returned something that is not a manifest");
+    expect(stdout).toContain("SOURCE=install.squirrelscan.com");
+    expect(stdout).toContain('"binaries"');
+  }, 30_000);
+
+  test("HTML from both sources ends at the actionable error, not a parse crash", async () => {
+    // Before the content check this exited 5 on a jq parse error with an empty
+    // report. It has to exit through error() with both URLs instead.
+    const { code, stdout } = await runWithCurlShim(
+      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid || { download_failure_output; echo "EXHAUSTED"; }; rm -f "$out"',
+      { body: HTML },
+    );
+    expect(code).toBe(0);
+    expect(stdout).toContain("EXHAUSTED");
+    expect(stdout).toContain("tried https://github.com/");
+    expect(stdout).toContain("tried https://install.squirrelscan.com/dl/");
+  }, 30_000);
+
+  test("the whole download step exits through error(), not a jq parse crash", async () => {
+    // The end-to-end shape of the bug. Before the content check this exited 5
+    // with `jq: parse error` and nothing else; now it exits 1 from error(),
+    // which is what carries the message and both URLs to the report.
+    // error() calls `exit`, which ends the sourced shell, so the exit code IS
+    // the assertion here.
+    const { code, stdout, stderr } = await runWithCurlShim(
+      'USE_JQ=true; download_and_install v1.2.3 linux-x64 /tmp/lane-c-bin',
+      { body: HTML },
+    );
+    const out = `${stdout}${stderr}`;
+    expect(code).toBe(1);
+    expect(out).not.toContain("parse error");
+    expect(out).toContain("Failed to download the manifest from github.com and install.squirrelscan.com");
+    expect(out).toContain("https://install.squirrelscan.com/dl/v1.2.3/manifest.json");
+  }, 30_000);
+
+  test("the GitHub path prints nothing new, so its output stays byte-identical", async () => {
+    // Only a mirror download announces where it came from. Almost every install
+    // takes the GitHub path and must look exactly as it did before.
+    const { stdout, stderr } = await runWithCurlShim(
+      'download_and_install_source_line() { :; }; fetch_release_asset v1.2.3 f "$(mktemp)" binary; echo "SOURCE=$DOWNLOAD_SOURCE"',
+      { body: "BYTES" },
+    );
+    expect(`${stdout}${stderr}`).toContain("SOURCE=github.com");
+    expect(`${stdout}${stderr}`).not.toContain("Downloaded from");
+  });
+
+  test("the source line is emitted only for the mirror", () => {
+    // Guard the call site itself: the announcement lives behind the condition.
+    expect(shellInstaller).toContain('if [ "$DOWNLOAD_SOURCE" != "github.com" ]; then');
+    const announce = shellInstaller.match(/info "Downloaded from \$\{DOWNLOAD_SOURCE\}"/g);
+    expect(announce).toHaveLength(1);
+    expect(powershellInstaller).toContain('if ($script:DownloadSource -ne "github.com") {');
+  });
+
+  test("CI probes for pwsh instead of declaring it as the shell", () => {
+    // `shell: pwsh` is resolved before the step's command runs, so on a runner
+    // without pwsh the step dies with a shell-not-found error that reads like an
+    // installer bug. Probing from bash degrades to a skip.
+    expect(ciWorkflow).not.toContain("shell: pwsh\n");
+    expect(ciWorkflow).toContain("if ! command -v pwsh > /dev/null 2>&1; then");
+    expect(ciWorkflow).toContain("::notice::pwsh is not available on this runner");
+    expect(ciWorkflow).toContain("pwsh -NoProfile -File ./scripts/install-ps-contract.test.ps1");
+  });
+
+  test("the ps1 contract script parses the whole installer, not just the part it runs", () => {
+    // It dot-sources only the text above `Main`, so a syntax error past that
+    // point would otherwise ship unseen.
+    expect(powershellContract).toContain("Parser]::ParseFile(");
+    expect(powershellContract).toContain("$parseErrors");
+  });
+
+  test("both installers ship the same mirror env vars", () => {
+    for (const script of [shellInstaller, powershellInstaller]) {
+      expect(script).toContain("SQUIRREL_FORCE_MIRROR");
+      expect(script).toContain("SQUIRREL_DOWNLOAD_ENDPOINT");
+      expect(script).toContain("https://install.squirrelscan.com/dl");
+    }
+  });
+
+  test("ps1 routes both downloads through the two-source helpers", () => {
+    expect(powershellInstaller).toContain(
+      'Get-ReleaseAssetJson -Version $Version -Asset "manifest.json" -Label "manifest"',
+    );
+    expect(powershellInstaller).toContain(
+      'Get-ReleaseAsset -Version $Version -Asset $filename -OutFile $binaryPath -Label "binary"',
+    );
+    // No call site may rebuild a GitHub download URL outside Get-DownloadSources.
+    const downloadUrls = powershellInstaller.match(
+      /"https:\/\/github\.com\/\$Repo\/releases\/download/g,
+    );
+    expect(downloadUrls).toHaveLength(1);
+  });
+
+  test("ps1 guards the script-scope bin dir against a missing LOCALAPPDATA", () => {
+    // Join-Path throws on a null Path, and at script scope under
+    // $ErrorActionPreference = "Stop" that kills the installer on line one,
+    // before the banner, in any environment without LOCALAPPDATA.
+    expect(powershellInstaller).toContain("$script:InstallBinDir = if ($env:LOCALAPPDATA) {");
+    expect(powershellInstaller).not.toMatch(
+      /\$script:InstallBinDir = Join-Path \$env:LOCALAPPDATA/,
+    );
+  });
+
+  test("ps1 deletes a partial download before trying the next source", () => {
+    // Invoke-WebRequest -OutFile leaves the partial file behind, and the mirror
+    // leg would then be asked to overwrite it.
+    expect(powershellInstaller).toContain(
+      "if (Test-Path $OutFile) { Remove-Item -Path $OutFile -Force -ErrorAction SilentlyContinue }",
+    );
+  });
 });

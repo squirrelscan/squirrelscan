@@ -27,6 +27,46 @@ This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
 **Alpine / musl Linux:** the binary needs the `libstdc++` runtime library. The installer adds it automatically when run as root; otherwise install it first with `apk add libstdc++` (or `sudo apk add libstdc++`).
 </Note>
 
+### Install options
+
+Set any of these before running the installer.
+
+| Variable | What it does |
+| --- | --- |
+| `SQUIRREL_VERSION` | Install a specific release instead of the newest one, for example `v0.0.94`. |
+| `SQUIRREL_CHANNEL` | `stable` (default) or `beta`. |
+| `SQUIRREL_BIN_DIR` | Where to put the `squirrel` symlink. Defaults to the first writable directory on your PATH, falling back to `~/.local/bin`. |
+| `SQUIRREL_FORCE_MIRROR` | Download from squirrelscan's mirror instead of GitHub. See below. |
+| `NO_TELEMETRY` | Any non-empty value turns off the anonymous failure report the installer sends when it fails. |
+
+### If GitHub is blocked on your network
+
+Release binaries live on GitHub, and a GitHub download redirects to `release-assets.githubusercontent.com`. Some networks cannot reach it, most commonly in mainland China. The installer handles this on its own: when a GitHub download fails it retries the same file from `install.squirrelscan.com`, which serves the identical bytes through squirrelscan's own infrastructure. The checksum from the release manifest is verified either way, so the mirror is not a shortcut around the integrity check.
+
+To skip GitHub from the start rather than waiting for it to time out:
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://install.squirrelscan.com | SQUIRREL_FORCE_MIRROR=1 bash
+    ```
+    The variable has to reach the shell that runs the script, so it goes on the right of the pipe.
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $env:SQUIRREL_FORCE_MIRROR='1'; iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+If both hosts are unreachable, the installer prints the two URLs it tried. Allowlist either `github.com` or `install.squirrelscan.com`, or download the binary on a machine that can reach one of them and move it into place yourself. A host that answers with a sign-in page instead of the release files, which is what a captive portal or an intercepting proxy does, counts as unreachable and the installer moves on to the other one.
+
+`SQUIRREL_DOWNLOAD_ENDPOINT` points the fallback at a different host if you mirror the releases yourself. Only its scheme, host and path appear in the installer's anonymous failure report, so a URL carrying a token in its userinfo, query or fragment does not send that token anywhere.
+
+### If the install is killed at the last step
+
+On a machine with very little free memory the kernel can kill `squirrel self install` before it finishes, which used to leave nothing installed. The installer now finishes the job itself: it lays the release out, links the binary, and runs it once to confirm it works. If even that run is killed, the machine cannot execute the binary at all, and the installer says so and points at the [cloud dashboard](https://app.squirrelscan.com) as the way to audit without a local binary.
+
 ## Four ways to run squirrelscan
 
 <Tabs>

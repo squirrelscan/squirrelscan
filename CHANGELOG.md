@@ -34,6 +34,15 @@ How it works:
   Findings on `/p?id=1` and `/p?id=2` were stored under one URL, piling every
   page's issues onto a single entry in the report.
 - A signed-in audit of a local or private-network address no longer submits its pages to the cloud render service, which charged on submit for renders the hosted browser then refused.
+- The installer now downloads from install.squirrelscan.com when GitHub is
+  unreachable, so an install no longer dies on networks that cannot reach
+  GitHub's release hosts. Both sources are checksum-verified against the release
+  manifest. Set `SQUIRREL_FORCE_MIRROR=1` to skip GitHub from the start, and if
+  both hosts fail the installer now prints the two URLs it tried.
+- A download host that answers with a sign-in or error page instead of the
+  release manifest is now treated as a failed source, so the installer moves on
+  to the other host rather than stopping on a parse error. This is what a
+  captive portal or an intercepting proxy looks like.
 
 ## v0.0.94
 
