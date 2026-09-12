@@ -17,7 +17,15 @@ import { join } from "node:path";
 
 import { report } from "@/cli/commands/report";
 
+/** Thrown in place of process.exit, so a command exit cannot kill the runner. */
+class ExitSignal extends Error {
+  constructor(readonly code: number) {
+    super(`exit ${code}`);
+  }
+}
+
 const originalFetch = globalThis.fetch;
+const originalExit = process.exit;
 const originalToken = process.env.SQUIRREL_API_TOKEN;
 
 let requested: string[] = [];
@@ -40,10 +48,17 @@ beforeEach(() => {
     );
   }) as unknown as typeof fetch;
   dir = mkdtempSync(join(tmpdir(), "squirrel-report-test-"));
+  // File-local, restored below. The command ends a failed publish in
+  // `safeExit(1)`, and an exit mid-test would take the whole runner with it —
+  // so a regression here has to surface as a failing test, not a dead run.
+  process.exit = ((code?: number) => {
+    throw new ExitSignal(code ?? 0);
+  }) as typeof process.exit;
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  process.exit = originalExit;
   if (originalToken === undefined) delete process.env.SQUIRREL_API_TOKEN;
   else process.env.SQUIRREL_API_TOKEN = originalToken;
   rmSync(dir, { recursive: true, force: true });
@@ -95,10 +110,21 @@ function writeReport(baseUrl: string): string {
 }
 
 async function runReport(baseUrl: string, extra: Record<string, unknown> = {}) {
-  await report.run!({
-    args: { input: writeReport(baseUrl), publish: true, ...extra },
-    // citty passes more than the command reads; only `args` is consulted.
-  } as never);
+  try {
+    await report.run!({
+      args: { input: writeReport(baseUrl), publish: true, ...extra },
+      // citty passes more than the command reads; only `args` is consulted.
+    } as never);
+  } catch (err) {
+    // A nonzero exit is a real failure of the thing under test, so surface it
+    // as one rather than letting the sentinel read as an unrelated crash.
+    if (err instanceof ExitSignal && err.code !== 0) {
+      throw new Error(`the command exited ${err.code}; see the output above`, {
+        cause: err,
+      });
+    }
+    if (!(err instanceof ExitSignal)) throw err;
+  }
 }
 
 describe("squirrel report --publish — a host no hosted runner can reach (#1841)", () => {
