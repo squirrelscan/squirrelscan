@@ -63,11 +63,67 @@ describe("nonPublicHostLabel", () => {
     }
   );
 
-  // `box.local` is the documented gap: mDNS names look public to a syntactic
-  // check and are refused by the API's egress classifier instead. Pinned so the
-  // handoff this leaves to SERVER_NON_PUBLIC_HOST_LINE stays deliberate.
-  test("an mDNS .local name is NOT caught here — the API refuses it", () => {
-    expect(nonPublicHostLabel("http://mac-mini.local:3000/")).toBeNull();
+  // The name cases a private-IP check alone cannot see. Each one was reachable
+  // before: `box.local` and `metadata.google.internal` registered, published and
+  // rendered, and `intranet` / `localhost.` did all that AND then failed to
+  // audit locally, because the classifier went through `parseUserUrl` (which
+  // rejects them) and read the rejection as "reachable".
+  test.each([
+    ["http://mac-mini.local:3000/", "mac-mini.local:3000"],
+    ["http://svc.cluster.local/", "svc.cluster.local"],
+    ["http://metadata.google.internal/", "metadata.google.internal"],
+    ["http://instance-data.ec2.internal/", "instance-data.ec2.internal"],
+    ["http://router.home.arpa/", "router.home.arpa"],
+    ["http://db.svc/", "db.svc"],
+    ["http://host.lan/", "host.lan"],
+    ["http://thing.corp/", "thing.corp"],
+    // Single-label: resolves through the machine's own search domain.
+    ["http://intranet/", "intranet"],
+    ["http://nas:8080/", "nas:8080"],
+    // Trailing root dot, at the apex and under it, however many dots.
+    ["http://localhost./", "localhost."],
+    ["http://app.localhost./", "app.localhost."],
+    ["http://metadata.google.internal../", "metadata.google.internal.."],
+  ])("%s is unreachable from the cloud, labelled %s", (url, label) => {
+    expect(nonPublicHostLabel(url)).toBe(label);
+  });
+
+  // The NAME rules must never see an IP literal. Every IPv6 address is dotless,
+  // so running the dotless-host rule over one refused `2606:4700::1111` — a
+  // real public address — and would have silently stopped an IPv6-only customer
+  // site registering, publishing and rendering.
+  test.each([
+    ["https://[2606:4700:4700::1111]/"],
+    ["https://[2001:4860:4860::8888]/"],
+    ["https://93.184.216.34/"],
+  ])("%s is a PUBLIC IP literal and stays publishable", (url) => {
+    expect(nonPublicHostLabel(url)).toBeNull();
+  });
+
+  test.each([
+    ["http://[fd00::1]/", "[fd00::1]"],
+    ["http://[fe80::1]/", "[fe80::1]"],
+    ["http://[::ffff:10.0.0.1]/", "[::ffff:a00:1]"],
+  ])("%s is still caught by the IP rules", (url, label) => {
+    expect(nonPublicHostLabel(url)).toBe(label);
+  });
+
+  test("uppercase does not evade the name rules", () => {
+    expect(
+      nonPublicHostLabel("http://METADATA.GOOGLE.INTERNAL/")
+    ).not.toBeNull();
+    expect(nonPublicHostLabel("http://Box.Local/")).not.toBeNull();
+  });
+
+  // The narrowness that makes the zone list safe: these are suffixes of a
+  // PUBLIC registrable domain, not the zones themselves.
+  test.each([
+    ["https://my.corp.example.com/"],
+    ["https://local.example.com/"],
+    ["https://internal-tools.example.com/"],
+    ["https://intranet.example.com/"],
+  ])("%s is a real customer site and stays publishable", (url) => {
+    expect(nonPublicHostLabel(url)).toBeNull();
   });
 });
 

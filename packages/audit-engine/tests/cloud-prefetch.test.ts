@@ -1151,18 +1151,22 @@ describe("prefetchCloudData — render service (#673)", () => {
   });
 
   // The default must stay "render runs": a flag that skipped on absence would
-  // silently disable rendering for every ordinary audit.
-  test("hostUnreachableByCloud unset leaves render running", async () => {
+  // silently disable rendering for every ordinary audit. ABSENT and `false` are
+  // tested separately because the field is optional, so only the absent case
+  // proves the default, and only the explicit case proves the CLI's own
+  // always-boolean call sites.
+  test.each([
+    ["absent", {}],
+    ["explicitly false", { hostUnreachableByCloud: false }],
+  ])("hostUnreachableByCloud %s leaves render running", async (_label, flag) => {
     let submitted = false;
     const client = renderClient({
-      render: async (req) => {
+      render: async () => {
         submitted = true;
         return { jobId: "j", status: "queued" };
       },
     });
-    await prefetchCloudData(
-      input({ client, rules: RENDER_RULES, hostUnreachableByCloud: false }),
-    );
+    await prefetchCloudData(input({ client, rules: RENDER_RULES, ...flag }));
     expect(submitted).toBe(true);
   });
 

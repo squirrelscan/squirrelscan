@@ -80,9 +80,9 @@ Auditing a site you are building? Point it at your dev server: `squirrel audit h
 
 ### Local and private hosts stay local
 
-An audit of `localhost`, a loopback address, a private range such as `192.168.1.10` or `10.0.0.5`, or a link-local address runs and prints its report exactly as any other audit does. What changes is everything that would need a squirrelscan server to reach the address itself:
+An audit of a host no squirrelscan server can reach runs and prints its report exactly as any other audit does. That covers `localhost`, loopback and link-local addresses, private ranges such as `192.168.1.10` or `10.0.0.5`, and internal names such as `box.local` or anything under `.internal` or `.lan`. What changes is everything that would need a squirrelscan server to reach the address itself:
 
-- The report is not published, so no shareable link is created and no site appears in your dashboard.
+- The report is not published, so no shareable link is created and no site appears in your dashboard. The same applies to publishing it later with `squirrel report --publish`.
 - The run is not registered, so it does not cost the audit base even when you are signed in.
 - Cloud rendering is off for the run, including with `--render`, and the crawl uses local HTTP fetching.
 

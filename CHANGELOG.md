@@ -19,7 +19,7 @@ How it works:
 
 ### Changed
 
-- Audits of `localhost`, loopback, and private-network addresses no longer hand anything to a hosted runner: no publish, no run registration, no cloud rendering, and no site added to your dashboard. The audit, its report, and the content-based cloud analysis are unchanged, and the CLI prints one line saying the report stayed local. Hosted services cannot reach those addresses, so a dashboard site for one could never be screenshotted, re-rendered, or re-audited.
+- Audits of `localhost`, loopback, and private-network addresses no longer hand anything to a hosted runner: no publish, no run registration, no cloud rendering, and no site added to your dashboard. This covers `squirrel report --publish` as well as `squirrel audit`, and internal names such as `box.local` and `metadata.google.internal` as well as private IP ranges. The audit, its report, and the content-based cloud analysis are unchanged, and the CLI prints one line saying the report stayed local. Hosted services cannot reach those addresses, so a dashboard site for one could never be screenshotted, re-rendered, or re-audited.
 
 ### Fixed
 

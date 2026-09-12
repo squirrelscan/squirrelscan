@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolvePublishDecision } from "../../src/cli/commands/audit";
+import {
+  resolvePublishDecision,
+  resolveRegisterDecision,
+} from "../../src/cli/commands/audit";
 
 /** Build opts with sensible defaults (signed in, online, config-on); override per-case. */
 function opts(
@@ -127,5 +130,40 @@ describe("resolvePublishDecision", () => {
       expect(resolvePublishDecision(opts({ nonPublicHost: false }))).toBe(true);
       expect(resolvePublishDecision(opts())).toBe(true);
     });
+  });
+});
+
+// #1841. Registering a local or private-network audit is what created the
+// hosted website plus the weekly screenshot refresh that could never succeed,
+// and it charged the 50-credit audit base for cloud work that cannot happen.
+describe("resolveRegisterDecision", () => {
+  const reg = (
+    over: Partial<Parameters<typeof resolveRegisterDecision>[0]> = {}
+  ) =>
+    resolveRegisterDecision({
+      signedIn: true,
+      offline: false,
+      nonPublicHost: false,
+      ...over,
+    });
+
+  test("a signed-in online run of a public host registers", () => {
+    expect(reg()).toBe(true);
+  });
+
+  test.each([
+    ["not signed in", { signedIn: false }],
+    ["--offline", { offline: true }],
+    ["a local or private host", { nonPublicHost: true }],
+  ])("%s does not register", (_label, over) => {
+    expect(reg(over)).toBe(false);
+  });
+
+  // The host outranks everything, including a signed-in online run that would
+  // otherwise be the normal case.
+  test("the host clause is not conditional on anything else", () => {
+    expect(reg({ nonPublicHost: true, signedIn: true, offline: false })).toBe(
+      false
+    );
   });
 });

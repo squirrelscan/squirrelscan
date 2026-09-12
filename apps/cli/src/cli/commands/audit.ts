@@ -551,6 +551,28 @@ export async function resolveCloudRendering(opts: {
  * Signed-in + online ⇒ publish unlisted by default; opt out per-run with
  * --no-publish/--offline or persistently via [cloud] publish = false.
  */
+/**
+ * Whether this run registers with the cloud at all (#271).
+ *
+ * Its own named predicate rather than an inline `&&` at the call site, because
+ * the #1841 clause is an invariant with a test, not a convenience: registering
+ * a local or private-network audit is what created the hosted website with a
+ * weekly screenshot refresh that could never succeed. An inline condition can
+ * be deleted without failing anything.
+ */
+export function resolveRegisterDecision(opts: {
+  signedIn: boolean;
+  offline: boolean;
+  /** #1841: the audited host is loopback / RFC1918 / link-local / internal. */
+  nonPublicHost: boolean;
+}): boolean {
+  // No cloud state for a host no hosted runner can reach, and no audit base
+  // charged for cloud work that cannot happen.
+  if (opts.nonPublicHost) return false;
+  if (opts.offline) return false;
+  return opts.signedIn;
+}
+
 export function resolvePublishDecision(opts: {
   signedIn: boolean;
   offline: boolean;
@@ -1477,7 +1499,11 @@ export const audit = defineCommand({
       // isn't clobbered mid-crawl. Only set for definitive 4xx, not transient.
       let registerWarning: RegisterFailure | null = null;
       const registerPromise: Promise<RegisteredRun | null> =
-        signedIn && !args.offline && !nonPublicHost
+        resolveRegisterDecision({
+          signedIn,
+          offline: !!args.offline,
+          nonPublicHost: !!nonPublicHost,
+        })
           ? registerRun(
               {
                 url: args.url,
