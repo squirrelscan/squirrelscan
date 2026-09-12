@@ -83,9 +83,13 @@ Check "download reports failure" ($failed -eq $false)
 Check "no partial file left behind" (-not (Test-Path $out))
 
 Write-Host "the failure report names both hosts and carries both urls"
+Get-DownloadSources -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe" | Out-Null
 $line = Get-DownloadFailureLine "binary"
 Check "line names github.com" ($line -like "*github.com*")
 Check "line names install.squirrelscan.com" ($line -like "*install.squirrelscan.com*")
+# The acceptance criterion asks for one actionable line: the hosts tried AND the
+# way out, not the hosts alone.
+Check "line names the escape hatch" ($line -like "*SQUIRREL_FORCE_MIRROR=1*")
 # Two full asset URLs would be truncated out of error_line, so they ride in
 # error_output instead.
 Check "line fits ErrorLineMax" ($line.Length -le $ErrorLineMax)
@@ -93,9 +97,36 @@ $output = Get-DownloadFailureOutput
 Check "output carries the github url" ($output -like "*https://github.com/*")
 Check "output carries the mirror url" ($output -like "*https://install.squirrelscan.com/dl/*")
 
+Write-Host "a skipped GitHub leg is reported as skipped, not failed"
+$env:SQUIRREL_FORCE_MIRROR = "1"
+Get-DownloadSources -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe" | Out-Null
+$forcedOutput = Get-DownloadFailureOutput
+Check "github recorded as skipped" ($forcedOutput -like "*skipped https://github.com/*(SQUIRREL_FORCE_MIRROR)*")
+Check "github not recorded as failed" (-not ($forcedOutput -like "*tried https://github.com/*(failed)*"))
+$forcedLine = Get-DownloadFailureLine "binary"
+Check "line says github was skipped" ($forcedLine -like "*github.com was skipped*")
+Check "line drops the retry instruction" (-not ($forcedLine -like "*retry with SQUIRREL_FORCE_MIRROR=1*"))
+Check "forced line still fits ErrorLineMax" ($forcedLine.Length -le $ErrorLineMax)
+Remove-Item Env:SQUIRREL_FORCE_MIRROR -ErrorAction SilentlyContinue
+
+Write-Host "a mirror URL carrying credentials is redacted"
+# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips home
+# paths and clamps length; it knows nothing about URL userinfo.
+Check "userinfo stripped" ((Get-RedactedUrl "https://alice:dummy-secret@mirror.test/dl/a") -eq "https://mirror.test/dl/a")
+Check "ordinary url untouched" ((Get-RedactedUrl "https://install.squirrelscan.com/dl/a") -eq "https://install.squirrelscan.com/dl/a")
+Check "an @ in the path is not userinfo" ((Get-RedactedUrl "https://host/p@th/a") -eq "https://host/p@th/a")
+$script:DownloadUrlMirror = "https://alice:dummy-secret@mirror.test/dl/a"
+$redactedOutput = Get-DownloadFailureOutput
+Check "report carries no credentials" (-not ($redactedOutput -like "*dummy-secret*"))
+$redactedGuidance = (Show-DownloadFailureGuidance -Asset "a" -Kind "binary" 6>&1 | Out-String)
+Check "guidance shows no credentials" (-not ($redactedGuidance -like "*dummy-secret*"))
+
 Write-Host "guidance is specific to what failed"
 $binaryGuidance = (Show-DownloadFailureGuidance -Asset "squirrel-1.2.3-windows-x64.exe" -Kind "binary" 6>&1 | Out-String)
 Check "a binary gets the by-hand recipe" ($binaryGuidance -like "*Move-Item squirrel-1.2.3-windows-x64.exe*")
+# The bin directory does not exist until the first successful install, and
+# Move-Item will not create it.
+Check "the recipe creates its destination first" ($binaryGuidance -like "*New-Item -ItemType Directory -Force -Path*")
 Check "the retry recipe sets the variable before the pipe" ($binaryGuidance -like "*`$env:SQUIRREL_FORCE_MIRROR='1'; iwr*")
 $manifestGuidance = (Show-DownloadFailureGuidance -Asset "manifest.json" -Kind "manifest" 6>&1 | Out-String)
 # Telling someone to move a manifest.json to <bin>\squirrel.exe is worse than

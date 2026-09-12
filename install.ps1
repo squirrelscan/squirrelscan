@@ -299,17 +299,43 @@ function Get-ReleaseAssetJson {
     return $null
 }
 
+# Strip `user:password@` out of a URL before it is printed or reported.
+# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and can carry credentials, and the
+# report scrubber removes home paths and clamps length — it knows nothing about
+# URL userinfo, so a mirror set to https://user:token@host would otherwise send
+# that token to the reporting endpoint verbatim.
+function Get-RedactedUrl {
+    param([string]$Url)
+    return [regex]::Replace($Url, '^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@', '$1')
+}
+
 # The report line and the user-facing guidance for a download that ran out of
 # sources. Write-Err carries the first to Sentry (clamped to $ErrorLineMax,
 # which two full URLs would blow past) and prints it; the URLs themselves ride
 # along in error_output, which has room for them.
+#
+# The line names the hosts AND the way out, because it is the one line that
+# reaches both the user's console and the Sentry issue; the guidance below it is
+# local only.
 function Get-DownloadFailureLine {
     param([string]$Label)
-    return "Failed to download the $Label from github.com and install.squirrelscan.com"
+    if (Test-ForceMirror) {
+        return "Failed to download the $Label from install.squirrelscan.com (SQUIRREL_FORCE_MIRROR is set, github.com was skipped)"
+    }
+    return "Failed to download the $Label from github.com and install.squirrelscan.com (retry with SQUIRREL_FORCE_MIRROR=1 to skip github.com)"
 }
 
+# Skipped is not failed: with SQUIRREL_FORCE_MIRROR set we never asked GitHub,
+# and a report claiming we did would send whoever reads it after the wrong host.
 function Get-DownloadFailureOutput {
-    return "tried $($script:DownloadUrlGitHub) (failed)`ntried $($script:DownloadUrlMirror) (failed)"
+    $github = Get-RedactedUrl $script:DownloadUrlGitHub
+    $mirror = Get-RedactedUrl $script:DownloadUrlMirror
+    $githubLine = if (Test-ForceMirror) {
+        "skipped $github (SQUIRREL_FORCE_MIRROR)"
+    } else {
+        "tried $github (failed)"
+    }
+    return "$githubLine`ntried $mirror (failed)"
 }
 
 # `Kind` is `binary` or `manifest`: only the binary has a by-hand recipe worth
@@ -322,9 +348,9 @@ function Show-DownloadFailureGuidance {
     if (Test-ForceMirror) {
         Write-Host "    github.com               skipped (SQUIRREL_FORCE_MIRROR is set)"
     } else {
-        Write-Host "    github.com               $($script:DownloadUrlGitHub)"
+        Write-Host "    github.com               $(Get-RedactedUrl $script:DownloadUrlGitHub)"
     }
-    Write-Host "    install.squirrelscan.com $($script:DownloadUrlMirror)"
+    Write-Host "    install.squirrelscan.com $(Get-RedactedUrl $script:DownloadUrlMirror)"
     Write-Host ""
     if (-not (Test-ForceMirror)) {
         Write-Host "  If github.com is blocked on this network, skip it and retry:"
@@ -334,6 +360,9 @@ function Show-DownloadFailureGuidance {
     if ($Kind -eq "binary") {
         Write-Host "  If both hosts are blocked, download $Asset on a machine that can"
         Write-Host "  reach one of them, copy it here, then:"
+        # The bin directory does not exist until the first successful install,
+        # and Move-Item does not create it.
+        Write-Host "    New-Item -ItemType Directory -Force -Path '$($script:InstallBinDir)' | Out-Null"
         Write-Host "    Move-Item $Asset '$($script:InstallBinDir)\squirrel.exe'"
     } else {
         Write-Host "  If both hosts are blocked, this machine cannot reach anywhere the"

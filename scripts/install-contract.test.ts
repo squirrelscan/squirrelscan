@@ -1112,6 +1112,64 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     expect(stdout).toContain(`tried ${MIRROR_ASSET} (failed)`);
   }, 30_000);
 
+  test("a mirror URL carrying credentials is redacted before it is shown or reported", async () => {
+    // SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips
+    // home paths and clamps length; it knows nothing about URL userinfo.
+    const { stdout } = await runWithCurlShim(
+      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://alice:dummy-secret@mirror.test/dl/a"; download_failure_output; download_failure_guidance a binary /tmp/bin',
+    );
+    expect(stdout).not.toContain("dummy-secret");
+    expect(stdout).toContain("https://mirror.test/dl/a");
+  });
+
+  test("redaction leaves an ordinary URL and an @ in the path alone", async () => {
+    const { stdout } = await runWithCurlShim(
+      'redact_url_credentials "https://install.squirrelscan.com/dl/v1/a"; echo; redact_url_credentials "https://host/p@th/a"',
+    );
+    expect(stdout.trim().split("\n")).toEqual([
+      "https://install.squirrelscan.com/dl/v1/a",
+      "https://host/p@th/a",
+    ]);
+  });
+
+  test("the printed recipe survives a bin dir with a space, a quote and a dollar", async () => {
+    // The recipe is meant to be copy-pasted, so it has to be valid shell for
+    // the path this run actually resolved.
+    const { stdout } = await runWithCurlShim(
+      `download_failure_guidance asset binary "/tmp/Test User/it's \\$weird/bin"`,
+    );
+    const recipe = stdout.split("\n").find((l) => l.includes("mv asset")) ?? "";
+    expect(recipe).toContain(`mkdir -p '/tmp/Test User/it'\\''s $weird/bin'`);
+    // Round-trip it: eval must reproduce exactly one argument.
+    const check = await runWithCurlShim(
+      `set -- ${recipe.slice(recipe.indexOf("mv asset") + "mv asset ".length)}; echo "$#"; echo "$1"`,
+    );
+    expect(check.stdout.trim().split("\n")).toEqual([
+      "1",
+      "/tmp/Test User/it's $weird/bin/squirrel",
+    ]);
+  });
+
+  test("a skipped GitHub leg is reported as skipped, not failed", async () => {
+    const { stdout } = await runWithCurlShim(
+      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://m.test/dl/a"; download_failure_output',
+      { env: { SQUIRREL_FORCE_MIRROR: "1" } },
+    );
+    expect(stdout).toContain("skipped https://github.com/x/y (SQUIRREL_FORCE_MIRROR)");
+    expect(stdout).toContain("tried https://m.test/dl/a (failed)");
+    expect(stdout).not.toContain("tried https://github.com/x/y (failed)");
+  });
+
+  test("the reported line names the escape hatch, and changes when it is already set", async () => {
+    const normal = await runWithCurlShim("download_failure_report_line binary");
+    expect(normal.stdout).toContain("SQUIRREL_FORCE_MIRROR=1");
+    const forced = await runWithCurlShim("download_failure_report_line binary", {
+      env: { SQUIRREL_FORCE_MIRROR: "1" },
+    });
+    expect(forced.stdout).toContain("github.com was skipped");
+    expect(forced.stdout).not.toContain("retry with SQUIRREL_FORCE_MIRROR=1");
+  });
+
   test("the reported line names both hosts and stays inside ERROR_LINE_MAX", async () => {
     // Two full asset URLs are ~170 chars and would be truncated out of
     // error_line, so the hosts go there and the URLs ride in error_output.
@@ -1143,7 +1201,7 @@ describe("release asset download falls back to the mirror (#2064)", () => {
       'download_failure_guidance squirrel-1.2.3-linux-x64 binary /home/u/.local/bin',
     );
     expect(binary.stdout).toContain(
-      "mv squirrel-1.2.3-linux-x64 /home/u/.local/bin/squirrel",
+      "mv squirrel-1.2.3-linux-x64 '/home/u/.local/bin/squirrel'",
     );
 
     const manifest = await runWithCurlShim(

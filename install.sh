@@ -809,17 +809,51 @@ fetch_release_asset() {
   return 1
 }
 
+# Strip `user:password@` out of a URL before it is printed or reported.
+# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and can carry credentials, and the
+# report scrubber removes home paths and clamps length — it knows nothing about
+# URL userinfo, so a mirror set to https://user:token@host would otherwise send
+# that token to the reporting endpoint verbatim.
+redact_url_credentials() {
+  printf '%s' "$1" | sed -E 's#^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@#\1#'
+}
+
+# Single-quote a value so the recipe we print is copy-pasteable even when the
+# path holds a space or a shell metacharacter. A literal quote inside closes the
+# string, escapes, and reopens: it's -> 'it'\''s'.
+shell_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
 # The report line and the user-facing guidance for a download that ran out of
 # sources. error() carries the first to Sentry (clamped to ERROR_LINE_MAX, which
 # two full URLs would blow past) and prints the second to the user only; the
 # URLs themselves ride along in error_output, which has room for them.
+#
+# The line names the hosts AND the way out, because it is the one line that
+# reaches both the user's terminal and the Sentry issue title area — the
+# guidance below it is local only.
 download_failure_report_line() {
   local label="$1"
-  echo "Failed to download the $label from github.com and install.squirrelscan.com"
+  if force_mirror_enabled; then
+    echo "Failed to download the $label from install.squirrelscan.com (SQUIRREL_FORCE_MIRROR is set, github.com was skipped)"
+  else
+    echo "Failed to download the $label from github.com and install.squirrelscan.com (retry with SQUIRREL_FORCE_MIRROR=1 to skip github.com)"
+  fi
 }
 
+# Skipped is not failed: with SQUIRREL_FORCE_MIRROR set we never asked GitHub,
+# and a report claiming we did would send whoever reads it after the wrong host.
 download_failure_output() {
-  printf 'tried %s (failed)\ntried %s (failed)\n' "$DOWNLOAD_URL_GITHUB" "$DOWNLOAD_URL_MIRROR"
+  if force_mirror_enabled; then
+    printf 'skipped %s (SQUIRREL_FORCE_MIRROR)\ntried %s (failed)\n' \
+      "$(redact_url_credentials "$DOWNLOAD_URL_GITHUB")" \
+      "$(redact_url_credentials "$DOWNLOAD_URL_MIRROR")"
+  else
+    printf 'tried %s (failed)\ntried %s (failed)\n' \
+      "$(redact_url_credentials "$DOWNLOAD_URL_GITHUB")" \
+      "$(redact_url_credentials "$DOWNLOAD_URL_MIRROR")"
+  fi
 }
 
 # download_failure_guidance <asset> <kind> <bin_dir>
@@ -829,14 +863,15 @@ download_failure_output() {
 # be worse than saying nothing. `bin_dir` is the directory this run actually
 # resolved, so the recipe names the same place a successful install would use.
 download_failure_guidance() {
-  local asset="$1" kind="$2" bin_dir="$3"
+  local asset="$1" kind="$2" bin_dir="$3" quoted_bin_dir
+  quoted_bin_dir=$(shell_quote "$bin_dir")
   echo "  Tried:"
   if force_mirror_enabled; then
     echo "    github.com               skipped (SQUIRREL_FORCE_MIRROR is set)"
   else
-    echo "    github.com               $DOWNLOAD_URL_GITHUB"
+    echo "    github.com               $(redact_url_credentials "$DOWNLOAD_URL_GITHUB")"
   fi
-  echo "    install.squirrelscan.com $DOWNLOAD_URL_MIRROR"
+  echo "    install.squirrelscan.com $(redact_url_credentials "$DOWNLOAD_URL_MIRROR")"
   echo ""
   if ! force_mirror_enabled; then
     # The variable has to reach the bash that runs the SCRIPT, not the curl
@@ -848,7 +883,7 @@ download_failure_guidance() {
   if [ "$kind" = binary ]; then
     echo "  If both hosts are blocked, download $asset on a machine that can"
     echo "  reach one of them, copy it here, then:"
-    echo "    chmod +x $asset && mkdir -p $bin_dir && mv $asset $bin_dir/squirrel"
+    echo "    chmod +x $asset && mkdir -p $quoted_bin_dir && mv $asset $(shell_quote "$bin_dir/squirrel")"
   else
     echo "  If both hosts are blocked, this machine cannot reach anywhere the"
     echo "  release is published. Allowlist github.com or install.squirrelscan.com,"
