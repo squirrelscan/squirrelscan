@@ -312,11 +312,22 @@ export interface CloudSmartAuditsResult {
   /**
    * (#2063) Published checks the producer had tagged `carried`/`unrendered` and
    * this merge refused to treat as evidence from this run. Zero on the
-   * complete-store path (the store IS the evidence there). Surfaced for logging:
-   * a large number on a small crawl is a producer publishing a stale local store,
-   * which is worth seeing without re-reading the report JSON out of R2.
+   * complete-store path (the store IS the evidence there).
    */
   replayedChecksDropped: number;
+  /**
+   * (#2063) Of the pages those refused checks named, how many this cloud site has
+   * NEVER had — neither crawled this run nor known from any earlier audit.
+   *
+   * This is the number that says something is wrong; {@link
+   * replayedChecksDropped} on its own does not. A partial re-audit legitimately
+   * replays thousands of checks for pages the cloud knows perfectly well, and the
+   * cloud carries those from its own store as it always did. A producer naming
+   * pages the cloud has no record of is publishing from a store the cloud was
+   * never told about — 508 such pages against a 16-page crawl was the incident,
+   * and nothing in the report said so.
+   */
+  replayedUnknownPages: number;
   /**
    * (#1023 R-D3) True when scoring ran off the reconstructed complete store
    * (freshResults from findings + `syntheticPassCount` for fresh clean pages).
@@ -373,6 +384,12 @@ export async function runCloudSmartAudits(
   const sampledCheckPages = new Map<string, Set<string>>();
   /** (#2063) Producer-carried checks refused as this run's evidence. */
   let replayedChecksDropped = 0;
+  /**
+   * (#2063) The pages those refused checks named. Bounded by PAGES, not checks,
+   * and reduced after the merge to the ones this cloud site has never had — see
+   * {@link CloudSmartAuditsResult.replayedUnknownPages}.
+   */
+  const replayedUrls = new Set<string>();
   if (completeStore) {
     // (#2063) IDENTITY CONTRACT. Complete mode is the one place where a page's
     // ABSENCE from the fresh set authorizes a resolve, and the fresh set was keyed
@@ -423,6 +440,7 @@ export async function runCloudSmartAudits(
       for (const c of r.checks.flatMap(unfoldAggregateCheck)) {
         if (isReplayedCheck(c)) {
           replayedChecksDropped += 1;
+          replayedUrls.add(normalizePageUrl(c.pageUrl!));
           continue;
         }
         checks.push(c);
@@ -561,6 +579,17 @@ export async function runCloudSmartAudits(
   for (const url of session.activePageUrls) {
     if (!crawledUrls.has(url)) carriedPageUrls.add(url);
   }
+
+  // (#2063) Reduce the refused checks' pages to the ones this site has no record
+  // of. `activePageUrls` is already settled here (the session reads `priorPages`
+  // before the first finding streams), and it is exactly "every page the cloud
+  // knows", so a replayed page missing from it was never published to the cloud
+  // at all. The set is dropped straight after.
+  let replayedUnknownPages = 0;
+  for (const url of replayedUrls) {
+    if (!session.activePageUrls.has(url)) replayedUnknownPages += 1;
+  }
+  replayedUrls.clear();
 
   const streamedComplete = completeStore?.openPages;
   // Writing as the merge streams is safe ONLY when the reader is a cursor that has
@@ -757,6 +786,7 @@ export async function runCloudSmartAudits(
     persistedFindings,
     removedPages: removedUrls.size,
     replayedChecksDropped,
+    replayedUnknownPages,
     completeStore: !!completeStore,
   };
 }

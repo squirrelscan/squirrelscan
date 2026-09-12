@@ -143,6 +143,10 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
     expect(r.coverage.auditedPages).toBe(16);
     expect(r.coverage.knownPages).toBe(16);
     expect(r.replayedChecksDropped).toBe(400);
+    // Every one of those 400 pages is one this cloud site has no record of —
+    // the number that separates a stale local store from an ordinary partial
+    // re-audit, which replays pages the cloud knows.
+    expect(r.replayedUnknownPages).toBe(400);
 
     // Nothing on a carried page reached the store, so nothing was stamped as
     // first seen today on a page this crawl never opened.
@@ -213,6 +217,10 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
 
     expect(r.coverage.auditedPages).toBe(1);
     expect(r.coverage.carriedFindings).toBe(1);
+    // The producer replayed a page the cloud DOES know, so nothing is unknown:
+    // an ordinary partial re-audit must not look like the incident.
+    expect(r.replayedChecksDropped).toBe(1);
+    expect(r.replayedUnknownPages).toBe(0);
     // The cloud's own last-seen (run 1), NOT the bogus `lastSeenAt: 1` the
     // producer published.
     expect(r.carriedLastSeen.get(`${FRESH_PAGES[0]}|core/meta-title|meta-title`)).toBe(AUGUST);
