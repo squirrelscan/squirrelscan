@@ -28,6 +28,10 @@ import {
   publishReport,
   type ReportVisibility,
 } from "@/controllers/report/publish";
+import {
+  LOCAL_HOST_NOT_PUBLISHED_LINE,
+  nonPublicHostLabel,
+} from "@/lib/non-public-host";
 import { diffReports, isSameBaseUrl } from "@/reports/diff";
 import {
   generateDiffConsole,
@@ -431,8 +435,25 @@ export const report = defineCommand({
       reportData = filterByCategory(reportData, categories as RuleCategory[]);
     }
 
+    // #1841: a report of a local or private-network target is never published.
+    // The audit's own publish path refuses these, and `squirrel report
+    // --publish` is the same handoff by another route: a hosted report for
+    // http://localhost:3000 is a dashboard card nothing in the cloud can
+    // screenshot, re-audit or schedule. Checked on the report's AUDITED url,
+    // which is the thing the cloud would have to reach.
+    //
+    // Falls THROUGH to the normal output below rather than exiting: the report
+    // exists and the user asked to see it, so the only thing withheld is the
+    // upload. On stderr so a `-f json` pipeline stays clean.
+    const publishNonPublicHost = args.publish
+      ? nonPublicHostLabel(reportData.baseUrl)
+      : null;
+    if (publishNonPublicHost) {
+      console.error(LOCAL_HOST_NOT_PUBLISHED_LINE);
+    }
+
     // Handle publish flag - skip report output when publishing
-    if (args.publish) {
+    if (args.publish && !publishNonPublicHost) {
       // Validate visibility if provided
       const validVisibilities: ReportVisibility[] = [
         "public",

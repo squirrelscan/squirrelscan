@@ -58,6 +58,7 @@ import {
   buildGapsPayloadsFromSeeds,
   createSeedState,
 } from "@/audit/cloud-payloads-gaps";
+import { nonPublicHostLabel } from "@/lib/non-public-host";
 import { logger } from "@/utils/logger";
 import { getOrigin, getPathname } from "@/utils/url";
 
@@ -447,6 +448,11 @@ export async function runCloudPrefetch(
     // HTTP-first (most pages raw) → render must run there, so this is false for auto — the caller derives it
     // from the resolved render fetcher, not config.cloud.rendering (which can't tell "all" from "auto").
     crawlRendered: opts.crawlRendered ?? false,
+    // #1841: a hosted browser cannot reach a loopback / private-network target,
+    // so the render service would charge on submit for a batch the
+    // crawler-worker refuses. Derived from the base URL in both prefetch seams
+    // so neither can drift.
+    hostUnreachableByCloud: nonPublicHostLabel(opts.baseUrl) !== null,
     // Per-page skip for the pages an "auto" crawl already rendered (charge-free, rule-discarded otherwise).
     renderedPageUrls,
   });
@@ -651,6 +657,13 @@ export async function runCloudPrefetchFromPayloads(
     confirm: opts.confirm,
     onProgress: opts.onProgress,
     crawlRendered: opts.crawlRendered ?? false,
+    // #1841: derived HERE rather than threaded down from the command, so no
+    // caller of this seam can forget it. A loopback / private-network site
+    // cannot be rendered by a hosted browser, and the render service debits on
+    // submit, so without this every signed-in `squirrel audit
+    // http://localhost:3000` pays 2 credits a page for a batch the
+    // crawler-worker refuses ("Refusing to render a non-public host").
+    hostUnreachableByCloud: nonPublicHostLabel(opts.baseUrl) !== null,
     renderedPageUrls: payloads.renderedPageUrls,
   });
 }

@@ -61,6 +61,12 @@ import {
   type ReportVisibility,
 } from "@/controllers/report/publish";
 import { formatBalance, isUnlimitedBalance } from "@/lib/balance";
+import {
+  cloudRenderSkippedLines,
+  LOCAL_HOST_NOT_PUBLISHED_LINE,
+  nonPublicHostLabel,
+  SERVER_NON_PUBLIC_HOST_LINE,
+} from "@/lib/non-public-host";
 import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 import {
   createRunFinalizer,
@@ -545,6 +551,28 @@ export async function resolveCloudRendering(opts: {
  * Signed-in + online ⇒ publish unlisted by default; opt out per-run with
  * --no-publish/--offline or persistently via [cloud] publish = false.
  */
+/**
+ * Whether this run registers with the cloud at all (#271).
+ *
+ * Its own named predicate rather than an inline `&&` at the call site, because
+ * the #1841 clause is an invariant with a test, not a convenience: registering
+ * a local or private-network audit is what created the hosted website with a
+ * weekly screenshot refresh that could never succeed. An inline condition can
+ * be deleted without failing anything.
+ */
+export function resolveRegisterDecision(opts: {
+  signedIn: boolean;
+  offline: boolean;
+  /** #1841: the audited host is loopback / RFC1918 / link-local / internal. */
+  nonPublicHost: boolean;
+}): boolean {
+  // No cloud state for a host no hosted runner can reach, and no audit base
+  // charged for cloud work that cannot happen.
+  if (opts.nonPublicHost) return false;
+  if (opts.offline) return false;
+  return opts.signedIn;
+}
+
 export function resolvePublishDecision(opts: {
   signedIn: boolean;
   offline: boolean;
@@ -557,7 +585,17 @@ export function resolvePublishDecision(opts: {
   // report in the dashboard, so treat it like an implicit --no-publish
   // unless the user explicitly asks with --publish.
   ruleFilterActive?: boolean;
+  // #1841: the audited host is loopback / RFC1918 / link-local, so no hosted
+  // service can ever reach it.
+  nonPublicHost?: boolean;
 }): boolean {
+  // BEFORE explicitPublish, unlike every other opt-out here. The rest of this
+  // function resolves a PREFERENCE, and an explicit --publish rightly wins
+  // those. This one is a CAPABILITY: a hosted report for http://localhost:3000
+  // is a dashboard card nothing in the cloud can screenshot, re-audit or
+  // schedule, and creating one is exactly the recurring production failure
+  // #1841 is about. The audit still runs and still prints its report.
+  if (opts.nonPublicHost) return false;
   if (opts.offline) return false;
   if (opts.explicitPublish) return true; // explicit --publish overrides opt-outs (still needs login; publishReport errors otherwise)
   if (opts.ruleFilterActive) return false;
@@ -1310,15 +1348,45 @@ export const audit = defineCommand({
         log("");
       }
 
+      // #1841 cloud preflight. A loopback / RFC1918 / link-local target is
+      // auditable (the crawl runs here) but unreachable for every hosted
+      // service, so this run hands NOTHING to the cloud that needs to fetch
+      // the address: no render submit, no run registration, no publish. Decided
+      // once, before the first API call, off the same normalization the crawl
+      // uses. The API refuses these independently — this only spares the user a
+      // charge and a failure they cannot fix.
+      const nonPublicHost = nonPublicHostLabel(args.url);
+
       // Resolve the render strategy (#294). `off`/`auto`/`all` is funneled into
       // the existing http/browser consent decision (off→http, auto|all→browser)
       // so the spend-consent flow is unchanged; the auto-vs-all *strategy* is
       // passed separately to the controller (hybrid vs render-all). Unset →
       // coverage-driven default, decided in the controller.
-      const explicitRenderMode = resolveExplicitRenderMode(
+      const requestedRenderMode = resolveExplicitRenderMode(
         { http: args.http, render: args.render, renderMode: renderModeArg },
         config
       );
+      // Rendering debits on SUBMIT and the crawler-worker then refuses the
+      // host outright ("Refusing to render a non-public host"), so an
+      // unpreflighted --render against localhost is a charge for a guaranteed
+      // failure. Announce it only when the user actually asked for rendering —
+      // the default (unset) mode is resolved in the controller and never
+      // reached the cloud for a local host anyway.
+      const explicitRenderMode = nonPublicHost ? "off" : requestedRenderMode;
+      // Only when rendering was actually going to happen: the user asked for it
+      // AND this run could have reached the cloud at all. Signed out or
+      // --offline, cloud rendering was already off for other reasons, and
+      // blaming the host there is a notice about nothing.
+      if (
+        nonPublicHost &&
+        signedIn &&
+        !args.offline &&
+        (requestedRenderMode === "auto" || requestedRenderMode === "all")
+      ) {
+        const [why, what] = cloudRenderSkippedLines(nonPublicHost);
+        log(fmt.yellow(`⚠ ${why}`));
+        log(fmt.dim(what));
+      }
       if (config.cloud.rendering && !config.cloud.render) {
         logger.debug(
           `[cloud] rendering = "${config.cloud.rendering}" is deprecated; prefer render = "${config.cloud.rendering === "http" ? "off" : "all"}"`
@@ -1366,7 +1434,14 @@ export const audit = defineCommand({
       // rendering is on). plannedPages is an UPPER bound (the crawl may find fewer),
       // so it's worded "up to". TTY → prompt continue/abort; non-TTY/--yes → warn +
       // continue (never block CI). Pricing comes from the shared source, not hardcoded.
-      if (signedIn && startingBalance != null) {
+      //
+      // #1841: never for a local/private host. That run does not register, so
+      // there is no base debit, and it does not render in the cloud, so there
+      // are no page charges — the whole estimate is zero. Left in, a
+      // low-balance user auditing localhost got a top-up warning and a
+      // default-No prompt for money nothing was going to take, and pressing
+      // Enter abandoned a free audit.
+      if (signedIn && startingBalance != null && !nonPublicHost) {
         const preflight = computePreflightAffordability({
           balance: startingBalance,
           maxPages,
@@ -1424,7 +1499,11 @@ export const audit = defineCommand({
       // isn't clobbered mid-crawl. Only set for definitive 4xx, not transient.
       let registerWarning: RegisterFailure | null = null;
       const registerPromise: Promise<RegisteredRun | null> =
-        signedIn && !args.offline
+        resolveRegisterDecision({
+          signedIn,
+          offline: !!args.offline,
+          nonPublicHost: !!nonPublicHost,
+        })
           ? registerRun(
               {
                 url: args.url,
@@ -1957,7 +2036,36 @@ export const audit = defineCommand({
         noPublish: !!args["no-publish"],
         configPublish: config.cloud.publish,
         ruleFilterActive,
+        nonPublicHost: !!nonPublicHost,
       });
+      // #1841: one line, and only when the host is the deciding factor — a
+      // signed-out or --no-publish run was never going to publish, and saying
+      // "kept local" there would read as a new restriction. Covers the skipped
+      // registration too: to the user both are the same fact.
+      // The server's own verdict (#1841). Reachable when its egress classifier
+      // is stricter than the preflight above — `box.local`,
+      // `metadata.google.internal`, a dotless host — so the run registered but
+      // no dashboard site exists. Mutually exclusive with the local skip below:
+      // a host the preflight caught never registered at all.
+      if (registeredRun?.websiteSkippedReason === "non_public_host") {
+        log(fmt.dim(SERVER_NON_PUBLIC_HOST_LINE));
+      }
+      if (
+        nonPublicHost &&
+        signedIn &&
+        !args.offline &&
+        resolvePublishDecision({
+          signedIn,
+          offline: !!args.offline,
+          explicitPublish: !!args.publish,
+          noPublish: !!args["no-publish"],
+          configPublish: config.cloud.publish,
+          ruleFilterActive,
+          nonPublicHost: false,
+        })
+      ) {
+        log(fmt.dim(LOCAL_HOST_NOT_PUBLISHED_LINE));
+      }
       // Only claim the filter caused the skip when it's actually the deciding
       // factor — --no-publish/config/signed-out skips would misattribute.
       const wouldPublishWithoutFilter = resolvePublishDecision({
@@ -1967,6 +2075,7 @@ export const audit = defineCommand({
         noPublish: !!args["no-publish"],
         configPublish: config.cloud.publish,
         ruleFilterActive: false,
+        nonPublicHost: !!nonPublicHost,
       });
       if (!shouldPublish && wouldPublishWithoutFilter && ruleFilterActive) {
         log(
@@ -2020,7 +2129,7 @@ export const audit = defineCommand({
             visibility,
             auditId: registeredRun?.auditId,
             runId: registeredRun?.runId,
-            websiteId: registeredRun?.websiteId,
+            websiteId: registeredRun?.websiteId ?? undefined,
             // #1167: surface the degrade-pass clip notice on stderr-safe `log`.
             onWarn: (msg) => log(fmt.yellow(`⚠ ${msg}`)),
           });
