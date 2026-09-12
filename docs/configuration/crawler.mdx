@@ -60,7 +60,7 @@ squirrel audit https://example.com -m 100
 
 The resolution order is **`--max-pages` / `-m` > non-default `[crawler] max_pages` > coverage-mode default** (`quick` 25, `surface` 100, `full` 500).
 
-**Note:** The CLI enforces a hard cap (currently 10,000 pages) regardless of config or plan - local audits are free and unlimited, and this cap never changes based on your account. When a crawl stops because it hit the limit, the CLI prints a hint naming `--max-pages` and the cap; see [Hitting the page limit](/crawl#hitting-the-page-limit).
+**Note:** The CLI enforces a hard cap (currently 10,000 pages) regardless of config or plan. Local audits are free, and this cap never changes based on your account. When a crawl stops because it hit the limit, the CLI prints a hint naming `--max-pages` and the cap; see [Hitting the page limit](/crawl#hitting-the-page-limit).
 
 **Cloud audits are different:** an audit dispatched from the dashboard (on-demand or [scheduled](/cloud/scheduled-audits)) is capped per plan instead - see [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit).
 
