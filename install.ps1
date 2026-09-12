@@ -5,6 +5,9 @@
 # Environment variables:
 #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
 #   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
+#   SQUIRREL_FORCE_MIRROR - Skip github.com and download from
+#                        install.squirrelscan.com (for networks that block
+#                        GitHub). Any value but empty, 0 or false enables it.
 
 $ErrorActionPreference = "Stop"
 
@@ -39,10 +42,30 @@ $InstallerReportVersion = "2"
 $ErrorEndpoint = if ($env:SQUIRREL_ERROR_ENDPOINT) { $env:SQUIRREL_ERROR_ENDPOINT } else { "https://install.squirrelscan.com/error" }
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 $ReleasesEndpoint = if ($env:SQUIRREL_RELEASES_ENDPOINT) { $env:SQUIRREL_RELEASES_ENDPOINT } else { "https://install.squirrelscan.com/releases" }
+# Release assets, mirrored through our own origin. A GitHub release-asset URL
+# redirects to githubusercontent.com (objects.* historically, release-assets.*
+# today), which some networks cannot reach: the metadata fetch above succeeds
+# and the binary download then fails on every retry, forever (#2064). Every
+# asset therefore has two sources.
+$DownloadEndpoint = if ($env:SQUIRREL_DOWNLOAD_ENDPOINT) { $env:SQUIRREL_DOWNLOAD_ENDPOINT } else { "https://install.squirrelscan.com/dl" }
 $ErrorLineMax = 200
 $ErrorOutputMax = 1000
 $script:CurrentStep = "init"
 $script:LastCapturedExitCode = 0
+# Where `squirrel self install` puts the binary on Windows. Hoisted to script
+# scope because the download-failure guidance names it too, not only the PATH
+# check at the end of Main.
+#
+# Guarded: Join-Path throws on a null Path, and at script scope with
+# $ErrorActionPreference = "Stop" that would kill the installer on line one,
+# before the banner, in any environment that has no LOCALAPPDATA (a service or
+# stripped-env invocation). This value is only ever printed, so naming the
+# variable symbolically is a better answer than dying.
+$script:InstallBinDir = if ($env:LOCALAPPDATA) {
+    Join-Path $env:LOCALAPPDATA "squirrel\bin"
+} else {
+    "%LOCALAPPDATA%\squirrel\bin"
+}
 
 # Make an arbitrary string safe to put in a report: reduce to printable ASCII
 # (control chars AND non-ASCII -> space) so truncation can't split a
@@ -189,6 +212,136 @@ function Show-Banner {
     Write-Host ""
 }
 
+# --- Release asset download (two sources) ------------------------------
+# GitHub is the origin and always has every asset, so it is tried first; the
+# mirror at $DownloadEndpoint proxies the same bytes through Cloudflare, which
+# reaches GitHub even when the client cannot. The manifest's sha256 is verified
+# over whatever comes back either way, so a second source adds no trust.
+#
+# A mirror that answers 404 is treated as "nothing here", which is also what a
+# worker deployed before the route existed answers: the script degrades to the
+# GitHub failure it would have reported anyway rather than breaking.
+$script:DownloadUrlGitHub = ""
+$script:DownloadUrlMirror = ""
+$script:DownloadSource = ""
+
+# Opt-in flag semantics, matching the CLI's SQUIRREL_NO_UPDATE: empty, 0 and
+# false are off, anything else is on. Presence semantics would make a stray
+# empty SQUIRREL_FORCE_MIRROR silently reroute every install.
+function Test-ForceMirror {
+    $value = "$($env:SQUIRREL_FORCE_MIRROR)".Trim().ToLowerInvariant()
+    return -not ($value -eq "" -or $value -eq "0" -or $value -eq "false")
+}
+
+# The two sources for one asset, in the order to try them, as (host, url)
+# pairs. Also records both URLs for the failure report.
+function Get-DownloadSources {
+    param([string]$Version, [string]$Asset)
+
+    $script:DownloadUrlGitHub = "https://github.com/$Repo/releases/download/$Version/$Asset"
+    $script:DownloadUrlMirror = "$DownloadEndpoint/$Version/$Asset"
+    $script:DownloadSource = ""
+
+    $sources = @()
+    if (Test-ForceMirror) {
+        Write-Info "SQUIRREL_FORCE_MIRROR is set, skipping github.com"
+    } else {
+        $sources += ,@("github.com", $script:DownloadUrlGitHub)
+    }
+    $sources += ,@("install.squirrelscan.com", $script:DownloadUrlMirror)
+    return ,$sources
+}
+
+# Invoke-WebRequest -OutFile leaves a partial file behind when a transfer dies
+# mid-stream, and the next source would then be asked to overwrite it. Delete a
+# failed attempt so only a completed download is ever handed back.
+function Get-ReleaseAsset {
+    param(
+        [string]$Version,
+        [string]$Asset,
+        [string]$OutFile,
+        [string]$Label
+    )
+
+    $sources = Get-DownloadSources -Version $Version -Asset $Asset
+    for ($i = 0; $i -lt $sources.Count; $i++) {
+        try {
+            Invoke-WebRequest -Uri $sources[$i][1] -OutFile $OutFile -TimeoutSec 120 -UseBasicParsing
+            $script:DownloadSource = $sources[$i][0]
+            return $true
+        } catch {
+            if (Test-Path $OutFile) { Remove-Item -Path $OutFile -Force -ErrorAction SilentlyContinue }
+            if ($i -lt ($sources.Count - 1)) {
+                Write-Warn "$($sources[$i][0]) could not serve the $Label, trying $($sources[$i + 1][0])..."
+            }
+        }
+    }
+    return $false
+}
+
+# Same two sources for a small JSON asset. Returns the parsed object, or $null
+# when both sources failed.
+function Get-ReleaseAssetJson {
+    param([string]$Version, [string]$Asset, [string]$Label)
+
+    $sources = Get-DownloadSources -Version $Version -Asset $Asset
+    for ($i = 0; $i -lt $sources.Count; $i++) {
+        try {
+            $parsed = Invoke-RestMethod -Uri $sources[$i][1] -TimeoutSec 30
+            $script:DownloadSource = $sources[$i][0]
+            return $parsed
+        } catch {
+            if ($i -lt ($sources.Count - 1)) {
+                Write-Warn "$($sources[$i][0]) could not serve the $Label, trying $($sources[$i + 1][0])..."
+            }
+        }
+    }
+    return $null
+}
+
+# The report line and the user-facing guidance for a download that ran out of
+# sources. Write-Err carries the first to Sentry (clamped to $ErrorLineMax,
+# which two full URLs would blow past) and prints it; the URLs themselves ride
+# along in error_output, which has room for them.
+function Get-DownloadFailureLine {
+    param([string]$Label)
+    return "Failed to download the $Label from github.com and install.squirrelscan.com"
+}
+
+function Get-DownloadFailureOutput {
+    return "tried $($script:DownloadUrlGitHub) (failed)`ntried $($script:DownloadUrlMirror) (failed)"
+}
+
+# `Kind` is `binary` or `manifest`: only the binary has a by-hand recipe worth
+# printing, because only the binary is the thing the user ultimately needs on
+# disk.
+function Show-DownloadFailureGuidance {
+    param([string]$Asset, [string]$Kind)
+
+    Write-Host "  Tried:"
+    if (Test-ForceMirror) {
+        Write-Host "    github.com               skipped (SQUIRREL_FORCE_MIRROR is set)"
+    } else {
+        Write-Host "    github.com               $($script:DownloadUrlGitHub)"
+    }
+    Write-Host "    install.squirrelscan.com $($script:DownloadUrlMirror)"
+    Write-Host ""
+    if (-not (Test-ForceMirror)) {
+        Write-Host "  If github.com is blocked on this network, skip it and retry:"
+        Write-Host "    `$env:SQUIRREL_FORCE_MIRROR='1'; iwr -useb https://install.squirrelscan.com/install.ps1 | iex"
+        Write-Host ""
+    }
+    if ($Kind -eq "binary") {
+        Write-Host "  If both hosts are blocked, download $Asset on a machine that can"
+        Write-Host "  reach one of them, copy it here, then:"
+        Write-Host "    Move-Item $Asset '$($script:InstallBinDir)\squirrel.exe'"
+    } else {
+        Write-Host "  If both hosts are blocked, this machine cannot reach anywhere the"
+        Write-Host "  release is published. Allowlist github.com or install.squirrelscan.com,"
+        Write-Host "  or install from a network that already reaches one of them."
+    }
+}
+
 function Get-LatestVersion {
     param([string]$Channel = "stable")
 
@@ -235,15 +388,14 @@ function Get-Manifest {
     param([string]$Version)
 
     $script:CurrentStep = "download_manifest"
-    $manifestUrl = "https://github.com/$Repo/releases/download/$Version/manifest.json"
     Write-Log "Downloading manifest..."
 
-    try {
-        $manifest = Invoke-RestMethod -Uri $manifestUrl -TimeoutSec 30
-        return $manifest
-    } catch {
-        Write-Err "Failed to download manifest: $_`n  URL: $manifestUrl"
+    $manifest = Get-ReleaseAssetJson -Version $Version -Asset "manifest.json" -Label "manifest"
+    if ($null -eq $manifest) {
+        Show-DownloadFailureGuidance -Asset "manifest.json" -Kind "manifest"
+        Write-Err (Get-DownloadFailureLine "manifest") -Output (Get-DownloadFailureOutput)
     }
+    return $manifest
 }
 
 function Install-Squirrel {
@@ -266,11 +418,14 @@ function Install-Squirrel {
 
     try {
         $binaryPath = Join-Path $tempDir "squirrel.exe"
-        $binaryUrl = "https://github.com/$Repo/releases/download/$Version/$filename"
 
         $script:CurrentStep = "download_binary"
         Write-Log "Downloading squirrel $Version..."
-        Invoke-WebRequest -Uri $binaryUrl -OutFile $binaryPath -TimeoutSec 120
+        if (-not (Get-ReleaseAsset -Version $Version -Asset $filename -OutFile $binaryPath -Label "binary")) {
+            Show-DownloadFailureGuidance -Asset $filename -Kind "binary"
+            Write-Err (Get-DownloadFailureLine "binary") -Output (Get-DownloadFailureOutput)
+        }
+        Write-Info "Downloaded from $($script:DownloadSource)"
 
         # Verify checksum
         $script:CurrentStep = "verify_checksum"
@@ -352,7 +507,7 @@ function Main {
     Show-Epilogue -Version $version
 
     # Check PATH
-    $binDir = Join-Path $env:LOCALAPPDATA "squirrel\bin"
+    $binDir = $script:InstallBinDir
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $currentPath = $env:Path

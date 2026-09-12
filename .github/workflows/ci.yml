@@ -170,6 +170,14 @@ jobs:
             exit 1
           }
           Write-Host 'install.ps1 parsed clean'
+      # Parsing proves only that the file is syntactically PowerShell. This runs
+      # the download helpers themselves against a stubbed Invoke-WebRequest, so
+      # a change to the two-source fallback (#2064) can't reach Windows users
+      # unexecuted the way the install-test workflow allows (it fetches the
+      # PUBLISHED script from main, never the tree under test).
+      - name: Check install.ps1 behaviour
+        shell: pwsh
+        run: pwsh -NoProfile -File ./scripts/install-ps-contract.test.ps1
       - name: Parse install.sh
         run: bash -n install.sh
 

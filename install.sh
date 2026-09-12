@@ -33,6 +33,9 @@ set -euo pipefail
 #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
 #   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
 #   SQUIRREL_BIN_DIR   - Override bin directory for symlink
+#   SQUIRREL_FORCE_MIRROR - Skip github.com and download from
+#                        install.squirrelscan.com (for networks that block
+#                        GitHub). Any value but empty, 0 or false enables it.
 #   GITHUB_TOKEN       - GitHub token to avoid API rate limits (optional)
 
 REPO="squirrelscan/squirrelscan"
@@ -95,6 +98,12 @@ INSTALLER_REPORT_VERSION="2"
 ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 RELEASES_ENDPOINT="${SQUIRREL_RELEASES_ENDPOINT:-https://install.squirrelscan.com/releases}"
+# Release assets, mirrored through our own origin. A GitHub release-asset URL
+# redirects to githubusercontent.com (objects.* historically, release-assets.*
+# today), which some networks cannot reach: the metadata fetch above succeeds
+# and the binary download then fails on every retry, forever (#2064). Every
+# asset therefore has two sources.
+DOWNLOAD_ENDPOINT="${SQUIRREL_DOWNLOAD_ENDPOINT:-https://install.squirrelscan.com/dl}"
 ERROR_LINE_MAX=200
 # Chars of captured command output carried in a report. The worker clamps again.
 ERROR_OUTPUT_MAX=1000
@@ -748,6 +757,105 @@ fetch_with_retry() {
   return 1
 }
 
+# --- Release asset download (two sources) ---------------------------------
+# GitHub is the origin and always has every asset, so it is tried first; the
+# mirror at DOWNLOAD_ENDPOINT proxies the same bytes through Cloudflare, which
+# reaches GitHub even when the client cannot. The manifest's sha256 is verified
+# over whatever comes back either way, so a second source adds no trust.
+#
+# A mirror that answers 404 is treated as "nothing here", which is also what a
+# worker deployed before the route existed answers: the script degrades to the
+# GitHub failure it would have reported anyway rather than breaking.
+DOWNLOAD_URL_GITHUB=""
+DOWNLOAD_URL_MIRROR=""
+DOWNLOAD_SOURCE=""
+
+# Opt-in flag semantics, matching the CLI's SQUIRREL_NO_UPDATE: empty, 0 and
+# false are off, anything else is on. Presence semantics (as NO_TELEMETRY uses)
+# would make a stray `SQUIRREL_FORCE_MIRROR=` in a profile silently reroute
+# every install.
+force_mirror_enabled() {
+  local value
+  value=$(printf '%s' "${SQUIRREL_FORCE_MIRROR:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+  case "$value" in
+    "" | 0 | false) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# fetch_release_asset <version> <asset> <output> <label>
+# Leaves both attempted URLs in DOWNLOAD_URL_GITHUB / DOWNLOAD_URL_MIRROR for
+# the failure report, and the winner in DOWNLOAD_SOURCE.
+fetch_release_asset() {
+  local version="$1" asset="$2" output="$3" label="$4"
+
+  DOWNLOAD_URL_GITHUB="https://github.com/${REPO}/releases/download/${version}/${asset}"
+  DOWNLOAD_URL_MIRROR="${DOWNLOAD_ENDPOINT}/${version}/${asset}"
+  DOWNLOAD_SOURCE=""
+
+  if force_mirror_enabled; then
+    info "SQUIRREL_FORCE_MIRROR is set, skipping github.com"
+  elif fetch_with_retry "$DOWNLOAD_URL_GITHUB" "$output"; then
+    DOWNLOAD_SOURCE="github.com"
+    return 0
+  else
+    warn "github.com could not serve the $label, trying install.squirrelscan.com..."
+  fi
+
+  if fetch_with_retry "$DOWNLOAD_URL_MIRROR" "$output"; then
+    DOWNLOAD_SOURCE="install.squirrelscan.com"
+    return 0
+  fi
+  return 1
+}
+
+# The report line and the user-facing guidance for a download that ran out of
+# sources. error() carries the first to Sentry (clamped to ERROR_LINE_MAX, which
+# two full URLs would blow past) and prints the second to the user only; the
+# URLs themselves ride along in error_output, which has room for them.
+download_failure_report_line() {
+  local label="$1"
+  echo "Failed to download the $label from github.com and install.squirrelscan.com"
+}
+
+download_failure_output() {
+  printf 'tried %s (failed)\ntried %s (failed)\n' "$DOWNLOAD_URL_GITHUB" "$DOWNLOAD_URL_MIRROR"
+}
+
+# download_failure_guidance <asset> <kind> <bin_dir>
+# `kind` is `binary` or `manifest`: only the binary has a by-hand recipe worth
+# printing, because only the binary is the thing the user ultimately needs on
+# disk. Telling someone to move a manifest.json to ~/.local/bin/squirrel would
+# be worse than saying nothing. `bin_dir` is the directory this run actually
+# resolved, so the recipe names the same place a successful install would use.
+download_failure_guidance() {
+  local asset="$1" kind="$2" bin_dir="$3"
+  echo "  Tried:"
+  if force_mirror_enabled; then
+    echo "    github.com               skipped (SQUIRREL_FORCE_MIRROR is set)"
+  else
+    echo "    github.com               $DOWNLOAD_URL_GITHUB"
+  fi
+  echo "    install.squirrelscan.com $DOWNLOAD_URL_MIRROR"
+  echo ""
+  if ! force_mirror_enabled; then
+    # The variable has to reach the bash that runs the SCRIPT, not the curl
+    # that fetches it, so it goes on the right-hand side of the pipe.
+    echo "  If github.com is blocked on this network, skip it and retry:"
+    echo "    curl -fsSL https://install.squirrelscan.com | SQUIRREL_FORCE_MIRROR=1 bash"
+    echo ""
+  fi
+  if [ "$kind" = binary ]; then
+    echo "  If both hosts are blocked, download $asset on a machine that can"
+    echo "  reach one of them, copy it here, then:"
+    echo "    chmod +x $asset && mkdir -p $bin_dir && mv $asset $bin_dir/squirrel"
+  else
+    echo "  If both hosts are blocked, this machine cannot reach anywhere the"
+    echo "  release is published. Allowlist github.com or install.squirrelscan.com,"
+    echo "  or install from a network that already reaches one of them."
+  fi
+}
+
 # Detect libc (glibc vs musl)
 detect_libc() {
   # Method 1: Check for musl loader (most reliable)
@@ -977,14 +1085,12 @@ download_and_install() {
   # here or it clobbers the failure-reporting trap.
   TMPDIR_TO_CLEAN="$tmpdir"
 
-  local release_url="https://github.com/${REPO}/releases/download/${version}"
-
   # Download manifest to get binary filename and checksum
   CURRENT_STEP="download_manifest"
   log "Downloading manifest..."
-  local manifest_url="${release_url}/manifest.json"
-  if ! fetch_with_retry "$manifest_url" "$tmpdir/manifest.json"; then
-    error "Failed to download manifest\n  URL: $manifest_url"
+  if ! fetch_release_asset "$version" "manifest.json" "$tmpdir/manifest.json" "manifest"; then
+    LAST_ERROR_OUTPUT=$(download_failure_output)
+    error "$(download_failure_report_line manifest)" "$(download_failure_guidance manifest.json manifest "$bin_dir")"
   fi
 
   # Read manifest content
@@ -1008,10 +1114,11 @@ download_and_install() {
   # Download binary
   CURRENT_STEP="download_binary"
   log "Downloading squirrel ${version}..."
-  local binary_url="${release_url}/${filename}"
-  if ! fetch_with_retry "$binary_url" "$tmpdir/squirrel"; then
-    error "Failed to download binary\n  URL: $binary_url"
+  if ! fetch_release_asset "$version" "$filename" "$tmpdir/squirrel" "binary"; then
+    LAST_ERROR_OUTPUT=$(download_failure_output)
+    error "$(download_failure_report_line binary)" "$(download_failure_guidance "$filename" binary "$bin_dir")"
   fi
+  info "Downloaded from ${DOWNLOAD_SOURCE}"
 
   # Verify checksum
   CURRENT_STEP="verify_checksum"
