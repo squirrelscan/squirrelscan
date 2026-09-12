@@ -1053,6 +1053,8 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     "https://install.squirrelscan.com/dl/v1.2.3/squirrel-1.2.3-linux-x64";
   const fetchAsset =
     'out=$(mktemp); fetch_release_asset v1.2.3 squirrel-1.2.3-linux-x64 "$out" binary; rc=$?; cat "$out"; rm -f "$out"; exit $rc';
+  const GITHUB_MANIFEST =
+    "https://github.com/squirrelscan/squirrelscan/releases/download/v1.2.3/manifest.json";
   const MANIFEST = '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}';
   const HTML = "<!DOCTYPE html><html><body>Sign in to continue</body></html>";
 
@@ -1072,7 +1074,7 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     expect(code).toBe(0);
     expect(stdout).toContain("BYTES");
     // Three attempts at GitHub (fetch_with_retry), then the mirror answers.
-    expect(calls.filter((argv) => argv.some((a) => a.includes(GITHUB_ASSET)))).toHaveLength(3);
+    expect(calls.filter((argv) => argv.includes(GITHUB_ASSET))).toHaveLength(3);
     expect(calls[calls.length - 1]).toContain(MIRROR_ASSET);
     expect(stderr).toContain("trying install.squirrelscan.com");
   }, 30_000);
@@ -1327,7 +1329,8 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     );
     expect(code).toBe(0);
     // GitHub answered 200, so the only reason we moved on is the content check.
-    expect(calls.filter((argv) => argv.some((a) => a.includes("github.com")))).toHaveLength(1);
+    // Exact URL, not a host substring: one attempt, no retry, then the mirror.
+    expect(calls.filter((argv) => argv.includes(GITHUB_MANIFEST))).toHaveLength(1);
     expect(calls[calls.length - 1]).toContain(
       "https://install.squirrelscan.com/dl/v1.2.3/manifest.json",
     );
