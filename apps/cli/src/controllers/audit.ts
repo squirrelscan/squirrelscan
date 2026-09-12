@@ -18,7 +18,10 @@ import type { RenderChargeLine } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import { createCloudDocumentFetcher } from "@squirrelscan/audit-engine";
-import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map";
+import {
+  createEntityMapCollector,
+  slimEntityMapForPublish,
+} from "@squirrelscan/audit-engine/entity-map";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
   createConditionalRenderDocumentFetcher,
@@ -1914,11 +1917,19 @@ export async function runAudit(
           const entityMap = writeEntityMap({
             pages: entityMapCollector.build(),
             siteUrl: url,
+            ...(options.entityMapFormats?.length
+              ? { formats: options.entityMapFormats }
+              : {}),
             ...(options.entityMapDir ? { dir: options.entityMapDir } : {}),
             ...(options.outputPath ? { outputPath: options.outputPath } : {}),
             cwd: cwdOr("."),
           });
-          options.onEntityMap?.(entityMap);
+          // Carried on the report so a published run hands the cloud the same
+          // map the local files hold, capped for the payload. Only ever set
+          // when --entity-map asked for it, so an ordinary run's report and
+          // publish body are unchanged.
+          report.entityMap = slimEntityMapForPublish(entityMap.map);
+          options.onEntityMap?.(entityMap.output);
         } catch (error) {
           logger.warn(
             `Could not write the entity map: ${error instanceof Error ? error.message : String(error)}`

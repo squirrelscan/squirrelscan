@@ -187,6 +187,7 @@ import type {
   CategoryScore as _CS,
   DomainStats as _DST,
   EditorSummary as _ES,
+  EntityMap as _EM,
   GroupScore as _GS,
   HealthScore as _HS,
   ReportTechnologies as _RT,
@@ -202,6 +203,7 @@ export type RuleCategory = _RC;
 export type ReportTechnologies = _RT;
 export type SiteMetadata = _SM;
 export type EditorSummary = _ES;
+export type EntityMap = _EM;
 export type DomainStats = _DST;
 export type CacheStats = _CST;
 
@@ -469,6 +471,14 @@ export interface AuditReport {
    */
   siteMetadata?: SiteMetadata;
   /**
+   * Structured entity map (#2061) — REPORT-ONLY / non-scoring. Mirrors
+   * core-contracts `AuditReport`. Present ONLY when the run passed
+   * `--entity-map`, which is off by default, so an ordinary run's report and
+   * publish body are unchanged. Capped by `slimEntityMapForPublish` before it
+   * is attached, since it rides the publish payload.
+   */
+  entityMap?: EntityMap;
+  /**
    * Auto-generated editor's summary — REPORT-ONLY / non-scoring, surfaced at the
    * TOP of the report. Present only when the credited cloud
    * editor-summary call ran (any logged-in plan with cloud enabled).
@@ -649,19 +659,20 @@ export interface AuditOptions {
   ruleInclude?: string[];
   ruleExclude?: string[];
   // --entity-map (#2061, prototype): write the site-wide JSON-LD entity graph
-  // as three side files. Off by default; nothing else about the run changes.
+  // as side files. Off by default; nothing else about the run changes.
   entityMap?: boolean;
-  // Directory the three files land in. Unset → the directory of --output, or
-  // the working directory when there is no --output.
+  // Directory the files land in. Unset → the directory of --output, or the
+  // working directory when there is no --output.
   entityMapDir?: string;
+  // --entity-map-format. Unset or empty → every format.
+  entityMapFormats?: EntityMapFormat[];
 }
 
-/** Where `--entity-map` wrote its three artifacts. */
-export interface EntityMapOutput {
-  json: string;
-  jsonld: string;
-  html: string;
-}
+/** A file `--entity-map` can write. */
+export type EntityMapFormat = "json" | "jsonld" | "html" | "md";
+
+/** Absolute path per format `--entity-map` actually wrote. */
+export type EntityMapOutput = Partial<Record<EntityMapFormat, string>>;
 
 // ============================================
 // HREFLANG TYPES (Phase 3)

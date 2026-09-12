@@ -17,6 +17,7 @@ import type { PreflightBalance } from "@/lib/balance";
 import type { UserSettings } from "@/self/types";
 import type { AuditOptions, EntityMapOutput } from "@/types";
 
+import { ENTITY_MAP_FORMATS, parseEntityMapFormats } from "@/audit/entity-map";
 import {
   normalizeFailOnArgs,
   parseFailOn,
@@ -616,6 +617,7 @@ export function validateAuditFlags(args: {
   http?: boolean;
   entity_map?: boolean;
   entity_map_dir?: string;
+  entity_map_format?: string | string[];
 }): string | null {
   const noPublish = args.no_publish || args.noPublish;
   // --offline conflicts with flags that require the cloud API.
@@ -636,6 +638,17 @@ export function validateAuditFlags(args: {
   // writing nothing is the worst answer (#2061).
   if (args.entity_map_dir && !args.entity_map) {
     return "--entity-map-dir requires --entity-map";
+  }
+  if (args.entity_map_format && !args.entity_map) {
+    return "--entity-map-format requires --entity-map";
+  }
+  // A typo here would otherwise write no file and say nothing about why.
+  const formats = parseEntityMapFormats(args.entity_map_format);
+  if (formats.unknown.length > 0) {
+    return `--entity-map-format: unknown format ${formats.unknown.join(", ")} (expected ${ENTITY_MAP_FORMATS.join(", ")})`;
+  }
+  if (args.entity_map_format && formats.formats.length === 0) {
+    return `--entity-map-format needs at least one of ${ENTITY_MAP_FORMATS.join(", ")}`;
   }
   return null;
 }
@@ -832,6 +845,11 @@ export const audit = defineCommand({
       description:
         "Directory for the --entity-map files (default: alongside --output, else the working directory)",
     },
+    "entity-map-format": {
+      type: "string",
+      description:
+        "Which --entity-map files to write: json, jsonld, html, md (repeatable or comma-separated; default: all four)",
+    },
   },
   async run({ args }) {
     // Configure logging before any output
@@ -859,6 +877,12 @@ export const audit = defineCommand({
       no_publish: args["no-publish"],
       entity_map: args["entity-map"],
       entity_map_dir: args["entity-map-dir"],
+      // citty accumulates a repeated string flag into an array at runtime even
+      // though its type says `string`, so widen the cast (same as --fail-on).
+      entity_map_format: args["entity-map-format"] as
+        | string
+        | string[]
+        | undefined,
     });
     if (flagError) {
       console.error(flagError);
@@ -1288,6 +1312,13 @@ export const audit = defineCommand({
         ...(args["entity-map"] ? { entityMap: true } : {}),
         ...(args["entity-map-dir"]
           ? { entityMapDir: args["entity-map-dir"] }
+          : {}),
+        ...(args["entity-map"]
+          ? {
+              entityMapFormats: parseEntityMapFormats(
+                args["entity-map-format"] as string | string[] | undefined
+              ).formats,
+            }
           : {}),
       };
 
@@ -2056,11 +2087,13 @@ export const audit = defineCommand({
       // the same reason the retention notice is: `-f json` is piped into other
       // tools and must stay a single JSON document.
       if (entityMap.output) {
+        const written = entityMap.output;
         console.error("");
         console.error("Entity map:");
-        console.error(`  ${entityMap.output.json}`);
-        console.error(`  ${entityMap.output.jsonld}`);
-        console.error(`  ${entityMap.output.html}`);
+        for (const format of ENTITY_MAP_FORMATS) {
+          const path = written[format];
+          if (path) console.error(`  ${path}`);
+        }
       }
 
       // Publish to the dashboard (auto when signed in + online, or forced with
