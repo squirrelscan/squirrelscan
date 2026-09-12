@@ -88,7 +88,7 @@ All tools require authentication. Write tools are marked; everything else only r
 
 Three tools deserve a closer look:
 
-- **`run_audit` has a confirm rail.** The first call returns a credit estimate instead of starting anything expensive; the agent is expected to show it to you and call again with `confirm: true`. Every audit costs at least the 50-credit base, so expect the confirm step on each run. A `max_credits` argument acts as a hard spend guard: the audit refuses to start if the estimate exceeds it.
+- **`run_audit` has a confirm rail.** When the estimate is above the auto-run threshold (50 credits by default), the first call returns the estimate instead of starting; the agent shows it to you and calls again with `confirm: true`. An estimate at or under the threshold starts immediately, and an agent that already has your approval can pass `confirm: true` on the first call. A `max_credits` argument acts as a hard spend guard: the audit refuses to start if the estimate exceeds it.
 - **`delete_website` has the same confirm rail.** The first call previews what happens (the domain, how many audits and open issues stay attached to the old id) without deleting anything; the agent confirms with you and calls again with `confirm: true`. Deletion is soft: nothing is destroyed, and re-adding the domain later registers a fresh website with a new id.
 - **`create_api_key` is scope-gated.** It needs credentials carrying the reserved `keys:write` scope. OAuth login grants it (you consented on the approval screen); plain API keys never carry it, and keys minted by this tool can't mint further keys. No escalation loops.
 
