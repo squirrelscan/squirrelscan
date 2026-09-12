@@ -150,10 +150,42 @@ describe("foldOverflowChecks", () => {
     const [allCarried] = foldOverflowChecks(carried, SMALL);
     expect(allCarried!.provenance).toBe("carried");
     expect(allCarried!.lastSeenAt).toBe(1005);
+  });
 
-    const mixed = [...carried.slice(0, 5), failCheck({ pageUrl: "https://example.com/fresh" })];
-    const [notCarried] = foldOverflowChecks(mixed, SMALL);
-    expect(notCarried!.provenance).toBeUndefined();
+  // #2063: a fresh check and a carried one are different issue CLASSES, not one
+  // class the fold has to compromise over. Before, the mixed group folded to a
+  // single aggregate with no provenance — which reads as evidence from this run,
+  // so a rule with enough carried pages to overflow the cap laundered every one
+  // of them into "crawled today".
+  test("a mixed group folds into one aggregate per provenance, each keeping its label", () => {
+    const carried = Array.from({ length: 6 }, (_, i) =>
+      failCheck({
+        pageUrl: `https://example.com/p/${i}`,
+        provenance: "carried",
+        lastSeenAt: 1000 + i,
+      }),
+    );
+    const mixed = [
+      ...carried.slice(0, 5),
+      failCheck({ pageUrl: "https://example.com/fresh-a" }),
+      failCheck({ pageUrl: "https://example.com/fresh-b" }),
+    ];
+
+    const folded = foldOverflowChecks(mixed, SMALL);
+    expect(folded).toHaveLength(2);
+
+    const carriedAgg = folded.find((c) => c.provenance === "carried");
+    expect(carriedAgg!.details?.occurrences).toBe(5);
+    expect(carriedAgg!.lastSeenAt).toBe(1004);
+    expect(carriedAgg!.details?.pagesTruncated).toBe(5);
+
+    const freshAgg = folded.find((c) => c.provenance === undefined);
+    expect(freshAgg!.details?.occurrences).toBe(2);
+    expect(freshAgg!.lastSeenAt).toBeUndefined();
+    expect(freshAgg!.pages).toEqual([
+      "https://example.com/fresh-a",
+      "https://example.com/fresh-b",
+    ]);
   });
 
   // #1652: folding must not launder "never rendered by any audit" into
@@ -167,7 +199,8 @@ describe("foldOverflowChecks", () => {
     expect(aggregate!.provenance).toBe("unrendered");
     expect(aggregate!.lastSeenAt).toBeUndefined();
 
-    // Mixed with a genuinely carried check → neither claim holds for the whole.
+    // Mixed with a genuinely carried check → the two stay apart (#2063), so
+    // neither claim is ever made about the other's pages.
     const mixed = [
       ...unrendered.slice(0, 5),
       failCheck({
@@ -176,7 +209,10 @@ describe("foldOverflowChecks", () => {
         lastSeenAt: 900,
       }),
     ];
-    expect(foldOverflowChecks(mixed, SMALL)[0]!.provenance).toBeUndefined();
+    const folded = foldOverflowChecks(mixed, SMALL);
+    expect(folded.map((c) => c.provenance).sort()).toEqual(["carried", "unrendered"]);
+    expect(folded.find((c) => c.provenance === "unrendered")!.lastSeenAt).toBeUndefined();
+    expect(folded.find((c) => c.provenance === "carried")!.lastSeenAt).toBe(900);
   });
 
   test("a pathological rule with more distinct issue classes than the cap still slices to the cap", () => {

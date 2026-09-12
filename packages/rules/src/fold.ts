@@ -173,6 +173,27 @@ export interface PublishDegradeLimits extends PublishSampleLimits {
   maxPageStatusBytes?: number;
 }
 
+/**
+ * Fold identity for a check: its issue class AND its provenance (#2063).
+ *
+ * Provenance is part of the key, not a property the fold tries to reconcile
+ * afterwards, because {@link foldGroup} can only keep a "carried"/"unrendered"
+ * label when EVERY constituent carries it — a mixed group folds to an aggregate
+ * with no provenance at all, i.e. one that reads as evidence from this run. On a
+ * site big enough to overflow `maxChecksPerRule` that is silent laundering:
+ * exactly the rules with hundreds of stale carried pages are the ones that
+ * overflow, and the aggregate they fold into claims every one of those pages was
+ * crawled. Keying on provenance keeps each aggregate homogeneous, so the label is
+ * always available and the consumer can tell replay from evidence.
+ *
+ * NUL cannot appear in a check name or status, so the parts can't collide.
+ */
+export function foldGroupKey(check: CheckResult): string {
+  const provenance =
+    check.provenance === "carried" || check.provenance === "unrendered" ? check.provenance : "";
+  return `${check.name}\u0000${check.status}\u0000${provenance}`;
+}
+
 /** Default publish sample: the primary caps applied on every publish (#1167). */
 export const DEFAULT_PUBLISH_SAMPLE: PublishSampleLimits = {
   maxPagesPerCheck: PUBLISH_LIMITS.maxPagesPerCheckPublish,
@@ -251,7 +272,7 @@ export function slimPageChecksForShell(checks: CheckResult[]): CheckResult[] {
   // never > maxChecks, so the trailing slice-to-cap can't drop a class). Fold keeps the
   // full pages[] (≤5000) so sampleChecksForPublish can stamp the true pre-clip count as
   // `details.pagesTruncated`; occurrences carries the folded per-page check count.
-  const classes = new Set(pageIssues.map((c) => `${c.name}\u0000${c.status}`)).size;
+  const classes = new Set(pageIssues.map(foldGroupKey)).size;
   const folded = sampleChecksForPublish(
     foldOverflowChecks(pageIssues, { ...DEFAULT_FOLD_LIMITS, maxChecks: classes }),
   );
@@ -485,7 +506,7 @@ export function foldOverflowChecks(
   // Group per issue class, first-seen order. NUL cannot appear in a check name.
   const groups = new Map<string, CheckResult[]>();
   for (const check of checks) {
-    const key = `${check.name}\u0000${check.status}`;
+    const key = foldGroupKey(check);
     const group = groups.get(key);
     if (group) group.push(check);
     else groups.set(key, [check]);

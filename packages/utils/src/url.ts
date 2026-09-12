@@ -307,7 +307,12 @@ export function parseUserUrl(input: string): UrlParseResult {
  * Normalize a URL for comparison/deduplication
  * - Lowercases scheme and host (case-insensitive per RFC)
  * - Preserves pathname case (case-sensitive on most servers)
- * - Removes trailing slashes and hash fragments
+ * - Removes trailing slashes, QUERY STRINGS and hash fragments
+ *
+ * Query-BLIND by design: this is the right key for "is this the same resource"
+ * comparisons (sitemap ↔ crawl matching, incoming-link buckets, external-URL
+ * cache keys). It is the WRONG key for a page's identity in a store — see
+ * {@link normalizePageUrl} (#2063).
  */
 export function normalizeUrl(url: string): string {
   try {
@@ -323,6 +328,57 @@ export function normalizeUrl(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * Normalize a URL for use as a PAGE IDENTITY (squirrelscan/repo#2063).
+ *
+ * Same as {@link normalizeUrl} — lowercased scheme + host, preserved path case,
+ * no trailing slash, no fragment — except that it KEEPS the query string.
+ *
+ * Two URLs that differ only by query are two different request targets serving
+ * two different documents, and the crawler already treats them that way: its own
+ * normalizer (`@squirrelscan/crawler` frontier) keeps the query after stripping
+ * tracking parameters, so every page record, finding and report check the
+ * producers emit is keyed query-preserving. Re-keying them with `normalizeUrl`
+ * server-side collapsed a whole catalogue into one row — 384 `?id=N` pages became
+ * a single `page_findings` URL carrying 362 copies of the same rule's finding.
+ *
+ * Use this wherever a URL identifies a PAGE (findings, site pages, crawled sets,
+ * resolution hashes). `normalizeUrl` stays the right call for comparisons that
+ * are deliberately query-blind (sitemap ↔ crawl matching, link-count buckets,
+ * external-URL cache keys).
+ *
+ * The query is preserved VERBATIM, parameter order included: `?a=1&b=2` and
+ * `?b=2&a=1` are distinct frontier entries upstream, and re-sorting here would
+ * key the store differently from the crawler that produced the URL.
+ */
+export function normalizePageUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    let path = parsed.pathname;
+    if (path.endsWith("/") && path !== "/") {
+      path = path.slice(0, -1);
+    }
+    const scheme = parsed.protocol.toLowerCase();
+    const host = parsed.host.toLowerCase();
+    return `${scheme}//${host}${path}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Drop a normalized page URL's query string — the pre-#2063 page identity.
+ *
+ * Exists ONLY for backward compatibility at version boundaries: a publisher on
+ * an older release hashed/keyed pages query-blind, so a consumer that has moved
+ * to {@link normalizePageUrl} has to recognize the old spelling too. Returns the
+ * input unchanged when there is no query.
+ */
+export function stripUrlQuery(url: string): string {
+  const q = url.indexOf("?");
+  return q === -1 ? url : url.slice(0, q);
 }
 
 /**

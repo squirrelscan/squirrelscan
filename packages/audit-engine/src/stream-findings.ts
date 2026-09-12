@@ -12,7 +12,7 @@
 
 import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
-import { normalizeUrl } from "@squirrelscan/utils/url";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import { findingFingerprint } from "./fingerprint";
 import { findingKey, flattenChecks } from "./merge-core";
@@ -52,7 +52,12 @@ export function buildStreamFindings(
     const byUrl = new Map<string, CheckResult[]>();
     for (const c of checks) {
       if (!c.pageUrl) continue; // site-scope check — never a per-page finding
-      const u = normalizeUrl(c.pageUrl);
+      // (#2063) A carried/unrendered check is a REPLAY of something an earlier
+      // audit saw, not evidence from this crawl. Streaming it would persist it
+      // with this run's crawl id and today's first/last-seen — the complete-store
+      // path's version of the same laundering the sampled merge now refuses.
+      if (c.provenance === "carried" || c.provenance === "unrendered") continue;
+      const u = normalizePageUrl(c.pageUrl);
       const arr = byUrl.get(u);
       if (arr) arr.push(c);
       else byUrl.set(u, [c]);
@@ -115,7 +120,11 @@ export function buildSkippedPassCounts(
     const byPage = new Map<string, CheckResult[]>();
     for (const c of checks) {
       if (!c.pageUrl) continue;
-      const u = normalizeUrl(c.pageUrl);
+      // (#2063) Same exclusion as buildStreamFindings: a replayed fail would mark
+      // a page "dirty" that this run never visited, and the synthetic pass counts
+      // derived here must describe this crawl only.
+      if (c.provenance === "carried" || c.provenance === "unrendered") continue;
+      const u = normalizePageUrl(c.pageUrl);
       const arr = byPage.get(u);
       if (arr) arr.push(c);
       else byPage.set(u, [c]);
