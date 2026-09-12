@@ -17,6 +17,19 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- Published cloud reports no longer count findings the CLI carried from its local
+  store as pages crawled this run. A machine with an old local audit database
+  could publish thousands of stale findings, which the cloud stored as first seen
+  today and scored as if every one of those pages had just been crawled, swinging
+  the health score by tens of points between identical runs. Carried findings keep
+  the date the cloud last saw them, and the audited-page count is now the pages the
+  crawl actually visited.
+- Two page URLs that differ only by their query string are two pages again.
+  Findings on `/p?id=1` and `/p?id=2` were stored under one URL, piling every
+  page's issues onto a single entry in the report.
+
 ## v0.0.94
 
 A one-line follow-up to v0.0.93 for the cloud audits that still ended before

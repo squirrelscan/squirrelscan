@@ -19,6 +19,41 @@ import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 
 import { findingFingerprint } from "./fingerprint";
 
+const EMPTY_HASHES: readonly string[] = [];
+
+/**
+ * Every resolution-signal hash a page could have been published under (#2063).
+ *
+ * The signal's URL hashes are computed by the PRODUCER, so which normalizer it
+ * used is decided by whichever release the user is running — and #2063 changed
+ * that normalizer from a query-blind one to the query-preserving page identity
+ * the store is keyed by. A publisher on an older release therefore hashes
+ * `/p?id=1` as `/p`, and matching only the new spelling would read its signal as
+ * "this page is not in the failing set" — i.e. resolve a finding that is still
+ * there.
+ *
+ * So accept EITHER spelling. Every consequence of the extra hash is a carry: a
+ * hit in `notEvaluated` carries, a hit in `failing` carries, and a miss in
+ * `failing` is the only branch that resolves. The worst case is that two query
+ * URLs sharing a path both carry when only one still fails — over-carry, which a
+ * later run with matching versions resolves. Under-carry is the outcome that
+ * silently deletes a real finding, and this shape cannot produce it.
+ */
+function resolutionHashes(normalizedUrl: string): readonly string[] {
+  const q = normalizedUrl.indexOf("?");
+  if (q === -1) return [resolutionUrlHash(normalizedUrl)];
+  return [resolutionUrlHash(normalizedUrl), resolutionUrlHash(normalizedUrl.slice(0, q))];
+}
+
+/** True when `set` holds any of `hashes` (see {@link resolutionHashes}). */
+function hasAnyHash(set: Set<string> | undefined, hashes: readonly string[]): boolean {
+  if (!set) return false;
+  for (const h of hashes) {
+    if (set.has(h)) return true;
+  }
+  return false;
+}
+
 /** A finding flattened from a CheckResult, ready to key/persist. */
 export interface FlatFinding {
   normalizedUrl: string;
@@ -714,13 +749,13 @@ export function createMergeSession(
       // truncated (or absent — rule disabled, unknown shape, old CLI) gives no
       // authority and falls through to the pre-#1185 behavior.
       const checkKey = `${prior.ruleId}${KEY_SEP}${prior.checkName}`;
-      const priorHash = resolution ? resolutionUrlHash(prior.normalizedUrl) : "";
+      const priorHashes = resolution ? resolutionHashes(prior.normalizedUrl) : EMPTY_HASHES;
       // The check produced NO evaluated result for this page this run (the rule
       // `skipped` it — perf/ttfb without timing data — or emitted nothing for
       // it). Its absence from the fresh findings is not evidence the finding is
       // gone, so it can never resolve: carry regardless of what the sampled
       // payload suggests.
-      if (resolution?.notEvaluatedByCheck.get(checkKey)?.has(priorHash)) {
+      if (hasAnyHash(resolution?.notEvaluatedByCheck.get(checkKey), priorHashes)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
@@ -728,7 +763,7 @@ export function createMergeSession(
       }
       const failingSet = resolution?.failingByCheck.get(checkKey);
       if (failingSet) {
-        if (failingSet.has(priorHash)) {
+        if (hasAnyHash(failingSet, priorHashes)) {
           // Unlike the sample-guard carry below, this page WAS observed failing
           // this run — the signal is unsampled, so its presence is positive
           // evidence, not an absence we couldn't rule out. Refresh the

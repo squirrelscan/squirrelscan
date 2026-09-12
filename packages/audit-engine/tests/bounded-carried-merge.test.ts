@@ -437,6 +437,49 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     expect(streamed.coverage.carriedFindings).toBe(OVER_CAP);
   });
 
+  // #2063: the publish fold now keys groups on provenance as well as issue class,
+  // so one class can leave the retained sample as TWO aggregates. The budget's
+  // class accounting has to count them the same way — counting `(name, status)`
+  // alone capped the re-fold at one aggregate, silently merging the two and
+  // losing an occurrence, and then reconciled the survivor against a class key it
+  // no longer matched (its provenance and last-seen were deleted).
+  test("a class that splits by provenance keeps both aggregates and every occurrence", async () => {
+    const TOTAL = 30;
+    const backlog = Array.from(
+      { length: TOTAL },
+      (_, i) => `https://x.test/backlog/${String(i).padStart(4, "0")}`,
+    );
+    // One page inside the retained window that NO audit has ever rendered: it has
+    // no site_pages row, so the merge stamps its finding "unrendered" while the
+    // other 29 stay "carried".
+    const neverRendered = backlog[5]!;
+    const fixture: Fixture = {
+      rows: backlog.map((u) => row(u, "", PRIOR_AUDIT)),
+      pages: backlog.filter((u) => u !== neverRendered),
+      crawled: ["https://x.test/p/0"],
+      statuses: [{ url: "https://x.test/p/0", status: 200 }],
+    };
+    const [streamed] = await runStreamed(fixture);
+
+    const checks = streamed.unionRuleResults.get(RULE)!.checks;
+    const byProvenance = new Map(checks.map((c) => [c.provenance, c]));
+    expect([...byProvenance.keys()].sort()).toEqual(["carried", "unrendered"]);
+
+    const occurrences = checks.reduce(
+      (sum, c) => sum + ((c.details?.occurrences as number | undefined) ?? 1),
+      0,
+    );
+    expect(occurrences).toBe(TOTAL);
+    expect(byProvenance.get("carried")!.details?.occurrences).toBe(TOTAL - 1);
+    // An "unrendered" aggregate never claims a prior observation.
+    expect(byProvenance.get("unrendered")!.lastSeenAt).toBeUndefined();
+
+    // The score still saw every one of them — the bound is on the report body.
+    expect(streamed.scoringTallies!.get(RULE)!.tally.failed).toBe(TOTAL);
+    expect(streamed.coverage.carriedFindings).toBe(TOTAL - 1);
+    expect(streamed.coverage.unrenderedFindings).toBe(1);
+  });
+
   test("a class first seen after the budget is spent still reaches the report", async () => {
     // The budget is per RULE, so one loud issue class can spend all of it before a
     // second class is ever seen. Dropping the second class would lose it from the
@@ -513,12 +556,15 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     expect(checks[0]!.details?.pagesTruncated).toBe(400);
   });
 
-  test("a class the sample saw as all-carried but is not loses the claim", async () => {
-    // `foldGroup` stamps "carried" only when EVERY constituent is, so a uniform
-    // sample of a mixed class would have the aggregate assert an earlier audit saw
-    // findings no audit has ever rendered. The newest date has the mirror problem:
-    // it is a max over the group, so a dropped constituent carrying a later one
-    // would leave the badge reading stale.
+  test("a class whose unrendered member arrives after the budget still splits out", async () => {
+    // The two claims used to cancel each other: `foldGroup` stamps "carried" only
+    // when EVERY constituent is, so a class mixing carried and never-rendered
+    // findings folded to one aggregate asserting neither, and a newer date on a
+    // dropped constituent could not be shown without over-claiming.
+    //
+    // (#2063) They no longer share an aggregate, so each keeps its own claim —
+    // including the case the counters exist for, where the odd member arrives
+    // after the retained sample is full and is only visible through them.
     const rendered = Array.from(
       { length: 30 },
       (_, i) => `https://x.test/seen/${String(i).padStart(2, "0")}`,
@@ -538,12 +584,17 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     };
     const [streamed] = await runStreamed(fixture);
     const checks = streamed.unionRuleResults.get(RULE)!.checks;
-    expect(checks).toHaveLength(1);
-    // Mixed carried + unrendered: neither marker, which is what folding all 31
-    // real checks would have produced.
-    expect(checks[0]!.provenance).toBeUndefined();
-    expect(checks[0]!.lastSeenAt).toBeUndefined();
-    expect(checks[0]!.details?.occurrences).toBe(31);
+    const byProvenance = new Map(checks.map((c) => [c.provenance, c]));
+    expect([...byProvenance.keys()].sort()).toEqual(["carried", "unrendered"]);
+
+    // The 30 rendered pages keep their claim and their own newest date; the one
+    // page nothing has ever rendered keeps neither, and its later date — which
+    // used to be the thing that made the badge read stale — never reaches a
+    // carried aggregate at all.
+    expect(byProvenance.get("carried")!.details?.occurrences).toBe(30);
+    expect(byProvenance.get("carried")!.lastSeenAt).toBe(1_600_000_000_000);
+    expect(byProvenance.get("unrendered")!.lastSeenAt).toBeUndefined();
+    expect(byProvenance.get("unrendered")!.details?.occurrences ?? 1).toBe(1);
   });
 
   test("an all-carried class keeps the NEWEST last-seen, dropped checks included", async () => {
@@ -589,8 +640,10 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
           payload: JSON.stringify({ details: { occurrences: 0.5, pagesTruncated: 400 } }),
         },
       ],
-      // `odd` has no site_pages row, so nothing has ever rendered it.
-      pages: backlog,
+      // `odd` is a rendered page like the rest, so it shares their class (#2063)
+      // and the drop this test is about actually happens — a different provenance
+      // would give it a class of its own, which is never over its own budget.
+      pages: [...backlog, odd],
       crawled: ["https://x.test/p/0"],
       statuses: [{ url: "https://x.test/p/0", status: 200 }],
     };
@@ -598,8 +651,7 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     const checks = streamed.unionRuleResults.get(RULE)!.checks;
     expect(checks).toHaveLength(1);
     expect(checks[0]!.details?.pagesTruncated).toBe(400);
-    // Mixed carried + unrendered, so neither marker survives.
-    expect(checks[0]!.provenance).toBeUndefined();
+    expect(checks[0]!.provenance).toBe("carried");
   });
 
   test("a class weighing zero is not rounded UP by the stamp", async () => {

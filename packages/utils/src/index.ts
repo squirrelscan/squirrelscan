@@ -2,6 +2,8 @@
 
 export {
   normalizeUrl,
+  normalizePageUrl,
+  stripUrlQuery,
   isValidUrl,
   isInternalUrl,
   getOrigin,

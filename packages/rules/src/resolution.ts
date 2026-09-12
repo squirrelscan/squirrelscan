@@ -12,7 +12,7 @@
 import type { CheckResult, ResolutionSignal } from "@squirrelscan/core-contracts";
 import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
-import { normalizeUrl } from "@squirrelscan/utils/url";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 /**
  * Build the resolution signal from a report's pre-sample rule results + the
@@ -55,13 +55,18 @@ export function buildResolutionSignal(
   // stays in, and the collision instead makes the *other* page carry too —
   // over-carry, never a wrong resolve.
   const evaluated = new Map<string, Set<string>>();
-  // The same page URL recurs across many checks/rules; normalizeUrl (URL
+  // (#2063) Hashed on the QUERY-PRESERVING page identity, the same key the merge
+  // stores findings under. A consumer on an older release hashed these
+  // query-blind; it recognizes both spellings (see merge-core's resolutionHashes),
+  // and the mismatch it cannot resolve only ever makes it carry, never resolve.
+  //
+  // The same page URL recurs across many checks/rules; normalizePageUrl (URL
   // parsing) dominates the build cost, so memoize per unique URL.
   const normalizeCache = new Map<string, string>();
   const normalized = (url: string): string => {
     let norm = normalizeCache.get(url);
     if (norm === undefined) {
-      norm = normalizeUrl(url);
+      norm = normalizePageUrl(url);
       normalizeCache.set(url, norm);
     }
     return norm;
@@ -80,6 +85,13 @@ export function buildResolutionSignal(
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
     for (const check of rule.checks) {
       if (check.status !== "pass" && check.status !== "warn" && check.status !== "fail") continue;
+      // (#2063) A carried/unrendered check is a replay of an earlier observation,
+      // not something this run evaluated. It can only mislead here — the pages it
+      // names were not crawled, so the consumer never consults them — while eating
+      // the signal's own budget: a producer replaying thousands of stale findings
+      // would push the pages this crawl DID evaluate past `maxChecks` and out of
+      // the signal entirely, which costs real resolutions.
+      if (check.provenance === "carried" || check.provenance === "unrendered") continue;
       const aggregated = check.details?.aggregated === true;
       const pageUrls = check.pageUrl
         ? [check.pageUrl]
