@@ -39,6 +39,10 @@ How it works:
   GitHub's release hosts. Both sources are checksum-verified against the release
   manifest. Set `SQUIRREL_FORCE_MIRROR=1` to skip GitHub from the start, and if
   both hosts fail the installer now prints the two URLs it tried.
+- A download host that answers with a sign-in or error page instead of the
+  release manifest is now treated as a failed source, so the installer moves on
+  to the other host rather than stopping on a parse error. This is what a
+  captive portal or an intercepting proxy looks like.
 
 ## v0.0.94
 

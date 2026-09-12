@@ -19,6 +19,10 @@ const powershellInstaller = await Bun.file(new URL("../install.ps1", import.meta
 const npmPostinstall = await Bun.file(
   new URL("../npm/scripts/postinstall.js", import.meta.url),
 ).text();
+const ciWorkflow = await Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text();
+const powershellContract = await Bun.file(
+  new URL("../scripts/install-ps-contract.test.ps1", import.meta.url),
+).text();
 
 // --- curl test double -----------------------------------------------------
 // install.sh pins every curl to HTTPS (#165), so a plaintext loopback server
@@ -1115,19 +1119,38 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     expect(stdout).toContain(`tried ${MIRROR_ASSET} (failed)`);
   }, 30_000);
 
-  test("a mirror URL carrying credentials is redacted before it is shown or reported", async () => {
-    // SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips
-    // home paths and clamps length; it knows nothing about URL userinfo.
+  test("a secret anywhere in the mirror URL is gone before it is shown or reported", async () => {
+    // SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and a token can hide in the
+    // userinfo, the query or the fragment. The report scrubber strips home
+    // paths and clamps length; it knows nothing about URL structure.
     const { stdout } = await runWithCurlShim(
-      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://alice:dummy-secret@mirror.test/dl/a"; download_failure_output; download_failure_guidance a binary /tmp/bin',  // pragma: allowlist secret -- a synthetic credential is the input under test
+      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://alice:dummy-secret@mirror.test/dl/a?token=querysecret#fragsecret"; download_failure_output; download_failure_guidance a binary /tmp/bin',  // pragma: allowlist secret -- a synthetic credential is the input under test
     );
-    expect(stdout).not.toContain("dummy-secret");
+    for (const secret of ["dummy-secret", "querysecret", "fragsecret"]) {
+      expect(stdout).not.toContain(secret);
+    }
+    // Still enough to tell which host was tried, which is why we carry it.
     expect(stdout).toContain("https://mirror.test/dl/a");
   });
 
+  test("the telemetry payload itself carries no part of a credentialed endpoint", async () => {
+    // The helper being clean is not the claim; what leaves the machine is.
+    const { calls } = await runWithCurlShim(
+      'CURRENT_STEP=download_binary; DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://u:pw@host/x?token=y#z"; report_error download_binary 1 "$(download_failure_report_line binary)" "$(download_failure_output)"; sleep 1',  // pragma: allowlist secret -- a synthetic credential is the input under test
+      { env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
+    );
+    const payload = calls[0]?.[calls[0].indexOf("--data") + 1] ?? "";
+    expect(payload).not.toBe("");
+    for (const secret of ["pw@", "token=y", "#z"]) {
+      expect(payload).not.toContain(secret);
+    }
+    expect(payload).toContain("https://host/x");
+    expect(JSON.parse(payload).step).toBe("download_binary");
+  }, 15_000);
+
   test("redaction leaves an ordinary URL and an @ in the path alone", async () => {
     const { stdout } = await runWithCurlShim(
-      'redact_url_credentials "https://install.squirrelscan.com/dl/v1/a"; echo; redact_url_credentials "https://host/p@th/a"',
+      'redact_url "https://install.squirrelscan.com/dl/v1/a"; echo; redact_url "https://host/p@th/a"',
     );
     expect(stdout.trim().split("\n")).toEqual([
       "https://install.squirrelscan.com/dl/v1/a",
@@ -1234,6 +1257,99 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     );
     const downloadUrls = shellInstaller.match(/https:\/\/github\.com\/\$\{REPO\}\/releases\/download/g);
     expect(downloadUrls).toHaveLength(1); // only the one inside fetch_release_asset
+  });
+
+  test("a 200 carrying HTML is a failed source, not a manifest", async () => {
+    // A captive portal, a proxy error page and an index-for-every-path bucket
+    // all return HTML with a 200. Before this, that reached jq, which died, and
+    // `set -e` took the script down with an empty report: exit 5, no message,
+    // no URLs.
+    const html = "<!DOCTYPE html><html><body>Sign in to continue</body></html>";
+    const { code, stderr } = await runWithCurlShim(
+      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid; rc=$?; rm -f "$out"; exit $rc',
+      { body: html },
+    );
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("returned something that is not a manifest");
+  }, 30_000);
+
+  test.each([
+    ["an HTML page", "<!DOCTYPE html><html><body>hi</body></html>", false],
+    ["an empty body", "", false],
+    ["valid JSON that is not a manifest", '{"message":"Not Found"}', false],
+    ["a JSON array", "[]", false],
+    ["a real manifest", '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}', true],
+  ])("manifest_looks_valid rejects %s", async (_name, body, expected) => {
+    const { code } = await runWithCurlShim(
+      `USE_JQ=true; f=$(mktemp); printf '%s' ${JSON.stringify(body)} > "$f"; manifest_looks_valid "$f"; rc=$?; rm -f "$f"; exit $rc`,
+    );
+    expect(code === 0).toBe(expected);
+  });
+
+  test("manifest_looks_valid agrees with itself without jq", async () => {
+    // The grep fallback is the path a machine without jq takes, and it is the
+    // one nobody exercises by hand.
+    const real = '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}';
+    const html = "<!DOCTYPE html><html><body>hi</body></html>";
+    const run = (body: string) =>
+      runWithCurlShim(
+        `USE_JQ=false; f=$(mktemp); printf '%s' ${JSON.stringify(body)} > "$f"; manifest_looks_valid "$f"; rc=$?; rm -f "$f"; exit $rc`,
+      );
+    expect((await run(real)).code).toBe(0);
+    expect((await run(html)).code).not.toBe(0);
+  });
+
+  test("a GitHub HTML manifest falls through to the mirror instead of failing", async () => {
+    // The recovery half: one bad source must not end the install.
+    const { calls, code } = await runWithCurlShim(
+      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid; rc=$?; cat "$out"; rm -f "$out"; exit $rc',
+      {
+        // The shim answers every URL with the same body, so drive the GitHub leg
+        // to fail outright and assert the mirror leg is what validates.
+        body: '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}',
+        failMatch: "github.com",
+      },
+    );
+    expect(code).toBe(0);
+    expect(calls[calls.length - 1]).toContain(
+      "https://install.squirrelscan.com/dl/v1.2.3/manifest.json",
+    );
+  }, 30_000);
+
+  test("the GitHub path prints nothing new, so its output stays byte-identical", async () => {
+    // Only a mirror download announces where it came from. Almost every install
+    // takes the GitHub path and must look exactly as it did before.
+    const { stdout, stderr } = await runWithCurlShim(
+      'download_and_install_source_line() { :; }; fetch_release_asset v1.2.3 f "$(mktemp)" binary; echo "SOURCE=$DOWNLOAD_SOURCE"',
+      { body: "BYTES" },
+    );
+    expect(`${stdout}${stderr}`).toContain("SOURCE=github.com");
+    expect(`${stdout}${stderr}`).not.toContain("Downloaded from");
+  });
+
+  test("the source line is emitted only for the mirror", () => {
+    // Guard the call site itself: the announcement lives behind the condition.
+    expect(shellInstaller).toContain('if [ "$DOWNLOAD_SOURCE" != "github.com" ]; then');
+    const announce = shellInstaller.match(/info "Downloaded from \$\{DOWNLOAD_SOURCE\}"/g);
+    expect(announce).toHaveLength(1);
+    expect(powershellInstaller).toContain('if ($script:DownloadSource -ne "github.com") {');
+  });
+
+  test("CI probes for pwsh instead of declaring it as the shell", () => {
+    // `shell: pwsh` is resolved before the step's command runs, so on a runner
+    // without pwsh the step dies with a shell-not-found error that reads like an
+    // installer bug. Probing from bash degrades to a skip.
+    expect(ciWorkflow).not.toContain("shell: pwsh\n");
+    expect(ciWorkflow).toContain("if ! command -v pwsh > /dev/null 2>&1; then");
+    expect(ciWorkflow).toContain("::notice::pwsh is not available on this runner");
+    expect(ciWorkflow).toContain("pwsh -NoProfile -File ./scripts/install-ps-contract.test.ps1");
+  });
+
+  test("the ps1 contract script parses the whole installer, not just the part it runs", () => {
+    // It dot-sources only the text above `Main`, so a syntax error past that
+    // point would otherwise ship unseen.
+    expect(powershellContract).toContain("Parser]::ParseFile(");
+    expect(powershellContract).toContain("$parseErrors");
   });
 
   test("both installers ship the same mirror env vars", () => {

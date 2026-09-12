@@ -279,34 +279,68 @@ function Get-ReleaseAsset {
     return $false
 }
 
+# A 200 is not the same as the file we asked for. A captive portal, a proxy
+# error page, or a bucket that answers every path with its index all return HTML
+# with a 200, and Invoke-RestMethod hands that back as a string rather than
+# throwing. Content that is not a manifest means this SOURCE failed, so the
+# mirror still gets its turn.
+function Test-ManifestShape {
+    param($Manifest)
+
+    if ($null -eq $Manifest) { return $false }
+    # A string is what Invoke-RestMethod returns for an HTML or plain-text body;
+    # a real manifest comes back as an object with these two members.
+    if ($Manifest -is [string]) { return $false }
+    if (-not $Manifest.PSObject.Properties.Match('binaries').Count) { return $false }
+    if (-not $Manifest.PSObject.Properties.Match('version').Count) { return $false }
+    return $null -ne $Manifest.binaries
+}
+
 # Same two sources for a small JSON asset. Returns the parsed object, or $null
-# when both sources failed.
+# when both sources failed or neither served a usable one.
 function Get-ReleaseAssetJson {
     param([string]$Version, [string]$Asset, [string]$Label)
 
     $sources = Get-DownloadSources -Version $Version -Asset $Asset
     for ($i = 0; $i -lt $sources.Count; $i++) {
+        $failure = ""
         try {
             $parsed = Invoke-RestMethod -Uri $sources[$i][1] -TimeoutSec 30
-            $script:DownloadSource = $sources[$i][0]
-            return $parsed
-        } catch {
-            if ($i -lt ($sources.Count - 1)) {
-                Write-Warn "$($sources[$i][0]) could not serve the $Label, trying $($sources[$i + 1][0])..."
+            if (Test-ManifestShape $parsed) {
+                $script:DownloadSource = $sources[$i][0]
+                return $parsed
             }
+            $failure = "$($sources[$i][0]) returned something that is not a $Label"
+        } catch {
+            $failure = "$($sources[$i][0]) could not serve the $Label"
+        }
+        if ($i -lt ($sources.Count - 1)) {
+            Write-Warn "$failure, trying $($sources[$i + 1][0])..."
+        } else {
+            Write-Warn $failure
         }
     }
     return $null
 }
 
-# Strip `user:password@` out of a URL before it is printed or reported.
-# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and can carry credentials, and the
-# report scrubber removes home paths and clamps length — it knows nothing about
-# URL userinfo, so a mirror whose URL carries a username and password would
-# otherwise send that password to the reporting endpoint verbatim.
+# Reduce a URL to scheme, host and path before it is printed or reported.
+# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and every part of it that can hold
+# a secret has to go: it can sit in the userinfo before the host, in the query
+# after the path, or in the fragment. The report scrubber strips home paths and clamps length; it knows nothing
+# about URL structure, so anything left here reaches the reporting endpoint
+# verbatim. Scheme, host and path are all a reader needs to tell which host was
+# tried, which is the whole point of carrying the URL at all.
 function Get-RedactedUrl {
     param([string]$Url)
-    return [regex]::Replace($Url, '^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@', '$1')
+    $stripped = [regex]::Replace($Url, '^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@', '$1')
+    return [regex]::Replace($stripped, '[?#].*$', '')
+}
+
+# Single-quote a value for a copy-paste recipe. A literal apostrophe ends the
+# string in PowerShell and is escaped by doubling it: O'Brien -> 'O''Brien'.
+function Get-SingleQuoted {
+    param([string]$Value)
+    return "'" + $Value.Replace("'", "''") + "'"
 }
 
 # The report line and the user-facing guidance for a download that ran out of
@@ -361,9 +395,14 @@ function Show-DownloadFailureGuidance {
         Write-Host "  If both hosts are blocked, download $Asset on a machine that can"
         Write-Host "  reach one of them, copy it here, then:"
         # The bin directory does not exist until the first successful install,
-        # and Move-Item does not create it.
-        Write-Host "    New-Item -ItemType Directory -Force -Path '$($script:InstallBinDir)' | Out-Null"
-        Write-Host "    Move-Item $Asset '$($script:InstallBinDir)\squirrel.exe'"
+        # and Move-Item does not create it. Both paths are quoted through
+        # Get-SingleQuoted: a profile under C:\Users\O'Brien would otherwise
+        # print a command that will not parse.
+        Write-Host "    New-Item -ItemType Directory -Force -Path $(Get-SingleQuoted $script:InstallBinDir) | Out-Null"
+        # Concatenated, not Join-Path: this is a display string, and Join-Path
+        # resolves drives (it rejects a C:\ path anywhere that drive does not
+        # exist, which is every non-Windows host the contract checks run on).
+        Write-Host "    Move-Item $(Get-SingleQuoted $Asset) $(Get-SingleQuoted "$($script:InstallBinDir)\squirrel.exe")"
     } else {
         Write-Host "  If both hosts are blocked, this machine cannot reach anywhere the"
         Write-Host "  release is published. Allowlist github.com or install.squirrelscan.com,"
@@ -454,7 +493,11 @@ function Install-Squirrel {
             Show-DownloadFailureGuidance -Asset $filename -Kind "binary"
             Write-Err (Get-DownloadFailureLine "binary") -Output (Get-DownloadFailureOutput)
         }
-        Write-Info "Downloaded from $($script:DownloadSource)"
+        # Only when the mirror answered. The GitHub path is the one almost every
+        # install takes, and its output stays byte-identical to before this change.
+        if ($script:DownloadSource -ne "github.com") {
+            Write-Info "Downloaded from $($script:DownloadSource)"
+        }
 
         # Verify checksum
         $script:CurrentStep = "verify_checksum"

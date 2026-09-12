@@ -12,6 +12,19 @@
 $ErrorActionPreference = "Stop"
 
 $installer = Join-Path (Split-Path -Parent $PSScriptRoot) "install.ps1"
+
+# Parse the whole file before anything else. The dot-source below only covers
+# the part above `Main`, so a syntax error past that point would otherwise reach
+# users unseen.
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile(
+    $installer, [ref]$null, [ref]$parseErrors) | Out-Null
+if ($parseErrors) {
+    $parseErrors | ForEach-Object { Write-Host "PARSE ERROR: $_" }
+    exit 1
+}
+Write-Host "install.ps1 parsed clean"
+
 $src = Get-Content $installer -Raw
 # Everything above Main: the function library, with no entry point to run.
 $cut = $src.Substring(0, $src.LastIndexOf("function Main {"))
@@ -109,21 +122,70 @@ Check "line drops the retry instruction" (-not ($forcedLine -like "*retry with S
 Check "forced line still fits ErrorLineMax" ($forcedLine.Length -le $ErrorLineMax)
 Remove-Item Env:SQUIRREL_FORCE_MIRROR -ErrorAction SilentlyContinue
 
+Write-Host "the printed recipe survives an apostrophe in the path"
+# A profile under C:\Users\O'Brien would otherwise print a command that does
+# not parse: the apostrophe ends the single-quoted string.
+Check "an apostrophe is doubled" ((Get-SingleQuoted "C:\Users\O'Brien\bin") -eq "'C:\Users\O''Brien\bin'")
+Check "an ordinary path is just quoted" ((Get-SingleQuoted "C:\Users\nik\bin") -eq "'C:\Users\nik\bin'")
+$savedBinDir = $script:InstallBinDir
+$script:InstallBinDir = "C:\Users\O'Brien\AppData\Local\squirrel\bin"
+$apostropheGuidance = (Show-DownloadFailureGuidance -Asset "squirrel-1.2.3-windows-x64.exe" -Kind "binary" 6>&1 | Out-String)
+$recipe = ($apostropheGuidance -split "`n" | Where-Object { $_ -like "*Move-Item*" }) -join ""
+# Round-trip it: the printed command must parse, and its second argument must be
+# the path we started from.
+$recipeErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseInput($recipe.Trim(), [ref]$null, [ref]$recipeErrors)
+Check "the printed recipe parses" ($recipeErrors.Count -eq 0)
+$elements = $ast.EndBlock.Statements[0].PipelineElements[0].CommandElements
+Check "the destination round-trips exactly" ($elements[2].Value -eq "C:\Users\O'Brien\AppData\Local\squirrel\bin\squirrel.exe")
+Check "the asset argument is quoted too" ($elements[1].Value -eq "squirrel-1.2.3-windows-x64.exe")
+$script:InstallBinDir = $savedBinDir
+
+Write-Host "a non-manifest 200 is a failed source, not a successful download"
+# Invoke-RestMethod hands back an HTML body as a string rather than throwing, so
+# a captive portal or proxy error page would otherwise be accepted as a manifest.
+Check "an HTML string is rejected" (-not (Test-ManifestShape "<html><body>Sign in</body></html>"))
+Check "null is rejected" (-not (Test-ManifestShape $null))
+Check "an object missing binaries is rejected" (-not (Test-ManifestShape ([pscustomobject]@{ version = "1.2.3" })))
+Check "an object missing version is rejected" (-not (Test-ManifestShape ([pscustomobject]@{ binaries = @{} })))
+Check "a real manifest is accepted" (Test-ManifestShape ([pscustomobject]@{ version = "1.2.3"; binaries = [pscustomobject]@{ "windows-x64" = @{} } }))
+
+function Invoke-RestMethod { param($Uri, $TimeoutSec)
+  if ($Uri -like "*github.com*") { return "<html><body>Sign in to continue</body></html>" }
+  return [pscustomobject]@{ version = "1.2.3"; binaries = [pscustomobject]@{ "windows-x64" = [pscustomobject]@{ filename = "f"; sha256 = "s" } } }
+}
+$recovered = Get-ReleaseAssetJson -Version "v1.2.3" -Asset "manifest.json" -Label "manifest"
+Check "an HTML GitHub response falls through to the mirror" ($null -ne $recovered)
+Check "the mirror is recorded as the source" ($script:DownloadSource -eq "install.squirrelscan.com")
+
+function Invoke-RestMethod { param($Uri, $TimeoutSec) return "<html><body>Sign in</body></html>" }
+$exhausted = Get-ReleaseAssetJson -Version "v1.2.3" -Asset "manifest.json" -Label "manifest"
+Check "HTML from both sources returns null, so the caller reports the actionable error" ($null -eq $exhausted)
+
 Write-Host "a mirror URL carrying credentials is redacted"
 # SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips home
 # paths and clamps length; it knows nothing about URL userinfo.
 Check "userinfo stripped" ((Get-RedactedUrl "https://alice:dummy-secret@mirror.test/dl/a") -eq "https://mirror.test/dl/a") # pragma: allowlist secret
 Check "ordinary url untouched" ((Get-RedactedUrl "https://install.squirrelscan.com/dl/a") -eq "https://install.squirrelscan.com/dl/a")
 Check "an @ in the path is not userinfo" ((Get-RedactedUrl "https://host/p@th/a") -eq "https://host/p@th/a")
-$script:DownloadUrlMirror = "https://alice:dummy-secret@mirror.test/dl/a" # pragma: allowlist secret
+# A token can hide in the query or the fragment just as easily as in userinfo.
+Check "a query token is dropped" ((Get-RedactedUrl "https://mirror.test/dl/a?token=secret") -eq "https://mirror.test/dl/a")
+Check "a fragment is dropped" ((Get-RedactedUrl "https://mirror.test/dl/a#secret") -eq "https://mirror.test/dl/a")
+Check "userinfo, query and fragment all go at once" ((Get-RedactedUrl "https://u:p@host/x?token=y#z") -eq "https://host/x")
+$script:DownloadUrlMirror = "https://alice:dummy-secret@mirror.test/dl/a?token=querysecret#fragsecret" # pragma: allowlist secret
 $redactedOutput = Get-DownloadFailureOutput
-Check "report carries no credentials" (-not ($redactedOutput -like "*dummy-secret*"))
+Check "report carries no userinfo password" (-not ($redactedOutput -like "*dummy-secret*"))
+Check "report carries no query token" (-not ($redactedOutput -like "*querysecret*"))
+Check "report carries no fragment" (-not ($redactedOutput -like "*fragsecret*"))
+Check "report still names the host and path" ($redactedOutput -like "*https://mirror.test/dl/a*")
 $redactedGuidance = (Show-DownloadFailureGuidance -Asset "a" -Kind "binary" 6>&1 | Out-String)
-Check "guidance shows no credentials" (-not ($redactedGuidance -like "*dummy-secret*"))
+Check "guidance shows no userinfo password" (-not ($redactedGuidance -like "*dummy-secret*"))
+Check "guidance shows no query token" (-not ($redactedGuidance -like "*querysecret*"))
+Check "guidance shows no fragment" (-not ($redactedGuidance -like "*fragsecret*"))
 
 Write-Host "guidance is specific to what failed"
 $binaryGuidance = (Show-DownloadFailureGuidance -Asset "squirrel-1.2.3-windows-x64.exe" -Kind "binary" 6>&1 | Out-String)
-Check "a binary gets the by-hand recipe" ($binaryGuidance -like "*Move-Item squirrel-1.2.3-windows-x64.exe*")
+Check "a binary gets the by-hand recipe" ($binaryGuidance -like "*Move-Item 'squirrel-1.2.3-windows-x64.exe'*")
 # The bin directory does not exist until the first successful install, and
 # Move-Item will not create it.
 Check "the recipe creates its destination first" ($binaryGuidance -like "*New-Item -ItemType Directory -Force -Path*")

@@ -59,7 +59,9 @@ To skip GitHub from the start rather than waiting for it to time out:
   </Tab>
 </Tabs>
 
-If both hosts are unreachable, the installer prints the two URLs it tried. Allowlist either `github.com` or `install.squirrelscan.com`, or download the binary on a machine that can reach one of them and move it into place yourself.
+If both hosts are unreachable, the installer prints the two URLs it tried. Allowlist either `github.com` or `install.squirrelscan.com`, or download the binary on a machine that can reach one of them and move it into place yourself. A host that answers with a sign-in page instead of the release files, which is what a captive portal or an intercepting proxy does, counts as unreachable and the installer moves on to the other one.
+
+`SQUIRREL_DOWNLOAD_ENDPOINT` points the fallback at a different host if you mirror the releases yourself. Only its scheme, host and path appear in the installer's anonymous failure report, so a URL carrying a token in its userinfo, query or fragment does not send that token anywhere.
 
 ### If the install is killed at the last step
 
