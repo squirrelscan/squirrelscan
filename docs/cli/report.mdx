@@ -65,6 +65,10 @@ https://reports.squirrelscan.com/XVv4NO7aPr
 
 Manage published reports in the [dashboard](https://app.squirrelscan.com).
 
+<Note>
+A report of a host no squirrelscan server can reach is never published, even with `--publish`. That covers `localhost`, loopback and private ranges, and internal names such as `box.local` or anything under `.internal`. The command prints the report as usual and says the report stayed local. See [Local audits with the CLI](/guides/local-audits-cli).
+</Note>
+
 ### Publish with visibility
 
 ```bash

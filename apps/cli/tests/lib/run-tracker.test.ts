@@ -125,6 +125,7 @@ describe("registerRun", () => {
       // Fixture response has no pricing-v10 fields → old-server defaults.
       baseCharged: 0,
       balanceAfterBase: null,
+      websiteSkippedReason: null,
     });
     expect(captured!.method).toBe("POST");
     expect(captured!.url).toContain("/v1/agent-runs/register");
@@ -177,6 +178,7 @@ describe("registerRun", () => {
       lifecycleBase: "/v1/agent-runs",
       baseCharged: 0,
       balanceAfterBase: null,
+      websiteSkippedReason: null,
     });
   });
 
@@ -594,6 +596,68 @@ describe("markRunning / finalizeRun", () => {
   });
 });
 
+// #1841. The API refuses to create a hosted website for a host no hosted
+// service can reach, while still accepting the run. The CLI has to tell that
+// apart from a malformed response, because the two look identical on the wire
+// except for one marker.
+describe("registerRun — a run the server gave no website (#1841)", () => {
+  const respond = (body: Record<string, unknown>) => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify(body), {
+        status: 201,
+      })) as unknown as typeof fetch;
+  };
+
+  test("accepts it when the server says WHY, carrying the reason", async () => {
+    respond({
+      runId: "run_1",
+      auditId: "aud_1",
+      websiteRegistration: { skipped: true, reason: "non_public_host" },
+    });
+    expect(await registerRun({ url: "http://mac-mini.local:3000" })).toEqual({
+      runId: "run_1",
+      websiteId: null,
+      auditId: "aud_1",
+      lifecycleBase: "/v1/agent-runs",
+      baseCharged: 0,
+      balanceAfterBase: null,
+      websiteSkippedReason: "non_public_host",
+    });
+  });
+
+  // The load-bearing half. Without the marker a missing websiteId is the old
+  // bad-body case: registering against it would leave the CLI unable to
+  // finalize the run against any site, silently.
+  test("still rejects a websiteId-less body with no marker", async () => {
+    respond({ runId: "run_1", auditId: "aud_1" });
+    expect(await registerRun({ url: "https://example.com" })).toBeNull();
+  });
+
+  test("a marker with no reason does not read as a normal register", async () => {
+    respond({
+      runId: "run_1",
+      auditId: "aud_1",
+      websiteRegistration: { skipped: true },
+    });
+    const result = await registerRun({ url: "https://example.com" });
+    expect(result?.websiteSkippedReason).toBe("unknown");
+  });
+
+  // `skipped: false` is the shape a future server might send for "I resolved
+  // one after all" — it must not be read as a skip.
+  test("skipped:false is not a skip", async () => {
+    respond({
+      runId: "run_1",
+      websiteId: "web_1",
+      auditId: "aud_1",
+      websiteRegistration: { skipped: false },
+    });
+    const result = await registerRun({ url: "https://example.com" });
+    expect(result?.websiteSkippedReason).toBeNull();
+    expect(result?.websiteId).toBe("web_1");
+  });
+});
+
 describe("createRunFinalizer (#332)", () => {
   const run: RegisteredRun = {
     runId: "run_1",
@@ -602,6 +666,7 @@ describe("createRunFinalizer (#332)", () => {
     lifecycleBase: "/v1/agent-runs",
     baseCharged: 50,
     balanceAfterBase: 450,
+    websiteSkippedReason: null,
   };
 
   // Count PATCH calls + capture each path so the once-guard + id are observable.
