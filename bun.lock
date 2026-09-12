@@ -122,6 +122,7 @@
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
         "effect": "^3.21.3",
+        "zod": "^4.4.3",
       },
     },
     "packages/crawler": {

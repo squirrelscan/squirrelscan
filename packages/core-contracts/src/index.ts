@@ -32,6 +32,9 @@ export * from "./resolution";
 // next steps) — shared by the crawler, the engine, the renderers and the cloud.
 export * from "./failure-reason";
 
+// #2061: the structured entity map — site-wide JSON-LD graph of one audit.
+export * from "./entity-map";
+
 // Import storage types needed locally by interfaces in this file
 import type {
   AgentAccessProbe,
