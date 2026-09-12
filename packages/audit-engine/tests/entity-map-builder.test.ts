@@ -332,6 +332,36 @@ describe("toJsonLd", () => {
     expect(() => JSON.parse(JSON.stringify(jsonLd))).not.toThrow();
   });
 
+  test("a punctuation-only name still gets a usable generated id", () => {
+    const map = build([
+      page("https://example.com/", {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        name: "---",
+      }),
+    ]);
+    const jsonLd = toJsonLd(map);
+    const id = String(jsonLd["@graph"][0]?.["@id"]);
+    expect(id).toContain("#entity-");
+    // No empty or dash-edged slug: `#entity--<hash>` reads as a broken id.
+    expect(id).not.toContain("#entity--");
+  });
+
+  test("a long punctuation-heavy name slugifies in linear time", () => {
+    // js/polynomial-redos: the trim used to be `/^-+|-+$/`, which backtracks on
+    // a site-controlled name. 200k separators must stay instant.
+    const started = Date.now();
+    const map = build([
+      page("https://example.com/", {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        name: "-".repeat(200_000),
+      }),
+    ]);
+    expect(toJsonLd(map)["@graph"]).toHaveLength(1);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
   test("generated ids are stable across builds", () => {
     const input = [
       page("https://example.com/", {

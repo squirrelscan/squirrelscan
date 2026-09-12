@@ -30,8 +30,16 @@ const MAX_CELL = 90;
  */
 function cell(value: string | null | undefined): string {
   if (!value) return "";
-  const flat = value.replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
-  return flat.length > MAX_CELL ? `${flat.slice(0, MAX_CELL - 1)}…` : flat;
+  const flat = value.replace(/\s+/g, " ").trim();
+  // Clip BEFORE escaping. Clipping afterwards can cut an escape pair in half
+  // and leave a trailing lone backslash, which would then escape the cell's
+  // own closing pipe.
+  const clipped =
+    flat.length > MAX_CELL ? `${flat.slice(0, MAX_CELL - 1)}…` : flat;
+  // Backslash first, then pipe. The other order turns a site's literal `\|`
+  // into `\\|`, which markdown reads as an escaped backslash followed by a
+  // LIVE pipe, and the row gains a column.
+  return clipped.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
 function percent(share: number): string {

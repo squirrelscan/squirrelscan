@@ -22,11 +22,16 @@ function shortHash(value: string): string {
 }
 
 function slugify(value: string): string {
+  // The first pass collapses every run of non-alphanumerics to ONE dash, so the
+  // trims below need no quantifier. `/^-+|-+$/` here would be a polynomial
+  // backtracking risk on a site-controlled name, and this input is exactly that.
+  // Clipping before the trims also removes a dash the clip itself introduced.
   const slug = value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
+    .slice(0, 48)
+    .replace(/^-/, "")
+    .replace(/-$/, "");
   return slug.length > 0 ? slug : "entity";
 }
 

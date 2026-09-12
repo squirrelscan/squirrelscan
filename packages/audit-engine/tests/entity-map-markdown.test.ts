@@ -125,6 +125,41 @@ describe("renderEntityMapMarkdown", () => {
     expect(separators.length).toBe(7);
   });
 
+  test("a backslash before a pipe cannot smuggle a live separator through", () => {
+    // Escaping the pipe without escaping the backslash first turns a site's
+    // literal `\|` into `\\|`, which markdown reads as an escaped backslash
+    // followed by a LIVE pipe, and the row gains a column.
+    const markdown = render([
+      page("https://example.com/", {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "Acme \\| Inc",
+      }),
+    ]);
+
+    const row = markdown.split("\n").find((line) => line.includes("Acme"));
+    expect(row).toBeDefined();
+    expect(row).toContain("Acme \\\\\\| Inc");
+    const separators = row!.replace(/\\\\/g, "").replace(/\\\|/g, "").split("|");
+    expect(separators.length).toBe(7);
+  });
+
+  test("a name that clips mid-escape cannot leave a trailing backslash", () => {
+    const markdown = render([
+      page("https://example.com/", {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: `${"a".repeat(200)}\\`,
+      }),
+    ]);
+
+    const row = markdown.split("\n").find((line) => line.includes("aaa"));
+    expect(row).toBeDefined();
+    // Whatever the clip did, every cell separator is still a bare pipe.
+    const separators = row!.replace(/\\\\/g, "").replace(/\\\|/g, "").split("|");
+    expect(separators.length).toBe(7);
+  });
+
   test("an empty map says there is nothing to read instead of empty tables", () => {
     const markdown = render([{ url: "https://example.com/", raw: null }]);
 
