@@ -665,3 +665,56 @@ describe("#2063 — the container streams this run's evidence only", () => {
     expect(counts).toEqual({ [RULE]: { "title-length": 1 } });
   });
 });
+
+describe("#2063 — a rule emptied by the filter still scores its crawled pages", () => {
+  const REAL_RULE = "core/meta-title";
+  /** Every check this rule published is a replay, so the filter empties it. */
+  const EMPTIED_RULE = "content/word-count";
+  const wordCountMeta = { ...pageMeta, id: "word-count", name: "Word Count", category: "content" };
+  const CRAWLED = FRESH_PAGES[0]!;
+
+  async function* noOpenPages(): AsyncGenerator<{
+    normalizedUrl: string;
+    fresh: PageFindingRecord[];
+    prior: PageFindingRecord[];
+  }> {
+    // Nothing open for this site.
+  }
+
+  // The filter must empty a rule's checks without removing the RULE. The tally
+  // fold reads rule membership to hand a page rule its fresh-clean pass count —
+  // the crawled pages it found nothing on — so an emptied rule dropped from the
+  // shell would silently leave the pass denominator.
+  test("its fresh-clean pass count survives the filter", async () => {
+    const result = await runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: {
+        [REAL_RULE]: { meta: pageMeta, checks: [warnCheck(CRAWLED)] },
+        [EMPTIED_RULE]: {
+          meta: wordCountMeta,
+          checks: [
+            warnCheck(CARRIED_PAGES[0]!, { provenance: "carried" as const, lastSeenAt: AUGUST }),
+            warnCheck(CARRIED_PAGES[1]!, { provenance: "unrendered" as const }),
+          ],
+        },
+      },
+      pageStatuses: [],
+      now: NOW,
+      completeStore: { openPages: noOpenPages(), crawledUrls: [CRAWLED] },
+    });
+
+    // The rule survives with no checks at all…
+    expect(result.unionRuleResults.get(EMPTIED_RULE)!.checks).toHaveLength(0);
+    // …and the one crawled page still counts as a pass for it. Drop the rule key
+    // and this entry does not exist.
+    const tally = result.scoringTallies!.get(EMPTIED_RULE);
+    expect(tally).toBeDefined();
+    expect(tally!.tally.passed).toBe(1);
+    expect(tally!.tally.warnings).toBe(0);
+
+    expect(result.replayedChecksDropped).toBe(2);
+    expect(result.coverage.auditedPages).toBe(1);
+  });
+});

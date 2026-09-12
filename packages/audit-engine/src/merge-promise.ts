@@ -65,10 +65,12 @@ const REMOVED_STATUSES = new Set([404, 410]);
  * appeared for a 16-page crawl with every stale finding re-stamped as first seen
  * today (squirrelscan/repo#2063).
  *
- * Gated on the check being PAGE-ATTRIBUTED so a site-scope check can never be
- * dropped by a stray provenance tag: a replay is a per-page finding by
- * construction (`carriedFindingToCheck` always stamps a `pageUrl`), and a site
- * rule's check is scored from the shell verbatim.
+ * Gated on the check being PAGE-ATTRIBUTED, so the ordinary site-scope check —
+ * no `pageUrl`, no aggregate marker, scored from the shell verbatim — is never
+ * dropped by a stray provenance tag. The gate reads the CHECK's shape, not the
+ * rule's scope: a check carrying the aggregate marker and naming pages is treated
+ * as a page replay whichever rule emitted it, which is the only honest reading of
+ * a check that claims those pages.
  */
 function isReplayedCheck(check: CheckResult): boolean {
   return (
@@ -342,8 +344,11 @@ export interface CloudSmartAuditsResult {
    * this merge refused to treat as evidence from this run. Counted in BOTH modes:
    * complete mode takes its findings from the store, but the shell is still the
    * report body and a replay in it would sit in the union beside the cloud's own
-   * carry for the same page. One aggregate counts once however many pages it
-   * names; {@link replayedUnknownPages} is the per-page number.
+   * The UNIT differs by mode, deliberately: the sampled branch unfolds before it
+   * filters, so an aggregate counts as the per-page checks it stood for, while
+   * complete mode never unfolds and counts it once. Both count "checks refused at
+   * the filter", which is what the filter was handed. {@link replayedUnknownPages}
+   * is the per-page number and is comparable across both.
    */
   replayedChecksDropped: number;
   /**
@@ -457,8 +462,10 @@ export async function runCloudSmartAudits(
     // Site-scope checks stay: the tally fold scores those verbatim.
     //
     // Every rule KEEPS ITS KEY even when every check goes. The tally fold reads
-    // rule membership to decide which rules the shell already handled, so dropping
-    // an emptied rule would hand it to the carried-only branch twice.
+    // rule membership twice: `foldShellRules` gives a page rule its fresh-clean
+    // pass count, and `finish` skips the rules it already handled. An emptied rule
+    // dropped here would lose that pass count — the crawled pages it found nothing
+    // on would leave the denominator, which is the #918 inflation in miniature.
     freshResults = new Map<string, RuleRunResult>();
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       const checks: CheckResult[] = [];
