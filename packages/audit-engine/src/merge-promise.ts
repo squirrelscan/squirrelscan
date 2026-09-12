@@ -374,6 +374,17 @@ export async function runCloudSmartAudits(
   /** (#2063) Producer-carried checks refused as this run's evidence. */
   let replayedChecksDropped = 0;
   if (completeStore) {
+    // (#2063) IDENTITY CONTRACT. Complete mode is the one place where a page's
+    // ABSENCE from the fresh set authorizes a resolve, and the fresh set was keyed
+    // by the PRODUCER (`buildStreamFindings`, container-side) while this set is
+    // keyed here. The two must use the same normalizer, which they do — same
+    // module, same release — so the contract is really a deploy one: ship the
+    // container image and the API from the same engine build. A container still
+    // keying pages query-blind would stream `/p` where this set has `/p?id=1`, and
+    // a prior on `/p?id=1` would then look crawled-clean and resolve. The damage
+    // is transient (the next audit re-creates a finding that is still there) and
+    // needs a publish from the NEW engine to have already keyed that page, so it
+    // is bounded by whatever audits are in flight across one deploy.
     for (const u of completeStore.crawledUrls) crawledUrls.add(normalizePageUrl(u));
     for (const u of statusByUrl.keys()) crawledUrls.add(u);
     for (const u of removedUrls) crawledUrls.delete(u);
@@ -727,6 +738,16 @@ export async function runCloudSmartAudits(
     unionRuleResults,
     ...(scoringTallies ? { scoringTallies } : {}),
     coverage: {
+      // Pages this run EVIDENCED, which after #2063 is the pages it crawled: the
+      // replayed checks that used to pad this are gone. It is deliberately the
+      // same set the score and `site_pages` are built from rather than the
+      // publish's raw crawl count, so the three cannot disagree — a coverage line
+      // claiming more pages than `knownPages` would be describing pages the
+      // report has no findings, passes or page rows for. On the SAMPLED path that
+      // leaves a residual gap, unchanged by #2063 and owned by #1167: a page
+      // crawled clean whose every check was clipped from the publish sample is
+      // evidenced by nothing, so it counts as carried rather than audited. The
+      // complete-store path (#1023) is the fix for that and has no such gap.
       auditedPages: crawledUrls.size,
       knownPages: session.activePageUrls.size,
       carriedFindings: carriedCount - unrenderedCount,

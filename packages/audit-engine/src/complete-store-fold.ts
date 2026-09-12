@@ -35,7 +35,7 @@
 
 import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { DEFAULT_FOLD_LIMITS, foldOverflowChecks } from "@squirrelscan/rules/fold";
+import { DEFAULT_FOLD_LIMITS, foldGroupKey, foldOverflowChecks } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 
 import { reconstructPageRuleChecks } from "./reconstruct";
@@ -434,8 +434,10 @@ function retainCarried(
   const pageClasses = new Set<string>();
   for (const check of checks) {
     // The key the publish fold groups on, so a stamp lands on the class it will
-    // actually be summed into. NUL cannot appear in a check name.
-    const key = `${check.name}\u0000${check.status}`;
+    // actually be summed into — provenance included (#2063), or a class that
+    // splits into a carried and a fresh aggregate would be counted once, capped
+    // as one, and reconciled against whichever of the two happened to match.
+    const key = foldGroupKey(check);
     let counts = entry.classes.get(key);
     if (!counts) {
       counts = {
@@ -569,7 +571,7 @@ function reconcileCarriedAggregate(
   aggregate: CheckResult,
   classes: Map<string, CarriedClassCounts>
 ): void {
-  const counts = classes.get(`${aggregate.name}\u0000${aggregate.status}`);
+  const counts = classes.get(foldGroupKey(aggregate));
   // Untouched unless this class actually lost members; a fully-present class was
   // folded from every constituent and is already right.
   if (!counts || counts.members <= counts.retainedMembers) return;

@@ -522,7 +522,16 @@ export function foldOverflowChecks(
   out.sort((a, b) => {
     const nameDiff = a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
     if (nameDiff !== 0) return nameDiff;
-    return a.status < b.status ? -1 : a.status > b.status ? 1 : 0;
+    const statusDiff = a.status < b.status ? -1 : a.status > b.status ? 1 : 0;
+    if (statusDiff !== 0) return statusDiff;
+    // (#2063) Provenance splits a class into up to three aggregates, so the pair
+    // above no longer separates them and Array#sort is free to leave them in
+    // whatever order the groups were built — which is rule execution order, and
+    // that is nondeterministic (#114). Ordering on the full group key is what
+    // keeps a repeat audit byte-identical.
+    const ka = foldGroupKey(a);
+    const kb = foldGroupKey(b);
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
   });
 
   // No rule emits >maxChecks distinct issue classes; slice keeps the invariant
