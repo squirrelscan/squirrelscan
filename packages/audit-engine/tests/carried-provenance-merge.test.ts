@@ -23,6 +23,8 @@ import type {
 import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 
 import { findingKey } from "../src/merge-core";
+import { foldOverflowChecks, sampleChecksForPublish } from "@squirrelscan/rules/fold";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
 import { buildSkippedPassCounts, buildStreamFindings } from "../src/stream-findings";
 import { calculateHealthScore } from "../src/scoring";
@@ -716,5 +718,91 @@ describe("#2063 — a rule emptied by the filter still scores its crawled pages"
 
     expect(result.replayedChecksDropped).toBe(2);
     expect(result.coverage.auditedPages).toBe(1);
+  });
+});
+
+// squirrelscan/repo#2072 — the residue in the incident report, end to end.
+//
+// 258 checks in that report are tagged `fresh` on 88 pages the crawl never
+// fetched, in three rules, and no server can refuse a `fresh` label. Every one of
+// them carries `details.pagesTruncated`, which only `unfoldAggregateCheck` leaves
+// on a per-page check — so they are the expansion of a SAMPLED AGGREGATE that
+// reached the server with no provenance at all.
+//
+// An aggregate loses its label when its fold group is MIXED, and a rule emitting
+// two checks per page overflows `maxChecksPerRule` as soon as the producer's local
+// store is large: 16 crawled pages + 481 replayed is 994 checks for one rule. The
+// real report stamps `pagesTruncated: 497` on those checks, which is exactly
+// 16 + 481 for one check name — the arithmetic is what identifies the path.
+//
+// Provenance-keyed fold groups split that into a fresh aggregate and a carried
+// one, and the merge refuses the carried one. This test is the whole chain,
+// producer fold through server merge, because neither half alone would catch it.
+describe("#2072 — a mixed group over the fold cap cannot launder its carried half", () => {
+  const RULE = "ax/token-weight";
+  const tokenMeta = { ...pageMeta, id: "token-weight", name: "Token Weight", category: "ax" };
+  const CRAWLED = Array.from({ length: 16 }, (_, i) => `https://x.test/p/${i}`);
+  const REPLAYED = Array.from({ length: 481 }, (_, i) => `https://x.test/old/${i}?id=${i}`);
+
+  /** Two checks per page, for both halves — what the rule emits before publish. */
+  function prePublishChecks(): CheckResult[] {
+    const ratio = (url: string, replayed: boolean): CheckResult => ({
+      name: "token-weight-ratio",
+      status: "warn",
+      message: "Visible text is under 15% of the page HTML",
+      pageUrl: url,
+      items: [{ id: url, label: "~7%", sourcePages: [url] }],
+      ...(replayed ? { provenance: "carried" as const, lastSeenAt: AUGUST } : {}),
+    });
+    const budget = (url: string, replayed: boolean): CheckResult => ({
+      name: "token-weight-budget",
+      status: "pass",
+      message: "within budget",
+      pageUrl: url,
+      ...(replayed ? { provenance: "carried" as const, lastSeenAt: AUGUST } : {}),
+    });
+    return [
+      ...CRAWLED.flatMap((u) => [ratio(u, false), budget(u, false)]),
+      ...REPLAYED.flatMap((u) => [ratio(u, true), budget(u, true)]),
+    ];
+  }
+
+  test("the publish fold labels each half and the merge refuses the replayed one", async () => {
+    const all = prePublishChecks();
+    // The premise: without the overflow no fold runs and the test proves nothing.
+    expect(all.length).toBeGreaterThan(REPORT_LIMITS.maxChecksPerRule);
+
+    const published = sampleChecksForPublish(foldOverflowChecks(all));
+    // Two issue classes x two provenances, not the two unlabelled aggregates the
+    // issue-class-only key produced.
+    expect(published).toHaveLength(4);
+
+    const carriedAggregates = published.filter((c) => c.provenance === "carried");
+    expect(carriedAggregates).toHaveLength(2);
+    for (const agg of carriedAggregates) {
+      expect(agg.lastSeenAt).toBe(AUGUST);
+      expect(agg.details?.pagesTruncated).toBe(REPLAYED.length);
+    }
+    // The fresh half is unlabelled, which is what fresh looks like on the wire.
+    const freshAggregates = published.filter((c) => c.provenance === undefined);
+    expect(freshAggregates).toHaveLength(2);
+    for (const agg of freshAggregates) expect(agg.pages).toHaveLength(CRAWLED.length);
+
+    const store = new MemStore();
+    const r = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: { [RULE]: { meta: tokenMeta, checks: published } },
+      pageStatuses: [],
+      now: NOW,
+    });
+
+    expect(r.coverage.auditedPages).toBe(CRAWLED.length);
+    expect([...store.pages.keys()].sort()).toEqual([...CRAWLED].sort());
+
+    const persisted = await store.getFindings("web_1");
+    expect(persisted).toHaveLength(CRAWLED.length);
+    for (const f of persisted) expect(REPLAYED).not.toContain(f.normalizedUrl);
   });
 });
