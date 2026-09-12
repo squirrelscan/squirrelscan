@@ -293,7 +293,12 @@ function Test-ManifestShape {
     if ($Manifest -is [string]) { return $false }
     if (-not $Manifest.PSObject.Properties.Match('binaries').Count) { return $false }
     if (-not $Manifest.PSObject.Properties.Match('version').Count) { return $false }
-    return $null -ne $Manifest.binaries
+    # `binaries` has to be a map, not merely present: `{"binaries":"unavailable"}`
+    # would otherwise be accepted, the mirror would never be tried, and the user
+    # would get "No binary for platform" from a source that plainly failed.
+    $binaries = $Manifest.binaries
+    if ($null -eq $binaries) { return $false }
+    return ($binaries -is [System.Management.Automation.PSCustomObject]) -or ($binaries -is [hashtable])
 }
 
 # Same two sources for a small JSON asset. Returns the parsed object, or $null
@@ -326,14 +331,20 @@ function Get-ReleaseAssetJson {
 # Reduce a URL to scheme, host and path before it is printed or reported.
 # SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and every part of it that can hold
 # a secret has to go: it can sit in the userinfo before the host, in the query
-# after the path, or in the fragment. The report scrubber strips home paths and clamps length; it knows nothing
-# about URL structure, so anything left here reaches the reporting endpoint
-# verbatim. Scheme, host and path are all a reader needs to tell which host was
+# after the path, or in the fragment. The report scrubber strips home paths and
+# clamps length; it knows nothing about URL structure, so anything left here
+# reaches the reporting endpoint verbatim. Scheme, host and path are all a reader needs to tell which host was
 # tried, which is the whole point of carrying the URL at all.
+# Order is load-bearing, and getting it wrong leaks. `[^/@]*@` happily crosses a
+# `?`, so run against `https://host?token=user@secret/path` the userinfo rule ate
+# `host?token=user@` and promoted the token's value to the host: the secret
+# survived, in the report and on screen. Cut the query and fragment off first,
+# then strip userinfo from what is left, and bound that pattern so it cannot
+# cross a delimiter even if the order is ever changed back.
 function Get-RedactedUrl {
     param([string]$Url)
-    $stripped = [regex]::Replace($Url, '^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@', '$1')
-    return [regex]::Replace($stripped, '[?#].*$', '')
+    $trimmed = [regex]::Replace($Url, '[?#].*$', '')
+    return [regex]::Replace($trimmed, '^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/?#@]*@', '$1')
 }
 
 # Single-quote a value for a copy-paste recipe. A literal apostrophe ends the

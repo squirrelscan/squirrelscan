@@ -148,6 +148,12 @@ Check "an HTML string is rejected" (-not (Test-ManifestShape "<html><body>Sign i
 Check "null is rejected" (-not (Test-ManifestShape $null))
 Check "an object missing binaries is rejected" (-not (Test-ManifestShape ([pscustomobject]@{ version = "1.2.3" })))
 Check "an object missing version is rejected" (-not (Test-ManifestShape ([pscustomobject]@{ binaries = @{} })))
+# `binaries` has to be a map. A scalar would otherwise be accepted, the mirror
+# never tried, and the user told "No binary for platform" by a source that
+# plainly failed.
+Check "a scalar binaries is rejected" (-not (Test-ManifestShape ([pscustomobject]@{ version = "1.2.3"; binaries = "unavailable" })))
+Check "a numeric binaries is rejected" (-not (Test-ManifestShape ([pscustomobject]@{ version = "1.2.3"; binaries = 0 })))
+Check "a hashtable binaries is accepted" (Test-ManifestShape ([pscustomobject]@{ version = "1.2.3"; binaries = @{ "windows-x64" = @{} } }))
 Check "a real manifest is accepted" (Test-ManifestShape ([pscustomobject]@{ version = "1.2.3"; binaries = [pscustomobject]@{ "windows-x64" = @{} } }))
 
 function Invoke-RestMethod { param($Uri, $TimeoutSec)
@@ -172,6 +178,10 @@ Check "an @ in the path is not userinfo" ((Get-RedactedUrl "https://host/p@th/a"
 Check "a query token is dropped" ((Get-RedactedUrl "https://mirror.test/dl/a?token=secret") -eq "https://mirror.test/dl/a")
 Check "a fragment is dropped" ((Get-RedactedUrl "https://mirror.test/dl/a#secret") -eq "https://mirror.test/dl/a")
 Check "userinfo, query and fragment all go at once" ((Get-RedactedUrl "https://u:p@host/x?token=y#z") -eq "https://host/x")
+# Order matters: a `@` inside the QUERY must not be read as userinfo. Stripping
+# userinfo first ate `host?token=user@` and promoted the token's value to the
+# host, so the secret survived.
+Check "an @ inside the query does not smuggle a secret through" ((Get-RedactedUrl "https://mirror.test?token=user@querysecret/v1/manifest.json") -eq "https://mirror.test")
 $script:DownloadUrlMirror = "https://alice:dummy-secret@mirror.test/dl/a?token=querysecret#fragsecret" # pragma: allowlist secret
 $redactedOutput = Get-DownloadFailureOutput
 Check "report carries no userinfo password" (-not ($redactedOutput -like "*dummy-secret*"))

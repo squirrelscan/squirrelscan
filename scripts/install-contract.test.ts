@@ -45,6 +45,16 @@ if [ -n "\${SHIM_FAIL_MATCH:-}" ]; then
   done
 fi
 
+# A second body for URLs matching SHIM_ALT_MATCH, so one source can answer with
+# something the other does not: a 200 carrying HTML from one host and a real
+# manifest from the other is the scenario this whole fallback exists for.
+body="\${SHIM_BODY:-}"
+if [ -n "\${SHIM_ALT_MATCH:-}" ]; then
+  for a in "$@"; do
+    case "$a" in *"$SHIM_ALT_MATCH"*) body="\${SHIM_ALT_BODY:-}" ;; esac
+  done
+fi
+
 out=""
 prev=""
 for a in "$@"; do
@@ -53,9 +63,9 @@ for a in "$@"; do
 done
 
 if [ -n "$out" ]; then
-  printf '%s' "\${SHIM_BODY:-}" > "$out"
+  printf '%s' "$body" > "$out"
 else
-  printf '%s' "\${SHIM_BODY:-}"
+  printf '%s' "$body"
 fi
 exit 0
 `;
@@ -90,6 +100,8 @@ const runWithCurlShim = async (
     cut = "body",
     body = "",
     failMatch = "",
+    altMatch = "",
+    altBody = "",
     env = {},
     settleMs = 0,
   }: {
@@ -98,6 +110,9 @@ const runWithCurlShim = async (
     body?: string;
     /** The shim exits 22 (curl's HTTP-error code) when any argv contains this. */
     failMatch?: string;
+    /** URLs containing this get `altBody` instead of `body`. */
+    altMatch?: string;
+    altBody?: string;
     env?: Record<string, string | undefined>;
     /** How long to wait for a detached (backgrounded) curl to log its argv. */
     settleMs?: number;
@@ -129,6 +144,8 @@ const runWithCurlShim = async (
         SHIM_LOG: log,
         SHIM_BODY: body,
         SHIM_FAIL_MATCH: failMatch,
+        SHIM_ALT_MATCH: altMatch,
+        SHIM_ALT_BODY: altBody,
         ...env,
       } as Record<string, string>,
       stdout: "pipe",
@@ -1036,6 +1053,8 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     "https://install.squirrelscan.com/dl/v1.2.3/squirrel-1.2.3-linux-x64";
   const fetchAsset =
     'out=$(mktemp); fetch_release_asset v1.2.3 squirrel-1.2.3-linux-x64 "$out" binary; rc=$?; cat "$out"; rm -f "$out"; exit $rc';
+  const MANIFEST = '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}';
+  const HTML = "<!DOCTYPE html><html><body>Sign in to continue</body></html>";
 
   test("GitHub is tried first and the mirror is not touched when it answers", async () => {
     const { calls, code, stdout } = await runWithCurlShim(fetchAsset, { body: "BYTES" });
@@ -1299,21 +1318,52 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     expect((await run(html)).code).not.toBe(0);
   });
 
-  test("a GitHub HTML manifest falls through to the mirror instead of failing", async () => {
-    // The recovery half: one bad source must not end the install.
-    const { calls, code } = await runWithCurlShim(
-      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid; rc=$?; cat "$out"; rm -f "$out"; exit $rc',
-      {
-        // The shim answers every URL with the same body, so drive the GitHub leg
-        // to fail outright and assert the mirror leg is what validates.
-        body: '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"f","sha256":"s"}}}',
-        failMatch: "github.com",
-      },
+  test("a GitHub 200 carrying HTML falls through to the mirror's real manifest", async () => {
+    // The recovery half, with GitHub actually SERVING the HTML rather than
+    // failing at transport: a 200 is the whole point of the scenario.
+    const { calls, code, stdout, stderr } = await runWithCurlShim(
+      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid; rc=$?; cat "$out"; rm -f "$out"; echo "SOURCE=$DOWNLOAD_SOURCE"; exit $rc',
+      { body: MANIFEST, altMatch: "github.com", altBody: HTML },
     );
     expect(code).toBe(0);
+    // GitHub answered 200, so the only reason we moved on is the content check.
+    expect(calls.filter((argv) => argv.some((a) => a.includes("github.com")))).toHaveLength(1);
     expect(calls[calls.length - 1]).toContain(
       "https://install.squirrelscan.com/dl/v1.2.3/manifest.json",
     );
+    expect(stderr).toContain("github.com returned something that is not a manifest");
+    expect(stdout).toContain("SOURCE=install.squirrelscan.com");
+    expect(stdout).toContain('"binaries"');
+  }, 30_000);
+
+  test("HTML from both sources ends at the actionable error, not a parse crash", async () => {
+    // Before the content check this exited 5 on a jq parse error with an empty
+    // report. It has to exit through error() with both URLs instead.
+    const { code, stdout } = await runWithCurlShim(
+      'USE_JQ=true; out=$(mktemp); fetch_release_asset v1.2.3 manifest.json "$out" manifest manifest_looks_valid || { download_failure_output; echo "EXHAUSTED"; }; rm -f "$out"',
+      { body: HTML },
+    );
+    expect(code).toBe(0);
+    expect(stdout).toContain("EXHAUSTED");
+    expect(stdout).toContain("tried https://github.com/");
+    expect(stdout).toContain("tried https://install.squirrelscan.com/dl/");
+  }, 30_000);
+
+  test("the whole download step exits through error(), not a jq parse crash", async () => {
+    // The end-to-end shape of the bug. Before the content check this exited 5
+    // with `jq: parse error` and nothing else; now it exits 1 from error(),
+    // which is what carries the message and both URLs to the report.
+    // error() calls `exit`, which ends the sourced shell, so the exit code IS
+    // the assertion here.
+    const { code, stdout, stderr } = await runWithCurlShim(
+      'USE_JQ=true; download_and_install v1.2.3 linux-x64 /tmp/lane-c-bin',
+      { body: HTML },
+    );
+    const out = `${stdout}${stderr}`;
+    expect(code).toBe(1);
+    expect(out).not.toContain("parse error");
+    expect(out).toContain("Failed to download the manifest from github.com and install.squirrelscan.com");
+    expect(out).toContain("https://install.squirrelscan.com/dl/v1.2.3/manifest.json");
   }, 30_000);
 
   test("the GitHub path prints nothing new, so its output stays byte-identical", async () => {

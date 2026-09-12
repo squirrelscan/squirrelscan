@@ -798,14 +798,36 @@ manifest_looks_valid() {
   # sourcing the script, or a future caller moved above check_deps). Same
   # defensive form json_get already uses.
   if [ "${USE_JQ:-false}" = true ]; then
-    jq -e 'type == "object" and has("binaries") and (.binaries | type == "object")' \
-      "$file" > /dev/null 2>&1
+    jq -e 'type == "object" and has("version") and has("binaries")
+           and (.binaries | type == "object")' "$file" > /dev/null 2>&1
     return $?
   fi
-  # No jq: the same two structural facts, by grep. json_get_nested reads the
-  # binaries block, so requiring it here is what the extraction needs anyway.
-  grep -q '"binaries"[[:space:]]*:[[:space:]]*{' "$file" || return 1
-  grep -q '"version"[[:space:]]*:' "$file" || return 1
+
+  # No jq: the same facts by hand, and the two paths have to agree or a machine
+  # without jq gets a different verdict on the same bytes.
+  #
+  # First non-whitespace byte must be `{`. That is what separates a manifest
+  # from a page that merely mentions one: an HTML error page carrying
+  # `{"version":...}` inside a <script> tag passes any test that only looks for
+  # the keys, and the jq path rejects it, so without this the two disagree.
+  local first
+  first=$(tr -d '[:space:]' < "$file" 2> /dev/null | cut -c1)
+  [ "$first" = "{" ] || return 1
+
+  # Flattened before matching: JSON may put the value on the line after its key,
+  # and grep is line-based, so a pretty-printed manifest that happens to wrap
+  # after `"binaries":` would otherwise be rejected as invalid. Rejecting a
+  # GOOD manifest is the worse failure of the two.
+  local flat
+  flat=$(tr -d '\n' < "$file" 2> /dev/null)
+  case "$flat" in
+    *'"version"'*) ;;
+    *) return 1 ;;
+  esac
+  case "$flat" in
+    *'"binaries"'*) ;;
+    *) return 1 ;;
+  esac
   return 0
 }
 
@@ -846,12 +868,18 @@ fetch_release_asset() {
 # Reduce a URL to scheme, host and path before it is printed or reported.
 # SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and every part of it that can hold
 # a secret has to go: it can sit in the userinfo before the host, in the query
-# after the path, or in the fragment. The report scrubber strips home paths and clamps length; it knows nothing
-# about URL structure, so anything left here reaches the reporting endpoint
-# verbatim. Scheme, host and path are all a reader needs to tell which host was
+# after the path, or in the fragment. The report scrubber strips home paths and
+# clamps length; it knows nothing about URL structure, so anything left here
+# reaches the reporting endpoint verbatim. Scheme, host and path are all a reader needs to tell which host was
 # tried, which is the whole point of carrying the URL at all.
+# Order is load-bearing, and getting it wrong leaks. `[^/@]*@` happily crosses a
+# `?`, so run against `https://host?token=user@secret/path` the userinfo rule
+# ate `host?token=user@` and promoted the token's value to the host: the secret
+# survived, in the report and on screen. Cut the query and fragment off first,
+# then strip userinfo from what is left, and bound that pattern so it cannot
+# cross a delimiter even if the order is ever changed back.
 redact_url() {
-  printf '%s' "$1" | sed -E -e 's#^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@#\1#' -e 's|[?#].*$||'
+  printf '%s' "$1" | sed -E -e 's|[?#].*$||' -e 's#^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/?#@]*@#\1#'
 }
 
 # Single-quote a value so the recipe we print is copy-pasteable even when the
@@ -1179,8 +1207,12 @@ download_and_install() {
     filename=$(echo "$manifest" | jq -r ".binaries[\"${platform}\"].filename // empty" 2> /dev/null || true)
     sha256=$(echo "$manifest" | jq -r ".binaries[\"${platform}\"].sha256 // empty" 2> /dev/null || true)
   else
-    filename=$(json_get_nested "$manifest" "$platform" "filename")
-    sha256=$(json_get_nested "$manifest" "$platform" "sha256")
+    # `|| true` for the same reason as the jq branch above: json_get_nested ends
+    # in a pipeline, and under `pipefail` a grep that matches nothing makes the
+    # whole substitution non-zero, which `set -e` turns into a silent death
+    # before the empty-value check below can say anything useful.
+    filename=$(json_get_nested "$manifest" "$platform" "filename" || true)
+    sha256=$(json_get_nested "$manifest" "$platform" "sha256" || true)
   fi
 
   if [ -z "$filename" ] || [ -z "$sha256" ]; then
