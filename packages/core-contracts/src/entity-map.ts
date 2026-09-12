@@ -60,6 +60,21 @@ export const ENTITY_MAP_PAGES_CAP = 50;
 /** Most page URLs listed per distinct value inside a conflict. */
 export const ENTITY_MAP_CONFLICT_PAGES_CAP = 10;
 
+/**
+ * Caps applied when the map rides the publish body.
+ *
+ * The local files are uncapped, because a file on disk costs nothing. The
+ * publish payload is measured against a hard gate, so the hosted copy keeps the
+ * entities and references that carry the findings and drops the tail. Nodes are
+ * kept by occurrence count, edges follow the nodes they connect, and `pages` is
+ * dropped outright: it is the largest array and the summary already carries the
+ * only number a reader needs from it.
+ */
+export const ENTITY_MAP_PUBLISH_LIMITS = {
+  maxNodes: 750,
+  maxEdges: 1500,
+} as const;
+
 // ── Node properties ────────────────────────────────────────────────
 
 /**

@@ -39,6 +39,23 @@ function escapeHtml(value: string): string {
 /** Nodes drawn in the force graph before it stops being readable (or fast). */
 const GRAPH_NODE_CAP = 400;
 
+/**
+ * Types that describe one page rather than a thing the site is about.
+ *
+ * A 60-page site emits one BreadcrumbList and one WebPage per page and a
+ * Question per FAQ entry, so these crowd out the Organization and Person nodes
+ * the map exists to show. The graph can hide them; the table never does. Unnamed
+ * ImageObject nodes join them at runtime, since an image with no name is a URL,
+ * not an entity a reader can reason about.
+ */
+const PAGE_LOCAL_TYPES = [
+  "Question",
+  "BreadcrumbList",
+  "ListItem",
+  "WebPage",
+  "Answer",
+] as const;
+
 const STYLES = `
 :root {
   --bg: #f7f7f5;
@@ -70,10 +87,10 @@ h2 { font-size: 15px; margin: 32px 0 10px; letter-spacing: -0.01em; }
 }
 .card .n { font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .card .l { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.graph-shell { position: relative; margin-top: 10px; }
+.graph-shell { position: relative; }
 canvas {
   width: 100%;
-  height: 520px;
+  height: 560px;
   display: block;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -82,10 +99,36 @@ canvas {
   touch-action: none;
 }
 canvas.dragging { cursor: grabbing; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-.swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 10px; }
+.legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px 2px 8px;
+  cursor: pointer;
+}
+.legend button:hover { color: var(--ink); }
+.legend button[aria-pressed="false"] { opacity: 0.45; text-decoration: line-through; }
+.swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
 .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+button.action {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+}
+button.action:hover { border-color: var(--muted); }
+label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 #panel {
   position: absolute;
   top: 12px;
@@ -153,17 +196,32 @@ const SCRIPT = String.raw`
   "use strict";
   var map = JSON.parse(document.getElementById("entity-map-data").textContent);
   var GRAPH_NODE_CAP = __GRAPH_NODE_CAP__;
+  var PAGE_LOCAL_TYPES = __PAGE_LOCAL_TYPES__;
 
   var PALETTE = [
     "#9a4b1f", "#2f6f4f", "#2d5d86", "#7a3d78", "#8a7318",
     "#3f6d6d", "#8d3b4a", "#4a5a2c", "#6b5b8a", "#a15c2a"
   ];
   var DANGLING_COLOR = "#a32020";
+  var MIN_ZOOM = 0.15, MAX_ZOOM = 6;
+  // Below this the labels would overlap into mush, so they are hidden until the
+  // reader zooms in. Set at 1 so a Fit that had room to zoom in shows them and
+  // a graph too big to fit does not. The focused node keeps its label at any
+  // zoom, and so does a node the reader has selected.
+  var LABEL_ZOOM = 1;
 
   document.getElementById("site").textContent = map.site;
   document.getElementById("generated").textContent = map.generatedAt;
 
   function primaryType(node) { return (node.types && node.types[0]) || "Thing"; }
+
+  function isPageLocal(node) {
+    if (!node) return false;
+    var type = primaryType(node);
+    if (PAGE_LOCAL_TYPES.indexOf(type) !== -1) return true;
+    // An image with no name is a URL, not something a reader can reason about.
+    return type === "ImageObject" && !node.name;
+  }
 
   var typeList = [];
   var seenTypes = Object.create(null);
@@ -201,32 +259,7 @@ const SCRIPT = String.raw`
     cardHost.appendChild(box);
   });
 
-  // ---------- legend ----------
-  var legend = document.getElementById("legend");
-  typeList.slice(0, 24).forEach(function (type) {
-    var item = document.createElement("span");
-    var swatch = document.createElement("i");
-    swatch.className = "swatch";
-    swatch.style.background = colorOf[type];
-    item.appendChild(swatch);
-    item.appendChild(text("span", type));
-    legend.appendChild(item);
-  });
-  if (map.summary.danglingCount > 0) {
-    var danglingLegend = document.createElement("span");
-    var ring = document.createElement("i");
-    ring.className = "swatch";
-    ring.style.border = "2px dashed " + DANGLING_COLOR;
-    ring.style.background = "transparent";
-    danglingLegend.appendChild(ring);
-    danglingLegend.appendChild(text("span", "undeclared (dangling)"));
-    legend.appendChild(danglingLegend);
-  }
-
   // ---------- graph model ----------
-  var byKey = Object.create(null);
-  map.nodes.forEach(function (node) { byKey[node.key] = node; });
-
   // Rank by occurrences so a capped graph keeps the entities that matter.
   var ranked = map.nodes.slice().sort(function (a, b) {
     return b.occurrences - a.occurrences || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
@@ -239,9 +272,13 @@ const SCRIPT = String.raw`
       key: node.key,
       node: node,
       label: node.name || primaryType(node),
+      legendType: primaryType(node),
       color: colorOf[primaryType(node)],
+      pageLocal: isPageLocal(node),
       dangling: false,
-      r: 5 + Math.min(11, Math.sqrt(node.occurrences) * 2.2),
+      // Area, not radius, tracks reach: an entity on 160 pages should read as
+      // bigger than one on 4 without swallowing the canvas.
+      r: 4 + Math.min(18, Math.sqrt(node.occurrences) * 2.6),
       x: 0, y: 0, vx: 0, vy: 0, fixed: false
     });
   });
@@ -257,7 +294,9 @@ const SCRIPT = String.raw`
           key: edge.target,
           node: null,
           label: edge.target.indexOf("id:") === 0 ? edge.target.slice(3) : edge.target,
+          legendType: null,
           color: DANGLING_COLOR,
+          pageLocal: false,
           dangling: true,
           r: 5, x: 0, y: 0, vx: 0, vy: 0, fixed: false
         });
@@ -281,7 +320,77 @@ const SCRIPT = String.raw`
   var panel = document.getElementById("panel");
   var ctx = canvas.getContext("2d");
   var width = 0, height = 0, dpr = 1;
-  var hovered = -1, selected = -1, dragging = -1;
+  var hovered = -1, selected = -1, dragging = -1, panning = null;
+
+  // ---------- visibility ----------
+  var hiddenTypes = Object.create(null);
+  // Dangling placeholders get their own flag rather than a key in hiddenTypes:
+  // type names come from audited pages, so any sentinel string could collide
+  // with a real @type.
+  var danglingHidden = false;
+  var hidePageLocal = false;
+  var visibleIdx = [], visibleLinks = [], neighbours = null, neighbourFocus = -2;
+
+  function nodeVisible(n) {
+    if (n.dangling) return !danglingHidden;
+    if (hiddenTypes[n.legendType]) return false;
+    if (hidePageLocal && n.pageLocal) return false;
+    return true;
+  }
+
+  function recomputeVisible() {
+    visibleIdx = [];
+    var shown = Object.create(null);
+    for (var i = 0; i < sim.length; i++) {
+      if (!nodeVisible(sim[i])) continue;
+      visibleIdx.push(i);
+      shown[i] = true;
+    }
+    visibleLinks = links.filter(function (link) { return shown[link.a] && shown[link.b]; });
+    neighbourFocus = -2;
+    if (hovered >= 0 && !shown[hovered]) hovered = -1;
+    if (selected >= 0 && !shown[selected]) { selected = -1; panel.hidden = true; }
+    updateGraphCount();
+  }
+
+  function updateGraphCount() {
+    var hiddenCount = sim.length - visibleIdx.length;
+    document.getElementById("graph-count").textContent =
+      visibleIdx.length + " of " + sim.length + " drawn" +
+      (hiddenCount > 0 ? " · " + hiddenCount + " hidden" : "");
+    var pageLocalTotal = 0;
+    for (var i = 0; i < sim.length; i++) if (sim[i].pageLocal) pageLocalTotal++;
+    document.getElementById("table-note").textContent = hidePageLocal
+      ? "The graph is hiding " + pageLocalTotal + " page-local entities (per-page types and unnamed images). Every entity is listed below."
+      : "Every entity is listed below, including the ones the graph can hide.";
+  }
+
+  // ---------- view transform ----------
+  var view = { scale: 1, tx: 0, ty: 0 };
+  function toScreenX(x) { return x * view.scale + view.tx; }
+  function toScreenY(y) { return y * view.scale + view.ty; }
+  function toWorldX(sx) { return (sx - view.tx) / view.scale; }
+  function toWorldY(sy) { return (sy - view.ty) / view.scale; }
+
+  function fit() {
+    if (visibleIdx.length === 0) { view.scale = 1; view.tx = 0; view.ty = 0; return; }
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (var i = 0; i < visibleIdx.length; i++) {
+      var n = sim[visibleIdx[i]];
+      if (n.x - n.r < minX) minX = n.x - n.r;
+      if (n.x + n.r > maxX) maxX = n.x + n.r;
+      if (n.y - n.r < minY) minY = n.y - n.r;
+      if (n.y + n.r > maxY) maxY = n.y + n.r;
+    }
+    var pad = 34;
+    var scale = Math.min(
+      (width - pad * 2) / Math.max(1, maxX - minX),
+      (height - pad * 2) / Math.max(1, maxY - minY)
+    );
+    view.scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+    view.tx = width / 2 - ((minX + maxX) / 2) * view.scale;
+    view.ty = height / 2 - ((minY + maxY) / 2) * view.scale;
+  }
 
   function resize() {
     dpr = window.devicePixelRatio || 1;
@@ -293,8 +402,7 @@ const SCRIPT = String.raw`
   }
 
   // Deterministic phyllotaxis seeding around the canvas centre: same map, same
-  // starting layout, every reload. Runs after the first resize, so the centre
-  // is a real coordinate rather than (0, 0).
+  // starting layout, every reload.
   function seed() {
     sim.forEach(function (n, i) {
       var angle = i * 2.399963;
@@ -312,12 +420,14 @@ const SCRIPT = String.raw`
   var REPULSION = 9000 / Math.sqrt(Math.max(1, sim.length));
   var CENTERING = 0.02;
 
+  // The simulation runs in a fixed world the size of the canvas at scale 1;
+  // zoom and pan are a view on top of it, so the physics never change.
   function step() {
     var cx = width / 2, cy = height / 2;
-    // Repulsion. O(n^2) is fine at this cap and avoids a quadtree.
-    for (var i = 0; i < sim.length; i++) {
-      for (var j = i + 1; j < sim.length; j++) {
-        var p = sim[i], q = sim[j];
+    var i, j, k, n;
+    for (i = 0; i < visibleIdx.length; i++) {
+      for (j = i + 1; j < visibleIdx.length; j++) {
+        var p = sim[visibleIdx[i]], q = sim[visibleIdx[j]];
         var dx = q.x - p.x, dy = q.y - p.y;
         var d2 = dx * dx + dy * dy;
         if (d2 < 0.01) { dx = (i - j) * 0.1 + 0.1; dy = 0.1; d2 = dx * dx + dy * dy; }
@@ -329,9 +439,8 @@ const SCRIPT = String.raw`
         q.vx += fx; q.vy += fy;
       }
     }
-    // Springs.
-    for (var k = 0; k < links.length; k++) {
-      var link = links[k];
+    for (k = 0; k < visibleLinks.length; k++) {
+      var link = visibleLinks[k];
       var u = sim[link.a], v = sim[link.b];
       var ex = v.x - u.x, ey = v.y - u.y;
       var len = Math.sqrt(ex * ex + ey * ey) || 0.01;
@@ -341,9 +450,8 @@ const SCRIPT = String.raw`
       u.vx += ux; u.vy += uy;
       v.vx -= ux; v.vy -= uy;
     }
-    // Centering + integrate.
-    for (var m = 0; m < sim.length; m++) {
-      var n = sim[m];
+    for (var m = 0; m < visibleIdx.length; m++) {
+      n = sim[visibleIdx[m]];
       if (n.fixed) { n.vx = 0; n.vy = 0; continue; }
       var ox = cx - n.x, oy = cy - n.y;
       // A node flung out early otherwise stays pinned in a corner once alpha
@@ -351,9 +459,9 @@ const SCRIPT = String.raw`
       // radius the pull ramps up until it comes back.
       var away = Math.sqrt(ox * ox + oy * oy);
       var limit = Math.min(width, height) * 0.42;
-      var pull = away > limit ? CENTERING * (1 + (away - limit) / 30) : CENTERING;
-      n.vx += ox * pull;
-      n.vy += oy * pull;
+      var centering = away > limit ? CENTERING * (1 + (away - limit) / 30) : CENTERING;
+      n.vx += ox * centering;
+      n.vy += oy * centering;
       n.vx *= 0.82; n.vy *= 0.82;
       n.x += n.vx * alpha;
       n.y += n.vy * alpha;
@@ -364,18 +472,43 @@ const SCRIPT = String.raw`
     if (alpha > 0.08) alpha *= 0.992;
   }
 
+  function focusIndex() { return hovered >= 0 ? hovered : selected; }
+
+  function neighboursOf(focus) {
+    if (neighbourFocus === focus) return neighbours;
+    var set = Object.create(null);
+    if (focus >= 0) {
+      set[focus] = true;
+      for (var k = 0; k < visibleLinks.length; k++) {
+        var link = visibleLinks[k];
+        if (link.a === focus) set[link.b] = true;
+        if (link.b === focus) set[link.a] = true;
+      }
+    }
+    neighbours = set;
+    neighbourFocus = focus;
+    return set;
+  }
+
   function draw() {
     ctx.clearRect(0, 0, width, height);
-    var focus = hovered >= 0 ? hovered : selected;
-    for (var k = 0; k < links.length; k++) {
-      var link = links[k];
+    var focus = focusIndex();
+    var near = neighboursOf(focus);
+    var showLabels = view.scale >= LABEL_ZOOM;
+    var k, i;
+
+    for (k = 0; k < visibleLinks.length; k++) {
+      var link = visibleLinks[k];
       var u = sim[link.a], v = sim[link.b];
       var lit = focus >= 0 && (link.a === focus || link.b === focus);
+      ctx.globalAlpha = focus >= 0 && !lit ? 0.12 : 1;
       ctx.beginPath();
-      ctx.moveTo(u.x, u.y);
-      ctx.lineTo(v.x, v.y);
-      ctx.strokeStyle = link.dangling ? "rgba(163,32,32,0.55)" : lit ? "rgba(28,28,26,0.55)" : "rgba(28,28,26,0.14)";
-      ctx.lineWidth = lit ? 1.6 : 1;
+      ctx.moveTo(toScreenX(u.x), toScreenY(u.y));
+      ctx.lineTo(toScreenX(v.x), toScreenY(v.y));
+      ctx.strokeStyle = link.dangling
+        ? "rgba(163,32,32,0.55)"
+        : lit ? "rgba(28,28,26,0.6)" : "rgba(28,28,26,0.14)";
+      ctx.lineWidth = lit ? 1.8 : 1;
       ctx.setLineDash(link.dangling ? [4, 3] : []);
       ctx.stroke();
       ctx.setLineDash([]);
@@ -383,13 +516,22 @@ const SCRIPT = String.raw`
         ctx.fillStyle = "#6b6b64";
         ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(link.predicate, (u.x + v.x) / 2, (u.y + v.y) / 2 - 3);
+        ctx.fillText(
+          link.predicate,
+          (toScreenX(u.x) + toScreenX(v.x)) / 2,
+          (toScreenY(u.y) + toScreenY(v.y)) / 2 - 3
+        );
       }
     }
-    for (var i = 0; i < sim.length; i++) {
-      var n = sim[i];
+
+    for (i = 0; i < visibleIdx.length; i++) {
+      var index = visibleIdx[i];
+      var n = sim[index];
+      var dim = focus >= 0 && !near[index];
+      ctx.globalAlpha = dim ? 0.18 : 1;
+      var px = toScreenX(n.x), py = toScreenY(n.y), pr = Math.max(1.5, n.r * view.scale);
       ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
       if (n.dangling) {
         ctx.fillStyle = "#ffffff";
         ctx.fill();
@@ -401,67 +543,141 @@ const SCRIPT = String.raw`
       } else {
         ctx.fillStyle = n.color;
         ctx.fill();
-        if (i === selected) {
+        if (index === selected) {
           ctx.strokeStyle = "#1c1c1a";
           ctx.lineWidth = 2;
           ctx.stroke();
         }
       }
-      if (n.r > 9 || i === focus) {
+      if ((showLabels && !dim) || index === focus) {
+        ctx.globalAlpha = 1;
         ctx.fillStyle = "#1c1c1a";
-        ctx.font = (i === focus ? "600 11px " : "11px ") + "ui-sans-serif, system-ui, sans-serif";
+        ctx.font = (index === focus ? "600 11px " : "11px ") + "ui-sans-serif, system-ui, sans-serif";
         ctx.textAlign = "center";
         var label = n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label;
-        ctx.fillText(label, n.x, n.y + n.r + 11);
+        ctx.fillText(label, px, py + pr + 11);
       }
     }
+    ctx.globalAlpha = 1;
   }
 
   function frame() { step(); draw(); requestAnimationFrame(frame); }
 
-  function hit(event) {
+  function pointer(event) {
     var rect = canvas.getBoundingClientRect();
-    var x = event.clientX - rect.left, y = event.clientY - rect.top;
-    for (var i = sim.length - 1; i >= 0; i--) {
-      var n = sim[i];
-      var dx = x - n.x, dy = y - n.y;
-      if (dx * dx + dy * dy <= (n.r + 4) * (n.r + 4)) return { index: i, x: x, y: y };
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function hit(event) {
+    var at = pointer(event);
+    // Topmost first, and in screen space so the grab radius stays usable at any
+    // zoom.
+    for (var i = visibleIdx.length - 1; i >= 0; i--) {
+      var n = sim[visibleIdx[i]];
+      var dx = at.x - toScreenX(n.x), dy = at.y - toScreenY(n.y);
+      var reach = Math.max(1.5, n.r * view.scale) + 4;
+      if (dx * dx + dy * dy <= reach * reach) return { index: visibleIdx[i], x: at.x, y: at.y };
     }
-    return { index: -1, x: x, y: y };
+    return { index: -1, x: at.x, y: at.y };
   }
 
   canvas.addEventListener("mousemove", function (event) {
-    var found = hit(event);
+    var at = pointer(event);
+    if (panning) {
+      view.tx = panning.tx + (at.x - panning.x);
+      view.ty = panning.ty + (at.y - panning.y);
+      return;
+    }
     if (dragging >= 0) {
-      sim[dragging].x = found.x;
-      sim[dragging].y = found.y;
+      sim[dragging].x = toWorldX(at.x);
+      sim[dragging].y = toWorldY(at.y);
       sim[dragging].vx = 0;
       sim[dragging].vy = 0;
       return;
     }
-    hovered = found.index;
+    hovered = hit(event).index;
   });
+
   canvas.addEventListener("mousedown", function (event) {
     var found = hit(event);
     if (found.index >= 0) {
       dragging = found.index;
       sim[dragging].fixed = true;
-      canvas.classList.add("dragging");
       alpha = Math.max(alpha, 0.6);
+    } else {
+      panning = { x: found.x, y: found.y, tx: view.tx, ty: view.ty };
     }
+    canvas.classList.add("dragging");
   });
+
   window.addEventListener("mouseup", function () {
     if (dragging >= 0) sim[dragging].fixed = false;
     dragging = -1;
+    panning = null;
     canvas.classList.remove("dragging");
   });
+
   canvas.addEventListener("mouseleave", function () { hovered = -1; });
+
   canvas.addEventListener("click", function (event) {
+    // A pan ends in a click; only treat it as a selection when it landed on a node.
     var found = hit(event);
     selected = found.index;
     if (found.index < 0) { panel.hidden = true; return; }
     showPanel(sim[found.index]);
   });
+
+  canvas.addEventListener("wheel", function (event) {
+    event.preventDefault();
+    var at = pointer(event);
+    var wx = toWorldX(at.x), wy = toWorldY(at.y);
+    var next = view.scale * Math.exp(-event.deltaY * 0.0015);
+    view.scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+    // Keep the point under the cursor pinned to the cursor.
+    view.tx = at.x - wx * view.scale;
+    view.ty = at.y - wy * view.scale;
+  }, { passive: false });
+
+  document.getElementById("fit").addEventListener("click", fit);
+
+  document.getElementById("hide-page-local").addEventListener("change", function (event) {
+    hidePageLocal = event.target.checked;
+    recomputeVisible();
+    alpha = Math.max(alpha, 0.7);
+    fit();
+  });
+
+  // ---------- legend ----------
+  var legend = document.getElementById("legend");
+  function legendChip(key, labelText, color, dashed) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", "true");
+    var swatch = document.createElement("i");
+    swatch.className = "swatch";
+    if (dashed) {
+      swatch.style.border = "2px dashed " + color;
+      swatch.style.background = "transparent";
+    } else {
+      swatch.style.background = color;
+    }
+    chip.appendChild(swatch);
+    chip.appendChild(text("span", labelText));
+    chip.addEventListener("click", function () {
+      var on = chip.getAttribute("aria-pressed") === "true";
+      chip.setAttribute("aria-pressed", on ? "false" : "true");
+      if (key === null) danglingHidden = on;
+      else if (on) hiddenTypes[key] = true;
+      else delete hiddenTypes[key];
+      recomputeVisible();
+      alpha = Math.max(alpha, 0.7);
+    });
+    legend.appendChild(chip);
+  }
+  typeList.slice(0, 24).forEach(function (type) { legendChip(type, type, colorOf[type]); });
+  if (map.summary.danglingCount > 0) {
+    legendChip(null, "undeclared (dangling)", DANGLING_COLOR, true);
+  }
 
   // ---------- detail panel ----------
   function listBlock(dl, label, values) {
@@ -583,6 +799,8 @@ const SCRIPT = String.raw`
   function renderTable() {
     var wantedType = filter.value;
     var needle = search.value.trim().toLowerCase();
+    // The table is the complete list on purpose: whatever the graph is hiding,
+    // every entity stays findable here.
     var rows = map.nodes.filter(function (node) {
       if (wantedType && node.types.indexOf(wantedType) === -1) return false;
       if (!needle) return true;
@@ -641,6 +859,11 @@ const SCRIPT = String.raw`
     window.addEventListener("resize", resize);
     resize();
     seed();
+    recomputeVisible();
+    // Settle the layout before the first paint, so the opening view is a graph
+    // rather than an expanding spiral, and Fit has a real bounding box to use.
+    for (var warm = 0; warm < 150; warm++) step();
+    fit();
     frame();
   }
 })();
@@ -655,7 +878,10 @@ const SCRIPT = String.raw`
 export function renderEntityMapHtml(map: EntityMap): string {
   const payload = escapeJsonForScript(JSON.stringify(map));
   const title = `Entity map: ${map.site}`;
-  const script = SCRIPT.replace("__GRAPH_NODE_CAP__", String(GRAPH_NODE_CAP));
+  const script = SCRIPT.replace("__GRAPH_NODE_CAP__", String(GRAPH_NODE_CAP)).replace(
+    "__PAGE_LOCAL_TYPES__",
+    JSON.stringify(PAGE_LOCAL_TYPES),
+  );
 
   return `<!doctype html>
 <html lang="en">
@@ -675,12 +901,17 @@ export function renderEntityMapHtml(map: EntityMap): string {
 
   <section id="graph-section">
     <h2>Graph</h2>
+    <div class="controls">
+      <button type="button" class="action" id="fit">Fit</button>
+      <label class="check"><input type="checkbox" id="hide-page-local"> Hide page-local entities</label>
+      <span class="note" id="graph-count"></span>
+    </div>
     <div class="graph-shell">
       <canvas id="graph"></canvas>
       <div id="panel" hidden></div>
     </div>
     <div class="legend" id="legend"></div>
-    <p class="note" id="graph-note">Drag a node to pin it. Hover to reveal the predicates on its references. Click for detail.</p>
+    <p class="note" id="graph-note">Scroll to zoom, drag the background to pan, drag a node to pin it. Hover to highlight what a node references. Click for detail. Legend chips toggle a type.</p>
   </section>
 
   <div class="empty" id="empty" hidden>This site declares no JSON-LD entities.</div>
@@ -698,6 +929,7 @@ export function renderEntityMapHtml(map: EntityMap): string {
         <tbody id="tbody"></tbody>
       </table>
     </div>
+    <p class="note" id="table-note"></p>
   </section>
 </div>
 

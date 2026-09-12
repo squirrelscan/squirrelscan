@@ -48,6 +48,7 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { ResolutionSignal } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
+import type { EntityMap } from "./entity-map";
 
 export interface CheckItem {
   id: string;
@@ -310,6 +311,22 @@ export interface AuditReport {
    * cache hit); absent for anonymous/offline runs.
    */
   siteMetadata?: SiteMetadata;
+  /**
+   * Structured entity map (#2061) — the site-wide JSON-LD graph. Like
+   * `technologies` / `siteMetadata`, REPORT-ONLY: it NEVER contributes to
+   * `healthScore` and no rule reads it.
+   *
+   * Present ONLY when the run passed `--entity-map`, which is off by default,
+   * so an ordinary audit's report and publish payload are byte-identical to
+   * before. It rides the publish body through `slimForPublish`'s spread, capped
+   * by `ENTITY_MAP_PUBLISH_LIMITS` so a pathological site cannot push the body
+   * toward the payload gate.
+   *
+   * NOTE for the cloud side: the API's publish schema must accept this field
+   * before a `--entity-map` run can publish. Until it does, a strict schema
+   * rejects the whole body.
+   */
+  entityMap?: EntityMap;
   /**
    * Auto-generated "editor's-style" audit summary — prose narrative + point-form
    * big-ticket items, framed like a quick exec-email to management. Like
