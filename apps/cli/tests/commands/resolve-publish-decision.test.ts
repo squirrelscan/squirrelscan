@@ -105,4 +105,27 @@ describe("resolvePublishDecision", () => {
       );
     });
   });
+  // #1841. A loopback / RFC1918 / link-local target is auditable locally but
+  // unreachable for every hosted service, so a published report for it is a
+  // dashboard card nothing in the cloud can screenshot, re-audit or schedule.
+  describe("nonPublicHost (#1841)", () => {
+    test("a local/private host skips publishing", () => {
+      expect(resolvePublishDecision(opts({ nonPublicHost: true }))).toBe(false);
+    });
+
+    // The ONLY opt-out that outranks an explicit --publish, because it is not a
+    // preference: the cloud cannot act on the host whatever the user asks for.
+    test("it beats an explicit --publish", () => {
+      expect(
+        resolvePublishDecision(
+          opts({ nonPublicHost: true, explicitPublish: true })
+        )
+      ).toBe(false);
+    });
+
+    test("unset/false leaves the default alone", () => {
+      expect(resolvePublishDecision(opts({ nonPublicHost: false }))).toBe(true);
+      expect(resolvePublishDecision(opts())).toBe(true);
+    });
+  });
 });

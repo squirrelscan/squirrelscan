@@ -149,6 +149,10 @@ publish = false
 Publishing requires authentication. Run `squirrel auth login` first; logged-out runs never publish.
 </Note>
 
+<Note>
+An audit of `localhost`, a loopback address, or a private range such as `192.168.1.10` never publishes, never registers a run, and never renders in the cloud, even with `--publish` or `--render`. Hosted services cannot reach your machine or your private network, so there is nothing they could screenshot, re-render or re-audit. The audit itself runs and prints normally. See [Local audits with the CLI](/guides/local-audits-cli).
+</Note>
+
 ### Browser rendering
 
 When you're **logged in, audits render every page in a cloud browser by default** (2 credits/page) - so JavaScript-heavy sites are audited against their fully rendered HTML. The first time this would spend credits the CLI asks once and remembers your answer.

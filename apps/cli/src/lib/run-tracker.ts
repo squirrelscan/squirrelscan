@@ -49,7 +49,12 @@ export type CliCompletionReason = "success" | "error" | "user_cancel";
 
 export interface RegisteredRun {
   runId: string;
-  websiteId: string;
+  /**
+   * Null when the server registered the run but deliberately created NO hosted
+   * website for it (#1841) — today only a host no hosted service can reach.
+   * The run is real and trackable; it just has no dashboard site to hang off.
+   */
+  websiteId: string | null;
   auditId: string;
   /**
    * Lifecycle base path resolved ONCE at register time. Threaded into every
@@ -65,6 +70,15 @@ export interface RegisteredRun {
   baseCharged: number;
   /** Balance total right after the base debit; null when the server omits it. */
   balanceAfterBase: number | null;
+  /**
+   * Why the server created no hosted website for this run (#1841), or null when
+   * it created (or resolved) one as usual. `non_public_host` is the only value
+   * today: the API's egress classifier is stricter than the CLI's preflight, so
+   * a host that looks public here (`box.local`, `metadata.google.internal`, a
+   * dotless name) is refused there. The CLI reports it rather than leaving the
+   * user to wonder why the site never appeared.
+   */
+  websiteSkippedReason: string | null;
 }
 
 export interface RegisterRunInput {
@@ -152,9 +166,16 @@ function runPath(runId: string, suffix = "", base = lifecycleBase()): string {
 }
 
 /** What `POST /register` answers with — ids plus the pricing-v10 extras. */
-type RegisterResponseBody = Partial<RegisteredRun> & {
+type RegisterResponseBody = Partial<Omit<RegisteredRun, "websiteId">> & {
+  websiteId?: string | null;
   balance?: { total?: number } | null;
   error?: { code?: string; message?: string };
+  /**
+   * #1841. Present only when the server declined to create a hosted website for
+   * this run. Absent on every older server and on every ordinary register, so
+   * its absence must read as "a website was resolved", never as a skip.
+   */
+  websiteRegistration?: { skipped?: boolean; reason?: string } | null;
 };
 
 /**
@@ -268,16 +289,27 @@ export async function registerRun(
     }
     return null;
   }
-  if (!data.runId || !data.websiteId || !data.auditId) return null;
+  // #1841: a websiteId-less response is only legitimate when the server SAYS it
+  // skipped the website. Without that marker a missing id is the old "bad body"
+  // case and must still fall through to an untracked audit — otherwise a
+  // malformed response would silently register a run the CLI cannot finalize
+  // against any site.
+  const websiteSkippedReason =
+    data.websiteRegistration?.skipped === true
+      ? (data.websiteRegistration.reason ?? "unknown")
+      : null;
+  if (!data.runId || !data.auditId) return null;
+  if (!data.websiteId && !websiteSkippedReason) return null;
   return {
     runId: data.runId,
-    websiteId: data.websiteId,
+    websiteId: data.websiteId ?? null,
     auditId: data.auditId,
     lifecycleBase: base,
     // Pricing v10 fields; absent from older servers → 0 / null.
     baseCharged: typeof data.baseCharged === "number" ? data.baseCharged : 0,
     balanceAfterBase:
       typeof data.balance?.total === "number" ? data.balance.total : null,
+    websiteSkippedReason,
   };
 }
 

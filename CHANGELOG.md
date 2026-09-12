@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- Audits of `localhost`, loopback, and private-network addresses no longer hand anything to a hosted runner: no publish, no run registration, no cloud rendering, and no site added to your dashboard. The audit, its report, and the content-based cloud analysis are unchanged, and the CLI prints one line saying the report stayed local. Hosted services cannot reach those addresses, so a dashboard site for one could never be screenshotted, re-rendered, or re-audited.
+
 ### Fixed
 
 - Published cloud reports no longer count findings the CLI carried from its local
@@ -29,6 +33,7 @@ How it works:
 - Two page URLs that differ only by their query string are two pages again.
   Findings on `/p?id=1` and `/p?id=2` were stored under one URL, piling every
   page's issues onto a single entry in the report.
+- A signed-in audit of a local or private-network address no longer submits its pages to the cloud render service, which charged on submit for renders the hosted browser then refused.
 
 ## v0.0.94
 

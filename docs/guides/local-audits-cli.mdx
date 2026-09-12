@@ -78,6 +78,20 @@ The three coverage modes are `quick`, `surface`, and `full`. See [`squirrel audi
 Auditing a site you are building? Point it at your dev server: `squirrel audit http://localhost:3000`. Local audits work the same against localhost, so you can catch issues before they ship. See [Projects](/projects) for keeping dev and production histories separate.
 </Tip>
 
+### Local and private hosts stay local
+
+An audit of `localhost`, a loopback address, a private range such as `192.168.1.10` or `10.0.0.5`, or a link-local address runs and prints its report exactly as any other audit does. What changes is everything that would need a squirrelscan server to reach the address itself:
+
+- The report is not published, so no shareable link is created and no site appears in your dashboard.
+- The run is not registered, so it does not cost the audit base even when you are signed in.
+- Cloud rendering is off for the run, including with `--render`, and the crawl uses local HTTP fetching.
+
+The reason is reachability, not policy: hosted services would have to fetch the address to screenshot it, render it, or re-audit it on a schedule, and they cannot reach your machine or your private network. The CLI prints one line saying the report stayed local.
+
+Cloud analysis that works from pages the CLI has already crawled is unaffected, so a signed-in local audit still gets the AI summary, technology detection, and the other content-based checks.
+
+To get a shareable report for a site you are developing, audit it once it is on a public URL, such as a preview deployment.
+
 ## Set project defaults with a config file
 
 Running the same audit repeatedly? Create a `squirrel.toml` so you do not retype flags:

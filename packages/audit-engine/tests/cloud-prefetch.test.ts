@@ -1127,6 +1127,45 @@ describe("prefetchCloudData — render service (#673)", () => {
     expect(res.spend).toEqual([]);
   });
 
+  // #1841. Render is the only prefetch service that asks the cloud to FETCH the
+  // page URL, and it debits on submit — so a target the hosted browser is
+  // refused access to (localhost, RFC1918) must be dropped BEFORE the charge,
+  // not discovered when the crawler-worker answers "Refusing to render a
+  // non-public host".
+  test("hostUnreachableByCloud: render is skipped not-applicable and never submitted (no charge for a refusal)", async () => {
+    let submitted = false;
+    const client = renderClient({
+      render: async () => {
+        submitted = true;
+        return { jobId: "j", status: "queued" };
+      },
+    });
+    const res = await prefetchCloudData(
+      input({ client, rules: RENDER_RULES, hostUnreachableByCloud: true }),
+    );
+    expect(submitted).toBe(false);
+    const render = res.store.get("render");
+    expect(render?.get(pages[0].url)?.status).toBe("skipped");
+    expect(render?.get(pages[0].url)?.skipReason).toBe("not-applicable");
+    expect(res.spend).toEqual([]);
+  });
+
+  // The default must stay "render runs": a flag that skipped on absence would
+  // silently disable rendering for every ordinary audit.
+  test("hostUnreachableByCloud unset leaves render running", async () => {
+    let submitted = false;
+    const client = renderClient({
+      render: async (req) => {
+        submitted = true;
+        return { jobId: "j", status: "queued" };
+      },
+    });
+    await prefetchCloudData(
+      input({ client, rules: RENDER_RULES, hostUnreachableByCloud: false }),
+    );
+    expect(submitted).toBe(true);
+  });
+
   test("partial render result: a page omitted from results is skipped service-unavailable, not lost", async () => {
     const client = renderClient({
       renderResult: async () => ({

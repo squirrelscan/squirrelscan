@@ -110,6 +110,20 @@ export interface CloudPrefetchInput {
    */
   crawlRendered?: boolean;
   /**
+   * True when the audited site lives somewhere no HOSTED runner can reach:
+   * loopback, RFC1918, link-local. The caller owns the classification (this
+   * engine stays policy-free, and host-blocking a CRAWL would be a regression —
+   * auditing localhost is the point).
+   *
+   * `render` is the only prefetch service that asks the cloud to FETCH the page
+   * URL itself, and it debits on submit. Against such a host the render service
+   * charges for a batch the crawler-worker then refuses outright, every run. So
+   * it is skipped `not-applicable` here, before any charge — the same treatment
+   * (and the same reason shape) as `crawlRendered`. Every other service works
+   * from payloads the caller already crawled, so they are unaffected.
+   */
+  hostUnreachableByCloud?: boolean;
+  /**
    * URLs the crawl ALREADY browser-rendered (per-page provenance from the crawl
    * `fetcherId`). The `render` service submits only pages NOT in this set —
    * an already-rendered page is self-identical (raw==rendered), so paying to
@@ -501,7 +515,11 @@ export async function prefetchCloudData(input: CloudPrefetchInput): Promise<Clou
   // for a comparison the rule discards anyway (#673). The rule then reads `not-applicable` and skips visibly.
   // Only set for render strategy "all"; an "auto" (HTTP-first) crawl leaves most pages raw and runs render,
   // relying on the rule's per-page `page.rendered` guard to skip the individual pages it did render (#964).
-  if (input.crawlRendered) {
+  // #1841 folds in the second reason render cannot produce anything: a
+  // loopback / private-network target the hosted renderer is refused access to.
+  // Both are "this comparison cannot happen for this run", both must land
+  // BEFORE the charge, so they share one skip.
+  if (input.crawlRendered || input.hostUnreachableByCloud) {
     const spec = specs.get("render");
     if (spec) {
       skipService(store, "render", spec.unit, input.pages, "not-applicable");
