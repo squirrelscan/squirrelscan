@@ -1,0 +1,956 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 767c0ac..90e11ca 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -170,6 +170,14 @@ jobs:
+             exit 1
+           }
+           Write-Host 'install.ps1 parsed clean'
++      # Parsing proves only that the file is syntactically PowerShell. This runs
++      # the download helpers themselves against a stubbed Invoke-WebRequest, so
++      # a change to the two-source fallback (#2064) can't reach Windows users
++      # unexecuted the way the install-test workflow allows (it fetches the
++      # PUBLISHED script from main, never the tree under test).
++      - name: Check install.ps1 behaviour
++        shell: pwsh
++        run: pwsh -NoProfile -File ./scripts/install-ps-contract.test.ps1
+       - name: Parse install.sh
+         run: bash -n install.sh
+ 
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 38906bd..2e14246 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -17,6 +17,14 @@ How it works:
+ 
+ ## [Unreleased]
+ 
++### Fixed
++
++- The installer now downloads from install.squirrelscan.com when GitHub is
++  unreachable, so an install no longer dies on networks that cannot reach
++  GitHub's release hosts. Both sources are checksum-verified against the release
++  manifest. Set `SQUIRREL_FORCE_MIRROR=1` to skip GitHub from the start, and if
++  both hosts fail the installer now prints the two URLs it tried.
++
+ ## v0.0.94
+ 
+ A one-line follow-up to v0.0.93 for the cloud audits that still ended before
+diff --git a/docs/quickstart.mdx b/docs/quickstart.mdx
+index dee6635..0711fd0 100644
+--- a/docs/quickstart.mdx
++++ b/docs/quickstart.mdx
+@@ -27,6 +27,44 @@ This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
+ **Alpine / musl Linux:** the binary needs the `libstdc++` runtime library. The installer adds it automatically when run as root; otherwise install it first with `apk add libstdc++` (or `sudo apk add libstdc++`).
+ </Note>
+ 
++### Install options
++
++Set any of these before running the installer.
++
++| Variable | What it does |
++| --- | --- |
++| `SQUIRREL_VERSION` | Install a specific release instead of the newest one, for example `v0.0.94`. |
++| `SQUIRREL_CHANNEL` | `stable` (default) or `beta`. |
++| `SQUIRREL_BIN_DIR` | Where to put the `squirrel` symlink. Defaults to the first writable directory on your PATH, falling back to `~/.local/bin`. |
++| `SQUIRREL_FORCE_MIRROR` | Download from squirrelscan's mirror instead of GitHub. See below. |
++| `NO_TELEMETRY` | Any non-empty value turns off the anonymous failure report the installer sends when it fails. |
++
++### If GitHub is blocked on your network
++
++Release binaries live on GitHub, and a GitHub download redirects to `release-assets.githubusercontent.com`. Some networks cannot reach it, most commonly in mainland China. The installer handles this on its own: when a GitHub download fails it retries the same file from `install.squirrelscan.com`, which serves the identical bytes through squirrelscan's own infrastructure. The checksum from the release manifest is verified either way, so the mirror is not a shortcut around the integrity check.
++
++To skip GitHub from the start rather than waiting for it to time out:
++
++<Tabs>
++  <Tab title="macOS / Linux">
++    ```bash
++    curl -fsSL https://install.squirrelscan.com | SQUIRREL_FORCE_MIRROR=1 bash
++    ```
++    The variable has to reach the shell that runs the script, so it goes on the right of the pipe.
++  </Tab>
++  <Tab title="Windows">
++    ```powershell
++    $env:SQUIRREL_FORCE_MIRROR='1'; iwr -useb https://install.squirrelscan.com/install.ps1 | iex
++    ```
++  </Tab>
++</Tabs>
++
++If both hosts are unreachable, the installer prints the two URLs it tried. Allowlist either `github.com` or `install.squirrelscan.com`, or download the binary on a machine that can reach one of them and move it into place yourself.
++
++### If the install is killed at the last step
++
++On a machine with very little free memory the kernel can kill `squirrel self install` before it finishes, which used to leave nothing installed. The installer now finishes the job itself: it lays the release out, links the binary, and runs it once to confirm it works. If even that run is killed, the machine cannot execute the binary at all, and the installer says so and points at the [cloud dashboard](https://app.squirrelscan.com) as the way to audit without a local binary.
++
+ ## Four ways to run squirrelscan
+ 
+ <Tabs>
+diff --git a/install.ps1 b/install.ps1
+index 9f90878..a115725 100644
+--- a/install.ps1
++++ b/install.ps1
+@@ -5,6 +5,9 @@
+ # Environment variables:
+ #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
+ #   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
++#   SQUIRREL_FORCE_MIRROR - Skip github.com and download from
++#                        install.squirrelscan.com (for networks that block
++#                        GitHub). Any value but empty, 0 or false enables it.
+ 
+ $ErrorActionPreference = "Stop"
+ 
+@@ -39,10 +42,30 @@ $InstallerReportVersion = "2"
+ $ErrorEndpoint = if ($env:SQUIRREL_ERROR_ENDPOINT) { $env:SQUIRREL_ERROR_ENDPOINT } else { "https://install.squirrelscan.com/error" }
+ # Release metadata (latest version per channel) — R2-backed, no rate limits.
+ $ReleasesEndpoint = if ($env:SQUIRREL_RELEASES_ENDPOINT) { $env:SQUIRREL_RELEASES_ENDPOINT } else { "https://install.squirrelscan.com/releases" }
++# Release assets, mirrored through our own origin. A GitHub release-asset URL
++# redirects to githubusercontent.com (objects.* historically, release-assets.*
++# today), which some networks cannot reach: the metadata fetch above succeeds
++# and the binary download then fails on every retry, forever (#2064). Every
++# asset therefore has two sources.
++$DownloadEndpoint = if ($env:SQUIRREL_DOWNLOAD_ENDPOINT) { $env:SQUIRREL_DOWNLOAD_ENDPOINT } else { "https://install.squirrelscan.com/dl" }
+ $ErrorLineMax = 200
+ $ErrorOutputMax = 1000
+ $script:CurrentStep = "init"
+ $script:LastCapturedExitCode = 0
++# Where `squirrel self install` puts the binary on Windows. Hoisted to script
++# scope because the download-failure guidance names it too, not only the PATH
++# check at the end of Main.
++#
++# Guarded: Join-Path throws on a null Path, and at script scope with
++# $ErrorActionPreference = "Stop" that would kill the installer on line one,
++# before the banner, in any environment that has no LOCALAPPDATA (a service or
++# stripped-env invocation). This value is only ever printed, so naming the
++# variable symbolically is a better answer than dying.
++$script:InstallBinDir = if ($env:LOCALAPPDATA) {
++    Join-Path $env:LOCALAPPDATA "squirrel\bin"
++} else {
++    "%LOCALAPPDATA%\squirrel\bin"
++}
+ 
+ # Make an arbitrary string safe to put in a report: reduce to printable ASCII
+ # (control chars AND non-ASCII -> space) so truncation can't split a
+@@ -189,6 +212,165 @@ function Show-Banner {
+     Write-Host ""
+ }
+ 
++# --- Release asset download (two sources) ------------------------------
++# GitHub is the origin and always has every asset, so it is tried first; the
++# mirror at $DownloadEndpoint proxies the same bytes through Cloudflare, which
++# reaches GitHub even when the client cannot. The manifest's sha256 is verified
++# over whatever comes back either way, so a second source adds no trust.
++#
++# A mirror that answers 404 is treated as "nothing here", which is also what a
++# worker deployed before the route existed answers: the script degrades to the
++# GitHub failure it would have reported anyway rather than breaking.
++$script:DownloadUrlGitHub = ""
++$script:DownloadUrlMirror = ""
++$script:DownloadSource = ""
++
++# Opt-in flag semantics, matching the CLI's SQUIRREL_NO_UPDATE: empty, 0 and
++# false are off, anything else is on. Presence semantics would make a stray
++# empty SQUIRREL_FORCE_MIRROR silently reroute every install.
++function Test-ForceMirror {
++    $value = "$($env:SQUIRREL_FORCE_MIRROR)".Trim().ToLowerInvariant()
++    return -not ($value -eq "" -or $value -eq "0" -or $value -eq "false")
++}
++
++# The two sources for one asset, in the order to try them, as (host, url)
++# pairs. Also records both URLs for the failure report.
++function Get-DownloadSources {
++    param([string]$Version, [string]$Asset)
++
++    $script:DownloadUrlGitHub = "https://github.com/$Repo/releases/download/$Version/$Asset"
++    $script:DownloadUrlMirror = "$DownloadEndpoint/$Version/$Asset"
++    $script:DownloadSource = ""
++
++    $sources = @()
++    if (Test-ForceMirror) {
++        Write-Info "SQUIRREL_FORCE_MIRROR is set, skipping github.com"
++    } else {
++        $sources += ,@("github.com", $script:DownloadUrlGitHub)
++    }
++    $sources += ,@("install.squirrelscan.com", $script:DownloadUrlMirror)
++    return ,$sources
++}
++
++# Invoke-WebRequest -OutFile leaves a partial file behind when a transfer dies
++# mid-stream, and the next source would then be asked to overwrite it. Delete a
++# failed attempt so only a completed download is ever handed back.
++function Get-ReleaseAsset {
++    param(
++        [string]$Version,
++        [string]$Asset,
++        [string]$OutFile,
++        [string]$Label
++    )
++
++    $sources = Get-DownloadSources -Version $Version -Asset $Asset
++    for ($i = 0; $i -lt $sources.Count; $i++) {
++        try {
++            Invoke-WebRequest -Uri $sources[$i][1] -OutFile $OutFile -TimeoutSec 120 -UseBasicParsing
++            $script:DownloadSource = $sources[$i][0]
++            return $true
++        } catch {
++            if (Test-Path $OutFile) { Remove-Item -Path $OutFile -Force -ErrorAction SilentlyContinue }
++            if ($i -lt ($sources.Count - 1)) {
++                Write-Warn "$($sources[$i][0]) could not serve the $Label, trying $($sources[$i + 1][0])..."
++            }
++        }
++    }
++    return $false
++}
++
++# Same two sources for a small JSON asset. Returns the parsed object, or $null
++# when both sources failed.
++function Get-ReleaseAssetJson {
++    param([string]$Version, [string]$Asset, [string]$Label)
++
++    $sources = Get-DownloadSources -Version $Version -Asset $Asset
++    for ($i = 0; $i -lt $sources.Count; $i++) {
++        try {
++            $parsed = Invoke-RestMethod -Uri $sources[$i][1] -TimeoutSec 30
++            $script:DownloadSource = $sources[$i][0]
++            return $parsed
++        } catch {
++            if ($i -lt ($sources.Count - 1)) {
++                Write-Warn "$($sources[$i][0]) could not serve the $Label, trying $($sources[$i + 1][0])..."
++            }
++        }
++    }
++    return $null
++}
++
++# Strip `user:password@` out of a URL before it is printed or reported.
++# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and can carry credentials, and the
++# report scrubber removes home paths and clamps length — it knows nothing about
++# URL userinfo, so a mirror set to https://user:token@host would otherwise send
++# that token to the reporting endpoint verbatim.
++function Get-RedactedUrl {
++    param([string]$Url)
++    return [regex]::Replace($Url, '^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@', '$1')
++}
++
++# The report line and the user-facing guidance for a download that ran out of
++# sources. Write-Err carries the first to Sentry (clamped to $ErrorLineMax,
++# which two full URLs would blow past) and prints it; the URLs themselves ride
++# along in error_output, which has room for them.
++#
++# The line names the hosts AND the way out, because it is the one line that
++# reaches both the user's console and the Sentry issue; the guidance below it is
++# local only.
++function Get-DownloadFailureLine {
++    param([string]$Label)
++    if (Test-ForceMirror) {
++        return "Failed to download the $Label from install.squirrelscan.com (SQUIRREL_FORCE_MIRROR is set, github.com was skipped)"
++    }
++    return "Failed to download the $Label from github.com and install.squirrelscan.com (retry with SQUIRREL_FORCE_MIRROR=1 to skip github.com)"
++}
++
++# Skipped is not failed: with SQUIRREL_FORCE_MIRROR set we never asked GitHub,
++# and a report claiming we did would send whoever reads it after the wrong host.
++function Get-DownloadFailureOutput {
++    $github = Get-RedactedUrl $script:DownloadUrlGitHub
++    $mirror = Get-RedactedUrl $script:DownloadUrlMirror
++    $githubLine = if (Test-ForceMirror) {
++        "skipped $github (SQUIRREL_FORCE_MIRROR)"
++    } else {
++        "tried $github (failed)"
++    }
++    return "$githubLine`ntried $mirror (failed)"
++}
++
++# `Kind` is `binary` or `manifest`: only the binary has a by-hand recipe worth
++# printing, because only the binary is the thing the user ultimately needs on
++# disk.
++function Show-DownloadFailureGuidance {
++    param([string]$Asset, [string]$Kind)
++
++    Write-Host "  Tried:"
++    if (Test-ForceMirror) {
++        Write-Host "    github.com               skipped (SQUIRREL_FORCE_MIRROR is set)"
++    } else {
++        Write-Host "    github.com               $(Get-RedactedUrl $script:DownloadUrlGitHub)"
++    }
++    Write-Host "    install.squirrelscan.com $(Get-RedactedUrl $script:DownloadUrlMirror)"
++    Write-Host ""
++    if (-not (Test-ForceMirror)) {
++        Write-Host "  If github.com is blocked on this network, skip it and retry:"
++        Write-Host "    `$env:SQUIRREL_FORCE_MIRROR='1'; iwr -useb https://install.squirrelscan.com/install.ps1 | iex"
++        Write-Host ""
++    }
++    if ($Kind -eq "binary") {
++        Write-Host "  If both hosts are blocked, download $Asset on a machine that can"
++        Write-Host "  reach one of them, copy it here, then:"
++        # The bin directory does not exist until the first successful install,
++        # and Move-Item does not create it.
++        Write-Host "    New-Item -ItemType Directory -Force -Path '$($script:InstallBinDir)' | Out-Null"
++        Write-Host "    Move-Item $Asset '$($script:InstallBinDir)\squirrel.exe'"
++    } else {
++        Write-Host "  If both hosts are blocked, this machine cannot reach anywhere the"
++        Write-Host "  release is published. Allowlist github.com or install.squirrelscan.com,"
++        Write-Host "  or install from a network that already reaches one of them."
++    }
++}
++
+ function Get-LatestVersion {
+     param([string]$Channel = "stable")
+ 
+@@ -235,15 +417,14 @@ function Get-Manifest {
+     param([string]$Version)
+ 
+     $script:CurrentStep = "download_manifest"
+-    $manifestUrl = "https://github.com/$Repo/releases/download/$Version/manifest.json"
+     Write-Log "Downloading manifest..."
+ 
+-    try {
+-        $manifest = Invoke-RestMethod -Uri $manifestUrl -TimeoutSec 30
+-        return $manifest
+-    } catch {
+-        Write-Err "Failed to download manifest: $_`n  URL: $manifestUrl"
++    $manifest = Get-ReleaseAssetJson -Version $Version -Asset "manifest.json" -Label "manifest"
++    if ($null -eq $manifest) {
++        Show-DownloadFailureGuidance -Asset "manifest.json" -Kind "manifest"
++        Write-Err (Get-DownloadFailureLine "manifest") -Output (Get-DownloadFailureOutput)
+     }
++    return $manifest
+ }
+ 
+ function Install-Squirrel {
+@@ -266,11 +447,14 @@ function Install-Squirrel {
+ 
+     try {
+         $binaryPath = Join-Path $tempDir "squirrel.exe"
+-        $binaryUrl = "https://github.com/$Repo/releases/download/$Version/$filename"
+ 
+         $script:CurrentStep = "download_binary"
+         Write-Log "Downloading squirrel $Version..."
+-        Invoke-WebRequest -Uri $binaryUrl -OutFile $binaryPath -TimeoutSec 120
++        if (-not (Get-ReleaseAsset -Version $Version -Asset $filename -OutFile $binaryPath -Label "binary")) {
++            Show-DownloadFailureGuidance -Asset $filename -Kind "binary"
++            Write-Err (Get-DownloadFailureLine "binary") -Output (Get-DownloadFailureOutput)
++        }
++        Write-Info "Downloaded from $($script:DownloadSource)"
+ 
+         # Verify checksum
+         $script:CurrentStep = "verify_checksum"
+@@ -352,7 +536,7 @@ function Main {
+     Show-Epilogue -Version $version
+ 
+     # Check PATH
+-    $binDir = Join-Path $env:LOCALAPPDATA "squirrel\bin"
++    $binDir = $script:InstallBinDir
+     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+     $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+     $currentPath = $env:Path
+diff --git a/install.sh b/install.sh
+index 1d6d0de..1d1a0d0 100755
+--- a/install.sh
++++ b/install.sh
+@@ -33,6 +33,9 @@ set -euo pipefail
+ #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
+ #   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
+ #   SQUIRREL_BIN_DIR   - Override bin directory for symlink
++#   SQUIRREL_FORCE_MIRROR - Skip github.com and download from
++#                        install.squirrelscan.com (for networks that block
++#                        GitHub). Any value but empty, 0 or false enables it.
+ #   GITHUB_TOKEN       - GitHub token to avoid API rate limits (optional)
+ 
+ REPO="squirrelscan/squirrelscan"
+@@ -95,6 +98,12 @@ INSTALLER_REPORT_VERSION="2"
+ ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
+ # Release metadata (latest version per channel) — R2-backed, no rate limits.
+ RELEASES_ENDPOINT="${SQUIRREL_RELEASES_ENDPOINT:-https://install.squirrelscan.com/releases}"
++# Release assets, mirrored through our own origin. A GitHub release-asset URL
++# redirects to githubusercontent.com (objects.* historically, release-assets.*
++# today), which some networks cannot reach: the metadata fetch above succeeds
++# and the binary download then fails on every retry, forever (#2064). Every
++# asset therefore has two sources.
++DOWNLOAD_ENDPOINT="${SQUIRREL_DOWNLOAD_ENDPOINT:-https://install.squirrelscan.com/dl}"
+ ERROR_LINE_MAX=200
+ # Chars of captured command output carried in a report. The worker clamps again.
+ ERROR_OUTPUT_MAX=1000
+@@ -748,6 +757,140 @@ fetch_with_retry() {
+   return 1
+ }
+ 
++# --- Release asset download (two sources) ---------------------------------
++# GitHub is the origin and always has every asset, so it is tried first; the
++# mirror at DOWNLOAD_ENDPOINT proxies the same bytes through Cloudflare, which
++# reaches GitHub even when the client cannot. The manifest's sha256 is verified
++# over whatever comes back either way, so a second source adds no trust.
++#
++# A mirror that answers 404 is treated as "nothing here", which is also what a
++# worker deployed before the route existed answers: the script degrades to the
++# GitHub failure it would have reported anyway rather than breaking.
++DOWNLOAD_URL_GITHUB=""
++DOWNLOAD_URL_MIRROR=""
++DOWNLOAD_SOURCE=""
++
++# Opt-in flag semantics, matching the CLI's SQUIRREL_NO_UPDATE: empty, 0 and
++# false are off, anything else is on. Presence semantics (as NO_TELEMETRY uses)
++# would make a stray `SQUIRREL_FORCE_MIRROR=` in a profile silently reroute
++# every install.
++force_mirror_enabled() {
++  local value
++  value=$(printf '%s' "${SQUIRREL_FORCE_MIRROR:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
++  case "$value" in
++    "" | 0 | false) return 1 ;;
++    *) return 0 ;;
++  esac
++}
++
++# fetch_release_asset <version> <asset> <output> <label>
++# Leaves both attempted URLs in DOWNLOAD_URL_GITHUB / DOWNLOAD_URL_MIRROR for
++# the failure report, and the winner in DOWNLOAD_SOURCE.
++fetch_release_asset() {
++  local version="$1" asset="$2" output="$3" label="$4"
++
++  DOWNLOAD_URL_GITHUB="https://github.com/${REPO}/releases/download/${version}/${asset}"
++  DOWNLOAD_URL_MIRROR="${DOWNLOAD_ENDPOINT}/${version}/${asset}"
++  DOWNLOAD_SOURCE=""
++
++  if force_mirror_enabled; then
++    info "SQUIRREL_FORCE_MIRROR is set, skipping github.com"
++  elif fetch_with_retry "$DOWNLOAD_URL_GITHUB" "$output"; then
++    DOWNLOAD_SOURCE="github.com"
++    return 0
++  else
++    warn "github.com could not serve the $label, trying install.squirrelscan.com..."
++  fi
++
++  if fetch_with_retry "$DOWNLOAD_URL_MIRROR" "$output"; then
++    DOWNLOAD_SOURCE="install.squirrelscan.com"
++    return 0
++  fi
++  return 1
++}
++
++# Strip `user:password@` out of a URL before it is printed or reported.
++# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and can carry credentials, and the
++# report scrubber removes home paths and clamps length — it knows nothing about
++# URL userinfo, so a mirror set to https://user:token@host would otherwise send
++# that token to the reporting endpoint verbatim.
++redact_url_credentials() {
++  printf '%s' "$1" | sed -E 's#^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@#\1#'
++}
++
++# Single-quote a value so the recipe we print is copy-pasteable even when the
++# path holds a space or a shell metacharacter. A literal quote inside closes the
++# string, escapes, and reopens: it's -> 'it'\''s'.
++shell_quote() {
++  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
++}
++
++# The report line and the user-facing guidance for a download that ran out of
++# sources. error() carries the first to Sentry (clamped to ERROR_LINE_MAX, which
++# two full URLs would blow past) and prints the second to the user only; the
++# URLs themselves ride along in error_output, which has room for them.
++#
++# The line names the hosts AND the way out, because it is the one line that
++# reaches both the user's terminal and the Sentry issue title area — the
++# guidance below it is local only.
++download_failure_report_line() {
++  local label="$1"
++  if force_mirror_enabled; then
++    echo "Failed to download the $label from install.squirrelscan.com (SQUIRREL_FORCE_MIRROR is set, github.com was skipped)"
++  else
++    echo "Failed to download the $label from github.com and install.squirrelscan.com (retry with SQUIRREL_FORCE_MIRROR=1 to skip github.com)"
++  fi
++}
++
++# Skipped is not failed: with SQUIRREL_FORCE_MIRROR set we never asked GitHub,
++# and a report claiming we did would send whoever reads it after the wrong host.
++download_failure_output() {
++  if force_mirror_enabled; then
++    printf 'skipped %s (SQUIRREL_FORCE_MIRROR)\ntried %s (failed)\n' \
++      "$(redact_url_credentials "$DOWNLOAD_URL_GITHUB")" \
++      "$(redact_url_credentials "$DOWNLOAD_URL_MIRROR")"
++  else
++    printf 'tried %s (failed)\ntried %s (failed)\n' \
++      "$(redact_url_credentials "$DOWNLOAD_URL_GITHUB")" \
++      "$(redact_url_credentials "$DOWNLOAD_URL_MIRROR")"
++  fi
++}
++
++# download_failure_guidance <asset> <kind> <bin_dir>
++# `kind` is `binary` or `manifest`: only the binary has a by-hand recipe worth
++# printing, because only the binary is the thing the user ultimately needs on
++# disk. Telling someone to move a manifest.json to ~/.local/bin/squirrel would
++# be worse than saying nothing. `bin_dir` is the directory this run actually
++# resolved, so the recipe names the same place a successful install would use.
++download_failure_guidance() {
++  local asset="$1" kind="$2" bin_dir="$3" quoted_bin_dir
++  quoted_bin_dir=$(shell_quote "$bin_dir")
++  echo "  Tried:"
++  if force_mirror_enabled; then
++    echo "    github.com               skipped (SQUIRREL_FORCE_MIRROR is set)"
++  else
++    echo "    github.com               $(redact_url_credentials "$DOWNLOAD_URL_GITHUB")"
++  fi
++  echo "    install.squirrelscan.com $(redact_url_credentials "$DOWNLOAD_URL_MIRROR")"
++  echo ""
++  if ! force_mirror_enabled; then
++    # The variable has to reach the bash that runs the SCRIPT, not the curl
++    # that fetches it, so it goes on the right-hand side of the pipe.
++    echo "  If github.com is blocked on this network, skip it and retry:"
++    echo "    curl -fsSL https://install.squirrelscan.com | SQUIRREL_FORCE_MIRROR=1 bash"
++    echo ""
++  fi
++  if [ "$kind" = binary ]; then
++    echo "  If both hosts are blocked, download $asset on a machine that can"
++    echo "  reach one of them, copy it here, then:"
++    echo "    chmod +x $asset && mkdir -p $quoted_bin_dir && mv $asset $(shell_quote "$bin_dir/squirrel")"
++  else
++    echo "  If both hosts are blocked, this machine cannot reach anywhere the"
++    echo "  release is published. Allowlist github.com or install.squirrelscan.com,"
++    echo "  or install from a network that already reaches one of them."
++  fi
++}
++
+ # Detect libc (glibc vs musl)
+ detect_libc() {
+   # Method 1: Check for musl loader (most reliable)
+@@ -977,14 +1120,12 @@ download_and_install() {
+   # here or it clobbers the failure-reporting trap.
+   TMPDIR_TO_CLEAN="$tmpdir"
+ 
+-  local release_url="https://github.com/${REPO}/releases/download/${version}"
+-
+   # Download manifest to get binary filename and checksum
+   CURRENT_STEP="download_manifest"
+   log "Downloading manifest..."
+-  local manifest_url="${release_url}/manifest.json"
+-  if ! fetch_with_retry "$manifest_url" "$tmpdir/manifest.json"; then
+-    error "Failed to download manifest\n  URL: $manifest_url"
++  if ! fetch_release_asset "$version" "manifest.json" "$tmpdir/manifest.json" "manifest"; then
++    LAST_ERROR_OUTPUT=$(download_failure_output)
++    error "$(download_failure_report_line manifest)" "$(download_failure_guidance manifest.json manifest "$bin_dir")"
+   fi
+ 
+   # Read manifest content
+@@ -1008,10 +1149,11 @@ download_and_install() {
+   # Download binary
+   CURRENT_STEP="download_binary"
+   log "Downloading squirrel ${version}..."
+-  local binary_url="${release_url}/${filename}"
+-  if ! fetch_with_retry "$binary_url" "$tmpdir/squirrel"; then
+-    error "Failed to download binary\n  URL: $binary_url"
++  if ! fetch_release_asset "$version" "$filename" "$tmpdir/squirrel" "binary"; then
++    LAST_ERROR_OUTPUT=$(download_failure_output)
++    error "$(download_failure_report_line binary)" "$(download_failure_guidance "$filename" binary "$bin_dir")"
+   fi
++  info "Downloaded from ${DOWNLOAD_SOURCE}"
+ 
+   # Verify checksum
+   CURRENT_STEP="verify_checksum"
+diff --git a/scripts/install-contract.test.ts b/scripts/install-contract.test.ts
+index 8f74db5..5b6dcf1 100644
+--- a/scripts/install-contract.test.ts
++++ b/scripts/install-contract.test.ts
+@@ -1020,3 +1020,256 @@ describe("by-hand install after a killed self install (#2023)", () => {
+     }
+   }, 15_000);
+ });
++
++// --- the mirror fallback (#2064) ------------------------------------------
++// GitHub release-asset URLs redirect to release-assets.githubusercontent.com,
++// which some networks cannot reach. Every asset now has a second source at
++// install.squirrelscan.com/dl.
++describe("release asset download falls back to the mirror (#2064)", () => {
++  const GITHUB_ASSET =
++    "https://github.com/squirrelscan/squirrelscan/releases/download/v1.2.3/squirrel-1.2.3-linux-x64";
++  const MIRROR_ASSET =
++    "https://install.squirrelscan.com/dl/v1.2.3/squirrel-1.2.3-linux-x64";
++  const fetchAsset =
++    'out=$(mktemp); fetch_release_asset v1.2.3 squirrel-1.2.3-linux-x64 "$out" binary; rc=$?; cat "$out"; rm -f "$out"; exit $rc';
++
++  test("GitHub is tried first and the mirror is not touched when it answers", async () => {
++    const { calls, code, stdout } = await runWithCurlShim(fetchAsset, { body: "BYTES" });
++    expect(code).toBe(0);
++    expect(stdout).toContain("BYTES");
++    expect(calls).toHaveLength(1);
++    expect(calls[0]).toContain(GITHUB_ASSET);
++  });
++
++  test("a blocked github.com is followed by the mirror, and the bytes still arrive", async () => {
++    const { calls, code, stdout, stderr } = await runWithCurlShim(fetchAsset, {
++      body: "BYTES",
++      failMatch: "github.com",
++    });
++    expect(code).toBe(0);
++    expect(stdout).toContain("BYTES");
++    // Three attempts at GitHub (fetch_with_retry), then the mirror answers.
++    expect(calls.filter((argv) => argv.some((a) => a.includes(GITHUB_ASSET)))).toHaveLength(3);
++    expect(calls[calls.length - 1]).toContain(MIRROR_ASSET);
++    expect(stderr).toContain("trying install.squirrelscan.com");
++  }, 30_000);
++
++  test("the mirror leg is hardened like every other curl", async () => {
++    const { calls } = await runWithCurlShim(fetchAsset, {
++      body: "BYTES",
++      failMatch: "github.com",
++    });
++    expect(calls.map(missingFromArgv)).toEqual(calls.map(() => []));
++  }, 30_000);
++
++  test("SQUIRREL_FORCE_MIRROR skips github.com entirely", async () => {
++    const { calls, code } = await runWithCurlShim(fetchAsset, {
++      body: "BYTES",
++      env: { SQUIRREL_FORCE_MIRROR: "1" },
++    });
++    expect(code).toBe(0);
++    expect(calls).toHaveLength(1);
++    expect(calls[0]).toContain(MIRROR_ASSET);
++    expect(calls.flat().some((a) => a.includes("github.com"))).toBe(false);
++  });
++
++  test.each([
++    ["", false],
++    ["0", false],
++    ["false", false],
++    ["FALSE", false],
++    ["  ", false],
++    ["1", true],
++    ["true", true],
++    ["yes", true],
++  ])("SQUIRREL_FORCE_MIRROR=%p enables the mirror-only path: %p", async (value, expected) => {
++    // Value semantics, not presence: a stray empty assignment in a profile must
++    // not silently reroute every install (SQUIRREL_NO_UPDATE reads the same).
++    const { code } = await runWithCurlShim("force_mirror_enabled", {
++      env: { SQUIRREL_FORCE_MIRROR: value },
++    });
++    expect(code === 0).toBe(expected);
++  });
++
++  test("SQUIRREL_DOWNLOAD_ENDPOINT redirects the mirror leg", async () => {
++    const { calls } = await runWithCurlShim(fetchAsset, {
++      body: "BYTES",
++      env: {
++        SQUIRREL_FORCE_MIRROR: "1",
++        SQUIRREL_DOWNLOAD_ENDPOINT: "https://mirror.test/dl",
++      },
++    });
++    expect(calls[0]).toContain("https://mirror.test/dl/v1.2.3/squirrel-1.2.3-linux-x64");
++  });
++
++  test("both sources failing leaves both URLs for the report", async () => {
++    const { code, stdout } = await runWithCurlShim(
++      'out=$(mktemp); fetch_release_asset v1.2.3 squirrel-1.2.3-linux-x64 "$out" binary || true; rm -f "$out"; download_failure_output',
++      { body: "BYTES", failMatch: "http" },
++    );
++    expect(code).toBe(0);
++    expect(stdout).toContain(`tried ${GITHUB_ASSET} (failed)`);
++    expect(stdout).toContain(`tried ${MIRROR_ASSET} (failed)`);
++  }, 30_000);
++
++  test("a mirror URL carrying credentials is redacted before it is shown or reported", async () => {
++    // SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips
++    // home paths and clamps length; it knows nothing about URL userinfo.
++    const { stdout } = await runWithCurlShim(
++      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://alice:dummy-secret@mirror.test/dl/a"; download_failure_output; download_failure_guidance a binary /tmp/bin',
++    );
++    expect(stdout).not.toContain("dummy-secret");
++    expect(stdout).toContain("https://mirror.test/dl/a");
++  });
++
++  test("redaction leaves an ordinary URL and an @ in the path alone", async () => {
++    const { stdout } = await runWithCurlShim(
++      'redact_url_credentials "https://install.squirrelscan.com/dl/v1/a"; echo; redact_url_credentials "https://host/p@th/a"',
++    );
++    expect(stdout.trim().split("\n")).toEqual([
++      "https://install.squirrelscan.com/dl/v1/a",
++      "https://host/p@th/a",
++    ]);
++  });
++
++  test("the printed recipe survives a bin dir with a space, a quote and a dollar", async () => {
++    // The recipe is meant to be copy-pasted, so it has to be valid shell for
++    // the path this run actually resolved.
++    const { stdout } = await runWithCurlShim(
++      `download_failure_guidance asset binary "/tmp/Test User/it's \\$weird/bin"`,
++    );
++    const recipe = stdout.split("\n").find((l) => l.includes("mv asset")) ?? "";
++    expect(recipe).toContain(`mkdir -p '/tmp/Test User/it'\\''s $weird/bin'`);
++    // Round-trip it: eval must reproduce exactly one argument.
++    const check = await runWithCurlShim(
++      `set -- ${recipe.slice(recipe.indexOf("mv asset") + "mv asset ".length)}; echo "$#"; echo "$1"`,
++    );
++    expect(check.stdout.trim().split("\n")).toEqual([
++      "1",
++      "/tmp/Test User/it's $weird/bin/squirrel",
++    ]);
++  });
++
++  test("a skipped GitHub leg is reported as skipped, not failed", async () => {
++    const { stdout } = await runWithCurlShim(
++      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://m.test/dl/a"; download_failure_output',
++      { env: { SQUIRREL_FORCE_MIRROR: "1" } },
++    );
++    expect(stdout).toContain("skipped https://github.com/x/y (SQUIRREL_FORCE_MIRROR)");
++    expect(stdout).toContain("tried https://m.test/dl/a (failed)");
++    expect(stdout).not.toContain("tried https://github.com/x/y (failed)");
++  });
++
++  test("the reported line names the escape hatch, and changes when it is already set", async () => {
++    const normal = await runWithCurlShim("download_failure_report_line binary");
++    expect(normal.stdout).toContain("SQUIRREL_FORCE_MIRROR=1");
++    const forced = await runWithCurlShim("download_failure_report_line binary", {
++      env: { SQUIRREL_FORCE_MIRROR: "1" },
++    });
++    expect(forced.stdout).toContain("github.com was skipped");
++    expect(forced.stdout).not.toContain("retry with SQUIRREL_FORCE_MIRROR=1");
++  });
++
++  test("the reported line names both hosts and stays inside ERROR_LINE_MAX", async () => {
++    // Two full asset URLs are ~170 chars and would be truncated out of
++    // error_line, so the hosts go there and the URLs ride in error_output.
++    const { stdout } = await runWithCurlShim(
++      'download_failure_report_line binary; echo "MAX=$ERROR_LINE_MAX"',
++    );
++    const [line, max] = stdout.trim().split("\n");
++    expect(line).toContain("github.com");
++    expect(line).toContain("install.squirrelscan.com");
++    expect(line.length).toBeLessThanOrEqual(Number(max.replace("MAX=", "")));
++  });
++
++  test("the retry recipe puts the flag on the bash side of the pipe", async () => {
++    // `VAR=1 curl … | bash` sets VAR for curl, not for the bash that runs the
++    // script, so the recipe would be a no-op written that way.
++    const { stdout } = await runWithCurlShim(
++      'download_failure_guidance squirrel-1.2.3-linux-x64 binary /home/u/.local/bin',
++    );
++    expect(stdout).toContain(
++      "curl -fsSL https://install.squirrelscan.com | SQUIRREL_FORCE_MIRROR=1 bash",
++    );
++    expect(stdout).not.toMatch(/SQUIRREL_FORCE_MIRROR=1\s+curl/);
++  });
++
++  test("the by-hand recipe is offered for a binary and withheld for a manifest", async () => {
++    // Telling someone to mv a manifest.json to <bin>/squirrel is worse than
++    // saying nothing.
++    const binary = await runWithCurlShim(
++      'download_failure_guidance squirrel-1.2.3-linux-x64 binary /home/u/.local/bin',
++    );
++    expect(binary.stdout).toContain(
++      "mv squirrel-1.2.3-linux-x64 '/home/u/.local/bin/squirrel'",
++    );
++
++    const manifest = await runWithCurlShim(
++      'download_failure_guidance manifest.json manifest /home/u/.local/bin',
++    );
++    expect(manifest.stdout).not.toContain("mv manifest.json");
++    expect(manifest.stdout).toContain("Allowlist github.com or install.squirrelscan.com");
++  });
++
++  test("guidance says github was skipped rather than printing a URL it never tried", async () => {
++    const { stdout } = await runWithCurlShim(
++      'download_failure_guidance squirrel-1.2.3-linux-x64 binary /home/u/.local/bin',
++      { env: { SQUIRREL_FORCE_MIRROR: "1" } },
++    );
++    expect(stdout).toContain("skipped (SQUIRREL_FORCE_MIRROR is set)");
++    expect(stdout).not.toContain("If github.com is blocked on this network");
++  });
++
++  test("both download steps go through the two-source helper, not a bare GitHub URL", () => {
++    // A call site that reconstructs the GitHub URL by hand would silently lose
++    // the fallback, and nothing else here would notice.
++    expect(shellInstaller).toContain(
++      'fetch_release_asset "$version" "manifest.json" "$tmpdir/manifest.json" "manifest"',
++    );
++    expect(shellInstaller).toContain(
++      'fetch_release_asset "$version" "$filename" "$tmpdir/squirrel" "binary"',
++    );
++    const downloadUrls = shellInstaller.match(/https:\/\/github\.com\/\$\{REPO\}\/releases\/download/g);
++    expect(downloadUrls).toHaveLength(1); // only the one inside fetch_release_asset
++  });
++
++  test("both installers ship the same mirror env vars", () => {
++    for (const script of [shellInstaller, powershellInstaller]) {
++      expect(script).toContain("SQUIRREL_FORCE_MIRROR");
++      expect(script).toContain("SQUIRREL_DOWNLOAD_ENDPOINT");
++      expect(script).toContain("https://install.squirrelscan.com/dl");
++    }
++  });
++
++  test("ps1 routes both downloads through the two-source helpers", () => {
++    expect(powershellInstaller).toContain(
++      'Get-ReleaseAssetJson -Version $Version -Asset "manifest.json" -Label "manifest"',
++    );
++    expect(powershellInstaller).toContain(
++      'Get-ReleaseAsset -Version $Version -Asset $filename -OutFile $binaryPath -Label "binary"',
++    );
++    // No call site may rebuild a GitHub download URL outside Get-DownloadSources.
++    const downloadUrls = powershellInstaller.match(
++      /"https:\/\/github\.com\/\$Repo\/releases\/download/g,
++    );
++    expect(downloadUrls).toHaveLength(1);
++  });
++
++  test("ps1 guards the script-scope bin dir against a missing LOCALAPPDATA", () => {
++    // Join-Path throws on a null Path, and at script scope under
++    // $ErrorActionPreference = "Stop" that kills the installer on line one,
++    // before the banner, in any environment without LOCALAPPDATA.
++    expect(powershellInstaller).toContain("$script:InstallBinDir = if ($env:LOCALAPPDATA) {");
++    expect(powershellInstaller).not.toMatch(
++      /\$script:InstallBinDir = Join-Path \$env:LOCALAPPDATA/,
++    );
++  });
++
++  test("ps1 deletes a partial download before trying the next source", () => {
++    // Invoke-WebRequest -OutFile leaves the partial file behind, and the mirror
++    // leg would then be asked to overwrite it.
++    expect(powershellInstaller).toContain(
++      "if (Test-Path $OutFile) { Remove-Item -Path $OutFile -Force -ErrorAction SilentlyContinue }",
++    );
++  });
++});
+diff --git a/scripts/install-ps-contract.test.ps1 b/scripts/install-ps-contract.test.ps1
+new file mode 100644
+index 0000000..69440e4
+--- /dev/null
++++ b/scripts/install-ps-contract.test.ps1
+@@ -0,0 +1,143 @@
++# Behavioural checks for install.ps1's release-asset download (#2064).
++#
++# CI already parses install.ps1, but parsing proves only that the file is
++# syntactically PowerShell. Nothing ran its functions before users did: the
++# install-test workflow fetches the PUBLISHED script from main, so a change to
++# this file reaches Windows users unexecuted. These checks dot-source the script
++# above `Main` (so nothing installs) and exercise the two-source download path
++# against a stubbed Invoke-WebRequest.
++#
++# Run locally with `pwsh -NoProfile -File scripts/install-ps-contract.test.ps1`.
++
++$ErrorActionPreference = "Stop"
++
++$installer = Join-Path (Split-Path -Parent $PSScriptRoot) "install.ps1"
++$src = Get-Content $installer -Raw
++# Everything above Main: the function library, with no entry point to run.
++$cut = $src.Substring(0, $src.LastIndexOf("function Main {"))
++. ([ScriptBlock]::Create($cut))
++
++$script:Failures = 0
++function Check {
++    param([string]$Name, [bool]$Condition)
++    if ($Condition) {
++        Write-Host "  ok   $Name"
++    } else {
++        Write-Host "  FAIL $Name"
++        $script:Failures++
++    }
++}
++
++Write-Host "SQUIRREL_FORCE_MIRROR uses value semantics, not presence"
++# A stray empty assignment in a profile must not reroute every install.
++foreach ($case in @(
++    @("", $false), @("0", $false), @("false", $false), @("FALSE", $false),
++    @("  ", $false), @("1", $true), @("true", $true), @("yes", $true)
++)) {
++    $env:SQUIRREL_FORCE_MIRROR = $case[0]
++    Check "'$($case[0])' -> $($case[1])" ((Test-ForceMirror) -eq $case[1])
++}
++Remove-Item Env:SQUIRREL_FORCE_MIRROR -ErrorAction SilentlyContinue
++
++Write-Host "GitHub is tried first, the mirror second"
++$sources = Get-DownloadSources -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe"
++Check "two sources" ($sources.Count -eq 2)
++Check "github.com first" ($sources[0][0] -eq "github.com")
++Check "github url" ($sources[0][1] -eq "https://github.com/squirrelscan/squirrelscan/releases/download/v1.2.3/squirrel-1.2.3-windows-x64.exe")
++Check "install.squirrelscan.com second" ($sources[1][0] -eq "install.squirrelscan.com")
++Check "mirror url" ($sources[1][1] -eq "https://install.squirrelscan.com/dl/v1.2.3/squirrel-1.2.3-windows-x64.exe")
++Check "both urls recorded for the report" (
++    $script:DownloadUrlGitHub -eq $sources[0][1] -and $script:DownloadUrlMirror -eq $sources[1][1])
++
++Write-Host "SQUIRREL_FORCE_MIRROR drops the GitHub leg"
++$env:SQUIRREL_FORCE_MIRROR = "1"
++$forced = Get-DownloadSources -Version "v1.2.3" -Asset "manifest.json"
++Check "one source" ($forced.Count -eq 1)
++Check "mirror only" ($forced[0][0] -eq "install.squirrelscan.com")
++Check "github url still recorded" ($script:DownloadUrlGitHub -like "https://github.com/*")
++Remove-Item Env:SQUIRREL_FORCE_MIRROR -ErrorAction SilentlyContinue
++
++Write-Host "a blocked github.com falls through to the mirror"
++function Invoke-WebRequest {
++    param($Uri, $OutFile, $TimeoutSec, [switch]$UseBasicParsing)
++    if ($Uri -like "*github.com*") { throw "blocked" }
++    Set-Content -Path $OutFile -Value "BYTES" -NoNewline
++}
++$out = Join-Path ([System.IO.Path]::GetTempPath()) "squirrel-ps-contract-asset"
++$ok = Get-ReleaseAsset -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe" -OutFile $out -Label "binary"
++Check "download succeeds" ($ok -eq $true)
++Check "source is the mirror" ($script:DownloadSource -eq "install.squirrelscan.com")
++Check "bytes landed on disk" ((Get-Content $out -Raw) -eq "BYTES")
++Remove-Item $out -Force -ErrorAction SilentlyContinue
++
++Write-Host "a failed attempt leaves no partial file for the next source"
++function Invoke-WebRequest {
++    param($Uri, $OutFile, $TimeoutSec, [switch]$UseBasicParsing)
++    # Invoke-WebRequest -OutFile really does leave a partial file behind when a
++    # transfer dies mid-stream.
++    Set-Content -Path $OutFile -Value "PARTIAL" -NoNewline
++    throw "blocked"
++}
++$failed = Get-ReleaseAsset -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe" -OutFile $out -Label "binary"
++Check "download reports failure" ($failed -eq $false)
++Check "no partial file left behind" (-not (Test-Path $out))
++
++Write-Host "the failure report names both hosts and carries both urls"
++Get-DownloadSources -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe" | Out-Null
++$line = Get-DownloadFailureLine "binary"
++Check "line names github.com" ($line -like "*github.com*")
++Check "line names install.squirrelscan.com" ($line -like "*install.squirrelscan.com*")
++# The acceptance criterion asks for one actionable line: the hosts tried AND the
++# way out, not the hosts alone.
++Check "line names the escape hatch" ($line -like "*SQUIRREL_FORCE_MIRROR=1*")
++# Two full asset URLs would be truncated out of error_line, so they ride in
++# error_output instead.
++Check "line fits ErrorLineMax" ($line.Length -le $ErrorLineMax)
++$output = Get-DownloadFailureOutput
++Check "output carries the github url" ($output -like "*https://github.com/*")
++Check "output carries the mirror url" ($output -like "*https://install.squirrelscan.com/dl/*")
++
++Write-Host "a skipped GitHub leg is reported as skipped, not failed"
++$env:SQUIRREL_FORCE_MIRROR = "1"
++Get-DownloadSources -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe" | Out-Null
++$forcedOutput = Get-DownloadFailureOutput
++Check "github recorded as skipped" ($forcedOutput -like "*skipped https://github.com/*(SQUIRREL_FORCE_MIRROR)*")
++Check "github not recorded as failed" (-not ($forcedOutput -like "*tried https://github.com/*(failed)*"))
++$forcedLine = Get-DownloadFailureLine "binary"
++Check "line says github was skipped" ($forcedLine -like "*github.com was skipped*")
++Check "line drops the retry instruction" (-not ($forcedLine -like "*retry with SQUIRREL_FORCE_MIRROR=1*"))
++Check "forced line still fits ErrorLineMax" ($forcedLine.Length -le $ErrorLineMax)
++Remove-Item Env:SQUIRREL_FORCE_MIRROR -ErrorAction SilentlyContinue
++
++Write-Host "a mirror URL carrying credentials is redacted"
++# SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips home
++# paths and clamps length; it knows nothing about URL userinfo.
++Check "userinfo stripped" ((Get-RedactedUrl "https://alice:dummy-secret@mirror.test/dl/a") -eq "https://mirror.test/dl/a")
++Check "ordinary url untouched" ((Get-RedactedUrl "https://install.squirrelscan.com/dl/a") -eq "https://install.squirrelscan.com/dl/a")
++Check "an @ in the path is not userinfo" ((Get-RedactedUrl "https://host/p@th/a") -eq "https://host/p@th/a")
++$script:DownloadUrlMirror = "https://alice:dummy-secret@mirror.test/dl/a"
++$redactedOutput = Get-DownloadFailureOutput
++Check "report carries no credentials" (-not ($redactedOutput -like "*dummy-secret*"))
++$redactedGuidance = (Show-DownloadFailureGuidance -Asset "a" -Kind "binary" 6>&1 | Out-String)
++Check "guidance shows no credentials" (-not ($redactedGuidance -like "*dummy-secret*"))
++
++Write-Host "guidance is specific to what failed"
++$binaryGuidance = (Show-DownloadFailureGuidance -Asset "squirrel-1.2.3-windows-x64.exe" -Kind "binary" 6>&1 | Out-String)
++Check "a binary gets the by-hand recipe" ($binaryGuidance -like "*Move-Item squirrel-1.2.3-windows-x64.exe*")
++# The bin directory does not exist until the first successful install, and
++# Move-Item will not create it.
++Check "the recipe creates its destination first" ($binaryGuidance -like "*New-Item -ItemType Directory -Force -Path*")
++Check "the retry recipe sets the variable before the pipe" ($binaryGuidance -like "*`$env:SQUIRREL_FORCE_MIRROR='1'; iwr*")
++$manifestGuidance = (Show-DownloadFailureGuidance -Asset "manifest.json" -Kind "manifest" 6>&1 | Out-String)
++# Telling someone to move a manifest.json to <bin>\squirrel.exe is worse than
++# saying nothing.
++Check "a manifest gets no by-hand recipe" (-not ($manifestGuidance -like "*Move-Item manifest.json*"))
++Check "a manifest names the allowlist route" ($manifestGuidance -like "*Allowlist github.com*")
++
++if ($script:Failures -gt 0) {
++    Write-Host ""
++    Write-Host "$($script:Failures) check(s) failed"
++    exit 1
++}
++Write-Host ""
++Write-Host "install.ps1 contract checks passed"

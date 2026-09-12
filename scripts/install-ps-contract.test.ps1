@@ -112,10 +112,10 @@ Remove-Item Env:SQUIRREL_FORCE_MIRROR -ErrorAction SilentlyContinue
 Write-Host "a mirror URL carrying credentials is redacted"
 # SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips home
 # paths and clamps length; it knows nothing about URL userinfo.
-Check "userinfo stripped" ((Get-RedactedUrl "https://alice:dummy-secret@mirror.test/dl/a") -eq "https://mirror.test/dl/a")
+Check "userinfo stripped" ((Get-RedactedUrl "https://alice:dummy-secret@mirror.test/dl/a") -eq "https://mirror.test/dl/a") # pragma: allowlist secret
 Check "ordinary url untouched" ((Get-RedactedUrl "https://install.squirrelscan.com/dl/a") -eq "https://install.squirrelscan.com/dl/a")
 Check "an @ in the path is not userinfo" ((Get-RedactedUrl "https://host/p@th/a") -eq "https://host/p@th/a")
-$script:DownloadUrlMirror = "https://alice:dummy-secret@mirror.test/dl/a"
+$script:DownloadUrlMirror = "https://alice:dummy-secret@mirror.test/dl/a" # pragma: allowlist secret
 $redactedOutput = Get-DownloadFailureOutput
 Check "report carries no credentials" (-not ($redactedOutput -like "*dummy-secret*"))
 $redactedGuidance = (Show-DownloadFailureGuidance -Asset "a" -Kind "binary" 6>&1 | Out-String)

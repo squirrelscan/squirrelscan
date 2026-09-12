@@ -1070,7 +1070,10 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     expect(code).toBe(0);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain(MIRROR_ASSET);
-    expect(calls.flat().some((a) => a.includes("github.com"))).toBe(false);
+    // The exact URL, not a "github.com" substring: fetch_release_asset builds
+    // only this one GitHub URL, so its absence is the whole claim, and a
+    // substring host test is the shape of a real sanitiser bug elsewhere.
+    expect(calls.flat()).not.toContain(GITHUB_ASSET);
   });
 
   test.each([
@@ -1116,7 +1119,7 @@ describe("release asset download falls back to the mirror (#2064)", () => {
     // SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied. The report scrubber strips
     // home paths and clamps length; it knows nothing about URL userinfo.
     const { stdout } = await runWithCurlShim(
-      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://alice:dummy-secret@mirror.test/dl/a"; download_failure_output; download_failure_guidance a binary /tmp/bin',
+      'DOWNLOAD_URL_GITHUB="https://github.com/x/y"; DOWNLOAD_URL_MIRROR="https://alice:dummy-secret@mirror.test/dl/a"; download_failure_output; download_failure_guidance a binary /tmp/bin',  // pragma: allowlist secret -- a synthetic credential is the input under test
     );
     expect(stdout).not.toContain("dummy-secret");
     expect(stdout).toContain("https://mirror.test/dl/a");

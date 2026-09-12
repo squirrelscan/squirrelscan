@@ -302,8 +302,8 @@ function Get-ReleaseAssetJson {
 # Strip `user:password@` out of a URL before it is printed or reported.
 # SQUIRREL_DOWNLOAD_ENDPOINT is user-supplied and can carry credentials, and the
 # report scrubber removes home paths and clamps length — it knows nothing about
-# URL userinfo, so a mirror set to https://user:token@host would otherwise send
-# that token to the reporting endpoint verbatim.
+# URL userinfo, so a mirror whose URL carries a username and password would
+# otherwise send that password to the reporting endpoint verbatim.
 function Get-RedactedUrl {
     param([string]$Url)
     return [regex]::Replace($Url, '^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@', '$1')
