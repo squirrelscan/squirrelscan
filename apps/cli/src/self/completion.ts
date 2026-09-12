@@ -187,7 +187,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --fail-on --header -H --rule-include --rule-exclude --summary --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --fail-on --header -H --rule-include --rule-exclude --summary --entity-map --entity-map-dir --help" -- "\${cur}") )
       return 0
       ;;
     crawl)
@@ -465,7 +465,9 @@ _squirrel() {
             '*'{-H,--header}'[Custom HTTP header on every crawl request, format "Name: Value" (repeatable)]:header' \\
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
-            '--summary[Print score, category breakdown, and issue counts only]'
+            '--summary[Print score, category breakdown, and issue counts only]' \\
+            '--entity-map[Also write the site JSON-LD entity graph (json, jsonld, html)]' \\
+            '--entity-map-dir[Directory for the --entity-map files]:dir:_files -/'
           ;;
         crawl)
           _arguments \\
@@ -662,6 +664,8 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "C
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l summary -d "Print score, category breakdown, and issue counts only"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l entity-map -d "Also write the site JSON-LD entity graph (json, jsonld, html)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l entity-map-dir -d "Directory for the --entity-map files"
 
 # Credits options
 complete -c squirrel -n "__fish_seen_subcommand_from credits" -l json -d "Output as JSON"

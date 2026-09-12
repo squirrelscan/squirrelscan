@@ -15,7 +15,7 @@ import { platform } from "node:os";
 import type { AuditFailureDetails, CrawlerEvent } from "@/controllers/audit";
 import type { PreflightBalance } from "@/lib/balance";
 import type { UserSettings } from "@/self/types";
-import type { AuditOptions } from "@/types";
+import type { AuditOptions, EntityMapOutput } from "@/types";
 
 import {
   normalizeFailOnArgs,
@@ -614,6 +614,8 @@ export function validateAuditFlags(args: {
   noPublish?: boolean;
   render?: boolean;
   http?: boolean;
+  entity_map?: boolean;
+  entity_map_dir?: string;
 }): string | null {
   const noPublish = args.no_publish || args.noPublish;
   // --offline conflicts with flags that require the cloud API.
@@ -629,6 +631,11 @@ export function validateAuditFlags(args: {
   // rather than silently picking one.
   if (args.render && args.http) {
     return "--render and --http cannot be combined";
+  }
+  // A directory with nothing to put in it is always a mistake, and silently
+  // writing nothing is the worst answer (#2061).
+  if (args.entity_map_dir && !args.entity_map) {
+    return "--entity-map-dir requires --entity-map";
   }
   return null;
 }
@@ -815,6 +822,16 @@ export const audit = defineCommand({
       description:
         "Print only the score, category breakdown, and issue counts — no per-issue detail (console format only)",
     },
+    "entity-map": {
+      type: "boolean",
+      description:
+        "Also write the site's JSON-LD entity graph as entity-map.json, entity-map.jsonld and entity-map.html",
+    },
+    "entity-map-dir": {
+      type: "string",
+      description:
+        "Directory for the --entity-map files (default: alongside --output, else the working directory)",
+    },
   },
   async run({ args }) {
     // Configure logging before any output
@@ -840,6 +857,8 @@ export const audit = defineCommand({
     const flagError = validateAuditFlags({
       ...args,
       no_publish: args["no-publish"],
+      entity_map: args["entity-map"],
+      entity_map_dir: args["entity-map-dir"],
     });
     if (flagError) {
       console.error(flagError);
@@ -1264,6 +1283,12 @@ export const audit = defineCommand({
         ...(ruleFilter.disable.length > 0
           ? { ruleExclude: ruleFilter.disable }
           : {}),
+        // #2061 (prototype): off by default, and nothing else in the run
+        // changes when it is on.
+        ...(args["entity-map"] ? { entityMap: true } : {}),
+        ...(args["entity-map-dir"]
+          ? { entityMapDir: args["entity-map-dir"] }
+          : {}),
       };
 
       // Preamble — aligned key/value block (Account, and Dashboard when online,
@@ -1613,6 +1638,10 @@ export const audit = defineCommand({
       let discoveredCount = 0;
       let sitemapUrlCount = 0;
       let result: Awaited<ReturnType<typeof runAudit>>;
+      // #2061: filled by the controller when --entity-map wrote its three
+      // files. A holder rather than a bare `let`, because TypeScript keeps the
+      // `null` narrowing across an assignment made only inside a callback.
+      const entityMap: { output: EntityMapOutput | null } = { output: null };
 
       // Route logs through progress to keep progress line at bottom
       setLogInterceptor((msg) => progress.log(msg));
@@ -1683,6 +1712,11 @@ export const audit = defineCommand({
           // corrupt `-f json` for the scripts that parse it.
           onRetention: (outcome) =>
             console.error(formatRetentionNotice(outcome)),
+          // #2061: captured here, printed after the report so the paths are the
+          // last thing on screen.
+          onEntityMap: (output) => {
+            entityMap.output = output;
+          },
           configPath: getGlobalConfigPath(),
           onEvent: (event: CrawlerEvent) => {
             switch (event.type) {
@@ -2016,6 +2050,17 @@ export const audit = defineCommand({
         generateXmlReport(report, options.outputPath, reportBranding);
       } else if (format === "llm") {
         generateLlmReport(report, options.outputPath);
+      }
+
+      // #2061: the three --entity-map paths. stderr regardless of format, for
+      // the same reason the retention notice is: `-f json` is piped into other
+      // tools and must stay a single JSON document.
+      if (entityMap.output) {
+        console.error("");
+        console.error("Entity map:");
+        console.error(`  ${entityMap.output.json}`);
+        console.error(`  ${entityMap.output.jsonld}`);
+        console.error(`  ${entityMap.output.html}`);
       }
 
       // Publish to the dashboard (auto when signed in + online, or forced with

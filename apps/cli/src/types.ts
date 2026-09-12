@@ -648,6 +648,19 @@ export interface AuditOptions {
   // to config.rules.disable.
   ruleInclude?: string[];
   ruleExclude?: string[];
+  // --entity-map (#2061, prototype): write the site-wide JSON-LD entity graph
+  // as three side files. Off by default; nothing else about the run changes.
+  entityMap?: boolean;
+  // Directory the three files land in. Unset → the directory of --output, or
+  // the working directory when there is no --output.
+  entityMapDir?: string;
+}
+
+/** Where `--entity-map` wrote its three artifacts. */
+export interface EntityMapOutput {
+  json: string;
+  jsonld: string;
+  html: string;
 }
 
 // ============================================

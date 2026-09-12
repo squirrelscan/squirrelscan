@@ -8,7 +8,7 @@ import type { Config } from "@/config";
 import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
 import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
-import type { AuditReport, AuditOptions } from "@/types";
+import type { AuditReport, AuditOptions, EntityMapOutput } from "@/types";
 
 import { createCrawler } from "@/crawler/core";
 
@@ -18,6 +18,7 @@ import type { RenderChargeLine } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import { createCloudDocumentFetcher } from "@squirrelscan/audit-engine";
+import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
   createConditionalRenderDocumentFetcher,
@@ -46,6 +47,7 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
+import { writeEntityMap } from "@/audit/entity-map";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -90,6 +92,7 @@ import { reconstructReport } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
 import { initRequestTool } from "@/tools/request";
+import { cwdOr } from "@/utils/cwd";
 import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
 import { summarizeRenderTimings } from "@/utils/render-timing-summary";
@@ -216,6 +219,12 @@ export interface RunAuditOptions extends AuditOptions {
    * only the command layer knows that.
    */
   onRetention?: (outcome: RetentionOutcome) => void;
+  /**
+   * Called with the three paths `--entity-map` wrote (#2061). Same division of
+   * labour as `onRetention`: the controller writes, the command layer decides
+   * where to say so.
+   */
+  onEntityMap?: (output: EntityMapOutput) => void;
 }
 
 /**
@@ -1296,6 +1305,11 @@ export async function runAudit(
         ? createCloudPrefetchCollector(url)
         : null;
       const techSampleCollector = createTechDetectSampleCollector(url);
+      // #2061: url + raw JSON-LD per page, and nothing else — off unless
+      // --entity-map asked for it, so a normal run allocates nothing.
+      const entityMapCollector = options.entityMap
+        ? createEntityMapCollector()
+        : null;
       // normalizedUrl + status per page, for the smart-audits merge and nothing
       // else — two scalars a page instead of the PageRecord it used to slice
       // them off.
@@ -1369,6 +1383,7 @@ export async function runAudit(
           onBatchContext: (batchContext) => {
             prefetchCollector?.absorb(batchContext);
             techSampleCollector.absorb(batchContext);
+            entityMapCollector?.absorb(batchContext);
             if (needExternalLinkCount)
               absorbExternalLinkUrls(externalLinkUrls, batchContext);
             for (const { page } of batchContext) {
@@ -1887,6 +1902,29 @@ export async function runAudit(
       // harness printed "rules n/a". One machine-readable line at the end of the
       // run, and `phaseTimingsMs` in the report is unchanged.
       logger.trace("phase timings", phaseTimer.timingsMs);
+
+      // ============================================
+      // STEP 3.3: ENTITY MAP (#2061, --entity-map only)
+      // ============================================
+      // A side artifact, written after the report exists and read by nothing
+      // else in the run. A failure here is logged and dropped: the audit
+      // succeeded, and losing an extra file must never lose the report.
+      if (entityMapCollector) {
+        try {
+          const entityMap = writeEntityMap({
+            pages: entityMapCollector.build(),
+            siteUrl: url,
+            ...(options.entityMapDir ? { dir: options.entityMapDir } : {}),
+            ...(options.outputPath ? { outputPath: options.outputPath } : {}),
+            cwd: cwdOr("."),
+          });
+          options.onEntityMap?.(entityMap);
+        } catch (error) {
+          logger.warn(
+            `Could not write the entity map: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
 
       // ============================================
       // STEP 4: RETENTION (#1912)
