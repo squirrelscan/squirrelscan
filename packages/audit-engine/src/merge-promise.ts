@@ -65,14 +65,42 @@ const REMOVED_STATUSES = new Set([404, 410]);
  * appeared for a 16-page crawl with every stale finding re-stamped as first seen
  * today (squirrelscan/repo#2063).
  *
- * Gated on `pageUrl` so a site-scope check can never be dropped by a stray
- * provenance tag: carried replays are per-page findings by construction
- * (`carriedFindingToCheck` always stamps a `pageUrl`).
+ * Gated on the check being PAGE-ATTRIBUTED so a site-scope check can never be
+ * dropped by a stray provenance tag: a replay is a per-page finding by
+ * construction (`carriedFindingToCheck` always stamps a `pageUrl`), and a site
+ * rule's check is scored from the shell verbatim.
  */
 function isReplayedCheck(check: CheckResult): boolean {
   return (
-    !!check.pageUrl && (check.provenance === "carried" || check.provenance === "unrendered")
+    isPageAttributed(check) &&
+    (check.provenance === "carried" || check.provenance === "unrendered")
   );
+}
+
+/**
+ * True when a check speaks for one or more PAGES: a per-page check carries a
+ * `pageUrl`, and a folded aggregate carries its affected pages in `pages[]`
+ * instead.
+ *
+ * Both forms matter. The sampled branch unfolds before it filters, so it only
+ * ever sees the first; the COMPLETE-store branch deliberately does not unfold —
+ * the shell's aggregates are its display surface — so there the second form is
+ * the one a replay arrives as.
+ *
+ * The aggregate test is deliberately `unfoldAggregateCheck`'s own gate, so the
+ * two branches agree on what an aggregate IS. A check carrying `pages` without
+ * the `aggregated` marker is not unfolded there and is not page-attributed here:
+ * either way it names no page this run is asked to believe in.
+ */
+function isPageAttributed(check: CheckResult): boolean {
+  if (check.pageUrl) return true;
+  return check.details?.aggregated === true && !!check.pages && check.pages.length > 0;
+}
+
+/** Every page a check speaks for, normalized to the store's page identity. */
+function attributedPages(check: CheckResult): string[] {
+  if (check.pageUrl) return [normalizePageUrl(check.pageUrl)];
+  return (check.pages ?? []).map(normalizePageUrl);
 }
 
 /**
@@ -311,8 +339,11 @@ export interface CloudSmartAuditsResult {
   removedPages: number;
   /**
    * (#2063) Published checks the producer had tagged `carried`/`unrendered` and
-   * this merge refused to treat as evidence from this run. Zero on the
-   * complete-store path (the store IS the evidence there).
+   * this merge refused to treat as evidence from this run. Counted in BOTH modes:
+   * complete mode takes its findings from the store, but the shell is still the
+   * report body and a replay in it would sit in the union beside the cloud's own
+   * carry for the same page. One aggregate counts once however many pages it
+   * names; {@link replayedUnknownPages} is the per-page number.
    */
   replayedChecksDropped: number;
   /**
@@ -390,6 +421,12 @@ export async function runCloudSmartAudits(
    * {@link CloudSmartAuditsResult.replayedUnknownPages}.
    */
   const replayedUrls = new Set<string>();
+  /**
+   * (#2063) The complete-store shell with its replays removed — what the tally
+   * fold and the union both read. Undefined in the sampled branch, which has no
+   * shell to speak of.
+   */
+  let shellResults: CloudSmartAuditsInput["ruleResults"] | undefined;
   if (completeStore) {
     // (#2063) IDENTITY CONTRACT. Complete mode is the one place where a page's
     // ABSENCE from the fresh set authorizes a resolve, and the fresh set was keyed
@@ -410,10 +447,38 @@ export async function runCloudSmartAudits(
     // audit-sized is ever resident. `freshResults` keeps the SHELL's rules: they
     // are the report surface and the site-scope rules' checks, exactly what the
     // materialized reconstruction passed through untouched.
+    //
+    // (#2063) Untouched EXCEPT for the replays. The shell is this run's evidence
+    // here, and it is also the report body — it flows into `freshForUnion` and
+    // then into the union, where a producer's replayed check would appear beside
+    // the cloud's own carry for the same page, with the producer's date, on a page
+    // this crawl never fetched. Complete mode does not unfold, so a replay arrives
+    // as a per-page check OR as a folded aggregate naming its pages; both go.
+    // Site-scope checks stay: the tally fold scores those verbatim.
+    //
+    // Every rule KEEPS ITS KEY even when every check goes. The tally fold reads
+    // rule membership to decide which rules the shell already handled, so dropping
+    // an emptied rule would hand it to the carried-only branch twice.
     freshResults = new Map<string, RuleRunResult>();
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
-      freshResults.set(ruleId, { meta: r.meta, checks: r.checks });
+      const checks: CheckResult[] = [];
+      for (const c of r.checks) {
+        if (isReplayedCheck(c)) {
+          replayedChecksDropped += 1;
+          for (const u of attributedPages(c)) replayedUrls.add(u);
+          continue;
+        }
+        checks.push(c);
+      }
+      freshResults.set(ruleId, { meta: r.meta, checks });
     }
+    // The same filtered shell the union gets, in the shape the tally fold takes.
+    // Passing the raw one would let a replay-tagged SITE rule's checks into a
+    // tally; page rules contribute counts rather than checks, so this is defence
+    // in depth rather than a second live path.
+    shellResults = Object.fromEntries(
+      Array.from(freshResults, ([ruleId, r]) => [ruleId, { meta: r.meta, checks: r.checks }]),
+    );
   } else {
     // A published report arrives already folded (#910): an over-cap per-rule
     // check array is collapsed into per-issue-class aggregates that carry every
@@ -440,7 +505,7 @@ export async function runCloudSmartAudits(
       for (const c of r.checks.flatMap(unfoldAggregateCheck)) {
         if (isReplayedCheck(c)) {
           replayedChecksDropped += 1;
-          replayedUrls.add(normalizePageUrl(c.pageUrl!));
+          for (const u of attributedPages(c)) replayedUrls.add(u);
           continue;
         }
         checks.push(c);
@@ -632,7 +697,7 @@ export async function runCloudSmartAudits(
 
   if (streamedComplete) {
     const fold = createCompleteStoreTallyFold({
-      ruleResults: input.ruleResults,
+      ruleResults: shellResults ?? input.ruleResults,
       crawledUrls,
       skippedPassCounts: completeStore.skippedPassCounts,
       carriedPageUrls,
@@ -696,7 +761,7 @@ export async function runCloudSmartAudits(
     // ORDER IS LOAD-BEARING — this MUST run before the deferred writes below.
     if (completeStore) {
       scoringTallies = await foldCompleteStoreTallies({
-        ruleResults: input.ruleResults,
+        ruleResults: shellResults ?? input.ruleResults,
         findingPages: completeStore.findingPages ?? emptyPageSource(),
         crawledUrls,
         skippedPassCounts: completeStore.skippedPassCounts,

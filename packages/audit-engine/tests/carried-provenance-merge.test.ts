@@ -24,6 +24,7 @@ import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contra
 
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { buildSkippedPassCounts, buildStreamFindings } from "../src/stream-findings";
 import { calculateHealthScore } from "../src/scoring";
 
 class MemStore implements SmartAuditStore {
@@ -375,5 +376,292 @@ describe("#2063 — query strings are part of a page's identity", () => {
       now: NOW,
     });
     expect(r.coverage.auditedPages).toBe(1);
+  });
+});
+
+describe("#2063 — the sample sets describe this run only", () => {
+  const RULE = "core/meta-title";
+  const CHECK = "meta-title";
+  /** A page the crawl visited and whose finding the fresh sample clipped out. */
+  const CLIPPED = "https://gaijin.test/p/3";
+
+  /**
+   * A truncated aggregate: it retains `pages` but declares a bigger
+   * `pagesTruncated`, which is the marker that makes its page list a SAMPLE and
+   * so non-authoritative for the merge.
+   */
+  function truncatedAggregate(
+    pages: string[],
+    total: number,
+    overrides: Partial<CheckResult> = {},
+  ): CheckResult {
+    return {
+      name: CHECK,
+      status: "warn",
+      message: `Title is too short (+${total - 1} more pages)`,
+      pages,
+      details: { aggregated: true, occurrences: total, pagesTruncated: total },
+      ...overrides,
+    };
+  }
+
+  // Without the replay exclusion the CARRIED aggregate's retained pages join the
+  // sample set, and a page it happens to name then reads as "in the sample,
+  // produced no fresh finding" — the one shape that resolves a finding the crawl
+  // never re-examined. The fresh aggregate is what makes the branch reachable:
+  // its sample is the authority, and it clipped this page out.
+  test("a carried aggregate's pages never become this run's sample", async () => {
+    const store = new MemStore();
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: { [RULE]: { meta: pageMeta, checks: freshChecks() } },
+      pageStatuses: [],
+      now: AUGUST,
+    });
+    // Run 1 left /p/0 and /p/1 failing. Give /p/3 a finding too, so run 2 has a
+    // prior on a page its fresh sample clips.
+    await store.upsertFindings([
+      {
+        siteKey: "web_1",
+        normalizedUrl: CLIPPED,
+        ruleId: RULE,
+        checkName: CHECK,
+        locator: "",
+        status: "warn",
+        severity: "warning",
+        message: "Title is too short",
+        value: null,
+        expected: null,
+        payload: null,
+        fingerprint: "fp-clipped",
+        firstSeenAt: AUGUST,
+        lastSeenAt: AUGUST,
+        lastSeenCrawlId: "audit_1",
+        provenance: "fresh",
+        state: "open",
+      },
+    ]);
+
+    const r = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_2",
+      ruleResults: {
+        [RULE]: {
+          meta: pageMeta,
+          checks: [
+            // Every page crawled again, so the whole site is in `crawledUrls`.
+            ...FRESH_PAGES.map((u) => passCheck(u)),
+            // This run's failing pages, SAMPLED — /p/3 was clipped out of it.
+            truncatedAggregate([FRESH_PAGES[0]!, FRESH_PAGES[1]!], 40),
+            // The producer's replay, whose own sample happens to name /p/3.
+            truncatedAggregate([CLIPPED, ...CARRIED_PAGES.slice(0, 99)], 400, {
+              provenance: "carried",
+              lastSeenAt: AUGUST,
+            }),
+          ],
+        },
+      },
+      pageStatuses: [],
+      now: NOW,
+    });
+
+    const clipped = (await store.getFindings("web_1")).find((f) => f.normalizedUrl === CLIPPED);
+    expect(clipped!.state).toBe("open");
+    expect(clipped!.provenance).toBe("carried");
+    // The sampled branch unfolds before it filters, so the aggregate is counted
+    // as the 100 per-page checks it stands for, not as one object.
+    expect(r.replayedChecksDropped).toBe(100);
+  });
+
+  test("an unrendered check is refused on the same terms as a carried one", async () => {
+    const store = new MemStore();
+    const r = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: {
+        [RULE]: {
+          meta: pageMeta,
+          checks: [
+            ...freshChecks(),
+            warnCheck(CARRIED_PAGES[0]!, { provenance: "unrendered" }),
+            truncatedAggregate(CARRIED_PAGES.slice(0, 50), 400, { provenance: "unrendered" }),
+          ],
+        },
+      },
+      pageStatuses: [],
+      now: NOW,
+    });
+
+    expect(r.coverage.auditedPages).toBe(16);
+    expect(r.replayedChecksDropped).toBe(51); // 1 per-page + the 50 the aggregate unfolds to
+    expect(await store.getFindings("web_1")).toHaveLength(2);
+    for (const check of r.unionRuleResults.get(RULE)!.checks) {
+      expect(CARRIED_PAGES).not.toContain(check.pageUrl ?? "");
+    }
+  });
+});
+
+describe("#2063 — complete-store mode keeps replays out of the union", () => {
+  const RULE = "core/meta-title";
+  const SITE_RULE = "crawl/robots-txt";
+  const siteMeta = {
+    id: "robots-txt",
+    name: "Robots.txt",
+    description: "A site should serve robots.txt",
+    category: "crawl",
+    scope: "site" as const,
+    severity: "warning" as const,
+    weight: 10,
+  };
+  const CRAWLED = FRESH_PAGES[0]!;
+  const REPLAYED = CARRIED_PAGES[0]!;
+
+  /** The staged shell: one real page check, one replay, one replayed aggregate,
+   *  and a site-scope check that must survive all of it. */
+  function shell() {
+    return {
+      [RULE]: {
+        meta: pageMeta,
+        checks: [
+          warnCheck(CRAWLED),
+          warnCheck(REPLAYED, { provenance: "carried" as const, lastSeenAt: 1 }),
+          {
+            name: "meta-title",
+            status: "warn" as const,
+            message: "Title is too short (+399 more pages)",
+            pages: CARRIED_PAGES.slice(0, 100),
+            details: { aggregated: true, occurrences: 400, pagesTruncated: 400 },
+            provenance: "carried" as const,
+            lastSeenAt: AUGUST,
+          },
+        ],
+      },
+      [SITE_RULE]: {
+        meta: siteMeta,
+        checks: [{ name: "robots-exists", status: "warn" as const, message: "No robots.txt" }],
+      },
+    };
+  }
+
+  async function* noFindingPages(): AsyncGenerator<PageFindingRecord[]> {
+    // This audit ingested nothing for these rules.
+  }
+  async function* noOpenPages(): AsyncGenerator<{
+    normalizedUrl: string;
+    fresh: PageFindingRecord[];
+    prior: PageFindingRecord[];
+  }> {
+    // The site has no open findings at all.
+  }
+
+  function assertClean(result: Awaited<ReturnType<typeof runCloudSmartAudits>>) {
+    // Complete mode does NOT unfold, so the aggregate is refused as one check.
+    expect(result.replayedChecksDropped).toBe(2);
+    expect(result.coverage.auditedPages).toBe(1);
+
+    const checks = result.unionRuleResults.get(RULE)!.checks;
+    for (const check of checks) {
+      expect(check.pageUrl ?? "").not.toBe(REPLAYED);
+      expect(check.lastSeenAt).toBeUndefined();
+      expect(check.pages ?? []).toHaveLength(0);
+    }
+    expect(checks.map((c) => c.pageUrl)).toEqual([CRAWLED]);
+
+    // A genuine site-scope check is scored from the shell verbatim and must not
+    // be swept up by a page-attribution filter.
+    expect(result.unionRuleResults.get(SITE_RULE)!.checks).toHaveLength(1);
+  }
+
+  test("the materialized variant", async () => {
+    const result = await runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: shell(),
+      pageStatuses: [],
+      now: NOW,
+      completeStore: {
+        findingPages: noFindingPages(),
+        priorOpenFindings: [],
+        crawledUrls: [CRAWLED],
+      },
+    });
+    assertClean(result);
+  });
+
+  test("the streamed variant", async () => {
+    const result = await runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: shell(),
+      pageStatuses: [],
+      now: NOW,
+      completeStore: { openPages: noOpenPages(), crawledUrls: [CRAWLED] },
+    });
+    assertClean(result);
+  });
+});
+
+describe("#2063 — the container streams this run's evidence only", () => {
+  const RULE = "core/meta-title";
+  const CRAWLED = FRESH_PAGES[0]!;
+  const REPLAYED = CARRIED_PAGES[0]!;
+
+  /** The pre-sample report the container flattens: one real finding, one replay
+   *  of each kind, and a replayed aggregate. */
+  function ruleResults() {
+    return {
+      [RULE]: {
+        meta: pageMeta,
+        checks: [
+          warnCheck(CRAWLED),
+          warnCheck(REPLAYED, { provenance: "carried" as const, lastSeenAt: AUGUST }),
+          warnCheck(CARRIED_PAGES[1]!, { provenance: "unrendered" as const }),
+          {
+            name: "meta-title",
+            status: "warn" as const,
+            message: "Title is too short (+9 more pages)",
+            pages: CARRIED_PAGES.slice(2, 12),
+            details: { aggregated: true, occurrences: 10 },
+            provenance: "carried" as const,
+            lastSeenAt: AUGUST,
+          },
+        ],
+      },
+    };
+  }
+
+  // Streaming a replay would persist it under THIS run's crawl id with today's
+  // first/last-seen — the complete-store path's version of the laundering the
+  // sampled merge refuses.
+  test("buildStreamFindings streams the crawl's finding and none of the replays", () => {
+    const lines = buildStreamFindings(ruleResults(), NOW);
+
+    expect(lines.map((l) => l.normalizedUrl)).toEqual([CRAWLED]);
+    expect(lines[0]!.provenance).toBe("fresh");
+    expect(lines[0]!.firstSeenAt).toBe(NOW);
+  });
+
+  test("buildSkippedPassCounts does not let a replayed fail make a page dirty", () => {
+    // /p/1 is clean apart from a REPLAYED warn, so its pass is a whole-page pass,
+    // not a passing sibling on a dirty page. Counting it here would add a pass
+    // unit the reconstruction already counts as a clean page.
+    const counts = buildSkippedPassCounts({
+      [RULE]: {
+        checks: [
+          warnCheck(CRAWLED),
+          { name: "title-length", status: "pass", message: "ok", pageUrl: CRAWLED },
+          warnCheck(FRESH_PAGES[1]!, { provenance: "carried" as const, lastSeenAt: AUGUST }),
+          { name: "title-length", status: "pass", message: "ok", pageUrl: FRESH_PAGES[1]! },
+        ],
+      },
+    });
+
+    expect(counts).toEqual({ [RULE]: { "title-length": 1 } });
   });
 });
