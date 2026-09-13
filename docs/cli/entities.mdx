@@ -124,6 +124,10 @@ With no arguments it compares the latest audit against the previous audit **of t
 
 `--diff` accepts `-f markdown` (the default) or `-f json`.
 
+<Note>
+An audit that stored no entities is not picked automatically as the older side, and you may see "only one has an entity map so far" because of it. The store cannot tell "this site declared nothing" from "this audit predates the entity map", and reading the second as the first turns every entity you have today into a fresh addition. When you know which it was, name both: `squirrel entities --diff --crawl <older> --crawl <newer>`.
+</Note>
+
 ### Not crawled again
 
 Two audits of a site rarely cover the same pages. A smaller crawl, a changed page cap or a section that started returning 404 all shrink the page set, and a naive comparison reports every entity on a page that simply was not visited as removed.

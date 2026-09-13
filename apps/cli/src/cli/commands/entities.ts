@@ -257,17 +257,19 @@ function renderList(
     return `No stored audit carries an entity map.\nRun "squirrel audit <url>" to create one.\n`;
   }
 
+  // 24, not 22: `toLocaleString()` runs to 21 characters with a 12-hour clock
+  // ("9/13/2026, 11:30:46 AM"), which left no gap before the Pages column.
   const out: string[] = [
     "Entity maps:",
-    "=".repeat(94),
+    "=".repeat(96),
     "ID".padEnd(11) +
-      "Date".padEnd(22) +
+      "Date".padEnd(24) +
       "Pages".padEnd(8) +
       "Entities".padEnd(10) +
       "Stable @id".padEnd(12) +
       "Conflicts".padEnd(11) +
       "Site",
-    "-".repeat(94),
+    "-".repeat(96),
   ];
   for (const row of rows) {
     const share = `${Math.round(row.stableIdShare * 100)}%`;
@@ -279,7 +281,7 @@ function renderList(
         : row.baseUrl;
     out.push(
       row.crawlId.slice(0, 8).padEnd(11) +
-        new Date(row.startedAt).toLocaleString().padEnd(22) +
+        new Date(row.startedAt).toLocaleString().padEnd(24) +
         String(row.pages).padEnd(8) +
         String(row.entities).padEnd(10) +
         share.padEnd(12) +
@@ -525,8 +527,17 @@ export const entities = defineCommand({
                   ? `No audit with an entity map matches "${ids[0]}".`
                   : "Need two audits to compare; none has an entity map yet."
             );
+            // An audit with no entities is skipped as the older side on
+            // purpose: the store cannot tell "this site declared nothing" from
+            // "this crawl predates the entity map", and reading the second as
+            // the first turns every current entity into a fresh addition. Name
+            // both ids to say you know which it was.
             console.log(
-              fmt.dim('Run "squirrel audit <url>" again, then re-run this.')
+              fmt.dim(
+                anchor
+                  ? 'Run "squirrel audit <url>" again, or name both audits: squirrel entities --diff --crawl <older> --crawl <newer>'
+                  : 'Run "squirrel audit <url>" again, then re-run this.'
+              )
             );
             return;
           }
