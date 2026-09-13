@@ -186,7 +186,13 @@ export function registerEntityTools(server: McpServer): void {
 
       const filtered = applyToolFilters(loaded.data.map, toFilters(args));
       const format = args.format ?? "json";
-      const { content, truncation } = renderGraph(filtered, format);
+      // The UNFILTERED count, so an empty result can say "no match" rather
+      // than "this site declares nothing" — two very different facts.
+      const { content, truncation } = renderGraph(
+        filtered,
+        format,
+        loaded.data.map.nodes.length
+      );
 
       return jsonResult({
         site: loaded.data.map.site,

@@ -509,3 +509,58 @@ function synthetic(options: { withId: boolean }): EntityMap {
     })),
   };
 }
+
+describe("an empty result is not a claim about the site", () => {
+  // The failure this prevents: an agent filters for a type the site does not
+  // use, gets back "This site declares no JSON-LD entities", and reports that
+  // the site has no structured data. It has 183 entities.
+  beforeEach(async () => {
+    await seed({
+      project: "docs",
+      baseUrl: "https://docs.squirrelscan.com/",
+      startedAt: 2_000_000,
+      map: await fixture("docs-after-jsonld"),
+    });
+  });
+
+  test("a filter that matches nothing says so, in both prose formats", async () => {
+    for (const format of ["mermaid", "markdown"]) {
+      const { data } = await call("get_entity_graph", {
+        format,
+        type: ["NoSuchTypeAnywhere"],
+      });
+      const content = data.content as string;
+      expect(data.nodeCount).toBe(0);
+      expect(content).toContain("No entity match");
+      // The sentence that would have been a lie.
+      expect(content).not.toContain("This site declares no JSON-LD entities");
+    }
+  });
+
+  test("a site that really declares nothing still says THAT", async () => {
+    // The before snapshot is the same site with no JSON-LD at all, so the
+    // original sentence is true and must survive.
+    const beforeRun = await seed({
+      project: "empty",
+      baseUrl: "https://empty.example/",
+      startedAt: 3_000_000,
+      map: await fixture("docs-before-jsonld"),
+    });
+    const { data } = await call("get_entity_graph", {
+      run_id: beforeRun,
+      format: "mermaid",
+    });
+    expect(data.nodeCount).toBe(0);
+    expect(data.content as string).toContain("declares no JSON-LD entities");
+  });
+
+  test("the machine-readable formats need no such message", async () => {
+    // An empty `nodes` array is unambiguous data; only prose can be wrong.
+    const { data } = await call("get_entity_graph", {
+      format: "json",
+      type: ["NoSuchTypeAnywhere"],
+    });
+    const parsed = JSON.parse(data.content as string) as { nodes: unknown[] };
+    expect(parsed.nodes).toHaveLength(0);
+  });
+});

@@ -262,11 +262,34 @@ export function entityDetail(
   };
 }
 
-/** Render the graph, capping the two formats that have to fit a context window. */
+/**
+ * Render the graph, capping the two formats that have to fit a context window.
+ *
+ * `declaredTotal` is the node count BEFORE filtering. The two prose formats
+ * write a sentence when the map is empty, and the renderer cannot tell an
+ * empty site from a filter that matched nothing: on a filtered request its
+ * "This site declares no JSON-LD entities" is simply false, and an agent has
+ * no way to know. That distinction is made here, where the filters are known.
+ */
 export function renderGraph(
   map: EntityMap,
-  format: EntityMcpGraphFormat
+  format: EntityMcpGraphFormat,
+  declaredTotal: number = map.nodes.length
 ): { content: string; truncation: EntityMcpTruncation } {
+  if (
+    map.nodes.length === 0 &&
+    declaredTotal > 0 &&
+    (format === "mermaid" || format === "markdown")
+  ) {
+    return {
+      content:
+        format === "mermaid"
+          ? `graph LR\n  empty[No entity matches these filters]\n`
+          : `# Entities on ${map.site}\n\nNo entity matches these filters. The site declares ${declaredTotal}; narrow less, or drop the filters to see them.\n`,
+      truncation: NO_TRUNCATION,
+    };
+  }
+
   switch (format) {
     case "json":
       return {
