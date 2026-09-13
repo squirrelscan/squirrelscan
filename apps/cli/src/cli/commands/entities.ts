@@ -469,19 +469,21 @@ export const entities = defineCommand({
         // different sites, and diffing those reports one site's entire graph as
         // added and the other's as removed.
         const ids = splitListFlag(args.crawl as string | string[] | undefined);
-        const listed = await listEntityMaps(50);
-        if (!listed.ok) {
-          console.error(listed.error.message);
-          return safeExit(1);
-        }
 
         let olderId: string | undefined;
         let newerId: string | undefined;
         if (ids.length >= 2) {
           // Two named audits are the user's choice, including across sites.
+          // Nothing is listed in this case: a listing reads the entity rows of
+          // every crawl in every project, which is real work to skip.
           olderId = ids[0];
           newerId = ids[1];
         } else {
+          const listed = await listEntityMaps(50);
+          if (!listed.ok) {
+            console.error(listed.error.message);
+            return safeExit(1);
+          }
           // Newest first, already, from `listEntityMaps`.
           const withMaps = listed.data.filter((row) => row.entities > 0);
           // One id names the NEWER side; the older one is whatever preceded it
