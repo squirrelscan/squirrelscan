@@ -8,6 +8,7 @@ import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
+import { entityMarkdownSection } from "../entities";
 import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
@@ -291,6 +292,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push(cells.join(" · "));
       lines.push("");
     }
+  }
+
+  // Entities (#2091) — report-only, never part of the score. Same section
+  // builder the standalone entity-map document uses.
+  if (report.entityMap) {
+    lines.push(...entityMarkdownSection(report.entityMap, "##"));
   }
 
   lines.push("## Summary");

@@ -163,10 +163,11 @@ describe("renderEntityMapMarkdown", () => {
   test("an empty map says there is nothing to read instead of empty tables", () => {
     const markdown = render([{ url: "https://example.com/", raw: null }]);
 
-    expect(markdown).toContain("| Entities | 0 |");
     expect(markdown).toContain("declares no JSON-LD entities");
-    expect(markdown).not.toContain("## Largest entities");
-    expect(markdown).not.toContain("## Findings");
+    expect(markdown).not.toContain("Largest entities");
+    expect(markdown).not.toContain("Conflicting properties");
+    expect(markdown).not.toContain("Dangling references");
+    expect(markdown).not.toContain("| Metric | Value |");
   });
 
   test("is deterministic for a given map", () => {

@@ -5,7 +5,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./editor-summary": "./src/editor-summary.ts",
-    "./domain-stats": "./src/domain-stats.ts"
+    "./domain-stats": "./src/domain-stats.ts",
+    "./entities": "./src/entities.ts",
+    "./entities-viewer": "./src/entities-viewer.ts"
   },
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",

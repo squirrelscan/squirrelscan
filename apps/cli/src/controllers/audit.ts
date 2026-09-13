@@ -8,7 +8,7 @@ import type { Config } from "@/config";
 import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
 import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
-import type { AuditReport, AuditOptions, EntityMapOutput } from "@/types";
+import type { AuditReport, AuditOptions } from "@/types";
 
 import { createCrawler } from "@/crawler/core";
 
@@ -50,7 +50,7 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
-import { writeEntityMap } from "@/audit/entity-map";
+import { buildAndStoreEntityMap } from "@/audit/entity-map";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -222,12 +222,6 @@ export interface RunAuditOptions extends AuditOptions {
    * only the command layer knows that.
    */
   onRetention?: (outcome: RetentionOutcome) => void;
-  /**
-   * Called with the three paths `--entity-map` wrote (#2061). Same division of
-   * labour as `onRetention`: the controller writes, the command layer decides
-   * where to say so.
-   */
-  onEntityMap?: (output: EntityMapOutput) => void;
 }
 
 /**
@@ -1308,11 +1302,9 @@ export async function runAudit(
         ? createCloudPrefetchCollector(url)
         : null;
       const techSampleCollector = createTechDetectSampleCollector(url);
-      // #2061: url + raw JSON-LD per page, and nothing else — off unless
-      // --entity-map asked for it, so a normal run allocates nothing.
-      const entityMapCollector = options.entityMap
-        ? createEntityMapCollector()
-        : null;
+      // #2091: url + raw JSON-LD per page, and nothing else. Always on — the
+      // entity map is part of every report now, not a flag.
+      const entityMapCollector = createEntityMapCollector();
       // normalizedUrl + status per page, for the smart-audits merge and nothing
       // else — two scalars a page instead of the PageRecord it used to slice
       // them off.
@@ -1386,7 +1378,7 @@ export async function runAudit(
           onBatchContext: (batchContext) => {
             prefetchCollector?.absorb(batchContext);
             techSampleCollector.absorb(batchContext);
-            entityMapCollector?.absorb(batchContext);
+            entityMapCollector.absorb(batchContext);
             if (needExternalLinkCount)
               absorbExternalLinkUrls(externalLinkUrls, batchContext);
             for (const { page } of batchContext) {
@@ -1907,34 +1899,27 @@ export async function runAudit(
       logger.trace("phase timings", phaseTimer.timingsMs);
 
       // ============================================
-      // STEP 3.3: ENTITY MAP (#2061, --entity-map only)
+      // STEP 3.3: ENTITY MAP (#2091)
       // ============================================
-      // A side artifact, written after the report exists and read by nothing
-      // else in the run. A failure here is logged and dropped: the audit
-      // succeeded, and losing an extra file must never lose the report.
-      if (entityMapCollector) {
-        try {
-          const entityMap = writeEntityMap({
-            pages: entityMapCollector.build(),
-            siteUrl: url,
-            ...(options.entityMapFormats?.length
-              ? { formats: options.entityMapFormats }
-              : {}),
-            ...(options.entityMapDir ? { dir: options.entityMapDir } : {}),
-            ...(options.outputPath ? { outputPath: options.outputPath } : {}),
-            cwd: cwdOr("."),
-          });
-          // Carried on the report so a published run hands the cloud the same
-          // map the local files hold, capped for the payload. Only ever set
-          // when --entity-map asked for it, so an ordinary run's report and
-          // publish body are unchanged.
-          report.entityMap = slimEntityMapForPublish(entityMap.map);
-          options.onEntityMap?.(entityMap.output);
-        } catch (error) {
-          logger.warn(
-            `Could not write the entity map: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
+      // Built on every audit, stored in the project store, and carried on the
+      // report so every format can render it. Report-only: no rule reads it and
+      // it never touches the health score.
+      //
+      // The copy on the report is capped for the publish body; the store keeps
+      // the full graph, so a later query is not limited by what fit in a payload.
+      try {
+        const entityMap = await buildAndStoreEntityMap({
+          storage: sqliteStorage,
+          crawlId,
+          siteUrl: url,
+          pages: entityMapCollector.build(),
+        });
+        report.entityMap = slimEntityMapForPublish(entityMap);
+      } catch (error) {
+        // A finished audit must never be lost to a report-only section.
+        logger.warn(
+          `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
 
       // ============================================

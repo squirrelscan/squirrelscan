@@ -51,6 +51,39 @@ export const ENTITY_MAP_PREDICATES = [
 
 export type EntityMapPredicate = (typeof ENTITY_MAP_PREDICATES)[number];
 
+/**
+ * Types that describe one page rather than a thing the site is about.
+ *
+ * A 60-page site emits one BreadcrumbList and one WebPage per page and a
+ * Question per FAQ entry, so these outnumber the Organization and Person nodes
+ * the map exists to show: on squirrelscan.com they are 233 of 363 entities. The
+ * builder tags them, the graph hides them by default, and the tables never do.
+ *
+ * An ImageObject joins them only when it has no name, since an unnamed image is
+ * a URL rather than an entity a reader can reason about. That check needs the
+ * node, so it lives in `isPageLocalEntity` rather than in this list.
+ */
+export const ENTITY_MAP_PAGE_LOCAL_TYPES = [
+  "Answer",
+  "BreadcrumbList",
+  "ListItem",
+  "Question",
+  "WebPage",
+] as const;
+
+const PAGE_LOCAL_TYPE_SET: ReadonlySet<string> = new Set(ENTITY_MAP_PAGE_LOCAL_TYPES);
+
+/**
+ * Whether an entity describes one page rather than the site's subject matter.
+ *
+ * Shared by the builder (which stamps `pageLocal`) and by any consumer that has
+ * to make the same call on a node it did not build, so the two can never drift.
+ */
+export function isPageLocalEntity(primaryType: string, name: string | null): boolean {
+  if (PAGE_LOCAL_TYPE_SET.has(primaryType)) return true;
+  return primaryType === "ImageObject" && !name;
+}
+
 /** Longest `description` kept on a node before truncation. */
 export const ENTITY_MAP_DESCRIPTION_MAX = 200;
 
@@ -165,6 +198,12 @@ export const entityMapNodeSchema = z.object({
   conflicts: z.array(entityMapConflictSchema),
   /** Outgoing `@id` references from this node that nothing declares. */
   danglingRefs: z.number().int().nonnegative(),
+  /**
+   * True when this entity describes one page rather than the site's subject
+   * matter — see {@link ENTITY_MAP_PAGE_LOCAL_TYPES}. Stamped by the builder so
+   * every consumer filters on the same call.
+   */
+  pageLocal: z.boolean(),
 });
 
 export type EntityMapNode = z.infer<typeof entityMapNodeSchema>;
@@ -220,6 +259,12 @@ export const entityMapSummarySchema = z.object({
   /** Nodes carrying an `@id`, and that count as a 0-1 share of `nodeCount`. */
   nodesWithStableId: z.number().int().nonnegative(),
   stableIdShare: z.number().min(0).max(1),
+  /** Nodes tagged `pageLocal` — what a graph hides by default. */
+  pageLocalCount: z.number().int().nonnegative(),
+  /** Nodes with no `@id` declared on more than one page: the identity finding. */
+  nodesWithoutIdCount: z.number().int().nonnegative(),
+  /** Nodes carrying at least one conflicting property. */
+  conflictCount: z.number().int().nonnegative(),
   /** Occurrence count per `@type`, every type of every node. Sorted by type. */
   countsByType: z.record(z.string(), z.number().int().nonnegative()),
 });

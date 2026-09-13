@@ -19,6 +19,7 @@ import {
   ENTITY_MAP_PREDICATES,
   ENTITY_MAP_PROPERTY_KEYS,
   ENTITY_MAP_VERSION,
+  isPageLocalEntity,
   type EntityMap,
   type EntityMapConflict,
   type EntityMapEdge,
@@ -599,6 +600,9 @@ function assemble(
   const outputNodes: EntityMapNode[] = [];
   const typeCounts = new Map<string, number>();
   let nodesWithStableId = 0;
+  let pageLocalCount = 0;
+  let nodesWithoutIdCount = 0;
+  let conflictCount = 0;
 
   for (const accumulator of [...nodes.values()].sort((a, b) => compareStrings(a.key, b.key))) {
     if (accumulator.id) nodesWithStableId += 1;
@@ -621,17 +625,27 @@ function assemble(
     }
 
     const { pages, morePages } = capPages(accumulator.pages, ENTITY_MAP_PAGES_CAP);
+    const name = accumulator.properties.name ?? null;
+    const pageLocal = isPageLocalEntity(accumulator.types[0] ?? "Thing", name);
+
+    if (pageLocal) pageLocalCount += 1;
+    if (conflicts.length > 0) conflictCount += 1;
+    // A one-page entity with no `@id` is normal; one repeated across pages with
+    // nothing to reconcile it by is the finding the map exists for.
+    if (!accumulator.id && pages.length + morePages > 1) nodesWithoutIdCount += 1;
+
     outputNodes.push({
       key: accumulator.key,
       id: accumulator.id,
       types: accumulator.types,
-      name: accumulator.properties.name ?? null,
+      name,
       properties: orderProperties(accumulator.properties),
       occurrences: accumulator.occurrences,
       pages,
       morePages,
       conflicts,
       danglingRefs: accumulator.danglingRefs,
+      pageLocal,
     });
   }
 
@@ -660,6 +674,9 @@ function assemble(
       pagesWithoutEntities,
       nodesWithStableId,
       stableIdShare: outputNodes.length === 0 ? 0 : nodesWithStableId / outputNodes.length,
+      pageLocalCount,
+      nodesWithoutIdCount,
+      conflictCount,
       // Type names come from audited pages, so a type called `__proto__` is
       // possible. `Object.fromEntries` uses CreateDataProperty and keeps it as
       // an own property instead of hitting the inherited setter.

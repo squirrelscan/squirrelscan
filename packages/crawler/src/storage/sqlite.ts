@@ -60,7 +60,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 28;
+export const SCHEMA_VERSION = 29;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -393,6 +393,47 @@ const MIGRATIONS: Record<number, string[]> = {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_page_rule_cache_key
       ON page_rule_cache(cache_key, created_at DESC)`,
+  ],
+  // Version 29: the structured entity map (squirrelscan/repo#2091). One row per
+  // collapsed entity, one per typed reference, one per (entity, page) pair — see
+  // the base schema below for what each column holds.
+  29: [
+    `CREATE TABLE IF NOT EXISTS entities (
+      crawl_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      entity_id TEXT,
+      types TEXT NOT NULL,
+      name TEXT,
+      properties TEXT NOT NULL,
+      occurrences INTEGER NOT NULL,
+      page_count INTEGER NOT NULL,
+      conflicts TEXT NOT NULL,
+      dangling_refs INTEGER NOT NULL,
+      page_local INTEGER NOT NULL,
+      PRIMARY KEY (crawl_id, key),
+      FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_entities_id ON entities(crawl_id, entity_id)`,
+    `CREATE TABLE IF NOT EXISTS entity_edges (
+      crawl_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      predicate TEXT NOT NULL,
+      target TEXT NOT NULL,
+      dangling INTEGER NOT NULL,
+      occurrences INTEGER NOT NULL,
+      PRIMARY KEY (crawl_id, source, predicate, target),
+      FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_entity_edges_target ON entity_edges(crawl_id, target)`,
+    `CREATE TABLE IF NOT EXISTS entity_occurrences (
+      crawl_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      normalized_url TEXT NOT NULL,
+      PRIMARY KEY (crawl_id, key, normalized_url),
+      FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_entity_occurrences_url
+      ON entity_occurrences(crawl_id, normalized_url)`,
   ],
 };
 
@@ -905,6 +946,58 @@ CREATE TABLE IF NOT EXISTS page_rule_cache (
 -- (#1908 — nothing here may grow a per-audit full scan).
 CREATE INDEX IF NOT EXISTS idx_page_rule_cache_key
   ON page_rule_cache(cache_key, created_at DESC);
+
+-- The structured entity map (#2091): the site's own JSON-LD, collapsed across
+-- every page into one graph, written once per audit by both squirrel audit
+-- and squirrel analyze. Three tables rather than one JSON blob so a later
+-- query can ask "which pages declare this entity" without parsing the document.
+-- Retired with the crawl: recomputable from the pages by definition.
+CREATE TABLE IF NOT EXISTS entities (
+  crawl_id TEXT NOT NULL,
+  -- The identity the builder settled on: id:<resolved @id>, a synthetic
+  -- syn:<type>|<discriminator>, or a per-page anon: key.
+  key TEXT NOT NULL,
+  -- The resolved @id, or NULL when the site declared none. Indexed: "what
+  -- declares this id" is the question the dangling-reference finding asks.
+  entity_id TEXT,
+  types TEXT NOT NULL,          -- JSON array, first entry is the primary type
+  name TEXT,
+  properties TEXT NOT NULL,     -- JSON object, the nine consistency properties
+  occurrences INTEGER NOT NULL, -- declarations across the crawl, not pages
+  page_count INTEGER NOT NULL,  -- distinct declaring pages, uncapped
+  conflicts TEXT NOT NULL,      -- JSON array of {property, values[]}
+  dangling_refs INTEGER NOT NULL,
+  page_local INTEGER NOT NULL,  -- 1 when the entity describes one page
+  PRIMARY KEY (crawl_id, key),
+  FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+);
+CREATE INDEX IF NOT EXISTS idx_entities_id ON entities(crawl_id, entity_id);
+
+-- One typed reference between two entities. target is an entities.key; when
+-- dangling is 1 no row in entities has it, which IS the finding.
+CREATE TABLE IF NOT EXISTS entity_edges (
+  crawl_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  predicate TEXT NOT NULL,
+  target TEXT NOT NULL,
+  dangling INTEGER NOT NULL,
+  occurrences INTEGER NOT NULL,
+  PRIMARY KEY (crawl_id, source, predicate, target),
+  FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+);
+CREATE INDEX IF NOT EXISTS idx_entity_edges_target ON entity_edges(crawl_id, target);
+
+-- Entity x page. The document caps a node's pages[] for size; this table does
+-- not, so "every page that declares this Organization" is answerable in full.
+CREATE TABLE IF NOT EXISTS entity_occurrences (
+  crawl_id TEXT NOT NULL,
+  key TEXT NOT NULL,
+  normalized_url TEXT NOT NULL,
+  PRIMARY KEY (crawl_id, key, normalized_url),
+  FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+);
+CREATE INDEX IF NOT EXISTS idx_entity_occurrences_url
+  ON entity_occurrences(crawl_id, normalized_url);
 
 -- Duplicate-title / -description / -content grouping (GROUP BY hash within a crawl).
 CREATE INDEX IF NOT EXISTS idx_page_features_title_hash
@@ -3187,6 +3280,214 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
+   * Write this crawl's entity map (#2091) into `entities`, `entity_edges` and
+   * `entity_occurrences`, in one transaction.
+   *
+   * Replaces the crawl's rows rather than merging: the map is rebuilt from every
+   * page on every audit, so a leftover row from a previous write of the SAME
+   * crawl id (a resumed or re-analyzed run) would be an entity the site no
+   * longer declares. `squirrel analyze` re-running over an existing crawl is
+   * exactly that case, and it is the normal path, not an edge case.
+   *
+   * `pages` is the UNCAPPED declaring-page list per entity. The document caps
+   * `node.pages` for size; this table does not, so "every page that declares
+   * this Organization" stays answerable.
+   */
+  saveEntityMap(
+    crawlId: string,
+    map: {
+      nodes: ReadonlyArray<{
+        key: string;
+        id: string | null;
+        types: string[];
+        name: string | null;
+        properties: unknown;
+        occurrences: number;
+        conflicts: unknown;
+        danglingRefs: number;
+        pageLocal: boolean;
+      }>;
+      edges: ReadonlyArray<{
+        source: string;
+        predicate: string;
+        target: string;
+        dangling: boolean;
+        occurrences: number;
+      }>;
+      occurrences: ReadonlyArray<{ key: string; normalizedUrl: string }>;
+    }
+  ): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const pageCounts = new Map<string, number>();
+        for (const row of map.occurrences) {
+          pageCounts.set(row.key, (pageCounts.get(row.key) ?? 0) + 1);
+        }
+
+        const insertNode = db.prepare(`
+          INSERT OR REPLACE INTO entities (
+            crawl_id, key, entity_id, types, name, properties,
+            occurrences, page_count, conflicts, dangling_refs, page_local
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const insertEdge = db.prepare(`
+          INSERT OR REPLACE INTO entity_edges (
+            crawl_id, source, predicate, target, dangling, occurrences
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        const insertOccurrence = db.prepare(`
+          INSERT OR REPLACE INTO entity_occurrences (crawl_id, key, normalized_url)
+          VALUES (?, ?, ?)
+        `);
+
+        const transaction = db.transaction(() => {
+          db.prepare("DELETE FROM entity_occurrences WHERE crawl_id = ?").run(crawlId);
+          db.prepare("DELETE FROM entity_edges WHERE crawl_id = ?").run(crawlId);
+          db.prepare("DELETE FROM entities WHERE crawl_id = ?").run(crawlId);
+
+          for (const node of map.nodes) {
+            insertNode.run(
+              crawlId,
+              node.key,
+              node.id,
+              JSON.stringify(node.types),
+              node.name,
+              JSON.stringify(node.properties),
+              node.occurrences,
+              pageCounts.get(node.key) ?? 0,
+              JSON.stringify(node.conflicts),
+              node.danglingRefs,
+              node.pageLocal ? 1 : 0
+            );
+          }
+          for (const edge of map.edges) {
+            insertEdge.run(
+              crawlId,
+              edge.source,
+              edge.predicate,
+              edge.target,
+              edge.dangling ? 1 : 0,
+              edge.occurrences
+            );
+          }
+          for (const row of map.occurrences) {
+            insertOccurrence.run(crawlId, row.key, row.normalizedUrl);
+          }
+        });
+        transaction();
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
+  /**
+   * Read back one crawl's stored entity rows (#2091).
+   *
+   * Returns the rows as stored, JSON columns decoded. Deliberately not the
+   * `EntityMap` document: the document carries a summary and per-page lists the
+   * tables do not, and reconstructing a half-true one would be worse than
+   * handing back exactly what is there.
+   */
+  getEntityMapRows(crawlId: string): Effect.Effect<
+    {
+      nodes: Array<{
+        key: string;
+        id: string | null;
+        types: string[];
+        name: string | null;
+        properties: Record<string, unknown>;
+        occurrences: number;
+        pageCount: number;
+        conflicts: unknown[];
+        danglingRefs: number;
+        pageLocal: boolean;
+      }>;
+      edges: Array<{
+        source: string;
+        predicate: string;
+        target: string;
+        dangling: boolean;
+        occurrences: number;
+      }>;
+      occurrences: Array<{ key: string; normalizedUrl: string }>;
+    },
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const nodeRows = db
+          .prepare(
+            `SELECT key, entity_id, types, name, properties, occurrences,
+                    page_count, conflicts, dangling_refs, page_local
+             FROM entities WHERE crawl_id = ? ORDER BY key`
+          )
+          .all(crawlId) as Array<{
+          key: string;
+          entity_id: string | null;
+          types: string;
+          name: string | null;
+          properties: string;
+          occurrences: number;
+          page_count: number;
+          conflicts: string;
+          dangling_refs: number;
+          page_local: number;
+        }>;
+        const edgeRows = db
+          .prepare(
+            `SELECT source, predicate, target, dangling, occurrences
+             FROM entity_edges WHERE crawl_id = ? ORDER BY source, target, predicate`
+          )
+          .all(crawlId) as Array<{
+          source: string;
+          predicate: string;
+          target: string;
+          dangling: number;
+          occurrences: number;
+        }>;
+        const occurrenceRows = db
+          .prepare(
+            `SELECT key, normalized_url FROM entity_occurrences
+             WHERE crawl_id = ? ORDER BY key, normalized_url`
+          )
+          .all(crawlId) as Array<{ key: string; normalized_url: string }>;
+
+        return {
+          nodes: nodeRows.map((row) => ({
+            key: row.key,
+            id: row.entity_id,
+            // Written by this class from a validated document, so a parse
+            // failure means a corrupt DB, not untrusted input.
+            types: JSON.parse(row.types) as string[],
+            name: row.name,
+            properties: JSON.parse(row.properties) as Record<string, unknown>,
+            occurrences: row.occurrences,
+            pageCount: row.page_count,
+            conflicts: JSON.parse(row.conflicts) as unknown[],
+            danglingRefs: row.dangling_refs,
+            pageLocal: row.page_local === 1,
+          })),
+          edges: edgeRows.map((row) => ({
+            source: row.source,
+            predicate: row.predicate,
+            target: row.target,
+            dangling: row.dangling === 1,
+            occurrences: row.occurrences,
+          })),
+          occurrences: occurrenceRows.map((row) => ({
+            key: row.key,
+            normalizedUrl: row.normalized_url,
+          })),
+        };
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
    * Copy existing cache entries into this crawl, by key (#1990).
    *
    * A replayed page's stored bytes are already exactly right, so this is a pure
@@ -3605,6 +3906,12 @@ export class SQLiteStorage implements CrawlStorage {
     // replayed pages included, so the newest crawl always holds a complete cache
     // and retiring an older one costs nothing. Recomputable by definition.
     "page_rule_cache",
+    // The entity map (#2091) is recomputed from the pages on every audit, so an
+    // older crawl's copy is pure history and the newest crawl always holds a
+    // complete one.
+    "entities",
+    "entity_edges",
+    "entity_occurrences",
     "sitemap_urls",
     "sitemaps",
     "sitemap_url_statuses",

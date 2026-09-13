@@ -239,6 +239,89 @@ describe("buildEntityMap", () => {
     expect(entityMapSchema.safeParse(map).success).toBe(true);
   });
 
+  test("resolves a relative @id against the page that declared it", () => {
+    // A fragment-only `@id` is page-scoped per the JSON-LD spec, so the same
+    // `#organization` on two pages really is two entities to a search engine.
+    // That is the finding, not a bug, and the summary has to say so.
+    const graph = {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "@id": "#organization",
+      name: "Acme",
+    };
+    const map = build([
+      page("https://example.com/a", graph),
+      page("https://example.com/b", graph),
+    ]);
+
+    expect(map.nodes).toHaveLength(2);
+    expect(map.nodes.map((n) => n.id)).toEqual([
+      "https://example.com/a#organization",
+      "https://example.com/b#organization",
+    ]);
+    expect(map.summary.nodesWithStableId).toBe(2);
+  });
+
+  test("tags page-local types and counts them", () => {
+    const map = build([
+      page("https://example.com/a", {
+        "@context": "https://schema.org",
+        "@graph": [
+          { "@type": "Organization", "@id": "https://example.com/#org", name: "Acme" },
+          { "@type": "WebPage", "@id": "https://example.com/a", name: "A page" },
+          { "@type": "BreadcrumbList", "@id": "https://example.com/a#crumb" },
+          { "@type": "Question", name: "Is it free?" },
+          { "@type": "ImageObject", "@id": "https://example.com/a#img" },
+          {
+            "@type": "ImageObject",
+            "@id": "https://example.com/a#named",
+            name: "Team photo",
+          },
+        ],
+      }),
+    ]);
+
+    const byName = (key: string) => map.nodes.find((n) => n.key === key)!;
+    expect(byName("id:https://example.com/#org").pageLocal).toBe(false);
+    expect(byName("id:https://example.com/a").pageLocal).toBe(true);
+    expect(byName("id:https://example.com/a#crumb").pageLocal).toBe(true);
+    expect(byName("id:https://example.com/a#img").pageLocal).toBe(true);
+    // A named image is a thing a reader can reason about, so it is not hidden.
+    expect(byName("id:https://example.com/a#named").pageLocal).toBe(false);
+    expect(map.nodes.find((n) => n.name === "Is it free?")!.pageLocal).toBe(true);
+    expect(map.summary.pageLocalCount).toBe(4);
+  });
+
+  test("summary counts the findings each format leads with", () => {
+    const organization = (logo: string) => ({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Acme",
+      logo,
+      publisher: { "@id": "https://example.com/#nowhere" },
+    });
+    const map = build([
+      page("https://example.com/a", organization("https://example.com/a.png")),
+      page("https://example.com/b", organization("https://example.com/b.png")),
+    ]);
+
+    expect(map.summary.conflictCount).toBe(1);
+    expect(map.summary.danglingCount).toBe(1);
+    // Declared on two pages with no @id: the identity finding.
+    expect(map.summary.nodesWithoutIdCount).toBe(1);
+  });
+
+  test("a one-page entity without an @id is not an identity finding", () => {
+    const map = build([
+      page("https://example.com/", {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        name: "Ada Lovelace",
+      }),
+    ]);
+    expect(map.summary.nodesWithoutIdCount).toBe(0);
+  });
+
   test("counts pages that declare no entities", () => {
     const map = build([
       page("https://example.com/", { "@context": "https://schema.org", "@type": "WebSite", name: "S" }),

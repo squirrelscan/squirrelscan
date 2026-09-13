@@ -27,7 +27,7 @@ describe("renderEntityMapHtml", () => {
       }),
     );
 
-    expect(html).toContain('<script type="application/json" id="entity-map-data">');
+    expect(html).toContain('<script type="application/json" id="em-data">');
     expect(html).toContain("Acme");
     expect(html).toContain("squirrelscan/entity-map");
     // No CDN, no external stylesheet, no runtime fetch.
@@ -57,7 +57,7 @@ describe("renderEntityMapHtml", () => {
     expect(openers).toHaveLength(2);
 
     // And the inlined JSON still parses back to the original name.
-    const start = html.indexOf('id="entity-map-data">') + 'id="entity-map-data">'.length;
+    const start = html.indexOf('id="em-data">') + 'id="em-data">'.length;
     const end = html.indexOf("</script>", start);
     const parsed = JSON.parse(html.slice(start, end)) as { nodes: { name: string | null }[] };
     expect(parsed.nodes[0]?.name).toBe("</script><script>window.pwned=1</script>");

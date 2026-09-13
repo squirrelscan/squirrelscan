@@ -471,11 +471,10 @@ export interface AuditReport {
    */
   siteMetadata?: SiteMetadata;
   /**
-   * Structured entity map (#2061) — REPORT-ONLY / non-scoring. Mirrors
-   * core-contracts `AuditReport`. Present ONLY when the run passed
-   * `--entity-map`, which is off by default, so an ordinary run's report and
-   * publish body are unchanged. Capped by `slimEntityMapForPublish` before it
-   * is attached, since it rides the publish payload.
+   * Structured entity map (#2091) — REPORT-ONLY / non-scoring. Mirrors
+   * core-contracts `AuditReport`. Built on every audit, so every report format
+   * can render it. Capped by `slimEntityMapForPublish` before it is attached,
+   * since it rides the publish payload; the project store keeps the full graph.
    */
   entityMap?: EntityMap;
   /**
@@ -658,21 +657,7 @@ export interface AuditOptions {
   // to config.rules.disable.
   ruleInclude?: string[];
   ruleExclude?: string[];
-  // --entity-map (#2061, prototype): write the site-wide JSON-LD entity graph
-  // as side files. Off by default; nothing else about the run changes.
-  entityMap?: boolean;
-  // Directory the files land in. Unset → the directory of --output, or the
-  // working directory when there is no --output.
-  entityMapDir?: string;
-  // --entity-map-format. Unset or empty → every format.
-  entityMapFormats?: EntityMapFormat[];
 }
-
-/** A file `--entity-map` can write. */
-export type EntityMapFormat = "json" | "jsonld" | "html" | "md";
-
-/** Absolute path per format `--entity-map` actually wrote. */
-export type EntityMapOutput = Partial<Record<EntityMapFormat, string>>;
 
 // ============================================
 // HREFLANG TYPES (Phase 3)

@@ -9,6 +9,14 @@ import { getScoreGrade } from "../scoring";
 import { REPORT_TEXT_WRAP_WIDTH } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
+import {
+  ENTITY_CONSOLE_LIMIT,
+  ENTITY_EMPTY_MESSAGE,
+  entityLabel,
+  entityPageTotal,
+  entitySummaryLine,
+  primaryEntities,
+} from "../entities";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
@@ -228,6 +236,34 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
         .map((t) => `${t.name}${t.version ? ` v${t.version}` : ""}`)
         .join(", ");
       write(`${group.emoji} ${group.label}: ${names}`);
+    }
+    write("");
+  }
+
+  // Entities (#2091) — the site's own JSON-LD collapsed into one graph.
+  // Report-only: it never contributes to the score.
+  if (report.entityMap) {
+    const map = report.entityMap;
+    write("ENTITIES");
+    write("-".repeat(40));
+    if (map.summary.nodeCount === 0) {
+      write(ENTITY_EMPTY_MESSAGE);
+    } else {
+      write(entitySummaryLine(map));
+      write("(informational — not part of the score)");
+      write("");
+      for (const node of primaryEntities(map).slice(0, ENTITY_CONSOLE_LIMIT)) {
+        const id = node.id ?? "no @id";
+        write(
+          `${entityLabel(node)} (${node.types.join(", ")}) — ${node.occurrences}x on ${entityPageTotal(node)} page(s), ${id}`
+        );
+      }
+      if (map.summary.nodesWithoutIdCount > 0) {
+        write("");
+        write(
+          `${map.summary.nodesWithoutIdCount} entity(ies) declared on several pages carry no @id — search engines cannot tell they are one thing.`
+        );
+      }
     }
     write("");
   }

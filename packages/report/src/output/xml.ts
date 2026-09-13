@@ -8,6 +8,7 @@ import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
+import { entityPageTotal, stableIdPercent } from "../entities";
 import { seedRedirect } from "../coverage";
 
 export interface XmlRenderOptions {
@@ -155,6 +156,41 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
       );
     }
     lines.push(`${indent(1)}</technologies>`);
+  }
+
+  // Entities (#2091) — the site's JSON-LD as one graph. Report-only, never part
+  // of the score. Carries the whole document: the summary as attributes, then
+  // every node and edge, so an XML consumer sees the same map the JSON one does.
+  if (report.entityMap) {
+    const map = report.entityMap;
+    const s = map.summary;
+    lines.push(
+      `${indent(1)}<entities format="${escapeXml(map.format)}" version="${map.version}" site="${escapeXml(map.site)}" generated-at="${escapeXml(map.generatedAt)}" count="${s.nodeCount}" references="${s.edgeCount}" dangling="${s.danglingCount}" conflicts="${s.conflictCount}" without-id="${s.nodesWithoutIdCount}" page-local="${s.pageLocalCount}" stable-id-share="${stableIdPercent(map)}" pages="${s.pagesTotal}" pages-without-entities="${s.pagesWithoutEntities}">`
+    );
+    for (const node of map.nodes) {
+      const id = node.id ? ` id="${escapeXml(node.id)}"` : "";
+      lines.push(
+        `${indent(2)}<entity key="${escapeXml(node.key)}" type="${escapeXml(node.types.join(","))}" name="${escapeXml(node.name ?? "")}"${id} occurrences="${node.occurrences}" pages="${entityPageTotal(node)}" conflicts="${node.conflicts.length}" dangling-refs="${node.danglingRefs}" page-local="${node.pageLocal}">`
+      );
+      for (const conflict of node.conflicts) {
+        lines.push(
+          `${indent(3)}<conflict property="${escapeXml(conflict.property)}">`
+        );
+        for (const value of conflict.values) {
+          lines.push(
+            `${indent(4)}<value pages="${value.pages.length + value.morePages}">${escapeXml(value.value)}</value>`
+          );
+        }
+        lines.push(`${indent(3)}</conflict>`);
+      }
+      lines.push(`${indent(2)}</entity>`);
+    }
+    for (const edge of map.edges) {
+      lines.push(
+        `${indent(2)}<reference source="${escapeXml(edge.source)}" predicate="${escapeXml(edge.predicate)}" target="${escapeXml(edge.target)}" dangling="${edge.dangling}" occurrences="${edge.occurrences}"/>`
+      );
+    }
+    lines.push(`${indent(1)}</entities>`);
   }
 
   const categoryIssues = groupIssuesByCategory(report.ruleResults);

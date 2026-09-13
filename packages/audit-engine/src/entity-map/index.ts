@@ -5,8 +5,9 @@
 // import the engine root, so anything it needs is re-exported here rather than
 // from `../index`.
 //
-// Prototype scope: the map is written as a side artifact by `squirrel audit
-// --entity-map`. It does not feed the rules, the score, or the report.
+// Built on every audit and every analyze (#2091), stored in the project store,
+// and carried on the report so all six formats can render it. Report-only: no
+// rule reads it and it never touches the health score.
 
 export { buildEntityMap } from "./build";
 export type { BuildEntityMapOptions, EntityMapPageInput } from "./build";

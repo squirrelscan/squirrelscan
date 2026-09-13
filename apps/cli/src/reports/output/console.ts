@@ -14,6 +14,12 @@ import {
   getSubcategoryName,
   groupTechnologies,
   techChangeSummary,
+  ENTITY_CONSOLE_LIMIT,
+  ENTITY_EMPTY_MESSAGE,
+  entityLabel,
+  entityPageTotal,
+  primaryEntities,
+  stableIdPercent,
   DOMAIN_STATS_NOTE,
   domainStatRows,
   positionBands,
@@ -27,6 +33,7 @@ import {
 import type {
   AuditReport,
   DomainStats,
+  EntityMap,
   GroupScore,
   HealthScore,
   ReportTechnologies,
@@ -186,6 +193,11 @@ export function generateConsoleReport(
   if (report.technologies && report.technologies.items.length > 0) {
     log("");
     printTechnologies(report.technologies);
+  }
+
+  if (report.entityMap) {
+    log("");
+    printEntities(report.entityMap);
   }
 
   // Group all rule results by category (includes both page-scope and site-scope rules)
@@ -427,6 +439,45 @@ function printTechnologies(tech: ReportTechnologies): void {
       .map((t) => `${t.name}${t.version ? fmt.dim(` ${t.version}`) : ""}`)
       .join(fmt.dim(" · "));
     log(`${group.emoji} ${fmt.bold(group.label.padEnd(22))} ${names}`);
+  }
+}
+
+/**
+ * The Entities block (#2091): the site's own JSON-LD as one graph.
+ *
+ * Report-only and non-scoring, like Technologies. Leads with the counts that
+ * name a problem (no stable `@id`, conflicting values, references to nothing)
+ * and then the three entities the site declares most, because those are the
+ * ones a search engine is trying to reconcile.
+ */
+function printEntities(map: EntityMap): void {
+  log(fmt.bold("ENTITIES"));
+  if (map.summary.nodeCount === 0) {
+    log(fmt.dim(ENTITY_EMPTY_MESSAGE));
+    return;
+  }
+
+  const s = map.summary;
+  const flags: string[] = [];
+  if (s.conflictCount > 0)
+    flags.push(fmt.yellow(`${s.conflictCount} conflicting`));
+  if (s.danglingCount > 0) flags.push(fmt.red(`${s.danglingCount} dangling`));
+  if (s.nodesWithoutIdCount > 0) {
+    flags.push(fmt.yellow(`${s.nodesWithoutIdCount} without @id`));
+  }
+  log(
+    fmt.dim("The site's own JSON-LD — not part of the score. ") +
+      `${s.nodeCount} entities · ${s.edgeCount} references · ${stableIdPercent(map)}% with a stable @id` +
+      (flags.length > 0 ? ` · ${flags.join(fmt.dim(" · "))}` : "")
+  );
+  log("");
+  for (const node of primaryEntities(map).slice(0, ENTITY_CONSOLE_LIMIT)) {
+    const id = node.id ? fmt.dim(` ${node.id}`) : fmt.yellow(" no @id");
+    log(
+      `${fmt.bold(entityLabel(node))} ${fmt.dim(`(${node.types.join(", ")})`)} ` +
+        fmt.dim(`${node.occurrences}x on ${entityPageTotal(node)} page(s)`) +
+        id
+    );
   }
 }
 
