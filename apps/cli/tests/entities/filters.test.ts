@@ -214,6 +214,28 @@ describe("filterEntityMap", () => {
     ).toEqual(["Ada Lovelace"]);
   });
 
+  test("--page takes the UNION of the two records, not one or the other", () => {
+    // A partial index is the dangerous middle case: present, so a naive
+    // implementation trusts it, but missing the page this entity is on. The
+    // node's own list still has it, and the union keeps it.
+    const partialIndex: EntityMap = {
+      ...MAP,
+      pages: [
+        {
+          url: "https://example.com/somewhere-else",
+          declares: [],
+          references: [],
+          entityCount: 0,
+        },
+      ],
+    };
+    expect(
+      filterEntityMap(partialIndex, { pages: ["/blog/"] }).nodes.map(
+        (n) => n.name
+      )
+    ).toEqual(["Ada Lovelace"]);
+  });
+
   test("--problem split-identity cannot be forged with a separator in a type", () => {
     // `@type` is site-controlled: joining the sorted set with "+" makes
     // ["Organization+X"] and ["Organization","X"] the same signature.

@@ -549,6 +549,12 @@ export const entities = defineCommand({
       }
       map = loaded.data.map;
       crawlLabel = `${loaded.data.crawl.id.slice(0, 8)} · ${new Date(loaded.data.crawl.startedAt).toLocaleString()}`;
+      for (const warning of loaded.data.warnings ?? []) {
+        // An answer drawn from part of the data says so.
+        console.error(
+          `Warning: a project store could not be read (${warning})`
+        );
+      }
       if (loaded.data.skipped) {
         // Never substitute older data silently. The store cannot tell a site
         // that declares nothing from an audit that stored no map, so say which

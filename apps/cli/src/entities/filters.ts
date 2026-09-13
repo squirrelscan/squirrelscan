@@ -79,19 +79,14 @@ function splitIdentityKeys(map: EntityMap): Set<string> {
 /**
  * Keys of every entity declared on a page matching one of the patterns.
  *
- * Driven from `map.pages[].declares`, NOT from `node.pages`: a node's page
- * list is capped at 50 in the document, so an entity declared only on the 51st
- * matching page would silently fail to match. The per-page list is uncapped.
+ * The map's per-page `declares` is the only UNCAPPED record of which entity is
+ * on which page: a node's own `pages` is capped at 50 in the document, so an
+ * entity declared on the 51st matching page is invisible to it.
  *
- * Returns null when the map carries no pages — one clipped for a publish
- * payload, or an older export — so the caller can fall back to the capped list
- * rather than filtering everything out.
+ * Empty when the map carries no pages, which is what a publish projection and
+ * a pre-#2091 export both look like.
  */
-function keysOnMatchingPages(
-  map: EntityMap,
-  patterns: string[]
-): Set<string> | null {
-  if (map.pages.length === 0) return null;
+function keysOnMatchingPages(map: EntityMap, patterns: string[]): Set<string> {
   const keys = new Set<string>();
   for (const page of map.pages) {
     if (
@@ -106,7 +101,7 @@ function keysOnMatchingPages(
   return keys;
 }
 
-function matchesPageFallback(node: EntityMapNode, patterns: string[]): boolean {
+function matchesOwnPages(node: EntityMapNode, patterns: string[]): boolean {
   return node.pages.some((page) =>
     patterns.some((pattern) => page === pattern || page.includes(pattern))
   );
@@ -162,7 +157,7 @@ export function filterEntityMap(
     : new Set<string>();
   const pageKeys = filters.pages?.length
     ? keysOnMatchingPages(map, filters.pages)
-    : null;
+    : new Set<string>();
 
   const nodes = map.nodes.filter((node) => {
     if (filters.types?.length) {
@@ -171,9 +166,12 @@ export function filterEntityMap(
         return false;
     }
     if (filters.pages?.length) {
-      const onPage = pageKeys
-        ? pageKeys.has(node.key)
-        : matchesPageFallback(node, filters.pages);
+      // The UNION of the two records, never one or the other. Each is
+      // incomplete in a different way — the page index is absent from a
+      // clipped export, the node's own list is truncated past 50 — so taking
+      // either alone drops entities that are genuinely on the page.
+      const onPage =
+        pageKeys.has(node.key) || matchesOwnPages(node, filters.pages);
       if (!onPage) return false;
     }
     if (

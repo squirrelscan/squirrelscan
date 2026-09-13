@@ -46,6 +46,14 @@ export interface StoredEntityMap {
    * most recent audit, which the caller has to say out loud.
    */
   skipped?: { crawlId: string; startedAt: number };
+  /**
+   * Project stores that could not be read while looking for this map.
+   *
+   * One bad store must not hide the others, but it must not hide ITSELF
+   * either: returning a map from project A while project B was unreadable is
+   * an answer drawn from part of the data, and the caller says so.
+   */
+  warnings?: string[];
 }
 
 /** A row of `squirrel entities --list`. */
@@ -374,7 +382,8 @@ export async function loadEntityMap(
     }
 
     candidates.sort((a, b) => b.crawl.startedAt - a.crawl.startedAt);
-    return ok(candidates[0]!);
+    const chosen = candidates[0]!;
+    return ok(failures.length > 0 ? { ...chosen, warnings: failures } : chosen);
   } catch (error) {
     return err(
       commandError(
