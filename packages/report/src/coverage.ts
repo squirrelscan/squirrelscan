@@ -37,21 +37,46 @@ export function coverageLine(report: AuditReport): string | null {
 }
 
 /**
+ * Was the page limit this run used SMALLER than the one it was asked for?
+ *
+ * `requestedMaxPages` is present only when something reduced the request
+ * (#1909): the CLI's own cap, or a hosted run whose crawl budget could not pay
+ * for the pace the site asks for. Compared rather than trusted to presence
+ * alone, so a producer that echoes the same number both ways does not render a
+ * reduction that never happened.
+ */
+function clampedPageLimit(
+  scope: NonNullable<AuditReport["scanScope"]>,
+): { requested: number; effective: number } | null {
+  const requested = scope.requestedMaxPages;
+  const effective = scope.maxPages;
+  if (requested === undefined || effective === undefined) return null;
+  return requested > effective ? { requested, effective } : null;
+}
+
+/**
  * One-line scan scope summary (#1180), e.g.
  *   "Scan: 100 pages crawled from the CLI v0.0.76 (page limit 100 reached)."
+ * and, when the limit was reduced from the one requested (#1909),
+ *   "Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested, reached)."
  * Returns null for pre-#1180 reports (no `scanScope`).
+ *
+ * Both numbers, because one of them alone is misleading in opposite directions:
+ * printing only the effective limit reads as the number the user chose, and
+ * printing only the requested one describes a crawl that did not happen.
  */
 export function scanScopeLine(report: AuditReport): string | null {
   const s = report.scanScope;
   if (!s) return null;
   const origin = s.origin === "cloud" ? "squirrelscan cloud" : s.origin === "ci" ? "CI" : "the CLI";
   const version = report.generatorVersion ? ` v${report.generatorVersion}` : "";
-  const cap =
-    s.maxPages !== undefined
-      ? s.capped
-        ? ` (page limit ${s.maxPages} reached)`
-        : ` (page limit ${s.maxPages})`
-      : "";
+  // The UNCLAMPED wording is byte-for-byte what it has always been — a comma
+  // only appears where the sentence now has two clauses to separate.
+  const clamped = clampedPageLimit(s);
+  const limit = clamped
+    ? `page limit ${clamped.effective} of ${clamped.requested} requested${s.capped ? ", reached" : ""}`
+    : `page limit ${s.maxPages}${s.capped ? " reached" : ""}`;
+  const cap = s.maxPages !== undefined ? ` (${limit})` : "";
   return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.`;
 }
 
@@ -70,12 +95,24 @@ export function fullScanHint(report: AuditReport): string | null {
   // Remediation copy branches by origin: --max-pages is a CLI flag; a cloud
   // audit's page budget lives in the website settings / audit trigger.
   const cloud = s?.origin === "cloud";
+  // ...and it branches again on whether the limit was already REDUCED (#1909).
+  // "Raise the limit" is the one thing that cannot work then: the request was
+  // above what this run could use, so a bigger number is reduced the same way.
+  // Deliberately neutral about what to do instead — the answer differs by
+  // surface, and this renderer is shared by the CLI and the hosted report.
+  const clamped = s ? clampedPageLimit(s) : null;
   if (partialUnion && c) {
     const target = c.knownPages > (s?.maxPages ?? 0) ? String(c.knownPages) : null;
-    const remedy = cloud
-      ? "Raise the audit page limit and re-run"
-      : `Re-run with ${target ? `--max-pages ${target}` : "a higher --max-pages"}`;
-    return `Partial scan: ${c.auditedPages} of ${c.knownPages} known pages were re-checked this run; the score carries earlier results for the rest. ${remedy} for a fully fresh full-site score.`;
+    const remedy = clamped
+      ? `This run was limited to ${clamped.effective} of the ${clamped.requested} pages requested, so raising the limit alone will not extend it`
+      : cloud
+        ? "Raise the audit page limit and re-run"
+        : `Re-run with ${target ? `--max-pages ${target}` : "a higher --max-pages"}`;
+    const tail = clamped ? "." : " for a fully fresh full-site score.";
+    return `Partial scan: ${c.auditedPages} of ${c.knownPages} known pages were re-checked this run; the score carries earlier results for the rest. ${remedy}${tail}`;
+  }
+  if (clamped) {
+    return `Partial scan: the page limit stopped the crawl, so the site may have more pages than this score covers. This run was limited to ${clamped.effective} of the ${clamped.requested} pages requested, so raising the limit alone will not extend it.`;
   }
   const remedy = cloud ? "Raise the audit page limit" : "Raise --max-pages";
   return `Partial scan: the page limit stopped the crawl, so the site may have more pages than this score covers. ${remedy} for a full-site score.`;

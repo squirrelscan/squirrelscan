@@ -129,3 +129,93 @@ describe("renderer wiring (#1180)", () => {
     expect(renderHtml(legacy, { reportId: "TESTID" })).not.toContain("crawled from");
   });
 });
+
+// #1909 / squirrelscan/repo#2110 — a page limit the run did not get to use.
+//
+// `requestedMaxPages` has been on the contract since #1909 but no human-readable
+// renderer ever printed it, so a run clamped from 10,000 to 4,320 read as though
+// 4,320 were the number the user chose — and the full-scan hint told them to
+// raise a limit that was already above what the run could use. Two producers set
+// it: the CLI's own page cap, and a hosted run whose crawl budget cannot pay for
+// the pace the site asks for. The wording here is shared by both, so it states
+// the facts and leaves the remedy to the surface that knows it.
+describe("a reduced page limit (#1909)", () => {
+  const clampedScope = {
+    origin: "cloud" as const,
+    maxPages: 4320,
+    requestedMaxPages: 10000,
+    pagesCrawled: 4320,
+    capped: true,
+  };
+
+  test("the scan line names both limits", () => {
+    expect(scanScopeLine(baseReport({ scanScope: clampedScope }))).toBe(
+      "Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested, reached).",
+    );
+  });
+
+  test("an uncapped clamped run still names both, without 'reached'", () => {
+    expect(
+      scanScopeLine(baseReport({ scanScope: { ...clampedScope, capped: false, pagesCrawled: 900 } })),
+    ).toBe("Scan: 900 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested).");
+  });
+
+  test("the CLI reads the same as the cloud — no surface-specific advice here", () => {
+    expect(scanScopeLine(baseReport({ scanScope: { ...clampedScope, origin: "cli" } }))).toBe(
+      "Scan: 4320 pages crawled from the CLI (page limit 4320 of 10000 requested, reached).",
+    );
+  });
+
+  test("a requested limit equal to the effective one is not a reduction", () => {
+    // A producer echoing the same number both ways must not render a clamp that
+    // never happened, which is why this compares rather than trusting presence.
+    expect(
+      scanScopeLine(
+        baseReport({ scanScope: { ...clampedScope, requestedMaxPages: 4320 } }),
+      ),
+    ).toBe("Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 reached).");
+  });
+
+  test("the full-scan hint stops telling them to raise the limit", () => {
+    const hint = fullScanHint(baseReport({ scanScope: clampedScope }));
+    expect(hint).toBe(
+      "Partial scan: the page limit stopped the crawl, so the site may have more pages than this score covers. This run was limited to 4320 of the 10000 pages requested, so raising the limit alone will not extend it.",
+    );
+    // The advice that cannot work: the request was already above what this run
+    // could use, so a bigger number is reduced exactly the same way.
+    expect(hint).not.toContain("Raise");
+    expect(hint).not.toContain("--max-pages");
+  });
+
+  test("an unclamped capped run keeps its original advice", () => {
+    const hint = fullScanHint(
+      baseReport({ scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true } }),
+    );
+    expect(hint).toContain("Raise --max-pages");
+  });
+
+  test("the carried-pages hint drops the raise advice too when clamped", () => {
+    const hint = fullScanHint(
+      baseReport({
+        scanScope: clampedScope,
+        coverage: { auditedPages: 4320, knownPages: 9000, carriedFindings: 12 },
+      }),
+    );
+    expect(hint).toContain("4320 of 9000 known pages were re-checked");
+    expect(hint).toContain("raising the limit alone will not extend it");
+    expect(hint).not.toContain("Raise the audit page limit");
+  });
+
+  test("every human-readable renderer carries both numbers", () => {
+    // The gap this closes: json and llm already emitted `requestedMaxPages`,
+    // and the three renderers a person actually reads did not.
+    const report = baseReport({ scanScope: clampedScope });
+    for (const rendered of [
+      renderText(report),
+      renderMarkdown(report),
+      renderHtml(report),
+    ]) {
+      expect(rendered).toContain("4320 of 10000 requested");
+    }
+  });
+});
