@@ -24,7 +24,12 @@
 
 import { Type, type Static } from "@sinclair/typebox";
 
-import { EntityMapDiffSchema, EntityMapSchema } from "./entity-map";
+import {
+  EntityMapDiffSchema,
+  EntityMapNodeSchema,
+  EntityMapSchema,
+  EntityMapSummarySchema,
+} from "./entity-map";
 
 // ── Names ──────────────────────────────────────────────────────────
 
@@ -105,7 +110,7 @@ export const ENTITY_MCP_LIMITS = {
  * that called one tool will look.
  */
 export const ENTITY_MCP_LOOP =
-  "Fix-and-verify loop: call list_entities with problem=\"no-id\" to find entities declared on several pages with nothing to tie them together, give each one an absolute @id, re-run the audit with run_audit, then call compare_entities and check that gainedId contains the keys you fixed. gainedId is the only confirmation that the fix landed: an entity that gained an @id changes key, so it would otherwise look like one removal plus one addition.";
+  "Fix-and-verify loop: call list_entities with problem=\"no-id\" to find entities declared on several pages with nothing to tie them together, give each one an absolute @id, re-run the audit with run_audit, then call compare_entities and check that gainedId contains the keys you fixed. gainedId is the only confirmation that the fix landed: an entity that gained an @id changes key, so it would otherwise look like one removal plus one addition. Check each entry's coverage field before calling it done: \"proven\" means the newer audit visited every page that declared the broken version, \"partial\" means it did not and those pages may still carry the old markup.";
 
 /**
  * Tool descriptions, identical on both servers.
@@ -125,7 +130,7 @@ export const ENTITY_MCP_DESCRIPTIONS: Record<EntityMcpToolName, string> = {
     "Get the whole entity graph, or a filtered part of it, in a chosen format: json for the canonical document, jsonld for a validator, mermaid or markdown to read in a conversation, dot or graphml for a graph tool. Takes the same filters as list_entities. mermaid and markdown are capped to fit a context window and say so in the output when they truncate; json, jsonld, dot and graphml are complete. " +
     ENTITY_MCP_LOOP,
   compare_entities:
-    "Compare two audits of a site and get the change set: entities added and removed, entities that gained or lost an @id, occurrence changes, new and resolved conflicts and dangling references, summary deltas, and the pages each audit saw that the other did not. Defaults to the previous audit versus the latest. An entity is only reported as removed when every page that declared it was crawled again; anything unproven is reported separately as not crawled, so a smaller crawl never reads as a site that deleted its structured data. " +
+    "Compare two audits of a site and get the change set: entities added and removed, entities that gained or lost an @id, occurrence changes, new and resolved conflicts and dangling references, summary deltas, and the pages each audit saw that the other did not. Defaults to the previous audit versus the latest. An entity is only reported as removed when every page that declared it was crawled again; anything unproven is reported separately as not crawled, so a smaller crawl never reads as a site that deleted its structured data. Each gainedId and lostId entry carries a coverage field saying whether the newer audit visited every page that declared the old version. " +
     ENTITY_MCP_LOOP,
   get_entity_findings:
     "Get the schema/entity-* rule verdicts for an audit: what is wrong with the site's entity graph, which entity keys and pages each finding affects, and the fix text for each. Use this instead of re-deriving the problems from the graph yourself. Each finding names one problem across the whole site rather than one per entity, so a count of 1 can still mean hundreds of pages. " +
@@ -139,28 +144,127 @@ export const ENTITY_MCP_DESCRIPTIONS: Record<EntityMcpToolName, string> = {
  */
 export const ENTITY_MCP_FIELD_DESCRIPTIONS = {
   common: {
-    website_id: "The registered website to read. Defaults to the latest audit.",
+    website_id:
+      "The registered website to read, on the hosted server. Ignored by the local server, which reads the project store. When both this and run_id are given, run_id wins and this is ignored; naming a run of a different website is answered about the run.",
     run_id: "A specific audit run to read. Defaults to the latest audit with an entity map.",
-    type: "Only entities carrying one of these @type values. Case-insensitive.",
-    page: "Only entities declared on pages matching this URL or prefix.",
-    problem: `Only entities with one of these problems: ${ENTITY_MCP_PROBLEMS.join(", ")}.`,
-    q: "Only entities whose name or @id contains this text. Case-insensitive.",
+    type: "Only entities carrying one of these @type values. Case-insensitive. Several values are an OR: an entity matching any one of them is kept.",
+    page: "Only entities declared on a page whose URL CONTAINS one of these strings. Not a prefix test and not a glob, so \"/blog\" matches https://example.com/blog/post and https://example.com/tag/blog alike. Several values are an OR.",
+    problem: `Only entities with one of these problems: ${ENTITY_MCP_PROBLEMS.join(", ")}. Several values are an OR.`,
+    q: "Only entities whose name or @id contains this text. Case-insensitive substring, not a pattern.",
     include_page_local:
       "Include entities that describe one page rather than the site's subject matter, such as a page's own WebPage or BreadcrumbList. False by default because they usually outnumber everything else.",
     limit: `Entities to return. Default ${ENTITY_MCP_LIMITS.defaultLimit}, maximum ${ENTITY_MCP_LIMITS.maxLimit}.`,
-    offset: "Entities to skip, for paging through a result larger than limit.",
+    offset: "Entities to skip, for paging through a result larger than limit. Default 0. Ordering is by page count descending, then by key, and is stable across calls on one audit, so paging does not repeat or skip a row.",
   },
   get_entity: {
-    key: "The entity key, its @id, or its name. Tried in that order, exactly before loosely.",
+    key: "The entity key, its @id, or its name. Resolved in that order of certainty: an exact @id match, then an exact key match, then the key formed by prefixing the value with \"id:\", then an exact case-insensitive name, and only then a case-insensitive substring of a name. The first match wins.",
   },
   get_entity_graph: {
-    format: `How to render the graph: ${ENTITY_MCP_GRAPH_FORMATS.join(", ")}.`,
+    format: `How to render the graph: ${ENTITY_MCP_GRAPH_FORMATS.join(", ")}. Defaults to json.`,
   },
   compare_entities: {
     from_run_id: "The older audit. Defaults to the one before the newer audit, for the same site.",
     to_run_id: "The newer audit. Defaults to the latest audit with an entity map.",
   },
 } as const;
+
+// ── Input shape ────────────────────────────────────────────────────
+
+/**
+ * One accepted input field, precisely enough for a second server to rebuild it.
+ *
+ * The descriptions above say what a field MEANS. This says what it IS, which is
+ * the half that has to match for two independently-written zod shapes to accept
+ * and reject the same calls. Prose cannot be asserted against; this can, and
+ * both servers have a test that does.
+ */
+export interface EntityMcpFieldSpec {
+  readonly kind: "string" | "string[]" | "boolean" | "integer";
+  /** Required fields have no default and a call without them is rejected. */
+  readonly required: boolean;
+  /** The closed set of accepted values, when there is one. */
+  readonly values?: readonly string[];
+  /** Applied by the handler when the field is absent, if anything is. */
+  readonly default?: string | number | boolean;
+  readonly min?: number;
+  readonly max?: number;
+}
+
+/**
+ * Every field each tool accepts, on BOTH servers.
+ *
+ * Filters combine as an AND ACROSS kinds and an OR WITHIN one: type plus
+ * problem keeps entities that match a listed type AND have a listed problem.
+ * That asymmetry is the one thing about the input an agent cannot guess, so it
+ * is stated here and in every affected field description.
+ */
+export const ENTITY_MCP_INPUT_FIELDS: Record<
+  EntityMcpToolName,
+  Readonly<Record<string, EntityMcpFieldSpec>>
+> = {
+  list_entities: {
+    run_id: { kind: "string", required: false },
+    type: { kind: "string[]", required: false },
+    page: { kind: "string[]", required: false },
+    problem: { kind: "string[]", required: false, values: ENTITY_MCP_PROBLEMS },
+    q: { kind: "string", required: false },
+    include_page_local: { kind: "boolean", required: false, default: false },
+    limit: {
+      kind: "integer",
+      required: false,
+      default: ENTITY_MCP_LIMITS.defaultLimit,
+      min: 1,
+      max: ENTITY_MCP_LIMITS.maxLimit,
+    },
+    offset: { kind: "integer", required: false, default: 0, min: 0 },
+  },
+  get_entity: {
+    run_id: { kind: "string", required: false },
+    key: { kind: "string", required: true },
+  },
+  get_entity_graph: {
+    run_id: { kind: "string", required: false },
+    type: { kind: "string[]", required: false },
+    page: { kind: "string[]", required: false },
+    problem: { kind: "string[]", required: false, values: ENTITY_MCP_PROBLEMS },
+    q: { kind: "string", required: false },
+    include_page_local: { kind: "boolean", required: false, default: false },
+    format: {
+      kind: "string",
+      required: false,
+      values: ENTITY_MCP_GRAPH_FORMATS,
+      default: "json",
+    },
+  },
+  compare_entities: {
+    from_run_id: { kind: "string", required: false },
+    to_run_id: { kind: "string", required: false },
+  },
+  get_entity_findings: {
+    run_id: { kind: "string", required: false },
+  },
+};
+
+/**
+ * Fields the hosted server adds and the local server does not have.
+ *
+ * The local server reads one machine's project store, where a website id means
+ * nothing. Listing the difference here is what lets each server's conformance
+ * test assert an exact field set rather than a subset, which is the assertion
+ * that actually catches a field added to one server and forgotten on the other.
+ */
+export const ENTITY_MCP_CLOUD_ONLY_FIELDS = ["website_id"] as const;
+
+/**
+ * How a tool reports a failure.
+ *
+ * Both servers return MCP tool errors (`isError: true` with a text message),
+ * never a result object carrying an error field, so an agent never has to check
+ * two places. The message names what was looked for and what to call next; it
+ * is meant to be read by the model, not matched by a caller.
+ */
+export const ENTITY_MCP_ERROR_STYLE =
+  "MCP tool error with a human-readable message; no error field on a successful result.";
 
 // ── Result shapes ──────────────────────────────────────────────────
 
@@ -198,7 +302,8 @@ export const EntityMcpListResultSchema = Type.Object({
   site: Type.String(),
   runId: Type.String(),
   auditedAt: Type.String(),
-  summary: Type.Unknown(),
+  /** The summary AFTER filtering, describing what survived rather than the site. */
+  summary: EntityMapSummarySchema,
   entities: Type.Array(EntityMcpListRowSchema),
   total: Type.Integer(),
   hasMore: Type.Boolean(),
@@ -223,7 +328,8 @@ export type EntityMcpEdge = Static<typeof EntityMcpEdgeSchema>;
 export const EntityMcpEntityResultSchema = Type.Object({
   site: Type.String(),
   runId: Type.String(),
-  entity: Type.Unknown(),
+  /** The node, with `pages` already capped; `declaredOn` repeats that list. */
+  entity: EntityMapNodeSchema,
   declaredOn: Type.Array(Type.String()),
   morePages: Type.Integer(),
   outgoing: Type.Array(EntityMcpEdgeSchema),
@@ -241,6 +347,24 @@ export const EntityMcpGraphResultSchema = Type.Object({
   content: Type.String(),
   nodeCount: Type.Integer(),
   edgeCount: Type.Integer(),
+  /**
+   * The `@id`s the `jsonld` rendering INVENTED, for entities the site declared
+   * without one.
+   *
+   * A JSON-LD document has nowhere to say "this identifier is not real", so it
+   * is said here. Without it the export reads as a site where every entity is
+   * already identified, which is the exact opposite of the finding that sent
+   * the agent to this tool. Empty for every other format, and for a jsonld
+   * rendering in which the site identified everything itself.
+   */
+  generatedIds: Type.Array(
+    Type.Object({
+      /** The entity key, as `list_entities` and `get_entity` report it. */
+      key: Type.String(),
+      /** The placeholder this export used. The site does not publish it. */
+      id: Type.String(),
+    })
+  ),
   truncation: EntityMcpTruncationSchema,
 });
 
@@ -278,6 +402,15 @@ export type EntityMcpFinding = Static<typeof EntityMcpFindingSchema>;
 export const EntityMcpFindingsResultSchema = Type.Object({
   site: Type.String(),
   runId: Type.String(),
+  /**
+   * Whether the entity rules RAN for this audit.
+   *
+   * False means the audit was crawled but never analyzed, so the arrays below
+   * are empty for lack of evaluation rather than for lack of problems. Those
+   * two produce an identical response otherwise, and only one of them is good
+   * news.
+   */
+  analyzed: Type.Boolean(),
   findings: Type.Array(EntityMcpFindingSchema),
   /** Rules that ran and had nothing to report. */
   passed: Type.Array(Type.String()),

@@ -157,7 +157,9 @@ export function registerEntityTools(server: McpServer): void {
         site: loaded.data.map.site,
         runId: loaded.data.crawl.id,
         entity: found.node,
-        declaredOn: found.node.pages.slice(0, ENTITY_MCP_LIMITS.entityPages),
+        // Both come off the already-capped node, so the list, the remainder
+        // and the embedded entity agree.
+        declaredOn: found.node.pages,
         morePages: found.node.morePages,
         outgoing: found.outgoing,
         incoming: found.incoming,
@@ -188,7 +190,7 @@ export function registerEntityTools(server: McpServer): void {
       const format = args.format ?? "json";
       // The UNFILTERED count, so an empty result can say "no match" rather
       // than "this site declares nothing" — two very different facts.
-      const { content, truncation } = renderGraph(
+      const { content, truncation, generatedIds } = renderGraph(
         filtered,
         format,
         loaded.data.map.nodes.length
@@ -201,6 +203,11 @@ export function registerEntityTools(server: McpServer): void {
         content,
         nodeCount: filtered.nodes.length,
         edgeCount: filtered.edges.length,
+        // Non-empty only for jsonld, and only when the site left entities
+        // anonymous. These @ids are this export's invention: the site does not
+        // publish them, and treating them as evidence of a fix would be exactly
+        // backwards.
+        generatedIds,
         truncation,
       });
     }
@@ -258,6 +265,9 @@ export function registerEntityTools(server: McpServer): void {
       return jsonResult({
         site: loaded.data.map.site,
         runId: loaded.data.crawl.id,
+        // False means the audit was never analyzed, so the three empty arrays
+        // below are an absence of evidence rather than a clean bill of health.
+        analyzed: result.data.analyzed,
         findings: result.data.findings,
         passed: result.data.passed,
         skipped: result.data.skipped,

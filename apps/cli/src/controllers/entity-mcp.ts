@@ -17,6 +17,7 @@ import type {
 
 import {
   diffEntityMaps,
+  jsonLdGeneratedIds,
   toJsonLd,
 } from "@squirrelscan/audit-engine/entity-map";
 import {
@@ -147,7 +148,21 @@ function narrow(
   const edges = map.edges.filter(
     (edge) => keys.has(edge.source) && (edge.dangling || keys.has(edge.target))
   );
+
   const withId = nodes.filter((node) => node.id !== null).length;
+  // EVERY derived counter, not the four that were easy. A `nodeCount: 0` beside
+  // `nodesWithoutIdCount: 1` and a non-empty `countsByType` is a summary that
+  // contradicts its own node list, and an agent reading the summary rather
+  // than counting the array gets a number for a site it cannot see.
+  const typeCounts = new Map<string, number>();
+  let nodesWithoutIdCount = 0;
+  for (const node of nodes) {
+    if (node.id === null && pageTotal(node) > 1) nodesWithoutIdCount += 1;
+    for (const type of node.types) {
+      typeCounts.set(type, (typeCounts.get(type) ?? 0) + node.occurrences);
+    }
+  }
+
   return {
     ...map,
     summary: {
@@ -159,6 +174,10 @@ function narrow(
       stableIdShare: nodes.length === 0 ? 0 : withId / nodes.length,
       pageLocalCount: nodes.filter((node) => node.pageLocal).length,
       conflictCount: nodes.filter((node) => node.conflicts.length > 0).length,
+      nodesWithoutIdCount,
+      countsByType: Object.fromEntries(
+        [...typeCounts.entries()].sort((a, b) => compareStrings(a[0], b[0]))
+      ),
     },
     nodes,
     edges,
@@ -238,10 +257,21 @@ export function entityDetail(
 
   const cap = ENTITY_MCP_LIMITS.entityEdges;
   const cut = Math.max(0, out.length - cap) + Math.max(0, inbound.length - cap);
+  // Against the node's TRUE page total, not the length of its (already capped)
+  // `pages` array. A node on 100 pages carries 50 in the array plus a
+  // `morePages` of 50; listing 20 and reporting 50 omitted would be wrong by
+  // 30, and reporting 0 would be wrong by 80.
   const pagesCut = Math.max(0, pageTotal(node) - ENTITY_MCP_LIMITS.entityPages);
 
   return {
-    node,
+    // The node with its page list cut to the same cap the payload advertises.
+    // Returning the full array beside a capped `declaredOn` gave two different
+    // answers to one question in one response.
+    node: {
+      ...node,
+      pages: node.pages.slice(0, ENTITY_MCP_LIMITS.entityPages),
+      morePages: pagesCut,
+    },
     outgoing: out
       .slice(0, cap)
       .map((edge) =>
@@ -275,7 +305,11 @@ export function renderGraph(
   map: EntityMap,
   format: EntityMcpGraphFormat,
   declaredTotal: number = map.nodes.length
-): { content: string; truncation: EntityMcpTruncation } {
+): {
+  content: string;
+  truncation: EntityMcpTruncation;
+  generatedIds: Array<{ key: string; id: string }>;
+} {
   if (
     map.nodes.length === 0 &&
     declaredTotal > 0 &&
@@ -287,6 +321,7 @@ export function renderGraph(
           ? `graph LR\n  empty[No entity matches these filters]\n`
           : `# Entities on ${map.site}\n\nNo entity matches these filters. The site declares ${declaredTotal}; narrow less, or drop the filters to see them.\n`,
       truncation: NO_TRUNCATION,
+      generatedIds: [],
     };
   }
 
@@ -295,16 +330,31 @@ export function renderGraph(
       return {
         content: JSON.stringify(map, null, 2),
         truncation: NO_TRUNCATION,
+        generatedIds: [],
       };
     case "jsonld":
       return {
         content: JSON.stringify(toJsonLd(map), null, 2),
         truncation: NO_TRUNCATION,
+        // The export mints an @id for every entity the site left anonymous, and
+        // the document cannot say so about itself. An agent handed a graph in
+        // which everything is identified, having just been told the site's
+        // problem is that nothing is, would reasonably conclude the export is
+        // the current state of the site. It is not.
+        generatedIds: jsonLdGeneratedIds(map),
       };
     case "dot":
-      return { content: renderEntitiesDot(map), truncation: NO_TRUNCATION };
+      return {
+        content: renderEntitiesDot(map),
+        truncation: NO_TRUNCATION,
+        generatedIds: [],
+      };
     case "graphml":
-      return { content: renderEntitiesGraphml(map), truncation: NO_TRUNCATION };
+      return {
+        content: renderEntitiesGraphml(map),
+        truncation: NO_TRUNCATION,
+        generatedIds: [],
+      };
     case "mermaid":
       // The renderer caps and says so in a comment; the payload says so too,
       // because an agent reading `content` as data will not parse a comment.
@@ -316,9 +366,10 @@ export function renderGraph(
           "entities",
           'Use format="dot" or format="graphml" for the whole graph.'
         ),
+        generatedIds: [],
       };
     case "markdown":
-      return renderMarkdown(map);
+      return { ...renderMarkdown(map), generatedIds: [] };
   }
 }
 
@@ -375,6 +426,16 @@ function cell(value: string): string {
     .replace(/\n/g, " ");
 }
 
+/**
+ * No row limit on a history search.
+ *
+ * `listEntityMaps` reads every crawl in every project whatever the limit is and
+ * only trims the array at the end, so a small number buys nothing and costs
+ * correctness: it silently drops the audit the caller asked about. The cap
+ * belongs on what a human is shown, not on what a lookup may consider.
+ */
+const ALL_AUDITS = Number.MAX_SAFE_INTEGER;
+
 /** The two crawls a comparison runs over, defaulting to previous versus latest. */
 export async function resolveComparison(
   fromRunId?: string,
@@ -393,49 +454,86 @@ export async function resolveComparison(
     return ok({ older, newer });
   }
 
-  // Same rule as `squirrel entities --diff`: anchor on the newer audit, then
-  // take the previous one OF THE SAME SITE. The store holds every project, so
-  // "the two newest audits" are routinely two different sites.
-  const listed = await listEntityMaps(50);
-  if (!listed.ok) return err(listed.error);
-  const withMaps = listed.data.filter((row) => row.entities > 0);
+  // A caller who named ONLY the older side gets an answer about it, not a
+  // silent substitution. Falling through here would have compared the latest
+  // two audits and reported that as the result, which is a different question
+  // answered under the caller's question's name — and the field description
+  // promises `from_run_id` IS the older audit.
+  if (fromRunId) {
+    const older = await loadEntityMap(fromRunId);
+    if (!older.ok) return err(older.error);
 
-  const anchorIndex = toRunId
-    ? withMaps.findIndex(
-        (row) => row.crawlId === toRunId || row.crawlId.startsWith(toRunId)
-      )
-    : 0;
-  const anchor = anchorIndex >= 0 ? withMaps[anchorIndex] : undefined;
-  if (!anchor) {
-    return err(
-      commandError(
-        ErrorCodes.CRAWL_NOT_FOUND,
-        toRunId
-          ? `No audit with an entity map matches "${toRunId}".`
-          : "No audit with an entity map found. Run an audit first."
-      )
+    const sameSite = await listEntityMaps(ALL_AUDITS, {
+      baseUrl: older.data.crawl.baseUrl,
+    });
+    if (!sameSite.ok) return err(sameSite.error);
+    const next = sameSite.data.find(
+      (row) => row.entities > 0 && row.startedAt > older.data.crawl.startedAt
     );
+    if (!next) {
+      return err(
+        commandError(
+          ErrorCodes.CRAWL_NOT_FOUND,
+          `No audit of ${older.data.crawl.baseUrl} with an entity map is newer than ${older.data.crawl.id}. Name a newer one with to_run_id, or run another audit.`
+        )
+      );
+    }
+    const newer = await loadEntityMap(next.crawlId);
+    if (!newer.ok) return err(newer.error);
+    return ok({ older: older.data, newer: newer.data });
   }
 
-  const sameSite = await listEntityMaps(200, { baseUrl: anchor.baseUrl });
+  // The newer side. A NAMED run is resolved directly rather than looked for in
+  // a window of recent audits: `loadEntityMap` searches every crawl in every
+  // project and accepts a prefix, so it finds a run however many audits have
+  // happened since. Searching a 50-row window told a caller their run did not
+  // exist as soon as the store held 50 newer ones — a false statement about the
+  // store, delivered under an error code that reads as a statement about the
+  // site.
+  let newer: StoredEntityMap;
+  if (toRunId) {
+    const loaded = await loadEntityMap(toRunId);
+    if (!loaded.ok) return err(loaded.error);
+    newer = loaded.data;
+  } else {
+    // Same rule as `squirrel entities --diff`: anchor on the newest audit
+    // anywhere, then take the previous one OF THE SAME SITE. The store holds
+    // every project, so "the two newest audits" are routinely two sites.
+    const listed = await listEntityMaps(ALL_AUDITS);
+    if (!listed.ok) return err(listed.error);
+    const anchor = listed.data.find((row) => row.entities > 0);
+    if (!anchor) {
+      return err(
+        commandError(
+          ErrorCodes.CRAWL_NOT_FOUND,
+          "No audit with an entity map found. Run an audit first."
+        )
+      );
+    }
+    const loaded = await loadEntityMap(anchor.crawlId);
+    if (!loaded.ok) return err(loaded.error);
+    newer = loaded.data;
+  }
+
+  const sameSite = await listEntityMaps(ALL_AUDITS, {
+    baseUrl: newer.crawl.baseUrl,
+  });
   if (!sameSite.ok) return err(sameSite.error);
   const previous = sameSite.data.find(
-    (row) => row.entities > 0 && row.startedAt < anchor.startedAt
+    (row) => row.entities > 0 && row.startedAt < newer.crawl.startedAt
   );
   if (!previous) {
     return err(
       commandError(
         ErrorCodes.CRAWL_NOT_FOUND,
-        `Only one audit of ${anchor.baseUrl} has an entity map, so there is nothing to compare it against yet.`
+        `No audit of ${newer.crawl.baseUrl} with an entity map is older than ${newer.crawl.id}, so there is nothing to compare it against yet.`
       )
     );
   }
 
   const older = await loadEntityMap(previous.crawlId);
   if (!older.ok) return err(older.error);
-  const newer = await loadEntityMap(anchor.crawlId);
-  if (!newer.ok) return err(newer.error);
-  return ok({ older: older.data, newer: newer.data });
+  return ok({ older: older.data, newer });
 }
 
 export { diffEntityMaps };
@@ -449,47 +547,54 @@ export { diffEntityMaps };
  */
 export async function loadEntityFindings(crawlId: string): Promise<
   Result<{
+    analyzed: boolean;
     findings: EntityMcpFinding[];
     passed: string[];
     skipped: Array<{ ruleId: string; reason: string }>;
   }>
 > {
-  try {
-    for (const dbPath of getProjectStoragePaths()) {
-      if (!existsSync(dbPath)) continue;
-      const storage = new SQLiteStorage(dbPath, getGlobalContentStore());
-      try {
-        await Effect.runPromise(storage.init());
-        const crawl = await Effect.runPromise(
-          storage
-            .getCrawl(crawlId)
-            .pipe(Effect.catchAll(() => Effect.succeed(null)))
-        );
-        if (!crawl) continue;
-        const byRule = await Effect.runPromise(
-          storage.getRuleResultsByRuleId(crawlId)
-        );
-        return ok(shapeFindings(byRule));
-      } finally {
-        await Effect.runPromise(
-          storage.close().pipe(Effect.catchAll(() => Effect.void))
-        );
-      }
+  const failures: string[] = [];
+  for (const dbPath of getProjectStoragePaths()) {
+    if (!existsSync(dbPath)) continue;
+    const storage = new SQLiteStorage(dbPath, getGlobalContentStore());
+    try {
+      await Effect.runPromise(storage.init());
+      const crawl = await Effect.runPromise(
+        storage
+          .getCrawl(crawlId)
+          .pipe(Effect.catchAll(() => Effect.succeed(null)))
+      );
+      if (!crawl) continue;
+      const byRule = await Effect.runPromise(
+        storage.getRuleResultsByRuleId(crawlId)
+      );
+      return ok(shapeFindings(byRule));
+    } catch (error) {
+      // Per project, not per call. One unreadable store used to abort the whole
+      // search through an outer catch, so a crawl sitting in a perfectly
+      // readable project reported as unreadable because an unrelated one was.
+      failures.push(`${dbPath}: ${String(error)}`);
+    } finally {
+      await Effect.runPromise(
+        storage.close().pipe(Effect.catchAll(() => Effect.void))
+      );
     }
-    return err(
-      commandError(
-        ErrorCodes.CRAWL_NOT_FOUND,
-        `No audit found matching "${crawlId}".`
-      )
-    );
-  } catch (error) {
+  }
+
+  if (failures.length > 0) {
     return err(
       commandError(
         ErrorCodes.CRAWL_ERROR,
-        `Could not read the entity findings: ${String(error)}`
+        `Could not read the entity findings, and ${failures.length} project store(s) could not be opened: ${failures.join("; ")}`
       )
     );
   }
+  return err(
+    commandError(
+      ErrorCodes.CRAWL_NOT_FOUND,
+      `No audit found matching "${crawlId}".`
+    )
+  );
 }
 
 /** Split the stored checks into findings, passes and skips. */
@@ -506,6 +611,7 @@ function shapeFindings(
     }>
   >
 ): {
+  analyzed: boolean;
   findings: EntityMcpFinding[];
   passed: string[];
   skipped: Array<{ ruleId: string; reason: string }>;
@@ -532,6 +638,11 @@ function shapeFindings(
   }
 
   return {
+    // Whether the rules RAN, not whether they found anything. An audit that was
+    // crawled but never analyzed produces the same three empty arrays as a site
+    // with a flawless entity graph, and only one of those is worth reporting as
+    // good news. Any stored check for this crawl proves the rules ran.
+    analyzed: byRule.size > 0,
     findings: findings.slice(0, ENTITY_MCP_LIMITS.findings),
     passed,
     skipped,
