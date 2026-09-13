@@ -34,10 +34,16 @@ export * from "./failure-reason";
 
 // #2061: the structured entity map — site-wide JSON-LD graph of one audit.
 export * from "./entity-map";
+// #2095: the entity MCP tool contract. Types only here, because `./entity-mcp`
+// re-exports two entity-map schemas that `export *` above already provides and
+// a star would collide. The CONSTANTS — names, descriptions, field specs,
+// limits — are the half a second server actually needs, and both servers import
+// them from the `@squirrelscan/core-contracts/entity-mcp` subpath.
 export type {
   EntityMcpToolName,
   EntityMcpProblem,
   EntityMcpGraphFormat,
+  EntityMcpFieldSpec,
   EntityMcpTruncation,
   EntityMcpListRow,
   EntityMcpListResult,
