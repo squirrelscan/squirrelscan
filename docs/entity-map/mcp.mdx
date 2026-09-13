@@ -15,13 +15,19 @@ Structured data identity is unusually well suited to an agent, because the whole
 Step 4 is the one that matters and the one that is easy to get wrong by hand. An entity that gains an `@id` **changes key**, because the key IS the `@id` when there is one. A naive comparison reports that as one removal plus one addition, which looks like damage. `gainedId` is the field that says a fix landed.
 
 <Warning>
-`gainedId` on its own says the entity changed, not that the broken pages were fixed. Matching happens on type and name, so a re-audit that visited a different part of the site pairs the two and reports the transition while the pages you were sent to fix still carry the old markup. Every entry carries a `coverage` field for that reason:
+`gainedId` on its own says the entity changed, not that the broken pages were fixed. Matching happens on type and name, so a re-audit of a different part of the site pairs the two and reports the transition while the pages you were sent to fix still carry the old markup. Every entry carries a `coverage` field for that reason:
 
-- `proven`: the newer audit visited every page that declared the old version. The change describes the whole site.
-- `partial`: it did not. The fix is real where it was seen, and the unvisited pages are unknown.
+- `proven`: the newer audit visited every page that declared the old version **and** found the replacement on all of them.
+- `partial`: one of those could not be established.
+
+Both conditions, because either alone is satisfied by a site that is not fixed. Recrawling the broken pages proves nothing if the markup was deleted there and the identified entity appeared somewhere else. Finding it somewhere else proves nothing about the pages that were never revisited.
 
 Re-audit the same scope you audited the first time, or treat `partial` as work still open.
 </Warning>
+
+<Note>
+The reverse does not hold: a missing `gainedId` entry is not proof the fix failed. The match needs the type and the name to be unchanged, so correcting the `@id` and the name in one edit appears as a removal plus an addition. Change the identifier first, confirm it, then rename.
+</Note>
 
 <Note>
 Every tool description states this loop, so an agent that calls one of the five learns the other four exist and in what order.
@@ -33,11 +39,13 @@ Available on both the local `squirrel mcp` server, reading your project store, a
 
 ### list_entities
 
-The entities a site declares, collapsed across every crawled page into one graph, so the same Organization on 60 pages is one row rather than 60.
+The entities a site declares, collapsed across every crawled page into one graph, so an Organization declared identically on 60 pages is one row rather than 60.
+
+Collapsing is by resolved `@id`, or by type and name when there is no `@id`. The same real-world thing can still occupy several rows when its declared identity differs between pages: a relative `@id` like `#organization` resolves against each page and produces one row per page. That is the split identity the audit rules flag, not a quirk of this tool.
 
 | Input | Meaning |
 |---|---|
-| `run_id` | A specific audit. Defaults to the latest with an entity map. |
+| `run_id` | A specific audit. Defaults to the latest that stored at least one entity, which is not always the latest audit. See below. |
 | `type` | Only these `@type` values. |
 | `page` | Only entities declared on a page whose URL contains one of these strings. A substring test, not a prefix and not a glob. |
 | `problem` | `no-id`, `conflict`, `dangling`, `single-page` or `split-identity`. |
@@ -53,7 +61,9 @@ Page-local entities are hidden by default because they usually outnumber everyth
 
 ### get_entity
 
-One entity in full, by key, `@id` or name: every property, the pages that declare it, the properties whose values disagree between those pages, and the references in and out.
+One entity as the map recorded it, by key, `@id` or name: the properties the map keeps, the pages that declare it, the properties whose values disagree between those pages, and the references in and out.
+
+The map keeps nine properties, not all of them: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address`, `description`, plus `@type`. A property missing here may still be in the page's JSON-LD, and a disagreement in a property outside that set is not detected. A `Product` with conflicting `sku` values across pages reads as consistent.
 
 The lookup resolves in order of certainty: an exact `@id`, then an exact key, then the key formed by prefixing your value with `id:`, then an exact name, and only then a name substring. The first match wins.
 
@@ -63,14 +73,16 @@ Use it after `list_entities` to see **why** an entity was flagged before decidin
 
 The whole graph, or a filtered part of it, in one of six formats.
 
-| Format | For |
-|---|---|
-| `json` | The canonical document. Complete. |
-| `jsonld` | A `@graph` you can paste into a validator. Complete. |
-| `mermaid` | A diagram in a conversation. Capped at 150 nodes. |
-| `dot` | Graphviz. Complete. |
-| `graphml` | Gephi, yEd, Cytoscape. Complete. |
-| `markdown` | A table to read. Capped at 50 rows. |
+| Format | For | Node cap |
+|---|---|---|
+| `json` | The canonical document. | none |
+| `jsonld` | A `@graph` you can paste into a validator. | none |
+| `mermaid` | A diagram in a conversation. | 150 |
+| `dot` | Graphviz. | none |
+| `graphml` | Gephi, yEd, Cytoscape. | none |
+| `markdown` | A table to read. | 50 rows |
+
+No node cap is not the same as complete. Every format renders the stored map, and on the local server that map carries no per-edge page list and no per-page reference list, so those arrays are empty because the CLI never stored them, not because nothing matched. Mermaid's cap bounds declared entities only: one entity referencing thousands of undeclared ids still draws thousands of placeholder nodes.
 
 Takes the same filters as `list_entities`. `mermaid` and `markdown` exist to fit a context window and say so in `truncation` when they cut; the other four are complete. `format` defaults to `json`.
 
@@ -82,7 +94,7 @@ The `jsonld` rendering gives every entity an `@id`, inventing one for each entit
 
 The change set between two audits: entities added and removed, entities that gained or lost an `@id`, occurrence changes, new and resolved conflicts and dangling references, summary deltas, and the pages each audit saw that the other did not.
 
-Defaults to the previous audit versus the latest, **of the same site**.
+Defaults to the previous audit versus the latest, **of the same site**. When you name both runs they are ordered chronologically whichever field named them, so a diff always reads forward in time. Read `fromRunId` and `toRunId` on the result for the direction actually used.
 
 <Note>
 An entity is only reported as `removed` when every page that declared it was crawled again. Anything unproven is reported separately as `notCrawled`, so a smaller crawl never reads as a site that deleted its structured data. If you are checking whether a fix landed, `notCrawled` is the field that tells you the audit did not cover the evidence.
@@ -95,6 +107,10 @@ The default declines when the older audit stored no entities at all, because zer
 The `schema/entity-*` rule verdicts for an audit: what is wrong with the entity graph, which entity keys and pages each finding affects, and the fix text for each.
 
 Use it instead of re-deriving the problems from the graph. Each finding names one problem across the whole site rather than one per entity, so a count of 1 can still mean hundreds of pages.
+
+<Warning>
+The keys and pages on a finding are a **sample**. The rule that produced the finding clipped its own lists before this tool saw them, typically to five pages, and nothing in the pipeline records how many were dropped. `truncation.truncated` is therefore always true here. Use `list_entities` with the matching `problem` filter for the complete set of affected entities, and that entity's `pages` for where it is declared.
+</Warning>
 
 `analyzed` says whether the rules ran at all. An audit that was crawled but never analyzed returns the same three empty arrays as a site with a flawless entity graph, and only one of those is good news. `analyzed: false` means no verdict exists yet, not that there is nothing to fix.
 
@@ -134,6 +150,20 @@ compare_entities {}
 ```
 
 A successful fix shows the removed declaration under `removed` and nothing under `notCrawled`. If the entity you kept also gained an `@id` in the same change, it appears under `gainedId` rather than as an add and a remove, with `coverage: "proven"` when the re-audit visited every page that had been wrong.
+
+## Which audit you actually got
+
+Every result carries a `warnings` array. It is empty when there is nothing to say, and it is the only place two facts appear that change what the answer means.
+
+**An audit was passed over.** The default picks the latest audit that stored at least one entity, not simply the latest. An audit that stored none is skipped, because the store cannot tell a site that declares nothing from an audit that predates the entity map.
+
+That matters most in exactly the case you would least want to miss it. A template change wipes a site's JSON-LD, today's audit stores nothing, and the default falls back to yesterday. Without the warning you would be shown yesterday's healthy graph while asking whether the structured data is fine. The warning names the audit that was skipped so you can read it with `run_id`.
+
+**A project store could not be read.** An answer drawn from part of the data says so rather than presenting itself as the whole picture.
+
+<Note>
+`warnings` is about what could not be read or had to be guessed around. `truncation` is about what was cut from an answer that was otherwise complete. They are separate fields because they call for different responses: re-audit or name a run, versus ask for another page.
+</Note>
 
 ## What the tools will not do
 
