@@ -67,7 +67,7 @@ GET /v1/reports/{id}/entities
 
 | Query | Meaning |
 |---|---|
-| `format` | `json`, `jsonld`, `html`, `markdown`, `csv`, `dot`, `graphml`, `mermaid`. Default `json`. |
+| `format` | `json`, `jsonld`, `html` or `markdown`. Default `json`. Four more are accepted and not yet implemented: see below. |
 | `type` | Keep only entities carrying this `@type`. Case-insensitive. |
 | `page` | Keep only entities declared on this page URL, or one starting with it. |
 | `problem` | `no-id`, `conflict`, `dangling`, `single-page`, `split-identity`. |
@@ -110,6 +110,18 @@ This is the opposite of the local behaviour, and it is the difference most likel
 
 Neither is wrong, but a script that reads `summary.nodeCount` after filtering gets a different number from each.
 </Warning>
+
+### Four formats are accepted and answer 501
+
+`csv`, `dot`, `graphml` and `mermaid` are part of the documented contract and the endpoint accepts them, but this release does not render them: they answer **`501`**, "The requested export format is not implemented in this release."
+
+They are accepted rather than rejected on purpose. A client written against the documented set gets an honest "not yet" rather than being turned away as though it had sent a typo, and the error names the reason. The dashboard's export menu shows those four disabled for the same reason: the menu and the contract agree rather than quietly diverging.
+
+All eight do render locally, through `squirrel entities -f <format>`.
+
+<Note>
+`html` is the mirror image. It renders here, and it is deliberately **not** one of the six formats the MCP tools offer, because an interactive viewer is no use to an agent. Neither list is a subset of the other.
+</Note>
 
 <Warning>
 The `page` filter here is a **prefix** match, so `https://site/about` also matches `https://site/about-us`; add a trailing slash to scope to a directory. The CLI and the MCP tools use a substring match instead. Comparing hosted output against local output on the same filter will show the difference.
@@ -155,7 +167,7 @@ The `html` rendering escapes it and is safe to open. The `markdown` rendering es
 
 ## Exports
 
-The dashboard's export menu offers the same formats as the API. Anything the hosted renderer does not implement is shown disabled rather than hidden, so the menu and the documented contract agree rather than quietly diverging.
+The dashboard's export menu offers the same formats as the API, with the four that are [not yet implemented](#four-formats-are-accepted-and-answer-501) shown disabled rather than hidden.
 
 ## References
 
