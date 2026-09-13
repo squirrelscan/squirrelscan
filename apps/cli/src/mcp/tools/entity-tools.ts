@@ -28,6 +28,7 @@ import {
   entityDetail,
   listRows,
   loadEntityFindings,
+  mapWarnings,
   renderGraph,
   resolveComparison,
   resolveMap,
@@ -125,6 +126,7 @@ export function registerEntityTools(server: McpServer): void {
         // for what `hasMore` does NOT cover: nothing here, today. Kept so the
         // shape matches the other four and a future cap has somewhere to go.
         truncation: NO_TRUNCATION,
+        warnings: mapWarnings(loaded.data),
       });
     }
   );
@@ -164,6 +166,7 @@ export function registerEntityTools(server: McpServer): void {
         outgoing: found.outgoing,
         incoming: found.incoming,
         truncation: found.truncation,
+        warnings: mapWarnings(loaded.data),
       });
     }
   );
@@ -209,6 +212,7 @@ export function registerEntityTools(server: McpServer): void {
         // backwards.
         generatedIds,
         truncation,
+        warnings: mapWarnings(loaded.data),
       });
     }
   );
@@ -244,6 +248,9 @@ export function registerEntityTools(server: McpServer): void {
         // The diff document caps its own lists and reports the true counts in
         // the summary, so there is nothing here the caller cannot see.
         truncation: NO_TRUNCATION,
+        // Both sides: an unreadable store or a passed-over audit on EITHER end
+        // changes what the comparison means.
+        warnings: [...mapWarnings(older), ...mapWarnings(newer)],
       });
     }
   );
@@ -271,7 +278,8 @@ export function registerEntityTools(server: McpServer): void {
         findings: result.data.findings,
         passed: result.data.passed,
         skipped: result.data.skipped,
-        truncation: NO_TRUNCATION,
+        truncation: result.data.truncation,
+        warnings: mapWarnings(loaded.data),
       });
     }
   );

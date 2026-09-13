@@ -110,7 +110,7 @@ export const ENTITY_MCP_LIMITS = {
  * that called one tool will look.
  */
 export const ENTITY_MCP_LOOP =
-  "Fix-and-verify loop: call list_entities with problem=\"no-id\" to find entities declared on several pages with nothing to tie them together, give each one an absolute @id, re-run the audit with run_audit, then call compare_entities and check that gainedId contains the keys you fixed. gainedId is the only confirmation that the fix landed: an entity that gained an @id changes key, so it would otherwise look like one removal plus one addition. Check each entry's coverage field before calling it done: \"proven\" means the newer audit visited every page that declared the broken version, \"partial\" means it did not and those pages may still carry the old markup.";
+  "Fix-and-verify loop: call list_entities with problem=\"no-id\" to find entities declared on several pages with nothing to tie them together, give each one an absolute @id, re-run the audit with run_audit, then call compare_entities and check that gainedId contains the keys you fixed. gainedId is the only confirmation that the fix landed: an entity that gained an @id changes key, so it would otherwise look like one removal plus one addition. Check each entry's coverage field before calling it done: \"proven\" means the newer audit visited every page that declared the broken version AND found the replacement on all of them, \"partial\" means one of those could not be established. Absence of a gainedId entry is not proof of failure: the match needs the name and type to be unchanged, so fixing the @id and the name together shows up as a removal plus an addition instead.";
 
 /**
  * Tool descriptions, identical on both servers.
@@ -121,19 +121,19 @@ export const ENTITY_MCP_LOOP =
  */
 export const ENTITY_MCP_DESCRIPTIONS: Record<EntityMcpToolName, string> = {
   list_entities:
-    "List the entities a site declares in its JSON-LD, collapsed across every crawled page into one graph, so the same Organization on 60 pages is one row rather than 60. Filter by @type, by declaring page, by problem class, or by a text match on the name. Page-local entities (a page's own WebPage, BreadcrumbList and unnamed images) usually outnumber the site's actual subject matter and are hidden unless include_page_local is true. Returns a summary, a page of nodes, and total and has_more so you can tell a capped list from a complete one. " +
+    "List the entities a site declares in its JSON-LD, collapsed across every crawled page into one graph, so an Organization declared identically on 60 pages is one row rather than 60. Declarations collapse by resolved @id, or by type and name when there is no @id, so the SAME real-world thing can still occupy several rows when its declared identity differs between pages: a relative @id such as \"#organization\" resolves against each page and yields one row per page. That is the split-identity problem, not a quirk of this tool. Filter by @type, by declaring page, by problem class, or by a text match on the name. Page-local entities (a page's own WebPage, BreadcrumbList and unnamed images) usually outnumber the site's actual subject matter and are hidden unless include_page_local is true. Returns a filtered summary, a page of nodes, total, and hasMore; keep requesting pages while hasMore is true rather than describing a site from one page. " +
     ENTITY_MCP_LOOP,
   get_entity:
-    "Get one entity in full: every property, the pages that declare it, the properties whose values disagree between those pages, and the references in and out of it. Accepts the entity key, its @id, or its name. Use this after list_entities to see why an entity was flagged, before deciding what to change. Edges and declaring pages are capped; the counts tell you when. " +
+    "Get one entity as the map recorded it: the properties the map keeps (name, url, logo, image, sameAs, telephone, email, address, description), the pages that declare it, the properties whose values disagree between those pages, and the references in and out of it. The map keeps those nine and @type and nothing else, so a property missing here may still be in the page's JSON-LD, and a disagreement in a property outside that set is not detected. Accepts the entity key, its @id, or its name. Use this after list_entities to see why an entity was flagged, before deciding what to change. Edges and declaring pages are capped; the counts tell you when. " +
     ENTITY_MCP_LOOP,
   get_entity_graph:
-    "Get the whole entity graph, or a filtered part of it, in a chosen format: json for the canonical document, jsonld for a validator, mermaid or markdown to read in a conversation, dot or graphml for a graph tool. Takes the same filters as list_entities. mermaid and markdown are capped to fit a context window and say so in the output when they truncate; json, jsonld, dot and graphml are complete. " +
+    "Get the whole entity graph, or a filtered part of it, in a chosen format: json for the canonical document, jsonld for a validator, mermaid or markdown to read in a conversation, dot or graphml for a graph tool. Defaults to json. Takes the same filters as list_entities. mermaid caps declared entities at 150 and markdown caps rows at 50, and both say so in truncation; json, jsonld, dot and graphml apply no node cap. No cap is not the same as complete: every format renders the stored map, and on the local server that map carries no per-edge page list and no per-page reference list, so those arrays are empty because they were never stored rather than because nothing matched. mermaid's cap bounds declared entities only, so one entity referencing thousands of undeclared ids still renders thousands of placeholder nodes. " +
     ENTITY_MCP_LOOP,
   compare_entities:
     "Compare two audits of a site and get the change set: entities added and removed, entities that gained or lost an @id, occurrence changes, new and resolved conflicts and dangling references, summary deltas, and the pages each audit saw that the other did not. Defaults to the previous audit versus the latest. An entity is only reported as removed when every page that declared it was crawled again; anything unproven is reported separately as not crawled, so a smaller crawl never reads as a site that deleted its structured data. Each gainedId and lostId entry carries a coverage field saying whether the newer audit visited every page that declared the old version. " +
     ENTITY_MCP_LOOP,
   get_entity_findings:
-    "Get the schema/entity-* rule verdicts for an audit: what is wrong with the site's entity graph, which entity keys and pages each finding affects, and the fix text for each. Use this instead of re-deriving the problems from the graph yourself. Each finding names one problem across the whole site rather than one per entity, so a count of 1 can still mean hundreds of pages. " +
+    "Get the schema/entity-* rule verdicts for an audit: what is wrong with the site's entity graph, which entity keys and pages each finding affects, and the fix text for each. Use this instead of re-deriving the problems from the graph yourself. Each finding names one problem across the whole site rather than one per entity, so a count of 1 can still mean hundreds of pages. The keys and pages on a finding are a SAMPLE: the rule that produced it clipped its own lists before this tool saw them, so the pages listed are never the complete affected set and no field reports how many were left out. Use list_entities with the matching problem filter for the full set. analyzed says whether the rules ran at all: false means this audit was never analyzed, so empty findings are an absence of evidence rather than a clean result. " +
     ENTITY_MCP_LOOP,
 };
 
@@ -146,7 +146,7 @@ export const ENTITY_MCP_FIELD_DESCRIPTIONS = {
   common: {
     website_id:
       "The registered website to read, on the hosted server. Ignored by the local server, which reads the project store. When both this and run_id are given, run_id wins and this is ignored; naming a run of a different website is answered about the run.",
-    run_id: "A specific audit run to read. Defaults to the latest audit with an entity map.",
+    run_id: "A specific audit run to read. Defaults to the latest audit that stored at least one entity, which is NOT always the latest audit: an audit that stored none is passed over, because the store cannot tell a site that declares nothing from an audit that predates the entity map. When one is passed over, warnings names it. If you are checking whether a change landed, name the run.",
     type: "Only entities carrying one of these @type values. Case-insensitive. Several values are an OR: an entity matching any one of them is kept.",
     page: "Only entities declared on a page whose URL CONTAINS one of these strings. Not a prefix test and not a glob, so \"/blog\" matches https://example.com/blog/post and https://example.com/tag/blog alike. Several values are an OR.",
     problem: `Only entities with one of these problems: ${ENTITY_MCP_PROBLEMS.join(", ")}. Several values are an OR.`,
@@ -163,8 +163,8 @@ export const ENTITY_MCP_FIELD_DESCRIPTIONS = {
     format: `How to render the graph: ${ENTITY_MCP_GRAPH_FORMATS.join(", ")}. Defaults to json.`,
   },
   compare_entities: {
-    from_run_id: "The older audit. Defaults to the one before the newer audit, for the same site.",
-    to_run_id: "The newer audit. Defaults to the latest audit with an entity map.",
+    from_run_id: "The older audit. Defaults to the one before the newer audit, for the same site. When both runs are named they are ordered chronologically whichever field named them, so a diff always reads forward in time; read fromRunId and toRunId on the result for the direction actually used.",
+    to_run_id: "The newer audit. Defaults to the latest audit that stored at least one entity. When both runs are named they are ordered chronologically whichever field named them.",
   },
 } as const;
 
@@ -275,6 +275,21 @@ export const ENTITY_MCP_ERROR_STYLE =
  * the site from a sample and state its conclusion as though it saw everything.
  * Saying so in the payload is cheaper than any amount of documentation.
  */
+/**
+ * Everything the server could not account for while answering.
+ *
+ * Separate from `truncation`, which is about what was CUT from a complete
+ * answer. A warning is about what could not be read or had to be guessed
+ * around: an unreadable project store, or a newer audit passed over because it
+ * stored no entities and is therefore indistinguishable from one that predates
+ * the entity map. Both change what the answer means, and neither shows up
+ * anywhere else in the payload.
+ *
+ * Always present, empty when clean. A consumer that has to check for an
+ * omitted field will forget to.
+ */
+export const EntityMcpWarningsSchema = Type.Array(Type.String());
+
 export const EntityMcpTruncationSchema = Type.Object({
   truncated: Type.Boolean(),
   /** What was cut, and how to see the rest. Empty when nothing was cut. */
@@ -308,6 +323,7 @@ export const EntityMcpListResultSchema = Type.Object({
   total: Type.Integer(),
   hasMore: Type.Boolean(),
   truncation: EntityMcpTruncationSchema,
+  warnings: EntityMcpWarningsSchema,
 });
 
 export type EntityMcpListResult = Static<typeof EntityMcpListResultSchema>;
@@ -335,6 +351,7 @@ export const EntityMcpEntityResultSchema = Type.Object({
   outgoing: Type.Array(EntityMcpEdgeSchema),
   incoming: Type.Array(EntityMcpEdgeSchema),
   truncation: EntityMcpTruncationSchema,
+  warnings: EntityMcpWarningsSchema,
 });
 
 export type EntityMcpEntityResult = Static<typeof EntityMcpEntityResultSchema>;
@@ -366,6 +383,7 @@ export const EntityMcpGraphResultSchema = Type.Object({
     })
   ),
   truncation: EntityMcpTruncationSchema,
+  warnings: EntityMcpWarningsSchema,
 });
 
 export type EntityMcpGraphResult = Static<typeof EntityMcpGraphResultSchema>;
@@ -376,6 +394,7 @@ export const EntityMcpCompareResultSchema = Type.Object({
   toRunId: Type.String(),
   diff: EntityMapDiffSchema,
   truncation: EntityMcpTruncationSchema,
+  warnings: EntityMcpWarningsSchema,
 });
 
 export type EntityMcpCompareResult = Static<typeof EntityMcpCompareResultSchema>;
@@ -416,7 +435,16 @@ export const EntityMcpFindingsResultSchema = Type.Object({
   passed: Type.Array(Type.String()),
   /** Rules that could not run, with why. */
   skipped: Type.Array(Type.Object({ ruleId: Type.String(), reason: Type.String() })),
+  /**
+   * Always truncated, and says why.
+   *
+   * A finding's keys and pages are clipped by the RULE that produced them
+   * before this tool sees them, so no count anywhere can say how much was left
+   * out. The flag is standing rather than conditional because the alternative
+   * is a `truncated: false` that an agent would read as a complete affected set.
+   */
   truncation: EntityMcpTruncationSchema,
+  warnings: EntityMcpWarningsSchema,
 });
 
 export type EntityMcpFindingsResult = Static<typeof EntityMcpFindingsResultSchema>;

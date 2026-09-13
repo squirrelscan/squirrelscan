@@ -819,6 +819,145 @@ function synthetic(options: { withId: boolean; site?: string }): EntityMap {
   };
 }
 
+describe("an audit the loader passed over is named, not hidden", () => {
+  // The quietest failure in the whole surface. The loader picks the newest
+  // audit that stored at least one entity, because zero entities is also what
+  // an audit predating the entity map looks like. So a template regression that
+  // wipes a site's JSON-LD makes today's audit store nothing, the loader falls
+  // back to yesterday, and an agent asking "is the structured data OK" is shown
+  // yesterday's healthy graph with no indication it is looking at the past.
+  test("list_entities warns when a newer audit stored no entities", async () => {
+    const good = await seed({
+      project: "regressed",
+      baseUrl: "https://regressed.example/",
+      startedAt: 1_000_000,
+      map: synthetic({ withId: true, site: "https://regressed.example/" }),
+    });
+    const empty = synthetic({
+      withId: true,
+      site: "https://regressed.example/",
+    });
+    const wiped = await seed({
+      project: "regressed",
+      baseUrl: "https://regressed.example/",
+      startedAt: 2_000_000,
+      map: {
+        ...empty,
+        summary: { ...empty.summary, nodeCount: 0, countsByType: {} },
+        nodes: [],
+        edges: [],
+        pages: empty.pages.map((page) => ({
+          ...page,
+          declares: [],
+          entityCount: 0,
+        })),
+      },
+    });
+
+    const { data } = await call("list_entities");
+    // It really did fall back.
+    expect(data.runId).toBe(good);
+    const warnings = data.warnings as string[];
+    expect(warnings.length).toBeGreaterThan(0);
+    // And it names the audit it passed over, so the agent can go look.
+    expect(warnings.join(" ")).toContain(wiped);
+    expect(warnings.join(" ")).toContain("NOT the most recent");
+  });
+
+  test("no warning when the latest audit is the one returned", async () => {
+    await seed({
+      project: "clean",
+      baseUrl: "https://clean.example/",
+      startedAt: 1_000_000,
+      map: synthetic({ withId: true, site: "https://clean.example/" }),
+    });
+    const { data } = await call("list_entities");
+    expect(data.warnings).toEqual([]);
+  });
+});
+
+describe("a finding points at something get_entity can look up", () => {
+  test("conflict findings carry the entity key, not the composite item id", async () => {
+    // `schema/entity-conflicts` ids its items `"<key> <property>"` so two
+    // conflicts on one entity stay two rows. Handing that composite to
+    // get_entity finds nothing: the agent is told which entity is broken in a
+    // form it cannot use to look the entity up.
+    const map = synthetic({ withId: true, site: "https://conflict.example/" });
+    const key = map.nodes[0]!.key;
+    const crawlId = await seed({
+      project: "conflict",
+      baseUrl: "https://conflict.example/",
+      startedAt: 1_000_000,
+      map,
+    });
+
+    const { createStorage } = await import("@/crawler/storage");
+    const storage = await Effect.runPromise(
+      createStorage({ projectName: "conflict", silent: true })
+    );
+    try {
+      await Effect.runPromise(
+        storage.saveRuleResults(
+          crawlId,
+          "https://conflict.example/",
+          "schema/entity-conflicts",
+          [
+            {
+              name: "entity-conflicts",
+              status: "fail",
+              message: "1 entity disagrees with itself across pages",
+              items: [
+                {
+                  id: `${key} telephone`,
+                  label: "Loop Ltd — telephone",
+                  sourcePages: ["https://conflict.example/"],
+                  meta: { key, property: "telephone", valueCount: 2 },
+                },
+              ],
+            },
+          ] as never
+        )
+      );
+    } finally {
+      await Effect.runPromise(
+        storage.close().pipe(Effect.catchAll(() => Effect.void))
+      );
+    }
+
+    const { data } = await call("get_entity_findings");
+    expect(data.analyzed).toBe(true);
+    const findings = data.findings as Array<{ ruleId: string; keys: string[] }>;
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.keys).toEqual([key]);
+
+    // The actual promise: every key a finding reports can be fetched.
+    for (const reported of findings[0]!.keys) {
+      const looked = await call("get_entity", { key: reported });
+      expect(looked.ok).toBe(true);
+    }
+  });
+
+  test("the findings result never claims a complete affected set", async () => {
+    // A finding's pages were clipped by the rule before this tool saw them, and
+    // nothing in the pipeline records how many were dropped. Saying "complete"
+    // would be the one claim the data cannot support.
+    await seed({
+      project: "sample",
+      baseUrl: "https://sample.example/",
+      startedAt: 1_000_000,
+      map: synthetic({ withId: true, site: "https://sample.example/" }),
+    });
+    const { data } = await call("get_entity_findings");
+    const truncation = data.truncation as {
+      truncated: boolean;
+      notice: string;
+    };
+    expect(truncation.truncated).toBe(true);
+    expect(truncation.notice).toContain("sample");
+    expect(truncation.notice).toContain("list_entities");
+  });
+});
+
 describe("the jsonld export discloses the @ids it invents", () => {
   // The whole reason this field exists. The export mints an `@id` for every
   // entity the site left anonymous, and JSON-LD has nowhere to mark an

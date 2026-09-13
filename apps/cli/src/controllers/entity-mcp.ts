@@ -94,6 +94,33 @@ export async function resolveMap(
 }
 
 /**
+ * What the loader could not account for, in words an agent can act on.
+ *
+ * `loadEntityMap` already records two things the CLI prints and the tools were
+ * dropping on the floor:
+ *
+ * - `skipped`: a NEWER audit passed over because it stored no entity rows. Zero
+ *   rows is also what a site declaring nothing looks like, so the loader cannot
+ *   tell them apart and falls back to an older map. Silently returning that map
+ *   is how a template regression that wiped a site's JSON-LD reads as a site
+ *   whose structured data is fine — the agent is looking at yesterday.
+ * - `warnings`: project stores that could not be read at all. An answer drawn
+ *   from part of the data has to say so.
+ *
+ * Empty array when there is nothing to say, never an omitted field: a consumer
+ * that has to check for undefined will forget.
+ */
+export function mapWarnings(loaded: StoredEntityMap): string[] {
+  const out = [...(loaded.warnings ?? [])];
+  if (loaded.skipped) {
+    out.push(
+      `A newer audit (${loaded.skipped.crawlId}, ${new Date(loaded.skipped.startedAt).toISOString()}) stored no entities and was passed over, so this is NOT the most recent audit. That audit either found no JSON-LD or predates the entity map, and the store cannot tell those apart. Name it with run_id to see it.`
+    );
+  }
+  return out;
+}
+
+/**
  * Apply the tool filters, including the two the CLI does not have.
  *
  * `q` and `include_page_local` are MCP-only: the CLI viewer has a page-local
@@ -551,6 +578,7 @@ export async function loadEntityFindings(crawlId: string): Promise<
     findings: EntityMcpFinding[];
     passed: string[];
     skipped: Array<{ ruleId: string; reason: string }>;
+    truncation: EntityMcpTruncation;
   }>
 > {
   const failures: string[] = [];
@@ -615,6 +643,7 @@ function shapeFindings(
   findings: EntityMcpFinding[];
   passed: string[];
   skipped: Array<{ ruleId: string; reason: string }>;
+  truncation: EntityMcpTruncation;
 } {
   const findings: EntityMcpFinding[] = [];
   const passed: string[] = [];
@@ -643,6 +672,18 @@ function shapeFindings(
     // with a flawless entity graph, and only one of those is worth reporting as
     // good news. Any stored check for this crawl proves the rules ran.
     analyzed: byRule.size > 0,
+    // Standing, not conditional. A finding's page list was already clipped by
+    // the rule that produced it — five pages is typical — before this tool ever
+    // saw it, so `pages` is a sample for EVERY finding and there is no count
+    // anywhere in the pipeline that could say how big a sample. An agent that
+    // reads five pages as the affected scope will fix five pages of a hundred.
+    truncation: {
+      truncated: true,
+      notice:
+        findings.length > ENTITY_MCP_LIMITS.findings
+          ? `Showing ${ENTITY_MCP_LIMITS.findings} of ${findings.length} findings. Each finding's keys and pages are also a sample: the rules cap their own lists before this tool sees them, so the pages listed are never the complete affected set. Use list_entities with a problem filter for the full set of affected entities.`
+          : "Each finding's keys and pages are a sample: the rules cap their own lists before this tool sees them, so the pages listed are never the complete affected set. Use list_entities with a problem filter for the full set of affected entities.",
+    },
     findings: findings.slice(0, ENTITY_MCP_LIMITS.findings),
     passed,
     skipped,
@@ -654,9 +695,30 @@ function buildFinding(
   check: { status: string; message: string; items?: unknown; pages?: string[] }
 ): EntityMcpFinding {
   const items = Array.isArray(check.items)
-    ? (check.items as Array<{ id?: string; sourcePages?: string[] }>)
+    ? (check.items as Array<{
+        id?: string;
+        sourcePages?: string[];
+        meta?: { key?: unknown };
+      }>)
     : [];
-  const keys = items.map((item) => item.id ?? "").filter((id) => id.length > 0);
+  // `meta.key` FIRST, because an item id is not always an entity key. A
+  // conflict item is id'd `"<key> <property>"` so that two conflicts on one
+  // entity stay two rows, and handing that composite to `get_entity` finds
+  // nothing — the agent is told which entity is broken in a form it cannot use
+  // to look the entity up. The rules that carry a real key put it in `meta`.
+  const keys = [
+    ...new Set(
+      items
+        .map((item) =>
+          typeof item.meta?.key === "string" && item.meta.key.length > 0
+            ? item.meta.key
+            : (item.id ?? "")
+        )
+        .filter((key) => key.length > 0)
+    ),
+    // Deduped: two conflicts on one entity are two items but one entity, and
+    // repeating the key would make `more` count rows rather than entities.
+  ];
   const pages = [
     ...new Set([
       ...(check.pages ?? []),
