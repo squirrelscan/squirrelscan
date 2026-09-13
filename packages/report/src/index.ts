@@ -194,6 +194,19 @@ export {
   typeCounts,
 } from "./entities";
 export {
+  ENTITY_DIFF_PAGE_LIMIT,
+  ENTITY_DIFF_ROW_LIMIT,
+  entityDiffIsEmpty,
+  renderEntityDiffMarkdown,
+} from "./entities-diff";
+export {
+  MERMAID_NODE_CAP,
+  renderEntitiesCsv,
+  renderEntitiesDot,
+  renderEntitiesGraphml,
+  renderEntitiesMermaid,
+} from "./entities-export";
+export {
   ENTITY_GRAPH_NODE_CAP,
   ENTITY_VIEWER_STYLES,
   escapeEntityJsonForScript,
@@ -204,6 +217,7 @@ export {
 export type {
   EntityMap,
   EntityMapConflict,
+  EntityMapDiff,
   EntityMapEdge,
   EntityMapNode,
   EntityMapSummary,

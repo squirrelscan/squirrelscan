@@ -14,6 +14,7 @@ export type {
   DomainStatsPositions,
   EntityMap,
   EntityMapConflict,
+  EntityMapDiff,
   EntityMapEdge,
   EntityMapNode,
   EntityMapSummary,

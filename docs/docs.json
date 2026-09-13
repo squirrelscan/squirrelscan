@@ -621,6 +621,7 @@
               "cli/crawl",
               "cli/analyze",
               "cli/report",
+              "cli/entities",
               "cli/init",
               "cli/config",
               "cli/feedback",

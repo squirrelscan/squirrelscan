@@ -307,8 +307,10 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
 
 /**
  * Get all project storage paths
+ *
+ * Exported for `controllers/entities.ts` (#2092), which walks the same set.
  */
-function getProjectStoragePaths(): string[] {
+export function getProjectStoragePaths(): string[] {
   const projectsDir = getProjectsPath();
   if (!existsSync(projectsDir)) return [];
 

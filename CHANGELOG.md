@@ -17,6 +17,20 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `squirrel entities` queries the entity map every audit now builds: a summary of
+  what your site declares, a lookup by `@id`, key or name, and `--list` over
+  stored audits. `--type`, `--page` and `--problem` narrow the result in every
+  output format, not just on screen.
+- Export the graph as `csv`, `dot`, `graphml` or `mermaid`, alongside the
+  existing `json`, `jsonld`, `html` and `markdown`.
+- `squirrel entities --diff` compares two audits of a site and reports entities
+  added and removed, `@id` changes, and new and resolved conflicts and dangling
+  references. An entity is only called removed when every page that declared it
+  was crawled again; anything else is reported as not crawled, so a smaller
+  crawl never reads as a site that deleted its structured data.
+
 ## v0.0.95
 
 Two fixes for scores that moved when nothing on the site had, one for local audits

@@ -1,0 +1,156 @@
+---
+title: "entities"
+icon: "share-nodes"
+description: "Query the entity map of a stored audit"
+---
+
+Every audit builds an **entity map**: the JSON-LD your pages declare, collapsed across the whole site into one graph. Two pages that both describe the same `Organization` become one entity with two declaring pages, and a `publisher` reference that points at an `@id` nothing declares becomes a dangling edge.
+
+The `entities` command queries that map without re-crawling anything.
+
+## Usage
+
+```bash
+squirrel entities [query] [options]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `query` | An entity `@id`, key or name (optional, defaults to a summary) |
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--list` | `-l` | List stored audits and their entity counts | `false` |
+| `--crawl` | | Crawl ID (or 8-character prefix) to read | latest |
+| `--type` | | Only entities of these `@type` values (repeatable or comma-separated) | all |
+| `--page` | | Only entities declared on pages matching this URL or prefix (repeatable) | all |
+| `--problem` | | Only entities with these problems: `no-id`, `conflict`, `dangling`, `single-page`, `split-identity` | all |
+| `--format` | `-f` | Output format: `json`, `jsonld`, `html`, `markdown`, `csv`, `dot`, `graphml`, `mermaid` | console, or markdown when piped |
+| `--output` | `-o` | Write to a file instead of stdout | - |
+| `--input` | `-i` | Read an exported entity map JSON instead of the store | - |
+| `--diff` | | Compare two audits: the previous and latest by default | `false` |
+
+## Summary
+
+With no arguments, you get the ten most-declared entities and anything worth fixing.
+
+```bash
+squirrel entities
+```
+
+```text
+ENTITY MAP
+https://docs.squirrelscan.com/ · 4f2ab91c · 13/09/2026, 00:23
+
+183 entities, 489 references, 100% with a stable @id, across 60 pages
+
+squirrelscan (WebSite) 60x on 60 page(s) https://docs.squirrelscan.com/#website
+Introduction (WebPage) 1x on 1 page(s) https://docs.squirrelscan.com/
+```
+
+## One entity
+
+Pass an `@id`, a key or a name. Names match loosely and case-insensitively, so `squirrel entities acme` finds `Acme Widgets Ltd`.
+
+```bash
+squirrel entities "https://example.com/#organization"
+squirrel entities acme
+```
+
+The lookup prints the entity's properties, every page that declares it, its outgoing references, and any property whose value disagrees between pages.
+
+## Filters
+
+`--type`, `--page` and `--problem` apply to **every** output format, not just the console view. `-f graphml --type Organization` hands your graph tool the filtered graph, and the summary counts describe what survived the filter rather than the whole site.
+
+```bash
+squirrel entities --type Organization,Person
+squirrel entities --page /blog/ -f csv
+squirrel entities --problem no-id --problem conflict
+```
+
+### Problems
+
+| Value | What it selects |
+|-------|-----------------|
+| `no-id` | Declared on several pages with no `@id` to reconcile them by |
+| `conflict` | A property whose value disagrees between pages |
+| `dangling` | References an `@id` that nothing on the site declares |
+| `single-page` | Declared on exactly one page |
+| `split-identity` | One thing declared under two or more identities |
+
+<Note>
+A one-page entity with no `@id` is ordinary, not a problem, so `no-id` does not select it. Search engines only need something to reconcile by when there is more than one declaration.
+</Note>
+
+## Export formats
+
+| Format | Use it for |
+|--------|-----------|
+| `json` | The canonical document, including every page |
+| `jsonld` | A `@graph` you can paste into a validator |
+| `html` | An interactive, self-contained graph you can open in a browser |
+| `markdown` | A table for a pull request or an agent |
+| `csv` | Two tables, entities and references, for a spreadsheet |
+| `dot` | Graphviz |
+| `graphml` | Gephi, yEd, Cytoscape |
+| `mermaid` | A diagram inside a Markdown file |
+
+```bash
+squirrel entities -f graphml -o entities.graphml
+squirrel entities -f dot | dot -Tsvg > entities.svg
+```
+
+<Note>
+Mermaid stops rendering usefully past a few hundred nodes, so `-f mermaid` draws the 150 most-declared entities and says so in a comment. Use `-f dot` or `-f graphml` for the whole graph.
+</Note>
+
+## Comparing two audits
+
+`--diff` reports what changed between two audits of the same site: entities added and removed, entities that gained or lost an `@id`, new and resolved conflicts, and new and resolved dangling references.
+
+```bash
+squirrel entities --diff
+squirrel entities --diff --crawl 4f2ab91c --crawl 9c1de77a
+squirrel entities --diff --input before.json --input new.json
+squirrel entities --diff -f json
+```
+
+With no arguments it compares the latest audit against the previous audit **of the same site**. One `--crawl` names the newer side and the previous audit of that site becomes the older one. Two name both sides. `--input` takes exactly two files when used with `--diff`, and it is repeat-only, because a path can contain a comma.
+
+`--diff` accepts `-f markdown` (the default) or `-f json`.
+
+### Not crawled again
+
+Two audits of a site rarely cover the same pages. A smaller crawl, a changed page cap or a section that started returning 404 all shrink the page set, and a naive comparison reports every entity on a page that simply was not visited as removed.
+
+So an entity is only **removed** when every page that declared it was crawled again. Everything else is reported separately as **not crawled again**, and the diff lists the pages each audit saw that the other did not.
+
+The same rule governs fixes. A conflict or a dangling reference counts as resolved only when the entity survived and all of its declaring pages were visited again, because a conflict needs two declarations to exist and seeing one of them tells you nothing.
+
+<Note>
+`--problem` cannot be combined with `--diff`. A problem is exactly what changes between two audits, so filtering both sides by one would report an entity that gained an `@id` as removed.
+</Note>
+
+## Listing stored maps
+
+```bash
+squirrel entities --list
+```
+
+```text
+Entity maps:
+==============================================================================================
+ID         Date                  Pages   Entities  Stable @id  Conflicts  Site
+----------------------------------------------------------------------------------------------
+4f2ab91c   13/09/2026, 00:23     60      183       100%        0          https://docs.squirrelscan.com/
+9c1de77a   12/09/2026, 23:04     60      0         0%          0          https://docs.squirrelscan.com/
+```
+
+## Exit codes
+
+`entities` exits 0 on every path that produced an answer, including a site that declares no JSON-LD at all. That is a finding, not a failure. Only a usage mistake or an unreadable store exits 1.

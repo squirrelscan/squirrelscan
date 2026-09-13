@@ -19,6 +19,7 @@
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
+        "@sinclair/typebox": "^0.34.49",
         "@squirrelscan/api-client": "workspace:*",
         "@squirrelscan/audit-engine": "workspace:*",
         "@squirrelscan/cloud-client": "workspace:*",

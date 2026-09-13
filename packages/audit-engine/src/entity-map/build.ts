@@ -644,7 +644,10 @@ function assemble(
     if (candidate.kind === "soft" && !declared) continue;
     if (candidate.source === candidate.target) continue;
 
-    const dedupeKey = `${candidate.source} ${candidate.predicate} ${candidate.target}`;
+    // JSON.stringify of the parts, not a delimiter join: source, predicate
+    // and target are all site-controlled strings, so any separator can appear
+    // inside one and make two different edges share a key.
+    const dedupeKey = JSON.stringify([candidate.source, candidate.predicate, candidate.target]);
     let edge = edges.get(dedupeKey);
     if (!edge) {
       edge = {

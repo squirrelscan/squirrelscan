@@ -7,7 +7,9 @@
     "./editor-summary": "./src/editor-summary.ts",
     "./domain-stats": "./src/domain-stats.ts",
     "./entities": "./src/entities.ts",
-    "./entities-viewer": "./src/entities-viewer.ts"
+    "./entities-viewer": "./src/entities-viewer.ts",
+    "./entities-diff": "./src/entities-diff.ts",
+    "./entities-export": "./src/entities-export.ts"
   },
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",

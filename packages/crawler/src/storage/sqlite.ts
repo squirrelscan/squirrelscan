@@ -1693,6 +1693,44 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Just the normalized URLs this crawl visited (#2092).
+   *
+   * One indexed column, no `parsed_data` and no HTML: `getPageLinkRows` exists
+   * because `getPages` materializes ~1 MB per page to read two fields, and this
+   * is the same argument one step further for a caller that needs only the set
+   * of URLs.
+   *
+   * The entity-map diff needs exactly this. Its "was this page crawled again?"
+   * test cannot use the entity tables, because a page the newer crawl DID visit
+   * and which now declares nothing has no row there — and treating that as
+   * "not crawled" would hide the single most important thing a diff can report,
+   * a site that dropped its structured data.
+   *
+   * Matches the collector's page universe exactly, and must keep matching it:
+   * 2xx only, keyed by the FINAL url. A redirect is one page under its
+   * destination, so returning the requested url instead would put a page in
+   * this set that no entity row can ever name, and a 404's markup is not part
+   * of the site's graph at all.
+   */
+  getCrawlPageUrls(crawlId: string): Effect.Effect<string[], StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const rows = db
+          .prepare(
+            `SELECT DISTINCT COALESCE(NULLIF(final_url, ''), url) AS page_url
+               FROM pages
+              WHERE crawl_id = ? AND status >= 200 AND status < 300
+              ORDER BY page_url ASC`
+          )
+          .all(crawlId) as Array<{ page_url: string }>;
+        return rows.map((row) => row.page_url);
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
   getPageCount(crawlId: string): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {

@@ -54,6 +54,7 @@ const main = defineCommand({
     crawl: () => import("./commands/crawl").then((m) => m.crawl),
     credits: () => import("./commands/credits").then((m) => m.credits),
     analyze: () => import("./commands/analyze").then((m) => m.analyze),
+    entities: () => import("./commands/entities").then((m) => m.entities),
     init: () => import("./commands/init").then((m) => m.init),
     config: () => import("./commands/config").then((m) => m.config),
     report: () => import("./commands/report").then((m) => m.report),
