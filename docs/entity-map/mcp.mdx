@@ -1,0 +1,130 @@
+---
+title: "The entity map for agents"
+description: "Five MCP tools that let an agent ask what a site declares, find what is wrong with it, fix it, and prove the fix landed."
+---
+
+## The loop
+
+Structured data identity is unusually well suited to an agent, because the whole task is a loop with a verifiable end:
+
+1. **Find the problem.** `list_entities` with `problem: "no-id"` returns the entities a site declares on several pages with nothing to tie them together.
+2. **Fix it.** Give each one an absolute `@id` and reference it everywhere else. [Fixing structured data identity](/entity-map/fixing) has the change for each generator.
+3. **Re-audit.** `run_audit`, or `squirrel audit` locally.
+4. **Prove it landed.** `compare_entities` and check that `gainedId` contains the keys you fixed.
+
+Step 4 is the one that matters and the one that is easy to get wrong by hand. An entity that gains an `@id` **changes key**, because the key IS the `@id` when there is one. A naive comparison reports that as one removal plus one addition, which looks like damage. `gainedId` is the field that says a fix landed.
+
+<Note>
+Every tool description states this loop, so an agent that calls one of the five learns the other four exist and in what order.
+</Note>
+
+## The five tools
+
+Available on both the local `squirrel mcp` server, reading your project store, and the [hosted server](/developers/mcp), reading the API. Same names, same inputs, same outputs. On the local server all five are free and need no account.
+
+### list_entities
+
+The entities a site declares, collapsed across every crawled page into one graph, so the same Organization on 60 pages is one row rather than 60.
+
+| Input | Meaning |
+|---|---|
+| `run_id` | A specific audit. Defaults to the latest with an entity map. |
+| `type` | Only these `@type` values. |
+| `page` | Only entities declared on pages matching this URL or prefix. |
+| `problem` | `no-id`, `conflict`, `dangling`, `single-page` or `split-identity`. |
+| `q` | Only entities whose name or `@id` contains this text. |
+| `include_page_local` | Include a page's own `WebPage`, `BreadcrumbList` and unnamed images. False by default. |
+| `limit`, `offset` | Paging. Default 25, maximum 100. |
+
+Returns a summary, a page of nodes, and `total` and `hasMore`. Those last two matter: they are how you tell a page from the whole list before describing a site from 25 of its entities.
+
+Page-local entities are hidden by default because they usually outnumber everything else. On squirrelscan.com they are 233 of 363 entities.
+
+### get_entity
+
+One entity in full, by key, `@id` or name: every property, the pages that declare it, the properties whose values disagree between those pages, and the references in and out.
+
+Use it after `list_entities` to see **why** an entity was flagged before deciding what to change. Edges and declaring pages are capped, and `truncation` says when.
+
+### get_entity_graph
+
+The whole graph, or a filtered part of it, in one of six formats.
+
+| Format | For |
+|---|---|
+| `json` | The canonical document. Complete. |
+| `jsonld` | A `@graph` you can paste into a validator. Complete. |
+| `mermaid` | A diagram in a conversation. Capped at 150 nodes. |
+| `dot` | Graphviz. Complete. |
+| `graphml` | Gephi, yEd, Cytoscape. Complete. |
+| `markdown` | A table to read. Capped at 50 rows. |
+
+Takes the same filters as `list_entities`. `mermaid` and `markdown` exist to fit a context window and say so in `truncation` when they cut; the other four are complete.
+
+### compare_entities
+
+The change set between two audits: entities added and removed, entities that gained or lost an `@id`, occurrence changes, new and resolved conflicts and dangling references, summary deltas, and the pages each audit saw that the other did not.
+
+Defaults to the previous audit versus the latest, **of the same site**.
+
+<Note>
+An entity is only reported as `removed` when every page that declared it was crawled again. Anything unproven is reported separately as `notCrawled`, so a smaller crawl never reads as a site that deleted its structured data. If you are checking whether a fix landed, `notCrawled` is the field that tells you the audit did not cover the evidence.
+</Note>
+
+The default declines when the older audit stored no entities at all, because zero entities cannot be distinguished from an audit that predates the entity map, and guessing would report a site's entire graph as brand new. Name both runs when you know which it was.
+
+### get_entity_findings
+
+The `schema/entity-*` rule verdicts for an audit: what is wrong with the entity graph, which entity keys and pages each finding affects, and the fix text for each.
+
+Use it instead of re-deriving the problems from the graph. Each finding names one problem across the whole site rather than one per entity, so a count of 1 can still mean hundreds of pages.
+
+## A worked example
+
+Finding and fixing a split identity, which is the most common expensive one.
+
+```
+list_entities { "problem": "split-identity" }
+```
+
+```json
+{
+  "site": "https://example.com/",
+  "runId": "4f2ab91c…",
+  "entities": [
+    { "key": "id:https://example.com/#organization", "name": "Example Ltd",
+      "types": ["Organization"], "pageCount": 39 },
+    { "key": "id:http://data.wordlift.io/wl1/entity/example-ltd", "name": "Example Ltd",
+      "types": ["Organization"], "pageCount": 36 }
+  ],
+  "total": 2,
+  "hasMore": false
+}
+```
+
+Two declarations of one company, from two plugins. The page counts say which the site actually uses. Look at the one you plan to keep:
+
+```
+get_entity { "key": "https://example.com/#organization" }
+```
+
+Then remove the second declaration or reduce it to a `sameAs`, re-audit, and confirm:
+
+```
+compare_entities {}
+```
+
+A successful fix shows the removed declaration under `removed` and nothing under `notCrawled`. If the entity you kept also gained an `@id` in the same change, it appears under `gainedId` rather than as an add and a remove.
+
+## What the tools will not do
+
+They read. None of the five changes a site, runs an audit or spends credits. `run_audit` is the tool that re-audits, and on the local server `squirrel audit` does it.
+
+They also will not tell you a site is clean when they have not looked. A tool that cannot find an entity map says so rather than returning an empty graph, because a site with no structured data and an audit that stored no map produce the same empty answer and only one of them is worth acting on.
+
+## References
+
+- [The entity map](/entity-map): what it is and how to read it
+- [Fixing structured data identity](/entity-map/fixing): the change to make in each generator
+- [`squirrel entities`](/cli/entities): the same queries from the command line
+- [MCP server guide](/developers/mcp): connecting an agent

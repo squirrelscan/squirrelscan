@@ -630,7 +630,8 @@
             "group": "Entity map",
             "pages": [
               "entity-map/index",
-              "entity-map/fixing"
+              "entity-map/fixing",
+              "entity-map/mcp"
             ]
           },
           {
