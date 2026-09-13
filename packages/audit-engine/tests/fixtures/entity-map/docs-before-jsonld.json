@@ -1,0 +1,380 @@
+{
+  "format": "squirrelscan/entity-map",
+  "version": 1,
+  "site": "https://docs.squirrelscan.com/",
+  "generatedAt": "2026-09-12T23:04:43.024Z",
+  "summary": {
+    "nodeCount": 0,
+    "edgeCount": 0,
+    "danglingCount": 0,
+    "pagesTotal": 60,
+    "pagesWithoutEntities": 60,
+    "nodesWithStableId": 0,
+    "stableIdShare": 0,
+    "countsByType": {}
+  },
+  "nodes": [],
+  "edges": [],
+  "pages": [
+    {
+      "url": "https://docs.squirrelscan.com/",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/agent-setup",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/api",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/analyze",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/audit",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/auth",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/config",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/crawl",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/feedback",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/init",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/report",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cloud",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cloud/webhooks",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/configuration",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/crawl",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/dashboard",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/agents",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/authentication",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/mcp",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/mcp-clients",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/badges",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/browser-rendering",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/ci",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/cloud-audits",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/failed-audits",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/local-audits-cli",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/rate-limited-hosts",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/web-bot-auth",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/projects",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/quickstart",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/reports",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/a11y",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/adblock",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/agents",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/analytics",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/ax",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/content",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/core",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/crawl",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/eeat",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/gaps",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/i18n",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/images",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/integrity",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/legal",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/links",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/local",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/mobile",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/perf",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/performance",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/schema",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/security",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/seo",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/social",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/url",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/video",
+      "declares": [],
+      "references": [],
+      "entityCount": 0
+    }
+  ]
+}

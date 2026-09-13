@@ -64,8 +64,12 @@ function script(shell: Shell): string {
 
 // The next top-level case arm, which ends each command's bash block (the
 // blocks contain nested `;;` from their prev-value cases).
+//
+// These track the ORDER of the arms in `completion.ts`, so inserting a command
+// between two of them makes the earlier one over-read into it and fail with a
+// flag it never offered. Move the entry, do not widen it.
 const BASH_BLOCK_END: Record<string, string> = {
-  audit: "crawl)",
+  audit: "entities)",
   report: "feedback)",
   credits: "analyze)",
 };

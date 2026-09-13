@@ -321,6 +321,133 @@ export const EntityMapSchema = Type.Object({
 
 export type EntityMap = Static<typeof EntityMapSchema>;
 
+// ── Diff (#2092, epic section 9) ───────────────────────────────────
+
+/** Discriminator written into every entity-map diff document. */
+export const ENTITY_MAP_DIFF_FORMAT = "squirrelscan/entity-map-diff";
+
+/** Diff schema version. Versioned like the map itself. */
+export const ENTITY_MAP_DIFF_VERSION = 1;
+
+/** An entity named in a change list. Enough to identify it without the map. */
+export const EntityMapDiffNodeSchema = Type.Object({
+  key: Type.String(),
+  id: Type.Union([Type.String(), Type.Null()]),
+  types: Type.Array(Type.String()),
+  name: Type.Union([Type.String(), Type.Null()]),
+  occurrences: Type.Integer({ minimum: 0 }),
+});
+
+export type EntityMapDiffNode = Static<typeof EntityMapDiffNodeSchema>;
+
+/**
+ * An entity that gained or lost a stable `@id`.
+ *
+ * Its key changes when that happens, so the two sides are matched on the sorted
+ * type set plus the normalised name instead. `before` and `after` are the keys
+ * on each side, which is what a reader needs to find it in either map.
+ */
+export const EntityMapDiffIdChangeSchema = Type.Object({
+  beforeKey: Type.String(),
+  afterKey: Type.String(),
+  types: Type.Array(Type.String()),
+  name: Type.Union([Type.String(), Type.Null()]),
+  id: Type.Union([Type.String(), Type.Null()]),
+});
+
+export type EntityMapDiffIdChange = Static<typeof EntityMapDiffIdChangeSchema>;
+
+/** How often an entity was declared, before and after. */
+export const EntityMapDiffOccurrenceSchema = Type.Object({
+  key: Type.String(),
+  name: Type.Union([Type.String(), Type.Null()]),
+  types: Type.Array(Type.String()),
+  before: Type.Integer({ minimum: 0 }),
+  after: Type.Integer({ minimum: 0 }),
+  delta: Type.Integer(),
+});
+
+export type EntityMapDiffOccurrence = Static<typeof EntityMapDiffOccurrenceSchema>;
+
+/** A conflicting property that appeared or went away. */
+export const EntityMapDiffConflictSchema = Type.Object({
+  key: Type.String(),
+  name: Type.Union([Type.String(), Type.Null()]),
+  property: Type.String(),
+});
+
+export type EntityMapDiffConflict = Static<typeof EntityMapDiffConflictSchema>;
+
+/** A dangling reference that appeared or went away. */
+export const EntityMapDiffDanglingSchema = Type.Object({
+  source: Type.String(),
+  predicate: Type.String(),
+  target: Type.String(),
+});
+
+export type EntityMapDiffDangling = Static<typeof EntityMapDiffDanglingSchema>;
+
+/** One summary metric, before and after. */
+export const EntityMapDiffMetricSchema = Type.Object({
+  before: Type.Number(),
+  after: Type.Number(),
+  delta: Type.Number(),
+});
+
+export type EntityMapDiffMetric = Static<typeof EntityMapDiffMetricSchema>;
+
+/** What one side of the comparison was. */
+export const EntityMapDiffSideSchema = Type.Object({
+  site: Type.String(),
+  generatedAt: Type.String(),
+  nodeCount: Type.Integer({ minimum: 0 }),
+  pagesTotal: Type.Integer({ minimum: 0 }),
+});
+
+export type EntityMapDiffSide = Static<typeof EntityMapDiffSideSchema>;
+
+/**
+ * The change set between two entity maps.
+ *
+ * The distinction that makes this trustworthy is `notCrawled`: an entity whose
+ * declaring pages were not all visited again is NOT reported as removed. A
+ * smaller crawl would otherwise read as the site having deleted its markup,
+ * which is the single most misleading thing a diff like this can say.
+ *
+ * Deterministic: every list is sorted, and `generatedAt` is the only field that
+ * changes between two runs over the same pair of maps.
+ */
+export const EntityMapDiffSchema = Type.Object({
+  format: Type.Literal(ENTITY_MAP_DIFF_FORMAT),
+  version: Type.Literal(ENTITY_MAP_DIFF_VERSION),
+  generatedAt: Type.String(),
+  older: EntityMapDiffSideSchema,
+  newer: EntityMapDiffSideSchema,
+  /** Entities the newer map declares and the older one did not. */
+  added: Type.Array(EntityMapDiffNodeSchema),
+  /** Gone, and every page that declared them WAS crawled again. */
+  removed: Type.Array(EntityMapDiffNodeSchema),
+  /** Gone, but at least one declaring page was not crawled again. */
+  notCrawled: Type.Array(EntityMapDiffNodeSchema),
+  gainedId: Type.Array(EntityMapDiffIdChangeSchema),
+  lostId: Type.Array(EntityMapDiffIdChangeSchema),
+  occurrenceDeltas: Type.Array(EntityMapDiffOccurrenceSchema),
+  newConflicts: Type.Array(EntityMapDiffConflictSchema),
+  resolvedConflicts: Type.Array(EntityMapDiffConflictSchema),
+  newDangling: Type.Array(EntityMapDiffDanglingSchema),
+  resolvedDangling: Type.Array(EntityMapDiffDanglingSchema),
+  /** Every summary metric, before and after. */
+  summaryDelta: Type.Record(Type.String(), EntityMapDiffMetricSchema),
+  /** Pages the older map saw and the newer one did not, and the reverse. */
+  pagesOnlyInOlder: Type.Array(Type.String()),
+  pagesOnlyInNewer: Type.Array(Type.String()),
+});
+
+export type EntityMapDiff = Static<typeof EntityMapDiffSchema>;
+
+/** Page URLs listed per side before a diff says "and N more". */
+export const ENTITY_MAP_DIFF_PAGES_CAP = 25;
+
 // ── JSON-LD export ─────────────────────────────────────────────────
 
 /**

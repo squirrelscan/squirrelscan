@@ -2,11 +2,15 @@ import { FEEDBACK_CATEGORIES } from "@squirrelscan/utils/constants";
 
 import type { Result } from "@/controllers/types";
 
+import { ENTITY_FORMATS } from "@/cli/commands/entities";
 import { OUTPUT_FORMATS } from "@/constants";
 import { ok, err, commandError } from "@/controllers/types";
+import { ENTITY_PROBLEMS } from "@/entities/filters";
 import { RULE_CATEGORY_VALUES } from "@/rules/categories";
 
 const categoryValues = RULE_CATEGORY_VALUES.join(" ");
+const entityFormatValues = ENTITY_FORMATS.join(" ");
+const entityProblemValues = ENTITY_PROBLEMS.join(" ");
 const formatValues = OUTPUT_FORMATS.join(" ");
 const feedbackCategoryValues = FEEDBACK_CATEGORIES.join(" ");
 
@@ -42,7 +46,7 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="audit auth crawl credits analyze init config report feedback keys mcp self skills"
+  local commands="audit auth crawl credits analyze entities init config report feedback keys mcp self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
@@ -188,6 +192,10 @@ _squirrel_completions() {
           ;;
       esac
       COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --fail-on --header -H --rule-include --rule-exclude --summary --help" -- "\${cur}") )
+      return 0
+      ;;
+    entities)
+      COMPREPLY=( $(compgen -W "--list -l --crawl --type --page --problem --format -f --output -o --input -i --diff --help" -- "\${cur}") )
       return 0
       ;;
     crawl)
@@ -467,6 +475,19 @@ _squirrel() {
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--summary[Print score, category breakdown, and issue counts only]'
           ;;
+        entities)
+          _arguments \\
+            '1:entity:' \\
+            '(-l --list)'{-l,--list}'[List stored audits and their entity counts]' \\
+            '--crawl[Crawl ID to read]:id' \\
+            '*--type[Only entities of these @types]:type' \\
+            '*--page[Only entities declared on pages matching this URL or prefix]:page' \\
+            '*--problem[Only entities with these problems]:problem:(${entityProblemValues})' \\
+            '(-f --format)'{-f,--format}'[Output format]:format:(${entityFormatValues})' \\
+            '(-o --output)'{-o,--output}'[Write to a file instead of stdout]:file:_files' \\
+            '*'{-i,--input}'[Read an exported entity map JSON]:file:_files' \\
+            '--diff[Compare two audits]'
+          ;;
         crawl)
           _arguments \\
             '1:url:_urls' \\
@@ -662,6 +683,17 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "C
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l summary -d "Print score, category breakdown, and issue counts only"
+
+# Entities options
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -s l -l list -d "List stored audits and their entity counts"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -l crawl -d "Crawl ID to read"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -l type -d "Only entities of these @types"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -l page -d "Only entities declared on pages matching this URL or prefix"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -l problem -x -a "${entityProblemValues}" -d "Only entities with these problems"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -s f -l format -x -a "${entityFormatValues}" -d "Output format"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -s o -l output -d "Write to a file instead of stdout"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -s i -l input -d "Read an exported entity map JSON"
+complete -c squirrel -n "__fish_seen_subcommand_from entities" -l diff -d "Compare two audits"
 
 # Credits options
 complete -c squirrel -n "__fish_seen_subcommand_from credits" -l json -d "Output as JSON"
