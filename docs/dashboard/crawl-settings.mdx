@@ -51,7 +51,6 @@ What sitemap scope does **not** change:
 - robots.txt is still fetched and parsed, and still enforced if you have asked for that below
 - your sitemap is still fetched and parsed, which is how the URLs are found in the first place
 - the start URL is queued even when your sitemap does not list it
-- pages carrying findings still open from your last audit are queued too, so a fix can be confirmed, whether or not your sitemap lists them
 - include and exclude patterns still apply, so an excluded sitemap URL is still skipped
 - assets on the pages being audited are still fetched, so rules about images, scripts and stylesheets still work
 
@@ -60,9 +59,19 @@ Queued is not the same as crawled: the start URL goes through your patterns and 
 If your sitemap turns out to have no crawlable URLs, because it is empty, unreachable, or everything in it is excluded, the crawl follows links rather than auditing nothing. Either way the run's event log says which happened:
 
 ```
-Crawl scope: sitemap only. 5322 sitemap URLs seeded, 2000 pages audited.
+Crawl scope: sitemap only. 5322 sitemap URLs seeded, 2000 pages audited. Cached pages were not reused, because reusing one re-discovers its links.
 Crawl scope: sitemap only, but the sitemap yielded no crawlable URLs, so links were followed instead. 412 pages audited.
 ```
+
+The last sentence appears only when the audit would otherwise have reused cached pages, so a first audit of a site does not carry it.
+
+### What sitemap scope gives up
+
+Two things a normal audit does are turned off, because each is a way a URL reaches the crawl behind the setting that is supposed to be keeping it out.
+
+**Pages carrying findings from your last audit are not re-queued.** A normal audit puts them back in the queue so a fix can be confirmed, ahead of everything else. Under sitemap scope that would spend your page limit on pages the sitemap does not list, before reaching the ones it does. A page that is in your sitemap is still audited, so a fix on it is still confirmed.
+
+**Cached pages are not reused.** Reusing a page from your last audit means re-reading the links on it, and there is no way to take the page without following them. So a sitemap-scoped audit fetches every page fresh. It is slower and costs more than the same audit with links followed, and the run's event log says so rather than leaving you to find it on the bill.
 
 ## Include and exclude patterns
 
@@ -132,6 +141,8 @@ Setting a header that only your origin knows about is you telling us this crawle
 While a crawl is authorised, the **Respect robots.txt** toggle is shown disabled. Your saved preference is kept and applies again if authorisation goes away.
 
 Authorisation is decided from the headers the audit will actually send, and headers are a Pro plan feature. If your plan stops permitting them the headers are not sent, so the crawl is not authorised and returns to polite pacing on its own.
+
+An authorised crawl never reuses pages from your last audit either, for a different reason: the requests carry your header, and an authenticated response must not be stored where another audit could read it.
 
 An authorised crawl is not unlimited. It still backs off per host when your server answers `429`, or answers `503` with a `Retry-After`, and it waits as long as that header asks for. A bare `503` with no `Retry-After` reads as an outage rather than a request to slow down. A site that pushes back is still crawled at the rate it will accept.
 
