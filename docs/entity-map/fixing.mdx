@@ -1,0 +1,192 @@
+---
+title: "Fixing structured data identity"
+description: "Every schema/entity-* finding, what causes it, and the exact change to make in Yoast, Rank Math, WordLift, Next.js, Astro and tangly."
+---
+
+## The one idea
+
+Almost every finding in this category comes back to the same thing: your site declares entities and does not say which declarations are the same entity.
+
+Structured data is a graph. A graph needs identifiers. An `@id` is that identifier. It is an arbitrary string that happens to look like a URL, it does not have to resolve to anything, and it only has to be **absolute** and **identical everywhere**.
+
+```json
+{
+  "@type": "Organization",
+  "@id": "https://example.com/#organization",
+  "name": "Example Ltd"
+}
+```
+
+With that in place, every other page can refer to the organization instead of redeclaring it:
+
+```json
+{ "@type": "Article", "publisher": { "@id": "https://example.com/#organization" } }
+```
+
+Two rules of thumb carry most of the value:
+
+1. **Declare once per page, reference everywhere else.** The full block can appear in each page's `@graph`, which is what Yoast does. What must not happen is the same entity appearing twice with no identifier.
+2. **Absolute `@id`, always.** A bare `#organization` resolves against the page it sits on, so forty pages means forty identifiers.
+
+## The shape that works
+
+One script, one `@graph`, everything referenced by `@id`:
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://example.com/about#webpage",
+      "url": "https://example.com/about",
+      "name": "About",
+      "isPartOf": { "@id": "https://example.com/#website" },
+      "about": { "@id": "https://example.com/#organization" }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://example.com/#website",
+      "url": "https://example.com/",
+      "name": "Example",
+      "publisher": { "@id": "https://example.com/#organization" }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://example.com/#organization",
+      "name": "Example Ltd",
+      "url": "https://example.com/",
+      "logo": "https://example.com/logo.png",
+      "sameAs": [
+        "https://www.linkedin.com/company/example",
+        "https://x.com/example"
+      ]
+    }
+  ]
+}
+</script>
+```
+
+Three nodes, three identifiers, two references. Repeat this on every page, changing only the `WebPage` node. Nothing in it can drift, because the organization is declared in one place per page and its identifier never changes.
+
+## Finding by finding
+
+| Finding | What it means | The change |
+|---|---|---|
+| [entity-identity](/rules/schema/entity-identity) | The same organization, person or website on many pages with no `@id` | Add one absolute `@id`, identical on every page |
+| [entity-split-identity](/rules/schema/entity-split-identity) | One entity under two different `@id`s, usually two plugins | Pick one, make the other a `sameAs` or remove it |
+| [entity-conflicts](/rules/schema/entity-conflicts) | The same entity with two logos, names or phone numbers | Converge on one value, then reference instead of repeating |
+| [entity-dangling](/rules/schema/entity-dangling) | A reference to an `@id` nothing declares | Declare the target in the `@graph` of every page that references it |
+| [entity-id-format](/rules/schema/entity-id-format) | An `@id` that is not an absolute URL | Write the scheme and host out in full |
+| [entity-type-drift](/rules/schema/entity-type-drift) | One `@id` with different `@type` sets on different pages | Emit the same type array everywhere |
+| [entity-authors](/rules/schema/entity-authors) | A byline with no `Person`, or a `Person` with no identifiers | Declare the author with `@id`, `url` and `sameAs` |
+| [entity-publisher-mismatch](/rules/schema/entity-publisher-mismatch) | Pages that name different publishers | One publisher, referenced by `@id` |
+| [entity-website-missing](/rules/schema/entity-website-missing) | No `WebSite` node, or no `isPartOf` links to it | Declare it once, reference it from every page |
+| [entity-organization-missing](/rules/schema/entity-organization-missing) | A business with no organization entity | Declare it once with `sameAs` |
+| [entity-sameas-missing](/rules/schema/entity-sameas-missing) | An organization with no `sameAs` profiles | List every profile you control |
+| [entity-local-business-per-page](/rules/schema/entity-local-business-per-page) | The whole business block on every page | Declare once, reference elsewhere |
+| [entity-orphan](/rules/schema/entity-orphan) | An `@id` nothing points at, on one page | Reference it, or drop the `@id` |
+
+## By generator
+
+### Yoast SEO
+
+Yoast already emits the right shape: one `@graph` per page, stable absolute `@id`s, everything referenced. Most findings on a Yoast site come from something else on the page competing with it.
+
+- **Split identity** is the common one, and it is nearly always a second plugin. Turn schema output off in the other plugin rather than trying to reconcile them.
+- **Organization details** live under Yoast SEO, Settings, Site representation. Set the organization name, logo and social profiles there; the social profiles become `sameAs`.
+- A **hand-written block** added to the theme header years ago will fight Yoast. Search the theme for `application/ld+json` before blaming the plugin.
+
+### Rank Math
+
+Same shape, same advice. Schema settings are under Rank Math, Titles and Meta, and the organization under Rank Math, General Settings, Local SEO if you use it.
+
+Rank Math's Local SEO module emits the `LocalBusiness` on every page by default. If you see [entity-local-business-per-page](/rules/schema/entity-local-business-per-page), that switch is what to look for.
+
+### WordLift
+
+WordLift identifies entities under `data.wordlift.io` URLs, which is a legitimate identifier scheme. Running it alongside Yoast produces exactly the two-organization split this category reports.
+
+Pick one to own the organization. If you keep WordLift, either disable Yoast's schema output or add the WordLift id to Yoast's organization as a `sameAs`.
+
+### Next.js
+
+Render one script per page with the complete `@graph`. Build the `@id`s from an environment variable so they cannot drift between environments:
+
+```tsx
+const SITE = process.env.NEXT_PUBLIC_SITE_URL!;
+const ORG = `${SITE}/#organization`;
+
+export function Schema({ page }: { page: { url: string; title: string } }) {
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            { "@type": "WebPage", "@id": `${page.url}#webpage`, name: page.title,
+              isPartOf: { "@id": `${SITE}/#website` } },
+            { "@type": "WebSite", "@id": `${SITE}/#website`, url: SITE,
+              publisher: { "@id": ORG } },
+            { "@type": "Organization", "@id": ORG, name: "Example Ltd", url: SITE },
+          ],
+        }),
+      }}
+    />
+  );
+}
+```
+
+The mistake to avoid is building `@id` from a relative path. `` `#organization` `` and `` `${SITE}/#organization` `` look equally correct in a template and only one of them works.
+
+### Astro
+
+Same principle, in a layout component:
+
+```astro
+---
+const SITE = Astro.site!.href.replace(/\/$/, "");
+const graph = [
+  { "@type": "WebPage", "@id": `${Astro.url.href}#webpage`, name: title,
+    isPartOf: { "@id": `${SITE}/#website` } },
+  { "@type": "WebSite", "@id": `${SITE}/#website`, url: `${SITE}/`,
+    publisher: { "@id": `${SITE}/#organization` } },
+  { "@type": "Organization", "@id": `${SITE}/#organization`, name: "Example Ltd" },
+];
+---
+<script type="application/ld+json" set:html={JSON.stringify({ "@context": "https://schema.org", "@graph": graph })} />
+```
+
+Set `site` in `astro.config.mjs` so `Astro.site` is defined. Without it the identifiers silently become relative.
+
+### tangly
+
+tangly emits the `@graph` shape from the site config. Set `site.url`, `organization` and `social` in the config and the `WebSite`, `Organization` and per-page nodes are generated with stable identifiers.
+
+## Checking your work
+
+Re-run the audit and look at the Entities section, or query the map directly:
+
+```bash
+squirrel audit https://example.com
+squirrel entities --problem no-id
+squirrel entities --problem split-identity
+squirrel entities "https://example.com/#organization"
+```
+
+To see whether a change actually landed, compare the two audits:
+
+```bash
+squirrel entities --diff
+```
+
+The diff reports entities that gained an `@id` separately from additions and removals, so a successful identity fix shows up as a gain rather than as one entity disappearing and another appearing.
+
+## References
+
+- [Structured data general guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+- [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
+- [Organization structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/organization)
+- [Getting started with schema.org, schema.org](https://schema.org/docs/gs.html)

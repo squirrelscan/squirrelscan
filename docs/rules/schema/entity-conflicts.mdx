@@ -1,0 +1,97 @@
+---
+title: "The same entity, two different logos"
+description: "One organization declared on forty pages with two logos, two phone numbers or two names. A search engine picks one, and which one is not yours to choose."
+---
+
+## What a conflict is
+
+When the same entity is declared on many pages, every copy is a chance to drift. A logo updated in the theme but not in the plugin. A phone number changed on the contact page only. A name that gained a suffix in one template.
+
+A search engine merges the declarations by `@id` and is then left with two answers to one question. It picks one. You have no say in which, and no way to tell from the outside which it picked.
+
+The repetition is the root cause. An entity declared once and referenced everywhere cannot contradict itself.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-conflicts`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `Every entity agrees with itself across the pages that declare it`.
+- Warns with the message `N properties disagree across pages, on N entities`, plus ` (+N more properties)` when more matched than are listed.
+
+Nine properties are compared: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address` and `description`.
+
+One item per entity and property pair, not per entity. An organization whose logo and telephone both disagree has two things to fix, and collapsing them would hide the second behind the first. Each item names up to three of the conflicting values with the number of pages carrying each.
+
+A disagreement about `@type` is reported by [schema/entity-type-drift](/rules/schema/entity-type-drift) instead, so one defect is never billed to two rules.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Pick the correct value and make every declaration agree. The finding lists each value with its page count, so the outlier is usually obvious: forty pages say one thing and two say another.
+
+The durable fix is to stop repeating the declaration. Declare the entity in full once with an `@id`, and reference it by `{ "@id": "…" }` everywhere else. Then the question cannot be asked twice, let alone answered differently.
+
+If the repetition comes from a template, fix the template rather than the pages. If it comes from two plugins, see [schema/entity-split-identity](/rules/schema/entity-split-identity). See [fixing structured data identity](/entity-map/fixing) for the per-generator detail.
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-conflicts` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-conflicts"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-conflicts"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-identity](/rules/schema/entity-identity): the same entity on many pages with no `@id`.
+- [schema/entity-type-drift](/rules/schema/entity-type-drift): the same `@id` declared with different types.
+- [schema/entity-local-business-per-page](/rules/schema/entity-local-business-per-page): the repetition that causes most conflicts.
+- [local/nap-consistency](/rules/local/nap-consistency): the same question asked of the visible name, address and phone.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Organization schema, schema.org](https://schema.org/Organization)
+- [Logo structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/logo)
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

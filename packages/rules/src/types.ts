@@ -12,11 +12,14 @@ import type { CollectedSiteSignals } from "./collected-signals";
 import type { CloudResultStore, RuleCloudSpec } from "./cloud";
 import type {
   BusinessCategory,
+  CheckItem,
   CheckResult,
   CloakingProbeData,
   ContactLinkData,
   ContentAnalysis,
   EntityMap,
+  EntityMapEdge,
+  EntityMapNode,
   HeadingHierarchy,
   ImageData,
   IntelContext,
@@ -422,4 +425,13 @@ export interface Rule {
 }
 
 // Re-export types for convenience
-export type { CheckResult, LlmsTxtData, MarkdownProbeData, RobotsTxtData };
+export type {
+  CheckItem,
+  CheckResult,
+  EntityMap,
+  EntityMapEdge,
+  EntityMapNode,
+  LlmsTxtData,
+  MarkdownProbeData,
+  RobotsTxtData,
+};

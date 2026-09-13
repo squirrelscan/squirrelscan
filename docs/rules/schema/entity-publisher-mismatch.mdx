@@ -1,0 +1,99 @@
+---
+title: "Your pages disagree about who publishes this site"
+description: "Two hundred articles name one publisher and three name another. The authority that should accumulate against one organization is divided."
+---
+
+## One site, one publisher
+
+The publisher of an article is a claim about who stands behind it. When the pages of one site name different publishers, each group of articles is attributed to a different organization, and none of them accumulates the record of the whole site.
+
+The usual causes are mundane. A section migrated from an acquired site kept its old markup. A guest-post template inlines the author's company. A plugin update changed the default and only new posts picked it up.
+
+The outlier is almost always the mistake, and the page counts tell you which it is.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-publisher-mismatch`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Skipped with the message `Nothing on this site declares a publisher` and the reason `no-publisher-declared`.
+- Passes with the message `Every publisher reference points at NAME`.
+- Warns with the message `Every publisher reference points at NAME, which is not this site's primary organization` when the site is consistent but names something other than the organization it otherwise presents as itself.
+- Warns with the message `This site names N different publishers`, plus ` (+N more publishers)` when more matched than are listed. The value lists each with its count, heaviest first.
+
+Publishers are weighted by how much of the site names each, not by how many distinct targets exist. One publisher named two hundred times and another named once is not a fifty-fifty disagreement, and the message says which is which.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Pick the publisher. The one with the higher count in the finding is almost certainly it.
+
+Give it an `@id` and reference that id from every `Article`, `BlogPosting` and `WebSite`:
+
+```json
+{ "@type": "Article", "publisher": { "@id": "https://example.com/#organization" } }
+```
+
+Referencing rather than inlining is what stops this recurring: an inline publisher block is a new copy each time, and each copy can drift. Find the template or plugin that emits the outlier and point it at the same id. See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-publisher-mismatch` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-publisher-mismatch"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-publisher-mismatch"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-split-identity](/rules/schema/entity-split-identity): one organization under two ids, which looks like this.
+- [schema/entity-dangling](/rules/schema/entity-dangling): a publisher reference that resolves to nothing.
+- [schema/article](/rules/schema/article): the per-page check that the Article block is complete.
+- [schema/entity-organization-missing](/rules/schema/entity-organization-missing): a site with no organization to be the publisher.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [publisher, schema.org](https://schema.org/publisher)
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+- [Organization, schema.org](https://schema.org/Organization)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

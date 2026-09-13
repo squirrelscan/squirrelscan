@@ -1,0 +1,107 @@
+---
+title: "Your organization is not connected to anything that corroborates it"
+description: "sameAs is how a search engine learns the company on your site is the company on LinkedIn and Wikidata. Without it the entity stands alone."
+---
+
+## What sameAs buys
+
+`sameAs` is a set of claims of the form "this is also me". It links the organization declared on your site to its LinkedIn page, its Crunchbase entry, its Wikipedia article, its X account and its Companies House record.
+
+Those links are how a search engine corroborates that you are a real organization and what kind. The evidence a knowledge panel is assembled from largely comes from outside your site, and `sameAs` is what tells a search engine where to look.
+
+It costs one array. It is the highest-value line in most organization blocks and the one most often missing.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-sameas-missing`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Skipped with the message `This site declares no organization entity` and the reason `no-organization`, which is [schema/entity-organization-missing](/rules/schema/entity-organization-missing)'s finding rather than this one's.
+- Passes with the message `NAME links to N profiles with sameAs`.
+- Reports at info with the message `NAME has no sameAs profiles`, with the number of pages declaring it in the value.
+
+The primary organization is the most-declared `Organization`, `Corporation` or `LocalBusiness` on the site, with ties broken on identity so the same one is chosen on every run. A site with two competing organizations is [schema/entity-split-identity](/rules/schema/entity-split-identity)'s finding.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Add every profile you control, using the canonical URL of each rather than a redirect or a shortened link:
+
+```json
+{
+  "@type": "Organization",
+  "@id": "https://example.com/#organization",
+  "name": "Example Ltd",
+  "sameAs": [
+    "https://www.linkedin.com/company/example",
+    "https://x.com/example",
+    "https://www.crunchbase.com/organization/example",
+    "https://www.wikidata.org/wiki/Q000000",
+    "https://github.com/example"
+  ]
+}
+```
+
+Only list profiles that are actually yours and actually about this organization. A `sameAs` pointing at something you do not control is a claim you cannot support. See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-sameas-missing` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-sameas-missing"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-sameas-missing"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [social/social-profiles](/rules/social/social-profiles): the profile links found in the page itself.
+- [schema/entity-organization-missing](/rules/schema/entity-organization-missing): a site with no organization at all.
+- [schema/entity-authors](/rules/schema/entity-authors): the same question asked of a Person.
+- [schema/organization](/rules/schema/organization): the per-page check that the Organization block is complete.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [sameAs, schema.org](https://schema.org/sameAs)
+- [Organization structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/organization)
+- [Wikidata, Wikimedia](https://www.wikidata.org/)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

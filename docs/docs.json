@@ -284,7 +284,20 @@
                   "rules/schema/video",
                   "rules/schema/review",
                   "rules/schema/rating-scope",
-                  "rules/schema/coverage-outlier"
+                  "rules/schema/coverage-outlier",
+                  "rules/schema/entity-identity",
+                  "rules/schema/entity-split-identity",
+                  "rules/schema/entity-dangling",
+                  "rules/schema/entity-conflicts",
+                  "rules/schema/entity-id-format",
+                  "rules/schema/entity-type-drift",
+                  "rules/schema/entity-authors",
+                  "rules/schema/entity-publisher-mismatch",
+                  "rules/schema/entity-local-business-per-page",
+                  "rules/schema/entity-website-missing",
+                  "rules/schema/entity-organization-missing",
+                  "rules/schema/entity-sameas-missing",
+                  "rules/schema/entity-orphan"
                 ]
               },
               {
@@ -613,6 +626,13 @@
         "tab": "Reference",
         "icon": "terminal",
         "groups": [
+          {
+            "group": "Entity map",
+            "pages": [
+              "entity-map/index",
+              "entity-map/fixing"
+            ]
+          },
           {
             "group": "CLI Reference",
             "pages": [

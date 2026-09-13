@@ -1,0 +1,111 @@
+---
+title: "One organization, or sixty? Entities declared without an @id"
+description: "Your site declares the same organization on every page with nothing to say they are one thing. A search engine reading 60 pages sees 60 organizations."
+---
+
+## Why an @id is the whole game
+
+Structured data is not a set of per-page annotations. It is a graph, and a graph needs identifiers. When your organization block appears on sixty pages with no `@id`, a search engine has sixty declarations and no statement that they describe one thing. Nothing accumulates: not your reviews, not your `sameAs` profiles, not the authority of the articles you published.
+
+The markup validates. Rich Results Test is happy with it. It is still the single most common reason a site with correct structured data has no knowledge panel.
+
+An `@id` costs one line and fixes it permanently. It is an arbitrary string that happens to look like a URL, it does not need to resolve, and it only has to be identical everywhere.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-identity`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `Every multi-page identity entity carries an @id`.
+- Fails with the message `N entities are declared on several pages with no @id`, plus ` (+N more entities)` when more matched than are listed. The value names the widest offender as `NAME on N pages` and the expectation reads `one absolute @id per entity, referenced elsewhere`.
+
+Only `Organization`, `LocalBusiness`, `Person` and `WebSite` are judged: these are the types a search engine reconciles across a site. A `Product` repeated on a category page and a detail page is not a split identity.
+
+An entity on a single page is never reported, whatever its type. With one declaration there is nothing to tie together, so an `@id` would buy nothing. An entity with no name is not reported either: without a name there is nothing to reconcile it by, and treating every unnamed node as one identity would merge the site's whole graph.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Give the entity one absolute `@id` and use it everywhere:
+
+```json
+{
+  "@type": "Organization",
+  "@id": "https://example.com/#organization",
+  "name": "Example Ltd",
+  "url": "https://example.com/",
+  "logo": "https://example.com/logo.png"
+}
+```
+
+The fragment is arbitrary. `#organization` is the convention Yoast uses and there is no reason to differ. What matters is that it is absolute, not a bare `#organization`, and byte-identical on every page.
+
+Then stop repeating the full block. On every page that merely refers to the organization, emit only the reference:
+
+```json
+{ "@type": "Article", "publisher": { "@id": "https://example.com/#organization" } }
+```
+
+Declare the full block once per page in a `@graph`, or on the home page alone if every other page can reach it. See [fixing structured data identity](/entity-map/fixing) for the exact shape in Yoast, Rank Math, Next.js and Astro.
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-identity` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-identity"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-identity"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-split-identity](/rules/schema/entity-split-identity): the opposite failure, where one thing has two ids.
+- [schema/entity-id-format](/rules/schema/entity-id-format): an `@id` that is present but relative, which has the same effect.
+- [schema/entity-dangling](/rules/schema/entity-dangling): a reference to an `@id` nothing declares.
+- [schema/organization](/rules/schema/organization): the per-page check that the Organization block itself is complete.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Structured data general guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+- [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
+- [Organization schema, schema.org](https://schema.org/Organization)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

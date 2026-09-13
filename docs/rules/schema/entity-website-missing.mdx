@@ -1,0 +1,107 @@
+---
+title: "Nothing says these pages are one site"
+description: "A WebSite entity is what carries your site name in search results and what every page should point back to with isPartOf."
+---
+
+## What a WebSite node does
+
+A `WebSite` node is the thing your pages belong to. It carries the name a search engine can show above a result instead of the domain, it is where a sitelinks search box is declared, and it is the node that names the publisher of the site as a whole rather than of one article.
+
+Declaring it is half the job. If no page references it with `isPartOf`, the node exists and nothing is attached to it, which is most of the way to not having one.
+
+This is an informational finding rather than an error. A site without it is behind, not broken.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-website-missing`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Reports at info with the message `This site declares no WebSite entity` when there is none.
+- Reports at info with the message `The WebSite entity has no @id, so nothing can reference it` when one exists without an identifier.
+- Passes with the message `A WebSite entity is declared with an @id` when no page entities exist to link it.
+- Passes with the message `A WebSite entity is declared and all N page entities link to it`.
+- Reports at info with the message `N of N page entities do not link to the WebSite with isPartOf`, plus ` (+N more pages)` when more matched than are listed.
+
+Page entities are `WebPage` and its subtypes plus the article types. A site whose markup describes only products or people, with no page-level nodes at all, passes on the first test.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Declare the `WebSite` once, with an `@id`, and reference it from every page node:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "WebSite", "@id": "https://example.com/#website",
+      "url": "https://example.com/", "name": "Example",
+      "publisher": { "@id": "https://example.com/#organization" } },
+    { "@type": "WebPage", "@id": "https://example.com/about#webpage",
+      "isPartOf": { "@id": "https://example.com/#website" } }
+  ]
+}
+```
+
+Every major SEO plugin emits this shape by default. If yours does not, the `@graph` above is the whole fix. See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-website-missing` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-website-missing"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-website-missing"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/website-search](/rules/schema/website-search): the sitelinks search box, declared on the WebSite node.
+- [schema/entity-organization-missing](/rules/schema/entity-organization-missing): the publisher the WebSite should name.
+- [schema/entity-dangling](/rules/schema/entity-dangling): an `isPartOf` that points at nothing declared.
+- [schema/entity-identity](/rules/schema/entity-identity): a WebSite declared on many pages with no `@id`.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [WebSite, schema.org](https://schema.org/WebSite)
+- [Sitelinks search box, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sitelinks-searchbox)
+- [isPartOf, schema.org](https://schema.org/isPartOf)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

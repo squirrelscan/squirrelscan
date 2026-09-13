@@ -1,0 +1,106 @@
+---
+title: "Two plugins, two @ids, one organization split in half"
+description: "Yoast declares your organization under one @id and WordLift under another. A search engine reads two companies, and neither gets the full picture."
+---
+
+## How a site ends up with two of itself
+
+This is almost always two plugins that do not know about each other. Yoast SEO emits an `Organization` under `https://yoursite.com/#organization`. WordLift emits the same organization under a `data.wordlift.io` identifier. Both are correct in isolation. Together they describe one company as two.
+
+The cost is division. Your `sameAs` profiles attach to one, your article authorship to the other, your reviews to whichever the plugin that wrote them preferred. Neither entity ends up with enough corroboration to be worth a knowledge panel, and a search engine has no basis for merging them.
+
+The same thing happens between a plugin and a hand-written block a developer added years earlier, or between a theme and a page builder.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-split-identity`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `No entity is declared under more than one @id`.
+- Fails with the message `N entities are declared under more than one @id`, plus ` (+N more declarations)` when more matched than are listed. The value reads `NAME under N: ID, ID` and the expectation is `one @id per entity`.
+
+Two entities count as one identity when their deduplicated, sorted `@type` sets are equal and their names match after trimming, collapsing whitespace and lowercasing.
+
+A split needs at least two distinct `@id`s. Two same-named entities where one has no `@id` at all are [schema/entity-identity](/rules/schema/entity-identity)'s finding, not this one's: reporting them in both places would bill one defect twice against your score.
+
+Both sides of every split are listed as items, with their page counts, so you can tell which one the site actually uses.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Decide which `@id` is canonical. The one already referenced by your articles and your `WebSite` node is usually the right answer, and the page counts in the finding tell you which that is.
+
+Then either remove the second declaration, or reduce it to a `sameAs` on the first:
+
+```json
+{
+  "@type": "Organization",
+  "@id": "https://example.com/#organization",
+  "name": "Example Ltd",
+  "sameAs": ["http://data.wordlift.io/wl1/entity/example-ltd"]
+}
+```
+
+If two plugins are fighting, turn the schema output off in one of them rather than trying to reconcile both. Most SEO plugins have a switch for this. See [fixing structured data identity](/entity-map/fixing) for where it lives in each.
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-split-identity` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-split-identity"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-split-identity"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-identity](/rules/schema/entity-identity): the same entity on many pages with no `@id` at all.
+- [schema/entity-conflicts](/rules/schema/entity-conflicts): one entity whose property values disagree between pages.
+- [schema/entity-publisher-mismatch](/rules/schema/entity-publisher-mismatch): articles that disagree about who published them.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): the per-page check that the JSON-LD parses at all.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
+- [sameAs, schema.org](https://schema.org/sameAs)
+- [Structured data general guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -1,0 +1,105 @@
+---
+title: "A publisher that points at nothing"
+description: "Every article references an organization by @id and only the homepage declares it. Read one article in isolation and the reference goes nowhere."
+---
+
+## Where a reference breaks
+
+Referencing by `@id` instead of repeating a block is the right instinct, and it is how you avoid every conflict this category reports. It has one requirement: the thing you point at has to be reachable.
+
+The common failure is a publisher or an author declared in full on the home page, with every article carrying only the pointer. A crawler that fetches one article page sees `publisher: { "@id": "…#organization" }` and nothing in that page's markup to resolve it against. Whether it ever connects the two depends on it having crawled and retained the home page, which is not something you should rely on.
+
+This is a real cost for a fix that is a few hundred bytes per page.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-dangling`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `Every @id reference resolves to a declaration`.
+- Fails with the message `N referenced @ids resolve to nothing declared on any crawled page`, plus ` (+N more targets)` when more matched than are listed.
+
+The test is against the whole crawl, not against the referencing page. A publisher declared on the home page and referenced from two hundred articles is NOT reported: it resolves. The rule fires only when nothing in the crawl declares the target at all.
+
+Findings are grouped by target. One undeclared publisher referenced from three hundred article pages is one thing to fix, not three hundred, and each item carries the predicates that point at it and how many entities do.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Declare the target in the `@graph` of every page that references it. This is what Yoast and Rank Math already do, and it is why their output repeats the organization block on every page: the repetition is deliberate, and combined with a stable `@id` it costs nothing in identity terms.
+
+```json
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "Article", "@id": "https://example.com/post#article",
+      "publisher": { "@id": "https://example.com/#organization" } },
+    { "@type": "Organization", "@id": "https://example.com/#organization",
+      "name": "Example Ltd", "url": "https://example.com/" }
+  ]
+}
+```
+
+Both nodes on every page, one of them referenced rather than inlined. See [fixing structured data identity](/entity-map/fixing) for the shape in each generator.
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-dangling` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-dangling"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-dangling"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-identity](/rules/schema/entity-identity): the opposite habit: repeating a block with no `@id`.
+- [schema/entity-orphan](/rules/schema/entity-orphan): an `@id` declared and never referenced, the mirror of this.
+- [schema/entity-publisher-mismatch](/rules/schema/entity-publisher-mismatch): publisher references that resolve but disagree.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): the per-page check that the JSON-LD parses at all.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [JSON-LD 1.1: node objects, W3C](https://www.w3.org/TR/json-ld11/#node-objects)
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+- [publisher, schema.org](https://schema.org/publisher)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

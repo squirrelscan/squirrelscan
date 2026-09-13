@@ -1,0 +1,99 @@
+---
+title: "A bare #organization is one entity per page, not one entity"
+description: "A relative @id resolves against the page it sits on, so the same fragment on forty pages is forty identifiers. The markup validates and the entity still never accumulates."
+---
+
+## Why relative identifiers do not work
+
+`"@id": "#organization"` looks like it says "the organization". It says "the organization of this page". Resolved against the home page it means `https://example.com/#organization`; resolved against an article it means `https://example.com/post/#organization`. Those are two identifiers.
+
+This is worse than having no `@id` at all, because it looks solved. A validator accepts it, a developer ticks it off, and the entity still fails to accumulate across the site for the same reason it did before.
+
+The fix is to write the URL out in full.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-id-format`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `Every @id is an absolute URL`.
+- Warns with the message `N @ids are not an absolute URL`, plus ` (+N more entities)` when more matched than are listed. The value names the widest offender as `NAME: ID` and the expectation is `an absolute https:// URL`.
+
+An `@id` counts as absolute only when it parses as a URL with an `http` or `https` scheme and a host. A `mailto:` or `urn:` identifier parses as absolute and is still reported: it is not the kind of identifier a search engine reconciles a site by.
+
+Where the audit can resolve a relative `@id` against its page it does so, which is what makes the per-page split visible to the other entity rules rather than to this one. What reaches this check is an `@id` that could not be resolved at all.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+
+## How to fix it
+
+Write the full URL:
+
+```json
+{ "@id": "https://example.com/#organization" }
+```
+
+Not `#organization`, not `/#organization`, not `//example.com/#organization`. The scheme and host have to be there.
+
+If the markup is generated, the template is probably concatenating a fragment without the site URL in front of it. Fix it there rather than page by page. See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-id-format` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-id-format"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-id-format"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-identity](/rules/schema/entity-identity): the same entity on many pages with no `@id` at all.
+- [schema/entity-split-identity](/rules/schema/entity-split-identity): one entity under two different ids.
+- [schema/entity-dangling](/rules/schema/entity-dangling): a reference to an `@id` nothing declares.
+- [core/canonical-form-drift](/rules/core/canonical-form-drift): the same absolute-versus-relative question asked of canonicals.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
+- [IRI resolution, JSON-LD 1.1, W3C](https://www.w3.org/TR/json-ld11/#iris)
+- [Getting started with schema.org, schema.org](https://schema.org/docs/gs.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

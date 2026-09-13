@@ -50,6 +50,16 @@ const PREDICATES: ReadonlySet<string> = new Set<string>(ENTITY_MAP_PREDICATES);
  */
 const MAX_CONFLICT_VALUES = 50;
 
+/**
+ * The pseudo-property under which a node's per-page `@type` sets are compared.
+ *
+ * `@type` is not one of `ENTITY_MAP_PROPERTY_KEYS` and is not a property of the
+ * entity in the same sense, but a conflict's `property` is a free string and a
+ * disagreement about type is exactly the same shape of finding, so it rides the
+ * same channel rather than growing the document a second one.
+ */
+const TYPE_CONFLICT_PROPERTY = "@type";
+
 /** Guard against a page declaring a pathologically deep nested object. */
 const MAX_NESTING_DEPTH = 12;
 
@@ -438,12 +448,47 @@ function registerNode(
     const seen = accumulator.typeOrigin.get(type);
     if (!seen || originBefore(origin, seen)) accumulator.typeOrigin.set(type, origin);
   }
+  // The node's `types` is the UNION across occurrences, which is what a
+  // consumer wants and which also erases the fact that two pages disagreed.
+  // Record each page's own sorted set so the drift survives the merge (#2093);
+  // it is reported as a `@type` conflict, which `property: string` already
+  // allows, so this is additive to a v1 document rather than a shape change.
+  recordTypeSet(accumulator, types, origin);
   mergeProperties(accumulator, properties, origin);
 
   if (depth < MAX_NESTING_DEPTH) {
     collectEdges(raw, key, pageUrl, page, nodes, candidates, counter, depth);
   }
   return key;
+}
+
+/**
+ * Remember this occurrence's own `@type` set, keyed the same way a property
+ * conflict is.
+ *
+ * Sorted and deduped before joining, so `["Organization","LocalBusiness"]` and
+ * `["LocalBusiness","Organization"]` are the same set rather than two values —
+ * schema.org puts no meaning on `@type` order and neither should a finding. A
+ * node with no `@type` at all records nothing: absence is not disagreement.
+ */
+function recordTypeSet(
+  accumulator: NodeAccumulator,
+  types: string[],
+  origin: Origin,
+): void {
+  if (types.length === 0) return;
+  const text = [...new Set(types)].sort(compareStrings).join(", ");
+  let values = accumulator.values.get(TYPE_CONFLICT_PROPERTY);
+  if (!values) {
+    values = new Map();
+    accumulator.values.set(TYPE_CONFLICT_PROPERTY, values);
+  }
+  const existing = values.get(text);
+  if (existing) {
+    existing.add(origin.page);
+  } else if (values.size < MAX_CONFLICT_VALUES) {
+    values.set(text, new Set([origin.page]));
+  }
 }
 
 /**
@@ -716,7 +761,9 @@ function assemble(
     }
 
     const conflicts: EntityMapConflict[] = [];
-    for (const property of ENTITY_MAP_PROPERTY_KEYS) {
+    // `@type` first: a node that disagrees about what it IS is a different and
+    // larger problem than one that disagrees about its logo, so it leads.
+    for (const property of [TYPE_CONFLICT_PROPERTY, ...ENTITY_MAP_PROPERTY_KEYS]) {
       const values = accumulator.values.get(property);
       if (!values || values.size < 2) continue;
       const entries = [...values.entries()].sort((a, b) => compareStrings(a[0], b[0]));
