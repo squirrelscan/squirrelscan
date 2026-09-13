@@ -18,10 +18,8 @@ import type { RenderChargeLine } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import { createCloudDocumentFetcher } from "@squirrelscan/audit-engine";
-import {
-  createEntityMapCollector,
-  slimEntityMapForPublish,
-} from "@squirrelscan/audit-engine/entity-map";
+import { slimEntityMapForPublish } from "@squirrelscan/audit-engine/entity-map";
+import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
   createConditionalRenderDocumentFetcher,

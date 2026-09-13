@@ -1,6 +1,6 @@
 // Analyze controller - runs rules on existing crawl data
 
-import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map";
+import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { Effect } from "effect";
 import { existsSync, readdirSync } from "node:fs";
 

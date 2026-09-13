@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./smart-audits": "./src/smart-audits.ts",
-    "./entity-map": "./src/entity-map/index.ts"
+    "./entity-map": "./src/entity-map/index.ts",
+    "./entity-map/collect": "./src/entity-map/collect.ts"
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",
