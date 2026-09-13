@@ -41,6 +41,7 @@ import {
   loadEntityMap,
   loadEntityMapFile,
 } from "@/controllers/entities";
+import { ErrorCodes } from "@/controllers/types";
 import {
   ENTITY_PROBLEMS,
   filterEntityMap,
@@ -289,10 +290,23 @@ function renderList(
   return `${out.join("\n")}\n`;
 }
 
+/**
+ * Terminal colour sequences, for stripping on the way to a file.
+ *
+ * `fmt` decides on colour from whether stdout is a TTY, which is the right
+ * question for stdout and the wrong one for `-o`: running in a terminal would
+ * otherwise write escape bytes into the file.
+ *
+ * Built rather than written as a literal. Matching ESC is the whole point
+ * here, but a control character inside a regex literal is almost always a
+ * mistake, so the linter rejects one however it is spelled.
+ */
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
 /** Write to `-o`, or to stdout. */
 function emit(content: string, outputPath: string | undefined): void {
   if (outputPath) {
-    writeFileSync(outputPath, content);
+    writeFileSync(outputPath, content.replace(ANSI, ""));
     console.error(`Wrote ${outputPath}`);
     return;
   }
@@ -362,9 +376,18 @@ export const entities = defineCommand({
     // A path may contain a comma, so `--input` is repeat-only. Every other
     // list flag takes values that cannot, and stays comma-splittable.
     const rawInput = args.input as string | string[] | undefined;
-    const inputs = (
-      Array.isArray(rawInput) ? rawInput : rawInput ? [rawInput] : []
-    ).filter((value) => value.length > 0);
+    const givenInputs = Array.isArray(rawInput)
+      ? rawInput
+      : rawInput === undefined
+        ? []
+        : [rawInput];
+    const inputs = givenInputs.filter((value) => value.length > 0);
+    if (givenInputs.length > 0 && inputs.length === 0) {
+      // `--input ""` asked for a file. Falling through to the store would
+      // answer a question the user did not ask, from data they did not name.
+      console.error("--input needs a file path, got an empty value");
+      return safeExit(1);
+    }
     const filters: EntityFilters = {};
     const types = splitListFlag(args.type as string | string[] | undefined);
     const pages = splitListFlag(args.page as string | string[] | undefined);
@@ -470,11 +493,26 @@ export const entities = defineCommand({
               )
             : 0;
           const anchor = anchorIndex >= 0 ? withMaps[anchorIndex] : undefined;
-          const previous = anchor
-            ? withMaps
-                .slice(anchorIndex + 1)
-                .find((row) => row.baseUrl === anchor.baseUrl)
-            : undefined;
+
+          // Re-listed scoped to the anchor's site rather than searched inside
+          // the 50 rows above: that window is global and ordered by time, so a
+          // busy site can bury a quiet site's previous audit past the end, and
+          // "only one audit has a map" would be a lie about the history.
+          let previous: (typeof withMaps)[number] | undefined;
+          if (anchor) {
+            const sameSite = await listEntityMaps(200, {
+              baseUrl: anchor.baseUrl,
+            });
+            if (!sameSite.ok) {
+              console.error(sameSite.error.message);
+              return safeExit(1);
+            }
+            previous = sameSite.data
+              .filter(
+                (row) => row.entities > 0 && row.startedAt < anchor.startedAt
+              )
+              .find(() => true);
+          }
           newerId = anchor?.crawlId;
           olderId = previous?.crawlId;
           if (!olderId || !newerId) {
@@ -543,9 +581,15 @@ export const entities = defineCommand({
     } else {
       const loaded = await loadEntityMap(args.crawl);
       if (!loaded.ok) {
-        // Nothing to show is an answer, not a failure: exit 0 and say what to do.
-        console.log(loaded.error.message);
-        return;
+        // Nothing stored is an ANSWER: exit 0 and say what to run next. A store
+        // that could not be read is a FAILURE, and a script that treats the two
+        // alike would take a broken database for an empty one.
+        if (loaded.error.code === ErrorCodes.CRAWL_NOT_FOUND) {
+          console.log(loaded.error.message);
+          return;
+        }
+        console.error(loaded.error.message);
+        return safeExit(1);
       }
       map = loaded.data.map;
       crawlLabel = `${loaded.data.crawl.id.slice(0, 8)} · ${new Date(loaded.data.crawl.startedAt).toLocaleString()}`;

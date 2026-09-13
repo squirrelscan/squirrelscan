@@ -40,10 +40,11 @@ export interface StoredEntityMap {
   crawl: CrawlMetadata;
   map: EntityMap;
   /**
-   * A newer crawl that was passed over because it stored no entity rows.
+   * The newest crawl, in ANY project, passed over for storing no entity rows.
    *
-   * Present only when auto-selecting. It means the map shown is not from the
-   * most recent audit, which the caller has to say out loud.
+   * Present only when auto-selecting, and only when that crawl is newer than
+   * the one being returned. It means the map shown is not from the most recent
+   * audit, which the caller has to say out loud.
    */
   skipped?: { crawlId: string; startedAt: number };
   /**
@@ -249,17 +250,29 @@ async function withEachProject<T>(
   return { results, failures };
 }
 
-/** Crawls that can carry an entity map, newest first across every project. */
+/**
+ * Crawls that can carry an entity map, newest first across every project.
+ *
+ * `baseUrl` narrows to one site BEFORE the limit is applied, which is the only
+ * way a caller can be sure of reaching that site's history: the list is global
+ * and ordered by time, so 50 rows of a busy site can bury the previous audit of
+ * a quiet one past the end. It also skips the per-crawl entity read for every
+ * other site, so a scoped call is cheaper as well as correct.
+ */
 export async function listEntityMaps(
-  limit = 10
+  limit = 10,
+  options: { baseUrl?: string } = {}
 ): Promise<Result<EntityMapListRow[]>> {
   try {
     const { results: rows } = await withEachProject(async (storage) => {
       const crawls = await Effect.runPromise(
         storage.listCrawls().pipe(Effect.catchAll(() => Effect.succeed([])))
       );
+      const scoped = options.baseUrl
+        ? crawls.filter((crawl) => crawl.baseUrl === options.baseUrl)
+        : crawls;
       const out: EntityMapListRow[] = [];
-      for (const crawl of crawls) {
+      for (const crawl of scoped) {
         // A listing is a survey, so one unreadable crawl is skipped rather than
         // failing the table. `loadEntityMap` does the opposite, deliberately.
         const stored = await Effect.runPromise(
@@ -320,38 +333,43 @@ export async function loadEntityMap(
   crawlId?: string
 ): Promise<Result<StoredEntityMap>> {
   try {
-    const { results: candidates, failures } = await withEachProject(
+    type Found =
+      | { kind: "map"; entry: StoredEntityMap }
+      | { kind: "skip"; crawlId: string; startedAt: number };
+
+    const { results: found, failures } = await withEachProject(
       async (storage) => {
-        const crawls = await Effect.runPromise(
-          storage.listCrawls().pipe(Effect.catchAll(() => Effect.succeed([])))
-        );
+        // NOT caught, here or below: a project whose crawl list or entity rows
+        // cannot be read must surface as a failure, never as "no audit found".
+        // Those two call for opposite next steps.
+        const crawls = await Effect.runPromise(storage.listCrawls());
         const matches = crawlId
           ? crawls.filter(
               (crawl) => crawl.id === crawlId || crawl.id.startsWith(crawlId)
             )
           : crawls;
 
-        const out: StoredEntityMap[] = [];
-        let skipped: StoredEntityMap["skipped"];
+        const out: Found[] = [];
         for (const crawl of [...matches].sort(
           (a, b) => b.startedAt - a.startedAt
         )) {
-          // NOT caught: a failed read must not become an empty map, which is
-          // the same document a site with no structured data produces.
           const rows = await Effect.runPromise(
             storage.getEntityMapRows(crawl.id)
           );
           if (rows.nodes.length === 0 && !crawlId) {
-            skipped ??= { crawlId: crawl.id, startedAt: crawl.startedAt };
+            out.push({
+              kind: "skip",
+              crawlId: crawl.id,
+              startedAt: crawl.startedAt,
+            });
             continue;
           }
           const pageUrls = await Effect.runPromise(
             storage.getCrawlPageUrls(crawl.id)
           );
           out.push({
-            crawl,
-            map: reassembleMap(crawl, rows, pageUrls),
-            ...(skipped ? { skipped } : {}),
+            kind: "map",
+            entry: { crawl, map: reassembleMap(crawl, rows, pageUrls) },
           });
           // One per project is enough: the newest with a map.
           break;
@@ -359,6 +377,20 @@ export async function loadEntityMap(
         return out;
       }
     );
+
+    const candidates = found
+      .filter(
+        (item): item is Extract<Found, { kind: "map" }> => item.kind === "map"
+      )
+      .map((item) => item.entry);
+    // Skips are pooled ACROSS projects, not per project: `squirrel entities`
+    // with no arguments selects the newest map anywhere, so the audit it passed
+    // over can easily belong to a different site than the one it shows.
+    const newestSkip = found
+      .filter(
+        (item): item is Extract<Found, { kind: "skip" }> => item.kind === "skip"
+      )
+      .sort((a, b) => b.startedAt - a.startedAt)[0];
 
     if (candidates.length === 0) {
       // A store that could not be opened is reported as a failure, never as
@@ -383,7 +415,17 @@ export async function loadEntityMap(
 
     candidates.sort((a, b) => b.crawl.startedAt - a.crawl.startedAt);
     const chosen = candidates[0]!;
-    return ok(failures.length > 0 ? { ...chosen, warnings: failures } : chosen);
+    // Only a skip NEWER than what is being shown is worth reporting. An older
+    // empty crawl is not a substitution; it is just an old audit.
+    const substituted =
+      newestSkip && newestSkip.startedAt > chosen.crawl.startedAt
+        ? { crawlId: newestSkip.crawlId, startedAt: newestSkip.startedAt }
+        : undefined;
+    return ok({
+      ...chosen,
+      ...(substituted ? { skipped: substituted } : {}),
+      ...(failures.length > 0 ? { warnings: failures } : {}),
+    });
   } catch (error) {
     return err(
       commandError(
