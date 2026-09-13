@@ -424,9 +424,7 @@ export { diffEntityMaps };
  * tool is to hand an agent what the audit already decided, and a second
  * evaluation could disagree with the report the user is looking at.
  */
-export async function loadEntityFindings(
-  crawlId: string
-): Promise<
+export async function loadEntityFindings(crawlId: string): Promise<
   Result<{
     findings: EntityMcpFinding[];
     passed: string[];

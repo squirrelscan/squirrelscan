@@ -30,6 +30,13 @@ const EXPECTED_TOOLS = [
   "comment_on_issue",
   "list_rules",
   "get_rule",
+  // Entity tools (#2095). Local like the rule tools: they read the project
+  // store, so no auth and no credits.
+  "list_entities",
+  "get_entity",
+  "get_entity_graph",
+  "compare_entities",
+  "get_entity_findings",
 ] as const;
 
 function textOf(result: {
@@ -81,6 +88,14 @@ describe("createMcpServer tool registration", () => {
       "quick_check",
       "list_rules",
       "get_rule",
+      // The entity tools read the project store, so they need no session and
+      // spend no credits. Listing them here is the claim that they are local;
+      // if one ever reaches the API it belongs on the other side of this line.
+      "list_entities",
+      "get_entity",
+      "get_entity_graph",
+      "compare_entities",
+      "get_entity_findings",
     ]);
     const { tools } = await client.listTools();
     for (const tool of tools) {
