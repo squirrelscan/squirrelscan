@@ -10,9 +10,18 @@ Structured data identity is unusually well suited to an agent, because the whole
 1. **Find the problem.** `list_entities` with `problem: "no-id"` returns the entities a site declares on several pages with nothing to tie them together.
 2. **Fix it.** Give each one an absolute `@id` and reference it everywhere else. [Fixing structured data identity](/entity-map/fixing) has the change for each generator.
 3. **Re-audit.** `run_audit`, or `squirrel audit` locally.
-4. **Prove it landed.** `compare_entities` and check that `gainedId` contains the keys you fixed.
+4. **Prove it landed.** `compare_entities` and check that `gainedId` contains the keys you fixed, each with `coverage: "proven"`.
 
 Step 4 is the one that matters and the one that is easy to get wrong by hand. An entity that gains an `@id` **changes key**, because the key IS the `@id` when there is one. A naive comparison reports that as one removal plus one addition, which looks like damage. `gainedId` is the field that says a fix landed.
+
+<Warning>
+`gainedId` on its own says the entity changed, not that the broken pages were fixed. Matching happens on type and name, so a re-audit that visited a different part of the site pairs the two and reports the transition while the pages you were sent to fix still carry the old markup. Every entry carries a `coverage` field for that reason:
+
+- `proven`: the newer audit visited every page that declared the old version. The change describes the whole site.
+- `partial`: it did not. The fix is real where it was seen, and the unvisited pages are unknown.
+
+Re-audit the same scope you audited the first time, or treat `partial` as work still open.
+</Warning>
 
 <Note>
 Every tool description states this loop, so an agent that calls one of the five learns the other four exist and in what order.
@@ -30,11 +39,13 @@ The entities a site declares, collapsed across every crawled page into one graph
 |---|---|
 | `run_id` | A specific audit. Defaults to the latest with an entity map. |
 | `type` | Only these `@type` values. |
-| `page` | Only entities declared on pages matching this URL or prefix. |
+| `page` | Only entities declared on a page whose URL contains one of these strings. A substring test, not a prefix and not a glob. |
 | `problem` | `no-id`, `conflict`, `dangling`, `single-page` or `split-identity`. |
 | `q` | Only entities whose name or `@id` contains this text. |
 | `include_page_local` | Include a page's own `WebPage`, `BreadcrumbList` and unnamed images. False by default. |
-| `limit`, `offset` | Paging. Default 25, maximum 100. |
+| `limit`, `offset` | Paging. Default 25, maximum 100. Ordered by page count descending, then by key. |
+
+Several values in one filter are an OR. Two different filters are an AND: `type` plus `problem` keeps the entities that match a listed type **and** have a listed problem.
 
 Returns a summary, a page of nodes, and `total` and `hasMore`. Those last two matter: they are how you tell a page from the whole list before describing a site from 25 of its entities.
 
@@ -43,6 +54,8 @@ Page-local entities are hidden by default because they usually outnumber everyth
 ### get_entity
 
 One entity in full, by key, `@id` or name: every property, the pages that declare it, the properties whose values disagree between those pages, and the references in and out.
+
+The lookup resolves in order of certainty: an exact `@id`, then an exact key, then the key formed by prefixing your value with `id:`, then an exact name, and only then a name substring. The first match wins.
 
 Use it after `list_entities` to see **why** an entity was flagged before deciding what to change. Edges and declaring pages are capped, and `truncation` says when.
 
@@ -59,7 +72,11 @@ The whole graph, or a filtered part of it, in one of six formats.
 | `graphml` | Gephi, yEd, Cytoscape. Complete. |
 | `markdown` | A table to read. Capped at 50 rows. |
 
-Takes the same filters as `list_entities`. `mermaid` and `markdown` exist to fit a context window and say so in `truncation` when they cut; the other four are complete.
+Takes the same filters as `list_entities`. `mermaid` and `markdown` exist to fit a context window and say so in `truncation` when they cut; the other four are complete. `format` defaults to `json`.
+
+<Note>
+The `jsonld` rendering gives every entity an `@id`, inventing one for each entity the site left anonymous, because a `@graph` member without an identifier is not much use in a validator. JSON-LD has nowhere to mark an identifier as a placeholder, so `generatedIds` lists them: the entity key and the `@id` this export made up for it. Those identifiers are not on the site. Read that list before concluding from the export that a site's entities are identified, which is the exact question that usually sends you here.
+</Note>
 
 ### compare_entities
 
@@ -78,6 +95,8 @@ The default declines when the older audit stored no entities at all, because zer
 The `schema/entity-*` rule verdicts for an audit: what is wrong with the entity graph, which entity keys and pages each finding affects, and the fix text for each.
 
 Use it instead of re-deriving the problems from the graph. Each finding names one problem across the whole site rather than one per entity, so a count of 1 can still mean hundreds of pages.
+
+`analyzed` says whether the rules ran at all. An audit that was crawled but never analyzed returns the same three empty arrays as a site with a flawless entity graph, and only one of those is good news. `analyzed: false` means no verdict exists yet, not that there is nothing to fix.
 
 ## A worked example
 
@@ -114,7 +133,7 @@ Then remove the second declaration or reduce it to a `sameAs`, re-audit, and con
 compare_entities {}
 ```
 
-A successful fix shows the removed declaration under `removed` and nothing under `notCrawled`. If the entity you kept also gained an `@id` in the same change, it appears under `gainedId` rather than as an add and a remove.
+A successful fix shows the removed declaration under `removed` and nothing under `notCrawled`. If the entity you kept also gained an `@id` in the same change, it appears under `gainedId` rather than as an add and a remove, with `coverage: "proven"` when the re-audit visited every page that had been wrong.
 
 ## What the tools will not do
 
