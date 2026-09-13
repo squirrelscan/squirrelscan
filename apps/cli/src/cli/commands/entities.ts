@@ -345,7 +345,7 @@ export const entities = defineCommand({
     page: {
       type: "string",
       description:
-        "Only entities declared on pages matching this URL or prefix (repeatable)",
+        "Only entities declared on a page whose URL contains this text (repeatable)",
     },
     problem: {
       type: "string",
