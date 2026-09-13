@@ -1,0 +1,158 @@
+---
+title: "Crawl settings"
+description: "Control which URLs a website's cloud audits crawl, and how fast"
+icon: "route"
+---
+
+Cloud audits don't read your local `squirrel.toml`, so the **Website → Settings → Crawl** page in the dashboard is where you control what the cloud crawls for a given website.
+
+Open it at **Dashboard → your website → Settings → Crawl**.
+
+Crawl scope and the include and exclude patterns apply to **every cloud audit of that website**: the one you start by hand, scheduled audits, the first audit after you add the site, the GitHub check, and an audit our infrastructure retries after a failure. None of it affects `squirrel audit` on your own machine, which reads your [config file](/configuration/crawler) instead.
+
+The GitHub check is the one trigger that does not take the rest. It is a fixed 25-page quick crawl whatever your depth preset or page-limit override says, and it sends no custom request headers, which means it is never an [authorised crawl](#authorised-crawls) and does not read your robots.txt preference. Scope and patterns reach it because they can only ever narrow a crawl.
+
+The page is four cards, each with its own save button, so saving one leaves the others alone.
+
+| Card | What it sets |
+| --- | --- |
+| **Crawl depth** | How many pages each audit crawls, as a preset. |
+| **Crawl rules** | Crawl scope, robots.txt, incremental crawl, and the include and exclude patterns. |
+| **Custom crawl config** | Per-site overrides for the depth preset: max pages, max depth, coverage mode, render mode. |
+| **Custom request headers** | Headers sent on every request. Pro plan. Also what makes a crawl [authorised](#authorised-crawls). |
+
+## Crawl scope
+
+Two choices for where the crawl is allowed to go.
+
+<CardGroup cols={2}>
+  <Card title="Follow links" icon="share-nodes">
+    Start from your sitemap and follow the links found on those pages. This is the default and what every existing website uses.
+  </Card>
+  <Card title="Sitemap only" icon="list-check">
+    Audit the URLs your sitemap publishes, and stop there. Links found on those pages are not followed.
+  </Card>
+</CardGroup>
+
+<Note>
+  The **Fast** depth preset, and the **Quick** coverage mode under Custom crawl config, do not follow links at all, whichever scope you pick. On those settings a **Follow links** crawl behaves like a sitemap-only one. Pick Surface or deeper if following links is the point.
+</Note>
+
+**Sitemap only** is for sites whose sitemap is the list you actually care about. It is the same idea as pointing a desktop crawler at a sitemap instead of a homepage.
+
+It matters most on large sites. One store we audit publishes 5,322 URLs in its sitemap; following links grew the crawl to more than 20,000 candidate URLs, and the audit spent its budget on pages the owner had never asked about. Narrowing the scope puts that budget back on the pages that matter.
+
+<Note>
+  The page limit still applies. Sitemap scope changes **which** URLs are eligible, not how many are crawled. If your sitemap lists more URLs than your page limit allows, the crawl stops at the limit.
+</Note>
+
+What sitemap scope does **not** change:
+
+- robots.txt is still fetched and parsed, and still enforced if you have asked for that below
+- your sitemap is still fetched and parsed, which is how the URLs are found in the first place
+- the start URL is queued even when your sitemap does not list it
+- include and exclude patterns still apply, so an excluded sitemap URL is still skipped
+- assets on the pages being audited are still fetched, so rules about images, scripts and stylesheets still work
+
+Queued is not the same as crawled: the start URL goes through your patterns and your robots.txt preference like any other URL. Exclude everything, start URL included, and the audit finishes with no pages rather than quietly widening.
+
+If your sitemap turns out to have no crawlable URLs, because it is empty, unreachable, or everything in it is excluded, the crawl follows links rather than auditing nothing. Either way the run's event log says which happened:
+
+```
+Crawl scope: sitemap only. 5322 sitemap URLs seeded, 2000 pages audited. Cached pages were not reused, because reusing one re-discovers its links.
+Crawl scope: sitemap only, but the sitemap yielded no crawlable URLs, so links were followed instead. 412 pages audited.
+```
+
+The last sentence appears only when the audit would otherwise have reused cached pages, so a first audit of a site does not carry it.
+
+### What sitemap scope gives up
+
+Two things a normal audit does are turned off, because each is a way a URL reaches the crawl behind the setting that is supposed to be keeping it out.
+
+**Pages carrying findings from your last audit are not re-queued.** A normal audit puts them back in the queue so a fix can be confirmed, ahead of everything else. Under sitemap scope that would spend your page limit on pages the sitemap does not list, before reaching the ones it does. A page that is in your sitemap is still audited, so a fix on it is still confirmed.
+
+**Cached pages are not reused.** Reusing a page from your last audit means re-reading the links on it, and there is no way to take the page without following them. So a sitemap-scoped audit fetches every page fresh. It is slower and costs more than the same audit with links followed, and the run's event log says so rather than leaving you to find it on the bill.
+
+## Include and exclude patterns
+
+Two lists of URL patterns, using the same syntax as the [`include` and `exclude` options](/configuration/crawler#include) in the config file. `*` is the only special character, and it stands for any run of characters, `/` included:
+
+| Pattern | How it matches |
+| --- | --- |
+| `/blog/*` | prefix: any path starting `/blog/`, however deep |
+| `/blog` | prefix: any path starting `/blog`, so `/blogroll` too |
+| `*.pdf` | the whole path, anchored and case-insensitive |
+| `https://example.com/*?preview=*` | the whole URL, anchored and case-insensitive |
+
+A pattern is matched against the URL's path unless it starts with `http://` or `https://`, in which case it is matched against the whole URL. A pattern that has to see a query string is therefore an absolute one. Include patterns are the exception, and the next section says why.
+
+Leave **include** empty to crawl the whole site. **Exclude wins**: a URL matching both lists is excluded.
+
+**A non-empty include list replaces host scoping rather than narrowing within it**, so every pattern is pinned to your own site's addresses before the crawl runs. `/blog/*` means the blog on your site, not every address anywhere whose path starts with `/blog/`.
+
+Pinning is also what stops an include list reaching off your site. An absolute include on somebody else's origin is dropped, since honouring it would send the crawl somewhere nobody authorised. If **every** pattern in the list is one of those, the save is refused outright, because the result would be an audit that crawls nothing.
+
+One consequence to know about: because an include pattern is pinned, it is matched against the whole URL rather than the path, and a query string is part of that. An include of `*.pdf` does not match `/report.pdf?download=1`. The same pattern as an **exclude** is not pinned, matches the path only, and does.
+
+### Limits
+
+Each list is bounded. Save a list that breaks one of these and the page **refuses** it, rather than accepting it and quietly dropping the tail when the crawl runs. That matters most for excludes, where a dropped pattern means a crawl visits pages you believe you excluded.
+
+| Limit | Value |
+| --- | --- |
+| Patterns per list | 50 |
+| Characters per pattern | 500 |
+| Encoded size per list | 4 KB |
+| `*` wildcards per pattern | 2, unless the pattern is exactly `*` or ends in `/*` |
+
+The wildcard cap only applies to patterns our matcher has to compile into a regular expression. `/blog/*` ends in `/*` and is a prefix test, so it is not counted; `/a*b*c*d` is, and is refused. Control characters are refused too, which is usually a pattern pasted in from a document.
+
+Trimming whitespace and collapsing a repeated pattern are not refusals. They lose nothing you meant, so they just happen, and what the page shows back afterwards is what will be sent to the crawl.
+
+### What a retry uses
+
+An audit records the scope it started with. If our infrastructure retries a failed run, the retry reproduces **the crawl that failed**, not a new one shaped by settings you changed in the meantime. Change a pattern and it applies to your next audit.
+
+The exception is an audit old enough to predate the setting, which has no recorded scope to replay. Those fall back to the site's current settings.
+
+## Respect robots.txt
+
+Off by default: these are audits of your own site, started by you. robots.txt is always fetched and parsed regardless, because that is where `Sitemap:` directives are found and what the [`crawl/robots-txt`](/rules/crawl/robots-txt) rule reports on.
+
+Turn the setting on and the crawler also skips URLs your robots.txt disallows, and waits between requests if your robots.txt asks it to with `Crawl-delay`.
+
+<Warning>
+  A `Crawl-delay` is a hard limit on how fast a host can be crawled, because the wait applies per host no matter how many workers are running. The directive is capped at 2 seconds even when it asks for longer, and 2 seconds a page is 1,800 pages an hour from one host. Most sites are one host, so for most sites that is the whole crawl. If your page count cannot finish within the audit's time budget at that pace, the audit says so at the start and crawls fewer pages rather than running out of time with nothing to show. An [authorised crawl](#authorised-crawls) is the way to tell us that limit is not meant for us.
+</Warning>
+
+## Authorised crawls
+
+Configure a **custom request header** for this website and its cloud audits run as **authorised**. The header card shows the status, *Authorised crawl: on (custom header)*.
+
+Setting a header that only your origin knows about is you telling us this crawler is yours, and it is usually the same header that exempts us from your rate limit in the first place. An authorised crawl:
+
+- runs at higher concurrency, with no fixed wait between requests
+- **does not apply robots.txt at all**
+
+<Warning>
+  That second point is wider than it sounds. `Disallow` and `Crawl-delay` are governed by one setting, so an authorised crawl ignores both. **Anything you were keeping out of the crawl with `Disallow` needs an exclude pattern instead.**
+</Warning>
+
+While a crawl is authorised, the **Respect robots.txt** toggle is shown disabled. Your saved preference is kept and applies again if authorisation goes away.
+
+Authorisation is decided from the headers the audit will actually send, and headers are a Pro plan feature. If your plan stops permitting them the headers are not sent, so the crawl is not authorised and returns to polite pacing on its own.
+
+An authorised crawl never reuses pages from your last audit either, for a different reason: the requests carry your header, and an authenticated response must not be stored where another audit could read it.
+
+An authorised crawl is not unlimited. It still backs off per host when your server answers `429`, or answers `503` with a `Retry-After`, and it waits as long as that header asks for. A bare `503` with no `Retry-After` reads as an outage rather than a request to slow down. A site that pushes back is still crawled at the rate it will accept.
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="Audit settings" icon="sliders-horizontal" href="/dashboard/audit-settings">
+    Which rules run for this website's cloud audits.
+  </Card>
+  <Card title="Crawler configuration" icon="gear" href="/configuration/crawler">
+    The same ideas for local audits, in `squirrel.toml`.
+  </Card>
+</CardGroup>
