@@ -5,12 +5,12 @@
 // crawl is the latest, which two belong to the same site, whether a map
 // survived the round trip. A stub would answer all of those by assumption.
 //
-// The fixtures are the two docs.squirrelscan.com snapshots committed with
-// #2092: the same 60-page site before and after it gained JSON-LD. "Before" is
-// the site declaring NO structured data at all — zero entities, not entities
-// with a problem — and "after" is the same 60 pages carrying 183 of them. That
-// pair is what makes the store questions real: which crawl is the latest, which
-// two belong to the same site, whether a map survives the round trip.
+// The fixtures are two docs.squirrelscan.com snapshots: the same 60-page site
+// before and after it gained JSON-LD. "Before" is the site declaring NO
+// structured data at all — zero entities, not entities with a problem — and
+// "after" is the same 60 pages carrying 183 of them. That pair is what makes
+// the store questions real: which crawl is the latest, which two belong to the
+// same site, whether a map survives the round trip.
 //
 // The fix-and-verify loop needs a before/after where the SAME entity changes,
 // which those two snapshots are not, so `synthetic()` below builds it.
@@ -74,54 +74,24 @@ afterAll(() => {
 });
 
 /**
- * The fixture, with the fields older exports predate filled in.
+ * The fixture, with the fields the OLDER export predates filled in.
  *
- * Two repairs. The first matches what the CLI's own `--input` loader does; the
- * second does NOT, and is a liberty this file takes to get a usable store.
+ * One repair, and it is the same one the CLI's own `--input` loader makes:
+ * `pageLocal` and three summary counters were added to v1 after
+ * `docs-before-jsonld.json` was written, and are recomputable from the nodes
+ * with certainty. Keeping a real pre-v1 artefact in the suite is deliberate —
+ * it exercises the lenient read path (#2094) on something that actually shipped,
+ * which a hand-written fixture cannot do.
  *
- * `pageLocal` and three summary counters were added to v1 after these files
- * were written, and are recomputable from the nodes with certainty.
- *
- * `pages` is the awkward one, and the CLI reconstructs nothing here — it reads
- * whatever the document carries. `docs-after-jsonld.json` carries `pages: []`
- * beside `pagesTotal: 60`, because it was exported before the publish
- * projection stopped clipping the report's own copy. The store derives its
- * occurrence rows from `pages[].declares`, so seeding it as-is gives every
- * entity zero declaring pages and every page filter matches nothing.
- *
- * Rebuilt here by inverting the nodes' own page lists. Faithful except for
- * three nodes whose lists are capped at 50 with a `morePages` remainder: the
- * widest, a WebSite on all 60 pages, comes back on 50. No assertion in this
- * file turns on that difference, and the alternative is either editing a real
- * export or not testing the pair the issue names.
+ * Nothing else is repaired. The "after" snapshot was regenerated with the
+ * post-#333 CLI and carries its own complete 60-page index, so the earlier
+ * version of this helper — which rebuilt `pages` by inverting the nodes' page
+ * lists — is gone. That reconstruction was lossy for the three nodes whose
+ * lists are capped at 50 with a `morePages` remainder, and it was a liberty the
+ * CLI never takes: the CLI reads whatever the document carries.
  */
 async function fixture(name: string): Promise<EntityMap> {
   const raw = (await Bun.file(`${FIXTURES}/${name}.json`).json()) as EntityMap;
-  const nodes = raw.nodes.map((node) => ({
-    ...node,
-    pageLocal: node.pageLocal ?? false,
-  }));
-
-  let pages = raw.pages;
-  if (pages.length === 0 && nodes.length > 0) {
-    const declaresByPage = new Map<string, string[]>();
-    for (const node of nodes) {
-      for (const url of node.pages) {
-        const list = declaresByPage.get(url);
-        if (list) list.push(node.key);
-        else declaresByPage.set(url, [node.key]);
-      }
-    }
-    pages = [...declaresByPage.entries()]
-      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-      .map(([url, declares]) => ({
-        url,
-        declares: declares.sort(),
-        references: [],
-        entityCount: declares.length,
-      }));
-  }
-
   return {
     ...raw,
     summary: {
@@ -130,8 +100,10 @@ async function fixture(name: string): Promise<EntityMap> {
       nodesWithoutIdCount: raw.summary.nodesWithoutIdCount ?? 0,
       conflictCount: raw.summary.conflictCount ?? 0,
     },
-    nodes,
-    pages,
+    nodes: raw.nodes.map((node) => ({
+      ...node,
+      pageLocal: node.pageLocal ?? false,
+    })),
   };
 }
 
@@ -725,6 +697,64 @@ describe("the fix-and-verify loop, end to end", () => {
     // The re-audit visited all three pages that were broken, so the fix is
     // proven across the site rather than observed somewhere.
     expect(diff.gainedId[0]?.coverage).toBe("proven");
+  });
+
+  test("occurrence_threshold filters the deltas and nothing else", async () => {
+    // A docs site republishes constantly, so a site-wide entity moves by one on
+    // every audit and fills the change set with noise an agent has to read past
+    // to find the real change. The threshold is how it says "not that small".
+    const before = synthetic({ withId: true, site: "https://noisy.example/" });
+    await seed({
+      project: "noisy",
+      baseUrl: "https://noisy.example/",
+      startedAt: 1_000_000,
+      map: before,
+    });
+    // Same entity, two more occurrences, plus a genuinely new one.
+    const newcomer = {
+      ...before.nodes[0]!,
+      key: "id:https://noisy.example/#person",
+      id: "https://noisy.example/#person",
+      types: ["Person"],
+      name: "Ada",
+    };
+    await seed({
+      project: "noisy",
+      baseUrl: "https://noisy.example/",
+      startedAt: 2_000_000,
+      map: {
+        ...before,
+        summary: { ...before.summary, nodeCount: 2 },
+        nodes: [
+          {
+            ...before.nodes[0]!,
+            occurrences: before.nodes[0]!.occurrences + 2,
+          },
+          newcomer,
+        ],
+        pages: before.pages.map((page) => ({
+          ...page,
+          declares: [...page.declares, newcomer.key],
+          entityCount: page.declares.length + 1,
+        })),
+      },
+    });
+
+    const loose = await call("compare_entities");
+    const strict = await call("compare_entities", { occurrence_threshold: 5 });
+
+    const deltas = (r: typeof loose) =>
+      (r.data.diff as { occurrenceDeltas: unknown[] }).occurrenceDeltas;
+    const added = (r: typeof loose) =>
+      (r.data.diff as { added: unknown[] }).added;
+
+    expect(deltas(loose)).toHaveLength(1);
+    // +2 is below 5, so the delta goes.
+    expect(deltas(strict)).toHaveLength(0);
+    // And the threshold touches ONLY the deltas. An entity that appeared is a
+    // structural change, not a change of degree, and must survive any setting.
+    expect(added(loose)).toHaveLength(1);
+    expect(added(strict)).toHaveLength(1);
   });
 
   test("a re-audit that missed the broken pages reports the fix as partial", async () => {
