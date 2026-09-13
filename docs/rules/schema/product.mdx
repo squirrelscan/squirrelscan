@@ -42,7 +42,7 @@ When `offers` is an array only the first entry is checked, so a product with sev
 
 Put it in the `<head>` of the product page and keep the price and availability in step with what the page shows a shopper.
 
-The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so a `Product` node nested inside one reports as `No Product schema found`.
+JSON-LD wrapped in an `@graph` array, which is what Yoast, Rank Math and several other generators emit, is read the same as a top-level node: the rule flattens each script before looking for `Product`.
 
 | | |
 |---|---|

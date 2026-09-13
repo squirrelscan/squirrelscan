@@ -1,0 +1,111 @@
+---
+title: "The whole LocalBusiness block, on every single page"
+description: "Declaring the business in full on every page is the default of most page builders, and it is why so many local sites disagree with themselves about their own phone number."
+---
+
+## Why repetition is the problem
+
+Most themes and page builders emit the complete `LocalBusiness` block into every page's markup. It works, and it is the reason local sites drift: every copy is a place the phone number can be updated and a place it can be forgotten.
+
+Declared once with an `@id` and referenced elsewhere, the business cannot contradict itself. The markup also gets smaller on every page but one, which is not the main argument but is not nothing on a site with a hundred pages.
+
+This is a warning rather than an error because the markup is valid and the business is found. It is the shape that causes the conflicts, not a defect in itself.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-local-business-per-page`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Skipped with the message `This site declares no LocalBusiness entity` and the reason `no-local-business`.
+- Skipped with the message `Only N pages were crawled, too few to tell repetition from coverage` and the reason `too-few-pages` on crawls under 5 pages.
+- Passes with the message `No LocalBusiness is redeclared across the whole site`.
+- Warns with the message `NAME is declared in full on N of N crawled pages`, plus ` (+N more businesses)` when more matched than are listed. The value gives the share as a percentage.
+
+The threshold is 80% of crawled pages, not 100%: a site that skips its own 404 page or one legal page is doing the same thing. A business declared on a home page and a contact page is correct markup and passes.
+
+The `LocalBusiness` subtypes count, from `Plumber` to `Dentist` to `BankOrCreditUnion`. The list is explicit rather than pattern-matched: `OnlineStore` ends in `Store` and is not a local business, having no premises.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
+
+## How to fix it
+
+Declare the business in full once, on the home page or the contact page:
+
+```json
+{
+  "@type": "Plumber",
+  "@id": "https://example.com/#business",
+  "name": "Example Plumbing",
+  "telephone": "+61 2 1234 5678",
+  "address": { "@type": "PostalAddress", "streetAddress": "1 Example St" }
+}
+```
+
+On every other page, emit only the reference where the business is mentioned:
+
+```json
+{ "@id": "https://example.com/#business" }
+```
+
+If the repetition comes from a theme setting, most have a "output schema on all pages" switch. See [fixing structured data identity](/entity-map/fixing) for where it lives in each generator.
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-local-business-per-page` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-local-business-per-page"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-local-business-per-page"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-conflicts](/rules/schema/entity-conflicts): the drift this shape causes.
+- [schema/local-business](/rules/schema/local-business): the per-page check that the block itself is complete.
+- [local/nap-consistency](/rules/local/nap-consistency): the same question asked of the visible name, address and phone.
+- [schema/entity-type-drift](/rules/schema/entity-type-drift): the same `@id` declared with different types.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+- [LocalBusiness, schema.org](https://schema.org/LocalBusiness)
+- [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

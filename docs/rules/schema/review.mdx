@@ -11,7 +11,7 @@ A single `Review` is the other half. Google's review snippet guidance asks for a
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and inspects each script's root object, or the entries of a root array. It does not walk nested nodes and does not flatten `@graph`. From those top-level nodes it collects an `aggregateRating` property, a node whose `@type` is exactly `AggregateRating`, a `review` property, and any node whose `@type` is exactly `Review`. It emits one to three checks:
+The rule reads every `script[type="application/ld+json"]` on the page and flattens each one, so a node nested in an `@graph` wrapper counts the same as a top-level node. It does not walk into ordinary properties. From those nodes it collects an `aggregateRating` property, a node whose `@type` is exactly `AggregateRating`, a `review` property, and any node whose `@type` is exactly `Review`. It emits one to three checks:
 
 - `review-schema`: reports at info status with the message `No Review or AggregateRating schema found` when neither is present. No further checks run.
 - `aggregate-rating`: warns with the message `AggregateRating missing ratingValue` when `ratingValue` is falsy. Only when it is present does the count get checked, warning with `AggregateRating missing ratingCount/reviewCount` when neither `ratingCount` nor `reviewCount` is present. With both it passes with `AggregateRating: 4.7/5 (218 reviews)`, filling in the value and the count.

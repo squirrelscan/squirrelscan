@@ -1,0 +1,65 @@
+---
+title: "The entity map"
+description: "Every audit collapses your site's JSON-LD into one graph, so you can see whether your site declares one identity for itself or a new one on every page."
+---
+
+## What it is
+
+Structured data validators check one page at a time. That is the wrong unit for most of what goes wrong with it.
+
+A page can carry a perfectly valid `Organization` block, and so can the fifty-nine other pages, and if none of them says they are the same organization then a search engine has sixty organizations and no reason to connect them. Nothing accumulates: not the reviews, not the profile links, not the authority of the articles.
+
+The entity map is what every audit builds to make that visible. It reads the JSON-LD from every crawled page, resolves the references between nodes, and collapses the result into one graph of the entities your site declares rather than a list of the blocks it emits.
+
+## What it shows
+
+Four questions, none of which a per-page validator can answer:
+
+- **How many things does this site actually declare?** Sixty `Organization` blocks are either one entity or sixty, and the difference is one line of markup.
+- **Does anything tie the declarations together?** The share of entities carrying a stable `@id` is the single most useful number in the map.
+- **Do the declarations agree?** The same organization with two logos, two phone numbers or two names is a question with no answer.
+- **Do the references resolve?** A `publisher` pointing at an `@id` that nothing in the crawl declares is a reference to nothing, and only a view of the whole site can tell that from a reference the home page satisfies.
+
+## Reading the graph
+
+Every audit report carries an Entities section. In the HTML report it is an interactive graph you can pan, zoom and filter; in Markdown and the terminal it is a table; in JSON it is the complete document under an `entities` key.
+
+From the command line, [`squirrel entities`](/cli/entities) queries the map of a stored audit without re-crawling:
+
+```bash
+squirrel entities                       # a summary of the latest audit
+squirrel entities "https://example.com/#organization"
+squirrel entities --problem no-id       # only the entities worth fixing
+squirrel entities --diff                # what changed since the last audit
+```
+
+## The summary metrics
+
+| Metric | What it tells you |
+|---|---|
+| Entities | Distinct things the site declares, after collapsing duplicates |
+| References | Typed edges between them: publisher, author, isPartOf and so on |
+| Dangling references | Edges pointing at an `@id` nothing declares |
+| Entities with a stable `@id` | The share that can accumulate across pages. The number to watch |
+| Pages with no entities | Pages carrying no JSON-LD at all |
+
+A high entity count with a low stable-`@id` share is the classic shape of a site that emits structured data everywhere and gets nothing from it.
+
+## The rules
+
+Thirteen site-wide rules read the map and report what is wrong with it, from identity failures down to tidiness. They are listed under [Structured Data](/rules/schema), and every one of them links back to [fixing structured data identity](/entity-map/fixing), which has the change to make in each generator.
+
+<CardGroup cols={2}>
+  <Card title="Fix identity problems" icon="wrench" href="/entity-map/fixing">
+    Every finding, with the exact change in Yoast, Rank Math, Next.js and Astro.
+  </Card>
+  <Card title="Query the map" icon="terminal" href="/cli/entities">
+    `squirrel entities`, its filters, its export formats and its diff.
+  </Card>
+</CardGroup>
+
+## References
+
+- [Introduction to structured data markup, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data)
+- [JSON-LD 1.1, W3C](https://www.w3.org/TR/json-ld11/)
+- [Getting started with schema.org, schema.org](https://schema.org/docs/gs.html)

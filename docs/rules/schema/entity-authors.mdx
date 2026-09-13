@@ -1,0 +1,111 @@
+---
+title: "An author who is only a name string is not an entity"
+description: "Articles with a byline and no Person entity, or a Person with nothing to identify them by. Most of what E-E-A-T is built on needs an identifier."
+---
+
+## Why a name is not enough
+
+`"author": "Ada Lovelace"` tells a search engine that a string appeared in a byline. It does not connect that byline to the same person's other articles, to their conference talks, to their Wikipedia entry or to the credentials that make them worth reading on the subject.
+
+A person has to be identifiable before anything can be connected to them. A `Person` node with an `@id`, a `url` and a `sameAs` list is what makes that possible.
+
+An `Organization` can be the author, and [Google's Article guidance](https://developers.google.com/search/docs/appearance/structured-data/article) supports that explicitly. An editorial board, a newswire or a research group is a valid author and this rule treats it as one.
+
+This matters most on exactly the sites where it is most often missing: health, finance and legal content, where the author's standing is part of whether the page should rank at all.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-authors`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Skipped with the message `This site declares no articles and no people` and the reason `no-authorship-to-describe` when there is no authorship to describe. A brochure site is not missing anything.
+- Warns with the message `N articles are declared with no Person entity anywhere on the site` when articles exist and no `Person` node does.
+- Passes with the message `All N Person entities carry a url or sameAs`.
+- Warns with the message `N of N Person entities have no url and no sameAs`, plus ` (+N more people)` when more matched than are listed.
+
+A `Person` counts as identified when it carries a non-empty `url` or at least one `sameAs` entry. Either is enough: a link to an author page on your own site is a real identifier even without external profiles.
+
+`Article`, `NewsArticle`, `BlogPosting`, `TechArticle` and `ScholarlyArticle` all count as articles here.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
+
+## How to fix it
+
+Declare each author once, with everything that identifies them:
+
+```json
+{
+  "@type": "Person",
+  "@id": "https://example.com/authors/ada#person",
+  "name": "Ada Lovelace",
+  "url": "https://example.com/authors/ada",
+  "sameAs": [
+    "https://en.wikipedia.org/wiki/Ada_Lovelace",
+    "https://www.linkedin.com/in/example"
+  ],
+  "jobTitle": "Principal Engineer"
+}
+```
+
+Then reference it from every article by `"author": { "@id": "https://example.com/authors/ada#person" }` rather than repeating the name. An author page on your own site is the easiest `url` to provide and is worth having regardless. See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-authors` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-authors"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-authors"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-dangling](/rules/schema/entity-dangling): an author reference that points at nothing declared.
+- [schema/article](/rules/schema/article): the per-page check that the Article block is complete.
+- [schema/entity-sameas-missing](/rules/schema/entity-sameas-missing): the same question asked of the organization.
+- [schema/entity-identity](/rules/schema/entity-identity): a Person declared on many pages with no `@id`.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable, people-first content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Person, schema.org](https://schema.org/Person)
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

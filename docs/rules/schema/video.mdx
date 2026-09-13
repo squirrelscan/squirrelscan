@@ -11,7 +11,7 @@ description: "A page with an embedded video and no VideoObject markup, or markup
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `VideoObject` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It also looks for a `<video>` element, or an `<iframe>` whose `src` contains `youtube` or `vimeo`. It emits one to three checks:
+The rule reads every `script[type="application/ld+json"]` on the page, flattens each one so a node nested in an `@graph` wrapper counts the same as a top-level node, and keeps the first `VideoObject` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It also looks for a `<video>` element, or an `<iframe>` whose `src` contains `youtube` or `vimeo`. It emits one to three checks:
 
 - `video-schema`: with no `VideoObject` node and a video element present, it warns with the message `Page has video but no VideoObject schema` and the value `Add schema for video rich results`. With no `VideoObject` node and no video element it reports at info status with the message `No VideoObject schema found`. Either way no further checks run.
 - `video-required`: warns with the message `VideoObject missing required properties` and lists the missing names as items. The required set is `name`, `description`, `thumbnailUrl` and `uploadDate`. When all four are present it passes with `VideoObject has required properties`.

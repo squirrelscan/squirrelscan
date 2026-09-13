@@ -12,10 +12,14 @@ import type { CollectedSiteSignals } from "./collected-signals";
 import type { CloudResultStore, RuleCloudSpec } from "./cloud";
 import type {
   BusinessCategory,
+  CheckItem,
   CheckResult,
   CloakingProbeData,
   ContactLinkData,
   ContentAnalysis,
+  EntityMap,
+  EntityMapEdge,
+  EntityMapNode,
   HeadingHierarchy,
   ImageData,
   IntelContext,
@@ -372,6 +376,20 @@ export interface RuleContext {
   // integrity intel rules then contribute nothing.
   intel?: IntelContext;
 
+  // The site's JSON-LD collapsed into one graph (#2091), built by audit-engine
+  // BEFORE rules run for the same reason `intel` is: the entity rules stay
+  // synchronous and pure, and nothing here has to parse JSON-LD again.
+  //
+  // It cannot come from `siteQuery`: that streams typed columns off
+  // `page_features` (page type, schema types, rich-result types) and never
+  // exposes raw JSON-LD, so the questions these rules ask — is this the same
+  // Organization, does this `@id` resolve — are not answerable from it.
+  //
+  // Undefined means the map was not built for this run; the `schema/entity-*`
+  // rules then skip rather than report a site with no structured data, because
+  // those two look identical from here and only one of them is a finding.
+  entityMap?: EntityMap;
+
   // Rule options from config, with defaults applied
   options: Record<string, unknown>;
 }
@@ -407,4 +425,13 @@ export interface Rule {
 }
 
 // Re-export types for convenience
-export type { CheckResult, LlmsTxtData, MarkdownProbeData, RobotsTxtData };
+export type {
+  CheckItem,
+  CheckResult,
+  EntityMap,
+  EntityMapEdge,
+  EntityMapNode,
+  LlmsTxtData,
+  MarkdownProbeData,
+  RobotsTxtData,
+};

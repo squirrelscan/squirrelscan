@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { flattenJsonLdNodes } from "@squirrelscan/utils";
+
 export const reviewSchemaRule: Rule = {
   meta: {
     id: "schema/review",
@@ -28,38 +30,38 @@ export const reviewSchemaRule: Rule = {
     let reviews: Record<string, unknown>[] = [];
 
     for (const script of schemaScripts) {
-      try {
-        const data = JSON.parse(script.textContent || "");
-        const schemas = Array.isArray(data) ? data : [data];
+      // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
+      // descended into rather than read as one typeless node (#317). Per
+      // SCRIPT and not over the joined `schema.raw`, because that join can
+      // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
+      // empty list, which is what the old try/catch was for.
+      const schemas = flattenJsonLdNodes(script.textContent || "");
 
-        for (const schema of schemas) {
-          // Look for aggregateRating in any schema
-          if (schema["aggregateRating"]) {
-            const raw = schema["aggregateRating"];
-            // Some generators array-wrap AggregateRating (#721); take first object entry.
-            const candidate = Array.isArray(raw)
-              ? raw.find((r) => r && typeof r === "object" && !Array.isArray(r))
-              : raw;
-            if (candidate) {
-              aggregateRating = candidate as Record<string, unknown>;
-            }
-          }
-          if (schema["review"]) {
-            const r = schema["review"];
-            reviews = reviews.concat(Array.isArray(r) ? r : [r]);
-          }
-
-          // Direct AggregateRating type
-          if (schema["@type"] === "AggregateRating") {
-            aggregateRating = schema;
-          }
-          // Direct Review type
-          if (schema["@type"] === "Review") {
-            reviews.push(schema);
+      for (const schema of schemas) {
+        // Look for aggregateRating in any schema
+        if (schema["aggregateRating"]) {
+          const raw = schema["aggregateRating"];
+          // Some generators array-wrap AggregateRating (#721); take first object entry.
+          const candidate = Array.isArray(raw)
+            ? raw.find((r) => r && typeof r === "object" && !Array.isArray(r))
+            : raw;
+          if (candidate) {
+            aggregateRating = candidate as Record<string, unknown>;
           }
         }
-      } catch {
-        // Invalid JSON
+        if (schema["review"]) {
+          const r = schema["review"];
+          reviews = reviews.concat(Array.isArray(r) ? r : [r]);
+        }
+
+        // Direct AggregateRating type
+        if (schema["@type"] === "AggregateRating") {
+          aggregateRating = schema;
+        }
+        // Direct Review type
+        if (schema["@type"] === "Review") {
+          reviews.push(schema);
+        }
       }
     }
 

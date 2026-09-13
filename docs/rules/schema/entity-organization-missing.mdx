@@ -1,0 +1,109 @@
+---
+title: "A business with nothing to attach its reputation to"
+description: "This site has the pages a business has and no Organization entity for a search engine to hang any of it on."
+---
+
+## The node everything else hangs off
+
+An organization node is the centre of a site's graph. It is the publisher of your articles, the owner of your `WebSite`, the seller behind your offers and the subject of your reviews. Without it, each of those is a claim with no subject.
+
+It is also where `sameAs` lives, which is how a search engine connects the company on your site to the company on LinkedIn, Crunchbase and Wikidata. That corroboration is most of what a knowledge panel is assembled from.
+
+The rule only fires when the site presents as a business. A documentation site legitimately has no organization, and telling it to declare one would be advice to publish markup that is not true. A personal site is also left alone, even though it has an about page and a contact page: when the site declares a named `Person` and no products or offers, the thing behind it is that person.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-organization-missing`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `This site declares N organization entities`.
+- Skipped with the message `This site does not present as a business` and the reason `no-business-signals`.
+- Skipped with the message `This site presents a person rather than an organization` and the reason `personal-site`, when a named `Person` is declared and no products or offers are.
+- Reports at info with the message `This site presents as a business but declares no Organization or LocalBusiness entity`, with the signals that made it a question listed in the value.
+
+Two signals count as presenting as a business: an `AboutPage` or `ContactPage` entity, and `Product` or `Offer` entities. A site transacting with nothing to say who it is transacting with is the second case.
+
+`Organization`, `Corporation` and the `LocalBusiness` subtypes all satisfy the rule. The subtype list is explicit rather than pattern-matched, because the names do not follow one: `BankOrCreditUnion` and `Dentist` are subtypes and end in neither `Business` nor `Service`, while `OnlineStore` ends in `Store` and is not one.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
+
+## How to fix it
+
+Declare it once, with everything that identifies you:
+
+```json
+{
+  "@type": "Organization",
+  "@id": "https://example.com/#organization",
+  "name": "Example Ltd",
+  "url": "https://example.com/",
+  "logo": "https://example.com/logo.png",
+  "sameAs": [
+    "https://www.linkedin.com/company/example",
+    "https://x.com/example"
+  ]
+}
+```
+
+If you have a physical location customers visit, use a `LocalBusiness` subtype instead and add the address, phone and opening hours. Then reference this `@id` as the publisher of your articles and the owner of your `WebSite`. See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-organization-missing` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-organization-missing"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-organization-missing"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/organization](/rules/schema/organization): the per-page check that the Organization block is complete.
+- [schema/entity-sameas-missing](/rules/schema/entity-sameas-missing): an organization declared without its profiles.
+- [schema/local-business](/rules/schema/local-business): the per-page check for a LocalBusiness block.
+- [schema/entity-publisher-mismatch](/rules/schema/entity-publisher-mismatch): articles that name different publishers.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Organization structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/organization)
+- [Organization, schema.org](https://schema.org/Organization)
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

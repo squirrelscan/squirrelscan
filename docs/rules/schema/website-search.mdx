@@ -38,7 +38,7 @@ A `SearchAction` is recognised only when its `@type` is exactly the string `Sear
 
 This block goes in the homepage `<head>`.
 
-The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so a `WebSite` node nested inside one is not found and the homepage reports `No WebSite schema on homepage`. Check the markup before adding a second block.
+JSON-LD wrapped in an `@graph` array, which is what Yoast, Rank Math and several other generators emit, is read the same as a top-level node: the rule flattens each script before looking for `WebSite`.
 
 | | |
 |---|---|

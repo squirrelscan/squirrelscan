@@ -120,7 +120,14 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // adds the same 500. All 500 pass: the fixture's origin is
       // `http://synthetic.test`, which is neither a dev host nor HTTPS, so
       // neither the host families nor the http-self-link kind can fire.
-      expect(v1.findings.length).toBe(99721);
+      // 99721 -> 99734: the thirteen schema/entity-* rules (#2093), site-scoped,
+      // each adding exactly one whole-crawl check. +13 and not one more is the
+      // property worth reading here: it proves every one of them emits a single
+      // capped finding rather than a finding per entity, which is what stops any
+      // of them dominating the schema category score. The harness supplies no
+      // entity map, so all thirteen are `skipped` — which is also why the
+      // pass/warn/fail tallies and healthScore.overall (48) are UNMOVED.
+      expect(v1.findings.length).toBe(99734);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -131,9 +138,15 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // content/date-agreement, 276 -> 277 links/no-contextual-inbound,
       // 277 -> 278 social/asset-divergence, 278 -> 279 perf/asset-compression,
       // 279 -> 280 content/placeholder-text, 280 -> 281
-      // content/unrendered-markup, 281 -> 282 content/dev-leakage; anything
+      // content/unrendered-markup, 281 -> 282 content/dev-leakage, 282 -> 295
+      // the thirteen schema/entity-* rules (#2093: entity-identity,
+      // entity-split-identity, entity-dangling, entity-conflicts,
+      // entity-id-format, entity-type-drift, entity-authors,
+      // entity-publisher-mismatch, entity-local-business-per-page,
+      // entity-website-missing, entity-organization-missing,
+      // entity-sameas-missing, entity-orphan); anything
       // else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(282);
+      expect(v1.perRuleTally.length).toBe(295);
       // Each +500 above is only "all passes" if nothing warned. healthScore
       // staying at 48 does not prove that — a handful of weight-5 warnings in a
       // 20-rule category would not move it — so pin the tally directly.

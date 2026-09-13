@@ -1,0 +1,101 @@
+---
+title: "An Organization on one page, a LocalBusiness on another"
+description: "The same @id declared with different @type sets on different pages. A search engine merges them and then has to decide which types are authoritative."
+---
+
+## What drifts, and why it matters
+
+A contact page that upgrades the organization to a `LocalBusiness` while every other page leaves it as an `Organization` is the usual shape. Someone added the address and the opening hours where they were relevant, which is a reasonable instinct and the wrong place to act on it.
+
+Types drive eligibility. A `LocalBusiness` can earn a local pack listing and opening-hours display; an `Organization` cannot. The two declarations are compatible and a consumer may well accumulate both, as the entity map itself does. What you lose is the certainty: whether the pages that say only `Organization` are read as complete, and whether a consumer sampling one of them sees a business at all.
+
+One type set, on every declaration.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-type-drift`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `Every @id carries the same @type set on every page`.
+- Warns with the message `N entities are declared with more than one @type set`, plus ` (+N more entities)` when more matched than are listed. The value reads `NAME: TYPES vs TYPES` and the expectation is `one @type set per @id`.
+
+Type sets are compared after deduplicating and sorting, so `["Organization","LocalBusiness"]` and `["LocalBusiness","Organization"]` are the same set. schema.org puts no meaning on the order and neither does this check.
+
+Only entities with an `@id` are judged. An entity without one has no identity for its types to drift against; whether it is reported at all is [schema/entity-identity](/rules/schema/entity-identity)'s question, and that rule looks only at named, multi-page entities of four specific types.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
+
+## How to fix it
+
+Decide what the entity is and say it the same way everywhere. If it is a local business, declare it as one on every page, not only where the address appears:
+
+```json
+{
+  "@type": ["Organization", "LocalBusiness"],
+  "@id": "https://example.com/#organization",
+  "name": "Example Ltd"
+}
+```
+
+The properties can still vary by page, and usually should: put the address and hours where they belong. It is the type array that has to be constant. See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-type-drift` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-type-drift"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-type-drift"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-conflicts](/rules/schema/entity-conflicts): the same question asked of the entity's other properties.
+- [schema/local-business](/rules/schema/local-business): the per-page check that the LocalBusiness block is complete.
+- [schema/organization](/rules/schema/organization): the per-page check for the Organization block.
+- [schema/entity-identity](/rules/schema/entity-identity): an entity with no `@id` for its types to drift against.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [LocalBusiness, schema.org](https://schema.org/LocalBusiness)
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+- [JSON-LD 1.1: specifying the type, W3C](https://www.w3.org/TR/json-ld11/#specifying-the-type)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -14,7 +14,7 @@ import { createCrawler } from "@/crawler/core";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
 
-import type { RenderChargeLine } from "@squirrelscan/core-contracts";
+import type { EntityMap, RenderChargeLine } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import { createCloudDocumentFetcher } from "@squirrelscan/audit-engine";
@@ -1502,6 +1502,23 @@ export async function runAudit(
           ? undefined
           : createProjectRuleCacheStore(sqliteStorage, crawlId);
 
+      // The entity map is built HERE, not after the report, because the
+      // `schema/entity-*` rules read it (#2093). The collector finished
+      // absorbing during the pre-rules walk above, so this is a move rather
+      // than extra work: it sees exactly the same pages either way.
+      //
+      // A failure degrades to undefined rather than losing a finished audit.
+      // The rules treat undefined as "no map was built" and skip, which is not
+      // the same claim as "this site declares nothing".
+      let entityMap: EntityMap | undefined;
+      try {
+        entityMap = entityMapCollector.build(url);
+      } catch (error) {
+        logger.warn(
+          `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+
       // Thread cloud results + the resolved Stage-0 profile into the rules phase
       // per audit run — no process-global singleton. The metadata drives
       // `appliesWhen` rule gating; undefined = run as today.
@@ -1513,6 +1530,7 @@ export async function runAudit(
         {
           cloudResults: cloudResult?.store,
           siteMetadata: cloudResult?.siteMetadata ?? undefined,
+          ...(entityMap ? { entityMap } : {}),
         },
         {
           batchSize: streamBatchSize,
@@ -1899,26 +1917,29 @@ export async function runAudit(
       // STEP 3.3: ENTITY MAP (#2091)
       // ============================================
       // Built on every audit, stored in the project store, and carried on the
-      // report so every format can render it. Report-only: no rule reads it and
-      // it never touches the health score.
+      // report so every format can render it. Since #2093 the thirteen
+      // `schema/entity-*` rules also read it, so it is BUILT above, before the
+      // rules phase; what is left here is storing it and hanging it on the
+      // report.
       //
       // The report keeps the FULL document: `-f json` is the canonical export
       // and must not be truncated. The publish payload gets its own slimmed
       // COPY, taken at publish time — slimming in place here would silently cut
       // the local json report to 750 nodes and drop `pages` entirely.
-      try {
-        const entityMap = entityMapCollector.build(url);
-        await storeEntityMap({
-          storage: sqliteStorage,
-          crawlId,
-          map: entityMap,
-        });
-        report.entityMap = entityMap;
-      } catch (error) {
-        // A finished audit must never be lost to a report-only section.
-        logger.warn(
-          `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
-        );
+      if (entityMap) {
+        try {
+          await storeEntityMap({
+            storage: sqliteStorage,
+            crawlId,
+            map: entityMap,
+          });
+          report.entityMap = entityMap;
+        } catch (error) {
+          // A finished audit must never be lost to a report-only section.
+          logger.warn(
+            `Could not store the entity map: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
       }
 
       // ============================================

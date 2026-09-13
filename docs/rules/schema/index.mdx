@@ -3,7 +3,9 @@ title: "Structured Data"
 description: "Structured data and rich snippet eligibility"
 ---
 
-Structured Data rules read the JSON-LD a page carries and check it against what each schema.org type needs. Most run per page and name the exact property that is missing; two run across the whole crawl, one comparing coverage against the site's own norm and one checking that a rating is visible and about the page it sits on. Markup that will not parse is reported before anything else, since nothing downstream can read it.
+Structured Data rules work at two scales. Per-page rules read the JSON-LD a page carries and name the exact property each schema.org type is missing; markup that will not parse is reported before anything else, since nothing downstream can read it.
+
+The rest read the [entity map](/entity-map), the whole site's JSON-LD collapsed into one graph. That is where the expensive failures live: sixty valid `Organization` blocks with nothing to say they are one organization pass every per-page check and still leave a search engine with sixty companies. Thirteen rules cover identity, agreement and reachability across the crawl, and [fixing structured data identity](/entity-map/fixing) has the change to make in each generator.
 
 See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 
@@ -45,6 +47,45 @@ See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-
   </Card>
   <Card title="WebSite SearchAction and the retired sitelinks searchbox" icon="circle-info" href="/rules/schema/website-search">
     WebSite schema on a homepage with no SearchAction, or a SearchAction missing target or query-input. squirrel checks the homepage markup.
+  </Card>
+  <Card title="One organization, or sixty? Entities declared without an @id" icon="triangle-exclamation" href="/rules/schema/entity-identity">
+    The same organization on every page with nothing to say they are one thing. squirrel reads the whole crawl, not one page.
+  </Card>
+  <Card title="Two plugins, two @ids, one organization split in half" icon="triangle-exclamation" href="/rules/schema/entity-split-identity">
+    Yoast declares your organization under one @id and WordLift under another. A search engine reads two companies.
+  </Card>
+  <Card title="A publisher that points at nothing" icon="triangle-exclamation" href="/rules/schema/entity-dangling">
+    Every article references an organization by @id and only the homepage declares it. squirrel checks against the whole crawl.
+  </Card>
+  <Card title="The same entity, two different logos" icon="circle-info" href="/rules/schema/entity-conflicts">
+    One organization declared on forty pages with two logos or two phone numbers. A search engine picks one.
+  </Card>
+  <Card title="A bare #organization is one entity per page, not one entity" icon="circle-info" href="/rules/schema/entity-id-format">
+    A relative @id resolves against the page it sits on, so the same fragment on forty pages is forty identifiers.
+  </Card>
+  <Card title="An Organization on one page, a LocalBusiness on another" icon="circle-info" href="/rules/schema/entity-type-drift">
+    The same @id with different @type sets. Types drive eligibility, and which set wins is not specified.
+  </Card>
+  <Card title="An author who is only a name string is not an entity" icon="circle-info" href="/rules/schema/entity-authors">
+    Articles with a byline and no Person entity. Most of what E-E-A-T is built on needs an identifier.
+  </Card>
+  <Card title="Your pages disagree about who publishes this site" icon="circle-info" href="/rules/schema/entity-publisher-mismatch">
+    Two hundred articles name one publisher and three name another. squirrel weighs them by how much of the site says each.
+  </Card>
+  <Card title="The whole LocalBusiness block, on every single page" icon="circle-info" href="/rules/schema/entity-local-business-per-page">
+    The default of most page builders, and why so many local sites disagree with themselves about their own phone number.
+  </Card>
+  <Card title="Nothing says these pages are one site" icon="circle-info" href="/rules/schema/entity-website-missing">
+    A WebSite entity carries your site name in search results and is what every page should point back to with isPartOf.
+  </Card>
+  <Card title="A business with nothing to attach its reputation to" icon="circle-info" href="/rules/schema/entity-organization-missing">
+    This site has the pages a business has and no Organization entity for a search engine to hang any of it on.
+  </Card>
+  <Card title="Your organization is not connected to anything that corroborates it" icon="circle-info" href="/rules/schema/entity-sameas-missing">
+    sameAs is how a search engine learns the company on your site is the company on LinkedIn and Wikidata.
+  </Card>
+  <Card title="An @id that nothing points at" icon="circle-info" href="/rules/schema/entity-orphan">
+    Giving an entity an identifier is the expensive part. One that nothing references is doing no more than an inline block.
   </Card>
 </CardGroup>
 

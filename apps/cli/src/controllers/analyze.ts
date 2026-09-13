@@ -1,5 +1,7 @@
 // Analyze controller - runs rules on existing crawl data
 
+import type { EntityMap } from "@squirrelscan/core-contracts";
+
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { Effect } from "effect";
 import { existsSync, readdirSync } from "node:fs";
@@ -294,9 +296,32 @@ export async function runAnalyze(
 
     logger.debug("running rules on crawl", crawlId);
 
+    // Entity map (#2091) built BEFORE the rules, because the thirteen
+    // `schema/entity-*` rules read it (#2093). `siteContext` is already
+    // resident here, so this costs one fold over pages that are in memory
+    // regardless. A failure degrades to undefined and those rules skip; it
+    // never fails an analyze.
+    let entityMap: EntityMap | undefined;
+    try {
+      const collector = createEntityMapCollector();
+      collector.absorb(siteContext);
+      entityMap = collector.build(baseUrl);
+    } catch (error) {
+      logger.warn(
+        `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
     // Run rules on site context (no additional parsing)
     const ruleResults = await Effect.runPromise(
-      runRulesOnStorage(storage, crawlId, siteContext, config, assets)
+      runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        config,
+        assets,
+        entityMap ? { entityMap } : undefined
+      )
     );
 
     // Save rule results to storage using batch method for efficiency
@@ -346,17 +371,15 @@ export async function runAnalyze(
       }
     }
 
-    // Entity map (#2091) — rebuilt from the stored pages and written to the
-    // project store, exactly as `squirrel audit` does, so re-analyzing a crawl
-    // refreshes its entity rows instead of leaving the last audit's behind.
-    // Report-only and non-scoring; a failure is logged and never fails analyze.
-    if ("saveEntityMap" in storage) {
-      const collector = createEntityMapCollector();
-      collector.absorb(siteContext);
+    // The map built above is written to the project store, exactly as
+    // `squirrel audit` does, so re-analyzing a crawl refreshes its entity rows
+    // instead of leaving the last audit's behind. Built once and reused rather
+    // than folded a second time here.
+    if (entityMap && "saveEntityMap" in storage) {
       await storeEntityMap({
         storage: storage as import("@/crawler/storage/sqlite").SQLiteStorage,
         crawlId,
-        map: collector.build(baseUrl),
+        map: entityMap,
       });
     }
 

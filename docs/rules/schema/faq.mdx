@@ -38,7 +38,7 @@ An entry counts as valid only when its `@type` is exactly the string `Question`.
 
 Put it in the `<head>` of the FAQ page, and keep every question and answer visible in the page content as well.
 
-The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so an `FAQPage` node nested inside one reports as `No FAQPage schema found`.
+JSON-LD wrapped in an `@graph` array, which is what Yoast, Rank Math and several other generators emit, is read the same as a top-level node: the rule flattens each script before looking for `FAQPage`.
 
 | | |
 |---|---|

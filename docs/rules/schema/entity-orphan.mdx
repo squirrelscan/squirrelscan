@@ -1,0 +1,101 @@
+---
+title: "An @id that nothing points at"
+description: "Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block."
+---
+
+## What an orphan is
+
+An `@id` exists so other nodes can point at it. An entity that has one, that nothing points at, and that appears on exactly one page has paid for a feature it does not use.
+
+Sometimes that is a leftover: a node that used to be referenced before a template changed. Sometimes it is a missed connection, where an `about` or `mainEntity` link would tell a search engine what the page is actually for.
+
+This is the lowest-severity rule in the set. It is a tidiness finding, not a defect, and it is reported at info for that reason.
+
+## What squirrel checks
+
+The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-orphan`.
+
+- Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
+- Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
+- Passes with the message `Every entity with an @id is referenced or spans more than one page`.
+- Reports at info with the message `N entities have an @id that nothing references, on one page each`, plus ` (+N more entities)` when more matched than are listed.
+
+Entities that describe or ARE their page are never reported. That is an explicit list rather than a judgement about each type: `WebPage` and the page subtypes, `BreadcrumbList`, `FAQPage`, `Question`, `Answer`, the article types, and the types a page is usually built around, such as `Product`, `Event`, `Recipe`, `Course` and `JobPosting`. Nothing else on a site should point at a page's own breadcrumb, and a product detail page IS the product rather than something another node should reference.
+
+Without those exclusions this rule reports the site's page count rather than a finding. On a real 40-page crawl of a large hosting site, 73 of the 79 entities it would otherwise have listed were breadcrumbs and articles.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem single-page` for the full list.
+
+## How to fix it
+
+Two options, and neither is worse than the current state.
+
+Reference it, if something on the site is about it. An `about` or `mainEntity` link from the page to the entity is usually the missing piece:
+
+```json
+{ "@type": "WebPage", "about": { "@id": "https://example.com/#product-line" } }
+```
+
+Or drop the `@id` and inline the entity where it is used. A node used once does not need an identifier, and removing it makes the markup honest about that.
+
+See [fixing structured data identity](/entity-map/fixing).
+
+| | |
+|---|---|
+| **Rule ID** | `schema/entity-orphan` |
+| **Category** | [Structured Data](/rules/schema) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/entity-orphan"]
+```
+
+### Disable all Structured Data rules
+
+```toml squirrel.toml
+[rules]
+disable = ["schema/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["schema/entity-orphan"]
+disable = ["*"]
+```
+
+## Related rules
+
+- [schema/entity-dangling](/rules/schema/entity-dangling): the mirror: a reference with nothing declared behind it.
+- [schema/entity-website-missing](/rules/schema/entity-website-missing): page entities that do not link to the WebSite.
+- [schema/entity-identity](/rules/schema/entity-identity): the opposite habit: no `@id` where one is needed.
+- [schema/json-ld-valid](/rules/schema/json-ld-valid): the per-page check that the JSON-LD parses at all.
+
+Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [JSON-LD 1.1: node objects, W3C](https://www.w3.org/TR/json-ld11/#node-objects)
+- [mainEntity, schema.org](https://schema.org/mainEntity)
+- [about, schema.org](https://schema.org/about)
+
+## Check your site
+
+Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Structured Data section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -7,6 +7,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { flattenJsonLdNodes } from "@squirrelscan/utils";
+
 import { crossCheckSocials, socialPlatformLabel } from "../social/social-match";
 
 const REQUIRED_PROPS = ["name", "url"];
@@ -36,24 +38,24 @@ export const organizationSchemaRule: Rule = {
     let orgSchema: Record<string, unknown> | null = null;
 
     for (const script of schemaScripts) {
-      try {
-        const data = JSON.parse(script.textContent || "");
-        const schemas = Array.isArray(data) ? data : [data];
+      // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
+      // descended into rather than read as one typeless node (#317). Per
+      // SCRIPT and not over the joined `schema.raw`, because that join can
+      // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
+      // empty list, which is what the old try/catch was for.
+      const schemas = flattenJsonLdNodes(script.textContent || "");
 
-        for (const schema of schemas) {
-          const type = schema["@type"];
-          if (
-            type === "Organization" ||
-            type === "Corporation" ||
-            (Array.isArray(type) &&
-              (type.includes("Organization") || type.includes("Corporation")))
-          ) {
-            orgSchema = schema;
-            break;
-          }
+      for (const schema of schemas) {
+        const type = schema["@type"];
+        if (
+          type === "Organization" ||
+          type === "Corporation" ||
+          (Array.isArray(type) &&
+            (type.includes("Organization") || type.includes("Corporation")))
+        ) {
+          orgSchema = schema;
+          break;
         }
-      } catch {
-        // Invalid JSON
       }
     }
 

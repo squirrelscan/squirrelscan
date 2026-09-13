@@ -6,6 +6,7 @@ import { mapWithConcurrency } from "@squirrelscan/utils";
 
 import type {
   CheckResult,
+  EntityMap,
   IntelContext,
   SiteMetadata,
   SiteQuery,
@@ -68,6 +69,14 @@ export interface RunnerScope {
    * opted-in; the integrity intel rules contribute nothing.
    */
   intel?: IntelContext;
+  /**
+   * The site's entity map for THIS run (#2091), threaded into `ctx.entityMap`.
+   * Scope rather than a `runSiteRules` argument, deliberately: like `intel` it
+   * is resolved before the runner exists, and unlike `siteQuery` it is a
+   * finished immutable document rather than a handle onto live storage.
+   * Undefined = not built; the `schema/entity-*` rules skip.
+   */
+  entityMap?: EntityMap;
 }
 
 export interface RunnerOptions extends RunnerScope {
@@ -172,12 +181,14 @@ export class RuleRunner {
   private readonly siteMetadata: SiteMetadata | undefined;
   private readonly cloudResults: CloudResultStore | undefined;
   private readonly intel: IntelContext | undefined;
+  private readonly entityMap: EntityMap | undefined;
 
   constructor(options: RunnerOptions) {
     this.config = options.config;
     this.siteMetadata = options.siteMetadata;
     this.cloudResults = options.cloudResults;
     this.intel = options.intel;
+    this.entityMap = options.entityMap;
     this.ruleConcurrency = Math.max(
       1,
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
@@ -448,6 +459,7 @@ export class RuleRunner {
         const siteMetadata = this.siteMetadata;
         const cloudResults = this.cloudResults;
         const intel = this.intel;
+        const entityMap = this.entityMap;
 
         // For site-scope rules, we need to provide page context: use the first
         // page or a dummy if no pages. Built once and shared (read-only).
@@ -482,6 +494,7 @@ export class RuleRunner {
               siteMetadata,
               cloudResults,
               intel,
+              entityMap,
               options: getRuleOptions(rule, this.config),
             };
             return Promise.resolve(this.runOneRule(rule, ctx, siteMetadata, "site"));
