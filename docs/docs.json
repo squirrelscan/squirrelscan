@@ -3,6 +3,20 @@
   "theme": "cirrus",
   "name": "squirrelscan",
   "siteUrl": "https://docs.squirrelscan.com",
+  "sameAs": [
+    "https://squirrelscan.com",
+    "https://github.com/squirrelscan",
+    "https://x.com/squirrelscan_",
+    "https://www.linkedin.com/company/squirrelscan/"
+  ],
+  "seo": {
+    "locale": "en",
+    "organization": {
+      "name": "squirrelscan",
+      "url": "https://squirrelscan.com",
+      "logo": "/logo/light.svg"
+    }
+  },
   "description": "The website QA tool for your coding agent",
   "colors": {
     "primary": "#C4530F",
