@@ -96,8 +96,18 @@ describe("the viewer script itself", () => {
   );
 
   test("parses as JavaScript", () => {
-    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
-      .map((match) => match[1]!)
+    // Case-insensitive and tolerant of attributes. Our own renderer emits
+    // lowercase `<script>` today, so a stricter pattern would pass now and
+    // silently match nothing the moment that changes — a test that extracts
+    // zero scripts and then asserts nothing about them is worse than no test.
+    //
+    // The inlined map rides in a `type="application/json"` block, which is not
+    // JavaScript and must not be handed to the parser. Selected by TYPE rather
+    // than by sniffing the content, so the two cannot be confused as the
+    // document grows.
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
+      .filter(([, attrs]) => !/type\s*=\s*["']?application\/json/i.test(attrs!))
+      .map((match) => match[2]!)
       .filter((source) => source.trim().length > 0);
     expect(scripts.length).toBeGreaterThan(0);
 
