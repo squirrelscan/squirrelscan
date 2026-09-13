@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.94",
+      "version": "0.0.95",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -65,7 +65,7 @@
     "docs": {
       "name": "@squirrelscan/docs",
       "devDependencies": {
-        "tangly": "0.4.0",
+        "tangly": "0.5.0",
         "wrangler": "^4.20.0",
       },
     },
@@ -978,21 +978,21 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.3", "", { "dependencies": { "@tailwindcss/node": "4.3.3", "@tailwindcss/oxide": "4.3.3", "tailwindcss": "4.3.3" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw=="],
 
-    "@tanglydocs/schema": ["@tanglydocs/schema@0.3.0", "", { "dependencies": { "zod": "^4.3.6" } }, "sha512-PVBhT+rEeeY392RIF+/4/1yejQLNWAV3yfv5cTy4XXJp7dRvL8ozJwpB+n6QncGRqwgJ7pzijrWeqc5vUDKe2A=="],
+    "@tanglydocs/schema": ["@tanglydocs/schema@0.4.0", "", { "dependencies": { "zod": "^4.3.6" } }, "sha512-nhB5zYJxQRyZSSe6tCG91Rrfm79nyG11hYde0pT200iUxxfeS+SMejILqwB1AGdKAjTzfp1ipnQe5dOD+4+LLQ=="],
 
-    "@tanglydocs/theme-cirrus": ["@tanglydocs/theme-cirrus@0.2.0", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.4.0", "tailwindcss": "^4.2.4" } }, "sha512-swuZQEHzxGm7b4COYUcjLsoib7Zj3JTWlaVFoDxsRRmgs0uTX5SB/+sdgUEzDzuuoRHPZCt7nFXg6XDQLOyHbA=="],
+    "@tanglydocs/theme-cirrus": ["@tanglydocs/theme-cirrus@0.2.1", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.5.0", "tailwindcss": "^4.2.4" } }, "sha512-B/mHzQxZYSGDOIP7cfR/z1mzHetKJhUFStSdv4pJUvH1cFsMdSVCwE9f4zmJHtt5ZC2uUzaor/vhDH+iYVnObw=="],
 
-    "@tanglydocs/theme-geist": ["@tanglydocs/theme-geist@0.1.9", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.4.0", "tailwindcss": "^4.2.4" } }, "sha512-96dKbpbSXxVoBQW6M/PZhhtBcxpNAwGX1mNon4X2T+xM1IiRbqFsbIABTuotIIE/kGCjRzsukjOSynnKGJWSTA=="],
+    "@tanglydocs/theme-geist": ["@tanglydocs/theme-geist@0.1.10", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.5.0", "tailwindcss": "^4.2.4" } }, "sha512-WO7G1qfOWIBCSdA1Mxb7fmk3+VpYBapCsVKPTIHIjDUsa5+8wVC02Dur/ER9EfdMeZYwTMSDS2Z+d1+0euwytg=="],
 
-    "@tanglydocs/theme-pip": ["@tanglydocs/theme-pip@0.1.9", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.4.0", "tailwindcss": "^4.2.4" } }, "sha512-l9NE4nz8d5hZqAHRmunYPW6cyRyb191bQR3HGYNTTXqfNAc4/GIXVSWaXkVgcBl2y/maupG5RgMZrhckJFnRgQ=="],
+    "@tanglydocs/theme-pip": ["@tanglydocs/theme-pip@0.2.0", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.5.0", "tailwindcss": "^4.2.4" } }, "sha512-1uTbyyxhp1uo+oWNhh6JguXMpbnHmGVPtSyu+QnZsFkfUk7Fz8RKsf4s2++gHfufjeOWFk2tNHS+L4QLyND1DQ=="],
 
-    "@tanglydocs/theme-pith": ["@tanglydocs/theme-pith@0.1.9", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.4.0", "tailwindcss": "^4.2.4" } }, "sha512-USm+d6BQDMnJMYPhNib69lgg0xgJ4MYURYKgr3wm1RYfHKeM4HGAcxeo1pbLYi2pa4Gxu4malE4LAvukH8nA/w=="],
+    "@tanglydocs/theme-pith": ["@tanglydocs/theme-pith@0.2.0", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.5.0", "tailwindcss": "^4.2.4" } }, "sha512-05xVq9OVuAh7DieDpS5ym+aPmcl+NQcwj6N+dW91OwGFo4FsCIUTXQF7Zvh5VYzNneyE1wJ3OvT/nKaYUPjnvw=="],
 
-    "@tanglydocs/theme-readable": ["@tanglydocs/theme-readable@0.1.9", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.4.0", "tailwindcss": "^4.2.4" } }, "sha512-5N85ogFeQrF6tixVxY8OivR0lALwL8c/x8mFpDrwL4wHoAq2WN8dghNPZvENUUmWv+gl751htZ0WOE+VAHuQ/g=="],
+    "@tanglydocs/theme-readable": ["@tanglydocs/theme-readable@0.2.0", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.5.0", "tailwindcss": "^4.2.4" } }, "sha512-isAUUieZ+MX5ShDY1fP7YXD7tlo+AEXmW2JO604psRlmb8hHdqams61ZAJuHEsdtUYhtkd/i9irXlk3s7UjLmg=="],
 
-    "@tanglydocs/theme-tang": ["@tanglydocs/theme-tang@0.1.9", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.4.0", "tailwindcss": "^4.2.4" } }, "sha512-ivNbA3KB1f7iaUSH/Xo1ObAWT5vvtbjxcmL+8sMI6AGlyruMF3/Y5FL7ekS8IYemeCLBwiS9K2UhDcMRAPyBTg=="],
+    "@tanglydocs/theme-tang": ["@tanglydocs/theme-tang@0.1.10", "", { "dependencies": { "@tanglydocs/theme-ui": "^0.5.0", "tailwindcss": "^4.2.4" } }, "sha512-SO0jIPPVk5u8W3qnKgyUH57wqz8I84ExIc4RwmkIp8Ap4dDv/2XEjvdLaQcKGXOfDrrfQ3bdV07ZccIO491u3A=="],
 
-    "@tanglydocs/theme-ui": ["@tanglydocs/theme-ui@0.4.0", "", { "dependencies": { "@astrojs/mdx": "^5.0.4", "@scalar/api-reference": "^1.53.1", "@tailwindcss/vite": "^4.2.4", "@tanglydocs/schema": "^0.3.0", "astro": "^6.1.10", "hast-util-from-html": "^2.0.3", "hast-util-to-string": "^3.0.1", "hastscript": "^9.0.0", "katex": "^0.16.45", "lucide": "^1.12.0", "mermaid": "^11.14.0", "rehype": "^13.0.2", "rehype-sanitize": "^6.0.0", "rehype-stringify": "^10.0.1", "remark-gfm": "^4.0.1", "remark-parse": "^11.0.0", "remark-rehype": "^11.1.2", "tailwindcss": "^4.2.4", "unified": "^11.0.5", "unist-util-visit": "^5.0.0", "vfile": "^6.0.3" } }, "sha512-6FGrF3YYNCFRiupX9dKbo1EP+SwI7kyRnKqhU7IclxCgQkskJBG1fktUZ4LLEQkayaBJDeD2oyAeHj4XrjnMFg=="],
+    "@tanglydocs/theme-ui": ["@tanglydocs/theme-ui@0.5.0", "", { "dependencies": { "@astrojs/mdx": "^5.0.4", "@scalar/api-reference": "^1.53.1", "@tailwindcss/vite": "^4.2.4", "@tanglydocs/schema": "^0.4.0", "astro": "^6.1.10", "hast-util-from-html": "^2.0.3", "hast-util-to-string": "^3.0.1", "hastscript": "^9.0.0", "katex": "^0.16.45", "lucide": "^1.12.0", "mermaid": "^11.14.0", "rehype": "^13.0.2", "rehype-sanitize": "^6.0.0", "rehype-stringify": "^10.0.1", "remark-gfm": "^4.0.1", "remark-parse": "^11.0.0", "remark-rehype": "^11.1.2", "tailwindcss": "^4.2.4", "unified": "^11.0.5", "unist-util-visit": "^5.0.0", "vfile": "^6.0.3" } }, "sha512-B2HJfwMn7CpCPzGAOcpF39d9yorY01V/24UsHkBLpdCFc/e5GE24OZiBZAhmmZEz+ad9k7U5C5PlcRXOBXBxVA=="],
 
     "@tanstack/virtual-core": ["@tanstack/virtual-core@3.17.6", "", {}, "sha512-h0/Ebo18CkOrChlQIhNtQkM5ySUnh/GumQ/D1st3hG2HWUPEF+ILUc2k29UtivCi/9G7w7G3/f7Xyd5cCFbKBw=="],
 
@@ -2600,7 +2600,7 @@
 
     "tailwindcss": ["tailwindcss@4.3.3", "", {}, "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="],
 
-    "tangly": ["tangly@0.4.0", "", { "dependencies": { "@astrojs/cloudflare": "^14.2.4", "@astrojs/markdown-remark": "^7.2.4", "@astrojs/mdx": "^7.0.8", "@astrojs/node": "^11.1.4", "@astrojs/preact": "^6.0.4", "@astrojs/vercel": "^11.0.8", "@clack/prompts": "^1.2.0", "@mdx-js/mdx": "^3.1.1", "@resvg/resvg-wasm": "^2.6.2", "@shikijs/rehype": "^4.0.2", "@shikijs/transformers": "^4.0.2", "@shikijs/twoslash": "^4.0.2", "@tailwindcss/vite": "^4.2.4", "@tanglydocs/schema": "^0.3.0", "@tanglydocs/theme-cirrus": "^0.2.0", "@tanglydocs/theme-geist": "^0.1.9", "@tanglydocs/theme-pip": "^0.1.9", "@tanglydocs/theme-pith": "^0.1.9", "@tanglydocs/theme-readable": "^0.1.9", "@tanglydocs/theme-tang": "^0.1.9", "@tanglydocs/theme-ui": "^0.4.0", "astro": "^7.2.6", "chokidar": "^5.0.0", "citty": "^0.2.2", "github-slugger": "^2.0.0", "gray-matter": "^4.0.3", "ignore": "^7", "katex": "^0.16.45", "pagefind": "^1.5.2", "piccolore": "^0.1.3", "picocolors": "^1.1.1", "preact": "^10.29.2", "rehype-autolink-headings": "^7.1.0", "rehype-katex": "^7.0.1", "rehype-slug": "^6.0.0", "rehype-stringify": "^10.0.1", "remark-gfm": "^4.0.1", "remark-math": "^6.0.0", "remark-parse": "^11.0.0", "remark-rehype": "^11.1.2", "satori": "^0.26.0", "shiki": "^4.0.2", "tailwindcss": "^4.2.4", "twoslash": "^0.3.8", "unified": "^11.0.5", "unist-util-visit": "^5.1.0", "unist-util-visit-parents": "^6.0.2", "zod": "^4.3.6" }, "peerDependencies": { "vite": "^8.2.2" }, "bin": { "tangly": "bin/tangly.js" } }, "sha512-BI6zZSFr+nOQzLYAf3kcQq8SgLBVLbmbz55Baq0Hn2vDl/hvOo5IJPukcGoEBzqByNhofB2D/P1ibnjOdu6FuQ=="],
+    "tangly": ["tangly@0.5.0", "", { "dependencies": { "@astrojs/cloudflare": "^14.2.4", "@astrojs/markdown-remark": "^7.2.4", "@astrojs/mdx": "^7.0.8", "@astrojs/node": "^11.1.4", "@astrojs/preact": "^6.0.4", "@astrojs/vercel": "^11.0.8", "@clack/prompts": "^1.2.0", "@mdx-js/mdx": "^3.1.1", "@resvg/resvg-wasm": "^2.6.2", "@shikijs/rehype": "^4.0.2", "@shikijs/transformers": "^4.0.2", "@shikijs/twoslash": "^4.0.2", "@tailwindcss/vite": "^4.2.4", "@tanglydocs/schema": "^0.4.0", "@tanglydocs/theme-cirrus": "^0.2.1", "@tanglydocs/theme-geist": "^0.1.10", "@tanglydocs/theme-pip": "^0.2.0", "@tanglydocs/theme-pith": "^0.2.0", "@tanglydocs/theme-readable": "^0.2.0", "@tanglydocs/theme-tang": "^0.1.10", "@tanglydocs/theme-ui": "^0.5.0", "astro": "^7.2.6", "chokidar": "^5.0.0", "citty": "^0.2.2", "github-slugger": "^2.0.0", "gray-matter": "^4.0.3", "ignore": "^7", "katex": "^0.16.45", "pagefind": "^1.5.2", "piccolore": "^0.1.3", "picocolors": "^1.1.1", "preact": "^10.29.2", "rehype-autolink-headings": "^7.1.0", "rehype-katex": "^7.0.1", "rehype-slug": "^6.0.0", "rehype-stringify": "^10.0.1", "remark-gfm": "^4.0.1", "remark-math": "^6.0.0", "remark-parse": "^11.0.0", "remark-rehype": "^11.1.2", "satori": "^0.26.0", "shiki": "^4.0.2", "tailwindcss": "^4.2.4", "twoslash": "^0.3.8", "unified": "^11.0.5", "unist-util-visit": "^5.1.0", "unist-util-visit-parents": "^6.0.2", "zod": "^4.3.6" }, "peerDependencies": { "vite": "^8.2.2" }, "bin": { "tangly": "bin/tangly.js" } }, "sha512-11ZiZOouYBDxqclmhHqH5PqIihhieuKFHwzr9zT4oSMlH+yUnnbYCMP1fcCpEQzn/H2u0d59CXojpUDcWfNMLg=="],
 
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 
