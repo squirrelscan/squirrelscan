@@ -353,6 +353,19 @@ export const EntityMapDiffIdChangeSchema = Type.Object({
   types: Type.Array(Type.String()),
   name: Type.Union([Type.String(), Type.Null()]),
   id: Type.Union([Type.String(), Type.Null()]),
+  /**
+   * Whether the newer audit actually visited the pages that were broken.
+   *
+   * `proven` means every page the older map recorded for this entity was
+   * crawled again, so the change describes the whole site. `partial` means at
+   * least one of those pages went unvisited: the new `@id` is real on the pages
+   * that were seen, and the unvisited ones may still carry the old markup.
+   *
+   * This is the same discipline that separates `removed` from `notCrawled`,
+   * carried onto the field an agent uses to decide a fix landed. Required, not
+   * optional: a consumer that forgets it would report a partial result as proof.
+   */
+  coverage: Type.Union([Type.Literal("proven"), Type.Literal("partial")]),
 });
 
 export type EntityMapDiffIdChange = Static<typeof EntityMapDiffIdChangeSchema>;

@@ -155,6 +155,10 @@ export function diffEntityMaps(
   const newerNodes = new Map(newer.nodes.map((node) => [node.key, node] as const));
   const olderPages = pageSet(older);
   const newerPages = pageSet(newer);
+  // Built BEFORE the identity block, not after it: an entity matched as an id
+  // change never reaches the added/removed/notCrawled split below, so this is
+  // the only place its coverage can be established.
+  const fullyRecrawled = buildCoverageTest(older, newerPages);
 
   // ── identity changes ─────────────────────────────────────────────
   // Resolved first: a node that gained an `@id` is NOT an add plus a remove,
@@ -199,6 +203,15 @@ export function diffEntityMaps(
     const before = befores[0]!;
     const node = afters[0]!;
 
+    // Matching on identity says the SAME entity now carries an `@id`. It does
+    // not say the pages that were broken are the pages that were fixed: an
+    // audit that visited /c and /d can pair them against an id-less entity last
+    // seen on /a and /b and report a clean fix while /a and /b still emit the
+    // old markup. The pairing is still right — it is the same entity — so the
+    // honest move is to report it and qualify it, not to drop it back into
+    // added plus removed.
+    const coverage = fullyRecrawled(before) ? "proven" : "partial";
+
     if (node.id !== null && before.id === null) {
       gainedId.push({
         beforeKey: before.key,
@@ -206,6 +219,7 @@ export function diffEntityMaps(
         types: node.types,
         name: node.name,
         id: node.id,
+        coverage,
       });
     } else if (node.id === null && before.id !== null) {
       lostId.push({
@@ -214,6 +228,7 @@ export function diffEntityMaps(
         types: node.types,
         name: node.name,
         id: before.id,
+        coverage,
       });
     } else {
       continue;
@@ -228,8 +243,6 @@ export function diffEntityMaps(
     if (olderNodes.has(node.key) || matchedNewer.has(node.key)) continue;
     added.push(toDiffNode(node));
   }
-
-  const fullyRecrawled = buildCoverageTest(older, newerPages);
 
   const removed: EntityMapDiffNode[] = [];
   const notCrawled: EntityMapDiffNode[] = [];

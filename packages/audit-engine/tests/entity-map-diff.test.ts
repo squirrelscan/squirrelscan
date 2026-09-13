@@ -155,6 +155,61 @@ describe("diffEntityMaps", () => {
     // The whole point: not an add plus a remove.
     expect(result.added).toHaveLength(0);
     expect(result.removed).toHaveLength(0);
+    // /a is the only page that declared the id-less version, and the newer
+    // crawl visited it, so the fix is proven across the whole site.
+    expect(result.gainedId[0]!.coverage).toBe("proven");
+  });
+
+  test("gainedId on pages the newer crawl never visited is reported as partial", () => {
+    // The failure this field exists for. An agent fixes an entity, re-audits a
+    // narrower slice of the site, and asks whether the fix landed. Identity
+    // matching says yes — it IS the same entity — but the pages that were
+    // broken were never looked at again, so "yes" would be a guess dressed as
+    // a verification.
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+      pages: ["https://example.com/a", "https://example.com/b"],
+    });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+      pages: ["https://example.com/c", "https://example.com/d"],
+    });
+    const result = diff(
+      map([before], [], ["https://example.com/a", "https://example.com/b"]),
+      map([after], [], ["https://example.com/c", "https://example.com/d"]),
+    );
+
+    expect(result.gainedId).toHaveLength(1);
+    expect(result.gainedId[0]!.coverage).toBe("partial");
+    // Still one change rather than an add plus a remove: the pairing is
+    // correct, only the claim about reach is weaker.
+    expect(result.added).toHaveLength(0);
+    expect(result.removed).toHaveLength(0);
+    expect(result.notCrawled).toHaveLength(0);
+  });
+
+  test("a capped page list can never prove coverage", () => {
+    // `morePages > 0` means the node carries a SAMPLE of its pages, so
+    // recrawling every page it lists proves nothing about the rest.
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+      pages: ["https://example.com/a"],
+      morePages: 40,
+    });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+    });
+    const result = diff(map([before], [], PAGES), map([after], [], PAGES));
+
+    expect(result.gainedId[0]!.coverage).toBe("partial");
   });
 
   test("lostId: the same match in reverse", () => {
