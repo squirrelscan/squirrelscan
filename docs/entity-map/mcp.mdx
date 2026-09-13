@@ -84,7 +84,9 @@ The whole graph, or a filtered part of it, in one of six formats.
 
 No node cap is not the same as complete. Every format renders the stored map, and on the local server that map carries no per-edge page list and no per-page reference list, so those arrays are empty because the CLI never stored them, not because nothing matched. Mermaid's cap bounds declared entities only: one entity referencing thousands of undeclared ids still draws thousands of placeholder nodes.
 
-Takes the same filters as `list_entities`. `mermaid` and `markdown` exist to fit a context window and say so in `truncation` when they cut; the other four are complete. `format` defaults to `json`.
+Takes the same filters as `list_entities`. `mermaid` and `markdown` exist to fit a context window and say so in `truncation` when they cut. `format` defaults to `json`.
+
+Not every server implements every format. One that does not says so rather than returning an empty or partial graph, so read the error instead of treating a refusal as a site with nothing to draw.
 
 <Note>
 The `jsonld` rendering gives every entity an `@id`, inventing one for each entity the site left anonymous, because a `@graph` member without an identifier is not much use in a validator. JSON-LD has nowhere to mark an identifier as a placeholder, so `generatedIds` lists them: the entity key and the `@id` this export made up for it. Those identifiers are not on the site. Read that list before concluding from the export that a site's entities are identified, which is the exact question that usually sends you here.
@@ -175,7 +177,9 @@ They also will not tell you a site is clean when they have not looked. A tool th
 
 ## References
 
-- [The entity map](/entity-map): what it is and how to read it
-- [Fixing structured data identity](/entity-map/fixing): the change to make in each generator
-- [`squirrel entities`](/cli/entities): the same queries from the command line
-- [MCP server guide](/developers/mcp): connecting an agent
+- [The entity map](/entity-map) — what it is and how to read it
+- [The entity map on your machine](/entity-map/cli) — the same queries from the command line
+- [The entity map in the cloud](/entity-map/cloud) — the dashboard and the API
+- [The entity map format](/entity-map/format) — the documents these tools return
+- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator
+- [MCP server guide](/developers/mcp) — connecting an agent
