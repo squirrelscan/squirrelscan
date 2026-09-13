@@ -15,7 +15,7 @@ import {
   buildSiteContext,
   fetchResourceAssets,
 } from "@/audit/adapter";
-import { buildAndStoreEntityMap } from "@/audit/entity-map";
+import { storeEntityMap } from "@/audit/entity-map";
 import { loadConfig } from "@/config";
 import {
   type Result,
@@ -353,11 +353,10 @@ export async function runAnalyze(
     if ("saveEntityMap" in storage) {
       const collector = createEntityMapCollector();
       collector.absorb(siteContext);
-      await buildAndStoreEntityMap({
+      await storeEntityMap({
         storage: storage as import("@/crawler/storage/sqlite").SQLiteStorage,
         crawlId,
-        siteUrl: baseUrl,
-        pages: collector.build(),
+        map: collector.build(baseUrl),
       });
     }
 

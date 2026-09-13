@@ -164,6 +164,15 @@ function tail(shown: number, total: number, noun: string): string[] {
 }
 
 /**
+ * What a findings section says when the summary reports findings but the map it
+ * was handed carries none of them — the hosted copy of a large map, clipped to
+ * fit the publish payload.
+ */
+function clippedNote(total: number, singular: string, plural: string): string {
+  return `${total} ${total === 1 ? singular : plural} affected, not included in this copy of the map.`;
+}
+
+/**
  * The Entities section as markdown lines, shared by the markdown report format
  * and by the engine's standalone entity-map document so the two can never
  * disagree.
@@ -209,10 +218,17 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
   lines.push(...tail(Math.min(ranked.length, ENTITY_TABLE_LIMIT), ranked.length, "entities"));
   lines.push("");
 
+  // Counts come from the SUMMARY, not from the rows present: a map clipped for
+  // the publish payload still knows what the site declared, and a section that
+  // counted only what survived would report "nothing wrong" about a site with
+  // findings it simply could not carry.
   const conflicted = conflictedEntities(map);
-  lines.push(`${sub} Conflicting properties (${conflicted.length})`, "");
-  if (conflicted.length === 0) {
+  const conflictTotal = Math.max(map.summary.conflictCount, conflicted.length);
+  lines.push(`${sub} Conflicting properties (${conflictTotal})`, "");
+  if (conflictTotal === 0) {
     lines.push("No entity disagrees with itself across pages.", "");
+  } else if (conflicted.length === 0) {
+    lines.push(clippedNote(conflictTotal, "entity", "entities"), "");
   } else {
     lines.push(
       "The same entity declares different values on different pages. Pick one and make every page agree.",
@@ -235,15 +251,18 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
       }
     }
     lines.push(
-      ...tail(Math.min(conflicted.length, ENTITY_FINDING_LIMIT), conflicted.length, "entities"),
+      ...tail(Math.min(conflicted.length, ENTITY_FINDING_LIMIT), conflictTotal, "entities"),
       "",
     );
   }
 
   const dangling = danglingEdges(map);
-  lines.push(`${sub} Dangling references (${dangling.length})`, "");
-  if (dangling.length === 0) {
+  const danglingTotal = Math.max(map.summary.danglingCount, dangling.length);
+  lines.push(`${sub} Dangling references (${danglingTotal})`, "");
+  if (danglingTotal === 0) {
     lines.push("Every `@id` reference points at an entity some page declares.", "");
+  } else if (dangling.length === 0) {
+    lines.push(clippedNote(danglingTotal, "reference", "references"), "");
   } else {
     lines.push(
       "A page references an entity by `@id` that no crawled page declares. Declare it, or drop the reference.",
@@ -257,15 +276,18 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
       );
     }
     lines.push(
-      ...tail(Math.min(dangling.length, ENTITY_FINDING_LIMIT), dangling.length, "references"),
+      ...tail(Math.min(dangling.length, ENTITY_FINDING_LIMIT), danglingTotal, "references"),
       "",
     );
   }
 
   const unstable = entitiesWithoutId(map);
-  lines.push(`${sub} Entities without an @id (${unstable.length})`, "");
-  if (unstable.length === 0) {
+  const unstableTotal = Math.max(map.summary.nodesWithoutIdCount, unstable.length);
+  lines.push(`${sub} Entities without an @id (${unstableTotal})`, "");
+  if (unstableTotal === 0) {
     lines.push("Every entity declared on more than one page carries an `@id`.", "");
+  } else if (unstable.length === 0) {
+    lines.push(clippedNote(unstableTotal, "entity", "entities"), "");
   } else {
     lines.push(
       "Declared on several pages with no `@id`, so a search engine has no way to tell they are one thing. Give each a stable `@id` such as `https://your.site/#organization` and reference that id everywhere else.",
@@ -279,7 +301,7 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
       );
     }
     lines.push(
-      ...tail(Math.min(unstable.length, ENTITY_FINDING_LIMIT), unstable.length, "entities"),
+      ...tail(Math.min(unstable.length, ENTITY_FINDING_LIMIT), unstableTotal, "entities"),
       "",
     );
   }

@@ -70,9 +70,69 @@ function map(nodes: EntityMapNode[], edges: EntityMapEdge[], pageCount = 0): Ent
 }
 
 describe("slimEntityMapForPublish", () => {
-  test("returns a small map untouched", () => {
+  test("leaves a small map's content alone", () => {
     const small = map([node("a", 3)], [], 0);
-    expect(slimEntityMapForPublish(small)).toBe(small);
+    const slim = slimEntityMapForPublish(small);
+    // A fresh object every time — the projection always clamps strings, so it
+    // can never hand back the caller's own map to be mutated downstream.
+    expect(slim).not.toBe(small);
+    expect(slim.nodes).toEqual(small.nodes);
+    expect(slim.edges).toEqual(small.edges);
+    expect(slim.summary).toEqual(small.summary);
+  });
+
+  test("clamps a site-controlled string that no count would bound", () => {
+    const huge = node("a", 3);
+    huge.name = "x".repeat(50_000);
+    huge.properties = { name: huge.name, description: "y".repeat(50_000) };
+    const slim = slimEntityMapForPublish(map([huge], []));
+
+    expect(slim.nodes[0]!.name!.length).toBeLessThanOrEqual(
+      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength,
+    );
+    expect(slim.nodes[0]!.properties.description!.length).toBeLessThanOrEqual(
+      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength,
+    );
+  });
+
+  test("drops nodes until the serialized map fits the byte budget", () => {
+    // Node and edge counts alone do NOT bound bytes: these are all under the
+    // node cap and still enormous, which is the case that blew the publish gate.
+    // Sized against what SURVIVES clamping, not against raw input: each node
+    // keeps 5 conflicts x 5 values x ~512 chars ≈ 18KB, so 400 of them is ~7MB
+    // against a 512KB budget and the loop has to drop most of them.
+    const fat: EntityMapNode[] = [];
+    for (let i = 0; i < 400; i += 1) {
+      const n = node(`n${String(i).padStart(4, "0")}`, i);
+      n.conflicts = Array.from({ length: 5 }, (_, c) => ({
+        property: `p${c}`,
+        values: Array.from({ length: 8 }, (_, v) => ({
+          value: "z".repeat(4000),
+          pages: Array.from({ length: 20 }, (_, p) => `https://example.com/${v}/${p}`),
+          morePages: 0,
+        })),
+      }));
+      fat.push(n);
+    }
+    const slim = slimEntityMapForPublish(map(fat, []));
+
+    expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
+      ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
+    );
+    // The busiest entities are the ones that survived.
+    expect(slim.nodes.length).toBeGreaterThan(0);
+    expect(slim.summary.nodeCount).toBe(400);
+  });
+
+  test("counts the pages it dropped rather than losing them", () => {
+    const wide = node("a", 60);
+    wide.pages = Array.from({ length: 50 }, (_, i) => `https://example.com/${i}`);
+    wide.morePages = 10;
+    const slim = slimEntityMapForPublish(map([wide], []));
+
+    expect(slim.nodes[0]!.pages).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxPages);
+    // 10 already beyond the document cap, plus the 45 this projection dropped.
+    expect(slim.nodes[0]!.morePages).toBe(10 + 50 - ENTITY_MAP_PUBLISH_LIMITS.maxPages);
   });
 
   test("always drops pages, even when nothing else is over the limit", () => {

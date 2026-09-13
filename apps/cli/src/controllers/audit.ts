@@ -18,7 +18,6 @@ import type { RenderChargeLine } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import { createCloudDocumentFetcher } from "@squirrelscan/audit-engine";
-import { slimEntityMapForPublish } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
@@ -48,7 +47,7 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
-import { buildAndStoreEntityMap } from "@/audit/entity-map";
+import { storeEntityMap } from "@/audit/entity-map";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -1903,16 +1902,18 @@ export async function runAudit(
       // report so every format can render it. Report-only: no rule reads it and
       // it never touches the health score.
       //
-      // The copy on the report is capped for the publish body; the store keeps
-      // the full graph, so a later query is not limited by what fit in a payload.
+      // The report keeps the FULL document: `-f json` is the canonical export
+      // and must not be truncated. The publish payload gets its own slimmed
+      // COPY, taken at publish time — slimming in place here would silently cut
+      // the local json report to 750 nodes and drop `pages` entirely.
       try {
-        const entityMap = await buildAndStoreEntityMap({
+        const entityMap = entityMapCollector.build(url);
+        await storeEntityMap({
           storage: sqliteStorage,
           crawlId,
-          siteUrl: url,
-          pages: entityMapCollector.build(),
+          map: entityMap,
         });
-        report.entityMap = slimEntityMapForPublish(entityMap);
+        report.entityMap = entityMap;
       } catch (error) {
         // A finished audit must never be lost to a report-only section.
         logger.warn(

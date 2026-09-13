@@ -19,8 +19,12 @@
 // A crawl-side consumer imports `@squirrelscan/audit-engine/entity-map/collect`
 // instead. (#2094)
 
-export { buildEntityMap } from "./build";
-export type { BuildEntityMapOptions, EntityMapPageInput } from "./build";
+export { buildEntityMap, createEntityMapBuilder } from "./build";
+export type {
+  BuildEntityMapOptions,
+  EntityMapBuilder,
+  EntityMapPageInput,
+} from "./build";
 export { toJsonLd } from "./jsonld";
 export { renderEntityMapHtml } from "./html";
 export { renderEntityMapMarkdown } from "./markdown";

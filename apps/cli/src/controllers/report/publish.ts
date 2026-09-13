@@ -5,6 +5,7 @@
 import type { ResolutionSignal } from "@squirrelscan/core-contracts";
 
 import { computeLockedRules } from "@squirrelscan/audit-engine";
+import { slimEntityMapForPublish } from "@squirrelscan/audit-engine/entity-map";
 import {
   REPORT_LIMITS,
   PUBLISH_LIMITS,
@@ -645,6 +646,13 @@ export function slimForPublish(
 
   return {
     ...report,
+    // #2091: the report carries the FULL entity map, because `-f json` is the
+    // canonical export. The published copy is bounded here instead — node and
+    // edge caps plus a serialized-byte budget, since property values are
+    // site-controlled strings and a count alone does not bound bytes.
+    ...(report.entityMap
+      ? { entityMap: slimEntityMapForPublish(report.entityMap) }
+      : {}),
     pages: [], // Drop all page-level data — renderers use ruleResults only
     // #1990 provenance describes how THIS machine produced the report (what
     // replayed from its local cache), not the site. It has no meaning to a reader

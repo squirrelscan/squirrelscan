@@ -140,10 +140,22 @@ function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+/**
+ * Drop trailing slashes with a backward scan.
+ *
+ * `/\/+$/` backtracks quadratically on a site-controlled path that is a long
+ * run of slashes, and every path here comes from an audited page.
+ */
+function trimTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (end > 1 && path.charCodeAt(end - 1) === 47) end -= 1;
+  return path.slice(0, end);
+}
+
 function normalizeUrlish(value: string, pageUrl: string): string {
   try {
     const url = new URL(value.trim(), pageUrl);
-    const path = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
+    const path = url.pathname.length > 1 ? trimTrailingSlashes(url.pathname) : url.pathname;
     return `${url.protocol}//${url.host.toLowerCase()}${path}${url.search}`;
   } catch {
     return normalizeText(value);
@@ -152,6 +164,23 @@ function normalizeUrlish(value: string, pageUrl: string): string {
 
 function idKey(resolvedId: string): string {
   return `id:${resolvedId}`;
+}
+
+/**
+ * A JSON-LD blank-node identifier. Document-scoped by the spec, so it names a
+ * DIFFERENT entity on every page.
+ *
+ * Resolving one as an ordinary relative URL turns `_:b0` into
+ * `https://site/page/_:b0`, which then merges every page's first blank node
+ * into one entity and reports it as a stable `@id`. Both are wrong.
+ */
+function isBlankNodeId(rawId: string): boolean {
+  return rawId.trim().startsWith("_:");
+}
+
+/** Page-scoped key for a blank node, so two pages never collapse into one. */
+function blankKey(rawId: string, pageUrl: string): string {
+  return `blank:${pageUrl}:${rawId.trim()}`;
 }
 
 /** `@type` as a deduped string list. Non-string entries are dropped. */
@@ -221,14 +250,28 @@ function propertyValueText(properties: EntityMapProperties, key: string): string
 
 // ── Accumulators ───────────────────────────────────────────────────
 
+/**
+ * Where a value was first seen. Ordered by page URL then by position within the
+ * page, so "first" is a property of the SITE and not of crawl order — which is
+ * what lets pages stream in any order and still produce a byte-identical map.
+ */
+interface Origin {
+  page: string;
+  index: number;
+}
+
+function originBefore(a: Origin, b: Origin): boolean {
+  return a.page < b.page || (a.page === b.page && a.index < b.index);
+}
+
 interface NodeAccumulator {
   key: string;
   id: string | null;
-  /** Union of `@type` across occurrences, in first-seen order. */
-  types: string[];
-  typeSeen: Set<string>;
-  /** First declared value per property, in walk order. */
+  /** Union of `@type` across occurrences, each with where it was first seen. */
+  typeOrigin: Map<string, Origin>;
+  /** Canonical value per property, with the origin that won it. */
   properties: EntityMapProperties;
+  propertyOrigin: Map<string, Origin>;
   occurrences: number;
   pages: Set<string>;
   /** property -> value text -> pages carrying it. */
@@ -265,51 +308,79 @@ interface PageAccumulator {
 // ── Builder ────────────────────────────────────────────────────────
 
 /**
- * Build the entity map for one audit.
+ * Accumulates one audit's entity map as pages arrive.
  *
- * Pages are sorted by URL before the walk, so "the first occurrence of an
- * entity" is a property of the site rather than of crawl order: two runs over
- * an unchanged site produce identical output apart from `generatedAt`.
+ * Nothing but the accumulators stays resident: each page's raw JSON-LD is
+ * parsed, folded in, and dropped. Pages may arrive in ANY order — every
+ * "first occurrence" is decided by page URL rather than by arrival, so two runs
+ * over an unchanged site still produce identical output apart from
+ * `generatedAt`.
+ */
+export interface EntityMapBuilder {
+  /** Fold one page in. A repeated URL after the first is ignored. */
+  addPage(url: string, raw: string | null): void;
+  /** Assemble the document. The builder is not reusable afterwards. */
+  finish(siteUrl: string, options?: BuildEntityMapOptions): EntityMap;
+}
+
+export function createEntityMapBuilder(): EntityMapBuilder {
+  const nodes = new Map<string, NodeAccumulator>();
+  const pageAccumulators = new Map<string, PageAccumulator>();
+  const candidates: EdgeCandidate[] = [];
+
+  return {
+    addPage(url: string, raw: string | null): void {
+      // A redirect chain can land two crawl records on one final URL. The page
+      // is counted once; a repeat is ignored UNLESS the first carried no
+      // JSON-LD and this one does, because otherwise the order two records
+      // happened to arrive in would decide whether the site's markup is seen.
+      let pageAccumulator = pageAccumulators.get(url);
+      if (pageAccumulator) {
+        if (!raw || pageAccumulator.entityCount > 0) return;
+      } else {
+        pageAccumulator = {
+          url,
+          declares: new Set(),
+          references: new Set(),
+          entityCount: 0,
+        };
+        pageAccumulators.set(url, pageAccumulator);
+      }
+      if (!raw) return;
+
+      // `flattenJsonLdNodes` handles multi-block raw, top-level arrays and
+      // `@graph` (the Yoast/Rank Math shape). It does NOT descend into ordinary
+      // properties — the nested walk below does that.
+      const roots = flattenJsonLdNodes(raw);
+      const counter = { index: 0 };
+      for (const root of roots) {
+        if (readTypes(root).length === 0) continue;
+        registerNode(root, url, pageAccumulator, nodes, candidates, counter, 0);
+      }
+    },
+
+    finish(siteUrl: string, options: BuildEntityMapOptions = {}): EntityMap {
+      return assemble(nodes, pageAccumulators, candidates, siteUrl, options);
+    },
+  };
+}
+
+/**
+ * Build the entity map from a list of pages.
+ *
+ * A convenience wrapper over {@link createEntityMapBuilder} for callers that
+ * already hold every page — tests, and `squirrel analyze`, which reads a
+ * finished crawl. The audit path streams instead and never materializes this
+ * list.
  */
 export function buildEntityMap(
   pages: EntityMapPageInput[],
   siteUrl: string,
   options: BuildEntityMapOptions = {},
 ): EntityMap {
-  const nodes = new Map<string, NodeAccumulator>();
-  const pageAccumulators = new Map<string, PageAccumulator>();
-  const candidates: EdgeCandidate[] = [];
-
-  // Deduplicate pages by URL (a redirect chain can land two records on one
-  // final URL) and walk them in URL order.
-  const byUrl = new Map<string, EntityMapPageInput>();
-  for (const page of pages) {
-    if (!byUrl.has(page.url)) byUrl.set(page.url, page);
-  }
-  const ordered = [...byUrl.values()].sort((a, b) => compareStrings(a.url, b.url));
-
-  for (const page of ordered) {
-    const pageAccumulator: PageAccumulator = {
-      url: page.url,
-      declares: new Set(),
-      references: new Set(),
-      entityCount: 0,
-    };
-    pageAccumulators.set(page.url, pageAccumulator);
-    if (!page.raw) continue;
-
-    // `flattenJsonLdNodes` handles multi-block raw, top-level arrays and
-    // `@graph` (the Yoast/Rank Math shape). It does NOT descend into ordinary
-    // properties — the nested walk below does that.
-    const roots = flattenJsonLdNodes(page.raw);
-    const counter = { index: 0 };
-    for (const root of roots) {
-      if (readTypes(root).length === 0) continue;
-      registerNode(root, page.url, pageAccumulator, nodes, candidates, counter, 0);
-    }
-  }
-
-  return assemble(nodes, pageAccumulators, candidates, siteUrl, options);
+  const builder = createEntityMapBuilder();
+  for (const page of pages) builder.addPage(page.url, page.raw);
+  return builder.finish(siteUrl, options);
 }
 
 /**
@@ -330,10 +401,16 @@ function registerNode(
 
   const properties = readProperties(raw, pageUrl);
   const rawId = typeof raw["@id"] === "string" ? raw["@id"] : null;
-  const resolvedId = rawId ? resolveId(rawId, pageUrl) : null;
-  const key = resolvedId
-    ? idKey(resolvedId)
-    : syntheticKey(types[0] ?? "Thing", properties, pageUrl, counter.index);
+  // A blank node carries an identifier but NOT a stable one: `id` stays null so
+  // it never counts toward the stable-`@id` share, and the key is page-scoped so
+  // two pages' `_:b0` stay two entities.
+  const blank = rawId !== null && isBlankNodeId(rawId);
+  const resolvedId = rawId && !blank ? resolveId(rawId, pageUrl) : null;
+  const key = blank
+    ? blankKey(rawId, pageUrl)
+    : resolvedId
+      ? idKey(resolvedId)
+      : syntheticKey(types, properties, pageUrl, counter.index);
 
   counter.index += 1;
   page.entityCount += 1;
@@ -344,9 +421,9 @@ function registerNode(
     accumulator = {
       key,
       id: resolvedId,
-      types: [],
-      typeSeen: new Set(),
+      typeOrigin: new Map(),
       properties: {},
+      propertyOrigin: new Map(),
       occurrences: 0,
       pages: new Set(),
       values: new Map(),
@@ -354,14 +431,14 @@ function registerNode(
     };
     nodes.set(key, accumulator);
   }
+  const origin: Origin = { page: pageUrl, index: counter.index - 1 };
   accumulator.occurrences += 1;
   accumulator.pages.add(pageUrl);
   for (const type of types) {
-    if (accumulator.typeSeen.has(type)) continue;
-    accumulator.typeSeen.add(type);
-    accumulator.types.push(type);
+    const seen = accumulator.typeOrigin.get(type);
+    if (!seen || originBefore(origin, seen)) accumulator.typeOrigin.set(type, origin);
   }
-  mergeProperties(accumulator, properties, pageUrl);
+  mergeProperties(accumulator, properties, origin);
 
   if (depth < MAX_NESTING_DEPTH) {
     collectEdges(raw, key, pageUrl, page, nodes, candidates, counter, depth);
@@ -378,13 +455,16 @@ function registerNode(
 function mergeProperties(
   accumulator: NodeAccumulator,
   properties: EntityMapProperties,
-  pageUrl: string,
+  origin: Origin,
 ): void {
   for (const key of ENTITY_MAP_PROPERTY_KEYS) {
     const text = propertyValueText(properties, key);
     if (text === null) continue;
 
-    if ((accumulator.properties as Record<string, unknown>)[key] === undefined) {
+    // Lowest origin wins, rather than whichever page happened to stream first.
+    const previous = accumulator.propertyOrigin.get(key);
+    if (!previous || originBefore(origin, previous)) {
+      accumulator.propertyOrigin.set(key, origin);
       (accumulator.properties as Record<string, unknown>)[key] = (
         properties as Record<string, unknown>
       )[key];
@@ -397,9 +477,9 @@ function mergeProperties(
     }
     const existing = values.get(text);
     if (existing) {
-      existing.add(pageUrl);
+      existing.add(origin.page);
     } else if (values.size < MAX_CONFLICT_VALUES) {
-      values.set(text, new Set([pageUrl]));
+      values.set(text, new Set([origin.page]));
     }
   }
 }
@@ -480,10 +560,16 @@ function pushEdge(
     if (typeof reference === "string" && reference.trim().length > 0) {
       // A bare `{"@id": …}` is a promise that some page declares the entity.
       // When no page does, that promise is the finding.
+      //
+      // A blank-node reference resolves ONLY within the page that wrote it, per
+      // the JSON-LD spec, so it targets that page's key and can only dangle
+      // against that page's own declarations.
       candidates.push({
         source: sourceKey,
         predicate,
-        target: idKey(resolveId(reference, pageUrl)),
+        target: isBlankNodeId(reference)
+          ? blankKey(reference, pageUrl)
+          : idKey(resolveId(reference, pageUrl)),
         kind: "idref",
         page: pageUrl,
       });
@@ -498,7 +584,9 @@ function pushEdge(
     candidates.push({
       source: sourceKey,
       predicate,
-      target: idKey(resolveId(value, pageUrl)),
+      target: isBlankNodeId(value)
+        ? blankKey(value, pageUrl)
+        : idKey(resolveId(value, pageUrl)),
       kind: "soft",
       page: pageUrl,
     });
@@ -511,15 +599,19 @@ function pushEdge(
  * anonymous key so two unrelated blank nodes never collapse into one.
  */
 function syntheticKey(
-  primaryType: string,
+  types: string[],
   properties: EntityMapProperties,
   pageUrl: string,
   index: number,
 ): string {
-  if (properties.name) return `syn:${primaryType}|name:${normalizeText(properties.name)}`;
-  if (properties.url) return `syn:${primaryType}|url:${normalizeUrlish(properties.url, pageUrl)}`;
+  // The SORTED set, not `types[0]`: schema.org puts no meaning on `@type`
+  // order, so `["Organization","LocalBusiness"]` and the reverse are the same
+  // entity and must not split into two nodes.
+  const typeKey = [...new Set(types)].sort(compareStrings).join("+") || "Thing";
+  if (properties.name) return `syn:${typeKey}|name:${normalizeText(properties.name)}`;
+  if (properties.url) return `syn:${typeKey}|url:${normalizeUrlish(properties.url, pageUrl)}`;
   const sameAs = properties.sameAs?.[0];
-  if (sameAs) return `syn:${primaryType}|sameAs:${normalizeUrlish(sameAs, pageUrl)}`;
+  if (sameAs) return `syn:${typeKey}|sameAs:${normalizeUrlish(sameAs, pageUrl)}`;
   return `anon:${pageUrl}#${index}`;
 }
 
@@ -606,7 +698,17 @@ function assemble(
 
   for (const accumulator of [...nodes.values()].sort((a, b) => compareStrings(a.key, b.key))) {
     if (accumulator.id) nodesWithStableId += 1;
-    for (const type of accumulator.types) {
+    // Origin order, so the union is the same list regardless of page order.
+    const types = [...accumulator.typeOrigin.entries()]
+      .sort((a, b) =>
+        a[1].page !== b[1].page
+          ? compareStrings(a[1].page, b[1].page)
+          : a[1].index !== b[1].index
+            ? a[1].index - b[1].index
+            : compareStrings(a[0], b[0]),
+      )
+      .map(([type]) => type);
+    for (const type of types) {
       typeCounts.set(type, (typeCounts.get(type) ?? 0) + accumulator.occurrences);
     }
 
@@ -626,7 +728,7 @@ function assemble(
 
     const { pages, morePages } = capPages(accumulator.pages, ENTITY_MAP_PAGES_CAP);
     const name = accumulator.properties.name ?? null;
-    const pageLocal = isPageLocalEntity(accumulator.types[0] ?? "Thing", name);
+    const pageLocal = isPageLocalEntity(types[0] ?? "Thing", name);
 
     if (pageLocal) pageLocalCount += 1;
     if (conflicts.length > 0) conflictCount += 1;
@@ -637,7 +739,7 @@ function assemble(
     outputNodes.push({
       key: accumulator.key,
       id: accumulator.id,
-      types: accumulator.types,
+      types,
       name,
       properties: orderProperties(accumulator.properties),
       occurrences: accumulator.occurrences,

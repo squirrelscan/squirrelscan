@@ -4,11 +4,8 @@
 // module is the seam between the built document and the project store, so the
 // audit and analyze controllers write it the same way.
 
-import {
-  buildEntityMap,
-  type EntityMap,
-  type EntityMapPageInput,
-} from "@squirrelscan/audit-engine/entity-map";
+import type { EntityMap } from "@squirrelscan/audit-engine/entity-map";
+
 import { Effect } from "effect";
 
 import type { SQLiteStorage } from "@/crawler/storage/sqlite";
@@ -16,23 +13,21 @@ import type { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { logger } from "@/utils/logger";
 
 /**
- * Build the map for one crawl and persist it.
+ * Persist an already-built map for one crawl.
  *
- * Returns the map so the caller can attach it to the report. Never throws: a
- * store write that fails must not lose a finished audit, and the report still
- * carries the map even when the rows did not land.
+ * Never throws: a store write that fails must not lose a finished audit, and
+ * the report still carries the map even when the rows did not land.
  */
-export async function buildAndStoreEntityMap(options: {
+export async function storeEntityMap(options: {
   storage: SQLiteStorage;
   crawlId: string;
-  siteUrl: string;
-  pages: EntityMapPageInput[];
-}): Promise<EntityMap> {
-  const map = buildEntityMap(options.pages, options.siteUrl);
+  map: EntityMap;
+}): Promise<void> {
+  const { map } = options;
 
   // The document caps each node's `pages[]`; the store keeps the full list, so
-  // rebuild the (entity, page) pairs from the same walk the builder did rather
-  // than from the capped arrays.
+  // rebuild the (entity, page) pairs from the per-page record rather than from
+  // the capped arrays.
   const occurrences: Array<{ key: string; normalizedUrl: string }> = [];
   for (const page of map.pages) {
     for (const key of page.declares) {
@@ -57,6 +52,4 @@ export async function buildAndStoreEntityMap(options: {
       `Could not store the entity map: ${error instanceof Error ? error.message : String(error)}`
     );
   }
-
-  return map;
 }
