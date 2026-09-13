@@ -17,6 +17,25 @@ import {
 
 const CHECK = "entity-split-identity";
 
+/**
+ * Whether any two entities in the group are declared on a common page.
+ *
+ * A node's `pages` is capped in the document, so this can miss an overlap that
+ * exists past the cap and report nothing. That is the safe direction for a
+ * rule at error severity: it says less rather than accusing a correct site.
+ */
+function sharesAPage(group: EntityMapNode[]): boolean {
+  const seen = new Map<string, string>();
+  for (const node of group) {
+    for (const page of node.pages) {
+      const other = seen.get(page);
+      if (other !== undefined && other !== node.key) return true;
+      seen.set(page, node.key);
+    }
+  }
+  return false;
+}
+
 export const entitySplitIdentityRule: Rule = {
   meta: {
     id: "schema/entity-split-identity",
@@ -46,6 +65,17 @@ export const entitySplitIdentityRule: Rule = {
         compareStrings
       );
       if (ids.length < 2) continue;
+      // They must be declared TOGETHER on at least one page. A same type set
+      // and a same name is not on its own proof of one thing: a large
+      // publisher can have two different people called John Smith, each
+      // correctly given their own `@id`, and calling that an error would be
+      // worse than saying nothing.
+      //
+      // Co-occurrence is what separates the two. Two plugins describing one
+      // organization both emit on the same pages — on kinsta.com the WordLift
+      // and Yoast declarations share all 36 of the pages either appears on —
+      // whereas two different people are written about in different places.
+      if (!sharesAPage(group)) continue;
       splits.push({ nodes: [...group].sort((a, b) => pageTotal(b) - pageTotal(a)), ids });
     }
     splits.sort(

@@ -20,7 +20,9 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 - Passes with the message `No entity is declared under more than one @id`.
 - Fails with the message `N entities are declared under more than one @id`, plus ` (+N more declarations)` when more matched than are listed. The value reads `NAME under N: ID, ID` and the expectation is `one @id per entity`.
 
-Two entities count as one identity when their deduplicated, sorted `@type` sets are equal and their names match after trimming, collapsing whitespace and lowercasing.
+Two entities count as one identity when their deduplicated, sorted `@type` sets are equal, their names match after trimming, collapsing whitespace and lowercasing, **and** they are declared together on at least one page.
+
+That last condition is what keeps the rule honest. A large publisher can have two different authors called John Smith, each correctly given their own `@id`, and calling that an error would be worse than saying nothing. Two plugins describing one organization always emit on the same pages: on a real kinsta.com crawl the WordLift and Yoast declarations shared all 36 pages either appeared on. Two different people written about in different places never do.
 
 A split needs at least two distinct `@id`s. Two same-named entities where one has no `@id` at all are [schema/entity-identity](/rules/schema/entity-identity)'s finding, not this one's: reporting them in both places would bill one defect twice against your score.
 

@@ -20,7 +20,10 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 - Skipped with the message `Nothing on this site declares a publisher` and the reason `no-publisher-declared`.
 - Passes with the message `Every publisher reference points at NAME`.
 - Warns with the message `Every publisher reference points at NAME, which is not this site's primary organization` when the site is consistent but names something other than the organization it otherwise presents as itself.
-- Warns with the message `This site names N different publishers`, plus ` (+N more publishers)` when more matched than are listed. The value lists each with its count, heaviest first.
+- Warns with the message `N publisher references disagree with the other N`, plus ` (+N more publishers)` when more matched than are listed. The value lists each publisher with its count, heaviest first.
+- Reports at info with the message `This site names N different publishers, none of them dominant` when no publisher holds 80% or more of the references.
+
+The 80% threshold is what separates drift from design. A clear majority with a few strays is a mistake someone made: a section that kept its old markup, a guest-post template that inlines the author's company. An even split is a decision, and a site that genuinely syndicates from several publishers is entitled to make it, so that case is described rather than warned about.
 
 Publishers are weighted by how much of the site names each, not by how many distinct targets exist. One publisher named two hundred times and another named once is not a fifty-fifty disagreement, and the message says which is which.
 

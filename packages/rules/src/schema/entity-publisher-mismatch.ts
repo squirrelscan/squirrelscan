@@ -15,6 +15,12 @@ import {
 
 const CHECK = "entity-publisher-mismatch";
 
+/**
+ * Share of publisher references one publisher must hold for the rest to read
+ * as drift rather than as a site that genuinely has several.
+ */
+const MAJORITY_SHARE = 0.8;
+
 export const entityPublisherMismatchRule: Rule = {
   meta: {
     id: "schema/entity-publisher-mismatch",
@@ -106,14 +112,27 @@ export const entityPublisherMismatchRule: Rule = {
       }))
     );
 
+    // Drift looks like a clear majority and a few strays. An even split does
+    // not: a syndicating news site or a multi-brand publisher legitimately
+    // names several publishers, and calling that a defect would be a warning
+    // about a design decision. Both are reported, and only the first is a
+    // finding — the shape of the distribution is what separates them.
+    const total = ranked.reduce((sum, [, count]) => sum + count, 0);
+    const strays = outliers.reduce((sum, [, count]) => sum + count, 0);
+    const looksLikeDrift = ranked[0]![1] / total >= MAJORITY_SHARE;
+
     return {
       checks: [
         {
           name: CHECK,
-          status: "warn",
-          message: `This site names ${ranked.length} different publishers${moreSuffix(hidden, "publishers")}`,
+          status: looksLikeDrift ? "warn" : "info",
+          message: looksLikeDrift
+            ? `${strays} publisher ${strays === 1 ? "reference disagrees" : "references disagree"} with the other ${ranked[0]![1]}${moreSuffix(hidden, "publishers")}`
+            : `This site names ${ranked.length} different publishers, none of them dominant${moreSuffix(hidden, "publishers")}`,
           value: `${label(canonical)} (${ranked[0]![1]}) vs ${outliers.map(([key, count]) => `${label(key)} (${count})`).join(", ")}`,
-          expected: "one publisher, referenced by @id",
+          expected: looksLikeDrift
+            ? "one publisher, referenced by @id"
+            : "one publisher per site, unless it genuinely syndicates",
           items,
         },
       ],

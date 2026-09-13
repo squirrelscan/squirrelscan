@@ -291,6 +291,58 @@ describe("schema/entity-split-identity", () => {
     expect((await oneCheck(entitySplitIdentityRule, map)).status).toBe("pass");
   });
 
+  test("two same-named people on different pages are two people, not a split", async () => {
+    // The false positive that would matter most: a large publisher can have
+    // two different authors called John Smith, each correctly given an `@id`.
+    // A same type set and a same name is not on its own proof of one thing, so
+    // the rule additionally requires them to be declared TOGETHER on a page —
+    // which is what two plugins describing one organization always do, and
+    // what two different people written about in different places never do.
+    const map = entityMap({
+      nodes: [
+        node({
+          key: "id:https://example.com/authors/a#person",
+          id: "https://example.com/authors/a#person",
+          types: ["Person"],
+          name: "John Smith",
+          pages: ["https://example.com/authors/a"],
+        }),
+        node({
+          key: "id:https://example.com/authors/b#person",
+          id: "https://example.com/authors/b#person",
+          types: ["Person"],
+          name: "John Smith",
+          pages: ["https://example.com/authors/b"],
+        }),
+      ],
+    });
+    expect((await oneCheck(entitySplitIdentityRule, map)).status).toBe("pass");
+  });
+
+  test("the same two on one page ARE a split", async () => {
+    // One page declaring two things with the same type and name under
+    // different ids is describing one thing twice, whatever the intent.
+    const map = entityMap({
+      nodes: [
+        node({
+          key: "id:https://example.com/#a",
+          id: "https://example.com/#a",
+          types: ["Person"],
+          name: "John Smith",
+          pages: ["https://example.com/team"],
+        }),
+        node({
+          key: "id:https://example.com/#b",
+          id: "https://example.com/#b",
+          types: ["Person"],
+          name: "John Smith",
+          pages: ["https://example.com/team"],
+        }),
+      ],
+    });
+    expect((await oneCheck(entitySplitIdentityRule, map)).status).toBe("fail");
+  });
+
   test("a different name under a different @id is two entities, not one split", async () => {
     const map = entityMap({
       nodes: [
@@ -582,11 +634,31 @@ describe("schema/entity-publisher-mismatch", () => {
     });
     const check = await oneCheck(entityPublisherMismatchRule, map);
     expect(check.status).toBe("warn");
-    expect(check.message).toContain("2 different publishers");
+    expect(check.message).toBe("1 publisher reference disagrees with the other 20");
     // Weighted by how much of the site names each, not by distinct target: one
     // publisher named 20 times and another once is not a 50/50 disagreement.
     expect(check.value).toContain("A (20)");
     expect(check.items?.[0]?.id).toBe("id:https://example.com/#org-b");
+  });
+
+  test("an evenly split site is described, not accused", async () => {
+    // A syndicating news site or a multi-brand publisher legitimately names
+    // several publishers. Drift looks like a majority and a few strays; an
+    // even split looks like a decision, and warning about it would be a
+    // warning about someone's architecture.
+    const map = entityMap({
+      nodes: [
+        node({ key: "id:https://example.com/#org-a", id: "https://example.com/#org-a", name: "A" }),
+        node({ key: "id:https://example.com/#org-b", id: "https://example.com/#org-b", name: "B" }),
+      ],
+      edges: [
+        edge({ target: "id:https://example.com/#org-a", occurrences: 10 }),
+        edge({ target: "id:https://example.com/#org-b", occurrences: 9 }),
+      ],
+    });
+    const check = await oneCheck(entityPublisherMismatchRule, map);
+    expect(check.status).toBe("info");
+    expect(check.message).toContain("none of them dominant");
   });
 
   test("a site that declares no publisher is skipped", async () => {

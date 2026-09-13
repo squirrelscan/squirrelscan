@@ -164,8 +164,11 @@ describe("@graph-nested JSON-LD is read by every schema rule", () => {
       const found = await checks(rule, graphHtml, url);
       // The precise assertion is "does not report the markup as absent". Each
       // rule's positive check differs; the absence message is what users saw.
-      const absent = found.filter((c) =>
-        /^No .* (schema|found)|not found/i.test(c.message)
+      //
+      // Two separate tests rather than one alternation: `^A|B` anchors only
+      // the first branch, which is a real bug and not an obvious one.
+      const absent = found.filter(
+        (c) => /^No\s/i.test(c.message) || /\bnot found\b/i.test(c.message)
       );
       expect(absent).toEqual([]);
       expect(found.length).toBeGreaterThan(0);
