@@ -192,10 +192,13 @@ const SCRIPT = String.raw`
   ];
   var DANGLING_COLOR = "#a32020";
   var MIN_ZOOM = 0.15, MAX_ZOOM = 6;
-  // Below this the labels overlap into mush, so they wait until the reader
-  // zooms in. Set at 1 so a Fit that had room to zoom in shows them and a graph
-  // too big to fit does not. The focused node keeps its label at any zoom.
-  var LABEL_ZOOM = 1;
+  // Labelling every visible node at fit scale makes the dense centre
+  // unreadable, and a plain zoom threshold is all-or-nothing: at 49 nodes every
+  // label appears at once. So the budget is a COUNT, not a switch — the N
+  // best-connected entities get a label, and N grows with the square of the
+  // zoom because the readable area does too. The hovered node, its neighbours
+  // and the selected node are always labelled, at any zoom.
+  var LABEL_BUDGET_AT_FIT = 12;
 
   function el(id) { return document.getElementById(id); }
   function setText(id, value) { var node = el(id); if (node) node.textContent = value; }
@@ -260,6 +263,9 @@ const SCRIPT = String.raw`
       color: colorOf[primaryType(node)],
       pageLocal: !!node.pageLocal,
       dangling: false,
+      // Drives both the radius and the label budget below.
+      occurrences: node.occurrences,
+      labelRank: Infinity,
       // Area, not radius, tracks reach: an entity on 160 pages should read as
       // bigger than one on 4 without swallowing the canvas.
       r: 4 + Math.min(18, Math.sqrt(node.occurrences) * 2.6),
@@ -282,6 +288,10 @@ const SCRIPT = String.raw`
           color: DANGLING_COLOR,
           pageLocal: false,
           dangling: true,
+          // An undeclared target has no occurrences of its own, so it never
+          // wins a label on reach — only by being hovered or selected.
+          occurrences: 0,
+          labelRank: Infinity,
           r: 5, x: 0, y: 0, vx: 0, vy: 0, fixed: false
         });
       }
@@ -333,6 +343,28 @@ const SCRIPT = String.raw`
       shown[i] = true;
     }
     visibleLinks = links.filter(function (link) { return shown[link.a] && shown[link.b]; });
+
+    // Rank among what is ACTUALLY drawn, not among all nodes: hiding the
+    // page-local entities should promote the site's real subjects into the
+    // label budget rather than leave them ranked behind hidden furniture.
+    var byReach = visibleIdx.slice().sort(function (a, b) {
+      return sim[b].occurrences - sim[a].occurrences ||
+        (sim[a].key < sim[b].key ? -1 : sim[a].key > sim[b].key ? 1 : 0);
+    });
+    // A node with no name labels as its bare @type, so a site with 40 unnamed
+    // Offers would spend the whole budget drawing the word "Offer" forty times.
+    // Reach still decides the order; a repeated label just yields its turn to
+    // the next distinct one and takes a rank behind every unique label.
+    var usedLabels = Object.create(null);
+    var unique = [], repeated = [];
+    for (var i = 0; i < byReach.length; i++) {
+      var label = sim[byReach[i]].label;
+      if (usedLabels[label]) repeated.push(byReach[i]);
+      else { usedLabels[label] = true; unique.push(byReach[i]); }
+    }
+    var ordered = unique.concat(repeated);
+    for (var r = 0; r < ordered.length; r++) sim[ordered[r]].labelRank = r;
+
     neighbourFocus = -2;
     if (hovered >= 0 && !shown[hovered]) hovered = -1;
     if (selected >= 0 && !shown[selected]) { selected = -1; if (panel) panel.hidden = true; }
@@ -352,13 +384,20 @@ const SCRIPT = String.raw`
 
   // ---------- view transform ----------
   var view = { scale: 1, tx: 0, ty: 0 };
+  // The scale the last Fit settled on, and the anchor the label budget is
+  // measured against. Updated by fit(), so hiding a type or toggling the
+  // page-local filter re-anchors it too.
+  var fitScale = 1;
   function toScreenX(x) { return x * view.scale + view.tx; }
   function toScreenY(y) { return y * view.scale + view.ty; }
   function toWorldX(sx) { return (sx - view.tx) / view.scale; }
   function toWorldY(sy) { return (sy - view.ty) / view.scale; }
 
   function fit() {
-    if (visibleIdx.length === 0) { view.scale = 1; view.tx = 0; view.ty = 0; return; }
+    if (visibleIdx.length === 0) {
+      view.scale = 1; view.tx = 0; view.ty = 0; fitScale = 1;
+      return;
+    }
     var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (var i = 0; i < visibleIdx.length; i++) {
       var n = sim[visibleIdx[i]];
@@ -373,6 +412,7 @@ const SCRIPT = String.raw`
       (height - pad * 2) / Math.max(1, maxY - minY)
     );
     view.scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+    fitScale = view.scale;
     view.tx = width / 2 - ((minX + maxX) / 2) * view.scale;
     view.ty = height / 2 - ((minY + maxY) / 2) * view.scale;
   }
@@ -479,7 +519,14 @@ const SCRIPT = String.raw`
     ctx.clearRect(0, 0, width, height);
     var focus = focusIndex();
     var near = neighboursOf(focus);
-    var showLabels = view.scale >= LABEL_ZOOM;
+    // RELATIVE to the fit scale, not to 1: "fit" is whatever zoom made the
+    // graph fill the canvas, which is well above 1 for a small graph and below
+    // it for a large one. Anchoring here is what makes the budget exactly
+    // LABEL_BUDGET_AT_FIT on first paint for every site. Squared, because
+    // zooming in grows BOTH dimensions of the readable area: 12 at fit, 27 at
+    // 1.5x fit, 48 at 2x.
+    var zoom = view.scale / fitScale;
+    var labelBudget = Math.round(LABEL_BUDGET_AT_FIT * zoom * zoom);
     var k, i;
 
     for (k = 0; k < visibleLinks.length; k++) {
@@ -534,7 +581,12 @@ const SCRIPT = String.raw`
           ctx.stroke();
         }
       }
-      if ((showLabels && !dim) || index === focus) {
+      // A label is EARNED by reach, or GRANTED outright to whatever the reader
+      // is pointing at: the focus, everything it references, and the selection.
+      // An earned label is dropped while its node is dimmed — a bright label on
+      // a faded dot reads as noise, and dimmed means "not relevant right now".
+      var granted = index === focus || index === selected || (focus >= 0 && near[index]);
+      if (granted || (n.labelRank < labelBudget && !dim)) {
         ctx.globalAlpha = 1;
         ctx.fillStyle = "#1c1c1a";
         ctx.font = (index === focus ? "600 11px " : "11px ") + "ui-sans-serif, system-ui, sans-serif";

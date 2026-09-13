@@ -240,6 +240,25 @@ describe("html report", () => {
     expect(out).not.toMatch(/<script[^>]+src=/);
   });
 
+  test("page-local entities are hidden by default", () => {
+    const out = renderHtml(report(MAP));
+    // The toggle SHOWS them, and ships unchecked, so the opening view is the
+    // site's subject matter rather than one WebPage per page crawled.
+    const checkbox = out.match(/<input[^>]*id="em-show-page-local"[^>]*>/)?.[0];
+    expect(checkbox).toBeDefined();
+    expect(checkbox).not.toContain("checked");
+    expect(out).toContain("Show page-local entities");
+  });
+
+  test("the label budget is anchored to the fit scale, not to scale 1", () => {
+    // A budget measured against absolute scale is wrong on both ends: fit is
+    // well above 1 for a small graph and below it for a large one, so the
+    // opening view would show far more or far fewer than the intended count.
+    const out = renderHtml(report(MAP));
+    expect(out).toContain("LABEL_BUDGET_AT_FIT");
+    expect(out).toContain("var zoom = view.scale / fitScale;");
+  });
+
   test("a script tag in an entity name cannot escape the data block", () => {
     const hostile = {
       ...MAP,
