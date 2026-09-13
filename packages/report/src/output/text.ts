@@ -240,34 +240,6 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("");
   }
 
-  // Entities (#2091) — the site's own JSON-LD collapsed into one graph.
-  // Report-only: it never contributes to the score.
-  if (report.entityMap) {
-    const map = report.entityMap;
-    write("ENTITIES");
-    write("-".repeat(40));
-    if (map.summary.nodeCount === 0) {
-      write(ENTITY_EMPTY_MESSAGE);
-    } else {
-      write(entitySummaryLine(map));
-      write("(informational — not part of the score)");
-      write("");
-      for (const node of primaryEntities(map).slice(0, ENTITY_CONSOLE_LIMIT)) {
-        const id = node.id ?? "no @id";
-        write(
-          `${entityLabel(node)} (${node.types.join(", ")}) — ${node.occurrences}x on ${entityPageTotal(node)} page(s), ${id}`
-        );
-      }
-      if (map.summary.nodesWithoutIdCount > 0) {
-        write("");
-        write(
-          `${map.summary.nodesWithoutIdCount} entity(ies) declared on several pages carry no @id — search engines cannot tell they are one thing.`
-        );
-      }
-    }
-    write("");
-  }
-
   write("SUMMARY");
   write("-".repeat(40));
   write(`Passed: ${report.passed}`);
@@ -359,6 +331,34 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     // #792: don't claim "No issues found" for a 0-page failed/blocked run —
     // nothing was audited (state shown above), the site isn't necessarily clean.
     write("No issues found");
+    write("");
+  }
+
+  // Entities (#2091) — the site's own JSON-LD collapsed into one graph.
+  // Report-only: it never contributes to the score.
+  if (report.entityMap) {
+    const map = report.entityMap;
+    write("ENTITIES");
+    write("-".repeat(40));
+    if (map.summary.nodeCount === 0) {
+      write(ENTITY_EMPTY_MESSAGE);
+    } else {
+      write(entitySummaryLine(map));
+      write("(informational — not part of the score)");
+      write("");
+      for (const node of primaryEntities(map).slice(0, ENTITY_CONSOLE_LIMIT)) {
+        const id = node.id ?? "no @id";
+        write(
+          `${entityLabel(node)} (${node.types.join(", ")}) — ${node.occurrences}x on ${entityPageTotal(node)} page(s), ${id}`
+        );
+      }
+      if (map.summary.nodesWithoutIdCount > 0) {
+        write("");
+        write(
+          `${map.summary.nodesWithoutIdCount} entity(ies) declared on several pages carry no @id — search engines cannot tell they are one thing.`
+        );
+      }
+    }
     write("");
   }
 

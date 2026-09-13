@@ -135,6 +135,66 @@ function report(map?: EntityMap): AuditReport {
   } as AuditReport;
 }
 
+/** A report with one real finding, so the issues section actually renders. */
+function reportWithIssues(): AuditReport {
+  return {
+    ...report(MAP),
+    failed: 1,
+    ruleResults: {
+      "core/meta-title": {
+        meta: {
+          id: "core/meta-title",
+          name: "Meta Title",
+          category: "core",
+          categoryName: "Core",
+          group: "seo",
+          severity: "error",
+          description: "d",
+          solution: "s",
+        },
+        checks: [
+          {
+            name: "title",
+            status: "fail",
+            message: "Missing title",
+            pageUrl: "https://example.com/x",
+          },
+        ],
+      },
+    },
+  } as AuditReport;
+}
+
+describe("section placement", () => {
+  // The entity map is informational and unscored, so it belongs BELOW the
+  // findings in every format — not between the score cards and the first issue,
+  // where it pushed the things a reader opened the report for off the screen.
+  test.each([
+    ["text", (r: AuditReport) => renderText(r), "ENTITIES", "ISSUES"],
+    ["markdown", (r: AuditReport) => renderMarkdown(r), "## Entities", "## Issues"],
+    ["llm", (r: AuditReport) => renderLlm(r), "<entities", "<issues"],
+    ["xml", (r: AuditReport) => renderXml(r), "<entities", "<issues"],
+    ["html", (r: AuditReport) => renderHtml(r), 'id="em-data"', "issue"],
+  ])("%s puts the entities section after the findings", (_name, render, entities, issues) => {
+    const out = render(reportWithIssues());
+    const entitiesAt = out.indexOf(entities);
+    const issuesAt = out.indexOf(issues);
+    expect(entitiesAt).toBeGreaterThan(-1);
+    expect(issuesAt).toBeGreaterThan(-1);
+    expect(entitiesAt).toBeGreaterThan(issuesAt);
+  });
+
+  test("xml keeps the entities element inside the root", () => {
+    const out = renderXml(reportWithIssues());
+    expect(out.indexOf("<entities")).toBeLessThan(out.indexOf("</squirrelscan-audit>"));
+  });
+
+  test("llm keeps the entities block inside the audit element", () => {
+    const out = renderLlm(reportWithIssues());
+    expect(out.indexOf("<entities")).toBeLessThan(out.indexOf("</audit>"));
+  });
+});
+
 describe("text report", () => {
   test("carries an Entities block with the summary and the top entities", () => {
     const out = renderText(report(MAP));
@@ -173,6 +233,20 @@ describe("markdown report", () => {
     expect(out).toContain("https://example.com/#missing");
     expect(out).toContain("### Entities without an @id (1)");
     expect(out).toContain("Ada Lovelace");
+  });
+
+  test("a clipped map reports the summary's findings, not the rows it kept", () => {
+    // The publish projection drops low-occurrence nodes, so a hosted map can
+    // carry a summary with conflicts and none of the entities that have them.
+    // Saying "no entity disagrees with itself" there would be a lie.
+    const clipped: EntityMap = { ...MAP, nodes: [node()], edges: [] };
+    const out = renderMarkdown(report(clipped));
+
+    expect(out).toContain("### Conflicting properties (1)");
+    expect(out).toContain("1 entity affected, not included in this copy of the map.");
+    expect(out).toContain("### Dangling references (1)");
+    expect(out).toContain("1 reference affected, not included in this copy of the map.");
+    expect(out).not.toContain("No entity disagrees with itself across pages.");
   });
 });
 
@@ -248,6 +322,22 @@ describe("html report", () => {
     expect(checkbox).toBeDefined();
     expect(checkbox).not.toContain("checked");
     expect(out).toContain("Show page-local entities");
+  });
+
+  test("the embedded table is capped with a show-all toggle", () => {
+    const out = renderHtml(report(MAP));
+    // A report is a document, not a database browser: `squirrel entities` is
+    // the full table (#2092).
+    expect(out).toContain('id="em-show-all"');
+    expect(out).toContain("TABLE_LIMIT = 25");
+    expect(out).toContain("tableExpanded ? rows : rows.slice(0, TABLE_LIMIT)");
+  });
+
+  test("the table filters with the graph, not independently", () => {
+    const out = renderHtml(report(MAP));
+    // One page-local control for the whole section. A table that kept listing
+    // every unnamed image while the graph hid them would read as a bug.
+    expect(out).toContain("if (!showPageLocal && node.pageLocal) return false;");
   });
 
   test("the label budget is anchored to the fit scale, not to scale 1", () => {

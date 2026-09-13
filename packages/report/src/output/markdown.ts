@@ -294,12 +294,6 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     }
   }
 
-  // Entities (#2091) — report-only, never part of the score. Same section
-  // builder the standalone entity-map document uses.
-  if (report.entityMap) {
-    lines.push(...entityMarkdownSection(report.entityMap, "##"));
-  }
-
   lines.push("## Summary");
   lines.push("");
   lines.push(`- **Passed:** ${report.passed}`);
@@ -497,6 +491,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("");
     lines.push("No issues found.");
     lines.push("");
+  }
+
+  // Entities (#2091) — report-only, never part of the score. Same section
+  // builder the standalone entity-map document uses.
+  if (report.entityMap) {
+    lines.push(...entityMarkdownSection(report.entityMap, "##"));
   }
 
   // Cloud-/Pro-gated rules that didn't run this audit (#780) — audience logic

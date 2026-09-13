@@ -378,8 +378,8 @@ const SCRIPT = String.raw`
     var pageLocalTotal = 0;
     for (var i = 0; i < sim.length; i++) if (sim[i].pageLocal) pageLocalTotal++;
     setText("em-table-note", showPageLocal
-      ? "Every entity is listed below, including the " + pageLocalTotal + " page-local ones."
-      : "The graph hides " + pageLocalTotal + " page-local entities (per-page types and unnamed images). The table lists every entity.");
+      ? "Showing all " + map.nodes.length + " entities, including the " + pageLocalTotal + " page-local ones (per-page types and unnamed images)."
+      : pageLocalTotal + " page-local entities (per-page types and unnamed images) are hidden from both the graph and the table. Tick the box to include them.");
   }
 
   // ---------- view transform ----------
@@ -764,6 +764,8 @@ const SCRIPT = String.raw`
     pageLocalToggle.addEventListener("change", function (event) {
       showPageLocal = event.target.checked;
       recomputeVisible();
+      // One control for the whole section: the table filters with the graph.
+      renderTable();
       alpha = Math.max(alpha, 0.7);
       fit();
     });
@@ -813,6 +815,8 @@ const SCRIPT = String.raw`
     { label: "Dangling", get: function (n) { return n.danglingRefs; }, cls: "em-num", numeric: true }
   ];
   var sortIndex = 3, sortDesc = true;
+  var tableExpanded = false;
+  var TABLE_LIMIT = __TABLE_LIMIT__;
 
   var filter = el("em-type-filter");
   if (filter) {
@@ -846,9 +850,11 @@ const SCRIPT = String.raw`
     if (!body) return;
     var wantedType = filter ? filter.value : "";
     var needle = search ? search.value.trim().toLowerCase() : "";
-    // The table is the complete list on purpose: whatever the graph is hiding,
-    // every entity stays findable here.
+    // Same page-local filter as the graph, so the section reads as one thing.
+    // A site with 188 entities is 139 unnamed images and per-page furniture;
+    // printing all of them into the report buries the 49 that matter.
     var rows = map.nodes.filter(function (node) {
+      if (!showPageLocal && node.pageLocal) return false;
       if (wantedType && node.types.indexOf(wantedType) === -1) return false;
       if (!needle) return true;
       return (node.name || "").toLowerCase().indexOf(needle) !== -1 ||
@@ -863,8 +869,19 @@ const SCRIPT = String.raw`
       return sortDesc ? -cmp : cmp;
     });
 
+    // Capped by default: the report is a document, not a database browser.
+    // The standalone squirrel entities command is the full table (#2092).
+    var shown = tableExpanded ? rows : rows.slice(0, TABLE_LIMIT);
+    var showAll = el("em-show-all");
+    if (showAll) {
+      showAll.hidden = rows.length <= TABLE_LIMIT;
+      showAll.textContent = tableExpanded
+        ? "Show top " + TABLE_LIMIT
+        : "Show all " + rows.length;
+    }
+
     body.textContent = "";
-    rows.forEach(function (node) {
+    shown.forEach(function (node) {
       var tr = document.createElement("tr");
       COLUMNS.forEach(function (col, index) {
         var value = col.get(node);
@@ -882,7 +899,10 @@ const SCRIPT = String.raw`
       });
       body.appendChild(tr);
     });
-    setText("em-row-count", rows.length + " of " + map.nodes.length + " entities");
+    setText(
+      "em-row-count",
+      shown.length + " of " + rows.length + " shown · " + map.nodes.length + " total"
+    );
     if (head) {
       for (var i = 0; i < COLUMNS.length; i++) {
         head.children[i].querySelector(".em-arrow").textContent =
@@ -893,6 +913,13 @@ const SCRIPT = String.raw`
 
   if (filter) filter.addEventListener("change", renderTable);
   if (search) search.addEventListener("input", renderTable);
+  var showAllButton = el("em-show-all");
+  if (showAllButton) {
+    showAllButton.addEventListener("click", function () {
+      tableExpanded = !tableExpanded;
+      renderTable();
+    });
+  }
   renderTable();
 
   if (map.nodes.length === 0 || !canvas || !ctx) {
@@ -927,9 +954,15 @@ const SCRIPT = String.raw`
 })();
 `;
 
+/** Rows the embedded table shows before "Show all N" is pressed. */
+export const ENTITY_TABLE_ROW_CAP = 25;
+
 /** The viewer's JavaScript, with its compile-time constants substituted. */
 export function entityViewerScript(): string {
-  return SCRIPT.replace("__GRAPH_NODE_CAP__", String(ENTITY_GRAPH_NODE_CAP));
+  return SCRIPT.replace("__GRAPH_NODE_CAP__", String(ENTITY_GRAPH_NODE_CAP)).replace(
+    "__TABLE_LIMIT__",
+    String(ENTITY_TABLE_ROW_CAP),
+  );
 }
 
 /**
@@ -970,6 +1003,7 @@ ${header}  <div class="em-cards" id="em-cards"></div>
     <div class="em-controls">
       <select id="em-type-filter" aria-label="Filter entities by type"></select>
       <input type="search" id="em-search" placeholder="Search name, @id or type" aria-label="Search entities">
+      <button type="button" class="em-action" id="em-show-all" hidden></button>
       <span class="em-note" id="em-row-count"></span>
     </div>
     <div class="em-scroll">

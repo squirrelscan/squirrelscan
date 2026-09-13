@@ -1466,12 +1466,12 @@ function ReportPage({
           <SiteProfileSection report={report} />
           <DomainStatsSection report={report} />
           <TechnologiesSection report={report} />
-          <EntitiesSection report={report} />
           {hasIssues ? (
             <IssuesByGroup categories={categoryIssues} />
           ) : isFailedOrBlocked ? null : (
             <div className="no-issues">✓ No issues found</div>
           )}
+          <EntitiesSection report={report} />
           <LockedRulesSection report={report} branding={branding} />
           {/* Cache reuse — quiet run metadata, pinned to the very bottom. */}
           <CacheSection report={report} />
