@@ -27,7 +27,7 @@ export type {
 } from "./build";
 export { diffEntityMaps } from "./diff";
 export type { DiffEntityMapsOptions } from "./diff";
-export { toJsonLd } from "./jsonld";
+export { jsonLdGeneratedIds, toJsonLd } from "./jsonld";
 export { renderEntityMapHtml } from "./html";
 export { renderEntityMapMarkdown } from "./markdown";
 export { slimEntityMapForPublish } from "./slim";
