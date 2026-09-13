@@ -91,14 +91,37 @@ function buildCoverageTest(
   older: EntityMap,
   newerPages: Set<string>
 ): (node: EntityMapNode) => boolean {
+  const declaringPages = buildDeclaringPages(older);
+  return (node: EntityMapNode): boolean => {
+    const pages = declaringPages(node);
+    return pages !== null && pages.every((url) => newerPages.has(url));
+  };
+}
+
+/**
+ * Every page that declared a node, or null when that cannot be established.
+ *
+ * The answer has to come from `map.pages[].declares`, not from `node.pages`:
+ * a node's page list is CAPPED in the document and `morePages` counts the rest,
+ * so an entity declared on 101 pages carries a 50-page sample. Deciding on the
+ * sample calls it removed the moment those 50 are recrawled, no matter what the
+ * other 51 now say — the exact false "the site deleted its structured data"
+ * this module exists to avoid.
+ *
+ * Null whenever the set cannot be PROVEN, which is the safe direction: every
+ * caller treats null as "say less".
+ */
+function buildDeclaringPages(
+  map: EntityMap
+): (node: EntityMapNode) => string[] | null {
   // A clipped page list (a publish projection caps it) looks exactly like a
   // complete one, so compare it against the count the crawl reported.
   const pageIndexIsComplete =
-    older.pages.length > 0 && older.pages.length >= older.summary.pagesTotal;
+    map.pages.length > 0 && map.pages.length >= map.summary.pagesTotal;
 
   const declaredOn = new Map<string, string[]>();
   if (pageIndexIsComplete) {
-    for (const page of older.pages) {
+    for (const page of map.pages) {
       for (const key of page.declares) {
         const pages = declaredOn.get(key);
         if (pages) pages.push(page.url);
@@ -107,18 +130,46 @@ function buildCoverageTest(
     }
   }
 
-  return (node: EntityMapNode): boolean => {
+  return (node: EntityMapNode): string[] | null => {
     const indexed = declaredOn.get(node.key);
     // Trusted only when it accounts for every page the NODE claims, including
     // the ones trimmed off its list. The two disagree only in a document
     // someone assembled by hand, and there the conservative answer is right.
     if (indexed && indexed.length >= node.pages.length + node.morePages) {
-      return indexed.every((url) => newerPages.has(url));
+      return indexed;
     }
     // No usable index. The node's own list is authoritative only when nothing
     // was trimmed off it.
-    if (node.morePages > 0) return false;
-    return node.pages.length > 0 && node.pages.every((url) => newerPages.has(url));
+    if (node.morePages > 0) return null;
+    return node.pages.length > 0 ? node.pages : null;
+  };
+}
+
+/**
+ * A test for "the entity that replaced this one is declared where it used to be".
+ *
+ * Recrawling the broken pages is necessary but not sufficient. An audit can
+ * visit /a and /b, find the anonymous entity gone from both because the markup
+ * was DELETED rather than fixed, and pair it with a properly identified entity
+ * that appeared on /c. Page coverage alone calls that a proven fix; it is a
+ * regression on /a and /b plus an addition on /c.
+ *
+ * So the replacement has to be declared on every page the original was. Null
+ * anywhere in the evidence chain means partial, for the same reason as above.
+ */
+function buildReplacementTest(
+  older: EntityMap,
+  newer: EntityMap
+): (before: EntityMapNode, after: EntityMapNode) => boolean {
+  const olderDeclaringPages = buildDeclaringPages(older);
+  const newerDeclaringPages = buildDeclaringPages(newer);
+
+  return (before: EntityMapNode, after: EntityMapNode): boolean => {
+    const was = olderDeclaringPages(before);
+    const now = newerDeclaringPages(after);
+    if (was === null || now === null) return false;
+    const nowSet = new Set(now);
+    return was.every((url) => nowSet.has(url));
   };
 }
 
@@ -159,6 +210,7 @@ export function diffEntityMaps(
   // change never reaches the added/removed/notCrawled split below, so this is
   // the only place its coverage can be established.
   const fullyRecrawled = buildCoverageTest(older, newerPages);
+  const replacedEverywhere = buildReplacementTest(older, newer);
 
   // ── identity changes ─────────────────────────────────────────────
   // Resolved first: a node that gained an `@id` is NOT an add plus a remove,
@@ -210,7 +262,15 @@ export function diffEntityMaps(
     // old markup. The pairing is still right — it is the same entity — so the
     // honest move is to report it and qualify it, not to drop it back into
     // added plus removed.
-    const coverage = fullyRecrawled(before) ? "proven" : "partial";
+    //
+    // BOTH tests, because either alone can be satisfied by a site that is not
+    // fixed. Recrawling /a and /b proves nothing if the markup was deleted
+    // there and the identified entity turned up on /c; finding it on /c proves
+    // nothing about /a and /b if those were never revisited.
+    const coverage =
+      fullyRecrawled(before) && replacedEverywhere(before, node)
+        ? "proven"
+        : "partial";
 
     if (node.id !== null && before.id === null) {
       gainedId.push({
