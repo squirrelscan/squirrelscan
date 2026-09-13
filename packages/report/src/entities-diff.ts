@@ -125,12 +125,14 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
     lines.push(
       "These entities now carry a stable `@id`, so a search engine can reconcile them across pages.",
       "",
-      "| Type | Name | New @id |",
-      "| --- | --- | --- |",
+      "A `partial` coverage row means the newer audit did not visit every page that declared the old, id-less version. The fix is real on the pages that were crawled; re-audit the rest before calling it done.",
+      "",
+      "| Type | Name | New @id | Coverage |",
+      "| --- | --- | --- | --- |",
     );
     for (const row of diff.gainedId.slice(0, ENTITY_DIFF_ROW_LIMIT)) {
       lines.push(
-        `| ${entityCell(row.types.join(", "))} | ${label(row.name, row.types)} | ${entityCell(row.id)} |`,
+        `| ${entityCell(row.types.join(", "))} | ${label(row.name, row.types)} | ${entityCell(row.id)} | ${row.coverage} |`,
       );
     }
     lines.push(
@@ -146,12 +148,14 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
     lines.push(
       "These entities no longer carry the `@id` they had. A search engine can no longer tell they are the same thing across pages.",
       "",
-      "| Type | Name | Former @id |",
-      "| --- | --- | --- |",
+      "A `partial` coverage row means the newer audit did not visit every page that declared the version that had the `@id`, so the regression may be narrower than it looks.",
+      "",
+      "| Type | Name | Former @id | Coverage |",
+      "| --- | --- | --- | --- |",
     );
     for (const row of diff.lostId.slice(0, ENTITY_DIFF_ROW_LIMIT)) {
       lines.push(
-        `| ${entityCell(row.types.join(", "))} | ${label(row.name, row.types)} | ${entityCell(row.id)} |`,
+        `| ${entityCell(row.types.join(", "))} | ${label(row.name, row.types)} | ${entityCell(row.id)} | ${row.coverage} |`,
       );
     }
     lines.push(

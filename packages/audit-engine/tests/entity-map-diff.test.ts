@@ -77,6 +77,26 @@ function map(nodes: EntityMapNode[], edges: EntityMapEdge[], pageUrls: string[])
   };
 }
 
+/** A map whose page index is complete, so coverage can actually be proven. */
+function mapWith(
+  nodes: EntityMapNode[],
+  edges: EntityMapEdge[],
+  declaresByPage: Record<string, string[]>,
+  pagesTotal?: number,
+): EntityMap {
+  const base = map(nodes, edges, Object.keys(declaresByPage));
+  return {
+    ...base,
+    summary: { ...base.summary, pagesTotal: pagesTotal ?? Object.keys(declaresByPage).length },
+    pages: Object.entries(declaresByPage).map(([url, declares]) => ({
+      url,
+      declares,
+      references: [],
+      entityCount: declares.length,
+    })),
+  };
+}
+
 const PAGES = ["https://example.com/a", "https://example.com/b"];
 
 function diff(older: EntityMap, newer: EntityMap) {
@@ -155,6 +175,123 @@ describe("diffEntityMaps", () => {
     // The whole point: not an add plus a remove.
     expect(result.added).toHaveLength(0);
     expect(result.removed).toHaveLength(0);
+    // /a is the only page that declared the id-less version, and the newer
+    // crawl visited it, so the fix is proven across the whole site.
+    expect(result.gainedId[0]!.coverage).toBe("proven");
+  });
+
+  test("gainedId on pages the newer crawl never visited is reported as partial", () => {
+    // The failure this field exists for. An agent fixes an entity, re-audits a
+    // narrower slice of the site, and asks whether the fix landed. Identity
+    // matching says yes — it IS the same entity — but the pages that were
+    // broken were never looked at again, so "yes" would be a guess dressed as
+    // a verification.
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+      pages: ["https://example.com/a", "https://example.com/b"],
+    });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+      pages: ["https://example.com/c", "https://example.com/d"],
+    });
+    const result = diff(
+      map([before], [], ["https://example.com/a", "https://example.com/b"]),
+      map([after], [], ["https://example.com/c", "https://example.com/d"]),
+    );
+
+    expect(result.gainedId).toHaveLength(1);
+    expect(result.gainedId[0]!.coverage).toBe("partial");
+    // Still one change rather than an add plus a remove: the pairing is
+    // correct, only the claim about reach is weaker.
+    expect(result.added).toHaveLength(0);
+    expect(result.removed).toHaveLength(0);
+    expect(result.notCrawled).toHaveLength(0);
+  });
+
+  test("markup deleted from the broken pages is not a proven fix", () => {
+    // Recrawling the broken pages is necessary and NOT sufficient. Here /a and
+    // /b were both visited again and the anonymous entity really is gone from
+    // them — because the markup was deleted, not fixed — while an identified
+    // entity of the same name turned up on /c. Coverage-by-recrawl alone calls
+    // that proven. It is a regression on /a and /b plus an addition on /c.
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+      pages: ["https://example.com/a", "https://example.com/b"],
+    });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+      pages: ["https://example.com/c"],
+    });
+    const result = diff(
+      mapWith([before], [], {
+        "https://example.com/a": ["syn:Organization|name:acme"],
+        "https://example.com/b": ["syn:Organization|name:acme"],
+      }),
+      mapWith([after], [], {
+        "https://example.com/a": [],
+        "https://example.com/b": [],
+        "https://example.com/c": ["id:https://example.com/#org"],
+      })
+    );
+
+    expect(result.gainedId).toHaveLength(1);
+    expect(result.gainedId[0]!.coverage).toBe("partial");
+  });
+
+  test("the replacement on every page the original had IS proven", () => {
+    // The mirror: same pages, markup actually fixed in place.
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+      pages: ["https://example.com/a", "https://example.com/b"],
+    });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+      pages: ["https://example.com/a", "https://example.com/b"],
+    });
+    const declares = {
+      "https://example.com/a": ["syn:Organization|name:acme"],
+      "https://example.com/b": ["syn:Organization|name:acme"],
+    };
+    const fixed = {
+      "https://example.com/a": ["id:https://example.com/#org"],
+      "https://example.com/b": ["id:https://example.com/#org"],
+    };
+    const result = diff(mapWith([before], [], declares), mapWith([after], [], fixed));
+
+    expect(result.gainedId).toHaveLength(1);
+    expect(result.gainedId[0]!.coverage).toBe("proven");
+  });
+
+  test("a capped page list can never prove coverage", () => {
+    // `morePages > 0` means the node carries a SAMPLE of its pages, so
+    // recrawling every page it lists proves nothing about the rest.
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+      pages: ["https://example.com/a"],
+      morePages: 40,
+    });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+    });
+    const result = diff(map([before], [], PAGES), map([after], [], PAGES));
+
+    expect(result.gainedId[0]!.coverage).toBe("partial");
   });
 
   test("lostId: the same match in reverse", () => {
@@ -259,25 +396,6 @@ describe("coverage is proven, not sampled", () => {
   // rest, so an entity on 101 pages carries a 50-page sample. Deciding removal
   // on the sample is how "we recrawled the first 50" becomes "the site deleted
   // its structured data".
-  function mapWith(
-    nodes: EntityMapNode[],
-    edges: EntityMapEdge[],
-    declaresByPage: Record<string, string[]>,
-    pagesTotal?: number,
-  ): EntityMap {
-    const base = map(nodes, edges, Object.keys(declaresByPage));
-    return {
-      ...base,
-      summary: { ...base.summary, pagesTotal: pagesTotal ?? Object.keys(declaresByPage).length },
-      pages: Object.entries(declaresByPage).map(([url, declares]) => ({
-        url,
-        declares,
-        references: [],
-        entityCount: declares.length,
-      })),
-    };
-  }
-
   const WIDE = node({
     key: "id:https://example.com/#wide",
     id: "https://example.com/#wide",

@@ -31,6 +31,13 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 | `list_issues` | Login | Supplant-aware issue state for a website. |
 | `get_issue` | Login | A single issue by website + number. |
 | `comment_on_issue` | Login | Comment on an audit issue. |
+| `list_entities` | None | The entities a site declares, collapsed across every crawled page, with filters and paging. |
+| `get_entity` | None | One entity as the map recorded it: the nine kept properties, declaring pages, conflicts, and references in and out. |
+| `get_entity_graph` | None | The graph as json, jsonld, mermaid, dot, graphml or markdown. |
+| `compare_entities` | None | What changed between two audits, including entities that gained an \`@id\`. |
+| `get_entity_findings` | None | The \`schema/entity-*\` verdicts for an audit, with fix text. |
+
+The five entity tools read the local project store, so they need no account and spend no credits. They answer questions about audits you have already run: see [the entity map for agents](/entity-map/mcp) for the fix-and-verify loop they are built around.
 
 ## Authentication for agent/CI use
 

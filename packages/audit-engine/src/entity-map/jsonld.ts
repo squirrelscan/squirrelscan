@@ -124,3 +124,22 @@ export function toJsonLd(map: EntityMap): EntityMapJsonLd {
 
   return { "@context": "https://schema.org", "@graph": graph };
 }
+
+/**
+ * The `@id`s `toJsonLd` would invent for this map, and whose entity each is.
+ *
+ * JSON-LD has nowhere to mark an identifier as a placeholder, so a consumer
+ * that shows the export has to say it alongside. Without that, the document
+ * reads as a site where every entity is already identified — which is the
+ * finding the reader is usually there to fix.
+ *
+ * Same function as the export uses, so the two can never disagree about which
+ * ids are real.
+ */
+export function jsonLdGeneratedIds(
+  map: EntityMap
+): Array<{ key: string; id: string }> {
+  return map.nodes
+    .filter((node) => node.id === null)
+    .map((node) => ({ key: node.key, id: publishedId(node, map.site) }));
+}

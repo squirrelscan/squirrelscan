@@ -136,6 +136,12 @@ So an entity is only **removed** when every page that declared it was crawled ag
 
 The same rule governs fixes. A conflict or a dangling reference counts as resolved only when the entity survived and all of its declaring pages were visited again, because a conflict needs two declarations to exist and seeing one of them tells you nothing.
 
+An entity that gained or lost an `@id` is matched across the key change on its type and name, so it is reported once rather than as a removal plus an addition. That match says the entity changed, not that the pages which were wrong are the pages that were fixed, so each row carries a **coverage** column.
+
+`proven` needs both halves: the newer audit visited every page that declared the old version, and it found the replacement on all of them. `partial` means one of those could not be established. Either half alone is satisfied by a site that is not fixed. Recrawling the broken pages proves nothing if the markup was deleted there and the identified entity turned up elsewhere; finding it elsewhere proves nothing about pages that were never revisited.
+
+A missing row is not proof of failure either. The match needs the type and the name to be unchanged, so changing the `@id` and the name together appears as a removal plus an addition.
+
 <Note>
 `--problem` cannot be combined with `--diff`. A problem is exactly what changes between two audits, so filtering both sides by one would report an entity that gained an `@id` as removed.
 </Note>

@@ -8,6 +8,7 @@ import { warnIfSessionUnreadable } from "@/self/credentials";
 import { version } from "../../package.json";
 import { type LoginResolver } from "./cloud";
 import { registerAuditTools } from "./tools/audit-tools";
+import { registerEntityTools } from "./tools/entity-tools";
 import { registerIssueTools } from "./tools/issue-tools";
 import { registerReportTools } from "./tools/report-tools";
 import { registerRuleTools } from "./tools/rule-tools";
@@ -28,6 +29,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   registerReportTools(server, options.resolveLogin);
   registerIssueTools(server, options.resolveLogin);
   registerRuleTools(server);
+  // Local and free: these read the project store, so no auth and no credits.
+  registerEntityTools(server);
 
   return server;
 }
