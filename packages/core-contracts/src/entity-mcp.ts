@@ -97,6 +97,13 @@ export const ENTITY_MCP_LIMITS = {
   entityPages: 20,
   /** Findings returned by `get_entity_findings`. */
   findings: 50,
+  /**
+   * Smallest occurrence change `compare_entities` reports by default.
+   *
+   * 1 means every change. Lives here so neither server hardcodes it and the
+   * two cannot disagree about what an unfiltered change set contains.
+   */
+  occurrenceThreshold: 1,
 } as const;
 
 // ── Descriptions ───────────────────────────────────────────────────
@@ -132,7 +139,7 @@ export const ENTITY_MCP_DESCRIPTIONS: Record<EntityMcpToolName, string> = {
     "Get one entity as the map recorded it: the properties the map keeps (name, url, logo, image, sameAs, telephone, email, address, description), the pages that declare it, the properties whose values disagree between those pages, and the references in and out of it. The map keeps those nine and @type and nothing else, so a property missing here may still be in the page's JSON-LD, and a disagreement in a property outside that set is not detected. Accepts the entity key, its @id, or its name. Use this after list_entities to see why an entity was flagged, before deciding what to change. Edges and declaring pages are capped; the counts tell you when. " +
     ENTITY_MCP_LOOP,
   get_entity_graph:
-    "Get the whole entity graph, or a filtered part of it, in a chosen format: json for the canonical document, jsonld for a validator, mermaid or markdown to read in a conversation, dot or graphml for a graph tool. Defaults to json. Takes the same filters as list_entities. mermaid caps declared entities at 150 and markdown caps rows at 50, and both say so in truncation; json, jsonld, dot and graphml apply no node cap. No cap is not the same as complete: every format renders the stored map, and on the local server that map carries no per-edge page list and no per-page reference list, so those arrays are empty because they were never stored rather than because nothing matched. mermaid's cap bounds declared entities only, so one entity referencing thousands of undeclared ids still renders thousands of placeholder nodes. " +
+    "Get the whole entity graph, or a filtered part of it, in a chosen format: json for the canonical document, jsonld for a validator, mermaid or markdown to read in a conversation, dot or graphml for a graph tool. Defaults to json. Takes the same filters as list_entities. mermaid caps declared entities at 150 and markdown caps rows at 50, and both say so in truncation; json, jsonld, dot and graphml apply no node cap. No cap is not the same as complete: every format renders the stored map, and on the local server that map carries no per-edge page list and no per-page reference list, so those arrays are empty because they were never stored rather than because nothing matched. mermaid's cap bounds declared entities only, so one entity referencing thousands of undeclared ids still renders thousands of placeholder nodes. Not every server implements every format: one that does not will say so rather than return an empty or partial graph, so read the error rather than treating a refusal as a site with nothing to draw. " +
     ENTITY_MCP_LOOP,
   compare_entities:
     "Compare two audits of a site and get the change set: entities added and removed, entities that gained or lost an @id, occurrence changes, new and resolved conflicts and dangling references, summary deltas, and the pages each audit saw that the other did not. Defaults to the previous audit versus the latest. An entity is only reported as removed when every page that declared it was crawled again; anything unproven is reported separately as not crawled, so a smaller crawl never reads as a site that deleted its structured data. Each gainedId and lostId entry carries a coverage field saying whether the newer audit visited every page that declared the old version and found the replacement there. Absence of a gainedId entry is not proof a fix failed: the match needs the type and the name to be unchanged, so changing the @id and the name in one edit appears as a removal plus an addition instead. " +
@@ -170,6 +177,8 @@ export const ENTITY_MCP_FIELD_DESCRIPTIONS = {
   compare_entities: {
     from_run_id: "The older audit. Defaults to the one before the newer audit, for the same site. When both runs are named they are ordered chronologically whichever field named them, so a diff always reads forward in time; read fromRunId and toRunId on the result for the direction actually used.",
     to_run_id: "The newer audit. Defaults to the latest audit that stored at least one entity. When both runs are named they are ordered chronologically whichever field named them.",
+    occurrence_threshold:
+      "Smallest occurrence change worth reporting. Default 1, meaning every change. Raise it on a site that publishes constantly, where a site-wide entity moves by one on every audit and would otherwise fill the change set with noise. Affects occurrenceDeltas only: entities added, removed, or changing their @id are reported whatever this is set to.",
   },
 } as const;
 
@@ -244,6 +253,12 @@ export const ENTITY_MCP_INPUT_FIELDS: Record<
   compare_entities: {
     from_run_id: { kind: "string", required: false },
     to_run_id: { kind: "string", required: false },
+    occurrence_threshold: {
+      kind: "integer",
+      required: false,
+      default: ENTITY_MCP_LIMITS.occurrenceThreshold,
+      min: 1,
+    },
   },
   get_entity_findings: {
     run_id: { kind: "string", required: false },

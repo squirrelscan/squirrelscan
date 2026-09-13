@@ -96,6 +96,8 @@ The change set between two audits: entities added and removed, entities that gai
 
 Defaults to the previous audit versus the latest, **of the same site**. When you name both runs they are ordered chronologically whichever field named them, so a diff always reads forward in time. Read `fromRunId` and `toRunId` on the result for the direction actually used.
 
+`occurrence_threshold` is the smallest occurrence change worth reporting, 1 by default. Raise it on a site that publishes constantly, where a site-wide entity moves by one on every audit and would otherwise bury the real change in noise. It affects `occurrenceDeltas` only: entities added, removed, or changing their `@id` are reported whatever you set it to, because those are structural changes rather than changes of degree.
+
 <Note>
 An entity is only reported as `removed` when every page that declared it was crawled again. Anything unproven is reported separately as `notCrawled`, so a smaller crawl never reads as a site that deleted its structured data. If you are checking whether a fix landed, `notCrawled` is the field that tells you the audit did not cover the evidence.
 </Note>

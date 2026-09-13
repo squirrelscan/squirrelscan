@@ -228,6 +228,12 @@ export function registerEntityTools(server: McpServer): void {
           .optional()
           .describe(F.compare_entities.from_run_id),
         to_run_id: z.string().optional().describe(F.compare_entities.to_run_id),
+        occurrence_threshold: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(F.compare_entities.occurrence_threshold),
       },
     },
     async (args) => {
@@ -238,7 +244,12 @@ export function registerEntityTools(server: McpServer): void {
       if (!resolved.ok) return errorResult(resolved.error.message);
 
       const { older, newer } = resolved.data;
-      const diff = diffEntityMaps(older.map, newer.map);
+      // Passed straight through to the engine, so the two servers filter the
+      // change set identically rather than each deciding what "noisy" means.
+      const diff = diffEntityMaps(older.map, newer.map, {
+        occurrenceThreshold:
+          args.occurrence_threshold ?? ENTITY_MCP_LIMITS.occurrenceThreshold,
+      });
 
       return jsonResult({
         site: newer.map.site,
