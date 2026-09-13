@@ -34,6 +34,20 @@ export * from "./failure-reason";
 
 // #2061: the structured entity map — site-wide JSON-LD graph of one audit.
 export * from "./entity-map";
+export type {
+  EntityMcpToolName,
+  EntityMcpProblem,
+  EntityMcpGraphFormat,
+  EntityMcpTruncation,
+  EntityMcpListRow,
+  EntityMcpListResult,
+  EntityMcpEdge,
+  EntityMcpEntityResult,
+  EntityMcpGraphResult,
+  EntityMcpCompareResult,
+  EntityMcpFinding,
+  EntityMcpFindingsResult,
+} from "./entity-mcp";
 
 // Import storage types needed locally by interfaces in this file
 import type {

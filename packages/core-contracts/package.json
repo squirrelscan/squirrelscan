@@ -17,7 +17,8 @@
     "./api-keys": "./src/api-keys.ts",
     "./threat-intel": "./src/threat-intel.ts",
     "./resolution": "./src/resolution.ts",
-    "./entity-map": "./src/entity-map.ts"
+    "./entity-map": "./src/entity-map.ts",
+    "./entity-mcp": "./src/entity-mcp.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
