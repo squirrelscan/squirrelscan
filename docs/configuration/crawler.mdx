@@ -353,24 +353,38 @@ URL patterns to include. If set, **only** matching URLs are crawled.
 
 **Pattern Syntax:**
 
-Uses glob syntax:
-- `*` - Match anything except `/`
-- `**` - Match anything including `/`
-- `?` - Match single character
-- `[abc]` - Match character set
+`*` is the only special character, and it stands for any run of characters,
+`/` included. There is no `?` or `[abc]`: those match themselves.
+
+A pattern is matched against the URL's **path** unless it starts with `http://`
+or `https://`, in which case it is matched against the whole URL. So a pattern
+that needs to see a query string or a host has to be absolute.
+
+| Pattern | How it matches |
+| --- | --- |
+| `*` | everything |
+| `/blog/*` | prefix: any path starting `/blog/`, however deep |
+| `/blog` | prefix: any path starting `/blog`, so `/blogroll` too |
+| `*.html` | the whole path, anchored and case-insensitive |
+| `https://example.com/*?preview=*` | the whole URL, anchored and case-insensitive |
+
+A pattern ending in `/*` is a plain prefix test, which is both the cheapest form
+and the one to reach for. `**` is not a separate construct: it is two `*` in a
+row and matches exactly what one `*` does, so older examples written as
+`/blog/**` still work.
 
 **Examples:**
 
 Only crawl blog:
 ```toml
 [crawler]
-include = ["/blog/**"]
+include = ["/blog/*"]
 ```
 
 Multiple sections:
 ```toml
 [crawler]
-include = ["/blog/**", "/docs/**", "/products/**"]
+include = ["/blog/*", "/docs/*", "/products/*"]
 ```
 
 Specific file types:
@@ -380,6 +394,14 @@ include = ["*.html", "*.htm"]
 ```
 
 **Important:** When `include` is set, it **overrides** the `domains` setting in `[project]`.
+
+<Note>
+  Cloud audits don't read this file. The same two lists live on the dashboard at
+  **Website → Settings → Crawl**, and apply to every cloud audit of that site.
+  They behave slightly differently there: a cloud `include` pattern is pinned to
+  the website's own addresses before the crawl runs, so it can never widen the
+  crawl onto another host. See [Crawl settings](/dashboard/crawl-settings).
+</Note>
 
 ---
 
@@ -397,7 +419,7 @@ Takes precedence over `include` - if a URL matches both, it's excluded.
 Exclude admin areas:
 ```toml
 [crawler]
-exclude = ["/admin/**", "/wp-admin/**"]
+exclude = ["/admin/*", "/wp-admin/*"]
 ```
 
 Exclude file types:
@@ -409,13 +431,14 @@ exclude = ["*.pdf", "*.zip", "*.tar.gz"]
 Exclude API endpoints:
 ```toml
 [crawler]
-exclude = ["/api/**", "/v1/**"]
+exclude = ["/api/*", "/v1/*"]
 ```
 
-Exclude query parameters:
+Exclude query parameters. These have to be absolute, because a relative
+pattern is matched against the path, which never contains a query string:
 ```toml
 [crawler]
-exclude = ["*?preview=*", "*?draft=*"]
+exclude = ["https://example.com/*?preview=*", "https://example.com/*?draft=*"]
 ```
 
 **Common exclusions:**
@@ -423,16 +446,14 @@ exclude = ["*?preview=*", "*?draft=*"]
 ```toml
 [crawler]
 exclude = [
-  "/admin/**",
-  "/wp-admin/**",
-  "/wp-content/**",
-  "/api/**",
+  "/admin/*",
+  "/wp-admin/*",
+  "/wp-content/*",
+  "/api/*",
   "*.pdf",
   "*.zip",
   "*.jpg",
-  "*.png",
-  "*?preview=*",
-  "*?print=*"
+  "*.png"
 ]
 ```
 
@@ -442,11 +463,15 @@ exclude = [
 
 | Pattern | Matches | Doesn't Match |
 |---------|---------|---------------|
-| `/blog/*` | `/blog/post` | `/blog/post/comment` |
-| `/blog/**` | `/blog/post`, `/blog/post/comment` | `/about` |
+| `/blog/*` | `/blog/post`, `/blog/post/comment` | `/about`, `/blog` |
+| `/blog` | `/blog`, `/blog/post`, `/blogroll` | `/about` |
 | `*.pdf` | `/file.pdf`, `/docs/guide.pdf` | `/file.html` |
-| `*?preview=*` | `/page?preview=true` | `/page` |
-| `/api/*/users` | `/api/v1/users` | `/api/v1/v2/users` |
+| `/api/*/users` | `/api/v1/users`, `/api/v1/v2/users` | `/api/users` |
+| `https://example.com/*?preview=*` | `https://example.com/page?preview=true` | `/page?preview=true` on another host |
+
+`*` does not stop at a `/`, so a pattern cannot select one level of a path and
+not the level below it. Reach for `exclude` when you need to carve a subtree
+back out.
 
 ---
 
@@ -671,6 +696,13 @@ Custom HTTP request headers attached to **every** crawl request: pages, assets,
 `robots.txt`, sitemaps, `llms.txt`, and markdown probes. Use this to authorize
 the crawler with schemes that require signed headers, such as
 [Web Bot Auth](/guides/web-bot-auth) (used by Shopify and Cloudflare).
+
+<Note>
+  A custom header configured for a website's **cloud** audits does more than
+  authenticate the request: it marks the crawl as authorised, which raises the
+  crawl rate and stops robots.txt being applied at all. See
+  [Authorised crawls](/dashboard/crawl-settings#authorised-crawls).
+</Note>
 
 ```toml
 [crawler]
@@ -897,8 +929,8 @@ max_prefix_budget = 0.2
 ```toml
 [crawler]
 max_pages = 200
-include = ["/blog/**"]
-exclude = ["*.pdf", "/blog/drafts/**"]
+include = ["/blog/*"]
+exclude = ["*.pdf", "/blog/drafts/*"]
 allow_query_params = ["page"]
 ```
 
@@ -907,8 +939,8 @@ allow_query_params = ["page"]
 ```toml
 [crawler]
 max_pages = 1000
-include = ["/products/**", "/categories/**"]
-exclude = ["/cart/**", "/checkout/**", "/account/**"]
+include = ["/products/*", "/categories/*"]
+exclude = ["/cart/*", "/checkout/*", "/account/*"]
 allow_query_params = ["category", "sort", "page", "filter"]
 drop_query_prefixes = ["utm_", "gclid", "fbclid", "ref"]
 ```
