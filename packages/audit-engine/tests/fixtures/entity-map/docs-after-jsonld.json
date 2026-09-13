@@ -2,10 +2,10 @@
   "format": "squirrelscan/entity-map",
   "version": 1,
   "site": "https://docs.squirrelscan.com/",
-  "generatedAt": "2026-09-13T00:23:39.343Z",
+  "generatedAt": "2026-09-13T05:23:15.852Z",
   "summary": {
     "nodeCount": 183,
-    "edgeCount": 489,
+    "edgeCount": 488,
     "danglingCount": 0,
     "pagesTotal": 60,
     "pagesWithoutEntities": 0,
@@ -105,10 +105,8 @@
         "https://docs.squirrelscan.com/cli",
         "https://docs.squirrelscan.com/cli/analyze",
         "https://docs.squirrelscan.com/cli/audit",
-        "https://docs.squirrelscan.com/cli/auth",
-        "https://docs.squirrelscan.com/cli/config",
         "https://docs.squirrelscan.com/cli/crawl",
-        "https://docs.squirrelscan.com/cli/feedback",
+        "https://docs.squirrelscan.com/cli/entities",
         "https://docs.squirrelscan.com/cli/init",
         "https://docs.squirrelscan.com/cli/report",
         "https://docs.squirrelscan.com/cloud",
@@ -121,6 +119,8 @@
         "https://docs.squirrelscan.com/developers/authentication",
         "https://docs.squirrelscan.com/developers/mcp",
         "https://docs.squirrelscan.com/developers/mcp-clients",
+        "https://docs.squirrelscan.com/entity-map",
+        "https://docs.squirrelscan.com/entity-map/fixing",
         "https://docs.squirrelscan.com/guides/badges",
         "https://docs.squirrelscan.com/guides/browser-rendering",
         "https://docs.squirrelscan.com/guides/ci",
@@ -461,128 +461,6 @@
       "pageLocal": true
     },
     {
-      "key": "id:https://docs.squirrelscan.com/cli/auth",
-      "id": "https://docs.squirrelscan.com/cli/auth",
-      "types": [
-        "WebPage"
-      ],
-      "name": "auth",
-      "properties": {
-        "name": "auth",
-        "url": "https://docs.squirrelscan.com/cli/auth",
-        "description": "Authenticate with squirrelscan for cloud features and publishing"
-      },
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0,
-      "conflicts": [],
-      "danglingRefs": 0,
-      "pageLocal": true
-    },
-    {
-      "key": "id:https://docs.squirrelscan.com/cli/auth#article",
-      "id": "https://docs.squirrelscan.com/cli/auth#article",
-      "types": [
-        "TechArticle"
-      ],
-      "name": "auth",
-      "properties": {
-        "name": "auth",
-        "image": [
-          "https://docs.squirrelscan.com/og/cli/auth.png"
-        ],
-        "description": "Authenticate with squirrelscan for cloud features and publishing"
-      },
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0,
-      "conflicts": [],
-      "danglingRefs": 0,
-      "pageLocal": false
-    },
-    {
-      "key": "id:https://docs.squirrelscan.com/cli/auth#breadcrumb",
-      "id": "https://docs.squirrelscan.com/cli/auth#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
-      "name": null,
-      "properties": {},
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0,
-      "conflicts": [],
-      "danglingRefs": 0,
-      "pageLocal": true
-    },
-    {
-      "key": "id:https://docs.squirrelscan.com/cli/config",
-      "id": "https://docs.squirrelscan.com/cli/config",
-      "types": [
-        "WebPage"
-      ],
-      "name": "config",
-      "properties": {
-        "name": "config",
-        "url": "https://docs.squirrelscan.com/cli/config",
-        "description": "View and modify squirrelscan configuration"
-      },
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0,
-      "conflicts": [],
-      "danglingRefs": 0,
-      "pageLocal": true
-    },
-    {
-      "key": "id:https://docs.squirrelscan.com/cli/config#article",
-      "id": "https://docs.squirrelscan.com/cli/config#article",
-      "types": [
-        "TechArticle"
-      ],
-      "name": "config",
-      "properties": {
-        "name": "config",
-        "image": [
-          "https://docs.squirrelscan.com/og/cli/config.png"
-        ],
-        "description": "View and modify squirrelscan configuration"
-      },
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0,
-      "conflicts": [],
-      "danglingRefs": 0,
-      "pageLocal": false
-    },
-    {
-      "key": "id:https://docs.squirrelscan.com/cli/config#breadcrumb",
-      "id": "https://docs.squirrelscan.com/cli/config#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
-      "name": null,
-      "properties": {},
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0,
-      "conflicts": [],
-      "danglingRefs": 0,
-      "pageLocal": true
-    },
-    {
       "key": "id:https://docs.squirrelscan.com/cli/crawl",
       "id": "https://docs.squirrelscan.com/cli/crawl",
       "types": [
@@ -644,20 +522,20 @@
       "pageLocal": true
     },
     {
-      "key": "id:https://docs.squirrelscan.com/cli/feedback",
-      "id": "https://docs.squirrelscan.com/cli/feedback",
+      "key": "id:https://docs.squirrelscan.com/cli/entities",
+      "id": "https://docs.squirrelscan.com/cli/entities",
       "types": [
         "WebPage"
       ],
-      "name": "feedback",
+      "name": "entities",
       "properties": {
-        "name": "feedback",
-        "url": "https://docs.squirrelscan.com/cli/feedback",
-        "description": "Send feedback to the squirrelscan team"
+        "name": "entities",
+        "url": "https://docs.squirrelscan.com/cli/entities",
+        "description": "Query the entity map of a stored audit"
       },
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0,
       "conflicts": [],
@@ -665,22 +543,22 @@
       "pageLocal": true
     },
     {
-      "key": "id:https://docs.squirrelscan.com/cli/feedback#article",
-      "id": "https://docs.squirrelscan.com/cli/feedback#article",
+      "key": "id:https://docs.squirrelscan.com/cli/entities#article",
+      "id": "https://docs.squirrelscan.com/cli/entities#article",
       "types": [
         "TechArticle"
       ],
-      "name": "feedback",
+      "name": "entities",
       "properties": {
-        "name": "feedback",
+        "name": "entities",
         "image": [
-          "https://docs.squirrelscan.com/og/cli/feedback.png"
+          "https://docs.squirrelscan.com/og/cli/entities.png"
         ],
-        "description": "Send feedback to the squirrelscan team"
+        "description": "Query the entity map of a stored audit"
       },
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0,
       "conflicts": [],
@@ -688,8 +566,8 @@
       "pageLocal": false
     },
     {
-      "key": "id:https://docs.squirrelscan.com/cli/feedback#breadcrumb",
-      "id": "https://docs.squirrelscan.com/cli/feedback#breadcrumb",
+      "key": "id:https://docs.squirrelscan.com/cli/entities#breadcrumb",
+      "id": "https://docs.squirrelscan.com/cli/entities#breadcrumb",
       "types": [
         "BreadcrumbList"
       ],
@@ -697,7 +575,7 @@
       "properties": {},
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0,
       "conflicts": [],
@@ -1430,6 +1308,128 @@
       "occurrences": 1,
       "pages": [
         "https://docs.squirrelscan.com/developers/mcp-clients"
+      ],
+      "morePages": 0,
+      "conflicts": [],
+      "danglingRefs": 0,
+      "pageLocal": true
+    },
+    {
+      "key": "id:https://docs.squirrelscan.com/entity-map",
+      "id": "https://docs.squirrelscan.com/entity-map",
+      "types": [
+        "WebPage"
+      ],
+      "name": "The entity map",
+      "properties": {
+        "name": "The entity map",
+        "url": "https://docs.squirrelscan.com/entity-map",
+        "description": "Every audit collapses your site's JSON-LD into one graph, so you can see whether your site declares one identity for itself or a new one on every page."
+      },
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0,
+      "conflicts": [],
+      "danglingRefs": 0,
+      "pageLocal": true
+    },
+    {
+      "key": "id:https://docs.squirrelscan.com/entity-map#article",
+      "id": "https://docs.squirrelscan.com/entity-map#article",
+      "types": [
+        "TechArticle"
+      ],
+      "name": "The entity map",
+      "properties": {
+        "name": "The entity map",
+        "image": [
+          "https://docs.squirrelscan.com/og/entity-map.png"
+        ],
+        "description": "Every audit collapses your site's JSON-LD into one graph, so you can see whether your site declares one identity for itself or a new one on every page."
+      },
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0,
+      "conflicts": [],
+      "danglingRefs": 0,
+      "pageLocal": false
+    },
+    {
+      "key": "id:https://docs.squirrelscan.com/entity-map#breadcrumb",
+      "id": "https://docs.squirrelscan.com/entity-map#breadcrumb",
+      "types": [
+        "BreadcrumbList"
+      ],
+      "name": null,
+      "properties": {},
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0,
+      "conflicts": [],
+      "danglingRefs": 0,
+      "pageLocal": true
+    },
+    {
+      "key": "id:https://docs.squirrelscan.com/entity-map/fixing",
+      "id": "https://docs.squirrelscan.com/entity-map/fixing",
+      "types": [
+        "WebPage"
+      ],
+      "name": "Fixing structured data identity",
+      "properties": {
+        "name": "Fixing structured data identity",
+        "url": "https://docs.squirrelscan.com/entity-map/fixing",
+        "description": "Every schema/entity-* finding, what causes it, and the exact change to make in Yoast, Rank Math, WordLift, Next.js, Astro and tangly."
+      },
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0,
+      "conflicts": [],
+      "danglingRefs": 0,
+      "pageLocal": true
+    },
+    {
+      "key": "id:https://docs.squirrelscan.com/entity-map/fixing#article",
+      "id": "https://docs.squirrelscan.com/entity-map/fixing#article",
+      "types": [
+        "TechArticle"
+      ],
+      "name": "Fixing structured data identity",
+      "properties": {
+        "name": "Fixing structured data identity",
+        "image": [
+          "https://docs.squirrelscan.com/og/entity-map/fixing.png"
+        ],
+        "description": "Every schema/entity-* finding, what causes it, and the exact change to make in Yoast, Rank Math, WordLift, Next.js, Astro and tangly."
+      },
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0,
+      "conflicts": [],
+      "danglingRefs": 0,
+      "pageLocal": false
+    },
+    {
+      "key": "id:https://docs.squirrelscan.com/entity-map/fixing#breadcrumb",
+      "id": "https://docs.squirrelscan.com/entity-map/fixing#breadcrumb",
+      "types": [
+        "BreadcrumbList"
+      ],
+      "name": null,
+      "properties": {},
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
       ],
       "morePages": 0,
       "conflicts": [],
@@ -2178,7 +2178,7 @@
       "properties": {
         "name": "Rules reference",
         "url": "https://docs.squirrelscan.com/rules",
-        "description": "All 282 audit rules organized by score group and category"
+        "description": "All 295 audit rules organized by score group and category"
       },
       "occurrences": 1,
       "pages": [
@@ -2201,7 +2201,7 @@
         "image": [
           "https://docs.squirrelscan.com/og/rules.png"
         ],
-        "description": "All 282 audit rules organized by score group and category"
+        "description": "All 295 audit rules organized by score group and category"
       },
       "occurrences": 1,
       "pages": [
@@ -3772,10 +3772,8 @@
         "https://docs.squirrelscan.com/cli",
         "https://docs.squirrelscan.com/cli/analyze",
         "https://docs.squirrelscan.com/cli/audit",
-        "https://docs.squirrelscan.com/cli/auth",
-        "https://docs.squirrelscan.com/cli/config",
         "https://docs.squirrelscan.com/cli/crawl",
-        "https://docs.squirrelscan.com/cli/feedback",
+        "https://docs.squirrelscan.com/cli/entities",
         "https://docs.squirrelscan.com/cli/init",
         "https://docs.squirrelscan.com/cli/report",
         "https://docs.squirrelscan.com/cloud",
@@ -3788,6 +3786,8 @@
         "https://docs.squirrelscan.com/developers/authentication",
         "https://docs.squirrelscan.com/developers/mcp",
         "https://docs.squirrelscan.com/developers/mcp-clients",
+        "https://docs.squirrelscan.com/entity-map",
+        "https://docs.squirrelscan.com/entity-map/fixing",
         "https://docs.squirrelscan.com/guides/badges",
         "https://docs.squirrelscan.com/guides/browser-rendering",
         "https://docs.squirrelscan.com/guides/ci",
@@ -3848,10 +3848,8 @@
         "https://docs.squirrelscan.com/cli",
         "https://docs.squirrelscan.com/cli/analyze",
         "https://docs.squirrelscan.com/cli/audit",
-        "https://docs.squirrelscan.com/cli/auth",
-        "https://docs.squirrelscan.com/cli/config",
         "https://docs.squirrelscan.com/cli/crawl",
-        "https://docs.squirrelscan.com/cli/feedback",
+        "https://docs.squirrelscan.com/cli/entities",
         "https://docs.squirrelscan.com/cli/init",
         "https://docs.squirrelscan.com/cli/report",
         "https://docs.squirrelscan.com/cloud",
@@ -3864,6 +3862,8 @@
         "https://docs.squirrelscan.com/developers/authentication",
         "https://docs.squirrelscan.com/developers/mcp",
         "https://docs.squirrelscan.com/developers/mcp-clients",
+        "https://docs.squirrelscan.com/entity-map",
+        "https://docs.squirrelscan.com/entity-map/fixing",
         "https://docs.squirrelscan.com/guides/badges",
         "https://docs.squirrelscan.com/guides/browser-rendering",
         "https://docs.squirrelscan.com/guides/ci",
@@ -3990,10 +3990,8 @@
         "https://docs.squirrelscan.com/cli",
         "https://docs.squirrelscan.com/cli/analyze",
         "https://docs.squirrelscan.com/cli/audit",
-        "https://docs.squirrelscan.com/cli/auth",
-        "https://docs.squirrelscan.com/cli/config",
         "https://docs.squirrelscan.com/cli/crawl",
-        "https://docs.squirrelscan.com/cli/feedback",
+        "https://docs.squirrelscan.com/cli/entities",
         "https://docs.squirrelscan.com/cli/init",
         "https://docs.squirrelscan.com/cli/report",
         "https://docs.squirrelscan.com/cloud",
@@ -4006,6 +4004,8 @@
         "https://docs.squirrelscan.com/developers/authentication",
         "https://docs.squirrelscan.com/developers/mcp",
         "https://docs.squirrelscan.com/developers/mcp-clients",
+        "https://docs.squirrelscan.com/entity-map",
+        "https://docs.squirrelscan.com/entity-map/fixing",
         "https://docs.squirrelscan.com/guides/badges",
         "https://docs.squirrelscan.com/guides/browser-rendering",
         "https://docs.squirrelscan.com/guides/ci",
@@ -4500,204 +4500,6 @@
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/auth",
-      "predicate": "isPartOf",
-      "target": "id:https://docs.squirrelscan.com/#website",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#article",
-      "predicate": "isPartOf",
-      "target": "id:https://docs.squirrelscan.com/cli/auth",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#article",
-      "predicate": "mainEntityOfPage",
-      "target": "id:https://docs.squirrelscan.com/cli/auth",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#article",
-      "predicate": "about",
-      "target": "id:https://squirrelscan.com/#organization",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#article",
-      "predicate": "author",
-      "target": "id:https://squirrelscan.com/#organization",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#article",
-      "predicate": "publisher",
-      "target": "id:https://squirrelscan.com/#organization",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#breadcrumb",
-      "predicate": "itemListElement",
-      "target": "id:https://docs.squirrelscan.com/",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#breadcrumb",
-      "predicate": "itemListElement",
-      "target": "id:https://docs.squirrelscan.com/cli",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/auth#breadcrumb",
-      "predicate": "itemListElement",
-      "target": "id:https://docs.squirrelscan.com/cli/auth",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/auth"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config",
-      "predicate": "isPartOf",
-      "target": "id:https://docs.squirrelscan.com/#website",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#article",
-      "predicate": "isPartOf",
-      "target": "id:https://docs.squirrelscan.com/cli/config",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#article",
-      "predicate": "mainEntityOfPage",
-      "target": "id:https://docs.squirrelscan.com/cli/config",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#article",
-      "predicate": "about",
-      "target": "id:https://squirrelscan.com/#organization",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#article",
-      "predicate": "author",
-      "target": "id:https://squirrelscan.com/#organization",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#article",
-      "predicate": "publisher",
-      "target": "id:https://squirrelscan.com/#organization",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#breadcrumb",
-      "predicate": "itemListElement",
-      "target": "id:https://docs.squirrelscan.com/",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#breadcrumb",
-      "predicate": "itemListElement",
-      "target": "id:https://docs.squirrelscan.com/cli",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
-      "source": "id:https://docs.squirrelscan.com/cli/config#breadcrumb",
-      "predicate": "itemListElement",
-      "target": "id:https://docs.squirrelscan.com/cli/config",
-      "dangling": false,
-      "occurrences": 1,
-      "pages": [
-        "https://docs.squirrelscan.com/cli/config"
-      ],
-      "morePages": 0
-    },
-    {
       "source": "id:https://docs.squirrelscan.com/cli/crawl",
       "predicate": "isPartOf",
       "target": "id:https://docs.squirrelscan.com/#website",
@@ -4797,101 +4599,101 @@
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback",
+      "source": "id:https://docs.squirrelscan.com/cli/entities",
       "predicate": "isPartOf",
       "target": "id:https://docs.squirrelscan.com/#website",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#article",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#article",
       "predicate": "isPartOf",
-      "target": "id:https://docs.squirrelscan.com/cli/feedback",
+      "target": "id:https://docs.squirrelscan.com/cli/entities",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#article",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#article",
       "predicate": "mainEntityOfPage",
-      "target": "id:https://docs.squirrelscan.com/cli/feedback",
+      "target": "id:https://docs.squirrelscan.com/cli/entities",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#article",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#article",
       "predicate": "about",
       "target": "id:https://squirrelscan.com/#organization",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#article",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#article",
       "predicate": "author",
       "target": "id:https://squirrelscan.com/#organization",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#article",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#article",
       "predicate": "publisher",
       "target": "id:https://squirrelscan.com/#organization",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#breadcrumb",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#breadcrumb",
       "predicate": "itemListElement",
       "target": "id:https://docs.squirrelscan.com/",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#breadcrumb",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#breadcrumb",
       "predicate": "itemListElement",
       "target": "id:https://docs.squirrelscan.com/cli",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
     {
-      "source": "id:https://docs.squirrelscan.com/cli/feedback#breadcrumb",
+      "source": "id:https://docs.squirrelscan.com/cli/entities#breadcrumb",
       "predicate": "itemListElement",
-      "target": "id:https://docs.squirrelscan.com/cli/feedback",
+      "target": "id:https://docs.squirrelscan.com/cli/entities",
       "dangling": false,
       "occurrences": 1,
       "pages": [
-        "https://docs.squirrelscan.com/cli/feedback"
+        "https://docs.squirrelscan.com/cli/entities"
       ],
       "morePages": 0
     },
@@ -5970,6 +5772,193 @@
       "occurrences": 1,
       "pages": [
         "https://docs.squirrelscan.com/developers/mcp-clients"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map",
+      "predicate": "isPartOf",
+      "target": "id:https://docs.squirrelscan.com/#website",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map#article",
+      "predicate": "isPartOf",
+      "target": "id:https://docs.squirrelscan.com/entity-map",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map#article",
+      "predicate": "mainEntityOfPage",
+      "target": "id:https://docs.squirrelscan.com/entity-map",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map#article",
+      "predicate": "about",
+      "target": "id:https://squirrelscan.com/#organization",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map#article",
+      "predicate": "author",
+      "target": "id:https://squirrelscan.com/#organization",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map#article",
+      "predicate": "publisher",
+      "target": "id:https://squirrelscan.com/#organization",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map#breadcrumb",
+      "predicate": "itemListElement",
+      "target": "id:https://docs.squirrelscan.com/",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map#breadcrumb",
+      "predicate": "itemListElement",
+      "target": "id:https://docs.squirrelscan.com/entity-map",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing",
+      "predicate": "isPartOf",
+      "target": "id:https://docs.squirrelscan.com/#website",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#article",
+      "predicate": "isPartOf",
+      "target": "id:https://docs.squirrelscan.com/entity-map/fixing",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#article",
+      "predicate": "mainEntityOfPage",
+      "target": "id:https://docs.squirrelscan.com/entity-map/fixing",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#article",
+      "predicate": "about",
+      "target": "id:https://squirrelscan.com/#organization",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#article",
+      "predicate": "author",
+      "target": "id:https://squirrelscan.com/#organization",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#article",
+      "predicate": "publisher",
+      "target": "id:https://squirrelscan.com/#organization",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#breadcrumb",
+      "predicate": "itemListElement",
+      "target": "id:https://docs.squirrelscan.com/",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#breadcrumb",
+      "predicate": "itemListElement",
+      "target": "id:https://docs.squirrelscan.com/entity-map",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
+      ],
+      "morePages": 0
+    },
+    {
+      "source": "id:https://docs.squirrelscan.com/entity-map/fixing#breadcrumb",
+      "predicate": "itemListElement",
+      "target": "id:https://docs.squirrelscan.com/entity-map/fixing",
+      "dangling": false,
+      "occurrences": 1,
+      "pages": [
+        "https://docs.squirrelscan.com/entity-map/fixing"
       ],
       "morePages": 0
     },
@@ -9330,10 +9319,8 @@
         "https://docs.squirrelscan.com/cli",
         "https://docs.squirrelscan.com/cli/analyze",
         "https://docs.squirrelscan.com/cli/audit",
-        "https://docs.squirrelscan.com/cli/auth",
-        "https://docs.squirrelscan.com/cli/config",
         "https://docs.squirrelscan.com/cli/crawl",
-        "https://docs.squirrelscan.com/cli/feedback",
+        "https://docs.squirrelscan.com/cli/entities",
         "https://docs.squirrelscan.com/cli/init",
         "https://docs.squirrelscan.com/cli/report",
         "https://docs.squirrelscan.com/cloud",
@@ -9346,6 +9333,8 @@
         "https://docs.squirrelscan.com/developers/authentication",
         "https://docs.squirrelscan.com/developers/mcp",
         "https://docs.squirrelscan.com/developers/mcp-clients",
+        "https://docs.squirrelscan.com/entity-map",
+        "https://docs.squirrelscan.com/entity-map/fixing",
         "https://docs.squirrelscan.com/guides/badges",
         "https://docs.squirrelscan.com/guides/browser-rendering",
         "https://docs.squirrelscan.com/guides/ci",
@@ -9378,5 +9367,911 @@
       "morePages": 10
     }
   ],
-  "pages": []
+  "pages": [
+    {
+      "url": "https://docs.squirrelscan.com/",
+      "declares": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/#article",
+        "id:https://docs.squirrelscan.com/#breadcrumb",
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/agent-setup",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/agent-setup",
+        "id:https://docs.squirrelscan.com/agent-setup#article",
+        "id:https://docs.squirrelscan.com/agent-setup#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/api",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/api",
+        "id:https://docs.squirrelscan.com/api#article",
+        "id:https://docs.squirrelscan.com/api#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cli",
+        "id:https://docs.squirrelscan.com/cli#article",
+        "id:https://docs.squirrelscan.com/cli#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/analyze",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cli/analyze",
+        "id:https://docs.squirrelscan.com/cli/analyze#article",
+        "id:https://docs.squirrelscan.com/cli/analyze#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/cli"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/audit",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cli/audit",
+        "id:https://docs.squirrelscan.com/cli/audit#article",
+        "id:https://docs.squirrelscan.com/cli/audit#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/cli"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/crawl",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cli/crawl",
+        "id:https://docs.squirrelscan.com/cli/crawl#article",
+        "id:https://docs.squirrelscan.com/cli/crawl#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/cli"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/entities",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cli/entities",
+        "id:https://docs.squirrelscan.com/cli/entities#article",
+        "id:https://docs.squirrelscan.com/cli/entities#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/cli"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/init",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cli/init",
+        "id:https://docs.squirrelscan.com/cli/init#article",
+        "id:https://docs.squirrelscan.com/cli/init#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/cli"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cli/report",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cli/report",
+        "id:https://docs.squirrelscan.com/cli/report#article",
+        "id:https://docs.squirrelscan.com/cli/report#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/cli"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cloud",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cloud",
+        "id:https://docs.squirrelscan.com/cloud#article",
+        "id:https://docs.squirrelscan.com/cloud#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/cloud/webhooks",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/cloud/webhooks",
+        "id:https://docs.squirrelscan.com/cloud/webhooks#article",
+        "id:https://docs.squirrelscan.com/cloud/webhooks#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/configuration",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/configuration",
+        "id:https://docs.squirrelscan.com/configuration#article",
+        "id:https://docs.squirrelscan.com/configuration#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/crawl",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/crawl",
+        "id:https://docs.squirrelscan.com/crawl#article",
+        "id:https://docs.squirrelscan.com/crawl#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/dashboard",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/dashboard",
+        "id:https://docs.squirrelscan.com/dashboard#article",
+        "id:https://docs.squirrelscan.com/dashboard#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/developers",
+        "id:https://docs.squirrelscan.com/developers#article",
+        "id:https://docs.squirrelscan.com/developers#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/agents",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/developers/agents",
+        "id:https://docs.squirrelscan.com/developers/agents#article",
+        "id:https://docs.squirrelscan.com/developers/agents#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/authentication",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/developers/authentication",
+        "id:https://docs.squirrelscan.com/developers/authentication#article",
+        "id:https://docs.squirrelscan.com/developers/authentication#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/mcp",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/developers/mcp",
+        "id:https://docs.squirrelscan.com/developers/mcp#article",
+        "id:https://docs.squirrelscan.com/developers/mcp#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/developers/mcp-clients",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/developers/mcp-clients",
+        "id:https://docs.squirrelscan.com/developers/mcp-clients#article",
+        "id:https://docs.squirrelscan.com/developers/mcp-clients#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/entity-map",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/entity-map",
+        "id:https://docs.squirrelscan.com/entity-map#article",
+        "id:https://docs.squirrelscan.com/entity-map#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/entity-map/fixing",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/entity-map/fixing",
+        "id:https://docs.squirrelscan.com/entity-map/fixing#article",
+        "id:https://docs.squirrelscan.com/entity-map/fixing#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/",
+        "id:https://docs.squirrelscan.com/entity-map"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/badges",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/badges",
+        "id:https://docs.squirrelscan.com/guides/badges#article",
+        "id:https://docs.squirrelscan.com/guides/badges#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/browser-rendering",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/browser-rendering",
+        "id:https://docs.squirrelscan.com/guides/browser-rendering#article",
+        "id:https://docs.squirrelscan.com/guides/browser-rendering#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/ci",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/ci",
+        "id:https://docs.squirrelscan.com/guides/ci#article",
+        "id:https://docs.squirrelscan.com/guides/ci#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/cloud-audits",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/cloud-audits",
+        "id:https://docs.squirrelscan.com/guides/cloud-audits#article",
+        "id:https://docs.squirrelscan.com/guides/cloud-audits#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/failed-audits",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/failed-audits",
+        "id:https://docs.squirrelscan.com/guides/failed-audits#article",
+        "id:https://docs.squirrelscan.com/guides/failed-audits#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent",
+        "id:https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent#article",
+        "id:https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/local-audits-cli",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/local-audits-cli",
+        "id:https://docs.squirrelscan.com/guides/local-audits-cli#article",
+        "id:https://docs.squirrelscan.com/guides/local-audits-cli#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/rate-limited-hosts",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/rate-limited-hosts",
+        "id:https://docs.squirrelscan.com/guides/rate-limited-hosts#article",
+        "id:https://docs.squirrelscan.com/guides/rate-limited-hosts#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/guides/web-bot-auth",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/guides/web-bot-auth",
+        "id:https://docs.squirrelscan.com/guides/web-bot-auth#article",
+        "id:https://docs.squirrelscan.com/guides/web-bot-auth#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/projects",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/projects",
+        "id:https://docs.squirrelscan.com/projects#article",
+        "id:https://docs.squirrelscan.com/projects#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/quickstart",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/quickstart",
+        "id:https://docs.squirrelscan.com/quickstart#article",
+        "id:https://docs.squirrelscan.com/quickstart#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/reports",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/reports",
+        "id:https://docs.squirrelscan.com/reports#article",
+        "id:https://docs.squirrelscan.com/reports#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules",
+        "id:https://docs.squirrelscan.com/rules#article",
+        "id:https://docs.squirrelscan.com/rules#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/a11y",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/a11y",
+        "id:https://docs.squirrelscan.com/rules/a11y#article",
+        "id:https://docs.squirrelscan.com/rules/a11y#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/adblock",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/adblock",
+        "id:https://docs.squirrelscan.com/rules/adblock#article",
+        "id:https://docs.squirrelscan.com/rules/adblock#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/agents",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/agents",
+        "id:https://docs.squirrelscan.com/rules/agents#article",
+        "id:https://docs.squirrelscan.com/rules/agents#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/analytics",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/analytics",
+        "id:https://docs.squirrelscan.com/rules/analytics#article",
+        "id:https://docs.squirrelscan.com/rules/analytics#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/ax",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/ax",
+        "id:https://docs.squirrelscan.com/rules/ax#article",
+        "id:https://docs.squirrelscan.com/rules/ax#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/content",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/content",
+        "id:https://docs.squirrelscan.com/rules/content#article",
+        "id:https://docs.squirrelscan.com/rules/content#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/core",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/core",
+        "id:https://docs.squirrelscan.com/rules/core#article",
+        "id:https://docs.squirrelscan.com/rules/core#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/crawl",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/crawl",
+        "id:https://docs.squirrelscan.com/rules/crawl#article",
+        "id:https://docs.squirrelscan.com/rules/crawl#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/eeat",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/eeat",
+        "id:https://docs.squirrelscan.com/rules/eeat#article",
+        "id:https://docs.squirrelscan.com/rules/eeat#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/gaps",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/gaps",
+        "id:https://docs.squirrelscan.com/rules/gaps#article",
+        "id:https://docs.squirrelscan.com/rules/gaps#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/i18n",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/i18n",
+        "id:https://docs.squirrelscan.com/rules/i18n#article",
+        "id:https://docs.squirrelscan.com/rules/i18n#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/images",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/images",
+        "id:https://docs.squirrelscan.com/rules/images#article",
+        "id:https://docs.squirrelscan.com/rules/images#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/integrity",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/integrity",
+        "id:https://docs.squirrelscan.com/rules/integrity#article",
+        "id:https://docs.squirrelscan.com/rules/integrity#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/legal",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/legal",
+        "id:https://docs.squirrelscan.com/rules/legal#article",
+        "id:https://docs.squirrelscan.com/rules/legal#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/links",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/links",
+        "id:https://docs.squirrelscan.com/rules/links#article",
+        "id:https://docs.squirrelscan.com/rules/links#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/local",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/local",
+        "id:https://docs.squirrelscan.com/rules/local#article",
+        "id:https://docs.squirrelscan.com/rules/local#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/mobile",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/mobile",
+        "id:https://docs.squirrelscan.com/rules/mobile#article",
+        "id:https://docs.squirrelscan.com/rules/mobile#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/perf",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/perf",
+        "id:https://docs.squirrelscan.com/rules/perf#article",
+        "id:https://docs.squirrelscan.com/rules/perf#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/performance",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/performance",
+        "id:https://docs.squirrelscan.com/rules/performance#article",
+        "id:https://docs.squirrelscan.com/rules/performance#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/schema",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/schema",
+        "id:https://docs.squirrelscan.com/rules/schema#article",
+        "id:https://docs.squirrelscan.com/rules/schema#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/security",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/security",
+        "id:https://docs.squirrelscan.com/rules/security#article",
+        "id:https://docs.squirrelscan.com/rules/security#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/seo",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/seo",
+        "id:https://docs.squirrelscan.com/rules/seo#article",
+        "id:https://docs.squirrelscan.com/rules/seo#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/social",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/social",
+        "id:https://docs.squirrelscan.com/rules/social#article",
+        "id:https://docs.squirrelscan.com/rules/social#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/url",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/url",
+        "id:https://docs.squirrelscan.com/rules/url#article",
+        "id:https://docs.squirrelscan.com/rules/url#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    },
+    {
+      "url": "https://docs.squirrelscan.com/rules/video",
+      "declares": [
+        "id:https://docs.squirrelscan.com/#website",
+        "id:https://docs.squirrelscan.com/rules/video",
+        "id:https://docs.squirrelscan.com/rules/video#article",
+        "id:https://docs.squirrelscan.com/rules/video#breadcrumb",
+        "id:https://squirrelscan.com/#logo",
+        "id:https://squirrelscan.com/#organization"
+      ],
+      "references": [
+        "id:https://docs.squirrelscan.com/"
+      ],
+      "entityCount": 6
+    }
+  ]
 }
