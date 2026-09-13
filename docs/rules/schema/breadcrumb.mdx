@@ -37,7 +37,7 @@ The sequence check only runs on positions that are JavaScript numbers. A `positi
 
 Put it in the `<head>` of the page it describes, number the positions from 1 with no gaps, and emit them as numbers rather than strings.
 
-The common false positive is a site whose JSON-LD is wrapped in an `@graph` array, which is what Yoast and several other generators emit. This rule reads the top level of each script only and does not flatten `@graph`, so a `BreadcrumbList` nested inside one reports as `No BreadcrumbList schema found`.
+JSON-LD wrapped in an `@graph` array, which is what Yoast, Rank Math and several other generators emit, is read the same as a top-level node: the rule flattens each script before looking for `BreadcrumbList`.
 
 | | |
 |---|---|
