@@ -1133,6 +1133,9 @@
           "pagesWithoutEntities",
           "nodesWithStableId",
           "stableIdShare",
+          "pageLocalCount",
+          "nodesWithoutIdCount",
+          "conflictCount",
           "countsByType"
         ],
         "properties": {
@@ -1154,6 +1157,18 @@
             "maximum": 1,
             "description": "nodesWithStableId as a 0-1 share of nodeCount."
           },
+          "pageLocalCount": {
+            "type": "integer",
+            "description": "Entities tagged `pageLocal` — what a graph hides by default."
+          },
+          "nodesWithoutIdCount": {
+            "type": "integer",
+            "description": "Entities with no `@id` declared on more than one page: the identity finding. An entity seen on a single page is not counted."
+          },
+          "conflictCount": {
+            "type": "integer",
+            "description": "Entities carrying at least one conflicting property. Counts entities, not properties."
+          },
           "countsByType": {
             "type": "object",
             "description": "Occurrence count per schema.org `@type`.",
@@ -1174,7 +1189,8 @@
           "pages",
           "morePages",
           "conflicts",
-          "danglingRefs"
+          "danglingRefs",
+          "pageLocal"
         ],
         "properties": {
           "key": {
@@ -1238,6 +1254,10 @@
           "danglingRefs": {
             "type": "integer",
             "description": "Outgoing `@id` references from this node that nothing declares."
+          },
+          "pageLocal": {
+            "type": "boolean",
+            "description": "True when the entity describes one page rather than the site's subject matter: Question, Answer, BreadcrumbList, ListItem, WebPage, and an ImageObject with no name. These are hidden unless `include_page_local` is set."
           }
         }
       },
@@ -1300,7 +1320,8 @@
               "auditedAt",
               "filtered",
               "counts",
-              "pageFilterIncomplete"
+              "pageFilterIncomplete",
+              "backfilled"
             ],
             "properties": {
               "reportId": { "type": "string" },
@@ -1322,6 +1343,14 @@
               "pageFilterIncomplete": {
                 "type": "boolean",
                 "description": "True when a `page` filter ran against a map containing an entity whose declaring-page list was capped. The result may be missing entities that really are declared on the requested page, because the omitted URLs are not in the document. Always false when no `page` filter was given."
+              },
+              "backfilled": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["pageLocalCount", "nodesWithoutIdCount", "conflictCount"]
+                },
+                "description": "Summary counters that were RECONSTRUCTED because this map was published before the field existed, so they are estimates rather than site totals.\n\n`summary` normally describes the whole audited site while `nodes` may be a projection capped at 750 entities. A reconstructed counter can only be computed from the stored entities, so on a large site it reads low next to its un-reconstructed siblings. Render those fields as \"at least N\", or hide them, rather than as site totals.\n\nEmpty on a map published by a current CLI. Entity-level `pageLocal` is reconstructed exactly and is never listed here."
               }
             }
           }
