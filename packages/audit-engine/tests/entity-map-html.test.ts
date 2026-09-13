@@ -5,6 +5,8 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { parseDocument } from "@squirrelscan/parser";
+
 import { buildEntityMap, renderEntityMapHtml } from "../src/entity-map";
 
 const AT = "2026-01-01T00:00:00.000Z";
@@ -77,5 +79,62 @@ describe("renderEntityMapHtml", () => {
     const html = renderEntityMapHtml(map);
     expect(html).toContain("This site declares no JSON-LD entities.");
     expect(html).toContain('"nodeCount":0');
+  });
+});
+
+describe("the viewer script itself", () => {
+  // The viewer is a JS program inside a TypeScript template literal, so tsgo
+  // checks the TypeScript around it and NOTHING inside it. A syntax error, or a
+  // stray backtick in a comment, compiles fine and ships a page whose graph
+  // never renders. Twice during this feature's development a backtick in a
+  // comment closed the literal, and the reported error was 200 lines away.
+  const html = render(
+    JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "@id": "https://example.com/#org",
+      name: "Acme",
+    }),
+  );
+
+  test("parses as JavaScript", () => {
+    // Parsed as HTML, not matched with a regex. Two regexes here were each
+    // correct for the markup we emit and each rejected by CodeQL for a case
+    // HTML permits and they missed: an uppercase `<SCRIPT>`, then an end tag
+    // with junk before the `>`. Both objections were right, and a third
+    // iteration would only have found the fourth. The parser already knows
+    // what a script element is.
+    //
+    // The inlined map rides in a `type="application/json"` element, which is
+    // not JavaScript and must not reach the transpiler. Selected by TYPE, so
+    // the two cannot be confused as the document grows.
+    const document = parseDocument(html);
+    const scripts = [...document.querySelectorAll("script")]
+      .filter((element) => {
+        const type = element.getAttribute("type");
+        return type === null || type === "" || type.toLowerCase() === "text/javascript";
+      })
+      .map((element) => element.textContent ?? "")
+      .filter((source) => source.trim().length > 0);
+    expect(scripts.length).toBeGreaterThan(0);
+
+    // Transpiler rather than `new Function`: this only needs to know the
+    // script parses, and building a callable out of page-derived source would
+    // be a code path that could run.
+    const transpiler = new Bun.Transpiler({ loader: "js" });
+    for (const source of scripts) {
+      expect(() => transpiler.transformSync(source)).not.toThrow();
+    }
+  });
+
+  test("caps the labels a hover grants", () => {
+    // Highlighting every neighbour is right and stays unbounded. Labelling
+    // every neighbour is not: hovering a hub on a real 40-page crawl granted
+    // 41 labels at once, which is the unreadable centre the zoom budget exists
+    // to prevent, reached through the pointer instead.
+    expect(html).toContain("var HOVER_LABEL_BUDGET = 12;");
+    // The granted-label test must read the capped set, not the full neighbour
+    // set — using `near` here is the bug this pins.
+    expect(html).toContain("neighbourLabels !== null && neighbourLabels[index]");
   });
 });
