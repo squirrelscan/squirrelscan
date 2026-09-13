@@ -5,6 +5,8 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { parseDocument } from "@squirrelscan/parser";
+
 import { buildEntityMap, renderEntityMapHtml } from "../src/entity-map";
 
 const AT = "2026-01-01T00:00:00.000Z";
@@ -96,18 +98,23 @@ describe("the viewer script itself", () => {
   );
 
   test("parses as JavaScript", () => {
-    // Case-insensitive and tolerant of attributes. Our own renderer emits
-    // lowercase `<script>` today, so a stricter pattern would pass now and
-    // silently match nothing the moment that changes — a test that extracts
-    // zero scripts and then asserts nothing about them is worse than no test.
+    // Parsed as HTML, not matched with a regex. Two regexes here were each
+    // correct for the markup we emit and each rejected by CodeQL for a case
+    // HTML permits and they missed: an uppercase `<SCRIPT>`, then an end tag
+    // with junk before the `>`. Both objections were right, and a third
+    // iteration would only have found the fourth. The parser already knows
+    // what a script element is.
     //
-    // The inlined map rides in a `type="application/json"` block, which is not
-    // JavaScript and must not be handed to the parser. Selected by TYPE rather
-    // than by sniffing the content, so the two cannot be confused as the
-    // document grows.
-    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
-      .filter(([, attrs]) => !/type\s*=\s*["']?application\/json/i.test(attrs!))
-      .map((match) => match[2]!)
+    // The inlined map rides in a `type="application/json"` element, which is
+    // not JavaScript and must not reach the transpiler. Selected by TYPE, so
+    // the two cannot be confused as the document grows.
+    const document = parseDocument(html);
+    const scripts = [...document.querySelectorAll("script")]
+      .filter((element) => {
+        const type = element.getAttribute("type");
+        return type === null || type === "" || type.toLowerCase() === "text/javascript";
+      })
+      .map((element) => element.textContent ?? "")
       .filter((source) => source.trim().length > 0);
     expect(scripts.length).toBeGreaterThan(0);
 
