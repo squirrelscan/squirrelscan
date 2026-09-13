@@ -538,3 +538,114 @@ describe("toJsonLd", () => {
     expect(JSON.stringify(toJsonLd(build(input)))).toBe(JSON.stringify(toJsonLd(build(input))));
   });
 });
+
+describe("conflict values are bounded and order-independent", () => {
+  // A node can accumulate distinct values for one property faster than anyone
+  // wants to hold: a broken template that stamps the page title into the
+  // organization's `name` gives one value per page. The cap has to be at
+  // insert, because collecting them all to trim later is unbounded memory on
+  // exactly the site that most needs the audit to finish.
+  //
+  // A plain "stop at N" keeps whichever N arrived first, and pages arrive in
+  // whatever order the crawl finished them. Keeping the N lowest-sorted values
+  // is bounded the same way and decided by the site rather than by the crawl.
+
+  const many = (count: number): EntityMapPageInput[] =>
+    Array.from({ length: count }, (_, i) =>
+      page(`${SITE}p${String(i).padStart(4, "0")}`, {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": `${SITE}#organization`,
+        name: `Example ${String(i).padStart(4, "0")}`,
+      })
+    );
+
+  test("the same pages in any order produce the same conflict values", () => {
+    const pages = many(80);
+    const forward = build(pages);
+    const reversed = build([...pages].reverse());
+    const shuffled = build([...pages].sort((a, b) => (a.url > b.url ? -1 : 1)));
+
+    const values = (map: ReturnType<typeof build>) =>
+      map.nodes[0]!.conflicts.find((c) => c.property === "name")?.values.map((v) => v.value);
+
+    expect(values(forward)).toEqual(values(reversed));
+    expect(values(forward)).toEqual(values(shuffled));
+  });
+
+  test("it keeps the lowest-sorted values rather than the first seen", () => {
+    const map = build([...many(80)].reverse());
+    const names = map.nodes[0]!.conflicts.find((c) => c.property === "name")!.values.map(
+      (v) => v.value
+    );
+    // 80 distinct names, capped at 50. Reversed input means "Example 0079"
+    // arrived first, and it is not kept; "Example 0000" arrived last, and is.
+    expect(names).toHaveLength(50);
+    expect(names).toContain("Example 0000");
+    expect(names).not.toContain("Example 0079");
+  });
+
+  test("a @type disagreement is recorded the same way", () => {
+    const map = build([
+      page(`${SITE}`, {
+        "@context": "https://schema.org",
+        "@type": ["Organization", "LocalBusiness"],
+        "@id": `${SITE}#organization`,
+        name: "Example Ltd",
+      }),
+      page(`${SITE}about`, {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": `${SITE}#organization`,
+        name: "Example Ltd",
+      }),
+    ]);
+    const drift = map.nodes[0]!.conflicts.find((c) => c.property === "@type");
+    // JSON-encoded, not joined: `@type` is a site-controlled string, so a site
+    // declaring `["Organization, LocalBusiness"]` as ONE type must not produce
+    // the same text as declaring the two separately, or a real disagreement
+    // goes unrecorded. `schema/entity-type-drift` renders it back for display.
+    expect(drift?.values.map((v) => v.value)).toEqual([
+      '["LocalBusiness","Organization"]',
+      '["Organization"]',
+    ]);
+  });
+
+  test("a comma inside one @type cannot forge a two-type set", () => {
+    const map = build([
+      page(`${SITE}`, {
+        "@context": "https://schema.org",
+        "@type": ["Organization", "LocalBusiness"],
+        "@id": `${SITE}#organization`,
+        name: "Example Ltd",
+      }),
+      page(`${SITE}about`, {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness, Organization",
+        "@id": `${SITE}#organization`,
+        name: "Example Ltd",
+      }),
+    ]);
+    const drift = map.nodes[0]!.conflicts.find((c) => c.property === "@type");
+    expect(drift?.values).toHaveLength(2);
+  });
+
+  test("the same type set in a different order is one value, not two", () => {
+    // schema.org puts no meaning on `@type` order, so neither does this.
+    const map = build([
+      page(`${SITE}`, {
+        "@context": "https://schema.org",
+        "@type": ["Organization", "LocalBusiness"],
+        "@id": `${SITE}#organization`,
+        name: "Example Ltd",
+      }),
+      page(`${SITE}about`, {
+        "@context": "https://schema.org",
+        "@type": ["LocalBusiness", "Organization"],
+        "@id": `${SITE}#organization`,
+        name: "Example Ltd",
+      }),
+    ]);
+    expect(map.nodes[0]!.conflicts.some((c) => c.property === "@type")).toBe(false);
+  });
+});

@@ -7,7 +7,9 @@ description: "One organization declared on forty pages with two logos, two phone
 
 When the same entity is declared on many pages, every copy is a chance to drift. A logo updated in the theme but not in the plugin. A phone number changed on the contact page only. A name that gained a suffix in one template.
 
-A search engine merges the declarations by `@id` and is then left with two answers to one question. It picks one. You have no say in which, and no way to tell from the outside which it picked.
+A search engine merges the declarations by `@id` and is then left with two answers to one question, with nothing in the markup to say which is current.
+
+Some multi-value cases are legitimate: a bilingual site whose organization has a name per language, or an entity with several images. The rule reports the disagreement and leaves the judgement to you, which is why it is a warning rather than an error.
 
 The repetition is the root cause. An entity declared once and referenced everywhere cannot contradict itself.
 
@@ -26,7 +28,7 @@ One item per entity and property pair, not per entity. An organization whose log
 
 A disagreement about `@type` is reported by [schema/entity-type-drift](/rules/schema/entity-type-drift) instead, so one defect is never billed to two rules.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem conflict` for the full list.
 
 ## How to fix it
 

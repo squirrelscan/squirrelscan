@@ -24,9 +24,9 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 
 The threshold is 80% of crawled pages, not 100%: a site that skips its own 404 page or one legal page is doing the same thing. A business declared on a home page and a contact page is correct markup and passes.
 
-Every `LocalBusiness` subtype counts, from `Plumber` to `Dentist` to `RoofingContractor`.
+The `LocalBusiness` subtypes count, from `Plumber` to `Dentist` to `BankOrCreditUnion`. The list is explicit rather than pattern-matched: `OnlineStore` ends in `Store` and is not a local business, having no premises.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 

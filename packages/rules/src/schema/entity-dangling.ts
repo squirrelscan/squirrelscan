@@ -6,6 +6,7 @@ import {
   ENTITY_FIX_DOCS,
   ENTITY_PAGE_CAP,
   cappedItems,
+  clipValue,
   compareStrings,
   entityLabel,
   isMapResolved,
@@ -14,6 +15,14 @@ import {
 } from "./entity-shared";
 
 const CHECK = "entity-dangling";
+
+/**
+ * Predicates whose target is expected to live somewhere else entirely.
+ *
+ * `sameAs` names the same thing on another site: Wikidata, LinkedIn, a company
+ * register. It resolving to nothing in this crawl is correct, not broken.
+ */
+const EXTERNAL_BY_DESIGN: ReadonlySet<string> = new Set(["sameAs"]);
 
 /** `id:<resolved @id>` is how the builder keys an entity that has one. */
 function targetId(key: string): string {
@@ -42,7 +51,14 @@ export const entityDanglingRule: Rule = {
     // declaration in the crawl. Re-deriving it here from `nodes` would be a
     // second, worse answer: the builder saw page-scoped and blank-node ids that
     // the finished document no longer distinguishes.
-    const dangling = map.edges.filter((edge) => edge.dangling);
+    //
+    // `sameAs` is excluded, because pointing somewhere this site does not
+    // declare is the entire purpose of it. An Organization whose
+    // `sameAs` names its Wikidata entity is doing the recommended thing, and
+    // reporting that as a broken reference would be advice to stop.
+    const dangling = map.edges.filter(
+      (edge) => edge.dangling && !EXTERNAL_BY_DESIGN.has(edge.predicate)
+    );
 
     if (dangling.length === 0) {
       return {
@@ -103,7 +119,7 @@ export const entityDanglingRule: Rule = {
           name: CHECK,
           status: "fail",
           message: `${rows.length} referenced ${rows.length === 1 ? "@id resolves" : "@ids resolve"} to nothing declared on any crawled page${moreSuffix(hidden, "targets")}`,
-          value: items[0]?.label ?? null,
+          value: items[0]?.label ? clipValue(items[0].label) : null,
           expected: "every referenced @id declared on the pages that reference it",
           items,
         },

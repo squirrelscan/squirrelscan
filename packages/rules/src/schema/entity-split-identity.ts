@@ -5,6 +5,7 @@ import type { EntityMapNode, Rule, RuleContext, RuleResult } from "../types";
 import {
   ENTITY_FIX_DOCS,
   cappedItems,
+  clipValue,
   compareStrings,
   entityItem,
   entityLabel,
@@ -111,7 +112,7 @@ export const entitySplitIdentityRule: Rule = {
           name: CHECK,
           status: "fail",
           message: `${splits.length} ${splits.length === 1 ? "entity is" : "entities are"} declared under more than one @id${moreSuffix(hidden, "declarations")}`,
-          value: `${entityLabel(worst.nodes[0]!)} under ${worst.ids.length}: ${worst.ids.join(", ")}`,
+          value: clipValue(`${entityLabel(worst.nodes[0]!)} under ${worst.ids.length}: ${worst.ids.join(", ")}`),
           expected: "one @id per entity",
           items,
         },

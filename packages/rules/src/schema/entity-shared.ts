@@ -44,12 +44,118 @@ export const IDENTITY_TYPES = [
   "WebSite",
 ] as const;
 
-/** `@type` values that are a LocalBusiness or one of its many subtypes. */
-const LOCAL_BUSINESS_PATTERN =
-  /^(LocalBusiness|.*(?:Business|Store|Shop|Restaurant|Cafe|Bakery|Hotel|Lodging|Dentist|Physician|Attorney|LegalService|Plumber|Electrician|Contractor|RoofingContractor|HVACBusiness|MovingCompany|AutoRepair|RealEstateAgent|TravelAgency|Florist|Locksmith|Notary|Pharmacy|Veterinary.*|MedicalClinic|HealthAndBeautyBusiness|SportsActivityLocation|EntertainmentBusiness|FinancialService|InsuranceAgency|ProfessionalService|HomeAndConstructionBusiness|AutomotiveBusiness|FoodEstablishment|EmergencyService|ChildCare|Library|Museum))$/;
+/**
+ * `@type` values that are a LocalBusiness or one of its subtypes.
+ *
+ * An explicit table rather than a suffix pattern. A pattern is tempting because
+ * most subtype names end in Business, Store or Service, and it is wrong in both
+ * directions: it misses `BankOrCreditUnion` and `Dentist`, which are subtypes
+ * and end in neither, and it accepts `OnlineStore`, which is not one — an
+ * online-only shop has no premises, which is the whole point of the type.
+ *
+ * Taken from the schema.org LocalBusiness hierarchy. Deliberately not
+ * exhaustive to its last leaf: the deepest subtypes inherit from one of these
+ * and a site declaring `Hairdresser` alone rather than with a parent is rare
+ * enough to be worth missing rather than guessing at.
+ */
+const LOCAL_BUSINESS_TYPES: ReadonlySet<string> = new Set([
+  "LocalBusiness",
+  "AnimalShelter",
+  "ArchiveOrganization",
+  "AutomotiveBusiness",
+  "AutoBodyShop",
+  "AutoDealer",
+  "AutoPartsStore",
+  "AutoRental",
+  "AutoRepair",
+  "AutoWash",
+  "BankOrCreditUnion",
+  "Bakery",
+  "BarOrPub",
+  "BeautySalon",
+  "BedAndBreakfast",
+  "BikeStore",
+  "BookStore",
+  "Brewery",
+  "CafeOrCoffeeShop",
+  "Campground",
+  "ChildCare",
+  "ClothingStore",
+  "ComputerStore",
+  "Dentist",
+  "DaySpa",
+  "DryCleaningOrLaundry",
+  "ElectronicsStore",
+  "Electrician",
+  "EmergencyService",
+  "EmploymentAgency",
+  "EntertainmentBusiness",
+  "FastFoodRestaurant",
+  "FinancialService",
+  "Florist",
+  "FoodEstablishment",
+  "FurnitureStore",
+  "GardenStore",
+  "GasStation",
+  "GeneralContractor",
+  "GroceryStore",
+  "HVACBusiness",
+  "HairSalon",
+  "HardwareStore",
+  "HealthAndBeautyBusiness",
+  "HobbyShop",
+  "HomeAndConstructionBusiness",
+  "HomeGoodsStore",
+  "Hostel",
+  "Hotel",
+  "HousePainter",
+  "IceCreamShop",
+  "InsuranceAgency",
+  "JewelryStore",
+  "LegalService",
+  "Library",
+  "LiquorStore",
+  "Locksmith",
+  "LodgingBusiness",
+  "MedicalBusiness",
+  "MedicalClinic",
+  "MensClothingStore",
+  "MobilePhoneStore",
+  "Motel",
+  "MovingCompany",
+  "MusicStore",
+  "NailSalon",
+  "Notary",
+  "NightClub",
+  "OfficeEquipmentStore",
+  "Optician",
+  "PetStore",
+  "Pharmacy",
+  "Physician",
+  "Plumber",
+  "ProfessionalService",
+  "RealEstateAgent",
+  "RecyclingCenter",
+  "Resort",
+  "Restaurant",
+  "RoofingContractor",
+  "SelfStorage",
+  "ShoeStore",
+  "SkiResort",
+  "SportingGoodsStore",
+  "SportsActivityLocation",
+  "Store",
+  "TattooParlor",
+  "TouristInformationCenter",
+  "ToyStore",
+  "TravelAgency",
+  "VeterinaryCare",
+  "WholesaleStore",
+  "Attorney",
+]);
 
 export function isLocalBusinessType(type: string): boolean {
-  return LOCAL_BUSINESS_PATTERN.test(type);
+  return LOCAL_BUSINESS_TYPES.has(type);
 }
 
 /** Stable, locale-independent ordering. `localeCompare` is not portable. */
@@ -131,6 +237,22 @@ export function cappedItems(items: CheckItem[]): {
 /** The suffix a capped message carries, or "" when nothing was cut. */
 export function moreSuffix(hidden: number, noun = "entities"): string {
   return hidden > 0 ? ` (+${hidden} more ${noun})` : "";
+}
+
+/**
+ * Longest `value` a finding carries.
+ *
+ * `items` is capped at ten, but a `value` built by joining every match is not
+ * bounded by that at all: a map with ten thousand publishers would produce a
+ * ten-item list beside a megabyte-long summary line, every byte of it chosen by
+ * the audited site. Every rule here runs its value through this.
+ */
+export const ENTITY_VALUE_MAX = 300;
+
+export function clipValue(value: string): string {
+  return value.length <= ENTITY_VALUE_MAX
+    ? value
+    : `${value.slice(0, ENTITY_VALUE_MAX - 1)}…`;
 }
 
 /**

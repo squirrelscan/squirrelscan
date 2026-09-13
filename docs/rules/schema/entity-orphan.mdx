@@ -20,11 +20,11 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 - Passes with the message `Every entity with an @id is referenced or spans more than one page`.
 - Reports at info with the message `N entities have an @id that nothing references, on one page each`, plus ` (+N more entities)` when more matched than are listed.
 
-Entities that describe or ARE their page are never reported: `WebPage` and its subtypes, `BreadcrumbList`, `FAQPage`, `Question`, `Answer`, and the article types. Nothing else on a site should point at a page's own breadcrumb, and an `Article` is what its page is rather than something another node should reference.
+Entities that describe or ARE their page are never reported. That is an explicit list rather than a judgement about each type: `WebPage` and the page subtypes, `BreadcrumbList`, `FAQPage`, `Question`, `Answer`, the article types, and the types a page is usually built around, such as `Product`, `Event`, `Recipe`, `Course` and `JobPosting`. Nothing else on a site should point at a page's own breadcrumb, and a product detail page IS the product rather than something another node should reference.
 
 Without those exclusions this rule reports the site's page count rather than a finding. On a real 40-page crawl of a large hosting site, 73 of the 79 entities it would otherwise have listed were breadcrumbs and articles.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem single-page` for the full list.
 
 ## How to fix it
 

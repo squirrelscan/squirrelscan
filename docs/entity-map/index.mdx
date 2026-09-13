@@ -18,7 +18,7 @@ Four questions, none of which a per-page validator can answer:
 - **How many things does this site actually declare?** Sixty `Organization` blocks are either one entity or sixty, and the difference is one line of markup.
 - **Does anything tie the declarations together?** The share of entities carrying a stable `@id` is the single most useful number in the map.
 - **Do the declarations agree?** The same organization with two logos, two phone numbers or two names is a question with no answer.
-- **Do the references resolve?** A `publisher` pointing at an `@id` that only the home page declares is a dangling edge on every other page.
+- **Do the references resolve?** A `publisher` pointing at an `@id` that nothing in the crawl declares is a reference to nothing, and only a view of the whole site can tell that from a reference the home page satisfies.
 
 ## Reading the graph
 

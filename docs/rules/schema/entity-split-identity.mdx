@@ -24,11 +24,11 @@ Two entities count as one identity when their deduplicated, sorted `@type` sets 
 
 That last condition is what keeps the rule honest. A large publisher can have two different authors called John Smith, each correctly given their own `@id`, and calling that an error would be worse than saying nothing. Two plugins describing one organization always emit on the same pages: on a real kinsta.com crawl the WordLift and Yoast declarations shared all 36 pages either appeared on. Two different people written about in different places never do.
 
-A split needs at least two distinct `@id`s. Two same-named entities where one has no `@id` at all are [schema/entity-identity](/rules/schema/entity-identity)'s finding, not this one's: reporting them in both places would bill one defect twice against your score.
+A split needs at least two distinct `@id`s. Two same-named entities where one has no `@id` at all are usually [schema/entity-identity](/rules/schema/entity-identity)'s finding, since that rule reports an unidentified entity spanning several pages. Neither fires when the unidentified one appears on a single page: one declaration has nothing to be split from.
 
 Both sides of every split are listed as items, with their page counts, so you can tell which one the site actually uses.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem split-identity` for the full list.
 
 ## How to fix it
 

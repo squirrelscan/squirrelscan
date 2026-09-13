@@ -20,11 +20,11 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 - Passes with the message `Every @id is an absolute URL`.
 - Warns with the message `N @ids are not an absolute URL`, plus ` (+N more entities)` when more matched than are listed. The value names the widest offender as `NAME: ID` and the expectation is `an absolute https:// URL`.
 
-An `@id` counts as absolute only when it parses as a URL with an `http` or `https` scheme and a host. A `mailto:` or `urn:` identifier parses as absolute and is still reported: it is not the kind of identifier a search engine reconciles a site by.
+An `@id` counts as stable when it parses as a URL with an `http` or `https` scheme and a host, or as a global identifier scheme: `urn:`, `doi:`, `info:` or `tag:`. A library's `urn:isbn:9780140328721` is unique, stable and the same on every page, so warning about it would be advice to break it. A `mailto:` identifier is reported, because an email address is a way of contacting a thing rather than a name for it.
 
 Where the audit can resolve a relative `@id` against its page it does so, which is what makes the per-page split visible to the other entity rules rather than to this one. What reaches this check is an `@id` that could not be resolved at all.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 
@@ -34,7 +34,7 @@ Write the full URL:
 { "@id": "https://example.com/#organization" }
 ```
 
-Not `#organization`, not `/#organization`, not `//example.com/#organization`. The scheme and host have to be there.
+Not `#organization` and not `/#organization`. A protocol-relative `//example.com/#organization` does resolve consistently within one scheme, but it changes meaning if the site is ever served over both, so write the scheme out.
 
 If the markup is generated, the template is probably concatenating a fragment without the site URL in front of it. Fix it there rather than page by page. See [fixing structured data identity](/entity-map/fixing).
 

@@ -4,7 +4,9 @@ import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
+  ENTITY_ITEM_CAP,
   cappedItems,
+  clipValue,
   compareStrings,
   entityLabel,
   isMapResolved,
@@ -129,7 +131,15 @@ export const entityPublisherMismatchRule: Rule = {
           message: looksLikeDrift
             ? `${strays} publisher ${strays === 1 ? "reference disagrees" : "references disagree"} with the other ${ranked[0]![1]}${moreSuffix(hidden, "publishers")}`
             : `This site names ${ranked.length} different publishers, none of them dominant${moreSuffix(hidden, "publishers")}`,
-          value: `${label(canonical)} (${ranked[0]![1]}) vs ${outliers.map(([key, count]) => `${label(key)} (${count})`).join(", ")}`,
+          // The outliers are joined into one line, and there can be thousands
+          // of them on a site that inlines a publisher per product. Take the
+          // heaviest few and let `clipValue` bound what survives.
+          value: clipValue(
+            `${label(canonical)} (${ranked[0]![1]}) vs ${outliers
+              .slice(0, ENTITY_ITEM_CAP)
+              .map(([key, count]) => `${label(key)} (${count})`)
+              .join(", ")}`
+          ),
           expected: looksLikeDrift
             ? "one publisher, referenced by @id"
             : "one publisher per site, unless it genuinely syndicates",

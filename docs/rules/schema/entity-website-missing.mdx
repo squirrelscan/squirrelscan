@@ -5,7 +5,7 @@ description: "A WebSite entity is what carries your site name in search results 
 
 ## What a WebSite node does
 
-A `WebSite` node is the thing your pages belong to. It carries the name a search engine can show above a result instead of the domain, it is where a sitelinks search box is declared, and it is the node that names the publisher of the site as a whole rather than of one article.
+A `WebSite` node is the thing your pages belong to. It carries the name a search engine can show above a result instead of the domain, and it is the node that names the publisher of the site as a whole rather than of one article. (It also used to declare the sitelinks search box, which [Google retired in November 2024](https://developers.google.com/search/blog/2024/10/sitelinks-search-box).)
 
 Declaring it is half the job. If no page references it with `isPartOf`, the node exists and nothing is attached to it, which is most of the way to not having one.
 
@@ -23,9 +23,11 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 - Passes with the message `A WebSite entity is declared and all N page entities link to it`.
 - Reports at info with the message `N of N page entities do not link to the WebSite with isPartOf`, plus ` (+N more pages)` when more matched than are listed.
 
-Page entities are `WebPage` and its subtypes plus the article types. A site whose markup describes only products or people, with no page-level nodes at all, passes on the first test.
+Page entities are an explicit list of the `WebPage` and `Article` subtypes generators actually emit, not every subtype schema.org defines. A type outside that list means the rule says nothing about it rather than guessing.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+A site whose markup describes only products or people, with no page-level nodes at all, still gets the first finding when it has no `WebSite`: the node is worth having regardless of what else is declared.
+
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 

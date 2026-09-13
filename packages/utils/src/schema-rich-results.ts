@@ -45,20 +45,34 @@ export function flattenJsonLdNodes(raw: string): Record<string, unknown>[] {
   }
 
   const nodes: Record<string, unknown>[] = [];
-  const visit = (value: unknown): void => {
+  const visit = (value: unknown, depth: number): void => {
+    // The input is JSON from an audited page, so its nesting is chosen by
+    // someone else. `'{"@graph":'.repeat(40000)` parses fine and then blows the
+    // stack here, which takes down whichever rule called us. Nothing legitimate
+    // nests a graph anywhere near this deep.
+    if (depth > MAX_GRAPH_DEPTH) return;
     if (Array.isArray(value)) {
-      for (const entry of value) visit(entry);
+      for (const entry of value) visit(entry, depth + 1);
       return;
     }
     if (value && typeof value === "object") {
       const node = value as Record<string, unknown>;
       nodes.push(node);
-      if (node["@graph"]) visit(node["@graph"]);
+      if (node["@graph"]) visit(node["@graph"], depth + 1);
     }
   };
-  for (const doc of documents) visit(doc);
+  for (const doc of documents) visit(doc, 0);
   return nodes;
 }
+
+/**
+ * How deep a `@graph` chain is followed.
+ *
+ * Real markup is one or two levels: a document wrapping a `@graph`, whose
+ * entries are occasionally arrays. 64 is far past anything a generator emits
+ * and far short of the stack.
+ */
+const MAX_GRAPH_DEPTH = 64;
 
 /**
  * Schema types eligible for Google rich results

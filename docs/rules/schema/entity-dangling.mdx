@@ -1,6 +1,6 @@
 ---
 title: "A publisher that points at nothing"
-description: "Every article references an organization by @id and only the homepage declares it. Read one article in isolation and the reference goes nowhere."
+description: "A reference to an @id that nothing in the crawl declares. squirrel checks against the whole site, so a publisher the homepage declares still resolves."
 ---
 
 ## Where a reference breaks
@@ -24,7 +24,7 @@ The test is against the whole crawl, not against the referencing page. A publish
 
 Findings are grouped by target. One undeclared publisher referenced from three hundred article pages is one thing to fix, not three hundred, and each item carries the predicates that point at it and how many entities do.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem dangling` for the full list.
 
 ## How to fix it
 

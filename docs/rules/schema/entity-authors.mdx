@@ -7,7 +7,9 @@ description: "Articles with a byline and no Person entity, or a Person with noth
 
 `"author": "Ada Lovelace"` tells a search engine that a string appeared in a byline. It does not connect that byline to the same person's other articles, to their conference talks, to their Wikipedia entry or to the credentials that make them worth reading on the subject.
 
-Experience, expertise, authoritativeness and trust are assessed against a person, and a person has to be identifiable before anything can be assessed against them. A `Person` node with an `@id`, a `url` and a `sameAs` list is what makes that possible.
+A person has to be identifiable before anything can be connected to them. A `Person` node with an `@id`, a `url` and a `sameAs` list is what makes that possible.
+
+An `Organization` can be the author, and [Google's Article guidance](https://developers.google.com/search/docs/appearance/structured-data/article) supports that explicitly. An editorial board, a newswire or a research group is a valid author and this rule treats it as one.
 
 This matters most on exactly the sites where it is most often missing: health, finance and legal content, where the author's standing is part of whether the page should rank at all.
 
@@ -26,7 +28,7 @@ A `Person` counts as identified when it carries a non-empty `url` or at least on
 
 `Article`, `NewsArticle`, `BlogPosting`, `TechArticle` and `ScholarlyArticle` all count as articles here.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 

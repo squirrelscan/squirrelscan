@@ -166,6 +166,35 @@ describe("every entity rule", () => {
       );
     }
   );
+
+  test.each(ALL.map((rule) => [rule.meta.id, rule] as const))(
+    "%s bounds its value string, not only its item list",
+    async (_id, rule) => {
+      // `items` is capped at ten; a `value` built by joining every match is
+      // not bounded by that at all. Every byte of these strings is chosen by
+      // the audited site, so a map with 2,000 same-named entities must not
+      // produce a ten-item list beside a megabyte-long summary line.
+      const many = entityMap({
+        nodes: Array.from({ length: 2000 }, (_, i) =>
+          node({
+            key: `id:https://example.com/#n${i}`,
+            id: `https://example.com/#n${i}`,
+            name: "A".repeat(200),
+            types: ["Organization"],
+            occurrences: 2,
+            pages: pages(2),
+          })
+        ),
+        edges: Array.from({ length: 2000 }, (_, i) =>
+          edge({ target: `id:https://example.com/#n${i}`, occurrences: 1 })
+        ),
+        pageUrls: pages(2),
+      });
+      const check = await oneCheck(rule, many);
+      expect(String(check.value ?? "").length).toBeLessThanOrEqual(300);
+      expect(check.items?.length ?? 0).toBeLessThanOrEqual(10);
+    }
+  );
 });
 
 describe("schema/entity-identity", () => {
@@ -501,6 +530,24 @@ describe("schema/entity-dangling", () => {
   test("a reference that resolves is not a finding", async () => {
     expect((await oneCheck(entityDanglingRule, CLEAN)).status).toBe("pass");
   });
+
+  test("a sameAs pointing off-site is correct, not broken", async () => {
+    // Naming your Wikidata entity is the recommended thing to do and the
+    // target will never be declared locally. Reporting it would be advice to
+    // remove the single most useful line in an organization block.
+    const map = entityMap({
+      nodes: [node()],
+      edges: [
+        edge({
+          source: "id:https://example.com/#organization",
+          predicate: "sameAs",
+          target: "id:https://www.wikidata.org/entity/Q42",
+          dangling: true,
+        }),
+      ],
+    });
+    expect((await oneCheck(entityDanglingRule, map)).status).toBe("pass");
+  });
 });
 
 describe("schema/entity-id-format", () => {
@@ -513,11 +560,21 @@ describe("schema/entity-id-format", () => {
     expect(check.value).toContain("#organization");
   });
 
-  test("mailto and urn are absolute to URL() and still not identifiers", async () => {
-    for (const id of ["mailto:hi@example.com", "urn:uuid:1234"]) {
+  test("a URN or a DOI is a proper identifier and passes", async () => {
+    // The rule is about an identifier that silently means something different
+    // on each page. A library's `urn:isbn:` is unique, stable and the same
+    // everywhere, so warning about it would be advice to break it.
+    for (const id of ["urn:isbn:9780140328721", "urn:uuid:1234", "doi:10.1000/182"]) {
       const map = entityMap({ nodes: [node({ key: `id:${id}`, id })] });
-      expect((await oneCheck(entityIdFormatRule, map)).status).toBe("warn");
+      expect((await oneCheck(entityIdFormatRule, map)).status).toBe("pass");
     }
+  });
+
+  test("mailto is a way to contact a thing, not a name for it", async () => {
+    const map = entityMap({
+      nodes: [node({ key: "id:mailto:hi@example.com", id: "mailto:hi@example.com" })],
+    });
+    expect((await oneCheck(entityIdFormatRule, map)).status).toBe("warn");
   });
 
   test("an absolute http(s) @id passes", async () => {
@@ -610,6 +667,75 @@ describe("schema/entity-authors", () => {
     const check = await oneCheck(entityAuthorsRule, map);
     expect(check.status).toBe("warn");
     expect(check.message).toContain("no url and no sameAs");
+  });
+
+  test("an Organization author is valid and is not a missing Person", async () => {
+    // Google's Article guidance supports organizational authors explicitly.
+    // An editorial board or a newswire is not an incomplete Person.
+    const map = entityMap({
+      nodes: [
+        node({
+          key: "id:https://example.com/p1#article",
+          id: "https://example.com/p1#article",
+          types: ["NewsArticle"],
+          name: "An editorial",
+          pages: ["https://example.com/p1"],
+        }),
+        node({ name: "Editorial Board" }),
+      ],
+      edges: [
+        edge({
+          source: "id:https://example.com/p1#article",
+          predicate: "author",
+          target: "id:https://example.com/#organization",
+        }),
+      ],
+    });
+    expect((await oneCheck(entityAuthorsRule, map)).status).toBe("pass");
+  });
+
+  test("a Person the site is only ABOUT is not held to an author's standard", async () => {
+    // A biography subject or an interviewee makes no claim to expertise on
+    // the site's behalf, and demanding a sameAs from them asks the site to
+    // vouch for a stranger.
+    const map = entityMap({
+      nodes: [
+        node({
+          key: "id:https://example.com/p1#article",
+          id: "https://example.com/p1#article",
+          types: ["Article"],
+          name: "A profile",
+          pages: ["https://example.com/p1"],
+        }),
+        node({
+          key: "id:https://example.com/#writer",
+          id: "https://example.com/#writer",
+          types: ["Person"],
+          name: "Ada Lovelace",
+          properties: { name: "Ada Lovelace", url: "https://example.com/about" },
+        }),
+        node({
+          key: "id:https://example.com/#subject",
+          id: "https://example.com/#subject",
+          types: ["Person"],
+          name: "A Subject",
+          properties: { name: "A Subject" },
+        }),
+      ],
+      edges: [
+        edge({
+          source: "id:https://example.com/p1#article",
+          predicate: "author",
+          target: "id:https://example.com/#writer",
+        }),
+        edge({
+          source: "id:https://example.com/p1#article",
+          predicate: "about",
+          target: "id:https://example.com/#subject",
+        }),
+      ],
+    });
+    expect((await oneCheck(entityAuthorsRule, map)).status).toBe("pass");
   });
 
   test("a site with neither articles nor people has nothing to describe", async () => {
@@ -717,6 +843,52 @@ describe("schema/entity-organization-missing", () => {
     const check = await oneCheck(entityOrganizationMissingRule, map);
     expect(check.status).toBe("info");
     expect(check.value).toContain("ContactPage");
+  });
+
+  test("a personal site with an about page is not told to invent a company", async () => {
+    // A personal site has an about page and a contact page too. The thing
+    // behind it is a Person, and advising an Organization would be advising
+    // markup that is not true.
+    const map = entityMap({
+      nodes: [
+        node({
+          key: "id:https://example.com/about#page",
+          id: "https://example.com/about#page",
+          types: ["AboutPage"],
+          name: "About",
+          pages: ["https://example.com/about"],
+        }),
+        node({
+          key: "id:https://example.com/#me",
+          id: "https://example.com/#me",
+          types: ["Person"],
+          name: "Ada Lovelace",
+        }),
+      ],
+    });
+    const check = await oneCheck(entityOrganizationMissingRule, map);
+    expect(check.status).toBe("skipped");
+    expect(check.skipReason).toBe("personal-site");
+  });
+
+  test("a LocalBusiness subtype that does not end in Business still counts", async () => {
+    // A suffix pattern misses `BankOrCreditUnion` and `Dentist`, and accepts
+    // `OnlineStore`, which has no premises and is not one.
+    for (const type of ["BankOrCreditUnion", "Dentist", "Attorney"]) {
+      const map = entityMap({
+        nodes: [
+          node({ types: [type], name: "Example" }),
+          node({
+            key: "id:https://example.com/contact#page",
+            id: "https://example.com/contact#page",
+            types: ["ContactPage"],
+            name: "Contact",
+            pages: ["https://example.com/contact"],
+          }),
+        ],
+      });
+      expect((await oneCheck(entityOrganizationMissingRule, map)).status).toBe("pass");
+    }
   });
 
   test("a site with no business signals is skipped, not told to invent markup", async () => {

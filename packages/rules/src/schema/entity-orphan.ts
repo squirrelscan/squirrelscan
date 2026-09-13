@@ -49,7 +49,12 @@ const PAGE_SUBJECT_TYPES = [
   "WPHeader",
   "WPFooter",
   "WPSideBar",
-  // Are the page.
+  "MedicalWebPage",
+  "QAPage",
+  "RealEstateListing",
+  // Are the page. A product detail page IS the product, a recipe page IS the
+  // recipe: expecting some other node to reference them is backwards, and the
+  // finding would be the site's page count rather than anything actionable.
   "Article",
   "NewsArticle",
   "BlogPosting",
@@ -59,6 +64,16 @@ const PAGE_SUBJECT_TYPES = [
   "LiveBlogPosting",
   "Recipe",
   "HowTo",
+  "Product",
+  "ProductGroup",
+  "Event",
+  "Course",
+  "JobPosting",
+  "SoftwareApplication",
+  "Book",
+  "Movie",
+  "Dataset",
+  "VideoObject",
 ];
 
 export const entityOrphanRule: Rule = {

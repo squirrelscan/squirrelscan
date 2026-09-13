@@ -5,6 +5,7 @@ import type { Rule, RuleContext, RuleResult } from "../types";
 import {
   ENTITY_FIX_DOCS,
   cappedItems,
+  clipValue,
   compareStrings,
   entityLabel,
   isMapResolved,
@@ -14,17 +15,36 @@ import {
 
 const CHECK = "entity-website-missing";
 
+/**
+ * Page-level entities expected to carry `isPartOf`.
+ *
+ * An explicit list of the `WebPage` and `Article` subtypes generators actually
+ * emit. It is not every subtype schema.org defines, and a type outside it means
+ * the rule says nothing rather than guessing — saying nothing is the safe
+ * direction for a check about markup someone chose deliberately.
+ */
 const PAGE_TYPES = [
   "WebPage",
-  "Article",
-  "NewsArticle",
-  "BlogPosting",
-  "TechArticle",
-  "CollectionPage",
-  "ItemPage",
   "AboutPage",
+  "CheckoutPage",
+  "CollectionPage",
   "ContactPage",
   "FAQPage",
+  "ItemPage",
+  "MedicalWebPage",
+  "ProfilePage",
+  "QAPage",
+  "RealEstateListing",
+  "SearchResultsPage",
+  "Article",
+  "AdvertiserContentArticle",
+  "BlogPosting",
+  "LiveBlogPosting",
+  "NewsArticle",
+  "Report",
+  "ScholarlyArticle",
+  "SatiricalArticle",
+  "TechArticle",
 ];
 
 export const entityWebsiteMissingRule: Rule = {
@@ -131,7 +151,7 @@ export const entityWebsiteMissingRule: Rule = {
           name: CHECK,
           status: "info",
           message: `${unlinked.length} of ${pageNodes.length} page ${unlinked.length === 1 ? "entity does" : "entities do"} not link to the WebSite with isPartOf${moreSuffix(hidden, "pages")}`,
-          value: items[0]?.label ?? null,
+          value: items[0]?.label ? clipValue(items[0].label) : null,
           expected: "isPartOf on every page entity",
           items,
         },

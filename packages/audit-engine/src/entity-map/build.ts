@@ -477,18 +477,53 @@ function recordTypeSet(
   origin: Origin,
 ): void {
   if (types.length === 0) return;
-  const text = [...new Set(types)].sort(compareStrings).join(", ");
+  // JSON.stringify of the sorted set, not a delimiter join: `@type` is a
+  // site-controlled string, so `["A, B"]` and `["A","B"]` would otherwise
+  // produce the same text and a real disagreement would go unrecorded.
+  const text = JSON.stringify([...new Set(types)].sort(compareStrings));
   let values = accumulator.values.get(TYPE_CONFLICT_PROPERTY);
   if (!values) {
     values = new Map();
     accumulator.values.set(TYPE_CONFLICT_PROPERTY, values);
   }
+  recordValue(values, text, origin.page);
+}
+
+/**
+ * Record one distinct value of a conflicting property, bounded and
+ * order-independent.
+ *
+ * The bound has to be at insert: a hostile or merely broken site can declare
+ * thousands of distinct values for one property, and collecting them all to
+ * cap later is unbounded memory. But a plain "stop at N" keeps whichever N
+ * arrived first, and pages arrive in whatever order the crawl finished them,
+ * so two runs over an unchanged site could keep different values.
+ *
+ * Keeping the N lowest-sorted values instead is both bounded and decided by
+ * the values themselves. Which N survive is then a property of the site rather
+ * than of the crawl, which is the same guarantee every other part of this
+ * builder makes.
+ */
+function recordValue(
+  values: Map<string, Set<string>>,
+  text: string,
+  page: string,
+): void {
   const existing = values.get(text);
   if (existing) {
-    existing.add(origin.page);
-  } else if (values.size < MAX_CONFLICT_VALUES) {
-    values.set(text, new Set([origin.page]));
+    existing.add(page);
+    return;
   }
+  if (values.size < MAX_CONFLICT_VALUES) {
+    values.set(text, new Set([page]));
+    return;
+  }
+  // Full. Evict the highest-sorted value, but only if this one sorts below it.
+  let highest = text;
+  for (const key of values.keys()) if (compareStrings(key, highest) > 0) highest = key;
+  if (highest === text) return;
+  values.delete(highest);
+  values.set(text, new Set([page]));
 }
 
 /**
@@ -520,12 +555,7 @@ function mergeProperties(
       values = new Map();
       accumulator.values.set(key, values);
     }
-    const existing = values.get(text);
-    if (existing) {
-      existing.add(origin.page);
-    } else if (values.size < MAX_CONFLICT_VALUES) {
-      values.set(text, new Set([origin.page]));
-    }
+    recordValue(values, text, origin.page);
   }
 }
 

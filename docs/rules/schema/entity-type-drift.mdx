@@ -7,7 +7,7 @@ description: "The same @id declared with different @type sets on different pages
 
 A contact page that upgrades the organization to a `LocalBusiness` while every other page leaves it as an `Organization` is the usual shape. Someone added the address and the opening hours where they were relevant, which is a reasonable instinct and the wrong place to act on it.
 
-Types drive eligibility. A `LocalBusiness` can earn a local pack listing and opening-hours display; an `Organization` cannot. When the two declarations are merged by `@id`, which set wins is not specified, and the answer can differ between search engines and between crawls.
+Types drive eligibility. A `LocalBusiness` can earn a local pack listing and opening-hours display; an `Organization` cannot. The two declarations are compatible and a consumer may well accumulate both, as the entity map itself does. What you lose is the certainty: whether the pages that say only `Organization` are read as complete, and whether a consumer sampling one of them sees a business at all.
 
 One type set, on every declaration.
 
@@ -22,9 +22,9 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 
 Type sets are compared after deduplicating and sorting, so `["Organization","LocalBusiness"]` and `["LocalBusiness","Organization"]` are the same set. schema.org puts no meaning on the order and neither does this check.
 
-Only entities with an `@id` are judged. An entity without one has no identity for its types to drift against, and is [schema/entity-identity](/rules/schema/entity-identity)'s finding.
+Only entities with an `@id` are judged. An entity without one has no identity for its types to drift against; whether it is reported at all is [schema/entity-identity](/rules/schema/entity-identity)'s question, and that rule looks only at named, multi-page entities of four specific types.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 

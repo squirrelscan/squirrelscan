@@ -23,7 +23,7 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 
 The primary organization is the most-declared `Organization`, `Corporation` or `LocalBusiness` on the site, with ties broken on identity so the same one is chosen on every run. A site with two competing organizations is [schema/entity-split-identity](/rules/schema/entity-split-identity)'s finding.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 
@@ -44,7 +44,7 @@ Add every profile you control, using the canonical URL of each rather than a red
 }
 ```
 
-Only list profiles that are actually yours and actually about this organization. A `sameAs` pointing at something you do not control is a claim you cannot support. See [fixing structured data identity](/entity-map/fixing).
+List profiles that are genuinely about this organization. `sameAs` asserts identity rather than ownership, so a Wikipedia article or a Wikidata entity you do not control is exactly the kind of corroboration it is for. What it must not name is a different organization. See [fixing structured data identity](/entity-map/fixing).
 
 | | |
 |---|---|

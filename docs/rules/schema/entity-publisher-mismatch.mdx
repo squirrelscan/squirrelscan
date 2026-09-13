@@ -9,7 +9,7 @@ The publisher of an article is a claim about who stands behind it. When the page
 
 The usual causes are mundane. A section migrated from an acquired site kept its old markup. A guest-post template inlines the author's company. A plugin update changed the default and only new posts picked it up.
 
-The outlier is almost always the mistake, and the page counts tell you which it is.
+The outlier is almost always the mistake, and the reference counts tell you which it is. They count references rather than pages, so one page naming a publisher a hundred times outweighs twenty pages naming another once each.
 
 ## What squirrel checks
 
@@ -27,7 +27,7 @@ The 80% threshold is what separates drift from design. A clear majority with a f
 
 Publishers are weighted by how much of the site names each, not by how many distinct targets exist. One publisher named two hundred times and another named once is not a fifty-fifty disagreement, and the message says which is which.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 

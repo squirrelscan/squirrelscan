@@ -7,7 +7,7 @@ description: "Your site declares the same organization on every page with nothin
 
 Structured data is not a set of per-page annotations. It is a graph, and a graph needs identifiers. When your organization block appears on sixty pages with no `@id`, a search engine has sixty declarations and no statement that they describe one thing. Nothing accumulates: not your reviews, not your `sameAs` profiles, not the authority of the articles you published.
 
-The markup validates. Rich Results Test is happy with it. It is still the single most common reason a site with correct structured data has no knowledge panel.
+The markup validates. Rich Results Test is happy with it. And the site still gets none of the benefit of having it, because there is no entity for the benefit to attach to.
 
 An `@id` costs one line and fixes it permanently. It is an arbitrary string that happens to look like a URL, it does not need to resolve, and it only has to be identical everywhere.
 
@@ -24,7 +24,7 @@ Only `Organization`, `LocalBusiness`, `Person` and `WebSite` are judged: these a
 
 An entity on a single page is never reported, whatever its type. With one declaration there is nothing to tie together, so an `@id` would buy nothing. An entity with no name is not reported either: without a name there is nothing to reconcile it by, and treating every unnamed node as one identity would merge the site's whole graph.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem no-id` for the full list.
 
 ## How to fix it
 

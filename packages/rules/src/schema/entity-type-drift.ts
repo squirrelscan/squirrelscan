@@ -6,6 +6,7 @@ import {
   ENTITY_FIX_DOCS,
   byReach,
   cappedItems,
+  clipValue,
   entityItem,
   entityLabel,
   isMapResolved,
@@ -14,6 +15,25 @@ import {
 } from "./entity-shared";
 
 const CHECK = "entity-type-drift";
+
+/**
+ * Render a recorded type set for a human.
+ *
+ * The builder stores it as `JSON.stringify(sortedTypes)` so that a `@type`
+ * containing a comma cannot forge a different set. That is the right storage
+ * and the wrong thing to put in a message, so it is turned back here.
+ */
+function readTypeSet(value: string): string {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")) {
+      return parsed.join(", ");
+    }
+  } catch {
+    // Older maps stored the joined form; show it as-is.
+  }
+  return value;
+}
 
 export const entityTypeDriftRule: Rule = {
   meta: {
@@ -61,7 +81,7 @@ export const entityTypeDriftRule: Rule = {
       offenders.map((node) => {
         const drift = node.conflicts.find((conflict) => conflict.property === "@type");
         return entityItem(node, {
-          declaredTypeSets: drift?.values.map((value) => value.value) ?? [],
+          declaredTypeSets: drift?.values.map((value) => readTypeSet(value.value)) ?? [],
         });
       })
     );
@@ -74,7 +94,7 @@ export const entityTypeDriftRule: Rule = {
           name: CHECK,
           status: "warn",
           message: `${offenders.length} ${offenders.length === 1 ? "entity is" : "entities are"} declared with more than one @type set${moreSuffix(hidden)}`,
-          value: `${entityLabel(worst)}: ${(worstDrift?.values ?? []).map((value) => value.value).join(" vs ")}`,
+          value: clipValue(`${entityLabel(worst)}: ${(worstDrift?.values ?? []).map((value) => readTypeSet(value.value)).join(" vs ")}`),
           expected: "one @type set per @id",
           items,
         },

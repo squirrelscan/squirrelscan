@@ -9,7 +9,7 @@ An organization node is the centre of a site's graph. It is the publisher of you
 
 It is also where `sameAs` lives, which is how a search engine connects the company on your site to the company on LinkedIn, Crunchbase and Wikidata. That corroboration is most of what a knowledge panel is assembled from.
 
-The rule only fires when the site presents as a business. A personal blog or a documentation site legitimately has no organization, and telling it to declare one would be advice to publish markup that is not true.
+The rule only fires when the site presents as a business. A documentation site legitimately has no organization, and telling it to declare one would be advice to publish markup that is not true. A personal site is also left alone, even though it has an about page and a contact page: when the site declares a named `Person` and no products or offers, the thing behind it is that person.
 
 ## What squirrel checks
 
@@ -19,13 +19,14 @@ The rule runs once per crawl, reads the [entity map](/entity-map) rather than th
 - Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
 - Passes with the message `This site declares N organization entities`.
 - Skipped with the message `This site does not present as a business` and the reason `no-business-signals`.
+- Skipped with the message `This site presents a person rather than an organization` and the reason `personal-site`, when a named `Person` is declared and no products or offers are.
 - Reports at info with the message `This site presents as a business but declares no Organization or LocalBusiness entity`, with the signals that made it a question listed in the value.
 
 Two signals count as presenting as a business: an `AboutPage` or `ContactPage` entity, and `Product` or `Offer` entities. A site transacting with nothing to say who it is transacting with is the second case.
 
-`Organization`, `Corporation` and every `LocalBusiness` subtype all satisfy the rule.
+`Organization`, `Corporation` and the `LocalBusiness` subtypes all satisfy the rule. The subtype list is explicit rather than pattern-matched, because the names do not follow one: `BankOrCreditUnion` and `Dentist` are subtypes and end in neither `Business` nor `Service`, while `OnlineStore` ends in `Store` and is not one.
 
-Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem` for the full list.
+Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities -f json` and read the `entities` key for the full list.
 
 ## How to fix it
 

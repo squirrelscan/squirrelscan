@@ -6,6 +6,7 @@ import {
   ENTITY_FIX_DOCS,
   byReach,
   cappedItems,
+  clipValue,
   entityItem,
   isMapResolved,
   moreSuffix,
@@ -67,27 +68,71 @@ export const entityAuthorsRule: Rule = {
     }
 
     if (people.length === 0) {
+      // An Organization can be the author, and Google's Article guidance says
+      // so explicitly. An editorial board, a newswire, a research group: the
+      // absence of a Person is only a finding when nothing is named as author
+      // at all.
+      const authored = new Set(
+        map.edges.filter((edge) => edge.predicate === "author").map((edge) => edge.target)
+      );
+      if (authored.size > 0) {
+        return {
+          checks: [
+            {
+              name: CHECK,
+              status: "pass",
+              message: `Authorship is declared by ${authored.size} non-Person ${authored.size === 1 ? "entity" : "entities"}`,
+            },
+          ],
+        };
+      }
       return {
         checks: [
           {
             name: CHECK,
             status: "warn",
             message: `${articles.length} ${articles.length === 1 ? "article is" : "articles are"} declared with no Person entity anywhere on the site`,
-            value: "no Person node",
-            expected: "a Person with @id, name, url and sameAs, referenced as author",
+            value: "no author entity of any kind",
+            expected: "a Person or Organization with @id, referenced as author",
           },
         ],
       };
     }
 
-    const anonymous = people.filter((node) => !isIdentified(node)).sort(byReach);
+    // Judge the people the site presents as AUTHORS, not every Person it
+    // mentions. A biography subject, an interviewee, a person a page is
+    // `about`: none of them is making a claim to expertise on your behalf, and
+    // demanding a `sameAs` from them is asking the site to vouch for a stranger.
+    //
+    // Falls back to every Person when nothing carries an `author` edge, which
+    // is what a site with inline author blocks looks like.
+    const authorKeys = new Set(
+      map.edges.filter((edge) => edge.predicate === "author").map((edge) => edge.target)
+    );
+    const judged = authorKeys.size > 0
+      ? people.filter((node) => authorKeys.has(node.key))
+      : people;
+
+    if (judged.length === 0) {
+      return {
+        checks: [
+          {
+            name: CHECK,
+            status: "pass",
+            message: `All ${people.length} Person ${people.length === 1 ? "entity is" : "entities are"} subjects rather than authors`,
+          },
+        ],
+      };
+    }
+
+    const anonymous = judged.filter((node) => !isIdentified(node)).sort(byReach);
     if (anonymous.length === 0) {
       return {
         checks: [
           {
             name: CHECK,
             status: "pass",
-            message: `All ${people.length} Person ${people.length === 1 ? "entity carries" : "entities carry"} a url or sameAs`,
+            message: `All ${judged.length} Person ${judged.length === 1 ? "entity carries" : "entities carry"} a url or sameAs`,
           },
         ],
       };
@@ -100,8 +145,8 @@ export const entityAuthorsRule: Rule = {
         {
           name: CHECK,
           status: "warn",
-          message: `${anonymous.length} of ${people.length} Person ${anonymous.length === 1 ? "entity has" : "entities have"} no url and no sameAs${moreSuffix(hidden, "people")}`,
-          value: items[0]?.label ?? null,
+          message: `${anonymous.length} of ${judged.length} Person ${anonymous.length === 1 ? "entity has" : "entities have"} no url and no sameAs${moreSuffix(hidden, "people")}`,
+          value: items[0]?.label ? clipValue(items[0].label) : null,
           expected: "url and sameAs on every Person",
           items,
         },

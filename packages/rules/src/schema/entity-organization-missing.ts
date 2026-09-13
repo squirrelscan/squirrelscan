@@ -4,6 +4,7 @@ import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
+  clipValue,
   isLocalBusinessType,
   isMapResolved,
   requireMap,
@@ -92,13 +93,36 @@ export const entityOrganizationMissingRule: Rule = {
       };
     }
 
+    // A personal site has an about page and a contact page too, and the thing
+    // behind it is a Person rather than an organization. Telling it to declare
+    // one would be advice to publish markup that is not true, so a site that
+    // presents a named Person and no commerce is left alone.
+    const commerceSignal = map.nodes.some((node) =>
+      node.types.some((type) => type === "Product" || type === "Offer")
+    );
+    const namedPerson = map.nodes.some(
+      (node) => node.types.includes("Person") && node.name !== null
+    );
+    if (namedPerson && !commerceSignal) {
+      return {
+        checks: [
+          {
+            name: CHECK,
+            status: "skipped",
+            message: "This site presents a person rather than an organization",
+            skipReason: "personal-site",
+          },
+        ],
+      };
+    }
+
     return {
       checks: [
         {
           name: CHECK,
           status: "info",
           message: "This site presents as a business but declares no Organization or LocalBusiness entity",
-          value: signals.join(", "),
+          value: clipValue(signals.join(", ")),
           expected: "one Organization or LocalBusiness with @id, name, url, logo and sameAs",
         },
       ],
