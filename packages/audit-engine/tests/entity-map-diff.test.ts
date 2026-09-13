@@ -337,6 +337,23 @@ describe("coverage is proven, not sampled", () => {
     expect(diff(older, newer).removed).toHaveLength(0);
   });
 
+  test("an index that contradicts the node's own count is not trusted", () => {
+    // The index claims one declaring page; the node claims two. They can only
+    // disagree in a hand-assembled document, and there the conservative answer
+    // is the right one: do not call it removed on the smaller number.
+    const older = mapWith([WIDE], [], {
+      "https://example.com/a": ["id:https://example.com/#wide"],
+      "https://example.com/b": [],
+    });
+    const newer = mapWith([], [], {
+      "https://example.com/a": [],
+      "https://example.com/b": [],
+    });
+
+    expect(diff(older, newer).notCrawled).toHaveLength(1);
+    expect(diff(older, newer).removed).toHaveLength(0);
+  });
+
   test("a conflict is only resolved when its evidence pages were revisited", () => {
     // A conflict needs two declarations. Surviving on one of its two pages
     // says nothing about whether the other still disagrees.

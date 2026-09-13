@@ -108,8 +108,13 @@ function buildCoverageTest(
   }
 
   return (node: EntityMapNode): boolean => {
-    const complete = declaredOn.get(node.key);
-    if (complete) return complete.every((url) => newerPages.has(url));
+    const indexed = declaredOn.get(node.key);
+    // Trusted only when it accounts for every page the NODE claims, including
+    // the ones trimmed off its list. The two disagree only in a document
+    // someone assembled by hand, and there the conservative answer is right.
+    if (indexed && indexed.length >= node.pages.length + node.morePages) {
+      return indexed.every((url) => newerPages.has(url));
+    }
     // No usable index. The node's own list is authoritative only when nothing
     // was trimmed off it.
     if (node.morePages > 0) return false;
