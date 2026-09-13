@@ -8,7 +8,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { entityMapSchema } from "@squirrelscan/core-contracts/entity-map";
+import { EntityMapSchema } from "@squirrelscan/core-contracts/entity-map";
+import { Value } from "@sinclair/typebox/value";
 
 import { buildEntityMap, toJsonLd, type EntityMapPageInput } from "../src/entity-map";
 
@@ -44,7 +45,7 @@ describe("buildEntityMap", () => {
       page("https://example.com/contact", organization),
     ]);
 
-    expect(entityMapSchema.safeParse(map).success).toBe(true);
+    expect(Value.Check(EntityMapSchema, map)).toBe(true);
     expect(map.nodes).toHaveLength(1);
     const node = map.nodes[0]!;
     expect(node.id).toBe("https://example.com/#org");
@@ -89,7 +90,7 @@ describe("buildEntityMap", () => {
 
     const map = build([page("https://example.com/", graph("/")), page("https://example.com/a", graph("/a"))]);
 
-    expect(entityMapSchema.safeParse(map).success).toBe(true);
+    expect(Value.Check(EntityMapSchema, map)).toBe(true);
     // Two WebPages (page-scoped @id) plus one WebSite and one Organization.
     expect(map.nodes).toHaveLength(4);
     expect(map.summary.danglingCount).toBe(0);
@@ -127,7 +128,7 @@ describe("buildEntityMap", () => {
       }),
     ]);
 
-    expect(entityMapSchema.safeParse(map).success).toBe(true);
+    expect(Value.Check(EntityMapSchema, map)).toBe(true);
     const author = nodeByName(map, "Ada Lovelace");
     expect(author.types).toEqual(["Person"]);
     expect(author.id).toBeNull();
@@ -221,7 +222,7 @@ describe("buildEntityMap", () => {
     });
     const map = build([{ url: "https://example.com/", raw }]);
 
-    expect(entityMapSchema.safeParse(map).success).toBe(true);
+    expect(Value.Check(EntityMapSchema, map)).toBe(true);
     expect(map.nodes).toHaveLength(1);
     expect(map.nodes[0]!.name).toBe("Acme");
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
@@ -236,7 +237,7 @@ describe("buildEntityMap", () => {
 
     expect(map.nodes).toHaveLength(1);
     expect(Object.prototype.hasOwnProperty.call(map.summary.countsByType, "__proto__")).toBe(true);
-    expect(entityMapSchema.safeParse(map).success).toBe(true);
+    expect(Value.Check(EntityMapSchema, map)).toBe(true);
   });
 
   test("resolves a relative @id against the page that declared it", () => {
@@ -320,6 +321,87 @@ describe("buildEntityMap", () => {
       }),
     ]);
     expect(map.summary.nodesWithoutIdCount).toBe(0);
+  });
+
+  test("a blank node is document-scoped and never a stable @id", () => {
+    // `_:b0` names a DIFFERENT entity on every page. Resolving it as a relative
+    // URL would merge every page's first blank node and report a stable `@id`.
+    const graph = {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "@id": "_:b0",
+      name: "Acme",
+    };
+    const map = build([
+      page("https://example.com/a", graph),
+      page("https://example.com/b", graph),
+    ]);
+
+    expect(map.nodes).toHaveLength(2);
+    expect(map.nodes.every((node) => node.id === null)).toBe(true);
+    expect(map.summary.nodesWithStableId).toBe(0);
+    expect(map.nodes.map((n) => n.key).sort()).toEqual([
+      "blank:https://example.com/a:_:b0",
+      "blank:https://example.com/b:_:b0",
+    ]);
+  });
+
+  test("a blank-node reference resolves only inside its own page", () => {
+    const map = build([
+      page("https://example.com/a", {
+        "@context": "https://schema.org",
+        "@graph": [
+          { "@type": "Article", "@id": "https://example.com/a#art", author: { "@id": "_:p1" } },
+          { "@type": "Person", "@id": "_:p1", name: "Ada" },
+        ],
+      }),
+      page("https://example.com/b", {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "@id": "https://example.com/b#art",
+        author: { "@id": "_:p1" },
+      }),
+    ]);
+
+    const edges = map.edges.filter((e) => e.predicate === "author");
+    expect(edges).toHaveLength(2);
+    // Page a declares its own `_:p1`; page b references one it never declared.
+    expect(edges.find((e) => e.source === "id:https://example.com/a#art")!.dangling).toBe(false);
+    expect(edges.find((e) => e.source === "id:https://example.com/b#art")!.dangling).toBe(true);
+  });
+
+  test("@type order does not split one entity into two", () => {
+    const map = build([
+      page("https://example.com/a", {
+        "@context": "https://schema.org",
+        "@type": ["Organization", "LocalBusiness"],
+        name: "Acme",
+      }),
+      page("https://example.com/b", {
+        "@context": "https://schema.org",
+        "@type": ["LocalBusiness", "Organization"],
+        name: "Acme",
+      }),
+    ]);
+
+    expect(map.nodes).toHaveLength(1);
+    expect(map.nodes[0]!.occurrences).toBe(2);
+    expect(map.nodes[0]!.key).toBe("syn:LocalBusiness+Organization|name:acme");
+  });
+
+  test("a long run of slashes in a url does not stall the builder", () => {
+    // js/polynomial-redos: the trailing-slash trim used to be `/\/+$/`, which
+    // backtracks on a site-controlled path.
+    const started = Date.now();
+    const map = build([
+      page("https://example.com/a", {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        url: `https://example.com/${"/".repeat(100_000)}`,
+      }),
+    ]);
+    expect(map.nodes).toHaveLength(1);
+    expect(Date.now() - started).toBeLessThan(2000);
   });
 
   test("counts pages that declare no entities", () => {

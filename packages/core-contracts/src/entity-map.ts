@@ -1,21 +1,36 @@
-// Structured entity map (#2061) — the graph of things a site declares in
+// Structured entity map (#2061/#2091) — the graph of things a site declares in
 // JSON-LD, collapsed across every page of one audit.
 //
-// One document per audit. The engine builds it, the CLI writes it next to the
-// report, and (later) the cloud stores it alongside the report JSON. The schema
-// lives here so the CLI, the engine and the dashboard read one type.
+// One document per audit. The engine builds it, the CLI stores it and embeds it
+// in every report format, and the cloud stores the published copy. The schema
+// lives here so the CLI, the engine, the API and the dashboard read one type.
+//
+// TypeBox, not zod, and deliberately: this package is consumed by the private
+// API on zod 3 and by the CLI and rules on zod 4, which install as two separate
+// copies, so a zod schema here could not be composed on either side. TypeBox is
+// already this package's schema library and has no such split. Validate with
+// `Value.Check(EntityMapSchema, doc)` from `@sinclair/typebox/value`.
 //
 // Everything in this document is derived from JSON-LD on audited pages, i.e.
 // from UNTRUSTED input: type names, property values and `@id`s are attacker
 // controlled. Consumers must escape before rendering and must never bracket-copy
 // a type name onto a plain `{}` (see ./untrusted-keys).
 
-import { z } from "zod";
+import { Type, type Static } from "@sinclair/typebox";
 
 /** Discriminator written into every entity-map document. */
 export const ENTITY_MAP_FORMAT = "squirrelscan/entity-map";
 
-/** Schema version. Bump on any breaking shape change. */
+/**
+ * Schema version. Bump on any change that makes an ALREADY-STORED document
+ * invalid, which a new required field does.
+ *
+ * Additive required fields were fine while nothing was persisted. Once the
+ * cloud writes published maps to R2 (#2099) they are v1 documents in the wild
+ * with no migration path, and the API re-validates stored bytes on every read
+ * rather than casting — so an invalidating change without a bump turns every
+ * older report's entity endpoints into a 404.
+ */
 export const ENTITY_MAP_VERSION = 1;
 
 /**
@@ -57,7 +72,7 @@ export type EntityMapPredicate = (typeof ENTITY_MAP_PREDICATES)[number];
  * A 60-page site emits one BreadcrumbList and one WebPage per page and a
  * Question per FAQ entry, so these outnumber the Organization and Person nodes
  * the map exists to show: on squirrelscan.com they are 233 of 363 entities. The
- * builder tags them, the graph hides them by default, and the tables never do.
+ * builder tags them and the viewer hides them by default.
  *
  * An ImageObject joins them only when it has no name, since an unnamed image is
  * a URL rather than an entity a reader can reason about. That check needs the
@@ -96,16 +111,26 @@ export const ENTITY_MAP_CONFLICT_PAGES_CAP = 10;
 /**
  * Caps applied when the map rides the publish body.
  *
- * The local files are uncapped, because a file on disk costs nothing. The
- * publish payload is measured against a hard gate, so the hosted copy keeps the
- * entities and references that carry the findings and drops the tail. Nodes are
- * kept by occurrence count, edges follow the nodes they connect, and `pages` is
- * dropped outright: it is the largest array and the summary already carries the
- * only number a reader needs from it.
+ * The local document is uncapped, because a file on disk costs nothing. The
+ * publish payload is measured against a hard size gate, so the hosted copy keeps
+ * the entities and references that carry the findings and drops the tail.
+ *
+ * Node and edge counts alone are NOT enough: property values are site-controlled
+ * strings, so fifty conflict values of a megabyte each would pass a node-count
+ * cap and still blow the payload limit. `maxBytes` is the real backstop and the
+ * per-string caps are what usually keep it from engaging.
  */
 export const ENTITY_MAP_PUBLISH_LIMITS = {
   maxNodes: 750,
   maxEdges: 1500,
+  /** Longest any single string property may be in the published copy. */
+  maxStringLength: 512,
+  /** Distinct values kept per conflicting property. */
+  maxConflictValues: 5,
+  /** Page URLs kept per conflict value, and per node or edge. */
+  maxPages: 5,
+  /** Serialized ceiling for the whole map. Well under the 20MB publish gate. */
+  maxBytes: 512_000,
 } as const;
 
 // ── Node properties ────────────────────────────────────────────────
@@ -117,19 +142,19 @@ export const ENTITY_MAP_PUBLISH_LIMITS = {
  * display string; arrays are kept as arrays only where schema.org routinely
  * uses one (`sameAs`, `image`). Absent means the entity never declared it.
  */
-export const entityMapPropertiesSchema = z.object({
-  name: z.string().optional(),
-  url: z.string().optional(),
-  logo: z.string().optional(),
-  image: z.array(z.string()).optional(),
-  sameAs: z.array(z.string()).optional(),
-  telephone: z.string().optional(),
-  email: z.string().optional(),
-  address: z.string().optional(),
-  description: z.string().optional(),
+export const EntityMapPropertiesSchema = Type.Object({
+  name: Type.Optional(Type.String()),
+  url: Type.Optional(Type.String()),
+  logo: Type.Optional(Type.String()),
+  image: Type.Optional(Type.Array(Type.String())),
+  sameAs: Type.Optional(Type.Array(Type.String())),
+  telephone: Type.Optional(Type.String()),
+  email: Type.Optional(Type.String()),
+  address: Type.Optional(Type.String()),
+  description: Type.Optional(Type.String()),
 });
 
-export type EntityMapProperties = z.infer<typeof entityMapPropertiesSchema>;
+export type EntityMapProperties = Static<typeof EntityMapPropertiesSchema>;
 
 /** Property names that participate in conflict detection, in output order. */
 export const ENTITY_MAP_PROPERTY_KEYS = [
@@ -147,28 +172,28 @@ export const ENTITY_MAP_PROPERTY_KEYS = [
 // ── Conflicts ──────────────────────────────────────────────────────
 
 /** One distinct value of a conflicting property and where it was declared. */
-export const entityMapConflictValueSchema = z.object({
+export const EntityMapConflictValueSchema = Type.Object({
   /** The value as rendered into {@link EntityMapProperties} (arrays joined). */
-  value: z.string(),
+  value: Type.String(),
   /** Pages declaring this value, sorted, capped at {@link ENTITY_MAP_CONFLICT_PAGES_CAP}. */
-  pages: z.array(z.string()),
+  pages: Type.Array(Type.String()),
   /** Pages beyond the cap. */
-  morePages: z.number().int().nonnegative(),
+  morePages: Type.Integer({ minimum: 0 }),
 });
 
-export type EntityMapConflictValue = z.infer<typeof entityMapConflictValueSchema>;
+export type EntityMapConflictValue = Static<typeof EntityMapConflictValueSchema>;
 
 /**
  * One property on which two occurrences of the same node disagree — the
  * "same Organization, three different logos" finding.
  */
-export const entityMapConflictSchema = z.object({
-  property: z.string(),
+export const EntityMapConflictSchema = Type.Object({
+  property: Type.String(),
   /** At least two entries, sorted by value. */
-  values: z.array(entityMapConflictValueSchema),
+  values: Type.Array(EntityMapConflictValueSchema),
 });
 
-export type EntityMapConflict = z.infer<typeof entityMapConflictSchema>;
+export type EntityMapConflict = Static<typeof EntityMapConflictSchema>;
 
 // ── Nodes ──────────────────────────────────────────────────────────
 
@@ -176,37 +201,38 @@ export type EntityMapConflict = z.infer<typeof entityMapConflictSchema>;
  * One entity, collapsed across every page that declares it.
  *
  * `key` is the identity the builder settled on: the resolved `@id` when the
- * site supplied one (`id:<absolute @id>`), a synthetic type+name/url/sameAs key
- * when it did not, or a per-page anonymous key for an entity with no
+ * site supplied one (`id:<absolute @id>`), a page-scoped `blank:<page>:<id>`
+ * for a JSON-LD blank node, a synthetic type+name/url/sameAs key when the site
+ * supplied nothing, or a per-page anonymous key for an entity with no
  * distinguishing property at all (those never collapse).
  */
-export const entityMapNodeSchema = z.object({
-  key: z.string(),
+export const EntityMapNodeSchema = Type.Object({
+  key: Type.String(),
   /** The resolved `@id`, or null when the entity declared none. */
-  id: z.string().nullable(),
-  /** `@type` values of the first occurrence, deduped. `types[0]` is primary. */
-  types: z.array(z.string()),
-  name: z.string().nullable(),
-  /** Taken from the first occurrence in `(pageUrl, nodeIndex)` order. */
-  properties: entityMapPropertiesSchema,
+  id: Type.Union([Type.String(), Type.Null()]),
+  /** `@type` values, deduped. `types[0]` is primary. */
+  types: Type.Array(Type.String()),
+  name: Type.Union([Type.String(), Type.Null()]),
+  /** First declared value per property, in page order. */
+  properties: EntityMapPropertiesSchema,
   /** How many times the entity was declared across the crawl. */
-  occurrences: z.number().int().nonnegative(),
+  occurrences: Type.Integer({ minimum: 0 }),
   /** Declaring pages, sorted, capped at {@link ENTITY_MAP_PAGES_CAP}. */
-  pages: z.array(z.string()),
-  morePages: z.number().int().nonnegative(),
+  pages: Type.Array(Type.String()),
+  morePages: Type.Integer({ minimum: 0 }),
   /** Properties whose value differs between occurrences. Empty when consistent. */
-  conflicts: z.array(entityMapConflictSchema),
+  conflicts: Type.Array(EntityMapConflictSchema),
   /** Outgoing `@id` references from this node that nothing declares. */
-  danglingRefs: z.number().int().nonnegative(),
+  danglingRefs: Type.Integer({ minimum: 0 }),
   /**
    * True when this entity describes one page rather than the site's subject
    * matter — see {@link ENTITY_MAP_PAGE_LOCAL_TYPES}. Stamped by the builder so
    * every consumer filters on the same call.
    */
-  pageLocal: z.boolean(),
+  pageLocal: Type.Boolean(),
 });
 
-export type EntityMapNode = z.infer<typeof entityMapNodeSchema>;
+export type EntityMapNode = Static<typeof EntityMapNodeSchema>;
 
 // ── Edges ──────────────────────────────────────────────────────────
 
@@ -217,59 +243,59 @@ export type EntityMapNode = z.infer<typeof entityMapNodeSchema>;
  * the site referenced `{"@id": …}` and never defined it. Dangling targets are
  * deliberately NOT present in `nodes` — a renderer draws them as placeholders.
  */
-export const entityMapEdgeSchema = z.object({
-  source: z.string(),
-  predicate: z.string(),
-  target: z.string(),
-  dangling: z.boolean(),
+export const EntityMapEdgeSchema = Type.Object({
+  source: Type.String(),
+  predicate: Type.String(),
+  target: Type.String(),
+  dangling: Type.Boolean(),
   /** How many page-level declarations produced this edge. */
-  occurrences: z.number().int().nonnegative(),
-  pages: z.array(z.string()),
-  morePages: z.number().int().nonnegative(),
+  occurrences: Type.Integer({ minimum: 0 }),
+  pages: Type.Array(Type.String()),
+  morePages: Type.Integer({ minimum: 0 }),
 });
 
-export type EntityMapEdge = z.infer<typeof entityMapEdgeSchema>;
+export type EntityMapEdge = Static<typeof EntityMapEdgeSchema>;
 
 // ── Pages ──────────────────────────────────────────────────────────
 
 /** What one crawled page contributed to the map. */
-export const entityMapPageSchema = z.object({
-  url: z.string(),
+export const EntityMapPageSchema = Type.Object({
+  url: Type.String(),
   /** Node keys this page declares, sorted. */
-  declares: z.array(z.string()),
+  declares: Type.Array(Type.String()),
   /** Node keys this page references without declaring, sorted. */
-  references: z.array(z.string()),
+  references: Type.Array(Type.String()),
   /** Number of JSON-LD entities declared on the page (before collapsing). */
-  entityCount: z.number().int().nonnegative(),
+  entityCount: Type.Integer({ minimum: 0 }),
 });
 
-export type EntityMapPage = z.infer<typeof entityMapPageSchema>;
+export type EntityMapPage = Static<typeof EntityMapPageSchema>;
 
 // ── Summary ────────────────────────────────────────────────────────
 
-export const entityMapSummarySchema = z.object({
-  nodeCount: z.number().int().nonnegative(),
-  edgeCount: z.number().int().nonnegative(),
+export const EntityMapSummarySchema = Type.Object({
+  nodeCount: Type.Integer({ minimum: 0 }),
+  edgeCount: Type.Integer({ minimum: 0 }),
   /** Edges whose target no page declares. */
-  danglingCount: z.number().int().nonnegative(),
+  danglingCount: Type.Integer({ minimum: 0 }),
   /** Pages considered by the builder. */
-  pagesTotal: z.number().int().nonnegative(),
+  pagesTotal: Type.Integer({ minimum: 0 }),
   /** Pages that declared no JSON-LD entity at all. */
-  pagesWithoutEntities: z.number().int().nonnegative(),
+  pagesWithoutEntities: Type.Integer({ minimum: 0 }),
   /** Nodes carrying an `@id`, and that count as a 0-1 share of `nodeCount`. */
-  nodesWithStableId: z.number().int().nonnegative(),
-  stableIdShare: z.number().min(0).max(1),
+  nodesWithStableId: Type.Integer({ minimum: 0 }),
+  stableIdShare: Type.Number({ minimum: 0, maximum: 1 }),
   /** Nodes tagged `pageLocal` — what a graph hides by default. */
-  pageLocalCount: z.number().int().nonnegative(),
+  pageLocalCount: Type.Integer({ minimum: 0 }),
   /** Nodes with no `@id` declared on more than one page: the identity finding. */
-  nodesWithoutIdCount: z.number().int().nonnegative(),
+  nodesWithoutIdCount: Type.Integer({ minimum: 0 }),
   /** Nodes carrying at least one conflicting property. */
-  conflictCount: z.number().int().nonnegative(),
+  conflictCount: Type.Integer({ minimum: 0 }),
   /** Occurrence count per `@type`, every type of every node. Sorted by type. */
-  countsByType: z.record(z.string(), z.number().int().nonnegative()),
+  countsByType: Type.Record(Type.String(), Type.Integer({ minimum: 0 })),
 });
 
-export type EntityMapSummary = z.infer<typeof entityMapSummarySchema>;
+export type EntityMapSummary = Static<typeof EntityMapSummarySchema>;
 
 // ── Document ───────────────────────────────────────────────────────
 
@@ -280,20 +306,20 @@ export type EntityMapSummary = z.infer<typeof entityMapSummarySchema>;
  * then predicate, `pages` by url, `countsByType` by type. `generatedAt` is the
  * only field that changes between two runs over an unchanged site.
  */
-export const entityMapSchema = z.object({
-  format: z.literal(ENTITY_MAP_FORMAT),
-  version: z.literal(ENTITY_MAP_VERSION),
+export const EntityMapSchema = Type.Object({
+  format: Type.Literal(ENTITY_MAP_FORMAT),
+  version: Type.Literal(ENTITY_MAP_VERSION),
   /** Site the audit started from, as an absolute URL. */
-  site: z.string(),
+  site: Type.String(),
   /** ISO-8601 timestamp. The one non-deterministic field. */
-  generatedAt: z.string(),
-  summary: entityMapSummarySchema,
-  nodes: z.array(entityMapNodeSchema),
-  edges: z.array(entityMapEdgeSchema),
-  pages: z.array(entityMapPageSchema),
+  generatedAt: Type.String(),
+  summary: EntityMapSummarySchema,
+  nodes: Type.Array(EntityMapNodeSchema),
+  edges: Type.Array(EntityMapEdgeSchema),
+  pages: Type.Array(EntityMapPageSchema),
 });
 
-export type EntityMap = z.infer<typeof entityMapSchema>;
+export type EntityMap = Static<typeof EntityMapSchema>;
 
 // ── JSON-LD export ─────────────────────────────────────────────────
 
