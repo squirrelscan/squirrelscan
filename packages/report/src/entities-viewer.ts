@@ -200,6 +200,12 @@ const SCRIPT = String.raw`
   // and the selected node are always labelled, at any zoom.
   var LABEL_BUDGET_AT_FIT = 12;
 
+  // Neighbours of the hovered node that get a label, beyond the hovered node
+  // itself. Highlighting is unbounded — every neighbour stays bright, which is
+  // what makes the shape of the relationship readable — but labels are not.
+  // Matches the dashboard.
+  var HOVER_LABEL_BUDGET = 12;
+
   function el(id) { return document.getElementById(id); }
   function setText(id, value) { var node = el(id); if (node) node.textContent = value; }
 
@@ -326,6 +332,12 @@ const SCRIPT = String.raw`
   // site's actual subject matter, so the graph starts without them.
   var showPageLocal = false;
   var visibleIdx = [], visibleLinks = [], neighbours = null, neighbourFocus = -2;
+  // The subset of neighbours that also earns a label. Separate because
+  // highlighting and labelling answer different questions: one is "what is
+  // connected to this", the other is "what can you read without it turning to
+  // soup". No backticks in here: this whole script is a template literal and
+  // one would close it, with the syntax error reported far from this line.
+  var neighbourLabels = null;
 
   function nodeVisible(n) {
     if (n.dangling) return !danglingHidden;
@@ -502,15 +514,36 @@ const SCRIPT = String.raw`
   function neighboursOf(focus) {
     if (neighbourFocus === focus) return neighbours;
     var set = Object.create(null);
+    var list = [];
     if (focus >= 0) {
       set[focus] = true;
       for (var k = 0; k < visibleLinks.length; k++) {
         var link = visibleLinks[k];
-        if (link.a === focus) set[link.b] = true;
-        if (link.b === focus) set[link.a] = true;
+        var other = link.a === focus ? link.b : link.b === focus ? link.a : -1;
+        if (other >= 0 && !set[other]) {
+          set[other] = true;
+          list.push(other);
+        }
       }
     }
     neighbours = set;
+    // Highlighting every neighbour is right; LABELLING every neighbour is not.
+    // Hovering a hub — a WebSite referenced by all 60 pages, an Organization on
+    // 39 — granted sixty labels at once and reproduced exactly the unreadable
+    // centre the label budget exists to prevent, just triggered by the pointer
+    // instead of by zoom. Cap the granted labels at the best-connected few.
+    //
+    // labelRank is the occurrences ordering computed once per filter, so this
+    // sorts a small array of indices rather than re-ranking anything.
+    list.sort(function (a, b) {
+      return sim[a].labelRank - sim[b].labelRank;
+    });
+    var labelled = Object.create(null);
+    if (focus >= 0) labelled[focus] = true;
+    for (var j = 0; j < list.length && j < HOVER_LABEL_BUDGET; j++) {
+      labelled[list[j]] = true;
+    }
+    neighbourLabels = labelled;
     neighbourFocus = focus;
     return set;
   }
@@ -582,10 +615,16 @@ const SCRIPT = String.raw`
         }
       }
       // A label is EARNED by reach, or GRANTED outright to whatever the reader
-      // is pointing at: the focus, everything it references, and the selection.
+      // is pointing at: the focus, the selection, and the best-connected
+      // HOVER_LABEL_BUDGET of its neighbours. Every neighbour stays bright
+      // regardless; only the labels are capped, because sixty of them at once
+      // is the unreadable centre this budget exists to prevent.
       // An earned label is dropped while its node is dimmed — a bright label on
       // a faded dot reads as noise, and dimmed means "not relevant right now".
-      var granted = index === focus || index === selected || (focus >= 0 && near[index]);
+      var granted =
+        index === focus ||
+        index === selected ||
+        (focus >= 0 && neighbourLabels !== null && neighbourLabels[index]);
       if (granted || (n.labelRank < labelBudget && !dim)) {
         ctx.globalAlpha = 1;
         ctx.fillStyle = "#1c1c1a";

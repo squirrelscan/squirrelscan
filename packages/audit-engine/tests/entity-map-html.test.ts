@@ -79,3 +79,45 @@ describe("renderEntityMapHtml", () => {
     expect(html).toContain('"nodeCount":0');
   });
 });
+
+describe("the viewer script itself", () => {
+  // The viewer is a JS program inside a TypeScript template literal, so tsgo
+  // checks the TypeScript around it and NOTHING inside it. A syntax error, or a
+  // stray backtick in a comment, compiles fine and ships a page whose graph
+  // never renders. Twice during this feature's development a backtick in a
+  // comment closed the literal, and the reported error was 200 lines away.
+  const html = render(
+    JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "@id": "https://example.com/#org",
+      name: "Acme",
+    }),
+  );
+
+  test("parses as JavaScript", () => {
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+      .map((match) => match[1]!)
+      .filter((source) => source.trim().length > 0);
+    expect(scripts.length).toBeGreaterThan(0);
+
+    // Transpiler rather than `new Function`: this only needs to know the
+    // script parses, and building a callable out of page-derived source would
+    // be a code path that could run.
+    const transpiler = new Bun.Transpiler({ loader: "js" });
+    for (const source of scripts) {
+      expect(() => transpiler.transformSync(source)).not.toThrow();
+    }
+  });
+
+  test("caps the labels a hover grants", () => {
+    // Highlighting every neighbour is right and stays unbounded. Labelling
+    // every neighbour is not: hovering a hub on a real 40-page crawl granted
+    // 41 labels at once, which is the unreadable centre the zoom budget exists
+    // to prevent, reached through the pointer instead.
+    expect(html).toContain("var HOVER_LABEL_BUDGET = 12;");
+    // The granted-label test must read the capped set, not the full neighbour
+    // set — using `near` here is the bug this pins.
+    expect(html).toContain("neighbourLabels !== null && neighbourLabels[index]");
+  });
+});
