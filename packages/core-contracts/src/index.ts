@@ -32,6 +32,9 @@ export * from "./resolution";
 // next steps) — shared by the crawler, the engine, the renderers and the cloud.
 export * from "./failure-reason";
 
+// #2061: the structured entity map — site-wide JSON-LD graph of one audit.
+export * from "./entity-map";
+
 // Import storage types needed locally by interfaces in this file
 import type {
   AgentAccessProbe,
@@ -45,6 +48,7 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { ResolutionSignal } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
+import type { EntityMap } from "./entity-map";
 
 export interface CheckItem {
   id: string;
@@ -307,6 +311,23 @@ export interface AuditReport {
    * cache hit); absent for anonymous/offline runs.
    */
   siteMetadata?: SiteMetadata;
+  /**
+   * Structured entity map (#2061) — the site-wide JSON-LD graph. Like
+   * `technologies` / `siteMetadata`, REPORT-ONLY: it NEVER contributes to
+   * `healthScore` and no rule reads it.
+   *
+   * Built on EVERY audit (#2091) — there is no flag. Absent only on a report
+   * produced before the feature, or when the build itself failed.
+   *
+   * It rides the publish body through `slimForPublish`'s spread, capped by
+   * `ENTITY_MAP_PUBLISH_LIMITS` so a pathological site cannot push the body
+   * toward the payload gate. The project store keeps the uncapped graph.
+   *
+   * NOTE for the cloud side: the API's publish schema must accept this field.
+   * A strict schema rejects the whole body on an unknown key, and every publish
+   * now carries this one.
+   */
+  entityMap?: EntityMap;
   /**
    * Auto-generated "editor's-style" audit summary — prose narrative + point-form
    * big-ticket items, framed like a quick exec-email to management. Like

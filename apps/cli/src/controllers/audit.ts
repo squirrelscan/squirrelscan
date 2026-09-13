@@ -18,6 +18,7 @@ import type { RenderChargeLine } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import { createCloudDocumentFetcher } from "@squirrelscan/audit-engine";
+import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
   createConditionalRenderDocumentFetcher,
@@ -46,6 +47,7 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
+import { storeEntityMap } from "@/audit/entity-map";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -90,6 +92,7 @@ import { reconstructReport } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
 import { initRequestTool } from "@/tools/request";
+import { cwdOr } from "@/utils/cwd";
 import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
 import { summarizeRenderTimings } from "@/utils/render-timing-summary";
@@ -1296,6 +1299,9 @@ export async function runAudit(
         ? createCloudPrefetchCollector(url)
         : null;
       const techSampleCollector = createTechDetectSampleCollector(url);
+      // #2091: url + raw JSON-LD per page, and nothing else. Always on — the
+      // entity map is part of every report now, not a flag.
+      const entityMapCollector = createEntityMapCollector();
       // normalizedUrl + status per page, for the smart-audits merge and nothing
       // else — two scalars a page instead of the PageRecord it used to slice
       // them off.
@@ -1369,6 +1375,7 @@ export async function runAudit(
           onBatchContext: (batchContext) => {
             prefetchCollector?.absorb(batchContext);
             techSampleCollector.absorb(batchContext);
+            entityMapCollector.absorb(batchContext);
             if (needExternalLinkCount)
               absorbExternalLinkUrls(externalLinkUrls, batchContext);
             for (const { page } of batchContext) {
@@ -1887,6 +1894,32 @@ export async function runAudit(
       // harness printed "rules n/a". One machine-readable line at the end of the
       // run, and `phaseTimingsMs` in the report is unchanged.
       logger.trace("phase timings", phaseTimer.timingsMs);
+
+      // ============================================
+      // STEP 3.3: ENTITY MAP (#2091)
+      // ============================================
+      // Built on every audit, stored in the project store, and carried on the
+      // report so every format can render it. Report-only: no rule reads it and
+      // it never touches the health score.
+      //
+      // The report keeps the FULL document: `-f json` is the canonical export
+      // and must not be truncated. The publish payload gets its own slimmed
+      // COPY, taken at publish time — slimming in place here would silently cut
+      // the local json report to 750 nodes and drop `pages` entirely.
+      try {
+        const entityMap = entityMapCollector.build(url);
+        await storeEntityMap({
+          storage: sqliteStorage,
+          crawlId,
+          map: entityMap,
+        });
+        report.entityMap = entityMap;
+      } catch (error) {
+        // A finished audit must never be lost to a report-only section.
+        logger.warn(
+          `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
 
       // ============================================
       // STEP 4: RETENTION (#1912)

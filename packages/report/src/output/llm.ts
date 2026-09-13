@@ -9,6 +9,18 @@ import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
 import { editorSummaryView } from "../editor-summary";
+import {
+  ENTITY_FINDING_LIMIT,
+  ENTITY_TABLE_LIMIT,
+  conflictedEntities,
+  danglingEdges,
+  danglingTargetId,
+  entitiesWithoutId,
+  entityLabel,
+  entityPageTotal,
+  primaryEntities,
+  stableIdPercent,
+} from "../entities";
 import { seedRedirect } from "../coverage";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
@@ -453,6 +465,47 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
     }
     lines.push("</locked-rules>");
+  }
+
+  // Entities (#2091) — the site's own JSON-LD as one graph. Report-only context
+  // for the agent; it does not affect the score. Attribute-first so a model can
+  // read the shape without parsing the rows.
+  if (report.entityMap) {
+    const map = report.entityMap;
+    const s = map.summary;
+    lines.push(
+      `<entities count="${s.nodeCount}" references="${s.edgeCount}" dangling="${s.danglingCount}" conflicts="${s.conflictCount}" without-id="${s.nodesWithoutIdCount}" stable-id-share="${stableIdPercent(map)}" pages-without-entities="${s.pagesWithoutEntities}">`
+    );
+    for (const node of primaryEntities(map).slice(0, ENTITY_TABLE_LIMIT)) {
+      const id = node.id ? ` id="${escapeXml(node.id)}"` : "";
+      lines.push(
+        `${indent(1)}<entity type="${escapeXml(node.types.join(","))}" name="${escapeXml(entityLabel(node))}"${id} occurrences="${node.occurrences}" pages="${entityPageTotal(node)}"/>`
+      );
+    }
+    for (const node of conflictedEntities(map).slice(0, ENTITY_FINDING_LIMIT)) {
+      for (const conflict of node.conflicts) {
+        lines.push(
+          `${indent(1)}<conflict entity="${escapeXml(entityLabel(node))}" property="${escapeXml(conflict.property)}" values="${conflict.values.length}">`
+        );
+        for (const value of conflict.values) {
+          lines.push(
+            `${indent(2)}<value pages="${value.pages.length + value.morePages}">${escapeXml(value.value)}</value>`
+          );
+        }
+        lines.push(`${indent(1)}</conflict>`);
+      }
+    }
+    for (const edge of danglingEdges(map).slice(0, ENTITY_FINDING_LIMIT)) {
+      lines.push(
+        `${indent(1)}<dangling predicate="${escapeXml(edge.predicate)}" target="${escapeXml(danglingTargetId(edge))}" occurrences="${edge.occurrences}"/>`
+      );
+    }
+    for (const node of entitiesWithoutId(map).slice(0, ENTITY_FINDING_LIMIT)) {
+      lines.push(
+        `${indent(1)}<without-id type="${escapeXml(node.types.join(","))}" name="${escapeXml(entityLabel(node))}" pages="${entityPageTotal(node)}"/>`
+      );
+    }
+    lines.push("</entities>");
   }
 
   lines.push("</audit>");

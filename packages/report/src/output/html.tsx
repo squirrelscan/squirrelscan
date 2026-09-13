@@ -21,6 +21,13 @@ import {
   REPORT_PAGES_HARD_CAP,
 } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity, type GroupedCategory } from "../grouping";
+import { entitySummaryLine } from "../entities";
+import {
+  ENTITY_VIEWER_STYLES,
+  entityViewerData,
+  entityViewerMarkup,
+  entityViewerScript,
+} from "../entities-viewer";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import {
   SITE_PROFILE_NOTE,
@@ -1080,6 +1087,38 @@ function Footer({ report, branding }: { report: AuditReport; branding?: ReportBr
   );
 }
 
+/**
+ * The interactive Entities section (#2091).
+ *
+ * The markup, styles and script all come from `../entities-viewer`, which the
+ * standalone entity-map document uses too. Three `dangerouslySetInnerHTML` uses,
+ * each safe by construction and none of them carrying site content as markup:
+ * the markup is a fixed literal, the script is a fixed literal, and the map
+ * reaches the page as `\uXXXX`-escaped JSON inside an `application/json` block
+ * that the viewer reads with `textContent`. Nothing loads over the network.
+ */
+function EntitiesSection({ report }: { report: AuditReport }) {
+  const map = report.entityMap;
+  if (!map) return null;
+  return (
+    <div className="entities-section">
+      <h2>Entities</h2>
+      <div className="tech-note">
+        The site&apos;s own JSON-LD, collapsed into one graph — informational, not part of
+        the score. {entitySummaryLine(map)}.
+      </div>
+      <style dangerouslySetInnerHTML={{ __html: ENTITY_VIEWER_STYLES }} />
+      <div dangerouslySetInnerHTML={{ __html: entityViewerMarkup() }} />
+      <script
+        type="application/json"
+        id="em-data"
+        dangerouslySetInnerHTML={{ __html: entityViewerData(map) }}
+      />
+      <script dangerouslySetInnerHTML={{ __html: entityViewerScript() }} />
+    </div>
+  );
+}
+
 function TechnologiesSection({ report }: { report: AuditReport }) {
   const tech = report.technologies;
   if (!tech || tech.items.length === 0) return null;
@@ -1432,6 +1471,7 @@ function ReportPage({
           ) : isFailedOrBlocked ? null : (
             <div className="no-issues">✓ No issues found</div>
           )}
+          <EntitiesSection report={report} />
           <LockedRulesSection report={report} branding={branding} />
           {/* Cache reuse — quiet run metadata, pinned to the very bottom. */}
           <CacheSection report={report} />

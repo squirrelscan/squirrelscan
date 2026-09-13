@@ -1,5 +1,6 @@
 // Analyze controller - runs rules on existing crawl data
 
+import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { Effect } from "effect";
 import { existsSync, readdirSync } from "node:fs";
 
@@ -14,6 +15,7 @@ import {
   buildSiteContext,
   fetchResourceAssets,
 } from "@/audit/adapter";
+import { storeEntityMap } from "@/audit/entity-map";
 import { loadConfig } from "@/config";
 import {
   type Result,
@@ -342,6 +344,20 @@ export async function runAnalyze(
           );
         }
       }
+    }
+
+    // Entity map (#2091) — rebuilt from the stored pages and written to the
+    // project store, exactly as `squirrel audit` does, so re-analyzing a crawl
+    // refreshes its entity rows instead of leaving the last audit's behind.
+    // Report-only and non-scoring; a failure is logged and never fails analyze.
+    if ("saveEntityMap" in storage) {
+      const collector = createEntityMapCollector();
+      collector.absorb(siteContext);
+      await storeEntityMap({
+        storage: storage as import("@/crawler/storage/sqlite").SQLiteStorage,
+        crawlId,
+        map: collector.build(baseUrl),
+      });
     }
 
     // Update crawl status to "analyzed"

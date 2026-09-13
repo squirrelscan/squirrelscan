@@ -1,7 +1,7 @@
 // JSON report output
 
 import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
-import type { AuditReport, AuditStatus, CheckItem } from "../types";
+import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
 import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
@@ -132,6 +132,9 @@ interface SlimJsonReport {
     model: string;
     generatedAt: string;
   };
+  // Report-only — never part of the score. The entity-map document (#2091),
+  // emitted verbatim so it still validates against the core-contracts schema.
+  entities?: EntityMap;
   // Report-only — never part of the score. Present when cloud tech-detect ran.
   technologies?: {
     firstScan: boolean;
@@ -316,6 +319,10 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
           },
         }
       : {}),
+    // Entities (#2091): the whole entity-map document, verbatim. Report-only
+    // and never part of the score. Emitted as-is rather than reshaped so a
+    // consumer can validate it against the core-contracts zod schema.
+    ...(report.entityMap ? { entities: report.entityMap } : {}),
     ...(report.siteMetadata
       ? {
           siteProfile: {

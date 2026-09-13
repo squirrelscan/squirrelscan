@@ -171,6 +171,44 @@ export {
 export { formatBytes } from "./utils";
 export type { CacheStats, CacheHitReason } from "./types";
 
+// Entity map (#2091) — report-only / non-scoring, shared by all six formats and
+// by the engine's standalone entity-map document.
+export {
+  ENTITY_CONSOLE_LIMIT,
+  ENTITY_EMPTY_MESSAGE,
+  ENTITY_FINDING_LIMIT,
+  ENTITY_TABLE_LIMIT,
+  conflictedEntities,
+  danglingEdges,
+  danglingTargetId,
+  entitiesByReach,
+  entitiesWithoutId,
+  entityCell,
+  entityLabel,
+  entityMarkdownSection,
+  entityPageTotal,
+  entitySummaryLine,
+  hasEntityMap,
+  primaryEntities,
+  stableIdPercent,
+  typeCounts,
+} from "./entities";
+export {
+  ENTITY_GRAPH_NODE_CAP,
+  ENTITY_VIEWER_STYLES,
+  escapeEntityJsonForScript,
+  entityViewerData,
+  entityViewerMarkup,
+  entityViewerScript,
+} from "./entities-viewer";
+export type {
+  EntityMap,
+  EntityMapConflict,
+  EntityMapEdge,
+  EntityMapNode,
+  EntityMapSummary,
+} from "./types";
+
 // "Pages affected" aggregation: unions check.pages + item-level sourcePages /
 // page-URL ids so site-scope rules report real counts (not 0). (#240)
 export {

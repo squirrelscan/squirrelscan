@@ -187,6 +187,7 @@ import type {
   CategoryScore as _CS,
   DomainStats as _DST,
   EditorSummary as _ES,
+  EntityMap as _EM,
   GroupScore as _GS,
   HealthScore as _HS,
   ReportTechnologies as _RT,
@@ -202,6 +203,7 @@ export type RuleCategory = _RC;
 export type ReportTechnologies = _RT;
 export type SiteMetadata = _SM;
 export type EditorSummary = _ES;
+export type EntityMap = _EM;
 export type DomainStats = _DST;
 export type CacheStats = _CST;
 
@@ -468,6 +470,13 @@ export interface AuditReport {
    * audit rules applied this run. Null/absent → no metadata gating occurred.
    */
   siteMetadata?: SiteMetadata;
+  /**
+   * Structured entity map (#2091) — REPORT-ONLY / non-scoring. Mirrors
+   * core-contracts `AuditReport`. Built on every audit, so every report format
+   * can render it. Capped by `slimEntityMapForPublish` before it is attached,
+   * since it rides the publish payload; the project store keeps the full graph.
+   */
+  entityMap?: EntityMap;
   /**
    * Auto-generated editor's summary — REPORT-ONLY / non-scoring, surfaced at the
    * TOP of the report. Present only when the credited cloud
