@@ -389,6 +389,112 @@
         }
       }
     },
+    "/v1/reports/{id}/entities": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get the report's entity map",
+        "description": "The graph of things the audited site declares in JSON-LD (Organization, Person, Product, Article, …), collapsed across every crawled page, with the references between them.\n\nFilters apply BEFORE rendering, so `?type=Organization&format=markdown` renders a markdown document of Organizations rather than filtering a rendered string. `summary` always describes the WHOLE site even when a filter is applied; compare it against `meta.counts` to see whether you are holding a subset.\n\n404 when the report predates the feature (no map was published with it), when it does not exist, or when it belongs to another organization. Available on every plan.",
+        "operationId": "getReportEntities",
+        "parameters": [
+          { "$ref": "#/components/parameters/ReportId" },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Export format. `csv`, `dot`, `graphml` and `mermaid` are accepted but answer 501 until the `squirrel entities` command ships them.\n\nEvery value in the map is declared by the audited site, so treat it as untrusted. The `html` rendering escapes it and is safe to open directly. The `markdown` rendering escapes only table delimiters, which is sufficient while it is read as markdown: if you render it to HTML, sanitize it first, or use `format=json` and render the fields yourself.",
+            "schema": {
+              "type": "string",
+              "enum": ["json", "jsonld", "html", "markdown", "csv", "dot", "graphml", "mermaid"],
+              "default": "json"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Keep only entities carrying this schema.org `@type` (case-insensitive).",
+            "schema": { "type": "string", "maxLength": 128 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Keep only entities declared on this page URL, or on a page whose URL starts with it.\n\nMatching is a plain prefix, so `https://site/about` also matches `https://site/about-us`; add a trailing slash to scope to a directory.\n\nThis filter can be INCOMPLETE. Each entity lists at most 50 of its declaring pages, with the rest collapsed into a `morePages` count, so an entity declared on 200 pages cannot match on one of the 150 URLs that were not listed. When that is possible for the map being filtered, `meta.pageFilterIncomplete` is true.",
+            "schema": { "type": "string", "maxLength": 2048 }
+          },
+          {
+            "name": "problem",
+            "in": "query",
+            "description": "Keep only entities with this problem. `no-id`: no `@id`, so nothing ties the declarations together. `conflict`: occurrences disagree on a property. `dangling`: references an `@id` no page declares. `single-page`: declared on one page only. `split-identity`: the same thing declared under two different `@id`s.",
+            "schema": {
+              "type": "string",
+              "enum": ["no-id", "conflict", "dangling", "single-page", "split-identity"]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Free-text match over name, `@id`, key and types.",
+            "schema": { "type": "string", "maxLength": 256 }
+          },
+          {
+            "name": "include_page_local",
+            "in": "query",
+            "description": "Include per-page types (BreadcrumbList, WebPage, ListItem, Question, Answer, and unnamed ImageObject). Off by default — they crowd out the entities the map exists to show.",
+            "schema": { "type": "string", "enum": ["true", "false", "1", "0"], "default": "false" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entity map. `application/json` for `format=json`; otherwise the requested rendering.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/EntityMapResponse" } },
+              "application/ld+json": { "schema": { "type": "object" } },
+              "text/html": { "schema": { "type": "string" } },
+              "text/markdown": { "schema": { "type": "string" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "501": {
+            "description": "The requested export format is not implemented in this release.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{id}/entities/{key}": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get one entity from the report's entity map",
+        "description": "One node with its properties, occurrences, conflicts, declaring pages, and the edges pointing out of and into it.\n\n`key` accepts the node key, the entity's `@id`, or its exact display name. An `@id` is a URL, so percent-encode it (`/` as `%2F`).",
+        "operationId": "getReportEntity",
+        "parameters": [
+          { "$ref": "#/components/parameters/ReportId" },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "description": "Node key, `@id`, or exact entity name. Percent-encode a URL.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entity and its edges.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/EntityNodeDetail" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
     "/v1/credits": {
       "get": {
         "tags": ["Credits"],
@@ -1014,6 +1120,235 @@
           "reports": { "type": "array", "items": { "$ref": "#/components/schemas/Report" } },
           "total": { "type": "integer" },
           "hasMore": { "type": "boolean" }
+        }
+      },
+      "EntityMapSummary": {
+        "type": "object",
+        "description": "Site-wide totals. Describes the WHOLE audit even when the response is filtered.",
+        "required": [
+          "nodeCount",
+          "edgeCount",
+          "danglingCount",
+          "pagesTotal",
+          "pagesWithoutEntities",
+          "nodesWithStableId",
+          "stableIdShare",
+          "countsByType"
+        ],
+        "properties": {
+          "nodeCount": { "type": "integer" },
+          "edgeCount": { "type": "integer" },
+          "danglingCount": {
+            "type": "integer",
+            "description": "Edges pointing at an `@id` no crawled page declares."
+          },
+          "pagesTotal": { "type": "integer" },
+          "pagesWithoutEntities": { "type": "integer" },
+          "nodesWithStableId": {
+            "type": "integer",
+            "description": "Entities carrying an `@id`."
+          },
+          "stableIdShare": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "nodesWithStableId as a 0-1 share of nodeCount."
+          },
+          "countsByType": {
+            "type": "object",
+            "description": "Occurrence count per schema.org `@type`.",
+            "additionalProperties": { "type": "integer" }
+          }
+        }
+      },
+      "EntityMapNode": {
+        "type": "object",
+        "description": "One entity, collapsed across every page that declares it. Every string here comes from site-declared JSON-LD and is untrusted; escape before rendering.",
+        "required": [
+          "key",
+          "id",
+          "types",
+          "name",
+          "properties",
+          "occurrences",
+          "pages",
+          "morePages",
+          "conflicts",
+          "danglingRefs"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Identity the builder settled on: the resolved `@id` when the site supplied one, otherwise a synthetic type+name key."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "description": "The resolved `@id`, or null when the entity declared none."
+          },
+          "types": { "type": "array", "items": { "type": "string" } },
+          "name": { "type": ["string", "null"] },
+          "properties": {
+            "type": "object",
+            "description": "Consistency-relevant properties, normalised to strings.",
+            "properties": {
+              "name": { "type": "string" },
+              "url": { "type": "string" },
+              "logo": { "type": "string" },
+              "image": { "type": "array", "items": { "type": "string" } },
+              "sameAs": { "type": "array", "items": { "type": "string" } },
+              "telephone": { "type": "string" },
+              "email": { "type": "string" },
+              "address": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          },
+          "occurrences": {
+            "type": "integer",
+            "description": "How many times the entity was declared across the crawl."
+          },
+          "pages": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Declaring pages, sorted and capped; the remainder is in morePages."
+          },
+          "morePages": { "type": "integer" },
+          "conflicts": {
+            "type": "array",
+            "description": "Properties whose value differs between occurrences.",
+            "items": {
+              "type": "object",
+              "required": ["property", "values"],
+              "properties": {
+                "property": { "type": "string" },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["value", "pages", "morePages"],
+                    "properties": {
+                      "value": { "type": "string" },
+                      "pages": { "type": "array", "items": { "type": "string" } },
+                      "morePages": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "danglingRefs": {
+            "type": "integer",
+            "description": "Outgoing `@id` references from this node that nothing declares."
+          }
+        }
+      },
+      "EntityMapEdge": {
+        "type": "object",
+        "description": "A typed reference from one node to another. A dangling target is deliberately absent from `nodes`.",
+        "required": ["source", "predicate", "target", "dangling", "occurrences", "pages", "morePages"],
+        "properties": {
+          "source": { "type": "string" },
+          "predicate": {
+            "type": "string",
+            "description": "author, publisher, mainEntity, about, isPartOf, sameAs, logo, offers, …"
+          },
+          "target": { "type": "string" },
+          "dangling": {
+            "type": "boolean",
+            "description": "True when no crawled page declares the target."
+          },
+          "occurrences": { "type": "integer" },
+          "pages": { "type": "array", "items": { "type": "string" } },
+          "morePages": { "type": "integer" }
+        }
+      },
+      "EntityMapResponse": {
+        "type": "object",
+        "description": "The entity-map document plus the context the endpoint adds under `meta`.",
+        "required": ["format", "version", "site", "generatedAt", "summary", "nodes", "edges", "meta"],
+        "properties": {
+          "format": { "type": "string", "const": "squirrelscan/entity-map" },
+          "version": { "type": "integer", "const": 1 },
+          "site": { "type": "string", "description": "Site the audit started from." },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "summary": { "$ref": "#/components/schemas/EntityMapSummary" },
+          "nodes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EntityMapNode" }
+          },
+          "edges": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EntityMapEdge" }
+          },
+          "pages": {
+            "type": "array",
+            "description": "Per-page contributions. Empty on hosted maps: the published copy drops it and the summary carries what a reader needs from it.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string" },
+                "declares": { "type": "array", "items": { "type": "string" } },
+                "references": { "type": "array", "items": { "type": "string" } },
+                "entityCount": { "type": "integer" }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "reportId",
+              "websiteId",
+              "auditedAt",
+              "filtered",
+              "counts",
+              "pageFilterIncomplete"
+            ],
+            "properties": {
+              "reportId": { "type": "string" },
+              "websiteId": { "type": ["string", "null"] },
+              "auditedAt": { "type": "string", "format": "date-time" },
+              "filtered": {
+                "type": "boolean",
+                "description": "True when a query filter removed at least one entity."
+              },
+              "counts": {
+                "type": "object",
+                "description": "Post-filter totals. Compare against `summary` to see whether this is a subset.",
+                "required": ["nodes", "edges"],
+                "properties": {
+                  "nodes": { "type": "integer" },
+                  "edges": { "type": "integer" }
+                }
+              },
+              "pageFilterIncomplete": {
+                "type": "boolean",
+                "description": "True when a `page` filter ran against a map containing an entity whose declaring-page list was capped. The result may be missing entities that really are declared on the requested page, because the omitted URLs are not in the document. Always false when no `page` filter was given."
+              }
+            }
+          }
+        }
+      },
+      "EntityNodeDetail": {
+        "type": "object",
+        "required": ["reportId", "websiteId", "auditedAt", "node", "pageCount", "outbound", "inbound"],
+        "properties": {
+          "reportId": { "type": "string" },
+          "websiteId": { "type": ["string", "null"] },
+          "auditedAt": { "type": "string", "format": "date-time" },
+          "node": { "$ref": "#/components/schemas/EntityMapNode" },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total declaring pages, including any beyond the `pages` cap."
+          },
+          "outbound": {
+            "type": "array",
+            "description": "Edges from this node, including dangling references.",
+            "items": { "$ref": "#/components/schemas/EntityMapEdge" }
+          },
+          "inbound": {
+            "type": "array",
+            "description": "Edges pointing at this node.",
+            "items": { "$ref": "#/components/schemas/EntityMapEdge" }
+          }
         }
       },
       "CreditsResponse": {
