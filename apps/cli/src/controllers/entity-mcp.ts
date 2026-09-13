@@ -672,18 +672,26 @@ function shapeFindings(
     // with a flawless entity graph, and only one of those is worth reporting as
     // good news. Any stored check for this crawl proves the rules ran.
     analyzed: byRule.size > 0,
-    // Standing, not conditional. A finding's page list was already clipped by
-    // the rule that produced it — five pages is typical — before this tool ever
-    // saw it, so `pages` is a sample for EVERY finding and there is no count
-    // anywhere in the pipeline that could say how big a sample. An agent that
-    // reads five pages as the affected scope will fix five pages of a hundred.
-    truncation: {
-      truncated: true,
-      notice:
-        findings.length > ENTITY_MCP_LIMITS.findings
-          ? `Showing ${ENTITY_MCP_LIMITS.findings} of ${findings.length} findings. Each finding's keys and pages are also a sample: the rules cap their own lists before this tool sees them, so the pages listed are never the complete affected set. Use list_entities with a problem filter for the full set of affected entities.`
-          : "Each finding's keys and pages are a sample: the rules cap their own lists before this tool sees them, so the pages listed are never the complete affected set. Use list_entities with a problem filter for the full set of affected entities.",
-    },
+    // Standing whenever there IS a finding, not conditional on a cap. A
+    // finding's page list was already clipped by the rule that produced it —
+    // five pages is typical — before this tool ever saw it, so `pages` is a
+    // sample for EVERY finding and no count anywhere in the pipeline can say
+    // how big a sample. An agent reading five pages as the affected scope will
+    // fix five pages of a hundred.
+    //
+    // With no findings there is nothing to be a sample OF, and claiming
+    // truncation would be its own small lie.
+    truncation:
+      findings.length === 0
+        ? NO_TRUNCATION
+        : {
+            truncated: true,
+            notice: `${
+              findings.length > ENTITY_MCP_LIMITS.findings
+                ? `Showing ${ENTITY_MCP_LIMITS.findings} of ${findings.length} findings. Each finding's keys and pages are also a sample: `
+                : "Each finding's keys and pages are a sample: "
+            }the rules cap their own lists before this tool sees them, so the pages listed are never the complete affected set. Use list_entities with a problem filter for the full set of affected entities.`,
+          },
     findings: findings.slice(0, ENTITY_MCP_LIMITS.findings),
     passed,
     skipped,

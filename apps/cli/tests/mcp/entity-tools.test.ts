@@ -891,38 +891,12 @@ describe("a finding points at something get_entity can look up", () => {
       map,
     });
 
-    const { createStorage } = await import("@/crawler/storage");
-    const storage = await Effect.runPromise(
-      createStorage({ projectName: "conflict", silent: true })
-    );
-    try {
-      await Effect.runPromise(
-        storage.saveRuleResults(
-          crawlId,
-          "https://conflict.example/",
-          "schema/entity-conflicts",
-          [
-            {
-              name: "entity-conflicts",
-              status: "fail",
-              message: "1 entity disagrees with itself across pages",
-              items: [
-                {
-                  id: `${key} telephone`,
-                  label: "Loop Ltd — telephone",
-                  sourcePages: ["https://conflict.example/"],
-                  meta: { key, property: "telephone", valueCount: 2 },
-                },
-              ],
-            },
-          ] as never
-        )
-      );
-    } finally {
-      await Effect.runPromise(
-        storage.close().pipe(Effect.catchAll(() => Effect.void))
-      );
-    }
+    await seedConflictFinding({
+      project: "conflict",
+      crawlId,
+      pageUrl: "https://conflict.example/",
+      key,
+    });
 
     const { data } = await call("get_entity_findings");
     expect(data.analyzed).toBe(true);
@@ -937,16 +911,24 @@ describe("a finding points at something get_entity can look up", () => {
     }
   });
 
-  test("the findings result never claims a complete affected set", async () => {
+  test("a finding never claims a complete affected set", async () => {
     // A finding's pages were clipped by the rule before this tool saw them, and
-    // nothing in the pipeline records how many were dropped. Saying "complete"
-    // would be the one claim the data cannot support.
-    await seed({
+    // nothing in the pipeline records how many were dropped, so the flag is
+    // standing rather than conditional on this tool's own cap.
+    const map = synthetic({ withId: true, site: "https://sample.example/" });
+    const crawlId = await seed({
       project: "sample",
       baseUrl: "https://sample.example/",
       startedAt: 1_000_000,
-      map: synthetic({ withId: true, site: "https://sample.example/" }),
+      map,
     });
+    await seedConflictFinding({
+      project: "sample",
+      crawlId,
+      pageUrl: "https://sample.example/",
+      key: map.nodes[0]!.key,
+    });
+
     const { data } = await call("get_entity_findings");
     const truncation = data.truncation as {
       truncated: boolean;
@@ -956,7 +938,72 @@ describe("a finding points at something get_entity can look up", () => {
     expect(truncation.notice).toContain("sample");
     expect(truncation.notice).toContain("list_entities");
   });
+
+  test("no findings means there is nothing to be a sample of", async () => {
+    // The mirror. An unanalyzed audit has no finding whose pages could have
+    // been clipped, and claiming truncation there would be its own small lie.
+    await seed({
+      project: "unanalyzed",
+      baseUrl: "https://unanalyzed.example/",
+      startedAt: 1_000_000,
+      map: synthetic({ withId: true, site: "https://unanalyzed.example/" }),
+    });
+    const { data } = await call("get_entity_findings");
+    expect(data.analyzed).toBe(false);
+    expect(data.truncation).toEqual({ truncated: false, notice: "" });
+  });
 });
+
+/**
+ * One stored `schema/entity-conflicts` verdict.
+ *
+ * Its item id is deliberately the composite the real rule emits, `"<key>
+ * <property>"`, with the entity key in `meta` — that shape is the whole point
+ * of the key test below it.
+ */
+async function seedConflictFinding(options: {
+  project: string;
+  crawlId: string;
+  pageUrl: string;
+  key: string;
+}): Promise<void> {
+  const { createStorage } = await import("@/crawler/storage");
+  const storage = await Effect.runPromise(
+    createStorage({ projectName: options.project, silent: true })
+  );
+  try {
+    await Effect.runPromise(
+      storage.saveRuleResults(
+        options.crawlId,
+        options.pageUrl,
+        "schema/entity-conflicts",
+        [
+          {
+            name: "entity-conflicts",
+            status: "fail",
+            message: "1 entity disagrees with itself across pages",
+            items: [
+              {
+                id: `${options.key} telephone`,
+                label: "Loop Ltd — telephone",
+                sourcePages: [options.pageUrl],
+                meta: {
+                  key: options.key,
+                  property: "telephone",
+                  valueCount: 2,
+                },
+              },
+            ],
+          },
+        ] as never
+      )
+    );
+  } finally {
+    await Effect.runPromise(
+      storage.close().pipe(Effect.catchAll(() => Effect.void))
+    );
+  }
+}
 
 describe("the jsonld export discloses the @ids it invents", () => {
   // The whole reason this field exists. The export mints an `@id` for every
