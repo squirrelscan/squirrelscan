@@ -1,0 +1,314 @@
+---
+title: "The entity map format"
+description: "The version 1 JSON document, the JSON-LD export and the change set, with a real sample of each."
+---
+
+Three documents come out of the entity map, and they are separate on purpose.
+
+| Document | What it is | Where it comes from |
+|---|---|---|
+| The **map** | One audit's graph, collapsed across every crawled page | `squirrel entities -f json`, the report's `entities` field, `GET /v1/reports/{id}/entities` |
+| The **JSON-LD export** | The same graph as a schema.org `@graph` | `squirrel entities -f jsonld`, `?format=jsonld` |
+| The **change set** | What moved between two audits | `squirrel entities --diff -f json` |
+
+Entity names, `@id`s, types and property values are declared by the audited site. Treat those as untrusted input: escape before rendering, and never bracket-assign a `@type` onto a plain object. The structure around them is squirrelscan's: the discriminators, the timestamps, the key prefixes, the counts, and any `@id` the JSON-LD export invented.
+
+## The map
+
+```json
+{
+  "format": "squirrelscan/entity-map",
+  "version": 1,
+  "site": "https://docs.squirrelscan.com/",
+  "generatedAt": "2026-09-13T05:23:00.000Z",
+  "summary": { },
+  "nodes": [ ],
+  "edges": [ ],
+  "pages": [ ]
+}
+```
+
+`format` and `version` are the discriminator. Check both before reading the rest: `version` is bumped whenever a change would make an already-stored document invalid, and stored documents exist in the wild.
+
+### summary
+
+Every field describes the audit, not a sample. From an audit of docs.squirrelscan.com:
+
+```json
+{
+  "nodeCount": 183,
+  "edgeCount": 488,
+  "danglingCount": 0,
+  "pagesTotal": 60,
+  "pagesWithoutEntities": 0,
+  "nodesWithStableId": 183,
+  "stableIdShare": 1,
+  "pageLocalCount": 121,
+  "nodesWithoutIdCount": 0,
+  "conflictCount": 0,
+  "countsByType": {
+    "BreadcrumbList": 60,
+    "ImageObject": 60,
+    "Organization": 60,
+    "TechArticle": 60,
+    "WebPage": 60,
+    "WebSite": 60
+  }
+}
+```
+
+`countsByType` counts **declarations**, not entities, and an entity carrying two types is counted under both. Sixty `Organization` declarations could be one entity declared on every page or sixty declared once each, and the type count cannot tell you which. `nodeCount` can: this audit has 183 entities behind those six type counts.
+
+`nodesWithoutIdCount` counts only entities declared on more than one page. An entity on a single page with no `@id` has nothing to reconcile across pages, so it is not the finding.
+
+<Note>
+Three counters, `pageLocalCount`, `nodesWithoutIdCount` and `conflictCount`, were added after version 1 shipped. A document written before them omits them. Readers recompute them from the nodes and say so; a recomputed counter counts the **stored** nodes, and a published map is capped, so treat it as a floor rather than a site total.
+</Note>
+
+### nodes
+
+One entity, collapsed across every page that declares it.
+
+```json
+{
+  "key": "id:https://squirrelscan.com/#organization",
+  "id": "https://squirrelscan.com/#organization",
+  "types": ["Organization"],
+  "name": "squirrelscan",
+  "properties": {
+    "name": "squirrelscan",
+    "url": "https://squirrelscan.com/",
+    "logo": "https://docs.squirrelscan.com/logo/light.svg",
+    "sameAs": [
+      "https://github.com/squirrelscan",
+      "https://www.linkedin.com/company/squirrelscan/",
+      "https://x.com/squirrelscan_"
+    ]
+  },
+  "occurrences": 60,
+  "pages": ["https://docs.squirrelscan.com/", "…"],
+  "morePages": 10,
+  "conflicts": [],
+  "danglingRefs": 0,
+  "pageLocal": false
+}
+```
+
+**`key` is the identity the builder settled on**, and it takes one of four shapes:
+
+| Shape | When | Example |
+|---|---|---|
+| `id:<resolved @id>` | The site declared an `@id` | `id:https://squirrelscan.com/#organization` |
+| `syn:<types>\|<property>:<value>` | No `@id`, but a distinguishing property | `syn:Organization\|name:acme` |
+| `blank:<page>:<raw id>` | A JSON-LD blank node, `_:b0` | `blank:https://site/about:_:b0` |
+| `anon:<page>#<n>` | No `@id` and nothing to tell it apart | `anon:https://site/about#3` |
+
+`<types>` in a synthetic key is the deduped, sorted type set joined with `+`, so `["LocalBusiness","Organization"]` and the reverse produce one key rather than two. The discriminator is the first of `name`, `url` or `sameAs` the entity has.
+
+The `@id` is **resolved against the page it was declared on**. A relative `#organization` therefore becomes a different `@id` on every page, which is why one real organization can occupy sixty nodes. That is the split identity the rules flag, not an artifact of this format.
+
+`id` is `null` whenever the site declared none, and also for a JSON-LD blank node (`_:b0`), because a blank node identifier is document-scoped and names a different thing on every page. The key stays page-scoped in that case so two pages' `_:b0` never merge.
+
+**`occurrences` is declarations, `pages` is where.** They differ: a page declaring the same Organization twice counts twice in `occurrences` and once in `pages`.
+
+**`pages` is capped at 50, with the rest in `morePages`.** In the sample above the Organization is on all 60 pages: 50 listed, 10 counted. The complete set is still in the document, in the top-level `pages[].declares` index described below, which is not capped. What you must not do is read the node's own array as the answer: a 50-entry list looks exactly like a complete one, and that is the single most common source of a wrong answer about an entity map.
+
+`properties` keeps nine consistency-relevant properties and nothing else: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address`, `description`. Objects are flattened to one display string, and only `image` and `sameAs` stay arrays. A `Product`'s `sku` is not here; the page's own JSON-LD still has it.
+
+### conflicts
+
+Populated when two declarations of one entity disagree on a kept property, or on `@type`.
+
+```json
+"conflicts": [
+  {
+    "property": "logo",
+    "values": [
+      { "value": "https://site/logo-a.png", "pages": ["https://site/"], "morePages": 0 },
+      { "value": "https://site/logo-b.png", "pages": ["https://site/about"], "morePages": 0 }
+    ]
+  }
+]
+```
+
+At least two entries, sorted by value, each capped at 10 pages. Conflict detection covers the nine kept properties plus `@type`, so a disagreement anywhere else is invisible here.
+
+<Note>
+The sample maps on this page have no conflicts and no dangling references, which is what a well-formed site looks like. The shapes above and below are from the schema rather than from those files.
+</Note>
+
+### edges
+
+One typed reference between two entities.
+
+```json
+{
+  "source": "id:https://docs.squirrelscan.com/",
+  "predicate": "isPartOf",
+  "target": "id:https://docs.squirrelscan.com/#website",
+  "dangling": false,
+  "occurrences": 1,
+  "pages": ["https://docs.squirrelscan.com/"],
+  "morePages": 0
+}
+```
+
+`dangling: true` means no node in the map has `target` as its key: the site referenced an `@id` that nothing declares. That is the finding, not an error in the export.
+
+Only a fixed set of predicates produces edges:
+
+`about`, `author`, `brand`, `creator`, `hasPart`, `image`, `isPartOf`, `itemListElement`, `itemReviewed`, `logo`, `mainEntity`, `mainEntityOfPage`, `member`, `mentions`, `offers`, `provider`, `publisher`, `review`, `sameAs`, `subjectOf`, `worksFor`.
+
+How a predicate's value is treated depends on its shape, and the difference decides what can dangle:
+
+| Value | Becomes | Can dangle |
+|---|---|---|
+| A nested object with an `@type` | Its own node, plus an edge to it | No |
+| An explicit `{"@id": "…"}` reference | An edge to that key | **Yes** |
+| A bare string, like a `sameAs` profile URL | An edge only if some page really declares a node under that `@id` | No |
+
+That last row is why a `sameAs` listing five social profiles does not produce five dangling references. A bare string is a value, not a promise. Only an explicit `{"@id": …}` claims that something exists, so only an explicit reference can be broken.
+
+A property that is neither a followed predicate nor one of the nine the map keeps is **discarded** when the map is built. A `Product`'s `sku` is not stored anywhere in this document; the page's own JSON-LD still has it.
+
+### pages
+
+One row per successfully crawled page, including pages that declared nothing. 2xx only and keyed by the final URL, so a redirect is one row under its destination and a 404's markup is not part of the graph at all.
+
+```json
+{
+  "url": "https://docs.squirrelscan.com/",
+  "declares": [
+    "id:https://docs.squirrelscan.com/",
+    "id:https://docs.squirrelscan.com/#article",
+    "id:https://docs.squirrelscan.com/#breadcrumb",
+    "id:https://docs.squirrelscan.com/#website",
+    "id:https://squirrelscan.com/#logo",
+    "id:https://squirrelscan.com/#organization"
+  ],
+  "references": [],
+  "entityCount": 6
+}
+```
+
+This array is the authoritative page index, and it is what a comparison uses to tell "this entity is gone" from "that page was not crawled again". A node's own `pages` is a 50-entry sample; this is not.
+
+`references` is empty in a map the CLI reassembled from its store, because the store does not keep per-page reference lists. Empty here means not recorded, not "nothing matched".
+
+## The JSON-LD export
+
+`squirrel entities -f jsonld` re-emits the collapsed graph as something a validator will read.
+
+```json
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@id": "https://squirrelscan.com/#organization",
+      "@type": "Organization",
+      "name": "squirrelscan",
+      "url": "https://squirrelscan.com/",
+      "logo": "https://docs.squirrelscan.com/logo/light.svg",
+      "sameAs": ["https://github.com/squirrelscan"],
+      "publisher": { "@id": "https://docs.squirrelscan.com/#website" }
+    }
+  ]
+}
+```
+
+Three things to know before you trust it as a picture of the site.
+
+**Every member has an `@id`, including the ones that did not.** An entity the site left anonymous is given `<site>#entity-<slug>-<hash>`, because a `@graph` member with no identifier is not much use in a validator. JSON-LD has nowhere to mark an identifier as invented, so the surfaces that hand you this export list them separately: the `get_entity_graph` tool returns `generatedIds` with the entity key and the placeholder it used. If you are looking at this export to answer "are this site's entities identified", read that list first, because the export's own answer is always yes.
+
+**A single `@type` is emitted as a string, several as an array.** `"@type": "Organization"` and `"@type": ["Organization", "LocalBusiness"]` are both produced.
+
+**Edges become `{"@id": …}` references**, and a dangling target is emitted too, so the export reproduces a broken reference rather than quietly dropping it. Its identifier is the resolved one rather than the site's raw spelling, and a dangling blank node keeps its page-scoped key. `sameAs` is the exception: it stays the plain string array the site declared rather than becoming reference objects.
+
+## The change set
+
+`squirrel entities --diff -f json` compares two maps.
+
+```json
+{
+  "format": "squirrelscan/entity-map-diff",
+  "version": 1,
+  "generatedAt": "2026-09-13T06:00:00.000Z",
+  "older": { "site": "…", "generatedAt": "…", "nodeCount": 170, "pagesTotal": 60 },
+  "newer": { "site": "…", "generatedAt": "…", "nodeCount": 183, "pagesTotal": 60 },
+  "added": [],
+  "removed": [],
+  "notCrawled": [],
+  "gainedId": [],
+  "lostId": [],
+  "occurrenceDeltas": [],
+  "newConflicts": [],
+  "resolvedConflicts": [],
+  "newDangling": [],
+  "resolvedDangling": [],
+  "summaryDelta": { },
+  "pagesOnlyInOlder": [],
+  "pagesOnlyInNewer": []
+}
+```
+
+Every list is sorted by a stable key, so two runs over the same pair produce identical bytes apart from `generatedAt`.
+
+### removed versus notCrawled
+
+The distinction the whole document is built around. Two audits of a site rarely cover the same pages, and a naive set difference reports every entity on a page that simply was not visited as removed, which reads as "the site deleted its structured data".
+
+An entity is **`removed`** only when every page that declared it was crawled again. Everything else is **`notCrawled`**. The test is conservative in one direction only: it can call a genuinely removed entity "not crawled", never the reverse.
+
+The same rule governs `resolvedConflicts` and `resolvedDangling`. A conflict needs two declarations to exist, so seeing one of them again tells you nothing.
+
+### gainedId and lostId
+
+An entity that gains an `@id` **changes key**, because the key is the `@id` when there is one. Reported as one transition rather than as an addition plus a removal:
+
+```json
+{
+  "beforeKey": "syn:Organization|name:acme",
+  "afterKey": "id:https://example.com/#org",
+  "types": ["Organization"],
+  "name": "Acme",
+  "id": "https://example.com/#org",
+  "coverage": "proven"
+}
+```
+
+Matching is on the sorted type set plus the normalized name, one-to-one. An ambiguous group, two identical-looking candidates on either side, stays unmatched and falls through to added and removed, which says less but says nothing false.
+
+**`coverage` is the field that says whether the change describes the whole site.** `proven` requires both that every page which declared the old version was crawled again **and** that the replacement was found on all of them. `partial` means one of those could not be established. Both, because either alone is satisfied by a site that is not fixed: re-auditing the broken pages proves nothing if the markup was deleted there and an identified entity turned up elsewhere.
+
+A missing entry is not proof of failure. The match needs the type and name unchanged, so changing the `@id` and the name in one edit appears as a removal plus an addition.
+
+### occurrenceDeltas
+
+```json
+{
+  "key": "id:https://example.com/#org",
+  "name": "Acme",
+  "types": ["Organization"],
+  "before": 58,
+  "after": 60,
+  "delta": 2
+}
+```
+
+Reported only for entities present in both maps under the same key, and only when `|delta|` reaches the threshold, which is 1 by default. Raise it on a site that publishes constantly, where a site-wide entity moves by one on every audit.
+
+### summaryDelta
+
+Every numeric summary metric as `{ before, after, delta }`, keyed by the summary's own field names. `countsByType` is excluded, being a map rather than a number.
+
+### pagesOnlyInOlder and pagesOnlyInNewer
+
+The page sets each audit saw and the other did not, sorted. This is the evidence behind `notCrawled`: if you are checking whether a fix landed and `notCrawled` is non-empty, these say which pages to re-audit.
+
+## References
+
+- [The entity map](/entity-map) — what it is and how to read it
+- [`squirrel entities`](/entity-map/cli) — producing these documents locally
+- [The entity map in the cloud](/entity-map/cloud) — the dashboard and the API
+- [The entity map for agents](/entity-map/mcp) — the MCP tools over the same data
+- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator

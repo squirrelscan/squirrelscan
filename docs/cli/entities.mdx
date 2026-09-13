@@ -27,7 +27,7 @@ squirrel entities [query] [options]
 | `--list` | `-l` | List stored audits and their entity counts | `false` |
 | `--crawl` | | Crawl ID (or 8-character prefix) to read | latest |
 | `--type` | | Only entities of these `@type` values (repeatable or comma-separated) | all |
-| `--page` | | Only entities declared on pages matching this URL or prefix (repeatable) | all |
+| `--page` | | Only entities declared on a page whose URL contains this text (repeatable) | all |
 | `--problem` | | Only entities with these problems: `no-id`, `conflict`, `dangling`, `single-page`, `split-identity` | all |
 | `--format` | `-f` | Output format: `json`, `jsonld`, `html`, `markdown`, `csv`, `dot`, `graphml`, `mermaid` | console, or markdown when piped |
 | `--output` | `-o` | Write to a file instead of stdout | - |
@@ -164,3 +164,11 @@ ID         Date                  Pages   Entities  Stable @id  Conflicts  Site
 ## Exit codes
 
 `entities` exits 0 on every path that produced an answer, including a site that declares no JSON-LD at all. That is a finding, not a failure. Only a usage mistake or an unreadable store exits 1.
+
+## References
+
+- [The entity map on your machine](/entity-map/cli) — where the map appears in every report format, and the store tables behind this command
+- [The entity map](/entity-map) — what the map is and how to read it
+- [The entity map format](/entity-map/format) — the documents `-f json`, `-f jsonld` and `--diff -f json` produce
+- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator
+- [The entity map for agents](/entity-map/mcp) — the same queries as MCP tools

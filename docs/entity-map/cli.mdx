@@ -1,0 +1,159 @@
+---
+title: "The entity map on your machine"
+description: "Where the map appears in every report format, how to query it with squirrel entities, and how it is stored."
+---
+
+The entity map is built on every audit and every `squirrel analyze`, stored in the project database, and carried on the report. Nothing extra to enable, and it never touches the health score: it is a description of what a site declares, not a verdict on it.
+
+Three ways to reach it locally: read it in a report, query it with `squirrel entities`, or read the store directly.
+
+## In a report
+
+Every format carries the map, and each one carries as much of it as that format is good at.
+
+| Format | What you get |
+|---|---|
+| `html` | An interactive graph. Drag to pan, wheel to zoom, hover to highlight an entity's neighbours, click for detail. Dangling targets are drawn hollow. The complete map is embedded as JSON to drive it. |
+| `markdown` | An Entities section: a summary metrics table, the 25 largest entities, then conflicts, dangling references and entities without an `@id`. |
+| `text` | The summary line and the widest-reach entities, one per line. |
+| `json` | The whole map, unmodified, under `entities`. This is the same document [`format`](/entity-map/format) describes. |
+| `llm` | An `<entities>` block with the summary as attributes, the top entities, and the conflicts. Sized for a context window rather than for completeness. |
+| `xml` | Every node and conflict as elements, with the summary on the wrapper. Node properties, page URLs and the page index are not included. |
+
+```bash
+squirrel audit https://example.com
+squirrel report -f html -o report.html    # the graph
+squirrel report -f json | jq .entities    # the document
+```
+
+<Note>
+The `html` viewer and the hosted dashboard graph are the same behaviours on purpose, including the label rule: a budget of the top twelve entities by reach, growing as you zoom, with repeated labels pushed behind unique ones so forty unnamed `Offer` nodes do not spend the whole budget drawing the word "Offer" forty times.
+</Note>
+
+## `squirrel entities`
+
+Queries a stored map without re-auditing.
+
+```bash
+squirrel entities                                  # summary of the latest audit
+squirrel entities --list                           # stored audits and their entity counts
+squirrel entities "https://example.com/#org"       # one entity, by @id
+squirrel entities "Acme"                           # or by name
+squirrel entities --problem no-id                  # what needs fixing
+squirrel entities -f jsonld -o graph.json          # export
+squirrel entities --diff                           # what changed since last time
+```
+
+Full reference, with worked output for each: [`squirrel entities`](/cli/entities).
+
+### Flags
+
+| Flag | Meaning |
+|---|---|
+| `<query>` | Positional. An `@id`, a key, or a name. Without it you get a summary. |
+| `--list`, `-l` | List stored audits and their entity counts instead of reading one. |
+| `--crawl <id>` | Read a specific audit. Accepts an 8-character prefix. Defaults to the latest that has a map. |
+| `--type <t>` | Keep only these `@type` values. Repeatable or comma-separated. |
+| `--page <url>` | Keep only entities declared on a matching page. Repeatable. |
+| `--problem <p>` | Keep only entities with these problems. Repeatable or comma-separated. |
+| `--format <f>`, `-f` | Output format. Defaults to a console summary, or markdown when piped. |
+| `--output <path>`, `-o` | Write to a file instead of stdout. |
+| `--input <path>`, `-i` | Read an exported map instead of the store. Repeat twice for `--diff`. |
+| `--diff` | Compare two audits. |
+
+### Problems
+
+`--problem` takes any of five, and repeating the flag is an OR:
+
+| Value | Means |
+|---|---|
+| `no-id` | Declared on more than one page with no `@id`, so nothing ties the declarations together. |
+| `conflict` | Two declarations disagree on a property. |
+| `dangling` | References an `@id` that no crawled page declares. |
+| `single-page` | Declared on one page only. |
+| `split-identity` | The same type and name declared under two different keys. |
+
+Different filters combine as an AND. `--type Organization --problem no-id` keeps organizations that also have that problem.
+
+<Warning>
+`--page` matches a **substring** of the page URL, not a prefix and not a glob, so `--page /blog` matches `https://site/blog/post` and `https://site/tag/blog` alike. The hosted API's `page` filter is a prefix match instead. If you are comparing local output against the dashboard, that difference will show.
+
+A map loaded from the local store carries a complete page index, and the filter uses it, so the 50-page cap on a node's own list does not limit matching. A map read with `--input` from an export that has no page index falls back to that capped list, and can then miss an entity that really is declared on the page you asked for.
+</Warning>
+
+### Formats
+
+| Format | For |
+|---|---|
+| `json` | The canonical document. |
+| `jsonld` | A schema.org `@graph` you can paste into a validator. |
+| `html` | The standalone interactive graph. |
+| `markdown` | A table to read or commit. |
+| `csv` | A spreadsheet. |
+| `dot` | Graphviz. |
+| `graphml` | Gephi, yEd, Cytoscape. |
+| `mermaid` | A diagram in a conversation or a README. Capped at 150 declared entities; dangling placeholders are drawn outside that cap. |
+
+`--diff` accepts `markdown` (default) or `json` only.
+
+Every filter applies to every format, so `-f dot --type Organization` exports the organizations subgraph rather than the whole thing filtered afterwards.
+
+<Note>
+The `jsonld` export gives every entity an `@id`, inventing one for the entities the site left anonymous, because a `@graph` member with no identifier is not much use in a validator. Do not read that export back as evidence that a site's entities are identified. [The format page](/entity-map/format#the-json-ld-export) has the detail.
+</Note>
+
+## Comparing two audits
+
+```bash
+squirrel entities --diff                                   # previous vs latest, same site
+squirrel entities --diff --crawl 9c1de77a                  # that audit vs its predecessor
+squirrel entities --diff --crawl 4f2ab91c --crawl 9c1de77a # both sides named
+squirrel entities --diff --input before.json --input after.json
+squirrel entities --diff -f json                           # for a CI job
+```
+
+With no arguments it compares the latest against the previous audit **of the same site**, because the store holds every project and the two newest audits are routinely two different sites.
+
+The output separates what changed from what was not looked at. An entity absent from the newer audit is only **removed** when every page that declared it was crawled again; anything else is **not crawled again**. A smaller crawl therefore never reads as a site that deleted its structured data.
+
+An entity that gained or lost an `@id` is matched across the key change and reported once, with a **coverage** column saying whether the newer audit both revisited the pages that were wrong and found the replacement there. [The format page](/entity-map/format#the-change-set) explains why both halves are required.
+
+<Note>
+An audit that stored no entities is never picked automatically as the older side. Zero entities is indistinguishable from an audit that predates the entity map, and reading the second as the first would report every entity the site has today as brand new. Name both sides when you know which it was.
+</Note>
+
+## In the store
+
+The map lives in the project database, `~/.squirrel/projects/<project>/project.db` on macOS and Linux, in three tables. You can query them directly; nothing here is private.
+
+| Table | One row per | Notes |
+|---|---|---|
+| `entities` | Entity, per crawl | `key`, `entity_id`, `types` and `properties` as JSON, `occurrences`, `page_count`, `conflicts`, `dangling_refs`, `page_local`. |
+| `entity_edges` | Typed reference | `source`, `predicate`, `target`, `dangling`, `occurrences`. `target` is an `entities.key`; `dangling = 1` means no row has it. |
+| `entity_occurrences` | Entity × page | `key` and `normalized_url`. **Uncapped**, unlike the document's 50-page list. |
+
+`entity_occurrences` is the one worth knowing about. A node's `pages` array is capped at 50, so it cannot answer "every page that declares this Organization". This table can, and so can the document's own top-level `pages[].declares` index, which is not capped. What you cannot use is the node's page array.
+
+```sql
+-- every page declaring one entity, uncapped
+SELECT normalized_url FROM entity_occurrences
+WHERE crawl_id = ? AND key = 'id:https://example.com/#organization';
+
+-- entities declared on several pages with no @id, widest first
+SELECT key, name, page_count FROM entities
+WHERE crawl_id = ? AND entity_id IS NULL AND page_count > 1
+ORDER BY page_count DESC;
+```
+
+<Note>
+`page_count` on `entities` is the true count of distinct declaring pages, uncapped. The document's `pages.length + morePages` says the same thing; the document's `pages` array alone does not.
+</Note>
+
+## References
+
+- [`squirrel entities`](/cli/entities) — the command reference with worked output
+- [The entity map](/entity-map) — what it is and how to read it
+- [The entity map format](/entity-map/format) — the documents this produces
+- [The entity map in the cloud](/entity-map/cloud) — the same map, hosted
+- [The entity map for agents](/entity-map/mcp) — the MCP tools over the same data
+- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator

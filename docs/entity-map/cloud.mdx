@@ -1,0 +1,167 @@
+---
+title: "The entity map in the cloud"
+description: "The dashboard Entities page, its filters and exports, and the API that serves the same map."
+---
+
+A hosted audit produces the same map a local one does. The dashboard draws it, and the API serves it.
+
+## The Entities page
+
+At `/<org>/website/<id>/entities`, reached from the website sidebar or from the Entities button on a report.
+
+It hangs off the **website**, not off one report, because the questions worth asking span audits: did this get better, is the split identity still there, when did that reference break. An audit picker at the top selects which report to draw, defaulting to the newest that produced a map.
+
+### The cards
+
+Six summary numbers, each with its change against the previous audit: entities, types, pages without entities, stable `@id` share, conflicts, and dangling references.
+
+Null and zero are kept apart. A first audit shows no delta at all rather than a change from nothing, and a metric that held still says "No change" rather than showing a zero you have to interpret.
+
+<Note>
+The Conflicts card can read **"at least N"**. Three summary counters were added after version 1 shipped, so a map stored before them has them reconstructed from the entities that were stored. A published map is capped, which makes a reconstructed counter a floor rather than a site total. When either side of a comparison was reconstructed the delta is suppressed entirely: one estimate minus one total is not a change, and two estimates are two counts over possibly different caps.
+</Note>
+
+### The graph
+
+The same behaviours as the report's viewer, so the hosted graph and an emailed HTML report read the same way: wheel and pinch to zoom, drag to pan, fit to view, node size by occurrences, colour by primary type, hover to highlight an entity's neighbours and dim the rest, click to select, dangling targets drawn hollow.
+
+Labels are a **budget** rather than a zoom threshold: the top twelve by reach when fitted, growing with the square of the zoom, with repeated labels pushed behind every unique one. Without that last rule, forty unnamed `Offer` nodes spend the whole budget drawing the word "Offer" forty times.
+
+Layout runs once and the scene is then static, which is what keeps it usable at two thousand nodes.
+
+<Note>
+The graph needs WebGL. Without it the panel says so and the cards, filters and table keep working.
+</Note>
+
+### Filters
+
+Free text, page or URL prefix, problem, and the legend, which doubles as the type filter. They apply to the graph and the table together and run **client-side over the whole map**, so clicking a legend chip is instant rather than a round trip.
+
+The filter rules deliberately mirror the API's own, so an export never disagrees with what is on screen.
+
+Page-local entities, a page's own `WebPage`, `BreadcrumbList`, `ListItem`, `Question`, `Answer` and unnamed `ImageObject`, are hidden by default behind a toggle. They usually outnumber everything else: on kinsta.com that is 137 of 188 nodes.
+
+### The table
+
+Sortable, with conflicts and dangling references highlighted. Below `md` the graph is hidden and the table is the primary view. Selecting a row opens the detail panel, docked beside the graph on wider screens and as a sheet below it on narrow ones.
+
+### History
+
+<Warning>
+The history view, metric series over time and a change list between audits, is not built yet. It is tracked separately and the cards' single-step deltas are what exists today.
+</Warning>
+
+### If a site has no structured data
+
+The page says so and links to [Fixing structured data identity](/entity-map/fixing) rather than showing an empty graph. A site with no JSON-LD and an audit that stored no map look identical from the outside, and only one of them is worth acting on.
+
+## The API
+
+Two endpoints, both under a report. Authentication is the same as the rest of the [API](/api).
+
+### Get the map
+
+```http
+GET /v1/reports/{id}/entities
+```
+
+| Query | Meaning |
+|---|---|
+| `format` | `json`, `jsonld`, `html`, `markdown`, `csv`, `dot`, `graphml`, `mermaid`. Default `json`. |
+| `type` | Keep only entities carrying this `@type`. Case-insensitive. |
+| `page` | Keep only entities declared on this page URL, or one starting with it. |
+| `problem` | `no-id`, `conflict`, `dangling`, `single-page`, `split-identity`. |
+| `q` | Free-text match over name, `@id`, key and types. |
+| `include_page_local` | Include per-page types. Off by default. |
+
+The JSON response is the [map document](/entity-map/format) plus a `meta` object:
+
+```json
+{
+  "format": "squirrelscan/entity-map",
+  "version": 1,
+  "site": "https://example.com/",
+  "generatedAt": "2026-09-13T05:23:00.000Z",
+  "summary": { },
+  "nodes": [ ],
+  "edges": [ ],
+  "pages": [],
+  "meta": {
+    "reportId": "…",
+    "websiteId": "…",
+    "auditedAt": "2026-09-13T05:20:00.000Z",
+    "filtered": true,
+    "counts": { },
+    "pageFilterIncomplete": false,
+    "backfilled": []
+  }
+}
+```
+
+Three fields in `meta`, and one at the top level, change how you should read the rest.
+
+- **`filtered`** is true when a query filter removed at least one entity. **`summary` still describes the whole audit**; `meta.counts` carries the post-filter totals. Compare the two to see how much of the site you are looking at.
+- **`pageFilterIncomplete`** is true when a `page` filter ran against a map holding an entity whose declaring-page list was capped. It says the result **may** be missing entities that really are declared on that page, not that it is. Always false when no `page` filter was given.
+- **`backfilled`** names the summary counters that were reconstructed rather than stored, for a map published before they existed. A reconstructed counter can only be computed from the stored entities, and a published map is capped, so it reads low next to its un-reconstructed siblings. Render those as "at least N" rather than as site totals. Entity-level `pageLocal` is reconstructed exactly and is never listed here.
+- **`pages`** is empty on hosted maps. The published copy drops the per-page index for size, and the summary carries what a reader needs from it. Empty means not published, not "no pages".
+
+<Warning>
+This is the opposite of the local behaviour, and it is the difference most likely to catch you out. `squirrel entities --type Organization` returns a summary describing **the organizations that survived the filter**. The API returns the same filtered nodes with a summary describing **the whole site**, and puts the filtered totals in `meta.counts`.
+
+Neither is wrong, but a script that reads `summary.nodeCount` after filtering gets a different number from each.
+</Warning>
+
+<Warning>
+The `page` filter here is a **prefix** match, so `https://site/about` also matches `https://site/about-us`; add a trailing slash to scope to a directory. The CLI and the MCP tools use a substring match instead. Comparing hosted output against local output on the same filter will show the difference.
+</Warning>
+
+### A hosted map is a projection
+
+The local document is uncapped, because a file on disk costs nothing. The published copy is measured against a hard size gate, so it keeps the entities and references that carry the findings and drops the tail:
+
+| Limit | Published |
+|---|---|
+| Entities | 750 |
+| References | 1,500 |
+| Declaring pages per entity | 5 |
+| Distinct values per conflicting property | 5 |
+| Any single string property | 512 characters |
+| The whole map | 512 KB |
+
+The page cap is the one to watch. Locally an entity lists up to 50 of its declaring pages; hosted it lists 5, with the rest in `morePages`. Anything that needs the real set has to count `pages.length + morePages` rather than reading the array, and a `page` filter over a hosted map is correspondingly more likely to set `pageFilterIncomplete`.
+
+Entity and reference counts alone would not hold the size, because property values are site-controlled strings: fifty conflict values of a megabyte each would pass a node count and still blow the limit. The byte ceiling is the real backstop and the per-string caps are what usually keep it from engaging.
+
+### Get one entity
+
+```http
+GET /v1/reports/{id}/entities/{key}
+```
+
+One node with its properties, occurrences, conflicts, declaring pages, and the edges in and out of it.
+
+`key` accepts the node key, the entity's `@id`, or its exact display name. An `@id` is a URL, so percent-encode it and escape `/` as `%2F`:
+
+```bash
+curl -H "Authorization: Bearer $SQUIRRELSCAN_API_KEY" \
+  "https://api.squirrelscan.com/v1/reports/$REPORT/entities/https%3A%2F%2Fexample.com%2F%23organization"
+```
+
+### Untrusted content
+
+Every entity name, `@id`, type and property value in the map is declared by the audited site. The structure around them is not: the discriminators, timestamps, key prefixes, counts and any generated `@id` are squirrelscan's.
+
+The `html` rendering escapes it and is safe to open. The `markdown` rendering escapes only table delimiters, which is enough while it is read as markdown: **if you render it to HTML, sanitize it first**, or take `format=json` and render the fields yourself.
+
+## Exports
+
+The dashboard's export menu offers the same formats as the API. Anything the hosted renderer does not implement is shown disabled rather than hidden, so the menu and the documented contract agree rather than quietly diverging.
+
+## References
+
+- [The entity map](/entity-map) — what it is and how to read it
+- [The entity map format](/entity-map/format) — the documents these endpoints return
+- [The entity map on your machine](/entity-map/cli) — the same map locally
+- [The entity map for agents](/entity-map/mcp) — the MCP tools over the same data
+- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator
+- [API reference](/api) — authentication and the rest of the surface
