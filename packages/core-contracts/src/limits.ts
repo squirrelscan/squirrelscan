@@ -22,6 +22,38 @@ import type { CoverageMode } from "./index";
 // retry short every time (nuxt.daigo.ru, verified 2026-09-09 on v0.0.93). The
 // runtime moves by the same 80s so the post-crawl slice (rules, prefetch,
 // publish) keeps its 110s and both invariants above hold.
+/**
+ * The phases a run's liveness is judged in (#2112).
+ *
+ * Deliberately COARSER than the container's own `PostCrawlStage` vocabulary. A
+ * stall window is a statement about how long a phase may legitimately look
+ * silent, and that is a property of the KIND of work, not of the stage label:
+ * `rules_site_fetch` and `rules_page_rules` are both "rules", and splitting the
+ * window between them would mean tuning five numbers where one answers the
+ * question. The container maps its current stage onto one of these.
+ *
+ * Ordered as a run passes through them, which is also the order to read the
+ * windows below in.
+ */
+export const AUDIT_LIVENESS_PHASES = [
+  "crawl",
+  "external_links",
+  "cloud_prefetch",
+  "rules",
+  "publish",
+] as const;
+
+export type AuditLivenessPhase = (typeof AUDIT_LIVENESS_PHASES)[number];
+
+/**
+ * The two wall-clock ceilings, by what the run is paying for.
+ *
+ * A class rather than a plan id because the ceiling is a safety net against a
+ * wedged container, not a product feature, and every paid plan wants the same
+ * answer. The private side maps its container classes onto these.
+ */
+export type AuditPlanClass = "free" | "paid";
+
 export const AUDIT_RUNTIME = {
   timeoutByCoverageMs: {
     quick: 330_000,
@@ -97,7 +129,106 @@ export const AUDIT_RUNTIME = {
     surface: 105_000,
     full: 105_000,
   } satisfies Record<CoverageMode, number>,
+  // ── Liveness (#2112) ──────────────────────────────────────────
+  //
+  // How long a phase may make NO progress before the run is treated as wedged.
+  // This is what terminates a run now; the wall-clock budgets above bound
+  // individual phases, and `absoluteCeilingMsByPlanClass` is the backstop for a
+  // run that keeps reporting progress forever.
+  //
+  // The premise: a run that is still fetching pages or finishing rule batches is
+  // not a run to kill, however long it has been going. A 50,000-page site is
+  // slow, not broken, and the fixed cap it used to die under was a statement
+  // about our patience rather than about its health. Progress is a page fetched,
+  // a rule batch completed, a stage event, or a heartbeat whose progress counter
+  // moved — a bare heartbeat is a liveness signal from the PROCESS and says
+  // nothing about the WORK, so it does not reset these.
+  //
+  // Sized per phase from what each one can legitimately do between two progress
+  // signals, with room for the worst case rather than the typical one:
+  //   crawl           — one page. Bounded by the per-URL watchdog (max(120s, 6xT))
+  //                     plus rate-limit backoff, which caps at 5 minutes per host
+  //                     (#1829). A host that throttles hard can therefore be
+  //                     silent for most of ten minutes and still be healthy.
+  //   external_links  — one batch of outbound link checks against third-party
+  //                     hosts we do not control, each with its own timeout and
+  //                     backoff. Same shape as crawl and the same window.
+  //   cloud_prefetch  — one enrichment call. The per-call client timeout is 90s
+  //                     and the phase batches 20 pages at a time, so a slow
+  //                     provider can hold several minutes without being stuck.
+  //   rules           — one rule batch over one page set. The dominant cost on a
+  //                     large crawl (~2s/page on script-heavy pages, #1864), and
+  //                     the sub-phases that report progress are coarse, so this
+  //                     gets half again what crawl does.
+  //   publish         — one chunk of a chunked publish, which on a large report
+  //                     is a multi-megabyte upload that may be retried. Matches
+  //                     rules rather than crawl because a failed chunk is retried
+  //                     with backoff before anything is reported.
+  //
+  // Ten and fifteen minutes are round numbers, and intentionally so: every one of
+  // them is far above the worst case measured for its phase, because the cost of
+  // being wrong is asymmetric. Too long and a wedged container burns until the
+  // ceiling; too short and we kill a healthy audit of a large site, which is the
+  // exact failure this replaces.
+  stallWindowMsByPhase: {
+    crawl: 600_000,
+    external_links: 600_000,
+    cloud_prefetch: 600_000,
+    rules: 900_000,
+    publish: 900_000,
+  } satisfies Record<AuditLivenessPhase, number>,
+  // The backstop, per plan class: the point past which a run is wedged whatever
+  // its progress events claim.
+  //
+  // Free keeps the hour it has always had. Free is capped at 500 pages and 500 x
+  // `runPerPageMs` is exactly that hour, so the ceiling has never been what bound
+  // a free run and this changes nothing for it.
+  //
+  // Paid goes to 24h, up from the 4h that shipped in the private worker (#1993).
+  // Four hours was chosen as a wall-clock BUDGET, and as a budget it was
+  // defensible; as a liveness backstop it is far too tight, because the whole
+  // point is that a run making steady progress on a 500,000-page site should
+  // finish. A run that is genuinely wedged is now caught by its stall window in
+  // ten or fifteen minutes, not in four hours, so raising the backstop makes the
+  // common failure FASTER to detect, not slower.
+  //
+  // NOTE for anything that derives an operational window from this: the container
+  // hard timeout and the deploy rollout grace are sized from the ceiling, and a
+  // 24h grace is a real cost (a deploy holds old-image containers that long).
+  // Whether those follow the ceiling is a private-side decision and should be a
+  // deliberate one.
+  absoluteCeilingMsByPlanClass: {
+    free: 3_600_000,
+    paid: 24 * 60 * 60 * 1000,
+  } satisfies Record<AuditPlanClass, number>,
 } as const;
+
+/**
+ * Stall window for a phase, failing OPEN to the longest window there is.
+ *
+ * An unrecognized phase is a phase this build does not know about, which is
+ * evidence the caller is newer than this contract, not evidence that the run is
+ * stuck. Killing a healthy audit is the expensive mistake here and waiting an
+ * extra five minutes is the cheap one, so the unknown takes the most generous
+ * answer rather than a default that happens to be first in the table.
+ */
+export function stallWindowForPhaseMs(phase: string | null | undefined): number {
+  const windows = AUDIT_RUNTIME.stallWindowMsByPhase;
+  return phase && Object.hasOwn(windows, phase)
+    ? windows[phase as AuditLivenessPhase]
+    : Math.max(...Object.values(windows));
+}
+
+/**
+ * The longest stall window any phase has.
+ *
+ * For callers that must bound a run whose phase they do not know — the reaper
+ * reading a run that has not reported one yet — and that therefore cannot pick a
+ * window. Derived so adding a longer phase moves it.
+ */
+export const MAX_STALL_WINDOW_MS = Math.max(
+  ...Object.values(AUDIT_RUNTIME.stallWindowMsByPhase),
+);
 
 // ── Fix Runner ──────────────────────────────────────────────────
 export const FIX_DEFAULTS = {
