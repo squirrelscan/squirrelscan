@@ -362,7 +362,7 @@ describe("registerRun", () => {
   // balance branch that could never fire and the wall showed no numbers at all.
   test("reads the wall's cost, balance, reset date and offer off the ENVELOPE", async () => {
     const upgrade = {
-      url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01M12TN7ABCDEFGHJKMNPQRSTV",
+      url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A",
       plan: "pro",
       interval: "month",
       name: "Pro",

@@ -187,7 +187,7 @@ describe("lowBalanceFooterLines", () => {
 // sells credits the blocked audit cannot spend.
 describe("the server's offer", () => {
   const OFFER = {
-    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01M12TN7ABCDEFGHJKMNPQRSTV",
+    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A",
     plan: "pro",
     interval: "month",
     name: "Pro",
@@ -198,7 +198,7 @@ describe("the server's offer", () => {
 
   test("the pitch carries the org-targeted link, not the static marketing URL", () => {
     const pitch = text(offerPitchLines(OFFER, "cli-audit"));
-    expect(pitch).toContain("org=01M12TN7ABCDEFGHJKMNPQRSTV");
+    expect(pitch).toContain("org=01TEST0000000000000000000A");
     expect(pitch).toContain("plan=pro");
     expect(pitch).toContain("interval=month");
     expect(pitch).not.toContain(UPGRADE);
@@ -227,7 +227,7 @@ describe("the server's offer", () => {
 
 describe("registerFailureLines with a server offer (#2183)", () => {
   const OFFER = {
-    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01M12TN7ABCDEFGHJKMNPQRSTV",
+    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A",
     plan: "pro",
     interval: "month",
     name: "Pro",
@@ -281,7 +281,7 @@ describe("registerFailureLines with a server offer (#2183)", () => {
 
 describe("lowBalanceFooterLines with a server offer (#2183)", () => {
   const OFFER = {
-    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01M12TN7ABCDEFGHJKMNPQRSTV",
+    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A",
     plan: "pro",
     interval: "month",
     name: "Pro",
