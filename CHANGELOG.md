@@ -17,19 +17,30 @@ How it works:
 
 ## [Unreleased]
 
+Every audit now builds a map of the entities your site declares, a new command and five MCP tools read it, thirteen rules check it, and the leaked-secrets scanner went from a thousand false alarms on real sites to a few hundred correct public keys.
+
 ### Added
 
-- `squirrel entities` queries the entity map every audit now builds: a summary of
-  what your site declares, a lookup by `@id`, key or name, and `--list` over
-  stored audits. `--type`, `--page` and `--problem` narrow the result in every
-  output format, not just on screen.
-- Export the graph as `csv`, `dot`, `graphml` or `mermaid`, alongside the
-  existing `json`, `jsonld`, `html` and `markdown`.
-- `squirrel entities --diff` compares two audits of a site and reports entities
-  added and removed, `@id` changes, and new and resolved conflicts and dangling
-  references. An entity is only called removed when every page that declared it
-  was crawled again; anything else is reported as not crawled, so a smaller
-  crawl never reads as a site that deleted its structured data.
+- **Entity map on every audit.** Structured data across the whole crawl is resolved into one graph (organisations, people, products, articles, and the pages that declare them), stored with the audit and embedded in every report format. Report-only: no score changes.
+- `squirrel entities` queries that map: a summary of what your site declares, a lookup by `@id`, key or name, and `--list` over stored audits. `--type`, `--page` and `--problem` narrow the result in every output format, not just on screen.
+- Export the graph as `csv`, `dot`, `graphml` or `mermaid`, alongside the existing `json`, `jsonld`, `html` and `markdown`.
+- `squirrel entities --diff` compares two audits of a site and reports entities added and removed, `@id` changes, and new and resolved conflicts and dangling references. An entity is only called removed when every page that declared it was crawled again; anything else is reported as not crawled, so a smaller crawl never reads as a site that deleted its structured data.
+- Five entity tools on `squirrel mcp`: `list_entities`, `get_entity`, `get_entity_graph`, `compare_entities` (with `occurrence_threshold`) and `get_entity_findings`. They read the local project store: no auth, no credits, no round trip.
+- Thirteen `schema/entity-*` rules over the map: missing organisation and website entities, split identities, conflicting declarations, dangling references, orphans, publisher mismatches, type drift, `@id` format, missing `sameAs`, authors, and one local business per page. Each has a rule doc page.
+- Leaked-secrets decodes what it scans: HTML character references, `\u` and `\x` escapes in scripts, and base64 runs that decode to text (data URIs and SRI hashes are never decoded). AWS access key ids, GitHub tokens, JWTs (Supabase `service_role` is high, `anon` is public, an expired token is a new `leaked-secrets-expired` info check), Algolia secured keys, Stripe, Slack and Sentry tokens are decoded offline so the finding carries what the token is, and a GitHub token with a bad checksum is dropped.
+
+### Changed
+
+- Leaked-secrets precision. Prefix patterns respect a left boundary, brand keywords must sit within 40 characters before the value, minified member keys no longer count as assignments, and public-by-design keys (PostHog, Shopify Storefront, Mixpanel, Raygun, and generic API keys under twelve public brands) report as public instead of leaks. On a private corpus of 383 real pages: 1,235 findings before, 352 after, none high. Scans are also faster.
+- The Discord bot token pattern no longer goes quadratic on long base64 runs (1.6 s to 2.5 ms on a 200 KB data URI page).
+
+### Fixed
+
+- Reports print the page limit you asked for alongside the one the run used, so a run clamped from 10,000 to 4,320 pages no longer tells you to raise a limit that was already higher.
+
+### Docs
+
+- New pages for the entity map (CLI, formats, cloud), cloud crawl scope, include/exclude patterns and authorised crawls; the rule catalogue counts refreshed.
 
 ## v0.0.95
 
