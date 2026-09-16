@@ -43,6 +43,7 @@ Every audit now builds a map of the entities your site declares, a new command a
 - Reports print the page limit you asked for alongside the one the run used, so a run clamped from 10,000 to 4,320 pages no longer tells you to raise a limit that was already higher.
 - Merged check messages carry their counts instead of a bare `N` (#374). When pages disagree on a count the message shows the range (`3 to 6 image(s) missing alt`); pages that disagree on any other number (a date, a size, a code) keep their own message instead of being merged. Digits inside words are left alone, so `H1` no longer reads `HN`.
 - `perf/bad-caching` no longer fails a page that revalidates correctly (#375). A document served with `max-age=0` or `no-cache` plus an ETag or Last-Modified declares a caching policy and passes; `no-store`, and a validator with no `Cache-Control` and no `Expires`, still do not. On the launch corpus this check failed 163 of 196 sites, most of them doing the right thing.
+- `integrity/template-discontinuity` no longer calls a site's own signed-out or empty-state page "likely injected" (#376). A page that loads the site's own stylesheets or scripts is reported for review, never escalated; shared public hosts (font and script CDNs) do not count as the site's own. Escalation is now a warning rather than a failure, so one off-template page cannot zero Site Integrity, and the escalation is withheld when the crawl hit its page limit with fewer than `minBaselinePagesWhenCapped` pages (default 20).
 
 ### Docs
 
