@@ -36,46 +36,46 @@ git diff tests/security/leaked-secrets/expected.json
 Cases carrying `knownGap` assert what the detector does TODAY, so the suite is
 green, and each registers a `test.todo` naming the fix. Bun hides todo names,
 so the suite also prints the deduplicated list at the top of its output.
-Fixing a gap means flipping its expectation in `cases.ts` or `negatives.ts`.
+Fixing a gap means flipping its expectation in `cases.ts`, `negatives.ts` or
+`real-world.ts`.
 
-The list as of this commit (20 distinct), the six the harness was briefed with first:
+### Closed by pub#357 / pub#363
+
+Left-boundary guard on every prefix pattern (Telegram in a UUID pair, Resend
+in `_Care_Dry…`, `fooghp_`/`xsk_live_`/`abcAKIA`); a 40-character bounded
+look-behind for the context tier instead of a ±500 window (ordinary-word
+keywords beside hashes and nonces); minified member keys (`e.k=`) and
+keyword-in-attribute names (`data-heroku-dyno`) are no longer credential
+contexts; the false-positive list is anchored to the value's head and tail
+(Twitter bearer tokens fire, a token containing `xxx` is kept); PayPal runs
+after Azure and needs a value position (no more `azione-…` slugs); DigitalOcean
+Spaces runs after New Relic; Sanity needs the `sanity` keyword; generic
+assignments skip values with whitespace or under a length-scaled entropy
+floor (i18n sentences); a quoted value under a credential key with a digit in
+it is a literal, so camelCase, snake_case and `on…` openings no longer drop
+real tokens; word-bounded context values (Cohere no longer claims the head of
+a Together key). The keyword prefilter is declared per pattern and asserted
+by the meta-test.
+
+### Remaining (13 distinct)
 
 1. Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live runs first and the overlap dedup drops it.
-2. PayPal `[Aa][Zz][Aa-zZ0-9-_]{60,}` omits uppercase B–Y, so a real mixed-case client id never fires.
-3. Sanity `sk[a-zA-Z0-9]{30,}` fires on any `sk`-prefixed identifier or CSS class of 32+ chars.
-4. Inline scripts are scanned twice (inside the serialized HTML, then on their own); the rule's dedup hides it, the cost is paid.
-5. PostHog `phc_` project keys are not recognised at all.
-6. No size cap: a 5 MB external script is scanned in full.
+2. `Authorization: Bearer <value>` around a value containing `.` (a JWT) reports a second medium "Bearer Token" for the prefix. For a Supabase anon JWT that is a false warning on a public key.
+3. `Authorization: Bearer <value>` with a value under 20 chars is reported by neither tier.
+4. PayPal's class omits uppercase B–Y, so a real mixed-case client id never fires.
+5. Neon `neon_[\w-]{32,}` matches a `neon_`-prefixed hyphenated URL slug (a left boundary does not help: `/` precedes it).
+6. PostHog `phc_` project keys are not recognised at all.
+7. The "Supabase Anon Key" pattern is the generic HS256 JWT header: any session JWT with a 100+ char payload reports as Supabase anon, and a `service_role` JWT reports as public.
+8. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
+9. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
+10. Scoping question: Shopify Storefront API access tokens and web-pixel `Api-Key` values are public storefront identifiers but report as medium generic assignments.
+11. No size cap: a 5 MB external script is scanned in full (cost, not a wrong result).
 
-Found while building the corpus:
-
-7. Twitter bearer tokens open with 19 `A`s and the false-positive filter `/a{16,}/i` drops every one of them.
-8. `FALSE_POSITIVE_PATTERNS` are unanchored substring tests: a random key containing `xxx`, `fake`, `sample` or `dummy` anywhere is dropped, prefix and all.
-9. Sanity `sk…{30,}` also fires inside base64 image data URIs (an `sk` followed by 30 alphanumerics is routine in a few KB of base64).
-10. `Authorization: Bearer <value>` around a value containing `.` (JWTs, Discord bot tokens) reports a second medium "Bearer Token" for the prefix. For a Supabase anon JWT that is a false warning on a public key.
-11. `Authorization: Bearer <value>` with a value under 20 chars is reported by neither tier (LinkedIn's 16-char secret).
-12. PayPal runs before Azure Storage Key and claims a substring of a lowercase-heavy AccountKey, downgrading a high finding to public info.
-13. DigitalOcean Spaces `DO[A-Z0-9]{20,}` runs before New Relic and claims the tail of any NRAL key containing `DO`, downgrading high to medium.
-14. With two brand keywords in one window the first CONTEXT pattern (Cohere, 40 alnum) claims a prefix of a longer Together key.
-15. `looksLikeCodeIdentifier` drops keyed values that open lowercase-then-uppercase (`abK…`, roughly 30% of random alphanumeric keys).
-16. It also drops values starting with `on`/`is`/`get`/… regardless of what follows.
-17. It also drops values carrying an `_` next to a lowercase letter; real Cloudflare tokens do.
-18. The "Supabase Anon Key" pattern is the generic HS256 JWT header: any first-party session JWT with a 100+ char payload is reported as a Supabase anon key, and a Supabase `service_role` JWT (full database access) is reported as the public-by-design anon key because the `role` claim is never decoded.
-19. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
-20. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
-
-Real-world shapes (`real-world.ts`, synthesised from what the detector fired on across 776 audited sites; 13 more distinct gaps, 33 total):
-
-21. The CONTEXT keywords `linkedin`, `cloudflare`, `together`, `segment`, `heroku`, `mistral`, `datadog` are ordinary words on real pages (share links, CDN hosts, prose), and a hash, nonce or UUID nearby under a minified member key (`e.k="…"`) or a keyword-named attribute (`data-heroku-dyno`) reports. The window spans the whole document, so a keyword in an anchor reaches a value in a script.
-22. Prefix patterns have no left boundary: `re_` fires inside `_Care_Dry…` in an image filename, `[0-9]{8,10}:` fires on the tail of a UUID pair in a Webflow id path, and `fooghp_…`, `xsk_live_…`, `abcAKIA…` all report.
-23. Neon `neon_[\w-]{32,}` matches any `neon_`-prefixed hyphenated URL slug.
-24. PayPal matches Italian/Malay words (`azione-…`, `azilah-…`) inside 60+ char hyphenated slugs.
-25. Generic Secret Assignment accepts human sentences: i18n labels under `password`/`secret` keys report (five findings on one Clerk-style i18n object).
-26. Scoping questions, not hard misses: Shopify Storefront API access tokens and web-pixel `Api-Key` values are public storefront identifiers but report as medium generic assignments.
-
-Also pinned in `real-world.ts`: Bearer templates and concatenations stay silent while a literal reports; `AIza…` lands in the public tier, never high; a shared theme bundle carrying the same Sentry DSN three times yields one finding per distinct value.
-
-Documented ordering rule, not a gap: the generic FAST assignments run before the CONTEXT tier, so a value under `auth0ClientSecret` or `twilioAuthToken` reports as "Generic Secret/Token Assignment", not under the brand (probe `generic-assignment-outranks-a-keyed-brand-pattern`).
+Documented choices, not gaps: unquoted identifiers under a credential key stay
+silent (`apiKey: getSegmentKey`); `password: "changeme"` reports (a weak <!-- pragma: allowlist secret -->
+credential as often as a placeholder); the generic FAST assignments outrank
+the context tier, so a value under `auth0ClientSecret` reports as "Generic
+Secret Assignment".
 
 ## Benchmark
 
@@ -97,6 +97,16 @@ best of N after one unmeasured warm-up pass.
 
 Apple M2, 16 GB, macOS 24.6.0, Bun 1.3.14, commit `10ef2e7`, 2026-09-16, seed 1, 3 iterations:
 
-| corpus | bodies | best | mean | ms/MB | findings | peak RSS |
+| commit | iterations | best | mean | ms/MB | findings | peak RSS |
 |---|---|---|---|---|---|---|
-| 66.67 MB (200 pages, 51 external scripts) | 400 | 946 ms | 991 ms | 14.2 | 145 | 383 MB |
+| `10ef2e7` (before pub#357), first baseline run | 3 | 946 ms | 991 ms | 14.2 | 145 | 383 MB |
+| `cd9f746` (origin/main, stashed detector), A/B run | 7 | 1247 ms | 1773 ms | 18.7 | 144 | 243 MB |
+| pub#357 + pub#363, same A/B run | 7 | 1081 ms | 1434 ms | 16.2 | 148 | 248 MB |
+
+The A/B pair was measured back to back on the same 66.67 MB corpus (200
+pages, 53 external scripts, 400 bodies), same seed, on a loaded machine: both
+rows are slower in absolute terms than the first baseline, and the pair is the
+comparison that holds (13% faster best-of-7, 19% faster mean). Findings went
+up because Twitter bearer tokens and the values the old identifier heuristic
+dropped now report; time went down because the context tier reads a
+40-character region per keyword instead of a 1,128-character window.
