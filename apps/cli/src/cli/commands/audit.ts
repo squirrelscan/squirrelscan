@@ -2,7 +2,10 @@
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
 
-import { CloudClientError } from "@squirrelscan/cloud-client";
+import {
+  CloudClientError,
+  type UpgradeOffer,
+} from "@squirrelscan/cloud-client";
 import {
   auditStatusToLifecycle,
   computeCost,
@@ -80,7 +83,14 @@ import {
   startRunHeartbeat,
 } from "@/lib/run-tracker";
 import { syncTechnologies } from "@/lib/technology-sync";
-import { AUDIT_PRICING_LINE, proPitchLines, upgradeUrl } from "@/lib/upgrade";
+import {
+  AUDIT_BASE_CREDITS,
+  AUDIT_PRICING_LINE,
+  offerPitchLines,
+  proPitchLines,
+  resetDateLabel,
+  upgradeUrl,
+} from "@/lib/upgrade";
 import { getApiUrl } from "@/self/api";
 import {
   API_TOKEN_ENV_VAR,
@@ -199,6 +209,12 @@ export function computePreflightAffordability(opts: {
    * Absent = metered.
    */
   unlimited?: boolean;
+  /**
+   * #2183: when the monthly grant comes back (`balance.periodEnd`). Waiting is
+   * a real answer to a shortfall — an audit that would degrade halfway is often
+   * worth postponing — but only once it has a date on it.
+   */
+  resetAt?: string | null;
 }): PreflightAffordability {
   const base = computeCost("audit_base", 1);
   const renderCost =
@@ -207,12 +223,18 @@ export function computePreflightAffordability(opts: {
       : 0;
   const estimate = base + renderCost;
   const shortfall = !opts.unlimited && opts.balance < estimate;
+  const resetOn = resetDateLabel(opts.resetAt);
   const warningLines = shortfall
     ? [
         `⚠ This audit may cost up to ${estimate.toLocaleString("en-US")} credits ` +
           `(${base} base + up to ${renderCost.toLocaleString("en-US")} to render ${opts.maxPages} pages), ` +
           `but your balance is ${opts.balance.toLocaleString("en-US")}.`,
-        `  Charging stops when credits run out — later pages won't render. Top up: ${opts.topUpUrl}`,
+        // #2183: the same four facts the other CLI walls carry. `topUpUrl` is
+        // the server's org-scoped link when there is one, so one click lands on
+        // checkout for the org that is short rather than the last-used one.
+        `  Charging stops when credits run out — later pages won't render.` +
+          (resetOn ? ` Credits reset ${resetOn}.` : "") +
+          ` Top up: ${opts.topUpUrl}`,
       ]
     : [];
   return { base, renderCost, estimate, shortfall, warningLines };
@@ -252,19 +274,33 @@ export function registerFailureLines(
       `  ${fmt.dim("The server may be running an older build. The audit itself ran locally and its results below are complete.")}`,
     ];
   }
+  // #2183: cost, remaining and reset date, all read off the refusal. `required`
+  // is what the server actually refused, which is not always the flat base — a
+  // future price change would otherwise have the CLI quoting a stale number
+  // from a binary nobody can correct.
+  const needed = failure.required ?? AUDIT_BASE_CREDITS;
   const balanceLine =
     failure.balance != null
-      ? `You have ${failure.balance.toLocaleString("en-US")} credits. ${AUDIT_PRICING_LINE}`
-      : AUDIT_PRICING_LINE;
+      ? `You have ${failure.balance.toLocaleString("en-US")} credits and this audit needs ${needed.toLocaleString("en-US")}. ${AUDIT_PRICING_LINE}`
+      : `This audit needs ${needed.toLocaleString("en-US")} credits. ${AUDIT_PRICING_LINE}`;
+  // Waiting is a real answer to "out of credits", and it was never priced
+  // against a date before — so nobody could weigh it against paying.
+  const resetOn = resetDateLabel(failure.resetAt);
   return [
     fmt.yellow(
       "⚠ Out of cloud credits. This run is not tracked in your dashboard."
     ),
     `  ${balanceLine}`,
+    ...(resetOn
+      ? [`  ${fmt.dim(`Your monthly credits reset on ${resetOn}.`)}`]
+      : []),
     // Say plainly that nothing was lost. A warning that reads like a failure is
     // why "the audit still ran" never landed.
     `  ${fmt.dim("The audit itself ran locally and its results below are complete.")}`,
-    ...proPitchLines("cli-audit"),
+    // The server's own offer when it sent one: its link already names the org
+    // that hit the wall, so the upgrade is one click rather than a login, an
+    // org switch and a hunt for billing.
+    ...offerPitchLines(failure.upgrade, "cli-audit"),
   ];
 }
 
@@ -318,6 +354,14 @@ export function lowBalanceFooterLines(opts: {
    * must never fire for one. Absent = metered.
    */
   unlimited?: boolean;
+  /**
+   * #2183: the server's offer for THIS org, off `GET /v1/credits`. Its link
+   * already names the org, so the upgrade is one click from the terminal.
+   * Absent on an older API; the pitch then falls back to the static URL.
+   */
+  upgrade?: UpgradeOffer | null;
+  /** When the monthly grant comes back (`balance.periodEnd`). */
+  resetAt?: string | null;
 }): string[] {
   const { balance, monthlyCredits, plan } = opts;
   if (opts.unlimited) return [];
@@ -341,8 +385,22 @@ export function lowBalanceFooterLines(opts: {
         `${balance.toLocaleString("en-US")} credits left. ${AUDIT_PRICING_LINE}`
       );
 
-  if (plan === "free") return [headline, ...proPitchLines("cli-audit")];
-  return [headline, `  Top up: ${fmt.cyan(upgradeUrl("cli-audit"))}`];
+  const resetOn = resetDateLabel(opts.resetAt);
+  const resetLine = resetOn
+    ? [`  ${fmt.dim(`Your monthly credits reset on ${resetOn}.`)}`]
+    : [];
+
+  if (plan === "free")
+    return [
+      headline,
+      ...resetLine,
+      ...offerPitchLines(opts.upgrade ?? null, "cli-audit"),
+    ];
+  return [
+    headline,
+    ...resetLine,
+    `  Top up: ${fmt.cyan(opts.upgrade?.url ?? upgradeUrl("cli-audit"))}`,
+  ];
 }
 
 /**
@@ -1027,6 +1085,13 @@ export const audit = defineCommand({
       // White-label branding for local html/markdown/text/xml exports (#810).
       // Present only when the signed-in org is on the Team plan (API decides).
       let reportBranding: ReportBranding | undefined;
+      // #2183: the server's upgrade offer and the credit reset date, captured
+      // from the same preflight read as the balance. Both walls the CLI can
+      // show — the preflight drop to local-only, and the end-of-run low-balance
+      // footer — happen WITHOUT a 402, so this is the only place they can get
+      // an org-targeted link and a date.
+      let upgradeOffer: UpgradeOffer | null = null;
+      let creditsResetAt: string | null = null;
       // Did the user EXPECT cloud (had a token) but we can't use it this run?
       // Drives the interactive guard below. null = no outage (clean state).
       let cloudOutage: "expired" | "unreachable" | null = null;
@@ -1034,12 +1099,15 @@ export const audit = defineCommand({
         kv("Account", fmt.dim("offline (--offline) — cloud features disabled"));
       } else if (statusClient && accountLabel) {
         try {
-          const { balance, plan, branding } = await statusClient.getBalance();
+          const { balance, plan, branding, upgrade } =
+            await statusClient.getBalance();
           startingBalance = balance.total;
           unlimitedCredits = isUnlimitedBalance(balance);
           accountPlan = plan.id === "free" ? "free" : "paid";
           planMonthlyCredits = plan.monthlyCredits;
           reportBranding = branding;
+          upgradeOffer = upgrade ?? null;
+          creditsResetAt = balance.periodEnd ?? null;
           // Pricing v10 (#391): every cloud audit debits a flat base at
           // registration. A balance below it can't start one — run local-only
           // (no register, no cloud calls, no publish) instead of letting the
@@ -1051,9 +1119,12 @@ export const audit = defineCommand({
           // the same failure mode with a real empty balance).
           const auditBase = computeCost("audit_base", 1);
           if (!canStartCloudAudit(balance)) {
+            // #2183: the org-targeted link when the server sent one. This is
+            // the CLI's most-seen credit wall — the run never registers, so it
+            // never collects the 402 that carries the same offer.
             kv(
               "Account",
-              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${auditBase}-credit audit base, running local-only`)} · upgrade: ${fmt.cyan(upgradeUrl("cli-audit"))}`
+              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${auditBase}-credit audit base, running local-only`)} · upgrade: ${fmt.cyan(upgrade?.url ?? upgradeUrl("cli-audit"))}`
             );
           } else {
             signedIn = true;
@@ -1451,8 +1522,10 @@ export const audit = defineCommand({
           balance: startingBalance,
           maxPages,
           cloudRendering,
-          topUpUrl: upgradeUrl("cli-audit"),
+          // #2183: the server's org-scoped link when the preflight read one.
+          topUpUrl: upgradeOffer?.url ?? upgradeUrl("cli-audit"),
           unlimited: unlimitedCredits,
+          resetAt: creditsResetAt,
         });
         if (preflight.shortfall) {
           log("");
@@ -2275,6 +2348,8 @@ export const audit = defineCommand({
               monthlyCredits: planMonthlyCredits,
               plan: accountPlan,
               unlimited: unlimitedCredits,
+              upgrade: upgradeOffer,
+              resetAt: creditsResetAt,
             })
           );
           // #2182: a signed-in user whose reports never reach the dashboard has

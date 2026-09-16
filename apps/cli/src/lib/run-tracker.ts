@@ -15,6 +15,8 @@
  * runs register. `--no-publish` still registers (the run shows in YOUR
  * dashboard) — publishing only governs the shareable report.
  */
+import type { UpgradeOffer } from "@squirrelscan/cloud-client";
+
 import { isApiKey } from "@squirrelscan/core-contracts/api-keys";
 
 import { cliApi } from "@/lib/api-client";
@@ -169,7 +171,20 @@ function runPath(runId: string, suffix = "", base = lifecycleBase()): string {
 type RegisterResponseBody = Partial<Omit<RegisteredRun, "websiteId">> & {
   websiteId?: string | null;
   balance?: { total?: number } | null;
-  error?: { code?: string; message?: string };
+  /**
+   * The typed error envelope (apps/api lib/api-error.ts). Everything about a
+   * FAILURE lives under here — including `balance`, which is why the top-level
+   * `balance` above only ever describes a SUCCESSFUL register. Reading the
+   * failure balance off the top level (as this did until #2183) silently found
+   * nothing, so the credit wall printed no balance at all.
+   */
+  error?: {
+    code?: string;
+    message?: string;
+    required?: number;
+    balance?: { total?: number; periodEnd?: string | null } | null;
+    upgrade?: UpgradeOffer | null;
+  };
   /**
    * #1841. Present only when the server declined to create a hosted website for
    * this run. Absent on every older server and on every ordinary register, so
@@ -206,6 +221,41 @@ export interface RegisterFailure {
   message: string;
   /** Balance at the time of the failure; null when the server didn't say. */
   balance: number | null;
+  /**
+   * #2183. What the refused charge needed, when the org's credits come back,
+   * and the org-targeted upgrade offer — all read off the refusal, never
+   * recomputed here. A CLI binary already on someone's machine can never be
+   * corrected, which is exactly why the price and the URL are the server's to
+   * state. Null throughout for a server that predates the fields.
+   */
+  required: number | null;
+  resetAt: string | null;
+  upgrade: UpgradeOffer | null;
+}
+
+/**
+ * Read an `upgrade` object off a refusal, or null.
+ *
+ * All-or-nothing: a partial offer would print a price with no link, or a link
+ * with no price. One null check at the render site is then the whole contract.
+ */
+function readUpgradeOffer(raw: unknown): UpgradeOffer | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.url !== "string" || o.url.length === 0) return null;
+  if (typeof o.name !== "string" || o.name.length === 0) return null;
+  if (typeof o.priceMonthUsd !== "number") return null;
+  if (typeof o.priceYearUsd !== "number") return null;
+  if (typeof o.monthlyCredits !== "number") return null;
+  return {
+    url: o.url,
+    plan: typeof o.plan === "string" ? o.plan : "pro",
+    interval: typeof o.interval === "string" ? o.interval : "month",
+    name: o.name,
+    priceMonthUsd: o.priceMonthUsd,
+    priceYearUsd: o.priceYearUsd,
+    monthlyCredits: o.monthlyCredits,
+  };
 }
 
 /**
@@ -276,14 +326,26 @@ export async function registerRun(
       // string `error` body (e.g. rate-limit) has no `.code` → stays silent.
       const code = data?.error?.code;
       if (onWarn && code && DEFINITIVE_REGISTER_FAILURE_CODES.has(code)) {
+        // Everything below reads the ENVELOPE (`error.*`). The top-level
+        // `balance` is the success shape and is never present on a refusal —
+        // reading it here left `registerFailureLines` with a balance branch
+        // that could not fire, so the wall never showed a number (#2183).
+        const envelope = data?.error;
         onWarn({
           code,
           message:
-            data?.error?.message ?? "the run won't appear in your dashboard",
+            envelope?.message ?? "the run won't appear in your dashboard",
           balance:
-            typeof data?.balance?.total === "number"
-              ? data.balance.total
+            typeof envelope?.balance?.total === "number"
+              ? envelope.balance.total
               : null,
+          required:
+            typeof envelope?.required === "number" ? envelope.required : null,
+          resetAt:
+            typeof envelope?.balance?.periodEnd === "string"
+              ? envelope.balance.periodEnd
+              : null,
+          upgrade: readUpgradeOffer(envelope?.upgrade),
         });
       }
     }

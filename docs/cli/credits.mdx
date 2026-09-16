@@ -22,7 +22,9 @@ Requires login - run [`squirrel auth login`](/cli/auth) first.
 | `--upgrade` | Print the upgrade URL and open it in your browser |
 
 `--upgrade` does not require login, so you can go straight to the upgrade page
-from any machine:
+from any machine. Because it answers before reading your balance, it prints the
+general upgrade URL: the organization-scoped link in the output below only
+appears once the CLI has read an organization's balance.
 
 ```bash
 squirrel credits --upgrade
@@ -46,7 +48,7 @@ Pricing:
   issue_enrich           3 per issue
   keyword_gaps          25 per run
 
-Top up: https://squirrelscan.com/upgrade?src=cli-credits
+Top up: https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01J0ORGEXAMPLE0000000000A&src=cli
 ```
 
 On the free plan the output ends with the Pro offer instead:
@@ -54,7 +56,7 @@ On the free plan the output ends with the Pro offer instead:
 ```text
   Pro: $19/month (or $190/year) for 3,000 credits a month
   Also unlocks daily audits on every site, faster crawls, and up to 2,000 pages per audit.
-  Upgrade: https://squirrelscan.com/upgrade?src=cli-credits
+  Upgrade: https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01J0ORGEXAMPLE0000000000A&src=cli
   Or run `squirrel credits --upgrade`.
 ```
 
