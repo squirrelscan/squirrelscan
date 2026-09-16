@@ -10,6 +10,25 @@ import type { ParsedPage } from "../types";
 export interface PageFingerprint {
   /** Distinct external asset hosts referenced by <link>/<script>/<img>. */
   assetHosts: Set<string>;
+  /**
+   * Hosts that actually SERVED something: a stylesheet, a script or an image.
+   *
+   * `assetHosts` is every `<link href>` host, so it also carries canonical,
+   * icon, preconnect, dns-prefetch and alternate, none of which is the site
+   * handing the page a resource. Those are fine for clustering, where any
+   * shared head markup is signal, and wrong for template-discontinuity's
+   * "does this page load the site's own assets" veto, which a page could
+   * otherwise satisfy with a single `<link rel=canonical>` (#2233).
+   */
+  resourceHosts: Set<string>;
+  /**
+   * The subset of {@link resourceHosts} reached by a stylesheet or a script.
+   *
+   * An image alone is the weakest of the three: a standalone page can hotlink
+   * one logo. Loading the site's CSS or JS is the part that says the page is
+   * being rendered by the site.
+   */
+  codeHosts: Set<string>;
   /** Class tokens on <body> (theme/framework signature). */
   bodyClasses: Set<string>;
   /** CSS custom-property names declared inline / in <style> (theme tokens). */
@@ -58,27 +77,36 @@ export function fingerprintPage(
   fingerprintWalks++;
 
   const assetHosts = new Set<string>();
+  const resourceHosts = new Set<string>();
+  const codeHosts = new Set<string>();
   const stylesheetHrefs = new Set<string>();
-  const addHost = (raw: string | null) => {
+  /** `kind` says which of the three sets the host also belongs in. */
+  const addHost = (raw: string | null, kind: "link" | "resource" | "code") => {
     if (!raw) return;
+    let host: string;
     try {
-      assetHosts.add(new URL(raw, pageUrl).hostname.toLowerCase());
+      host = new URL(raw, pageUrl).hostname.toLowerCase();
     } catch {
-      /* ignore */
+      return;
     }
+    assetHosts.add(host);
+    if (kind === "link") return;
+    resourceHosts.add(host);
+    if (kind === "code") codeHosts.add(host);
   };
 
   for (const link of doc.querySelectorAll("link[href]")) {
     const rel = (link.getAttribute("rel") ?? "").toLowerCase();
     const href = link.getAttribute("href");
-    addHost(href);
-    if (rel.includes("stylesheet") && href) stylesheetHrefs.add(href);
+    const isStylesheet = rel.includes("stylesheet");
+    addHost(href, isStylesheet ? "code" : "link");
+    if (isStylesheet && href) stylesheetHrefs.add(href);
   }
   for (const s of doc.querySelectorAll("script[src]")) {
-    addHost(s.getAttribute("src"));
+    addHost(s.getAttribute("src"), "code");
   }
   for (const img of doc.querySelectorAll("img[src]")) {
-    addHost(img.getAttribute("src"));
+    addHost(img.getAttribute("src"), "resource");
   }
 
   const bodyClasses = new Set<string>();
@@ -106,6 +134,8 @@ export function fingerprintPage(
 
   return {
     assetHosts,
+    resourceHosts,
+    codeHosts,
     bodyClasses,
     cssVars,
     hasNav: doc.querySelector("nav, [role='navigation']") !== null,
@@ -152,6 +182,8 @@ export function similarityToBaseline(
 
 export interface SiteBaseline {
   assetHosts: Set<string>;
+  /** Hosts a MAJORITY of pages load a stylesheet, script or image from. */
+  resourceHosts: Set<string>;
   bodyClasses: Set<string>;
   cssVars: Set<string>;
   stylesheetHrefs: Set<string>;
@@ -185,6 +217,7 @@ export function buildBaseline(fingerprints: PageFingerprint[]): SiteBaseline {
 
   return {
     assetHosts: tally((fp) => fp.assetHosts),
+    resourceHosts: tally((fp) => fp.resourceHosts),
     bodyClasses: tally((fp) => fp.bodyClasses),
     cssVars: tally((fp) => fp.cssVars),
     stylesheetHrefs: tally((fp) => fp.stylesheetHrefs),

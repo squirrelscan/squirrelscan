@@ -143,11 +143,13 @@ function pageCtx(
 function siteCtx(pages: SiteData["pages"], opts?: {
   sitemapLocs?: string[];
   options?: Record<string, unknown>;
+  crawlLimits?: { pagesCrawled: number; maxPages: number };
 }): RuleContext {
   const site: SiteData = {
     baseUrl: SITE,
     pages,
     robotsTxt: null,
+    ...(opts?.crawlLimits ? { crawlLimits: opts.crawlLimits } : {}),
     sitemaps: opts?.sitemapLocs
       ? {
           discovered: [
@@ -374,12 +376,91 @@ describe("integrity/seo-doorway", () => {
 // ── template-discontinuity rule (site-scope) ─────────────────────────
 
 describe("integrity/template-discontinuity", () => {
-  test("kit page diverges from theme + carries signals → fail", () => {
+  test("kit page diverges from theme + carries signals → warn", () => {
+    // #2233 — still escalated (it shares none of the site's assets and carries
+    // page-level signals), but a warning rather than a failure: the evidence is
+    // a similarity score plus a heuristic, which is enough to ask someone to
+    // look and not enough to zero a category.
     const ctx = siteCtx(fullSitePages());
     const c = find(run(templateDiscontinuityRule, ctx), "template-discontinuity");
-    expect(c?.status).toBe("fail");
+    expect(c?.status).toBe("warn");
     const outliers = (c?.details?.outliers as { url: string }[]) ?? [];
     expect(outliers.some((o) => o.url.includes("/calendly"))).toBe(true);
+  });
+
+  // #2233 — a signed-out or empty-state page on the site's own host renders a
+  // different shell but still pulls the site's own assets. It is the site's
+  // page, and calling it injected was a false positive on a real site.
+  test("an off-template page that loads the site's own assets is never escalated", () => {
+    // A different shell (its own stylesheet, no nav, no footer, none of the
+    // theme's classes or variables) but it still pulls the theme's stylesheet
+    // from the site's own CDN. Similarity lands under the threshold; the shared
+    // stylesheet is the whole point.
+    const signedOut = `<!DOCTYPE html><html><head>
+      <title>Your saved items</title>
+      <link rel="stylesheet" href="https://cdn.sydneyav.com/theme/style.css">
+      <link rel="stylesheet" href="https://unrelated-cdn.tk/lp.css">
+      <script>${obfuscatedPayload()}</script>
+    </head><body class="signed-out">
+      <div>Sign in to see your items.</div>
+    </body></html>`;
+    const pages = [
+      pageEntry(`${SITE}/`, themed("Home", CLEAN_BODY)),
+      pageEntry(`${SITE}/services`, themed("Services", CLEAN_BODY)),
+      pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
+      pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
+      pageEntry(`${SITE}/account/items`, signedOut),
+    ];
+    const checks = run(templateDiscontinuityRule, siteCtx(pages));
+    expect(checks.find((c) => c.name === "template-discontinuity")).toBeUndefined();
+    const review = find(checks, "template-discontinuity-review");
+    expect(review?.status).toBe("info");
+    const outliers = (review?.details?.outliers as { url: string; loadsSiteAssets: boolean; signals: number }[]) ?? [];
+    const page = outliers.find((o) => o.url.includes("/account/items"));
+    // It carries a signal AND it is still not escalated: the assets are why.
+    expect(page?.signals).toBeGreaterThanOrEqual(1);
+    expect(page?.loadsSiteAssets).toBe(true);
+  });
+
+  test("the same page carrying nothing of the site's own is escalated", () => {
+    // Identical but for the stylesheet: this is what an injected standalone
+    // page looks like, and it still reports.
+    const standalone = `<!DOCTYPE html><html><head>
+      <title>Your saved items</title>
+      <link rel="stylesheet" href="https://unrelated-cdn.tk/lp.css">
+      <script>${obfuscatedPayload()}</script>
+    </head><body class="signed-out">
+      <img src="https://unrelated-cdn.tk/logo.png" alt="logo">
+      <div>Sign in to see your items.</div>
+    </body></html>`;
+    const pages = [
+      pageEntry(`${SITE}/`, themed("Home", CLEAN_BODY)),
+      pageEntry(`${SITE}/services`, themed("Services", CLEAN_BODY)),
+      pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
+      pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
+      pageEntry(`${SITE}/account/items`, standalone),
+    ];
+    const c = find(run(templateDiscontinuityRule, siteCtx(pages)), "template-discontinuity");
+    expect(c?.status).toBe("warn");
+    const outliers = (c?.details?.outliers as { loadsSiteAssets: boolean }[]) ?? [];
+    expect(outliers[0]?.loadsSiteAssets).toBe(false);
+  });
+
+  test("the finding does not assert that the page is injected", () => {
+    const c = find(run(templateDiscontinuityRule, siteCtx(fullSitePages())), "template-discontinuity");
+    expect(c?.message).not.toMatch(/injected|compromise signals/i);
+    expect(c?.message).toContain("share none of the site's assets");
+  });
+
+  test("the solution asks the reader to confirm the page before anything else", () => {
+    const solution = templateDiscontinuityRule.meta.solution ?? "";
+    // The compromise instruction must be reached only through a condition, and
+    // the condition has to come first.
+    expect(solution).toContain("confirming the page is one you published");
+    expect(solution.indexOf("confirming the page is one you published")).toBeLessThan(
+      solution.indexOf("treat the site as compromised")
+    );
+    expect(solution).toContain("only then");
   });
 
   test("all-themed site → pass", () => {
@@ -490,7 +571,7 @@ describe("integrity — incident corpus end-to-end", () => {
     expect(
       find(run(templateDiscontinuityRule, siteCtxFull), "template-discontinuity")
         ?.status
-    ).toBe("fail");
+    ).toBe("warn"); // #2233: escalated, but a warning rather than a failure
     expect(
       find(run(orphanPageRule, siteCtxFull), "orphan-page")?.status
     ).toBe("fail");
@@ -813,5 +894,395 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
     expect(hit?.reason).toContain("203.0.113.9");
+  });
+});
+
+// ── template-discontinuity: what counts as "the site's own assets" ───
+//
+// The veto that stops a legitimate off-template page from being escalated used
+// to accept ANY host shared with the rest of the crawl, and `assetHosts` was
+// every `<link href>` host, so a canonical, a favicon or a preconnect was enough,
+// and so was a font CDN both pages happen to use. These probes came out of the
+// review of #2233 and each one is a page that carries an integrity signal, is a
+// template outlier, and differs only in what it loads.
+//
+// Fixtures here are synthetic (`example-site.test`); nothing in this block comes
+// from a real site.
+
+const PSITE = "https://example-site.test";
+const PCDN = "https://cdn.example-site.test";
+const PTHIRD = "https://cdn.thirdparty.test";
+
+/** Theme on a separate CDN host. */
+function pThemed(title: string): string {
+  return `<!DOCTYPE html><html><head>
+    <title>${title}</title>
+    <link rel="stylesheet" href="${PCDN}/theme/style.css">
+    <link rel="stylesheet" href="${PCDN}/theme/layout.css">
+    <link rel="stylesheet" href="${PCDN}/theme/blocks.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
+    <script src="${PCDN}/theme/app.js"></script>
+    <style>:root{--brand-color:#0a5;--brand-spacing:8px;}</style>
+  </head><body class="wp-theme sitetheme home page-template">
+    <nav class="main-nav"><a href="/">Home</a></nav>
+    <main>${CLEAN_BODY}</main>
+    <footer class="site-footer"><img src="${PCDN}/logo.png" alt="logo">Site</footer>
+  </body></html>`;
+}
+
+/** Theme served from the site's own origin, so a canonical shares its host. */
+function pThemedSameOrigin(title: string): string {
+  return `<!DOCTYPE html><html><head>
+    <title>${title}</title>
+    <link rel="stylesheet" href="/theme/style.css">
+    <link rel="stylesheet" href="/theme/layout.css">
+    <link rel="stylesheet" href="/theme/blocks.css">
+    <script src="/theme/app.js"></script>
+    <style>:root{--brand-color:#0a5;--brand-spacing:8px;}</style>
+  </head><body class="wp-theme sitetheme home page-template">
+    <nav class="main-nav"><a href="/">Home</a></nav>
+    <main>${CLEAN_BODY}</main>
+    <footer class="site-footer"><img src="/logo.png" alt="logo">Site</footer>
+  </body></html>`;
+}
+
+/** Theme served wholly from a third-party CDN that is not a shared public one. */
+function pThemedThirdParty(title: string): string {
+  return `<!DOCTYPE html><html><head>
+    <title>${title}</title>
+    <link rel="stylesheet" href="${PTHIRD}/theme/style.css">
+    <link rel="stylesheet" href="${PTHIRD}/theme/layout.css">
+    <link rel="stylesheet" href="${PTHIRD}/theme/blocks.css">
+    <script src="${PTHIRD}/theme/app.js"></script>
+    <style>:root{--brand-color:#0a5;--brand-spacing:8px;}</style>
+  </head><body class="wp-theme sitetheme home page-template">
+    <nav class="main-nav"><a href="/">Home</a></nav>
+    <main>${CLEAN_BODY}</main>
+    <footer class="site-footer"><img src="${PTHIRD}/logo.png" alt="logo">Site</footer>
+  </body></html>`;
+}
+
+/**
+ * Theme that pulls a library from jsDelivr, so the shared public CDN is in the
+ * baseline's resource hosts and the exclusion has something to exclude. Without
+ * this the jsDelivr probe would pass whether or not the exclusion exists.
+ */
+function pThemedWithPublicCdn(title: string): string {
+  return `<!DOCTYPE html><html><head>
+    <title>${title}</title>
+    <link rel="stylesheet" href="${PCDN}/theme/style.css">
+    <link rel="stylesheet" href="${PCDN}/theme/layout.css">
+    <link rel="stylesheet" href="${PCDN}/theme/blocks.css">
+    <script src="https://cdn.jsdelivr.net/npm/lib/dist/lib.js"></script>
+    <script src="${PCDN}/theme/app.js"></script>
+    <style>:root{--brand-color:#0a5;--brand-spacing:8px;}</style>
+  </head><body class="wp-theme sitetheme home page-template">
+    <nav class="main-nav"><a href="/">Home</a></nav>
+    <main>${CLEAN_BODY}</main>
+    <footer class="site-footer"><img src="${PCDN}/logo.png" alt="logo">Site</footer>
+  </body></html>`;
+}
+
+/**
+ * Theme that PRECONNECTS to a host it never actually loads from. The host is in
+ * every page's `<link href>` set and in none of their resource sets, which is
+ * the difference between the two.
+ */
+function pThemedWithPreconnect(title: string): string {
+  return `<!DOCTYPE html><html><head>
+    <title>${title}</title>
+    <link rel="preconnect" href="https://preconnect-only.test">
+    <link rel="stylesheet" href="${PCDN}/theme/style.css">
+    <link rel="stylesheet" href="${PCDN}/theme/layout.css">
+    <link rel="stylesheet" href="${PCDN}/theme/blocks.css">
+    <script src="${PCDN}/theme/app.js"></script>
+    <style>:root{--brand-color:#0a5;--brand-spacing:8px;}</style>
+  </head><body class="wp-theme sitetheme home page-template">
+    <nav class="main-nav"><a href="/">Home</a></nav>
+    <main>${CLEAN_BODY}</main>
+    <footer class="site-footer"><img src="${PCDN}/logo.png" alt="logo">Site</footer>
+  </body></html>`;
+}
+
+/** The odd page's head, minus whatever the probe is testing. */
+function oddPage(extraHead: string, extraBody = ""): string {
+  return `<!DOCTYPE html><html><head>
+    <title>Offer</title>
+    ${extraHead}
+    <script>${obfuscatedPayload()}</script>
+  </head><body class="lp">${extraBody}<div>Sign in to continue.</div></body></html>`;
+}
+
+type ProbeOutlier = {
+  url: string;
+  escalated: boolean;
+  signals: number;
+  loadsSiteAssets: boolean;
+};
+
+/**
+ * Run the rule over four themed pages plus one odd page and return the odd
+ * page's row, from whichever check it landed in. `undefined` means it was not
+ * an outlier at all, which every probe below asserts against: a probe that
+ * silently stops being flagged would otherwise "pass" for the wrong reason.
+ */
+function probe(
+  theme: (title: string) => string,
+  oddHtml: string,
+  opts?: { crawlLimits?: { pagesCrawled: number; maxPages: number }; themedPages?: number }
+): ProbeOutlier | undefined {
+  const n = opts?.themedPages ?? 4;
+  const pages = [
+    ...Array.from({ length: n }, (_, i) =>
+      pageEntry(`${PSITE}/p${i}`, theme(`Page ${i}`))
+    ),
+    pageEntry(`${PSITE}/odd`, oddHtml),
+  ];
+  const checks = run(
+    templateDiscontinuityRule,
+    siteCtx(pages, { crawlLimits: opts?.crawlLimits })
+  );
+  const rows = [
+    ...((find(checks, "template-discontinuity")?.details?.outliers as ProbeOutlier[]) ?? []),
+    ...((find(checks, "template-discontinuity-review")?.details?.outliers as ProbeOutlier[]) ?? []),
+  ];
+  return rows.find((o) => o.url.endsWith("/odd"));
+}
+
+describe("integrity/template-discontinuity: the site's own assets", () => {
+  test("a stylesheet or script from a site resource host still vetoes escalation", () => {
+    const row = probe(
+      pThemed,
+      oddPage(
+        `<link rel="stylesheet" href="https://kit-cdn.tk/lp.css"><script src="${PCDN}/theme/app.js"></script>`
+      )
+    );
+    expect(row).toBeDefined();
+    expect(row?.signals).toBeGreaterThanOrEqual(1);
+    expect(row?.loadsSiteAssets).toBe(true);
+    expect(row?.escalated).toBe(false);
+  });
+
+  test("probe a: hotlinking one of the site's own stylesheets still vetoes", () => {
+    const row = probe(
+      pThemed,
+      oddPage(
+        `<link rel="stylesheet" href="${PCDN}/theme/style.css"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
+      )
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(true);
+    expect(row?.escalated).toBe(false);
+  });
+
+  test("probe a3: a font CDN both pages use is not the site's own asset", () => {
+    const row = probe(
+      pThemed,
+      oddPage(
+        `<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
+      )
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+
+  test("probe a4: a canonical pointing at the site is not an asset", () => {
+    const row = probe(
+      pThemedSameOrigin,
+      oddPage(
+        `<link rel="canonical" href="${PSITE}/odd"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
+      )
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+
+  test("probe a5: a favicon on the site's own host is not an asset", () => {
+    const row = probe(
+      pThemedSameOrigin,
+      oddPage(
+        `<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
+      )
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+
+  test("a preconnect to the site's own host is not an asset either", () => {
+    const row = probe(
+      pThemedSameOrigin,
+      oddPage(
+        `<link rel="preconnect" href="${PSITE}"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
+      )
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+
+  test("an image from a site resource host is not enough on its own", () => {
+    const row = probe(
+      pThemed,
+      oddPage(
+        `<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
+        `<img src="${PCDN}/logo.png" alt="logo">`
+      )
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+
+  // The baseline side of the veto has to be resource hosts, not every linked
+  // host. Here the only thing the site ever said about `preconnect-only.test` is
+  // that it might connect to it; it never loaded a byte from it. A page loading
+  // a script from there shares nothing the site actually serves.
+  test("a host the site only preconnects to is not one of its asset hosts", () => {
+    const row = probe(
+      pThemedWithPreconnect,
+      oddPage(`<script src="https://preconnect-only.test/x.js"></script>`)
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+
+  // The veto's host arm has to accept a stylesheet, not just a script. This page
+  // loads a DIFFERENT file from the site's CDN, so the exact-href arm cannot fire
+  // and the host arm is the only thing that can veto it.
+  test("a stylesheet from a site resource host vetoes on the host alone", () => {
+    const row = probe(
+      pThemed,
+      oddPage(`<link rel="stylesheet" href="${PCDN}/theme/checkout-only.css">`)
+    );
+    expect(row).toBeDefined();
+    expect(row?.signals).toBeGreaterThanOrEqual(1);
+    expect(row?.loadsSiteAssets).toBe(true);
+    expect(row?.escalated).toBe(false);
+  });
+
+  // The known limit, pinned rather than claimed fixed. A page the site really
+  // does serve, from a first-party host the rest of the crawl never touches,
+  // is indistinguishable from a foreign one by asset evidence; the veto cannot
+  // see the difference and neither can anything else this rule has.
+  test("probe b: a first-party host the rest of the crawl never uses reads as foreign", () => {
+    const row = probe(
+      pThemed,
+      oddPage(`<link rel="stylesheet" href="https://assets2.example-site.test/lp.css">`)
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+
+  // A site served wholly from one third-party CDN. That host is not a shared
+  // public CDN, so it still counts as the site's: a page loading from it is
+  // vetoed, and one that does not is escalated.
+  test("probe d: a site's own third-party CDN still counts as the site's", () => {
+    const shares = probe(
+      pThemedThirdParty,
+      oddPage(`<script src="${PTHIRD}/theme/app.js"></script>`)
+    );
+    expect(shares?.escalated).not.toBe(true);
+
+    const doesNot = probe(
+      pThemedThirdParty,
+      oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`)
+    );
+    expect(doesNot).toBeDefined();
+    expect(doesNot?.loadsSiteAssets).toBe(false);
+    expect(doesNot?.escalated).toBe(true);
+  });
+
+  // The theme itself pulls from jsDelivr here, so `cdn.jsdelivr.net` IS in the
+  // baseline's resource hosts. Sharing it must still not buy a veto, and the
+  // list is matched on subdomains, not just the bare host.
+  test("a subdomain of a shared public CDN is shared even when the theme uses it", () => {
+    const row = probe(
+      pThemedWithPublicCdn,
+      oddPage(`<script src="https://cdn.jsdelivr.net/npm/x/dist/x.js"></script>`)
+    );
+    expect(row).toBeDefined();
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(true);
+  });
+});
+
+// ── template-discontinuity: a capped crawl cannot accuse (#2233 AC4) ─
+
+describe("integrity/template-discontinuity: capped crawls", () => {
+  const foreign = () =>
+    oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`);
+
+  test("a crawl that stopped at its page limit with a thin baseline does not escalate", () => {
+    const row = probe(pThemed, foreign(), {
+      themedPages: 9,
+      crawlLimits: { pagesCrawled: 10, maxPages: 10 },
+    });
+    expect(row).toBeDefined();
+    // Everything else about it says escalate; only the cap holds it back.
+    expect(row?.signals).toBeGreaterThanOrEqual(1);
+    expect(row?.loadsSiteAssets).toBe(false);
+    expect(row?.escalated).toBe(false);
+  });
+
+  test("the same crawl reports the page for review, and says why it stopped there", () => {
+    const pages = [
+      ...Array.from({ length: 9 }, (_, i) => pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))),
+      pageEntry(`${PSITE}/odd`, foreign()),
+    ];
+    const checks = run(
+      templateDiscontinuityRule,
+      siteCtx(pages, { crawlLimits: { pagesCrawled: 10, maxPages: 10 } })
+    );
+    expect(find(checks, "template-discontinuity")).toBeUndefined();
+    const review = find(checks, "template-discontinuity-review");
+    expect(review?.status).toBe("info");
+    expect(review?.details?.escalationWithheld).toBe("capped_crawl_small_baseline");
+  });
+
+  test("the same page on an uncapped crawl of the same size IS escalated", () => {
+    const row = probe(pThemed, foreign(), { themedPages: 9 });
+    expect(row?.escalated).toBe(true);
+  });
+
+  test("a crawl that stopped short of its limit is not capped", () => {
+    const row = probe(pThemed, foreign(), {
+      themedPages: 9,
+      crawlLimits: { pagesCrawled: 10, maxPages: 500 },
+    });
+    expect(row?.escalated).toBe(true);
+  });
+
+  test("a capped crawl with a baseline at the minimum escalates", () => {
+    const row = probe(pThemed, foreign(), {
+      themedPages: 19,
+      crawlLimits: { pagesCrawled: 20, maxPages: 20 },
+    });
+    expect(row?.escalated).toBe(true);
+  });
+
+  test("the minimum is an option, so a caller can lower it", () => {
+    const pages = [
+      ...Array.from({ length: 9 }, (_, i) => pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))),
+      pageEntry(`${PSITE}/odd`, foreign()),
+    ];
+    const checks = run(
+      templateDiscontinuityRule,
+      siteCtx(pages, {
+        crawlLimits: { pagesCrawled: 10, maxPages: 10 },
+        options: { minBaselinePagesWhenCapped: 5 },
+      })
+    );
+    expect(find(checks, "template-discontinuity")?.status).toBe("warn");
+  });
+
+  test("the default minimum is 20", () => {
+    const schema = templateDiscontinuityRule.meta.optionsSchema!;
+    const parsed = schema.parse({}) as { minBaselinePagesWhenCapped: number };
+    expect(parsed.minBaselinePagesWhenCapped).toBe(20);
   });
 });
