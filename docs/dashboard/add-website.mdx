@@ -34,7 +34,7 @@ Whether the site is re-audited on its own, and how often. **Weekly and on** by d
 | **Weekly** | An audit every week. The default. |
 | **Monthly** | An audit every month. |
 
-Each run costs credits like any other cloud audit, and every completed run emails you [what changed](/cloud/scheduled-audits#the-digest-email). Turn it off any time under **Settings → Schedule**.
+The schedule starts as soon as the site is added, not after its first audit has finished. Each run costs credits like any other cloud audit, and every completed run emails you [what changed](/cloud/scheduled-audits#the-digest-email). Turn it off any time under **Settings → Schedule**.
 
 Picking a cadence here is a decision, and it is treated as one. A site added with the schedule **disabled** stays unscheduled: it will not switch itself on after its first audit, which is what happens to a site added through the CLI or the API without an explicit choice.
 
@@ -43,6 +43,8 @@ Picking a cadence here is a decision, and it is treated as one. A site added wit
 Cadences your plan does not fund are shown locked, with the same wording the schedule settings page uses. Free covers weekly and monthly on one website; Pro and Team add daily and put every website on a schedule. See [scheduled audits](/cloud/scheduled-audits) for the full table.
 
 If your plan's scheduled-site slots are already taken, the schedule control starts **off** and says which site is holding the slot. Freeing that site's schedule is the alternative to upgrading, and it is usually the quicker one.
+
+A site added while the slots are spent is not recorded as a refusal. It is left waiting instead, so if a slot frees up later, the site's next completed audit puts it on the weekly default. Only unticking the schedule yourself makes the off permanent.
 
 ### If the schedule was not granted
 
