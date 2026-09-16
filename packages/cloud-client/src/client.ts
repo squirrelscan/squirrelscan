@@ -109,6 +109,20 @@ export interface UpgradeOffer {
   monthlyCredits: number;
 }
 
+/**
+ * A website's recurring audits, re-exported from core-contracts (#2184).
+ *
+ * The type lives ONCE, in `@squirrelscan/core-contracts/schedule`, because the
+ * CLI, the MCP tools, the dashboard and the API all read the same object and a
+ * per-package copy is how a shared shape stops being shared. This re-export
+ * exists so a client that already depends on cloud-client for every other wire
+ * type does not need a second import path for this one.
+ */
+export type {
+  WebsiteScheduleState,
+  WebsiteScheduleSummary,
+} from "@squirrelscan/core-contracts/schedule";
+
 /** `GET /v1/credits` response. */
 export interface CreditsResponse {
   balance: {

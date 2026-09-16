@@ -82,6 +82,7 @@ import {
   resolveRunFinalizeScore,
   startRunHeartbeat,
 } from "@/lib/run-tracker";
+import { scheduleSummaryLine } from "@/lib/schedule-notice";
 import { syncTechnologies } from "@/lib/technology-sync";
 import {
   AUDIT_BASE_CREDITS,
@@ -2255,6 +2256,15 @@ export const audit = defineCommand({
             }
             log("");
             log(publishResult.data.url);
+
+            // #2184: recurring audits switch themselves on after a site's first
+            // completed cloud audit, so this is where the CLI tells its user a
+            // weekly credit charge has started and where one click stops it.
+            // Silent when the server said nothing, or said the schedule is off.
+            const scheduleLine = scheduleSummaryLine(
+              publishResult.data.schedule
+            );
+            if (scheduleLine) log(scheduleLine);
 
             if (report.crawlId) {
               await savePublishedReportInfo(

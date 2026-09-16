@@ -13,6 +13,7 @@
     "./failure-reason": "./src/failure-reason.ts",
     "./untrusted-keys": "./src/untrusted-keys.ts",
     "./credits": "./src/credits.ts",
+    "./schedule": "./src/schedule.ts",
     "./services": "./src/services.ts",
     "./api-keys": "./src/api-keys.ts",
     "./threat-intel": "./src/threat-intel.ts",
