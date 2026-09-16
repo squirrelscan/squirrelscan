@@ -7,6 +7,8 @@ export * from "./cache-stats";
 // Plans, credits, and service limits.
 export * from "./plans";
 export * from "./credits";
+// #2184: the one shape every surface reads a website's recurring audits from.
+export * from "./schedule";
 export * from "./limits";
 export * from "./clamp";
 export * from "./control-chars";

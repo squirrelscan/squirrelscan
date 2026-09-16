@@ -19,6 +19,109 @@ import {
   OTHER_CATEGORY,
 } from "./categories";
 
+/**
+ * One COUNT in a check message, merged across the pages that produced it.
+ * `text` is the digits exactly as the first page wrote them, kept so a count
+ * every page agrees on renders byte-identically to its original.
+ */
+interface MergedCount {
+  min: number;
+  max: number;
+  text: string;
+}
+
+/** What a message looks like once its counts are pulled out. */
+interface MessageShape {
+  /** The literal text between the counts: n+1 parts. */
+  parts: string[];
+  counts: MergedCount[];
+  /** parts joined by `#`: two messages merge only if these match exactly. */
+  key: string;
+}
+
+const DIGIT_RUN_RE = /\d+/g;
+
+// A character that makes the digits beside it part of something else: a word
+// (`H1`, `4KB`), a decimal or version (`4.3`), a date or a negative (`2024-01`,
+// `-5`), a time (`05:30`), a ratio (`10/10`), a grouped number (`1,024`).
+const GLUED_RE = /[A-Za-z0-9._:/,-]/;
+
+// Beyond this many digits a value does not survive a round trip through
+// `Number`, so it is never treated as a count.
+const SAFE_DIGITS = 15;
+
+/**
+ * Is this digit run a COUNT, and therefore something two pages may legitimately
+ * disagree about without changing what the sentence says?
+ *
+ * Only a count may widen into a range. Everything else — a date, a decimal, a
+ * digit inside a word, an identifier, a negative, a zero-padded code — is part
+ * of a statement, and widening it invents a fact. `The URL says 2019 but the
+ * schema dates are from 2018` would become `The URL says 2019 to 2024 …`,
+ * which reads as true and is not; the old `N` placeholder at least announced
+ * its own failure. So a token that is not a count never widens, and two pages
+ * that disagree about one do not merge at all: each keeps its own true message
+ * (#2231).
+ *
+ * A count is a standalone integer that either counts the noun after it
+ * (`3 image(s)`) or stands alone in parentheses (`Multiple H1 tags found (3)`).
+ */
+function isCountToken(message: string, start: number, end: number): boolean {
+  const text = message.slice(start, end);
+  if (text.length > SAFE_DIGITS) return false;
+  // `007` is a code, not a count: widening it would drop the padding too.
+  if (text.length > 1 && text.startsWith("0")) return false;
+  // A four-digit year is indistinguishable from a count of that many things,
+  // and getting it wrong writes a false date, so it is never widened.
+  if (text.length === 4 && Number(text) >= 1000 && Number(text) <= 2999) return false;
+  // Only the character BEFORE needs testing against the glue set: the two
+  // positive tests below already demand a space or a `)` after the run, so a
+  // `.`, `-`, `:`, `/`, `,` or letter on the right can never reach them. The
+  // left is where `H1`, `-5`, `4.3` and `2024-01` are caught.
+  if (GLUED_RE.test(message[start - 1] ?? "")) return false;
+  // Alone in parentheses.
+  if (message[start - 1] === "(" && message[end] === ")") return true;
+  // In front of the thing it counts.
+  return message[end] === " " && /[A-Za-z]/.test(message[end + 1] ?? "");
+}
+
+/** Split a message into its literal parts and its counts. */
+function shapeOf(message: string): MessageShape {
+  const parts: string[] = [];
+  const counts: MergedCount[] = [];
+  let cut = 0;
+  DIGIT_RUN_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = DIGIT_RUN_RE.exec(message)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (!isCountToken(message, start, end)) continue;
+    parts.push(message.slice(cut, start));
+    const value = Number(match[0]);
+    counts.push({ min: value, max: value, text: match[0] });
+    cut = end;
+  }
+  parts.push(message.slice(cut));
+  return { parts, counts, key: parts.join("#") };
+}
+
+/**
+ * The merged message: every count the pages agree on printed as it was
+ * written, every count they disagree on printed as the range it covers.
+ *
+ * A range rather than a total. These counts are per page, and a site-level
+ * total would be a different number from any of them; the page count the
+ * renderers show beside the message is what says how many pages contributed.
+ */
+function renderMergedMessage(shape: MessageShape): string {
+  let out = shape.parts[0] ?? "";
+  for (const [index, count] of shape.counts.entries()) {
+    out += count.min === count.max ? count.text : `${count.min} to ${count.max}`;
+    out += shape.parts[index + 1] ?? "";
+  }
+  return out;
+}
+
 export interface GroupedCheck {
   name: string;
   status: "pass" | "warn" | "fail" | "info" | "skipped";
@@ -165,6 +268,8 @@ export function groupIssuesByCategory(
         pageSet: Set<string>;
         itemById: Map<string, CheckItem>;
         carriedPageSet: Set<string>;
+        /** The message's literal parts and the counts merged so far. */
+        messageShape: MessageShape;
       }
     >();
     // #1135: the "fixed on all pages checked this run" note reads every
@@ -206,9 +311,12 @@ export function groupIssuesByCategory(
 
       const checkName = (check as { name: string }).name;
       const checkMessage = (check as { message: string }).message;
-      const normalizedMessage = checkMessage.replace(/\d+/g, "#");
+      // Only counts are wildcarded. Everything else stays literal, so two
+      // messages differing in a date, a decimal or a digit inside a word land
+      // in different groups instead of being merged into a claim neither made.
+      const shape = shapeOf(checkMessage);
 
-      const key = `${checkName}${KEY_SEPARATOR}${status}${KEY_SEPARATOR}${normalizedMessage}`;
+      const key = `${checkName}${KEY_SEPARATOR}${status}${KEY_SEPARATOR}${shape.key}`;
       const existing = checkMap.get(key);
 
       const details = (check as { details?: Record<string, unknown> }).details;
@@ -219,7 +327,7 @@ export function groupIssuesByCategory(
 
       // When message contains numbers that differ per page, auto-generate
       // an item to preserve per-page detail (only if check has no explicit items)
-      const messageWasNormalized = normalizedMessage !== checkMessage;
+      const messageWasNormalized = shape.counts.length > 0;
       const autoItem =
         messageWasNormalized && pageUrl && !items?.length
           ? { id: pageUrl, label: checkMessage }
@@ -239,9 +347,16 @@ export function groupIssuesByCategory(
             );
           }
         }
-        // When merging checks whose original messages differ, use generic form
+        // Same key means the same literal text and the same count positions,
+        // so the counts line up one for one. Widen each to the range it covers.
         if (existing.message !== checkMessage && messageWasNormalized) {
-          existing.message = normalizedMessage.replace(/#/g, "N");
+          for (const [index, incoming] of shape.counts.entries()) {
+            const slot = existing.messageShape.counts[index];
+            if (!slot) continue;
+            slot.min = Math.min(slot.min, incoming.min);
+            slot.max = Math.max(slot.max, incoming.max);
+          }
+          existing.message = renderMergedMessage(existing.messageShape);
         }
         if (pageUrl && !existing.pageSet.has(pageUrl)) {
           existing.pages.push(pageUrl);
@@ -298,6 +413,7 @@ export function groupIssuesByCategory(
           name: checkName,
           status: status as "fail" | "warn",
           message: checkMessage,
+          messageShape: shape,
           count: occurrences,
           pages: initialPages,
           pageSet: initialPageSet,
@@ -322,7 +438,13 @@ export function groupIssuesByCategory(
     // (#150) — #114's bounded-concurrency rule execution otherwise leaves them
     // in nondeterministic insertion order, churning report diffs run-to-run.
     const checks = Array.from(checkMap.values()).map(
-      ({ pageSet: _, itemById, carriedPageSet: ___, ...check }) => {
+      ({
+        pageSet: _,
+        itemById,
+        carriedPageSet: ___,
+        messageShape: ____,
+        ...check
+      }) => {
         check.pages = [...check.pages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
         if (itemById.size > 0) {
           check.items = [...itemById.values()].sort((a, b) =>

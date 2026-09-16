@@ -59,12 +59,24 @@ class ExitSignal extends Error {
 const originalFetch = globalThis.fetch;
 const originalExit = process.exit;
 const originalToken = process.env.SQUIRREL_API_TOKEN;
+const originalLog = console.log;
+const originalError = console.error;
 
 let requested: string[] = [];
 let dir: string;
+/** Captured separately: this command's stdout contract is a BARE URL (#2184). */
+let stdout: string[] = [];
+let stderr: string[] = [];
+/** What the publish 201 carries as `schedule`. Reassigned per test. */
+let publishSchedule: unknown;
 
 beforeEach(() => {
   requested = [];
+  stdout = [];
+  stderr = [];
+  publishSchedule = undefined;
+  console.log = (...args: unknown[]) => stdout.push(args.join(" "));
+  console.error = (...args: unknown[]) => stderr.push(args.join(" "));
   // Signed in, so a publish is genuinely possible and the host is the only
   // thing that can stop it.
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
@@ -75,6 +87,7 @@ beforeEach(() => {
         id: "rep_1",
         url: "https://reports.test/rep_1",
         visibility: "public",
+        ...(publishSchedule === undefined ? {} : { schedule: publishSchedule }),
       }),
       { status: 201, headers: { "Content-Type": "application/json" } }
     );
@@ -91,6 +104,8 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   process.exit = originalExit;
+  console.log = originalLog;
+  console.error = originalError;
   if (originalToken === undefined) delete process.env.SQUIRREL_API_TOKEN;
   else process.env.SQUIRREL_API_TOKEN = originalToken;
   rmSync(dir, { recursive: true, force: true });
@@ -219,5 +234,103 @@ describe("squirrel report --publish — a host no hosted runner can reach (#1841
       first_publish_at?: string;
     };
     expect(after.first_publish_at).toBe("2020-01-01T00:00:00.000Z");
+  });
+});
+
+/**
+ * `squirrel report --publish` writes a BARE URL to stdout, and #2184's
+ * recurring-audit disclosure must not break that.
+ *
+ * The documented contract is that this command "prints the published report URL
+ * (and nothing else, so it pipes cleanly)". People pipe it. So the schedule line
+ * goes to stderr, where this command's errors already go, and stdout stays one
+ * line whatever the server attaches.
+ *
+ * The call site had no test at all: a reviewer silenced it and thirty-nine tests
+ * across four files stayed green. Everything below asserts on the STREAMS,
+ * because a stream is the only place the difference between stdout and stderr
+ * is observable.
+ */
+describe("squirrel report --publish — stdout stays pipeable (#2184)", () => {
+  const SETTINGS_URL =
+    "https://app.squirrelscan.com/acme/website/web_1/settings/schedule";
+
+  const active = () => ({
+    kind: "recurring" as const,
+    frequency: "weekly" as const,
+    requested: true,
+    state: "active",
+    stateReason: null,
+    nextRunAt: "2026-09-23T04:41:00.000Z",
+    cadenceLabel: "every week",
+    settingsUrl: SETTINGS_URL,
+    pauseUrl: "https://api.squirrelscan.com/v1/schedules/pause?s=a&t=b",
+    cap: { limit: 1, used: 1 },
+    upgradeUrl: null,
+  });
+
+  test("with an active schedule: stdout is the URL alone, the notice is on stderr", async () => {
+    publishSchedule = active();
+
+    await runReport("https://example.com/");
+
+    // Byte for byte, one line, nothing appended. This is the assertion the
+    // stdout contract lives or dies by.
+    expect(stdout).toEqual(["https://reports.test/rep_1"]);
+    expect(stderr.join("\n")).toContain("Scheduled audits: every week");
+    expect(stderr.join("\n")).toContain(SETTINGS_URL);
+  });
+
+  // THE CONTROL. Without it every stdout assertion here would pass just as
+  // happily if the command had stopped publishing altogether.
+  test("the URL reaches stdout whether or not a schedule came back", async () => {
+    await runReport("https://example.com/");
+
+    expect(stdout).toEqual(["https://reports.test/rep_1"]);
+    expect(requested.some((u) => u.includes("/v1/reports"))).toBe(true);
+  });
+
+  test("a server that sends no schedule prints no notice at all", async () => {
+    await runReport("https://example.com/");
+
+    expect(stderr.join("\n")).not.toContain("Scheduled audits:");
+  });
+
+  // Every state but `active` is silent until #2225 adds its branch to the same
+  // renderer, and none of them may reach stdout on the way.
+  test.each([["off"], ["capped"], ["unschedulable"], ["paused"]])(
+    "state %p prints nothing on either stream",
+    async (state) => {
+      publishSchedule = { ...active(), state };
+
+      await runReport("https://example.com/");
+
+      expect(stdout).toEqual(["https://reports.test/rep_1"]);
+      expect(stderr.join("\n")).not.toContain("Scheduled audits:");
+    }
+  );
+
+  // A summary missing a field the line renders is dropped whole: naming a
+  // recurring charge with no way to stop it is worse than silence, and it must
+  // not half-print onto either stream.
+  test("a summary missing its link prints nothing", async () => {
+    const { settingsUrl: _dropped, ...withoutLink } = active();
+    publishSchedule = withoutLink;
+
+    await runReport("https://example.com/");
+
+    expect(stdout).toEqual(["https://reports.test/rep_1"]);
+    expect(stderr.join("\n")).not.toContain("Scheduled audits:");
+  });
+
+  // A local host publishes nothing, so there is no schedule to disclose either.
+  test("a host no runner can reach prints neither a URL nor a notice", async () => {
+    publishSchedule = active();
+
+    await runReport("http://localhost:3000/");
+
+    expect(requested).toEqual([]);
+    expect(stdout.join("\n")).not.toContain("https://reports.test/rep_1");
+    expect(stderr.join("\n")).not.toContain("Scheduled audits:");
   });
 });
