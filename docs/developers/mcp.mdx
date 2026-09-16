@@ -81,6 +81,11 @@ All tools require authentication. Write tools are marked; everything else only r
 | `comment_on_issue` | Post a markdown comment on an issue, visible in the dashboard thread. | Write |
 | `list_rules` | Browse the audit rule catalog by category or keyword. | Read |
 | `get_rule` | One rule's full definition by id, e.g. `crawl/canonical-chain`, including its fix recommendation and docs link. | Read |
+| `list_entities` | The entities a site declares in its JSON-LD, collapsed across every crawled page, so an Organization declared on 60 pages is one row rather than 60. Filter by `@type`, by declaring page, by problem class, or by a text match on the name. Page-local entities (a page's own `WebPage`, `BreadcrumbList` and unnamed images) are hidden unless `include_page_local` is true. Paginated (`total`/`has_more`). Needs `audits:read`. | Read |
+| `get_entity` | One entity as the map recorded it: the properties the map keeps, the pages that declare it, the properties whose values disagree between those pages, and the references in and out of it. Accepts the entity key, its `@id`, or its name. Needs `audits:read`. | Read |
+| `get_entity_graph` | The whole entity graph, or a filtered part of it, as `json`, `jsonld`, `mermaid`, `dot`, `graphml` or `markdown`. Takes the same filters as `list_entities`. `mermaid` and `markdown` are capped and say so in `truncation`. Needs `audits:read`. | Read |
+| `compare_entities` | The change set between two audits: entities added and removed, entities that gained or lost an `@id`, occurrence changes, new and resolved conflicts and dangling references, and the pages each audit saw that the other did not. Defaults to the previous audit versus the latest. An entity counts as removed only when every page that declared it was crawled again, so a smaller crawl never reads as a site that deleted its structured data. Needs `audits:read`. | Read |
+| `get_entity_findings` | The `schema/entity-*` rule verdicts for an audit: what is wrong with the site's entity graph, which entity keys and pages each finding affects, and the fix text for each. The keys and pages on a finding are a sample, so use `list_entities` with the matching problem filter for the full set. Needs `audits:read`. | Read |
 | `get_credit_balance` | Monthly and pack credit buckets for the org. | Read |
 | `list_credit_transactions` | Org credit accounting log — grants, per-audit debits (each carries a `run_id`), refunds, adjustments — newest first, paginated, with the current balance. Needs `credits:read`. | Read |
 | `create_api_key` | Mint a new org API key. Requires the `keys:write` scope, which only OAuth login grants. The key is returned exactly once. | Write, gated |
@@ -91,6 +96,12 @@ Three tools deserve a closer look:
 - **`run_audit` has a confirm rail.** When the estimate is above the auto-run threshold (50 credits by default), the first call returns the estimate instead of starting; the agent shows it to you and calls again with `confirm: true`. An estimate at or under the threshold starts immediately, and an agent that already has your approval can pass `confirm: true` on the first call. A `max_credits` argument acts as a hard spend guard: the audit refuses to start if the estimate exceeds it.
 - **`delete_website` has the same confirm rail.** The first call previews what happens (the domain, how many audits and open issues stay attached to the old id) without deleting anything; the agent confirms with you and calls again with `confirm: true`. Deletion is soft: nothing is destroyed, and re-adding the domain later registers a fresh website with a new id.
 - **`create_api_key` is scope-gated.** It needs credentials carrying the reserved `keys:write` scope. OAuth login grants it (you consented on the approval screen); plain API keys never carry it, and keys minted by this tool can't mint further keys. No escalation loops.
+
+### The entity tools run one loop
+
+The five entity tools exist to be used in order. `list_entities` with `problem: "no-id"` returns the entities a site declares on several pages with nothing tying them together, you fix the site's JSON-LD, `run_audit` re-audits, and `compare_entities` confirms the keys you fixed come back under `gainedId`. That last step is the one worth insisting on: an entity that gains an `@id` changes key, so a naive before-and-after comparison reports the fix as one removal plus one addition and it reads as damage.
+
+[The entity map over MCP](/entity-map/mcp) covers the loop in full, including what the `coverage` field on each change is claiming.
 
 ### Which number to compare
 
