@@ -401,8 +401,7 @@
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"eyJhbG********************wMH0"}
   ],
   "supabase-anon-key@fetch-bearer-header": [
-    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"eyJhbG********************wMH0"},
-    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************VCJ9"}
+    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"eyJhbG********************wMH0"}
   ],
   "supabase-anon-key@pre-env-dump": [
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************wMH0"}
@@ -828,14 +827,8 @@
   "paypal-client-id@external-bundle": [
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"AZl-0x********************1gy1"}
   ],
-  "paypal-client-id@fetch-bearer-header": [
-    {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"AZ7vyh********************r64a"}
-  ],
   "paypal-client-id@pre-env-dump": [
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"AZ_r9_********************7zpj"}
-  ],
-  "paypal-client-id@sourcemap-comment": [
-    {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"AZ2hhm********************vwg4"}
   ],
   "square-access-token@inline-config-object": [
     {"type":"Square Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sq0atp*******************ex4F"},
@@ -1811,8 +1804,7 @@
     {"type":"Discord Bot Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"MTM2OT********************ibs_"}
   ],
   "discord-bot-token@fetch-bearer-header": [
-    {"type":"Discord Bot Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"MTg3Nj********************Nptc"},
-    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************NzAz"}
+    {"type":"Discord Bot Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"MTg3Nj********************Nptc"}
   ],
   "discord-bot-token@pre-env-dump": [
     {"type":"Discord Bot Token","confidence":"high","publicByDesign":false,"location":"html","masked":"MTI1Mj********************ke3i"}
@@ -2101,6 +2093,69 @@
   "sentry-dsn@pre-env-dump": [
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"html","masked":"https:********************2445"}
   ],
+  "posthog-project-key@inline-config-object": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_IU********************nfyV"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_IU********************nfyV"}
+  ],
+  "posthog-project-key@window-env": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_hc********************whGV"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_hc********************whGV"}
+  ],
+  "posthog-project-key@next-data": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Gw********************rj9a"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_Gw********************rj9a"}
+  ],
+  "posthog-project-key@nuxt-payload": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_nO********************eeRI"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_nO********************eeRI"}
+  ],
+  "posthog-project-key@html-comment": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Em********************iF65"}
+  ],
+  "posthog-project-key@meta-content": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_1y********************Y8cE"}
+  ],
+  "posthog-project-key@data-attribute": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Jd********************tjDw"}
+  ],
+  "posthog-project-key@json-ld": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_XM********************zw16"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_XM********************zw16"}
+  ],
+  "posthog-project-key@external-bundle": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"phc_mX********************THhk"}
+  ],
+  "posthog-project-key@fetch-bearer-header": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"phc_SN********************Rlw1"}
+  ],
+  "posthog-project-key@pre-env-dump": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_aX********************MkKR"}
+  ],
+  "posthog-project-key@sourcemap-comment": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"phc_DS********************L6tJ"}
+  ],
+  "shopify-storefront-access-token-key@inline-config-object": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************cea\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************cea\""}
+  ],
+  "shopify-storefront-access-token-key@window-env": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************534\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************534\""}
+  ],
+  "shopify-storefront-access-token-key@next-data": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************7cd\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************7cd\""}
+  ],
+  "shopify-storefront-access-token-key@nuxt-payload": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************f1b\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************f1b\""}
+  ],
+  "shopify-storefront-access-token-key@html-comment": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************5a7\""}
+  ],
+  "shopify-storefront-access-token-key@external-bundle": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"storef********************18e\""}
+  ],
   "new-relic-license-key@inline-config-object": [
     {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"html","masked":"3N5BPQ********************NRAL"},
     {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"3N5BPQ********************NRAL"}
@@ -2264,47 +2319,6 @@
   ],
   "mapbox-secret-token@sourcemap-comment": [
     {"type":"Mapbox Secret Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sk.eyJ********************tIn0"}
-  ],
-  "sanity-token@inline-config-object": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skT3u6********************UAne"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skT3u6********************UAne"}
-  ],
-  "sanity-token@window-env": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skbIiy********************zkSo"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skbIiy********************zkSo"}
-  ],
-  "sanity-token@next-data": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skfWcQ********************SOcb"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skfWcQ********************SOcb"}
-  ],
-  "sanity-token@nuxt-payload": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skTFJh********************8ian"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skTFJh********************8ian"}
-  ],
-  "sanity-token@html-comment": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skjh6Q********************3cMw"}
-  ],
-  "sanity-token@meta-content": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skPOwz********************iExY"}
-  ],
-  "sanity-token@data-attribute": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skEAyz********************Vhhp"}
-  ],
-  "sanity-token@json-ld": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skXQMo********************ikSj"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skXQMo********************ikSj"}
-  ],
-  "sanity-token@external-bundle": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"skVkKI********************hrpM"}
-  ],
-  "sanity-token@fetch-bearer-header": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"sk9n0d********************eCdM"}
-  ],
-  "sanity-token@pre-env-dump": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skrl0X********************9KVd"}
-  ],
-  "sanity-token@sourcemap-comment": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"skJQY6********************5Msh"}
   ],
   "private-key-rsa@inline-config-object": [
     {"type":"Private Key (RSA)","confidence":"high","publicByDesign":false,"location":"html","masked":"-----B********************----"},
@@ -2522,18 +2536,47 @@
   "facebook-access-token@sourcemap-comment": [
     {"type":"Facebook Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"EAACEd********************tOzZ"}
   ],
-  "twitter-bearer-token@inline-config-object": [],
-  "twitter-bearer-token@window-env": [],
-  "twitter-bearer-token@next-data": [],
-  "twitter-bearer-token@nuxt-payload": [],
-  "twitter-bearer-token@html-comment": [],
-  "twitter-bearer-token@meta-content": [],
-  "twitter-bearer-token@data-attribute": [],
-  "twitter-bearer-token@json-ld": [],
-  "twitter-bearer-token@external-bundle": [],
-  "twitter-bearer-token@fetch-bearer-header": [],
-  "twitter-bearer-token@pre-env-dump": [],
-  "twitter-bearer-token@sourcemap-comment": [],
+  "twitter-bearer-token@inline-config-object": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************AewN"},
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AAAAAA********************AewN"}
+  ],
+  "twitter-bearer-token@window-env": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************pUHL"},
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AAAAAA********************pUHL"}
+  ],
+  "twitter-bearer-token@next-data": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************Db4J"},
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AAAAAA********************Db4J"}
+  ],
+  "twitter-bearer-token@nuxt-payload": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************AuTY"},
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AAAAAA********************AuTY"}
+  ],
+  "twitter-bearer-token@html-comment": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************uvkN"}
+  ],
+  "twitter-bearer-token@meta-content": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************21Lf"}
+  ],
+  "twitter-bearer-token@data-attribute": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************aZPR"}
+  ],
+  "twitter-bearer-token@json-ld": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************W4Z7"},
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AAAAAA********************W4Z7"}
+  ],
+  "twitter-bearer-token@external-bundle": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"AAAAAA********************5Wfu"}
+  ],
+  "twitter-bearer-token@fetch-bearer-header": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"AAAAAA********************wKHY"}
+  ],
+  "twitter-bearer-token@pre-env-dump": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************En74"}
+  ],
+  "twitter-bearer-token@sourcemap-comment": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"AAAAAA********************yXcO"}
+  ],
   "generic-api-key-assignment@inline-config-object": [
     {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"apiKey********************BYB\""},
     {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"apiKey********************BYB\""}
@@ -3015,41 +3058,115 @@
     {"type":"Segment Write Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"5xPIpv********************DcwX"}
   ],
   "mixpanel-token@inline-config-object": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"2372d9********************2a6a"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2372d9********************2a6a"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"2372d9********************2a6a"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"2372d9********************2a6a"}
   ],
   "mixpanel-token@window-env": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"6efc2e********************d4e3"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6efc2e********************d4e3"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"6efc2e********************d4e3"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"6efc2e********************d4e3"}
   ],
   "mixpanel-token@next-data": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"622372********************3eaf"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"622372********************3eaf"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"622372********************3eaf"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"622372********************3eaf"}
   ],
   "mixpanel-token@nuxt-payload": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"43097c********************288b"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"43097c********************288b"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"43097c********************288b"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"43097c********************288b"}
   ],
   "mixpanel-token@html-comment": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"262278********************b378"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"262278********************b378"}
   ],
   "mixpanel-token@meta-content": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"8403a9********************9cc8"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"8403a9********************9cc8"}
   ],
   "mixpanel-token@data-attribute": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"108f07********************05ef"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"108f07********************05ef"}
   ],
   "mixpanel-token@external-bundle": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"59b09f********************c84d"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"59b09f********************c84d"}
   ],
   "mixpanel-token@fetch-bearer-header": [
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************30c4"}
   ],
   "mixpanel-token@pre-env-dump": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9d2371********************99a6"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"9d2371********************99a6"}
   ],
   "mixpanel-token@sourcemap-comment": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"54af50********************cee3"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"54af50********************cee3"}
+  ],
+  "shopify-storefront-access-token@inline-config-object": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"510ff4********************701e"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"510ff4********************701e"}
+  ],
+  "shopify-storefront-access-token@window-env": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"21cfcb********************1521"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"21cfcb********************1521"}
+  ],
+  "shopify-storefront-access-token@next-data": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"3346f4********************f59b"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3346f4********************f59b"}
+  ],
+  "shopify-storefront-access-token@nuxt-payload": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"38b56e********************d97a"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"38b56e********************d97a"}
+  ],
+  "shopify-storefront-access-token@html-comment": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"3e71bb********************69df"}
+  ],
+  "shopify-storefront-access-token@meta-content": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"99184b********************be0d"}
+  ],
+  "shopify-storefront-access-token@data-attribute": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"42d9e4********************7ebd"}
+  ],
+  "shopify-storefront-access-token@external-bundle": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"960757********************8759"}
+  ],
+  "shopify-storefront-access-token@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************393a"}
+  ],
+  "shopify-storefront-access-token@pre-env-dump": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"0d45c1********************9b91"}
+  ],
+  "shopify-storefront-access-token@sourcemap-comment": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"7d1376********************1c90"}
+  ],
+  "raygun-api-key@inline-config-object": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"1bDQyL******************rC51"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"1bDQyL******************rC51"}
+  ],
+  "raygun-api-key@window-env": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"6ydEBp******************X1w2"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"6ydEBp******************X1w2"}
+  ],
+  "raygun-api-key@next-data": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"90yM4m******************pfkt"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"90yM4m******************pfkt"}
+  ],
+  "raygun-api-key@nuxt-payload": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"70go4V******************SlEp"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"70go4V******************SlEp"}
+  ],
+  "raygun-api-key@html-comment": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"5xeiMQ******************nXkO"}
+  ],
+  "raygun-api-key@meta-content": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"3YBteG******************f2y8"}
+  ],
+  "raygun-api-key@data-attribute": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"1ze076******************sSRy"}
+  ],
+  "raygun-api-key@external-bundle": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"1FxQfx******************Hbg8"}
+  ],
+  "raygun-api-key@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************XPAS"}
+  ],
+  "raygun-api-key@pre-env-dump": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"9n2I1y******************PNNj"}
+  ],
+  "raygun-api-key@sourcemap-comment": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"2zM17j******************X5ZE"}
   ],
   "amplitude-api-key@inline-config-object": [
     {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"3d70d3********************1be4"},
@@ -3199,6 +3316,43 @@
   "contentful-access-token@sourcemap-comment": [
     {"type":"Contentful Access Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"69STjC********************v2BJ"}
   ],
+  "sanity-token@inline-config-object": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk73u6********************UAne"},
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"sk73u6********************UAne"}
+  ],
+  "sanity-token@window-env": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk0Iiy********************zkSo"},
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"sk0Iiy********************zkSo"}
+  ],
+  "sanity-token@next-data": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk0WcQ********************SOcb"},
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"sk0WcQ********************SOcb"}
+  ],
+  "sanity-token@nuxt-payload": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk7FJh********************8ian"},
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"sk7FJh********************8ian"}
+  ],
+  "sanity-token@html-comment": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk1h6Q********************3cMw"}
+  ],
+  "sanity-token@meta-content": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk6Owz********************iExY"}
+  ],
+  "sanity-token@data-attribute": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk4Ayz********************Vhhp"}
+  ],
+  "sanity-token@external-bundle": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"sk7kKI********************hrpM"}
+  ],
+  "sanity-token@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************eCdM"}
+  ],
+  "sanity-token@pre-env-dump": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk2l0X********************9KVd"}
+  ],
+  "sanity-token@sourcemap-comment": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"sk5QY6********************5Msh"}
+  ],
   "algolia-api-key@inline-config-object": [
     {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"8248a8********************3526"},
     {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8248a8********************3526"}
@@ -3288,7 +3442,10 @@
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"html","masked":"https:********************4822"},
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"inline-script","masked":"https:********************4822"}
   ],
-  "neg:posthog-project-key": [],
+  "neg:posthog-project-key": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Y7********************7mod"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_Y7********************7mod"}
+  ],
   "neg:supabase-anon-jwt": [
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************wMH0"},
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************wMH0"}
@@ -3298,30 +3455,54 @@
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************MDB9"}
   ],
   "neg:rs256-jwt-is-not-supabase": [],
-  "neg:base64-image-data-uri": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"sk2JJQ********************G6Ix"}
-  ],
+  "neg:base64-image-data-uri": [],
   "neg:release-checksums-with-brand-prose": [],
   "neg:chunk-hashes-at-the-bare-shape-floors": [],
   "neg:uuids-as-request-ids": [],
   "neg:bearer-19-char-literal-then-interpolation": [],
   "neg:identifier-value-under-a-credential-key": [],
-  "neg:sk-prefixed-identifier": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skelet********************ce42"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skelet********************ce42"}
-  ],
-  "neg:sk-prefixed-css-class": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skelet********************iant"}
-  ],
+  "neg:sk-prefixed-identifier": [],
+  "neg:sk-prefixed-css-class": [],
   "neg:sk-prefixed-class-one-under-the-floor": [],
   "neg:env-reference-not-literal": [],
   "neg:password-seven-chars": [],
-  "neg:password-eight-chars": [
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*********Fiv\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo*********Fiv\""}
+  "neg:password-eight-random-chars": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*********skp\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo*********skp\""}
+  ],
+  "neg:password-eight-chars-of-two-letters": [],
+  "neg:password-changeme-is-a-weak-credential-not-a-placeholder": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*********eme\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo*********eme\""}
+  ],
+  "neg:password-near-a-public-brand-word-is-still-a-password": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo************v9L\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret***********R7x\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo************v9L\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret***********R7x\""}
+  ],
+  "neg:secret-key-value-differing-from-its-key-by-a-digit": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret*************ey1\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo**************24!\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret*************ey1\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo**************24!\""}
+  ],
+  "neg:value-equal-to-its-key-is-a-label": [],
+  "neg:password-with-a-percent-sign-is-still-a-password": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*************9L%\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo*************9L%\""}
+  ],
+  "neg:quoted-instruction-string-under-a-credential-key": [],
+  "neg:password-sixteen-random-chars": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*****************Je9\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo*****************Je9\""}
   ],
   "neg:placeholder-api-key": [],
-  "neg:real-shaped-token-suppressed-by-fp-word": [],
+  "neg:real-shaped-token-with-an-fp-word-inside-is-kept": [
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ghp_pk********************jGh5"},
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ghp_pk********************jGh5"}
+  ],
+  "neg:placeholder-shaped-token-at-the-head": [],
   "neg:css-class-soup": [],
   "neg:google-oauth-client-id": [
     {"type":"Google OAuth Client ID","confidence":"high","publicByDesign":true,"location":"html","masked":"042308********************.com"},
@@ -3336,103 +3517,172 @@
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"AZ2kcu********************zyd3"}
   ],
   "neg:paypal-client-id-mixed-case": [],
-  "real:sanity-webpack-chunk-id": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skFVfL********************F06i"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skQ7yg********************6hlO"},
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skQ7yg********************6hlO"}
-  ],
-  "real:sanity-base64-image-fragment": [
-    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skI1VJ********************O94d"}
-  ],
-  "real:linkedin-share-link-plus-shopify-wpm-script": [
-    {"type":"LinkedIn Client Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"8fad6c******cc68"}
-  ],
-  "real:cloudflare-fronted-page-sri-and-challenge": [
-    {"type":"Cloudflare API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"KJCNqf********************nGnP"}
-  ],
+  "real:sanity-webpack-chunk-id": [],
+  "real:sanity-base64-image-fragment": [],
+  "real:linkedin-share-link-plus-shopify-wpm-script": [],
+  "real:cloudflare-fronted-page-sri-and-challenge": [],
   "real:together-in-prose-plus-sha256-attr": [],
   "real:segment-in-prose-plus-hash-attr": [],
-  "real:heroku-in-prose-plus-uuid-attr": [
-    {"type":"Heroku API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"41b80b********************7e9b"}
-  ],
+  "real:heroku-in-prose-plus-uuid-attr": [],
   "real:mistral-in-prose-plus-cryptojs-salted-blob": [],
   "real:datadog-in-prose-plus-md5-attr": [],
-  "real:telegram-uuid-pair-in-webflow-id-path": [
-    {"type":"Telegram Bot Token","confidence":"high","publicByDesign":false,"location":"html","masked":"844374********************21fb"}
-  ],
-  "real:resend-mid-token-in-image-filename": [
-    {"type":"Resend API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"re_Dry********************Balm"},
-    {"type":"Resend API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"re_sGr********************1szT"}
-  ],
+  "real:telegram-uuid-pair-in-webflow-id-path": [],
+  "real:resend-mid-token-in-image-filename": [],
   "real:neon-product-slug": [
     {"type":"Neon Database Token","confidence":"high","publicByDesign":false,"location":"html","masked":"neon_a********************tion"}
   ],
-  "real:paypal-azione-slug": [
-    {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"azione********************nale"}
-  ],
-  "real:generic-secret-i18n-strings": [
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo********************ion'"},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwd********************in?\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret******************** us\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Passwo********************rd?\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Passwo********************tch\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo********************ion'"},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwd********************in?\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret******************** us\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Passwo********************rd?\""},
-    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Passwo********************tch\""}
-  ],
+  "real:paypal-azione-slug": [],
+  "real:generic-secret-i18n-strings": [],
   "real:shopify-storefront-access-token": [
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Access********************4af\""},
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************a85\""},
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Access********************4af\""},
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************a85\""}
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************4af\""},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"de297e********************1a85"},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************4af\""},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"de297e********************1a85"}
   ],
   "real:shopify-web-pixel-api-key": [
-    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Api-Ke********************9UM\""},
-    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Api-Ke********************9UM\""}
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"f2828d********************dfba"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"f2828d********************dfba"}
   ],
+  "real:shopify-access-token-far-from-the-brand-word-stays-generic": [
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************6e0\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************6e0\""}
+  ],
+  "real:url-encoded-json-stripe-publishable-key": [
+    {"type":"Stripe Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_liv********************wWOU"},
+    {"type":"Stripe Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_liv********************wWOU"}
+  ],
+  "real:url-encoded-json-github-token": [
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ghp_m3********************3Z03"},
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ghp_m3********************3Z03"}
+  ],
+  "real:url-encoded-sentence-under-password-key": [],
   "real:bearer-template-and-concat-in-auth-spa": [],
   "real:bearer-literal-in-auth-spa": [
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer*****************NiJ9"},
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer*****************NiJ9"}
   ],
+  "real:bearer-literal-opaque-token-in-auth-spa": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************imsV"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************imsV"}
+  ],
   "real:aiza-is-public-not-high": [
     {"type":"Google API Key (browser)","confidence":"high","publicByDesign":true,"location":"html","masked":"AIzaSy********************XBdf"},
     {"type":"Google API Key (browser)","confidence":"high","publicByDesign":true,"location":"inline-script","masked":"AIzaSy********************XBdf"}
   ],
-  "real:prefix-mid-token-ghp": [
-    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ghp_mc********************kfAq"},
-    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ghp_mc********************kfAq"}
+  "real:prefix-mid-token-ghp": [],
+  "real:prefix-mid-token-sk-live": [],
+  "real:prefix-mid-token-akia": [],
+  "real:shopify-features-boot-json": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"239256********************994c"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"239256********************994c"}
   ],
-  "real:prefix-mid-token-sk-live": [
-    {"type":"Stripe Live Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk_liv********************VvX3"},
-    {"type":"Stripe Live Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk_liv********************VvX3"}
+  "real:storefront-access-token-key-anywhere": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************d98\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************d98\""}
   ],
-  "real:prefix-mid-token-akia": [
-    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"html","masked":"AKIAC6**********NY0D"},
-    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AKIAC6**********NY0D"}
+  "real:access-token-on-a-cdn-shopify-page": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"access********************122\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************122\""}
+  ],
+  "real:raygun-parent-object": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"3pwIz5******************tG6u"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3pwIz5******************tG6u"}
+  ],
+  "real:builder-component-tag": [
+    {"type":"Builder.io API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"api-ke********************607\""}
+  ],
+  "real:intercom-settings-object": [
+    {"type":"Intercom App ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"access********************NBY\""},
+    {"type":"Intercom App ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"access********************NBY\""}
+  ],
+  "real:brand-parent-does-not-claim-a-secret-or-auth-token": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************Qh2\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"authTo********************gCM\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************Qh2\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"authTo********************gCM\""}
+  ],
+  "real:credential-in-a-query-string-is-not-a-path": [],
+  "real:quoted-credential-after-a-query-mark-in-an-href": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************MeJ'"}
+  ],
+  "real:two-hs256-jwts-only-the-claimed-one-yields": [
+    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************wMH0"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************VCJ9"},
+    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************wMH0"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************VCJ9"}
+  ],
+  "real:public-username-inside-a-database-url-does-not-hide-it": [
+    {"type":"PostgreSQL Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"postgr********************prod"},
+    {"type":"PostgreSQL Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"postgr********************prod"}
+  ],
+  "real:brand-far-from-the-key-stays-generic": [
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"apiKey********************QCH\""},
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"apiKey********************QCH\""}
+  ],
+  "real:generic-match-inside-a-url-path": [],
+  "real:wordpress-oembed-data-secret-nonce": [],
+  "real:meta-description-mentioning-access": [],
+  "real:cdn-shopify-lookalike-host-is-not-a-shopify-page": [
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************0b5\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************0b5\""}
+  ],
+  "real:protocol-relative-cdn-shopify-url-counts": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"access********************745\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************745\""}
+  ],
+  "real:sentry-dsn-host-lookalike": [],
+  "real:ga4-api-secret-assignment": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"SECRET********************rCZ'"},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"SECRET********************rCZ'"}
+  ],
+  "real:rsc-flight-payload-bearer-jwt": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************VCJ9"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************VCJ9"}
+  ],
+  "real:fetch-header-literal-first-party-api": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************HfFT"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************HfFT"}
+  ],
+  "real:screaming-snake-env-dump-with-turnstile-test-key": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"SECRET********************Sw9\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"SECRET********************Sw9\""}
   ],
   "dedup:shared-theme-bundle-one-finding-per-distinct-value": [
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"external-script","masked":"https:********************7113"},
     {"type":"Mapbox Access Token","confidence":"high","publicByDesign":true,"location":"external-script","masked":"pk.eyJ********************YSJ9"}
   ],
   "probe:paypal-eats-azure-account-key": [
-    {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"az5hmz********************hxcu"},
-    {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"az5hmz********************hxcu"}
+    {"type":"Azure Storage Key","confidence":"high","publicByDesign":false,"location":"html","masked":"Defaul********************u==;"},
+    {"type":"Azure Storage Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"Defaul********************u==;"}
   ],
   "probe:cohere-window-claims-together-key": [
-    {"type":"Cohere API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"04484f********************982c"},
-    {"type":"Cohere API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"04484f********************982c"}
+    {"type":"Together AI Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"04484f********************8458"},
+    {"type":"Together AI Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"04484f********************8458"}
   ],
-  "probe:keyed-value-dropped-as-camelcase": [],
-  "probe:keyed-value-dropped-as-snake-case": [],
-  "probe:keyed-value-dropped-by-verb-prefix": [],
+  "probe:keyed-value-opening-camelcase-is-kept-when-quoted": [
+    {"type":"Cohere API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"abWeqo********************Zou4"},
+    {"type":"Cohere API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"abWeqo********************Zou4"}
+  ],
+  "probe:keyed-value-with-underscore-is-kept-when-quoted": [
+    {"type":"Cloudflare API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"6f6xq1********************cy33"},
+    {"type":"Cloudflare API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6f6xq1********************cy33"}
+  ],
+  "probe:keyed-value-with-verb-prefix-is-kept-when-quoted": [
+    {"type":"Mistral API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"on7813********************6447"},
+    {"type":"Mistral API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"on7813********************6447"}
+  ],
+  "probe:naming-attribute-after-the-value-in-the-same-tag": [
+    {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"6d7a26********************6435"}
+  ],
+  "probe:keyed-identifier-unquoted-is-still-dropped": [],
   "probe:digitalocean-spaces-eats-new-relic": [
-    {"type":"DigitalOcean Spaces Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"DOQM2X**************NRAL"},
-    {"type":"DigitalOcean Spaces Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"DOQM2X**************NRAL"}
+    {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"html","masked":"3RJ1Z3********************NRAL"},
+    {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"3RJ1Z3********************NRAL"}
   ],
-  "probe:fp-filter-is-a-substring-test": [],
+  "probe:fp-filter-is-a-substring-test": [
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ghp_zf********************TlWM"},
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ghp_zf********************TlWM"}
+  ],
   "probe:supabase-service-role-jwt-is-called-public": [
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************AwfQ"},
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************AwfQ"}

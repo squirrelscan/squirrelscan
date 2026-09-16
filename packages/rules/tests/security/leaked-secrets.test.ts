@@ -20,11 +20,13 @@ import { join } from "node:path";
 import { parsePage } from "@squirrelscan/parser";
 
 import {
+  CONTEXT_KEYWORD_GAP,
   CONTEXT_PATTERNS,
   FAST_PATTERNS,
   leakedSecretsRule,
   scanContent,
   scanPageForSecrets,
+  selectFastPatterns,
   type LeakedSecret,
 } from "../../src/security/leaked-secrets";
 import type { RuleContext, RuleResult } from "../../src/types";
@@ -132,9 +134,8 @@ describe("security/leaked-secrets corpus: coverage", () => {
       const keyName = g.keyName ?? "value";
       const js = g.tier === "assignment" ? `var c={${v.text}};` : `var c={${keyName}:${JSON.stringify(v.text)}};`;
       const types = scanContent(js, "inline-script").map((f) => f.type);
-      const expected =
-        g.pattern === "Clerk Secret Key" ? "Stripe Live Key" : g.pattern === "Twitter Bearer Token" ? null : g.pattern;
-      if (expected === null ? types.length !== 0 : !types.includes(expected)) {
+      const expected = g.pattern === "Clerk Secret Key" ? "Stripe Live Key" : g.pattern;
+      if (!types.includes(expected)) {
         wrong.push(`${g.pattern}: got [${types.join(", ")}]`);
       }
     }
@@ -145,6 +146,130 @@ describe("security/leaked-secrets corpus: coverage", () => {
     const ids = CASES.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+});
+
+// pub#363: for every pattern, mechanically from its generator — a positive,
+// a prefilter assertion, a corrupted-keyword near-miss, a mid-token near-miss
+// (prefixed tier), a duplicate that collapses to one finding, and for the
+// context tier the three directions of the bounded look-behind.
+describe("security/leaked-secrets corpus: meta (every pattern, derived from its generator)", () => {
+  const CLAIMED: Record<string, string> = { "Clerk Secret Key": "Stripe Live Key" };
+
+  /** The bare embedding every generator fires in: `var c={key:"value"};`. */
+  const bare = (g: (typeof GENERATORS)[number], text: string) =>
+    g.tier === "assignment" ? `var c={${text}};` : `var c={${g.keyName ?? "value"}:${JSON.stringify(text)}};`;
+
+  /** The keywords the detector declares for a pattern, whichever tier. */
+  const keywordsOf = (name: string): string[] => {
+    const fast = FAST_PATTERNS.find((p) => p.name === name);
+    if (fast) return fast.keywords ?? [];
+    const ctx = CONTEXT_PATTERNS.find((p) => p.name === name);
+    return ctx ? [ctx.keyword] : [];
+  };
+
+  test("every FAST pattern declares at least one keyword, and none is an English word", () => {
+    const missing = FAST_PATTERNS.filter((p) => !p.keywords || p.keywords.length === 0).map((p) => p.name);
+    expect(missing).toEqual([]);
+    const words = FAST_PATTERNS.flatMap((p) => p.keywords ?? []);
+    expect(words.every((k) => k === k.toLowerCase())).toBe(true);
+    // The tier is prefix tokens; a bare dictionary word here would gate
+    // nothing. `bearer`/`basic`/`secret`/`password` are the generic
+    // patterns' own literals and the one exception the tier has.
+    const english = ["key", "token", "api", "auth", "user", "id", "data", "value", "name"];
+    expect(words.filter((k) => english.includes(k))).toEqual([]);
+  });
+
+  for (const g of GENERATORS) {
+    const expected = CLAIMED[g.pattern] ?? g.pattern;
+    const value = g.make(seededRng(11));
+    const input = bare(g, value.text);
+    const keywords = keywordsOf(g.pattern);
+    const isFast = FAST_PATTERNS.some((p) => p.name === g.pattern);
+
+    test(`${g.pattern}: positive, and its input carries a declared keyword`, () => {
+      expect(scanContent(input, "inline-script").map((f) => f.type)).toContain(expected);
+      const lower = input.toLowerCase();
+      expect(keywords.some((k) => lower.includes(k))).toBe(true);
+    });
+
+    // Keywords are plain substrings, never regexes: every occurrence is
+    // found case-insensitively by indexOf and rewritten in place.
+    const rewrite = (text: string, needle: string, by: (m: string) => string) => {
+      const lower = text.toLowerCase();
+      let out = "";
+      let pos = 0;
+      for (let at = lower.indexOf(needle, pos); at !== -1; at = lower.indexOf(needle, pos)) {
+        out += text.slice(pos, at) + by(text.slice(at, at + needle.length));
+        pos = at + needle.length;
+      }
+      return out + text.slice(pos);
+    };
+    // Every keyword occurrence with its last character replaced.
+    const corrupt = (text: string) => {
+      let out = text;
+      for (const k of keywords) out = rewrite(out, k, (m) => m.slice(0, -1) + "#");
+      return out;
+    };
+    // The gram index is only built past 256 characters; pad so the prefilter
+    // has something to decide with, the way a real body does.
+    const pad = (text: string) => `${text}\n/* ${"-".repeat(300)} */`;
+
+    test(`${g.pattern}: the prefilter selects it for its own positive and deselects a corrupted keyword`, () => {
+      if (isFast) {
+        expect(selectFastPatterns(pad(input))).toContain(expected);
+        // A keyword under four characters proves nothing to a 4-gram index,
+        // so its pattern is always selected; only longer ones can deselect.
+        // The keyword is REMOVED here rather than corrupted by a character:
+        // a PEM trailer repeats most of its header's grams and a run of `A`s
+        // repeats its own, so one changed character leaves the index able to
+        // say "maybe", which is the sound answer.
+        if (keywords.every((k) => k.length >= 4)) {
+          let removed = input;
+          for (const k of keywords) removed = rewrite(removed, k, () => "#");
+          expect(selectFastPatterns(pad(removed))).not.toContain(expected);
+        }
+      } else {
+        expect(input.toLowerCase().includes(keywords[0]!)).toBe(true);
+      }
+    });
+
+    test(`${g.pattern}: one corrupted character in the keyword and it no longer fires`, () => {
+      const corrupted = corrupt(input);
+      expect(corrupted).not.toBe(input);
+      expect(scanContent(corrupted, "inline-script").map((f) => f.type)).not.toContain(expected);
+    });
+
+    if (g.tier === "prefixed") {
+      test(`${g.pattern}: the prefix mid-token (foo…) does not fire`, () => {
+        const midToken = bare(g, `foo${value.text}`);
+        expect(scanContent(midToken, "inline-script").map((f) => f.type)).not.toContain(expected);
+      });
+    }
+
+    test(`${g.pattern}: the same value twice collapses to one finding`, () => {
+      // Two complete fixtures, each detectable on its own (the keyed tier
+      // needs its keyword in front of BOTH), so the one finding is dedup's.
+      const once = bare(g, value.text);
+      expect(scanContent(once, "inline-script").filter((f) => f.type === expected)).toHaveLength(1);
+      const found = scanContent(`${once}\n${once}`, "inline-script").filter((f) => f.type === expected);
+      expect(found).toHaveLength(1);
+    });
+
+    if (g.tier === "keyed") {
+      const keyword = keywords[0]!;
+      // From the end of the keyword to the first character of the value:
+      // ` */` (3), the filler, `;` (1) and `credential:"` (12).
+      const at = (gap: number) =>
+        `/* ${keyword} */${"x".repeat(gap - 3 - 1 - 'credential:"'.length)};credential:${JSON.stringify(value.text)}`;
+      test(`${g.pattern}: keyword 30 before the value fires, 60 before does not, after does not`, () => {
+        expect(scanContent(at(30), "inline-script").map((f) => f.type)).toEqual([g.pattern]);
+        expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.type)).toEqual([g.pattern]);
+        expect(scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")).toEqual([]);
+        expect(scanContent(at(60), "inline-script")).toEqual([]);
+        expect(scanContent(`credential:${JSON.stringify(value.text)}; /* ${keyword} */`, "inline-script")).toEqual([]);
+      });
+    }
+  }
 });
 
 describe("security/leaked-secrets corpus: rule output", () => {
@@ -176,13 +301,14 @@ describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviou
   });
 
   for (const c of gaps) {
+    // The 5 MB size-cap probe scans in full: an explicit budget under load.
     test(`${c.id} — today: ${c.expect.map((e) => `${e.pattern} (${e.check})`).join(", ") || "nothing"}`, () => {
       const got = observed(c);
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
       }
-    });
+    }, 30_000);
     test.todo(`GAP ${c.id}: ${c.knownGap}`, () => {
       throw new Error(c.knownGap);
     });
@@ -232,6 +358,42 @@ describe("security/leaked-secrets corpus: invariants", () => {
   });
 });
 
+describe("security/leaked-secrets corpus: cost on a large base64 body (pub#365)", () => {
+  // A 200 KB image data URI with no `+` or `/` in it: one alphanumeric run,
+  // which is the worst case for any pattern that opens on a wide class and
+  // has to backtrack. Discord's unbounded `{23,}` took 2.7 s here.
+  const alnum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const dataUri = (kb: number) => {
+    const r = seededRng(365);
+    let s = "";
+    for (let i = 0; i < kb * 1024; i++) s += alnum[Math.floor(r() * 62)];
+    return `<img alt="" src="data:image/png;base64,${s}">`;
+  };
+  const bestOf = (html: string) => {
+    let best = Infinity;
+    for (let i = 0; i < 3; i++) {
+      const t0 = performance.now();
+      scanContent(html, "html");
+      best = Math.min(best, performance.now() - t0);
+    }
+    return best;
+  };
+
+  test("a 200 KB alphanumeric data URI scans through the whole FAST table in a few ms, and linearly", () => {
+    const small = dataUri(50);
+    const large = dataUri(200);
+    scanContent(large, "html"); // warm
+    const smallMs = bestOf(small);
+    const largeMs = bestOf(large);
+    // 2.5 ms on an M2; the budget leaves room for a loaded CI runner and is
+    // still three orders of magnitude under the quadratic reading.
+    expect(largeMs).toBeLessThan(25);
+    // 4x the body: linear is 4x the time, the quadratic pattern was 16x.
+    expect(largeMs / Math.max(smallMs, 0.2)).toBeLessThan(8);
+    expect(scanContent(large, "html")).toEqual([]);
+  }, 30_000);
+});
+
 // One record per raw finding, stable across runs: the masked value is what a
 // user sees and the only thing about the value that belongs in git.
 type SnapshotRow = { type: string; confidence: string; publicByDesign: boolean; location: string; masked: string };
@@ -266,5 +428,5 @@ describe("security/leaked-secrets corpus: snapshot", () => {
     }
     const stored = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8")) as Snapshot;
     expect(current).toEqual(stored);
-  });
+  }, 60_000);
 });

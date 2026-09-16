@@ -23,6 +23,7 @@ import {
 } from "@squirrelscan/utils/constants";
 
 import {
+  CONTEXT_KEYWORD_GAP,
   classifyKeyContext,
   createSeenValues,
   leakedSecretsRule,
@@ -168,18 +169,23 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
       const content = `{"vendor":"together","sha256"${" ".repeat(gap)}:"${DIGEST}"}`;
       expect(scanContent(content, "inline-script")).toEqual([]);
     }
-    // The same distance under a credential key still reports.
-    const leak = `{"vendor":"together","token"${" ".repeat(SECRET_KEY_LOOKBEHIND_SIZE * 4)}:"${TOGETHER_KEY}"}`;
+    // Under a credential key within the keyword gap it still reports. The
+    // bounded look-behind (#357) counts raw characters from the brand word,
+    // whitespace included, so the gap here is what a formatter leaves.
+    const leak = `{"vendor":"together","token"${" ".repeat(20)}:"${TOGETHER_KEY}"}`;
     expect(scanContent(leak, "inline-script").map((f) => f.type)).toEqual([
       "Together AI Key",
     ]);
 
     // The invariant under all of it: the distance between a key and its value
     // is not evidence. A key that names something which is not a credential
-    // reads the same at 200 spaces as it does at none — before this, the same
+    // reads the same at 20 spaces as it does at none — before this, the same
     // page said "checksum" up close and "unnamed assignment" further away.
+    // (Past the keyword gap the silence is the gap's, not the key's, which
+    // is why the widest gap here stays inside it; the look-back itself is
+    // exercised at 200 spaces by the classifyKeyContext tests below.)
     for (const key of ["filename", "description", "sha256"]) {
-      for (const gap of [0, 1, SECRET_KEY_LOOKBEHIND_SIZE * 3]) {
+      for (const gap of [0, 1, 20]) {
         const content = `{"vendor":"together","${key}"${" ".repeat(gap)}:"${DIGEST}"}`;
         expect(scanContent(content, "inline-script")).toEqual([]);
       }
@@ -189,15 +195,21 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
   test("a short key that names something is not a minified member access", () => {
     // A cache-busting query param and a JSON id are short but they do name
     // their value, and it is not a credential.
+    // The brand word sits in front of each value, inside the keyword gap,
+    // so the silence is the key's and not the gap's.
     const cases = [
-      `<a href="/bundle.js?v=${DIGEST}">built together</a>`,
-      `<script>x={"id":"${DIGEST}",vendor:"together"}</script>`,
-      `<script>x={id:"${DIGEST}",vendor:"together"}</script>`,
-      `<script>x={a:"${DIGEST}",vendor:"together"}</script>`,
+      `<p>together</p><a href="/bundle.js?v=${DIGEST}">built</a>`,
+      `<script>x={vendor:"together","id":"${DIGEST}"}</script>`,
+      `<script>x={vendor:"together",id:"${DIGEST}"}</script>`,
+      `<script>x={vendor:"together",a:"${DIGEST}"}</script>`,
     ];
     for (const content of cases) {
       expect(scanContent(content, "html")).toEqual([]);
     }
+    // The same page with a key that does name a credential reports.
+    expect(
+      scanContent(`<script>x={vendor:"together",token:"${TOGETHER_KEY}"}</script>`, "html").map((f) => f.value) // pragma: allowlist secret
+    ).toEqual([TOGETHER_KEY]);
   });
 });
 
@@ -263,66 +275,87 @@ describe("security/leaked-secrets: real credentials still report", () => {
     }
   });
 
-  test("a minified assignment is still scanned", () => {
-    // `t.a = "…"` is what a bundler leaves behind, and it is exactly where a
-    // leaked key hides. The brand word is elsewhere in the window.
-    const content = `var t={};t.a="${TOGETHER_KEY}";/* together.ai client */`; // pragma: allowlist secret
-    const found = scanContent(content, "inline-script");
-    expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
+  test("a minified member assignment is not a credential context (#357)", () => {
+    // `t.a = "…"` used to report as "assigned". On 776 real sites that was the
+    // Cloudflare challenge bootstrap and the Shopify pixel loader assigning
+    // nonces to one-letter members within reach of a brand word, and not one
+    // leak. A bare shape needs a key that names it.
+    const content = `/* together.ai client */var t={};t.a="${TOGETHER_KEY}";`; // pragma: allowlist secret
+    expect(scanContent(content, "inline-script")).toEqual([]);
+    // The same value under a named key still reports.
+    const named = `/* together.ai client */var t={};t.token="${TOGETHER_KEY}";`; // pragma: allowlist secret
+    expect(scanContent(named, "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
   });
 
-  test("a naming attribute after the value is still read", () => {
-    const content = `<meta content="${TOGETHER_KEY}" name="algolia-api-key">`; // pragma: allowlist secret
-    const found = scanContent(content, "html");
-    // Algolia's 32-hex pattern claims the leading half of the value first, so
-    // assert the report, not which pattern's slice of it won.
-    expect(found).not.toEqual([]);
-    expect(TOGETHER_KEY.startsWith(found[0]?.value ?? "\0")).toBe(true);
+  test("a naming attribute of the same tag is read in either order (#357)", () => {
+    // The 40-character keyword gap is about prose distance. Inside one tag
+    // the whole tag is the look-behind: `<meta content="…" name="…">` is the
+    // attribute order a lot of generated HTML writes, and it names its value
+    // exactly as the other order does.
+    // Algolia's shape is 32 hex, and values are word-bounded now, so a
+    // 64-hex value is not an Algolia key: this uses one of Algolia's length.
+    const ALGOLIA_KEY = TOGETHER_KEY.slice(0, 32);
+    const before = `<meta name="algolia-api-key" content="${ALGOLIA_KEY}">`; // pragma: allowlist secret
+    expect(scanContent(before, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    const after = `<meta content="${ALGOLIA_KEY}" name="algolia-api-key">`; // pragma: allowlist secret
+    expect(scanContent(after, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    // With other attributes between them, past the gap, still one tag.
+    const spread = `<meta content="${ALGOLIA_KEY}" lang="en" dir="ltr" data-testid="release-row" property="og:x" name="algolia-api-key">`; // pragma: allowlist secret
+    expect(scanContent(spread, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    // The exception is the TAG's: the same keyword in the next tag, or in
+    // text after the value, does not reach back.
+    expect(scanContent(`<meta content="${ALGOLIA_KEY}"><meta name="algolia-api-key">`, "html")).toEqual([]);
+    expect(scanContent(`<meta content="${ALGOLIA_KEY}"> algolia`, "html")).toEqual([]);
+    // And a digest-naming attribute still suppresses in either order.
+    expect(scanContent(`<meta content="${DIGEST}" name="release-sha256"> together`, "html")).toEqual([]);
+    expect(scanContent(`<meta name="together" content="${DIGEST}" data-sha256="x">`, "html")).toEqual([]);
   });
 
-  test("a brand word at the far edge of the window still sees the key", () => {
-    // The window opens on the value itself and the key sits in the lead-in, so
-    // this only reports if the extracted window carries look-back context.
+  test("the brand word names the value from up to the keyword gap before it, never after (#357)", () => {
     // No FAST pattern matches `credential=`, so the context tier is on its own.
-    const lead = `${"x".repeat(199)};`;
     const assignment = `credential="${TOGETHER_KEY}"`; // pragma: allowlist secret
-    const valueStart = lead.length + `credential="`.length;
-    const keywordAt = valueStart + SECRET_CONTEXT_WINDOW_SIZE;
-    const filler = "x".repeat(keywordAt - (lead.length + assignment.length));
-    const content = `${lead}${assignment}${filler}together.ai`;
-
-    const found = scanContent(content, "inline-script");
-    expect(found.map((f) => f.value)).toContain(TOGETHER_KEY);
+    // Filler, a statement break, then the assignment: the key must not be
+    // glued to the filler or it stops being the word "credential".
+    // From the end of the brand word to the first character of the value:
+    // ` */` (3), the filler, `;` (1) and `credential="` (12).
+    const at = (gap: number) =>
+      `/* together */${"x".repeat(gap - 3 - 1 - 'credential="'.length)};${assignment}`;
+    // 30 characters before the value: fires.
+    expect(scanContent(at(30), "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
+    // Exactly the gap: fires. One past it: the word is elsewhere on the page.
+    expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
+    expect(scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")).toEqual([]);
+    expect(scanContent(at(60), "inline-script")).toEqual([]);
+    // After the value, at any distance: never.
+    expect(scanContent(`${assignment}; // together.ai`, "inline-script")).toEqual([]);
+    expect(scanContent(`${assignment};${"x".repeat(SECRET_CONTEXT_WINDOW_SIZE)}together`, "inline-script")).toEqual([]);
   });
 
   test("a long key beginning past the look-back budget still reports", () => {
     // End to end version of the look-back test: silent from N+1 before the fix.
+    // The brand word sits at the END of the key so it is within the keyword
+    // gap of the value; the key's start is what lies past the budget.
     const N = SECRET_KEY_LOOKBEHIND_SIZE;
     for (const distance of [N, N + 1, N + 2]) {
-      const key = `key${"Z".padEnd(distance - 2 - "key".length, "z")}`;
-      const content = `;${key}="${TOGETHER_KEY}" // together.ai`; // pragma: allowlist secret
+      const key = `${"z".repeat(distance - "togetherKey".length)}togetherKey`;
+      const content = `;${key}="${TOGETHER_KEY}"`; // pragma: allowlist secret
       expect(scanContent(content, "inline-script").map((f) => f.value)).toContain(
         TOGETHER_KEY
       );
     }
   });
 
-  test("a value straddling the start of the window is still reported once", () => {
-    // The value begins in the lead-in and runs into the scanned region. Cutting
-    // matching at the region boundary drops it entirely; scanning the lead-in
-    // and requiring the match to reach the region keeps it, exactly once.
-    const straddle = 32;
-    const key = `credential="`;
-    const lead = `${"x".repeat(199)};`;
-    const valueStart = lead.length + key.length;
-    // Put the brand word so the window opens partway through the value.
-    const keywordAt = valueStart + straddle + SECRET_CONTEXT_WINDOW_SIZE;
-    const upto = valueStart + TOGETHER_KEY.length + 1;
-    const filler = "x".repeat(keywordAt - upto);
-    const content = `${lead}${key}${TOGETHER_KEY}"${filler}together.ai`; // pragma: allowlist secret
-
-    const found = scanContent(content, "inline-script");
-    expect(found.map((f) => f.value)).toEqual([TOGETHER_KEY]);
+  test("a bare-shape value is word-bounded: a run inside a longer run is not a value (#357)", () => {
+    // Together's 64-hex shape is also the first 64 characters of a longer hex
+    // run, and Twilio's 32-hex shape is the first half of a Together key. With
+    // the value word-bounded, neither slice is a finding — only the whole run
+    // under its own key is.
+    const longer = `${TOGETHER_KEY}${"a1b2c3d4".repeat(2)}`;
+    expect(scanContent(`togetherKey:"${longer}"`, "inline-script")).toEqual([]);
+    expect(scanContent(`twilioAuth:"${TOGETHER_KEY}"`, "inline-script")).toEqual([]);
+    expect(scanContent(`togetherKey:"${TOGETHER_KEY}"`, "inline-script").map((f) => f.value)).toEqual([
+      TOGETHER_KEY,
+    ]);
   });
 
   test("a key too long for the look-back cannot invent a digest word", () => {
@@ -332,9 +365,11 @@ describe("security/leaked-secrets: real credentials still report", () => {
     // read at all: #175's direction, applied to the look-back itself.
     // Each separator puts the cut at a different offset inside the key, and a
     // `-`, a `.` or a digit is one the key patterns cannot start a match on.
+    // The brand word ends the key so it sits within the keyword gap; it is
+    // one word among many there, which names nothing on its own (#357).
     for (const separator of ["_", "-", ".", "7"]) {
-      const key = `api_key_${"q".repeat(100)}${separator}${"z".repeat(84)}_xsha256`;
-      const content = `"${key}"${" ".repeat(100)}:"${TOGETHER_KEY}"; // together.ai`; // pragma: allowlist secret
+      const key = `api_key_${"q".repeat(100)}${separator}${"z".repeat(84)}_xsha256_together`;
+      const content = `"${key}"${" ".repeat(20)}:"${TOGETHER_KEY}";`; // pragma: allowlist secret
       expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
         TOGETHER_KEY,
       ]);
@@ -342,7 +377,7 @@ describe("security/leaked-secrets: real credentials still report", () => {
 
     // A digest key the walk does reach the start of still suppresses, so the
     // guard buys the silence back only where the evidence was never read.
-    const short = `"cache_${"z".repeat(20)}_sha256"${" ".repeat(100)}:"${DIGEST}"; // together.ai`;
+    const short = `"cache_${"z".repeat(20)}_sha256_together"${" ".repeat(20)}:"${DIGEST}";`;
     expect(scanContent(short, "inline-script")).toEqual([]);
   });
 
@@ -388,7 +423,7 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
     `const v = ${q}${PREFIX.aws}2XJQ7LP4RNVD3KEB${q};`, // pragma: allowlist secret
     `const v = ${q}${PREFIX.slack}2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa${q};`, // pragma: allowlist secret
     `const v = ${q}-----BEGIN RSA PRIVATE KEY-----${q};`, // pragma: allowlist secret
-    `var t={};t.a=${q}${TOGETHER_KEY}${q};/* together.ai client */`, // pragma: allowlist secret
+    `/* together.ai client */var t={};t.token=${q}${TOGETHER_KEY}${q};`, // pragma: allowlist secret
     `cfg[${q}apiKey${q}] = ${q}${TOGETHER_KEY}${q}; // together`, // pragma: allowlist secret
   ];
   const fixtures = ['"', "'"].flatMap(fixturesQuotedWith);
@@ -483,10 +518,10 @@ describe("classifyKeyContext", () => {
     );
   });
 
-  test("a minifier's member access is treated as no key at all", () => {
-    expect(classifyKeyContext(`t.a = "`, "together")).toBe("assigned");
-    expect(classifyKeyContext(`e.x2="`, "together")).toBe("assigned");
-    expect(classifyKeyContext(`n["a"]="`, "together")).toBe("assigned");
+  test("a minifier's member access names nothing, and nothing is not a credential (#357)", () => {
+    expect(classifyKeyContext(`t.a = "`, "together")).toBe("none");
+    expect(classifyKeyContext(`e.x2="`, "together")).toBe("none");
+    expect(classifyKeyContext(`n["a"]="`, "together")).toBe("none");
     // A key long enough to mean something still has to say "credential".
     expect(classifyKeyContext(`filename: "`, "together")).toBe("none");
     expect(classifyKeyContext(`description = "`, "together")).toBe("none");
@@ -655,7 +690,7 @@ describe("classifyKeyContext", () => {
     expect(classifyKeyContext(`commitHash || "`, "together")).toBe("digest");
     // Nor a key that means nothing into one that does.
     expect(classifyKeyContext(`filename || "`, "together")).toBe("none");
-    expect(classifyKeyContext(`t.a || "`, "together")).toBe("assigned");
+    expect(classifyKeyContext(`t.a || "`, "together")).toBe("none");
   });
 });
 
@@ -813,18 +848,15 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // A call expression names nothing, and a checksum falling back to a
     // literal is exactly the shape that would be misread.
     for (const expr of ["getChecksum()", "hashes.get(name)", "digestOf(x)"]) {
-      const content = `const v = ${expr} || "${DIGEST}"; // together.ai`;
+      const content = `/* together.ai */ const v = ${expr} || "${DIGEST}";`;
       expect(scanContent(content, "inline-script")).toEqual([]);
     }
-    // A name in front of the fallback still reports, minified ones included.
-    for (const content of [
-      `const v = cfg.token || "${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
-      `t.a||"${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
-    ]) {
-      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
-        TOGETHER_KEY,
-      ]);
-    }
+    // A name in front of the fallback still reports; a minified member is not
+    // a name (#357).
+    expect(
+      scanContent(`/* together.ai */ const v = cfg.token || "${TOGETHER_KEY}";`, "inline-script").map((f) => f.value) // pragma: allowlist secret
+    ).toEqual([TOGETHER_KEY]);
+    expect(scanContent(`/* together.ai */ t.a||"${TOGETHER_KEY}";`, "inline-script")).toEqual([]); // pragma: allowlist secret
   });
 
   test("a hardcoded fallback behind an env var is reported", () => {
@@ -851,7 +883,7 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // isInValuePosition and classifyKeyContext both read across the `||`.
     for (const content of [
       `const v = togetherKey || "${TOGETHER_KEY}";`, // pragma: allowlist secret
-      `const v = credential ?? "${TOGETHER_KEY}"; // together.ai`, // pragma: allowlist secret
+      `/* together.ai */ const v = credential ?? "${TOGETHER_KEY}";`, // pragma: allowlist secret
     ]) {
       expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
         TOGETHER_KEY,
@@ -859,7 +891,7 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     }
     // Same shape, digest key: the published checksum stays silent.
     for (const key of ["cacheKey", "sha256", "etag", "commitHash", "integrityHash"]) {
-      const content = `const v = ${key} || "${DIGEST}"; // together.ai`;
+      const content = `/* together.ai */ const v = ${key} || "${DIGEST}";`;
       expect(scanContent(content, "inline-script")).toEqual([]);
     }
   });

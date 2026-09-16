@@ -95,7 +95,7 @@ export const NEGATIVES: Case[] = [
   neg(
     "posthog-project-key",
     (r) => page("", `<script>posthog.init(${JSON.stringify(["ph", "c_"].join("") + runOf(r, ALNUM, 43))},{api_host:"https://us.i.posthog.com"});</script>`),
-    { knownGap: "PostHog phc_ project keys are not recognised at all (no pattern); a public-tier info finding would be right" },
+    { expect: [{ pattern: "PostHog Project Key", check: "public", location: "inline-script" }] },
   ),
 
   neg(
@@ -142,11 +142,8 @@ export const NEGATIVES: Case[] = [
         "",
         `<img alt="chart" src="data:image/png;base64,iVBORw0KGgo${"A".repeat(24)}${b64Filler(r, 1500)}/sk${runOf(r, ALNUM, 34)}/${b64Filler(r, 1500)}${"A".repeat(30)}${b64Filler(r, 400)}==">`,
       ),
-    {
-      expect: [{ pattern: "Sanity Token", check: "medium", location: "html" }],
-      knownGap:
-        "Sanity `sk[a-zA-Z0-9]{30,}` fires inside base64 image data URIs (an `sk` followed by 30 alphanumerics is routine in a few KB of base64)",
-    },
+    // Sanity needs the brand word within reach now (#357); no page of
+    // images carries it.
   ),
 
   neg("release-checksums-with-brand-prose", (r) =>
@@ -189,11 +186,13 @@ export const NEGATIVES: Case[] = [
   ),
 
   neg("identifier-value-under-a-credential-key", () =>
-    // Under `segmentKey`, in a Segment window, 40+ chars: only the
-    // identifier filter stands between this and a finding.
+    // Under `segmentKey`, in a Segment window, an UNQUOTED identifier: only
+    // the identifier filter stands between this and a finding. (Quoted, the
+    // same string is a literal assigned as a secret and reports; see the
+    // probes in cases.ts.)
     page(
       "",
-      `<script>var cfg={segmentKey:"segmentAnalyticsMiddlewareFactoryInstance",onCloudflareChallengeCompletedCallbackHandlerFn:handleAuthenticationRedirectAfterLoginSuccessCallback};</script>`,
+      `<script>var cfg={segmentKey:segmentAnalyticsMiddlewareFactoryInstance,onCloudflareChallengeCompletedCallbackHandlerFn:handleAuthenticationRedirectAfterLoginSuccessCallback};</script>`,
     ),
   ),
 
@@ -204,21 +203,12 @@ export const NEGATIVES: Case[] = [
         "",
         `<script>function skeletonLoaderComponentFactoryInstance42(){return null}window.skeletonLoaderComponentFactoryInstance42=skeletonLoaderComponentFactoryInstance42;</script>`,
       ),
-    {
-      // The Sanity pattern is FAST, so it never sees looksLikeCodeIdentifier.
-      expect: [{ pattern: "Sanity Token", check: "medium", location: "inline-script" }],
-      knownGap: "Sanity `sk[a-zA-Z0-9]{30,}` fires on any sk-prefixed identifier of 32+ chars (minified bundles are full of them)",
-    },
   ),
 
   neg(
     "sk-prefixed-css-class",
     () =>
       page("", `<div class="card skeletonLoaderShimmerAnimatedRowVariant sk-loading"><span class="skeleton-row"></span></div>`),
-    {
-      expect: [{ pattern: "Sanity Token", check: "medium", location: "html" }],
-      knownGap: "Sanity `sk[a-zA-Z0-9]{30,}` fires on any sk-prefixed identifier of 32+ chars (minified bundles are full of them)",
-    },
   ),
 
   neg("sk-prefixed-class-one-under-the-floor", () =>
@@ -240,8 +230,72 @@ export const NEGATIVES: Case[] = [
   ),
 
   neg(
-    "password-eight-chars",
+    "password-eight-random-chars",
+    // The entropy floor scales with length (#357): eight distinct characters
+    // is 3 bits/char, which is all eight characters can have, and it passes.
     (r) => page("", `<script>const seed={password:"${runOf(r, ALNUM, 8)}"};</script>`), // pragma: allowlist secret
+    { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
+  ),
+
+  neg("password-eight-chars-of-two-letters", () =>
+    // The same length with no entropy is a placeholder.
+    page("", `<script>const seed={password:"aabbaabb"};</script>`), // pragma: allowlist secret
+  ),
+
+  neg(
+    "password-changeme-is-a-weak-credential-not-a-placeholder",
+    // A deliberate choice: `changeme` clears the length-scaled floor (2.75 of
+    // a possible 2.5 at eight characters). It is as often a real default
+    // credential as a placeholder, and silencing it would hide the former.
+    () => page("", `<script>const seed={password:"changeme"};</script>`), // pragma: allowlist secret
+    { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
+  ),
+
+  // Round 2 (codex): the label/public/percent guards must not eat these.
+  neg(
+    "password-near-a-public-brand-word-is-still-a-password",
+    // A brand parent claims an API key or an access token (the SDK's client
+    // credential), never a password or a secret: both of these stay leaks.
+    () => page("", `<script>window.__cfg={shopify:{password:"R7m!q2Z#v9L"},mixpanel:{secret:"Zq9#Lm2!vR7x"}};</script>`), // pragma: allowlist secret
+    {
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
+    },
+  ),
+  neg(
+    "secret-key-value-differing-from-its-key-by-a-digit",
+    () => page("", `<script>const c={secret_key:"secretkey1",password:"password2024!"};</script>`), // pragma: allowlist secret
+    {
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
+    },
+  ),
+  neg("value-equal-to-its-key-is-a-label", () =>
+    page("", `<script>const l={password:"Password",passwd:"passwd",secret:"SECRET",secretKey:"secret-key"};</script>`), // pragma: allowlist secret
+  ),
+  neg(
+    "password-with-a-percent-sign-is-still-a-password",
+    () => page("", `<script>const c={password:"R7m!q2Z#v9L%",pwd:"R7m!q2Z%20v9L#"};</script>`), // pragma: allowlist secret
+    {
+      // `%20` is read as a space wherever it appears, so the second one is a
+      // documented casualty of the URL-encoded-label rule: one finding.
+      expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }],
+    },
+  ),
+
+  neg("quoted-instruction-string-under-a-credential-key", () =>
+    // Quoted and under a credential key, but made of words with no digit:
+    // the identifier heuristic still applies and drops it.
+    page("", `<script>window.__CFG__={cloudflare:{token:"paste_your_cloudflare_api_token_here_now"}};</script>`),
+  ),
+
+  neg(
+    "password-sixteen-random-chars",
+    (r) => page("", `<script>const seed={password:"${runOf(r, ALNUM, 16)}"};</script>`), // pragma: allowlist secret
     { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
   ),
 
@@ -249,10 +303,19 @@ export const NEGATIVES: Case[] = [
     page("", `<script>const client=new Client({apiKey:"YOUR_API_KEY_GOES_HERE_REPLACE_ME_NOW",timeout:3000});</script>`), // pragma: allowlist secret
   ),
 
-  neg("real-shaped-token-suppressed-by-fp-word", (r) =>
-    // A `ghp_` token of the right length whose body says `dummy`: the one
-    // case where the substring filter is doing exactly what it is for.
-    page("", `<script>const t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${runOf(r, ALNUM, 12)}dummy${runOf(r, ALNUM, 19)}"};</script>`),
+  neg(
+    "real-shaped-token-with-an-fp-word-inside-is-kept",
+    (r) =>
+      // A `ghp_` token of the right length whose random body happens to say
+      // `dummy`. The placeholder list is anchored to the value's head and
+      // tail now (#357), so a word in the middle of a token is not a verdict.
+      page("", `<script>const t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${runOf(r, ALNUM, 12)}dummy${runOf(r, ALNUM, 19)}"};</script>`),
+    { expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "inline-script" }] },
+  ),
+
+  neg("placeholder-shaped-token-at-the-head", (r) =>
+    // `ghp_dummy…`: the word right after the prefix IS the value.
+    page("", `<script>const t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}dummy${runOf(r, ALNUM, 31)}"};</script>`),
   ),
 
   neg("css-class-soup", () =>
