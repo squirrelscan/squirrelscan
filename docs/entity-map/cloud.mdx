@@ -101,11 +101,18 @@ GET /v1/reports/{id}/entities
 | Query | Meaning |
 |---|---|
 | `format` | `json`, `jsonld`, `html`, `markdown`, `csv`, `dot`, `graphml`, `mermaid`. Default `json`. |
-| `type` | Keep only entities carrying this `@type`. Case-insensitive. |
+| `type` | Keep only entities carrying this `@type`, matched against every type an entity declares. Case-insensitive. |
+| `exclude_type` | Drop entities whose **primary** `@type` is exactly this one. Repeat it to exclude several. Case-sensitive. |
 | `page` | Keep only entities declared on this page URL, or one starting with it. |
 | `problem` | `no-id`, `conflict`, `dangling`, `single-page`, `split-identity`. |
 | `q` | Free-text match over name, `@id`, key and types. |
 | `include_page_local` | Include per-page types. Off by default. |
+
+`type` and `exclude_type` read different things on purpose. `type` matches any of an entity's types and ignores case, so `?type=localbusiness` finds an entity typed `["Organization", "LocalBusiness"]`. `exclude_type` matches only the primary type, the one the entity leads with, and matches it exactly. That is the type an entity is listed under in a viewer showing one chip per entity, and comparing it as a string is what keeps a site that declares both `Organization` and `organization` from losing both when you name one. Together that is what makes a deny-list over the visible types expressible:
+
+```http
+GET /v1/reports/{id}/entities?exclude_type=WebPage&exclude_type=BreadcrumbList
+```
 
 The JSON response is the [map document](/entity-map/format) plus a `meta` object:
 

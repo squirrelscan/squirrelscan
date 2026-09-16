@@ -410,13 +410,25 @@
           {
             "name": "type",
             "in": "query",
-            "description": "Keep only entities carrying this schema.org `@type` (case-insensitive).",
+            "description": "Keep only entities carrying this schema.org `@type` (case-insensitive). Matched against EVERY type an entity declares, so an entity typed `[\"Organization\", \"LocalBusiness\"]` matches either.",
             "schema": { "type": "string", "maxLength": 128 }
+          },
+          {
+            "name": "exclude_type",
+            "in": "query",
+            "description": "Drop entities whose PRIMARY `@type` is exactly this one. Repeat the parameter to exclude several: `?exclude_type=WebPage&exclude_type=BreadcrumbList`.\n\nTwo differences from `type` above, both deliberate. It reads the primary type, `types[0]`, the one an entity leads with, rather than every type it declares: this expresses a deny-list over the one type an entity is listed under, which is what a viewer showing one chip per entity needs. And it is CASE-SENSITIVE, where `type` is not: the distinct primary types in a map are compared as strings, so a site declaring both `Organization` and `organization` has two of them, and folding case here would drop both when the caller named one.\n\nThe length bound is the published map's own `maxStringLength`, not the 128 that `type` uses, so every type name this endpoint can serve can also be excluded.\n\nCombine freely with the other filters; they all apply before rendering.",
+            "schema": {
+              "type": "array",
+              "maxItems": 750,
+              "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "page",
             "in": "query",
-            "description": "Keep only entities declared on this page URL, or on a page whose URL starts with it.\n\nMatching is a plain prefix, so `https://site/about` also matches `https://site/about-us`; add a trailing slash to scope to a directory.\n\nThis filter can be INCOMPLETE. Each entity lists at most 50 of its declaring pages, with the rest collapsed into a `morePages` count, so an entity declared on 200 pages cannot match on one of the 150 URLs that were not listed. When that is possible for the map being filtered, `meta.pageFilterIncomplete` is true.",
+            "description": "Keep only entities declared on this page URL, or on a page whose URL starts with it.\n\nMatching is a plain prefix, so `https://site/about` also matches `https://site/about-us`; add a trailing slash to scope to a directory.\n\nThis filter can be INCOMPLETE. Each entity lists only its first few declaring pages (at most 5 in the published map this endpoint serves), with the rest collapsed into a `morePages` count, so an entity declared on 200 pages cannot match on one of the URLs that were not listed. When that is possible for the map being filtered, `meta.pageFilterIncomplete` is true.",
             "schema": { "type": "string", "maxLength": 2048 }
           },
           {
