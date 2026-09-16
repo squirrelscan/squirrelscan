@@ -109,6 +109,36 @@ export interface UpgradeOffer {
   monthlyCredits: number;
 }
 
+/**
+ * What the API says about a website's recurring audits when a report is
+ * published (#2184).
+ *
+ * Recurring audits are ON BY DEFAULT since #2184: a website's first completed
+ * cloud audit switches a weekly schedule on with no user action. Publishing is
+ * the moment the CLI can tell somebody that, so the API attaches this and the
+ * CLI prints it.
+ *
+ * SERVER-BUILT, like the upgrade offer above and for the same reason. The
+ * cadence wording and the settings link both depend on things the CLI cannot
+ * know: which cadence the plan clamped the site to, and the org slug the
+ * dashboard route needs. A client that composed either would be one release
+ * away from disagreeing with the dashboard and the email about the same site.
+ *
+ * Optional wherever it appears: a server older than #2184 omits it, and so does
+ * a publish that linked no website at all (a local host, or an org over its
+ * website cap). Absence means "say nothing", never "there is no schedule".
+ */
+export interface ScheduleNotice {
+  /** Whether recurring audits are on for this website right now. */
+  enabled: boolean;
+  /** The stored cadence: "daily", "weekly" or "monthly". */
+  frequency: string;
+  /** The cadence as it reads in a sentence, e.g. "every week". Render, do not derive. */
+  frequencyLabel: string;
+  /** Dashboard page for this site's schedule, where it can be changed or switched off. */
+  settingsUrl: string;
+}
+
 /** `GET /v1/credits` response. */
 export interface CreditsResponse {
   balance: {
