@@ -15,18 +15,21 @@ The rule is site-wide. It fingerprints each page on five theme markers: styleshe
 
 The baseline is not a cluster. Each marker is tallied across every fingerprint and kept when it appears on at least `max(2, ceil(n / 2))` pages. Similarity is then a weighted sum: Jaccard overlap for stylesheets at 0.35, asset hosts at 0.25, body classes at 0.15 and CSS variables at 0.1, plus a chrome term at 0.15 that is the average of two boolean matches on nav and footer.
 
-- Skipped when the crawl produced fewer pages than `minPages`. Message: `Need >=4 pages to establish a template baseline`.
+- Skipped when the crawl produced fewer pages than `minPages`. Message: `Need >=N pages to establish a template baseline`.
 - Skipped when too few pages had a parseable document. Message: `Too few parseable pages for a template baseline`.
 - Skipped when the baseline has no shared stylesheets and no shared asset hosts, so there is no theme to diverge from. Message: `No shared template baseline detected across the site`.
 - Pass when every page scores at or above the threshold. Message: `All pages share the site's common template`.
-- `template-discontinuity` fails for below-threshold pages that also carry at least one page-level integrity signal. Message: `1 off-template page(s) carrying compromise signals — likely injected`, listing up to five as `/path (sim 0.04)`.
-- `template-discontinuity-review` reports info for below-threshold pages with no other signal. Message: `3 page(s) diverge from the site template (review)`.
+- `template-discontinuity` warns for below-threshold pages that carry at least one page-level integrity signal **and** load nothing the rest of the site loads. Message: `N off-template page(s) share none of the site's assets and carry a page-level integrity signal`, listing up to five as `/path (sim S)`.
+- A below-threshold page is never escalated when it loads one of the site's own stylesheets, or loads a stylesheet or a script from a host that serves a stylesheet, script or image on a majority of the crawled pages. An injected standalone page brings its own everything; a signed-out account view pulling the site's CSS bundle is the site's own page, however little of the theme it renders.
+- Three things deliberately do not count as the site's assets. A `link` that is not a stylesheet, so a `canonical`, an `icon`, a `preconnect`, a `dns-prefetch` or an `alternate` pointing at the site proves nothing about who rendered the page. A shared public host: `fonts.googleapis.com`, `fonts.gstatic.com`, `ajax.googleapis.com`, `cdnjs.cloudflare.com`, and any subdomain of `jsdelivr.net` or `unpkg.com`, since every site on the web can load those. And an image on its own, because a standalone page can hotlink a logo.
+- Nothing is escalated when the crawl stopped at its page limit and the baseline came from fewer than `minBaselinePagesWhenCapped` pages. A capped crawl saw the first N pages of the site, not the site, so its baseline can be one section's template and everything outside that section looks foreign. Those pages are still reported for review, and the review check's details carry `escalationWithheld: capped_crawl_small_baseline`. Raising the page limit is what changes the verdict.
+- `template-discontinuity-review` reports info for below-threshold pages that were not escalated. Message: `N page(s) diverge from the site template (review)`.
 
 Severity is warning, weight 6.
 
 ## How to fix it
 
-Open the listed pages and compare them with a normal page from the same site. If a page is yours, load the shared stylesheet and the site chrome on it, which also fixes the inconsistency a visitor would notice. If it is not, treat the site as compromised: remove it, audit recently modified files and read the access logs.
+Open the listed pages and compare them with a normal page from the same site. Most of the time the answer is that you published it: a campaign landing page, a signed-out or empty state, a checkout step. If a page is yours, load the shared stylesheet and the site chrome on it, which also fixes the inconsistency a visitor would notice and stops the page being reported. Only if you did not publish it does the compromise reading apply, and then remove it, audit recently modified files and read the access logs.
 
 A marketing landing page that deliberately ships its own CSS scores low and is reported for review. A site with no shared stylesheets or asset hosts at all produces a skip instead, because there is no baseline to measure against. Lower `similarityThreshold`, or disable the rule, when off-template pages are the design.
 
@@ -44,6 +47,7 @@ A marketing landing page that deliberately ships its own CSS scores low and is r
 |--------|------|---------|-------------|
 | `minPages` | integer, 3 or more | `4` | Minimum pages needed to establish a reliable baseline |
 | `similarityThreshold` | number, 0 to 1 | `0.2` | Pages below this similarity to the baseline are flagged |
+| `minBaselinePagesWhenCapped` | integer, 0 or more | `20` | When the crawl stopped at its page limit, escalate only if the baseline was built from at least this many pages; below it, outliers are still reported for review |
 
 ### Configuration example
 
@@ -51,6 +55,7 @@ A marketing landing page that deliberately ships its own CSS scores low and is r
 [rule_options."integrity/template-discontinuity"]
 minPages = 10
 similarityThreshold = 0.1
+minBaselinePagesWhenCapped = 30
 ```
 
 ## Enable / disable

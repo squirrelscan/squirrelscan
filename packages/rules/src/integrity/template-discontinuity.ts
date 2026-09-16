@@ -5,8 +5,17 @@
 // Site-scope. Builds a baseline from the majority theme cluster, then scores each
 // page's similarity. Pages far below threshold are flagged. A page that ALSO
 // carries page-level integrity signals (brand/obfuscation/overlay/doorway) is
-// escalated to `fail`; a lone template outlier is `info` (could be a legitimate
-// off-theme landing page).
+// escalated; a lone template outlier is `info` (could be a legitimate off-theme
+// landing page).
+//
+// Two things bound the escalation (#2233). A page that loads the site's OWN
+// assets is never escalated however far its markup diverges: an injected
+// standalone page is standalone, and a signed-out account view or an empty
+// state that pulls the site's stylesheets is the site's own page rendering a
+// different shell. And the escalated check warns rather than fails, because
+// the evidence is a similarity score plus a heuristic signal, which is enough
+// to ask someone to look and not enough to zero a category or to tell them
+// their site is compromised.
 
 import { z } from "zod";
 
@@ -22,6 +31,40 @@ import {
 } from "./fingerprint";
 import { detectPageSignals } from "./signals";
 
+/**
+ * Hosts that serve the same files to everybody.
+ *
+ * The veto below asks "does this page load something the rest of the site
+ * loads", as evidence that the site itself rendered it. A font or library CDN
+ * cannot answer that: a standalone page pulling Google Fonts shares a host with
+ * every other site on the web that pulls Google Fonts, including the one it was
+ * injected into. Matched on the host and any subdomain of it, so the jsDelivr
+ * and unpkg mirrors are covered without listing each one (#2233).
+ */
+const SHARED_PUBLIC_ASSET_HOSTS = [
+  "fonts.googleapis.com",
+  "fonts.gstatic.com",
+  "ajax.googleapis.com",
+  "cdnjs.cloudflare.com",
+  "jsdelivr.net",
+  "unpkg.com",
+];
+
+const isSharedPublicAssetHost = (host: string): boolean =>
+  SHARED_PUBLIC_ASSET_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+
+/**
+ * Host of an absolute or protocol-relative href, lowercased, port and userinfo
+ * stripped. `null` for a relative href, which is same-origin by definition and
+ * therefore never one of the shared hosts above.
+ */
+const hrefHost = (href: string): string | null => {
+  const m = /^(?:https?:)?\/\/([^/?#]+)/i.exec(href);
+  if (!m) return null;
+  const authority = m[1].split("@").pop() ?? "";
+  return authority.replace(/:\d+$/, "").toLowerCase() || null;
+};
+
 export const templateDiscontinuityRule: Rule = {
   meta: {
     id: "integrity/template-discontinuity",
@@ -29,7 +72,7 @@ export const templateDiscontinuityRule: Rule = {
     description:
       "Detects pages whose markup diverges hard from the site's common template — a standalone page with none of the site's theme is a classic injected-page signal",
     solution:
-      "A page that shares almost none of your site's theme (no shared stylesheets, asset hosts, nav/footer, or CSS variables) may be an injected standalone page rather than something your CMS produced. Confirm the page is one you created; if not, treat the site as compromised: remove the page, audit recently modified files, and check server access logs. Legitimate off-theme landing pages should still load your shared assets.",
+      "This page shares almost none of your site's theme: no stylesheets, asset hosts, nav or footer, or CSS variables in common with the rest of the crawl. That is usually deliberate: a campaign landing page, a signed-out or empty state, a checkout step, a status page. It is worth a glance only because an injected standalone page looks the same from the outside. Start by confirming the page is one you published. If it is not, and only then, treat the site as compromised: remove the page, audit recently modified files, and check server access logs.",
     category: "integrity",
     scope: "site",
     severity: "warning",
@@ -47,14 +90,42 @@ export const templateDiscontinuityRule: Rule = {
         .max(1)
         .default(0.2)
         .describe("Pages below this similarity to the baseline are flagged"),
+      minBaselinePagesWhenCapped: z
+        .number()
+        .int()
+        .min(0)
+        .default(20)
+        .describe(
+          "When the crawl stopped at its page limit, escalate only if the baseline was built from at least this many pages; below it, outliers are still reported for review"
+        ),
     }),
   },
 
   run(ctx: RuleContext): RuleResult {
+    /** Do these two sets have anything at all in common? */
+    const intersects = (a: Set<string>, b: Set<string>): boolean => {
+      const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+      for (const value of small) if (large.has(value)) return true;
+      return false;
+    };
+
     const checks: CheckResult[] = [];
     const pages = ctx.site?.pages ?? [];
     const minPages = ctx.options.minPages as number;
     const threshold = ctx.options.similarityThreshold as number;
+    const minBaselinePagesWhenCapped = ctx.options
+      .minBaselinePagesWhenCapped as number;
+
+    // A crawl that stopped at its page limit did not see the site; it saw the
+    // first N pages of it. The baseline is then whatever those N had in common,
+    // which on a capped run of a large site can be one section's template, and
+    // every page outside it looks foreign. Reporting those for review is fine.
+    // Telling someone their site may be compromised on that evidence is not
+    // (#2233 AC4). The same `pagesCrawled >= maxPages` reading sitemap-coverage
+    // uses; undefined limits mean a caller that never threaded it through, which
+    // is treated as not capped.
+    const limits = ctx.site?.crawlLimits;
+    const crawlWasCapped = !!limits && limits.pagesCrawled >= limits.maxPages;
 
     if (pages.length < minPages) {
       checks.push({
@@ -108,9 +179,30 @@ export const templateDiscontinuityRule: Rule = {
       return { checks };
     }
 
+    // The veto's two reference sets, built once. Shared public CDNs are dropped
+    // from both: a host everybody loads from cannot distinguish the site's own
+    // page from a page injected into it.
+    const siteResourceHosts = new Set(
+      [...baseline.resourceHosts].filter((h) => !isSharedPublicAssetHost(h))
+    );
+    const siteStylesheetHrefs = new Set(
+      [...baseline.stylesheetHrefs].filter((href) => {
+        const host = hrefHost(href);
+        return host === null || !isSharedPublicAssetHost(host);
+      })
+    );
+
+    // AC4: a capped crawl with a thin baseline can report, but not accuse.
+    const baselineTooSmallToEscalate =
+      crawlWasCapped && baseline.pageCount < minBaselinePagesWhenCapped;
+
     const outliers: {
       url: string;
       similarity: number;
+      /** Page-level integrity signals this page also carries. */
+      signals: number;
+      /** Does it load anything the rest of the site loads? */
+      loadsSiteAssets: boolean;
       escalated: boolean;
     }[] = [];
 
@@ -182,10 +274,31 @@ export const templateDiscontinuityRule: Rule = {
         };
         signalCount = detectPageSignals(pageCtx).size;
       }
+      // An injected standalone page brings its own everything. A page that
+      // still pulls one of the site's own stylesheets, or loads a stylesheet or
+      // script from a host the rest of the site serves resources from, is the
+      // site's own page however little of the theme it renders, which is what
+      // the solution text has always told the reader to look for.
+      //
+      // Both arms are narrower than they look, deliberately. `siteResourceHosts`
+      // is the majority tally of hosts that served a stylesheet, script or image,
+      // so a lone `<link rel=canonical>` or favicon on the outlier no longer buys
+      // it a veto, and the outlier side reads `codeHosts`, so a hotlinked logo
+      // does not either. Shared public CDNs are excluded on both arms: they say
+      // nothing about WHICH site rendered the page.
+      const loadsSiteAssets =
+        intersects(fp.stylesheetHrefs, siteStylesheetHrefs) ||
+        intersects(fp.codeHosts, siteResourceHosts);
+
       outliers.push({
         url,
         similarity: Math.round(similarity * 100) / 100,
-        escalated: signalCount >= 1, // template-discontinuity + >=1 page signal
+        signals: signalCount,
+        loadsSiteAssets,
+        // template-discontinuity + >=1 page signal, nothing of the site's own,
+        // and a baseline we actually trust.
+        escalated:
+          signalCount >= 1 && !loadsSiteAssets && !baselineTooSmallToEscalate,
       });
     }
 
@@ -212,8 +325,8 @@ export const templateDiscontinuityRule: Rule = {
     if (escalated.length > 0) {
       checks.push({
         name: "template-discontinuity",
-        status: "fail",
-        message: `${escalated.length} off-template page(s) carrying compromise signals — likely injected`,
+        status: "warn",
+        message: `${escalated.length} off-template page(s) share none of the site's assets and carry a page-level integrity signal`,
         value: listOf(escalated),
         items: escalated.map((o) => ({ id: o.url })),
         details: {
@@ -238,6 +351,11 @@ export const templateDiscontinuityRule: Rule = {
           baselinePages: baseline.pageCount,
           threshold,
           escalated: false,
+          // Says WHY nothing escalated when the reason was the crawl budget
+          // rather than the pages: a deeper crawl may reach a different verdict.
+          ...(baselineTooSmallToEscalate
+            ? { escalationWithheld: "capped_crawl_small_baseline" }
+            : {}),
           outliers: reviewOnly,
         },
       });
