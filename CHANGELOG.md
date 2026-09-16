@@ -41,6 +41,7 @@ Every audit now builds a map of the entities your site declares, a new command a
 ### Fixed
 
 - Reports print the page limit you asked for alongside the one the run used, so a run clamped from 10,000 to 4,320 pages no longer tells you to raise a limit that was already higher.
+- Merged check messages carry their counts instead of a bare `N` (#374). When pages disagree on a count the message shows the range (`3 to 6 image(s) missing alt`); pages that disagree on any other number (a date, a size, a code) keep their own message instead of being merged. Digits inside words are left alone, so `H1` no longer reads `HN`.
 
 ### Docs
 
