@@ -391,8 +391,12 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "high",
   },
   {
+    // The id segment is base64 of a snowflake: 24 to 28 characters. Unbounded
+    // (`{23,}`) it consumed every alphanumeric run to its end from every `M`
+    // and `N` in it before backtracking for the `.`: 2.7 s on one 200 KB
+    // image data URI (#365).
     name: "Discord Bot Token",
-    pattern: /[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27}/g,
+    pattern: /[MN][A-Za-z\d]{23,27}\.[\w-]{6}\.[\w-]{27}/g,
     keywords: ["."],
     confidence: "high",
   },

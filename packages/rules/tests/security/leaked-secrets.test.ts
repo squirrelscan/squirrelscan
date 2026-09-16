@@ -350,6 +350,42 @@ describe("security/leaked-secrets corpus: invariants", () => {
   });
 });
 
+describe("security/leaked-secrets corpus: cost on a large base64 body (pub#365)", () => {
+  // A 200 KB image data URI with no `+` or `/` in it: one alphanumeric run,
+  // which is the worst case for any pattern that opens on a wide class and
+  // has to backtrack. Discord's unbounded `{23,}` took 2.7 s here.
+  const alnum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const dataUri = (kb: number) => {
+    const r = seededRng(365);
+    let s = "";
+    for (let i = 0; i < kb * 1024; i++) s += alnum[Math.floor(r() * 62)];
+    return `<img alt="" src="data:image/png;base64,${s}">`;
+  };
+  const bestOf = (html: string) => {
+    let best = Infinity;
+    for (let i = 0; i < 3; i++) {
+      const t0 = performance.now();
+      scanContent(html, "html");
+      best = Math.min(best, performance.now() - t0);
+    }
+    return best;
+  };
+
+  test("a 200 KB alphanumeric data URI scans through the whole FAST table in a few ms, and linearly", () => {
+    const small = dataUri(50);
+    const large = dataUri(200);
+    scanContent(large, "html"); // warm
+    const smallMs = bestOf(small);
+    const largeMs = bestOf(large);
+    // 2.5 ms on an M2; the budget leaves room for a loaded CI runner and is
+    // still three orders of magnitude under the quadratic reading.
+    expect(largeMs).toBeLessThan(25);
+    // 4x the body: linear is 4x the time, the quadratic pattern was 16x.
+    expect(largeMs / Math.max(smallMs, 0.2)).toBeLessThan(8);
+    expect(scanContent(large, "html")).toEqual([]);
+  });
+});
+
 // One record per raw finding, stable across runs: the masked value is what a
 // user sees and the only thing about the value that belongs in git.
 type SnapshotRow = { type: string; confidence: string; publicByDesign: boolean; location: string; masked: string };
