@@ -1735,6 +1735,15 @@ function insideUrlValue(text: string, index: number): boolean {
 // token).
 const BRAND_CLAIMABLE_KEY_RE = /^(?:api[_-]?key|apikey|access[_-]?token|accesstoken)$/i;
 
+/** The quoted body a value ends with, or the value itself. */
+function quotedBodyOf(value: string): string {
+  return /['"]([^'"]*)['"]$/.exec(value)?.[1] ?? value;
+}
+
+// WordPress writes its oEmbed nonce as `<blockquote class="wp-embedded-content"
+// data-secret="…">` on every embed: ten alphanumerics, public by design.
+const WP_EMBED_NONCE_RE = /^[A-Za-z0-9]{10}$/;
+
 /** The key a generic assignment match opens with: `password` of `password:"…"`. */
 function keyOf(match: string): string {
   return /^[A-Za-z_-]+/.exec(match)?.[0] ?? "";
@@ -1932,6 +1941,17 @@ export function scanContent(
         // label too, however the encoding scattered its letters. // pragma: allowlist secret
         if (alnum(body) === alnum(keyOf(value))) continue;
         if (isPercentEncodedLabel(body)) continue;
+        // WordPress's oEmbed nonce: `data-secret` on a wp-embedded-content
+        // element, or a ten-character alphanumeric under `data-secret`.
+        if (
+          name === "Generic Secret Assignment" &&
+          content.slice(Math.max(0, match.index - 5), match.index).toLowerCase() === "data-" &&
+          (WP_EMBED_NONCE_RE.test(body) ||
+            (tagBoundsAround(content, match.index) !== undefined &&
+              /\bwp-embedded-content\b/.test(content.slice(tagBoundsAround(content, match.index)!.start, match.index))))
+        ) {
+          continue;
+        }
         // A value the public tier claims under a brand keyword in front of
         // it (`storefrontAccessToken:"…"` after `shopify`) is that tier's:
         // the context pass reports it as informational, not as a leak.
@@ -2107,6 +2127,15 @@ export function scanContent(
  * `site.pages` fallback so both yield a byte-identical per-page `LeakedSecret[]`.
  * Caller guarantees `doc` is non-null (page had a parseable document).
  */
+/** `<script id="x" type="y">` rebuilt from the element's attributes. */
+function openTagOf(el: Element): string {
+  let tag = "<script";
+  for (const attr of Array.from(el.attributes)) {
+    tag += ` ${attr.name}="${attr.value.replace(/"/g, "&quot;")}"`;
+  }
+  return tag + ">";
+}
+
 export function scanPageForSecrets(
   doc: NonNullable<ParsedPage["document"]>,
   pageUrl: string
@@ -2119,7 +2148,13 @@ export function scanPageForSecrets(
   for (const script of doc.querySelectorAll("script:not([src])")) {
     const scriptContent = script.textContent || "";
     if (scriptContent.trim()) {
-      found.push(...scanContent(scriptContent, "inline-script", pageUrl));
+      // The script's own open tag goes in front of its text, so the inline
+      // pass classifies `<script id="shopify-features">{"accessToken":…}`
+      // exactly as the whole-document pass does: the naming attribute is
+      // the look-behind, and the value is public rather than a generic leak
+      // that the rule's dedup then has to reconcile. Attributes carry no
+      // findings of their own that the document pass has not already made.
+      found.push(...scanContent(`${openTagOf(script)}${scriptContent}`, "inline-script", pageUrl));
     }
   }
   return found;
@@ -2187,17 +2222,18 @@ export const leakedSecretsRule: Rule = {
       byValue.set(s.value, s);
     }
     // A generic assignment's value carries its key (`accessToken":"…"`), so
-    // it never equals the bare token another scan classified as public. A
-    // generic record whose BODY is exactly a public value is that public
-    // value, keyed. Exact equality, by Set: containment would let a public
-    // username hide the database URL it sits in.
-    const publicValues = new Set(
+    // it never equals the bare token another scan classified as public, and
+    // a public record that was itself a re-typed generic carries ITS key
+    // (`access-token":"…"`). Both sides are compared by the quoted body.
+    // Exact equality, by Set: containment would let a public username hide
+    // the database URL it sits in.
+    const publicBodies = new Set(
       Array.from(byValue.values())
         .filter((s) => s.publicByDesign)
-        .map((s) => s.value)
+        .map((s) => quotedBodyOf(s.value))
     );
     const uniqueSecrets = Array.from(byValue.values()).filter(
-      (s) => s.publicByDesign || !s.type.startsWith("Generic ") || !publicValues.has(genericValueOf(s.value))
+      (s) => s.publicByDesign || !s.type.startsWith("Generic ") || !publicBodies.has(quotedBodyOf(s.value))
     );
 
     // Public-by-design client keys are informational only — never leaks

@@ -3574,7 +3574,7 @@
   "real:prefix-mid-token-akia": [],
   "real:shopify-features-boot-json": [
     {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"239256********************994c"},
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************94c\""}
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"239256********************994c"}
   ],
   "real:storefront-access-token-key-anywhere": [
     {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************d98\""},
@@ -3620,6 +3620,12 @@
     {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"apiKey********************QCH\""}
   ],
   "real:generic-match-inside-a-url-path": [],
+  "real:wordpress-oembed-data-secret-nonce": [],
+  "real:meta-description-mentioning-access": [],
+  "real:ga4-api-secret-assignment": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"SECRET********************rCZ'"},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"SECRET********************rCZ'"}
+  ],
   "real:rsc-flight-payload-bearer-jwt": [
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************VCJ9"},
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************VCJ9"}

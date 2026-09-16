@@ -189,10 +189,10 @@ export const ROUND_3: Case[] = [
   // 1. Shopify's own boot JSON and theme code.
   rw("shopify-features-boot-json", (r) =>
     page("", `<script id="shopify-features" type="application/json">{"accessToken":"${runOf(r, HEX, 32)}","betas":["rich-media-storefront-analytics"],"domain":"acme.myshopify.com","predictiveSearch":true,"shopId":${runOf(r, DIGIT, 8)},"locale":"en"}</script>`),
-    // Reported at `html`: the whole-document scan sees the naming tag, the
-    // inline-script rescan of the same text does not, and the public
-    // classification wins the rule's dedup.
-    [inl("html", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
+    // The inline pass is handed the script's open tag, so it classifies the
+    // value public exactly as the document pass does; the rule keeps the
+    // last of two identical public records, the inline one.
+    [inl("inline-script", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
   rw("storefront-access-token-key-anywhere", (r) =>
     page("", `<script>window.theme={settings:{currency:"USD"},"storefrontAccessToken":"${runOf(r, HEX, 32)}"};// Storefront Access Token\nvar t="${runOf(r, HEX, 32)}";</script>`),
     [inl("inline-script", "Shopify Storefront Access Token (key)", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
@@ -252,6 +252,19 @@ export const ROUND_3: Case[] = [
   rw("generic-match-inside-a-url-path", (r) =>
     page("", `<img src="https://cdn.shopify.com/s/files/1/0001/products/Access_Token_${runOf(r, ALNUM, 24)}.png" alt=""><a href="/docs/api_key=${runOf(r, ALNUM, 24)}">docs</a><div style="background:url(/img/secret_key=${runOf(r, ALNUM, 24)})"></div>`),
     []),
+
+  // Round 4 (full-rule run over the corpus): WordPress oEmbed nonce, a
+  // meta description that mentions "access", and a fourth real leak.
+  rw("wordpress-oembed-data-secret-nonce", (r) =>
+    page("", `<blockquote class="wp-embedded-content" data-secret="${runOf(r, ALNUM, 10)}"><a href="https://blog.acme.test/post/">A post</a></blockquote><iframe class="wp-embedded-content" sandbox="allow-scripts" security="restricted" src="https://blog.acme.test/post/embed/#?secret=${runOf(r, ALNUM, 10)}" data-secret="${runOf(r, ALNUM, 10)}"></iframe>`),
+    []),
+  rw("meta-description-mentioning-access", () =>
+    page(`<meta name="description" content="Discover handcrafted necklaces and accessories designed for style, focus, and confidence. Every piece stands out."><meta property="og:description" content="Access to our token program is by invitation.">`, ""),
+    []),
+  rw("ga4-api-secret-assignment", (r) =>
+    // packomic: a Measurement Protocol API secret inlined next to the id.
+    page("", `<script>const GA4_MEASUREMENT_ID = 'G-${runOf(r, UPPER + DIGIT, 10)}';const GA4_API_SECRET = '${runOf(r, ALNUM + "-_", 22)}';</script>`),
+    [inl("inline-script", "Generic Secret Assignment")]),
 
   // 5. Real leaks that must keep reporting.
   rw("rsc-flight-payload-bearer-jwt", (r) =>
