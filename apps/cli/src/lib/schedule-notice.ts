@@ -45,6 +45,12 @@ const RENDERED_STATES = new Set(["active"]);
  * requiring fields the CLI never touches (`nextRunAt`, `cap`, `pauseUrl`) would
  * make an older or a partially-populated server silent for no reason, and the
  * server owns those fields' meaning anyway.
+ *
+ * THE COROLLARY, for whoever adds the next branch: narrow means it validates
+ * the ACTIVE line's fields only. A `capped` branch renders `upgradeUrl`, which
+ * nothing here checks, so it would print "Upgrade: undefined" for a server that
+ * omitted it. Widen this guard in the same change that widens
+ * {@link RENDERED_STATES}.
  */
 export function isScheduleSummary(
   value: unknown

@@ -1,6 +1,6 @@
 // #2184 at the `squirrel audit` command boundary.
 //
-// `scheduleNoticeLine` has its own suite, and it would stay green with the call
+// `scheduleSummaryLine` has its own suite, and it would stay green with the call
 // site deleted. This drives the real command against a stubbed API and asserts
 // on what actually reaches the user's terminal, which is the only thing that
 // proves the disclosure happens at all.

@@ -42,21 +42,6 @@ Two things still apply at that moment:
 
 You can also switch recurring audits on yourself at any time from the **Scheduled Audits** card, without waiting for an audit to complete. Turning them off is permanent until you turn them back on: a later audit will not switch them on again.
 
-## Where you are told
-
-A schedule that starts by itself is still recurring spend, so every surface that reports a finished audit says the same three things: that the site is re-audited, how often, and where one click stops it.
-
-- The **report page** in the dashboard carries the notice with a **Turn off** button.
-- The **completion email** names the cadence and carries a one-click pause link that needs no sign-in.
-- The **CLI** prints one line after a published audit with the link to the site's schedule settings.
-- The **digest email** for each scheduled run carries the same pause link.
-
-## When a run is skipped for credits
-
-A scheduled run is skipped outright when your balance cannot cover the whole run, not just its base charge. The alternative is worse: the audit would start, spend what was left part-way through the crawl, and publish a report of a site it never finished.
-
-A skipped run is recorded, and the organization is told once with the cost of the run, the balance, and an upgrade link. Recurring audits resume by themselves as soon as the balance covers a run, so there is nothing to switch back on. Before that point, a run that leaves you unable to fund the next one warns you while there is still time to top up.
-
 ## How runs behave
 
 - Each scheduled run is a normal cloud audit and **spends [credits](/cloud/credits)** like any other cloud audit. Stay within budget with the same per-audit spend controls.
@@ -75,7 +60,7 @@ There are three variants, and the subject line tells you which one you have:
 
 | Variant | Subject | Sent when | What is in it |
 | --- | --- | --- | --- |
-| Changes | "What changed on your-site.com" | The comparison against the previous audit found movement | New, fixed and worse counts, up to five leading new and worsened findings with the page each was found on, up to five the run cleared, and the score change where both audits scored |
+| Changes | "What changed on your-site.com" | The comparison against the previous audit found movement | New, fixed and worse counts, up to five leading new and worsened findings with the page each was found on, and the score change where both audits scored |
 | All clear | "Nothing changed on your-site.com" | The comparison ran and found nothing | The health score and the same three counts, all at zero |
 | First audit | "First audit of your-site.com" | There is no earlier audit to compare against | That run's own error and warning counts and pages crawled, with no claim about change |
 
