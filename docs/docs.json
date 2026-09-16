@@ -698,6 +698,7 @@
             "group": "Dashboard",
             "pages": [
               "dashboard/index",
+              "dashboard/add-website",
               "dashboard/audit-settings",
               "dashboard/crawl-settings",
               "dashboard/emails",

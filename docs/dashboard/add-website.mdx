@@ -1,0 +1,53 @@
+---
+title: "Adding a website"
+description: "Pick the scan depth and the audit schedule when you add a site"
+icon: "plus"
+---
+
+**Dashboard → Add website** takes a URL and starts the first audit straight away. Two settings are chosen on the same form, and both can be changed later in the site's settings.
+
+## Scan depth
+
+How many pages each audit of this site crawls. The same four presets the [crawl settings](/dashboard/crawl-settings) page offers, so what you pick here is what you will see there.
+
+| Preset | Pages | For |
+| --- | --- | --- |
+| **Fast** | 10 | Quickest default run. |
+| **Surface** | 50 | Good default coverage. This is the default. |
+| **Deep** | 250 | Larger sites. |
+| **Full** | 500 | Whole-site coverage. |
+
+Pages are the main thing an audit costs, at 2 credits each on top of the 50-credit base, so the preset you pick is also the size of the bill. Change it any time under **Settings → Crawl**, or override it per site with a custom page limit.
+
+<Note>
+  **Fast** does not follow links at all. On that preset a crawl audits your sitemap and stops, whatever crawl scope the site is set to. Pick **Surface** or deeper if following links is the point.
+</Note>
+
+## Schedule
+
+Whether the site is re-audited on its own, and how often. **Weekly and on** by default: a scheduled audit is how you find out what changed, and a site nobody re-audits only ever tells you about the day it was added.
+
+| Choice | What happens |
+| --- | --- |
+| **Disabled** | Nothing recurring. The site is audited only when you ask. |
+| **Daily** | An audit every day. Pro and Team. |
+| **Weekly** | An audit every week. The default. |
+| **Monthly** | An audit every month. |
+
+The schedule starts as soon as the site is added, not after its first audit has finished. Each run costs credits like any other cloud audit, and every completed run emails you [what changed](/cloud/scheduled-audits#the-digest-email). Turn it off any time under **Settings → Schedule**.
+
+Picking a cadence here is a decision, and it is treated as one. A site added with the schedule **disabled** stays unscheduled: it will not switch itself on after its first audit, which is what happens to a site added through the CLI or the API without an explicit choice.
+
+### What your plan funds
+
+Cadences your plan does not fund are shown locked, with the same wording the schedule settings page uses. Free covers weekly and monthly on one website; Pro and Team add daily and put every website on a schedule. See [scheduled audits](/cloud/scheduled-audits) for the full table.
+
+If your plan's scheduled-site slots are already taken, the schedule control starts **off** and says which site is holding the slot. Freeing that site's schedule is the alternative to upgrading, and it is usually the quicker one.
+
+A site added while the slots are spent is not recorded as a refusal. It is left waiting instead, so if a slot frees up later, the site's next completed audit puts it on the weekly default. Only unticking the schedule yourself makes the off permanent.
+
+### If the schedule was not granted
+
+The plan limits are applied when the site is created, not when the form is filled in, so it is possible to ask for a schedule that cannot be given: someone else in your organization takes the last slot while you are typing, for instance.
+
+When that happens the site is still added and its first audit still runs. The page tells you the schedule was not granted and why, rather than reporting success and leaving you to discover weeks later that nothing has been re-audited.
