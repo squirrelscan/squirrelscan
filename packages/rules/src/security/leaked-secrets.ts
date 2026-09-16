@@ -2,16 +2,15 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
 
-import {
-  SECRET_CONTEXT_WINDOW_SIZE,
-  SECRET_KEY_LOOKBEHIND_SIZE,
-} from "@squirrelscan/utils/constants";
+import { SECRET_KEY_LOOKBEHIND_SIZE } from "@squirrelscan/utils/constants";
 
+import { shannonEntropy } from "../integrity/signals";
 import {
   buildGramIndex,
   mayContain,
   mayMatch,
   withPrefilter,
+  type GramIndex,
 } from "../shared/literal-prefilter";
 
 // Secret detection patterns with service names
@@ -22,6 +21,21 @@ type FastPattern = {
   name: string;
   pattern: RegExp;
   confidence: "high" | "medium";
+  /**
+   * Lowercase literals, at least one of which every match contains. The
+   * prefilter runs the regex only on content that contains one (#357): a
+   * page without `ghp_` in it never pays for the GitHub pattern. Provider
+   * tokens (`akia`, `sk_live_`, `hooks.slack.com`), never English words —
+   * the corpus meta-test fails a pattern whose own positives do not contain
+   * one of its keywords, and one that declares none.
+   */
+  keywords?: string[];
+  /**
+   * The value is a bare shape the key gave meaning to, not a provider
+   * token: skip it when it carries whitespace or has under
+   * GENERIC_MIN_ENTROPY bits per character (an i18n label, a placeholder).
+   */
+  generic?: boolean;
   /**
    * Keys that are designed to ship in client-side code (Stripe pk_*,
    * Google browser keys, OAuth client IDs, Sentry DSNs…). Reported as an
@@ -36,6 +50,12 @@ type FastPattern = {
    * startsInsideDigestKey.
    */
   keyAnchored?: boolean;
+  /**
+   * The shape is also a word: PayPal's `[Aa][Zz]…{60,}` is `azione-di-…` in
+   * an Italian URL slug. Such a match counts only in a value position
+   * (`clientId:"…"`, `client-id=…`), never in prose or a path (#357).
+   */
+  valuePosition?: boolean;
 };
 
 // Type for context patterns (generic patterns, only run if keyword present)
@@ -74,42 +94,55 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "OpenAI API Key",
     pattern: /sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20}/g,
+    keywords: ["t3blbkfj"],
     confidence: "high",
   },
   {
     name: "OpenAI API Key (proj)",
     pattern: /sk-proj-[a-zA-Z0-9_-]{80,}/g,
+    keywords: ["sk-proj-"],
     confidence: "high",
   },
   {
     name: "OpenAI API Key (legacy)",
     pattern: /sk-[a-zA-Z0-9]{32,}/g,
+    keywords: ["sk-"],
     confidence: "medium",
   },
   {
     name: "Anthropic API Key",
     pattern: /sk-ant-[a-zA-Z0-9_-]{80,}/g,
+    keywords: ["sk-ant-"],
     confidence: "high",
   },
-  { name: "Groq API Key", pattern: /gsk_[a-zA-Z0-9]{52}/g, confidence: "high" },
+  {
+    name: "Groq API Key",
+    pattern: /gsk_[a-zA-Z0-9]{52}/g,
+    confidence: "high",
+    keywords: ["gsk_"],
+  },
   {
     name: "xAI (Grok) API Key",
     pattern: /xai-[a-zA-Z0-9]{48,}/g,
+    keywords: ["xai-"],
     confidence: "high",
   },
   {
     name: "HuggingFace Token",
     pattern: /hf_[a-zA-Z0-9]{34}/g,
+    keywords: ["hf_"],
     confidence: "high",
   },
   {
     name: "Replicate API Token",
     pattern: /r8_[a-zA-Z0-9]{37}/g,
+    keywords: ["r8_"],
     confidence: "high",
   },
   {
     name: "Perplexity API Key",
     pattern: /pplx-[a-zA-Z0-9]{48}/g,
+    keywords: ["pplx-"],
     confidence: "high",
   },
 
@@ -118,42 +151,50 @@ export const FAST_PATTERNS: FastPattern[] = [
     // Anon keys are public by design — Row Level Security is the guard
     name: "Supabase Anon Key",
     pattern: /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_-]{100,}/g,
+    keywords: ["eyjhbgcioijiuzi1niisinr5cci6ikpxvcj9."],
     confidence: "medium",
     publicByDesign: true,
   },
   {
     name: "Supabase Service Role Key",
     pattern: /sbp_[a-f0-9]{40}/g,
+    keywords: ["sbp_"],
     confidence: "high",
   },
   {
     name: "MongoDB Connection String",
     pattern: /mongodb(\+srv)?:\/\/[^\s"'<>]+/gi,
+    keywords: ["mongodb"],
     confidence: "high",
   },
   {
     name: "PostgreSQL Connection String",
     pattern: /postgres(ql)?:\/\/[^\s"'<>]+/gi,
+    keywords: ["postgres"],
     confidence: "high",
   },
   {
     name: "MySQL Connection String",
     pattern: /mysql:\/\/[^\s"'<>]+/gi,
+    keywords: ["mysql://"],
     confidence: "high",
   },
   {
     name: "Redis Connection String",
     pattern: /redis(s)?:\/\/[^\s"'<>]+/gi,
+    keywords: ["redis"],
     confidence: "high",
   },
   {
     name: "PlanetScale Token",
     pattern: /pscale_tkn_[a-zA-Z0-9_-]{32,}/g,
+    keywords: ["pscale_tkn_"],
     confidence: "high",
   },
   {
     name: "Neon Database Token",
     pattern: /neon_[a-zA-Z0-9_-]{32,}/g,
+    keywords: ["neon_"],
     confidence: "high",
   },
 
@@ -161,35 +202,33 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "Stripe Live Key",
     pattern: /sk_live_[0-9a-zA-Z]{24,}/g,
+    keywords: ["sk_live_"],
     confidence: "high",
   },
   {
     name: "Stripe Test Key",
     pattern: /sk_test_[0-9a-zA-Z]{24,}/g,
+    keywords: ["sk_test_"],
     confidence: "high",
   },
   {
     // pk_live_/pk_test_ are public by design (Stripe docs)
     name: "Stripe Publishable Key",
     pattern: /pk_live_[0-9a-zA-Z]{24,}/g,
-    confidence: "medium",
-    publicByDesign: true,
-  },
-  {
-    // OAuth client IDs are public identifiers, not secrets
-    name: "PayPal Client ID",
-    pattern: /[Aa][Zz][Aa-zZ0-9-_]{60,}/g,
+    keywords: ["pk_live_"],
     confidence: "medium",
     publicByDesign: true,
   },
   {
     name: "Square Access Token",
     pattern: /sq0atp-[0-9A-Za-z_-]{22}/g,
+    keywords: ["sq0atp-"],
     confidence: "high",
   },
   {
     name: "Square OAuth Secret",
     pattern: /sq0csp-[0-9A-Za-z_-]{43}/g,
+    keywords: ["sq0csp-"],
     confidence: "high",
   },
 
@@ -197,6 +236,7 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "AWS Access Key ID",
     pattern: /(A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/g,
+    keywords: ["a3t","akia","agpa","aroa","aipa","anpa","anva","asia"],
     confidence: "high",
   },
   {
@@ -206,6 +246,8 @@ export const FAST_PATTERNS: FastPattern[] = [
       /(?:aws[_-]?(?:secret)?[_-]?(?:access)?[_-]?key|secret[_-]?access[_-]?key)['"]?\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}['"]?/gi,
     confidence: "medium",
     keyAnchored: true,
+    generic: true,
+    keywords: ["aws", "secret"],
   },
   {
     // AIza… keys in frontend code are Maps/Firebase browser keys — meant to
@@ -213,6 +255,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     // secrecy (Firebase docs say these are not secrets)
     name: "Google API Key (browser)",
     pattern: /AIza[0-9A-Za-z_-]{35}/g,
+    keywords: ["aiza"],
     confidence: "high",
     publicByDesign: true,
   },
@@ -220,50 +263,65 @@ export const FAST_PATTERNS: FastPattern[] = [
     // OAuth client IDs are public identifiers, not secrets
     name: "Google OAuth Client ID",
     pattern: /[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com/g,
+    keywords: [".apps.googleusercontent.com"],
     confidence: "high",
     publicByDesign: true,
   },
   {
     name: "Google OAuth Access Token",
     pattern: /ya29\.[0-9A-Za-z_-]+/g,
+    keywords: ["ya29."],
     confidence: "high",
   },
   {
     name: "Azure Storage Key",
     pattern:
       /DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[^;]+;/gi,
+    keywords: ["defaultendpointsprotocol="],
     confidence: "high",
+  },
+  // After Azure Storage Key on purpose: this class covers lowercase+digits, so
+  // a 60-character run inside an AccountKey was claimed here first and the
+  // whole connection string then dropped as an "overlap" of it (#357).
+  {
+    // OAuth client IDs are public identifiers, not secrets
+    name: "PayPal Client ID",
+    pattern: /[Aa][Zz][Aa-zZ0-9-_]{60,}/g,
+    keywords: ["az"],
+    confidence: "medium",
+    publicByDesign: true,
+    valuePosition: true,
   },
   {
     name: "DigitalOcean Token",
     pattern: /dop_v1_[a-f0-9]{64}/g,
+    keywords: ["dop_v1_"],
     confidence: "high",
-  },
-  {
-    name: "DigitalOcean Spaces Key",
-    pattern: /DO[A-Z0-9]{20,}/g,
-    confidence: "medium",
   },
 
   // Hosting/Deployment
   {
     name: "Vercel Token",
     pattern: /vercel_[a-zA-Z0-9]{24}/gi,
+    keywords: ["vercel_"],
     confidence: "high",
   },
   {
     name: "Netlify Token",
     pattern: /nfp_[a-zA-Z0-9]{40,}/g,
+    keywords: ["nfp_"],
     confidence: "high",
   },
   {
     name: "Render API Key",
     pattern: /rnd_[a-zA-Z0-9]{32,}/g,
+    keywords: ["rnd_"],
     confidence: "high",
   },
   {
     name: "Railway Token",
     pattern: /railway_[a-zA-Z0-9_-]{32,}/g,
+    keywords: ["railway_"],
     confidence: "high",
   },
 
@@ -271,36 +329,43 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "GitHub Personal Access Token",
     pattern: /ghp_[0-9a-zA-Z]{36}/g,
+    keywords: ["ghp_"],
     confidence: "high",
   },
   {
     name: "GitHub OAuth Token",
     pattern: /gho_[0-9a-zA-Z]{36}/g,
+    keywords: ["gho_"],
     confidence: "high",
   },
   {
     name: "GitHub App Token",
     pattern: /ghu_[0-9a-zA-Z]{36}/g,
+    keywords: ["ghu_"],
     confidence: "high",
   },
   {
     name: "GitHub Refresh Token",
     pattern: /ghr_[0-9a-zA-Z]{36}/g,
+    keywords: ["ghr_"],
     confidence: "high",
   },
   {
     name: "GitLab Personal Access Token",
     pattern: /glpat-[a-zA-Z0-9_-]{20,}/g,
+    keywords: ["glpat-"],
     confidence: "high",
   },
   {
     name: "GitLab Pipeline Token",
     pattern: /glptt-[a-f0-9]{40}/g,
+    keywords: ["glptt-"],
     confidence: "high",
   },
   {
     name: "Bitbucket App Password",
     pattern: /ATBB[a-zA-Z0-9]{32}/g,
+    keywords: ["atbb"],
     confidence: "high",
   },
 
@@ -308,28 +373,33 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "Slack Token",
     pattern: /xox[baprs]-[0-9a-zA-Z-]{10,72}/g,
+    keywords: ["xox"],
     confidence: "high",
   },
   {
     name: "Slack Webhook",
     pattern:
       /https:\/\/hooks\.slack\.com\/services\/T[a-zA-Z0-9_]+\/B[a-zA-Z0-9_]+\/[a-zA-Z0-9_]+/g,
+    keywords: ["hooks.slack.com"],
     confidence: "high",
   },
   {
     name: "Discord Webhook",
     pattern:
       /https:\/\/discord(app)?\.com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+/g,
+    keywords: ["/api/webhooks/"],
     confidence: "high",
   },
   {
     name: "Discord Bot Token",
     pattern: /[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27}/g,
+    keywords: ["."],
     confidence: "high",
   },
   {
     name: "Telegram Bot Token",
     pattern: /[0-9]{8,10}:[a-zA-Z0-9_-]{35}/g,
+    keywords: [":"],
     confidence: "high",
   },
 
@@ -337,26 +407,31 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "Twilio Account SID",
     pattern: /AC[0-9a-f]{32}/g,
+    keywords: ["ac"],
     confidence: "high",
   },
   {
     name: "SendGrid API Key",
     pattern: /SG\.[a-zA-Z0-9_-]{20,24}\.[a-zA-Z0-9_-]{39,50}/g,
+    keywords: ["sg."],
     confidence: "high",
   },
   {
     name: "Mailgun API Key",
     pattern: /key-[0-9a-zA-Z]{32}/g,
+    keywords: ["key-"],
     confidence: "high",
   },
   {
     name: "Mailchimp API Key",
     pattern: /[0-9a-f]{32}-us[0-9]{1,2}/g,
+    keywords: ["-us"],
     confidence: "high",
   },
   {
     name: "Resend API Key",
     pattern: /re_[a-zA-Z0-9]{32,}/g,
+    keywords: ["re_"],
     confidence: "high",
   },
 
@@ -365,19 +440,31 @@ export const FAST_PATTERNS: FastPattern[] = [
     // DSNs are designed for client-side error reporting
     name: "Sentry DSN",
     pattern: /https:\/\/[a-f0-9]+@[a-z0-9]+\.ingest\.sentry\.io\/[0-9]+/gi,
+    keywords: [".ingest.sentry.io/"],
     confidence: "high",
     publicByDesign: true,
   },
   {
     name: "New Relic License Key",
     pattern: /[A-Z0-9]{40}NRAL/g,
+    keywords: ["nral"],
     confidence: "high",
+  },
+  // After New Relic on purpose: `DO` + 20 uppercase is the tail of any NRAL
+  // key that happens to contain `DO`, and claiming that tail first dropped the
+  // New Relic finding as an overlap (#357).
+  {
+    name: "DigitalOcean Spaces Key",
+    pattern: /DO[A-Z0-9]{20,}/g,
+    keywords: ["do"],
+    confidence: "medium",
   },
 
   // Auth Services
   {
     name: "Clerk Secret Key",
     pattern: /sk_live_[a-zA-Z0-9]{40,}/g,
+    keywords: ["sk_live_"],
     confidence: "high",
   },
 
@@ -386,46 +473,46 @@ export const FAST_PATTERNS: FastPattern[] = [
     // pk.* tokens are Mapbox public tokens (sk.* are the secret ones)
     name: "Mapbox Access Token",
     pattern: /pk\.[a-zA-Z0-9]{60,}/g,
+    keywords: ["pk."],
     confidence: "high",
     publicByDesign: true,
   },
   {
     name: "Mapbox Secret Token",
     pattern: /sk\.[a-zA-Z0-9]{60,}/g,
+    keywords: ["sk."],
     confidence: "high",
-  },
-
-  // CMS/Services
-  {
-    name: "Sanity Token",
-    pattern: /sk[a-zA-Z0-9]{30,}/g,
-    confidence: "medium",
   },
 
   // Crypto Keys
   {
     name: "Private Key (RSA)",
     pattern: /-----BEGIN RSA PRIVATE KEY-----/g,
+    keywords: ["-----begin rsa private key-----"],
     confidence: "high",
   },
   {
     name: "Private Key (DSA)",
     pattern: /-----BEGIN DSA PRIVATE KEY-----/g,
+    keywords: ["-----begin dsa private key-----"],
     confidence: "high",
   },
   {
     name: "Private Key (EC)",
     pattern: /-----BEGIN EC PRIVATE KEY-----/g,
+    keywords: ["-----begin ec private key-----"],
     confidence: "high",
   },
   {
     name: "Private Key (OpenSSH)",
     pattern: /-----BEGIN OPENSSH PRIVATE KEY-----/g,
+    keywords: ["-----begin openssh private key-----"],
     confidence: "high",
   },
   {
     name: "Private Key (PGP)",
     pattern: /-----BEGIN PGP PRIVATE KEY BLOCK-----/g,
+    keywords: ["-----begin pgp private key block-----"],
     confidence: "high",
   },
 
@@ -433,11 +520,13 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "Facebook Access Token",
     pattern: /EAACEdEose0cBA[0-9A-Za-z]+/g,
+    keywords: ["eaacedeose0cba"],
     confidence: "high",
   },
   {
     name: "Twitter Bearer Token",
     pattern: /AAAAAAAAAAAAAAAAAAA[A-Za-z0-9%]+/g,
+    keywords: ["aaaaaaaaaaaaaaaaaaa"],
     confidence: "high",
   },
 
@@ -473,6 +562,8 @@ export const FAST_PATTERNS: FastPattern[] = [
       /(?:api[_-]?key|apikey)(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
+    generic: true,
+    keywords: ["api_key", "api-key", "apikey"],
   },
   {
     name: "Generic Secret Assignment",
@@ -480,6 +571,8 @@ export const FAST_PATTERNS: FastPattern[] = [
       /(?:secret|password|passwd|pwd)(?:[_-]?(?:key|token))?(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][^'"]{8,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
+    generic: true,
+    keywords: ["secret", "password", "passwd", "pwd"],
   },
   {
     name: "Generic Token Assignment",
@@ -487,6 +580,8 @@ export const FAST_PATTERNS: FastPattern[] = [
       /(?:access[_-]?token|auth[_-]?token)(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
+    generic: true,
+    keywords: ["access_token", "access-token", "accesstoken", "auth_token", "auth-token", "authtoken"],
   },
   {
     // Standard base64, not just base64url: a token with `+` or `/` in its first
@@ -498,11 +593,15 @@ export const FAST_PATTERNS: FastPattern[] = [
     name: "Bearer Token",
     pattern: /Bearer\s+[a-zA-Z0-9_+/-]{20,}={0,2}/g,
     confidence: "medium",
+    generic: true,
+    keywords: ["bearer"],
   },
   {
     name: "Basic Auth Header",
     pattern: /Basic\s+[A-Za-z0-9+/=]{20,}/g,
     confidence: "medium",
+    generic: true,
+    keywords: ["basic"],
   },
 ];
 
@@ -614,6 +713,17 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
 
   // CMS/Services (need context)
   {
+    // Was a FAST pattern. `sk` + 30 alphanumerics is the shape of a minified
+    // identifier (`skeletonLoader…`), a CSS class hash and any 32-character
+    // run of base64: 346 findings on 74 of 776 real sites, none a token
+    // (#357). Here it needs the brand word and a credential key like every
+    // other bare shape.
+    name: "Sanity Token",
+    keyword: "sanity",
+    pattern: /sk[a-zA-Z0-9]{30,}/g,
+    confidence: "medium",
+  },
+  {
     name: "Contentful Access Token",
     keyword: "contentful",
     pattern: /[a-zA-Z0-9_-]{43}/gi,
@@ -635,24 +745,42 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
   },
 ];
 
-// False positive filters - common non-sensitive patterns
+// False positive filters - common non-sensitive patterns.
+//
+// Anchored to the value's head or tail (#357). As bare substring tests these
+// dropped any real token that happened to contain `xxx`, `fake` or `sample`
+// somewhere in its random body, and `a{16,}` dropped every Twitter bearer
+// token, which opens with nineteen of them. A placeholder is a placeholder
+// because the word IS the value (after at most a short prefix such as `ghp_`)
+// or ends it; a run of one repeated character is one because it runs to the
+// end.
+const PLACEHOLDER_WORDS =
+  "placeholder|your[_-]?api[_-]?key|test[_-]?key|demo[_-]?key|sample|dummy|fake";
 const FALSE_POSITIVE_PATTERNS = [
   // Google tag IDs (GTM containers, GA4/UA measurement IDs, Ads/DC tags)
   // are public identifiers — never secrets, whatever pattern caught them
   /^(GTM|G|UA|AW|DC)-[A-Z0-9-]+$/i,
+  // A host, so anywhere: a connection string to example.com is a placeholder
   /example\.com/i,
-  /placeholder/i,
-  /your[_-]?api[_-]?key/i,
-  /xxx+/i,
-  /test[_-]?key/i,
-  /demo[_-]?key/i,
-  /sample/i,
-  /dummy/i,
-  /fake/i,
-  /0{16,}/,
-  /1{16,}/,
-  /a{16,}/i,
+  new RegExp(`^[A-Za-z0-9]{0,12}[_.-]?(?:${PLACEHOLDER_WORDS})`, "i"),
+  new RegExp(`(?:${PLACEHOLDER_WORDS})[_.-]?[A-Za-z0-9]{0,4}$`, "i"),
 ];
+
+/**
+ * A run of one repeated character that ends the value: `sk_live_xxxxxxxx`,
+ * `AKIA0000000000000000`. Counted by a walk rather than `/(?:x{3,}|0{16,})$/`, // pragma: allowlist secret
+ * which retries the anchored repetition from every character and goes
+ * quadratic on a long match (a connection string runs to the next quote).
+ */
+function endsInRepeatedChar(value: string): boolean {
+  if (value.length === 0) return false;
+  const last = value.charCodeAt(value.length - 1) | 0x20; // fold case
+  let run = 0;
+  for (let i = value.length - 1; i >= 0 && (value.charCodeAt(i) | 0x20) === last; i--) run++;
+  if (last === 120) return run >= 3; // x
+  if (last === 48 || last === 49 || last === 97) return run >= 16; // 0 1 a
+  return false;
+}
 
 // Check if value looks like a code identifier (function/variable name)
 function looksLikeCodeIdentifier(value: string): boolean {
@@ -793,23 +921,6 @@ function keyWords(key: string): string[] {
   return words;
 }
 
-/**
- * A minifier's member access carries no meaning: `t.a = "…"`, `e.x2 = "…"`,
- * `n["a"] = "…"`. Suppressing on those would blind the rule to every bundled
- * script, so they count as "no key at all" rather than as a key that failed to
- * say "credential".
- *
- * Being short is not enough — it has to be a member access on an object. A
- * query parameter (`?v=<hex>`), a JSON key (`"id":"<hex>"`) and a plain
- * property (`id: "<hex>"`) are short but they do name their value, and what
- * they name is not a credential.
- */
-function isMinifiedMemberKey(key: string, viaBracket: boolean): boolean {
-  const last = key.split(".").pop() ?? key;
-  if (last.replace(/[^A-Za-z0-9]/g, "").length > 2) return false;
-  return viaBracket || key.includes(".");
-}
-
 // Characters that can be part of a key, so cutting the look-back in the middle
 // of a run of them would hand classifyKeyContext a truncated key.
 const KEY_CHAR_RE = /[A-Za-z0-9_$.-]/;
@@ -929,11 +1040,11 @@ type KeyContext = "digest" | "credential" | "assigned" | "none";
 function classifyKeyName(key: string, keyword: string): KeyContext | "unknown" {
   const words = keyWords(key);
   if (words.some((word) => DIGEST_KEY_WORDS.has(word))) return "digest";
-  if (
-    words.some((word) => CREDENTIAL_KEY_WORDS.has(word) || word === keyword)
-  ) {
-    return "credential";
-  }
+  if (words.some((word) => CREDENTIAL_KEY_WORDS.has(word))) return "credential";
+  // The brand word ALONE names the value (`together: "…"`, `cfg["together"]`).
+  // As one word among others it names something about the brand, not a
+  // credential: `data-heroku-dyno`, `herokuAppName`, `segmentId` (#357).
+  if (words.length === 1 && words[0] === keyword) return "credential";
   return "unknown";
 }
 
@@ -1047,9 +1158,8 @@ function classifyTagKeys(tag: string, keyword: string): KeyContext | "unknown" {
  *
  * - `digest` — a checksum, SRI hash, cache key or object id. Never reported.
  * - `credential` — a key that says "secret". Reported.
- * - `assigned` — in value position under a key that means nothing either way,
- *   including a minifier's `t.a`. Reported: suppressing here would blind the
- *   rule to every minified bundle, which is where leaks actually hide.
+ * - `assigned` — in value position under a key the look-back could not read
+ *   whole. Reported: an unreadable key is not evidence of anything.
  * - `none` — no assignment at all (a hex run in prose or a table cell).
  *   Not reported.
  *
@@ -1116,8 +1226,13 @@ export function classifyKeyContext(
     if (fromTag !== "unknown") return fromTag;
   }
 
+  // A key that was read whole and says nothing is "none" — and that now
+  // includes a minifier's member access (`t.a = "…"`, `e.k = "…"`). Letting
+  // those through as "assigned" was the single largest source of real-world
+  // noise: every Cloudflare challenge and Shopify pixel bootstrap assigns a
+  // nonce to a one-letter member within reach of a brand word (#357).
   if (key) {
-    return cutKey || isMinifiedMemberKey(key, bracket !== null) ? "assigned" : "none";
+    return cutKey ? "assigned" : "none";
   }
 
   if (AUTH_SCHEME_RE.test(before)) return "credential";
@@ -1135,7 +1250,7 @@ export interface LeakedSecret {
 }
 
 function isLikelyFalsePositive(value: string): boolean {
-  return FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value));
+  return endsInRepeatedChar(value) || FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value));
 }
 
 function maskSecret(value: string): string {
@@ -1150,41 +1265,34 @@ function maskSecret(value: string): string {
 }
 
 /**
- * A window around one keyword occurrence. `text` carries a lead-in — the full
- * budget lookBehind can spend — so a value sitting at the very start of the
- * scanned region still has its key visible. `scanFrom` marks where the region
- * proper begins: a match must reach into it to count, which keeps the scanned
- * span exactly as wide as it was before the lead-in existed.
+ * How far past a brand keyword a bare-shape value may START (#357, after
+ * trufflehog's PrefixRegex). The value may run on past it.
+ *
+ * The old ±500-character window meant "the word together appears somewhere
+ * on this screen of text", which on real pages it does. Forty characters is
+ * `togetherKey: "`, `TOGETHER_API_KEY = "` and `"together": {"token": "`,
+ * and not a share link three lines up.
  */
-type KeywordWindow = { text: string; scanFrom: number };
+export const CONTEXT_KEYWORD_GAP = 40;
 
-// How much lead-in a window carries: whatever lookBehind is allowed to spend.
-const WINDOW_LEAD_IN = SECRET_KEY_LOOKBEHIND_SIZE * 2;
+// The longest a context value can be, plus the gap: how much text past a
+// keyword is worth handing the regex. Every bounded shape in the tier is
+// under 70 characters; Sanity's `{30,}` is open-ended but a real token is
+// under 200.
+const CONTEXT_SCAN_SPAN = CONTEXT_KEYWORD_GAP + 512;
 
-// Extract windows around all keyword occurrences
-function extractKeywordWindows(
-  content: string,
-  contentLower: string,
-  keyword: string
-): KeywordWindow[] {
-  const windows: KeywordWindow[] = [];
-  let pos = 0;
+// How much text either side of a value the key-context helpers get to see:
+// the whole look-back budget, and enough after it to find the tag's `>`.
+const CONTEXT_LOCAL_REACH = LOOKBEHIND_SCAN_LIMIT + SECRET_KEY_LOOKBEHIND_SIZE;
 
-  while ((pos = contentLower.indexOf(keyword, pos)) !== -1) {
-    const start = Math.max(0, pos - SECRET_CONTEXT_WINDOW_SIZE);
-    const leadIn = Math.max(0, start - WINDOW_LEAD_IN);
-    const end = Math.min(
-      content.length,
-      pos + keyword.length + SECRET_CONTEXT_WINDOW_SIZE
-    );
-    windows.push({
-      text: content.slice(leadIn, end),
-      scanFrom: start - leadIn,
-    });
-    pos += keyword.length;
-  }
-
-  return windows;
+// `\w` on one code unit: the boundary the prefix patterns and the bounded
+// look-behind both want.
+function isWordCharAt(text: string, index: number): boolean {
+  if (index < 0 || index >= text.length) return false;
+  const c = text.charCodeAt(index);
+  return (
+    (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95
+  );
 }
 
 // One window's worth of characters. Every pattern in this file matches more
@@ -1386,6 +1494,71 @@ export function createSeenValues(contentLength: number): SeenValues {
 // computed once at module load rather than per page.
 const PREFILTERED_FAST_PATTERNS = withPrefilter(FAST_PATTERNS);
 
+// Below this a bare-shape value under a credential key is a label, a
+// placeholder or a word, not a token (gitleaks: 3.5 for generic-api-key).
+const GENERIC_MIN_ENTROPY = 3.5;
+
+/**
+ * The floor a generic value has to clear. Empirical entropy cannot exceed
+ * log2(length), so a flat 3.5 would silence every 8–11 character password
+ * however random: the floor scales down for short values, asking them to be
+ * NEAR their maximum instead. `K8#mZ2!q` (3.0 of a possible 3.0) passes,
+ * `aaaabbbb` (1.0) does not, and from 12 characters up it is the flat 3.5.
+ */
+function genericEntropyFloor(length: number): number {
+  return Math.min(GENERIC_MIN_ENTROPY, Math.log2(Math.max(length, 2)) - 0.5);
+}
+
+/**
+ * The part of a generic match that is the value: the quoted body of an
+ * assignment, or the token after `Bearer`/`Basic`.
+ */
+function genericValueOf(match: string): string {
+  const quoted = /['"]([^'"]*)['"]$/.exec(match);
+  let body = (quoted ? quoted[1]! : match).replace(/^(?:Bearer|Basic)\s+/i, "");
+  if (!quoted) {
+    // `aws_secret_access_key = XXXX`: the value is the last token.
+    // Split on separators, not on a token's own `=` padding: `Bearer …==`
+    // ends in two of them, and an empty last part has no entropy at all. The
+    // padding comes off by a walk, not `/=+$/`: on `Basic ====…A` that
+    // regex retries from every `=` and goes quadratic.
+    let end = body.length;
+    while (end > 0 && body.charCodeAt(end - 1) === 61) end--;
+    const parts = body.slice(0, end).split(/[\s:=]+/).filter(Boolean);
+    body = parts[parts.length - 1] ?? body;
+  }
+  return body;
+}
+
+/**
+ * Does the keyword prefilter let this FAST pattern run on this content? True
+ * unless the gram index proves every one of the pattern's keywords absent.
+ * The index folds ASCII case, so the lowercase keywords are looked up as-is
+ * and no lowercased copy of the content is needed; a keyword under four
+ * characters (`re_`, `ac`) proves nothing and its pattern always runs, as
+ * it did before. A pattern with no keywords declared always runs too; the
+ * corpus meta-test is what makes that an error rather than a silent default.
+ */
+function fastPatternMayFire(pattern: { keywords?: string[] }, index: GramIndex | null): boolean {
+  const keywords = pattern.keywords;
+  if (!index || !keywords || keywords.length === 0) return true;
+  for (const keyword of keywords) {
+    if (mayContain(index, keyword)) return true;
+  }
+  return false;
+}
+
+/**
+ * The FAST patterns the keyword prefilter selects for this content, by name.
+ * Exported for the corpus meta-test, which asserts that every positive's
+ * input selects the pattern it expects and a corrupted keyword deselects it.
+ * Content too short to index selects everything, exactly as scanContent does.
+ */
+export function selectFastPatterns(content: string): string[] {
+  const index = buildGramIndex(content);
+  return FAST_PATTERNS.filter((p) => fastPatternMayFire(p, index)).map((p) => p.name);
+}
+
 export function scanContent(
   content: string,
   location: "html" | "inline-script" | "external-script",
@@ -1405,25 +1578,47 @@ export function scanContent(
   // skipped and behaviour is exactly as it was.
   const gramIndex = buildGramIndex(content);
 
-  // Helper to process regex matches on given text
-  const processMatches = (
-    text: string,
-    name: string,
-    pattern: RegExp,
-    confidence: "high" | "medium",
-    publicByDesign: boolean,
-    keyAnchored = false
-  ) => {
-    // Reset pattern state for global regex
-    pattern.lastIndex = 0;
+  // Pass 1: FAST patterns, gated twice — by the literals proven from each
+  // regex (#1864) and by the keywords each pattern declares (#357). Both
+  // gates read the gram index, so a body the index rules out costs nothing.
+  for (const entry of PREFILTERED_FAST_PATTERNS) {
+    const { name, pattern, confidence, publicByDesign, keyAnchored, generic, valuePosition, literals } =
+      entry;
+    if (!mayMatch(gramIndex, literals)) continue;
+    if (!fastPatternMayFire(entry, gramIndex)) continue;
 
+    pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
+    while ((match = pattern.exec(content)) !== null) {
       const value = match[0];
+
+      // A prefix is a prefix only at the start of a token. `re_` inside
+      // `_Care_Dry…`, `[0-9]{8,10}:` on the tail of a UUID and `fooghp_…`
+      // were every high-tier finding on 776 real sites (#357). The generic
+      // assignments are exempt: they anchor on a credential word that is
+      // allowed to sit part-way through its key (`stripeApiKey`), and
+      // startsInsideDigestKey reads that key instead.
+      if (!keyAnchored && isWordCharAt(content, match.index - 1)) {
+        continue;
+      }
 
       // A generic assignment can start part-way through a longer key, so the
       // words to its left decide too: `cache-api-key` is a cache key.
-      if (keyAnchored && startsInsideDigestKey(text, match.index)) {
+      if (keyAnchored && startsInsideDigestKey(content, match.index)) {
+        continue;
+      }
+
+      // A shape that is also a word counts only where a value goes.
+      if (valuePosition && !isInValuePosition(content, value, match.index)) {
+        continue;
+      }
+
+      // A bare shape the key gave meaning to has to look like a token:
+      // `password: "Password confirmation"` is a label (#357). The // pragma: allowlist secret
+      // placeholder list reads the same body, since the key is part of the
+      // match and `apiKey:"YOUR_API_KEY…"` is a placeholder however keyed. // pragma: allowlist secret
+      const body = generic ? genericValueOf(value) : value;
+      if (generic && (/\s/.test(body) || shannonEntropy(body) < genericEntropyFloor(body.length))) {
         continue;
       }
 
@@ -1431,7 +1626,7 @@ export function scanContent(
       if (
         seenValues.has(value) ||
         seenValues.overlaps(value) ||
-        isLikelyFalsePositive(value)
+        isLikelyFalsePositive(body)
       ) {
         continue;
       }
@@ -1441,42 +1636,20 @@ export function scanContent(
         type: name,
         value,
         confidence,
-        publicByDesign,
+        publicByDesign: publicByDesign ?? false,
         location,
         sourceUrl,
       });
     }
-  };
-
-  // Pass 1: Run all fast patterns (distinctive prefixes, O(n) safe)
-  //
-  // A pass over the content costs the same whether it finds anything or not, and
-  // on a 1 MB script-heavy page 34 of these 70 cannot match the body being
-  // scanned. The gram index answers that for the price of one pass instead of
-  // seventy. 18 of the 70 prove no literal at all — `[0-9]{8,10}:[a-zA-Z0-9_-]{35}`
-  // has nothing to prove — and those always run.
-  for (const {
-    name,
-    pattern,
-    confidence,
-    publicByDesign,
-    keyAnchored,
-    literals,
-  } of PREFILTERED_FAST_PATTERNS) {
-    if (!mayMatch(gramIndex, literals)) continue;
-    processMatches(
-      content,
-      name,
-      pattern,
-      confidence,
-      publicByDesign ?? false,
-      keyAnchored ?? false
-    );
   }
 
-  // Pass 2: Run context patterns only on windows around keyword occurrences
-  // This avoids scanning the entire content with generic patterns like /[a-f0-9]{32}/
-  // Additional filtering: require assignment context and filter code identifiers
+  // Pass 2: CONTEXT patterns, a bounded look-behind from each keyword (#357).
+  //
+  // A bare shape counts only when it STARTS within CONTEXT_KEYWORD_GAP
+  // characters after a brand keyword and is word-bounded on both sides: the
+  // keyword names the value (`togetherKey: "…"`), it does not merely share a
+  // screen with it. A keyword after the value never counts. The key-context
+  // gate (digest keys, value position, minified members) still applies.
   //
   // The lowercase copy exists only to locate the keywords, so it is built the
   // first time a keyword survives the index: on a page where none does, the pass
@@ -1492,23 +1665,22 @@ export function scanContent(
   for (const { name, keyword, pattern, confidence } of CONTEXT_PATTERNS) {
     if (keywordFilter && !mayContain(keywordFilter, keyword)) continue;
     contentLower ??= content.toLowerCase();
-    // Extract small windows around each keyword occurrence
-    const windows = extractKeywordWindows(content, contentLower, keyword);
-    if (windows.length === 0) continue;
 
-    // Only scan the windows, not the entire content
-    for (const { text: window, scanFrom } of windows) {
-      // Match across the lead-in too: a value can START there and run into the
-      // region proper, and skipping those loses the leak at a window boundary.
+    let pos = 0;
+    while ((pos = contentLower.indexOf(keyword, pos)) !== -1) {
+      const from = pos + keyword.length;
+      pos = from;
+      const region = content.slice(from, from + CONTEXT_SCAN_SPAN);
+
       pattern.lastIndex = 0;
-
       let match: RegExpExecArray | null;
-      while ((match = pattern.exec(window)) !== null) {
+      while ((match = pattern.exec(region)) !== null) {
+        if (match.index > CONTEXT_KEYWORD_GAP) break;
         const value = match[0];
+        const at = from + match.index;
 
-        // A match that both starts and ends inside the lead-in belongs to the
-        // previous window, which already scanned it. The lead-in is context.
-        if (match.index + value.length <= scanFrom) {
+        // Word-bounded: a 32-hex run inside a 64-hex digest is the digest's.
+        if (isWordCharAt(content, at - 1) || isWordCharAt(content, at + value.length)) {
           continue;
         }
 
@@ -1521,28 +1693,42 @@ export function scanContent(
           continue;
         }
 
-        // Skip values that look like code identifiers (function/variable names)
-        if (looksLikeCodeIdentifier(value)) {
-          continue;
-        }
+        // The key-context helpers read a bounded stretch either side.
+        const lo = Math.max(0, at - CONTEXT_LOCAL_REACH);
+        const local = content.slice(lo, at + value.length + CONTEXT_LOCAL_REACH);
+        const localAt = at - lo;
 
         // For context patterns, require the value to be in a value position
         // (assigned via = or :) to reduce false positives from array elements
-        if (!isInValuePosition(window, value, match.index)) {
+        if (!isInValuePosition(local, value, localAt)) {
           continue;
         }
 
         // Bare-shape patterns are the shape of a SHA-256 digest, so the key in
         // front of the value decides: never report under sha256/integrity/
         // checksum/commit/cache, or with no assignment context at all.
-        const back = readKeyLookBack(window, match.index);
+        const back = readKeyLookBack(local, localAt);
         const keyContext = classifyKeyContext(
           back.before,
           keyword,
-          enclosingTag(window, match.index),
+          enclosingTag(local, localAt),
           back.cut
         );
         if (keyContext === "digest" || keyContext === "none") {
+          continue;
+        }
+
+        // Skip values that look like code identifiers (function/variable
+        // names): `apiKey: getSegmentKey` assigns a call, not a key. A QUOTED
+        // string under a key that says credential is a literal and reads as
+        // one however it is spelt — real Cloudflare tokens carry `_`, real
+        // Sanity tokens open `skA…`, and a third of random alphanumeric keys
+        // happen to start lowercase-then-uppercase (#357) — provided it has a
+        // digit in it: `"paste_your_cloudflare_api_token_here_now"` is
+        // quoted, under a credential key, and made of words.
+        const literal =
+          QUOTE_CHAR_RE.test(content[at - 1] ?? "") && keyContext === "credential" && /[0-9]/.test(value);
+        if (!literal && looksLikeCodeIdentifier(value)) {
           continue;
         }
 
