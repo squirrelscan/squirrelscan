@@ -1,10 +1,11 @@
 // #2184: what `publishReport` forwards out of the API's publish response.
 //
-// The CLI's renderer validates the notice again before printing, so this file
+// The CLI's renderer validates the summary again before printing, so this file
 // pins the OTHER half of the contract: `PublishResult.schedule` is typed
-// `ScheduleNotice`, and the only way that type can be honest is if the
-// controller refuses a partial object rather than passing the cast through.
-// Without this, the field's type is a claim nothing checks.
+// `WebsiteScheduleSummary`, the shared shape in core-contracts, and the only way
+// that type can be honest is if the controller refuses an object missing the
+// fields it promises rather than passing the cast through. Without this, the
+// field's type is a claim nothing checks.
 //
 // `getSettingsPath` is spied rather than redirected through $HOME: a successful
 // publish stamps `first_publish_at` (#2182) and Bun fixes homedir() at process
@@ -32,12 +33,24 @@ import * as pathsModule from "../../src/self/paths";
 const SETTINGS_URL =
   "https://app.squirrelscan.com/acme/website/web_1/settings/schedule";
 
-const COMPLETE = {
-  enabled: true,
+// Typed loosely on purpose: this file feeds these objects through a JSON
+// response, which is exactly the untyped path the controller's guard exists for.
+const COMPLETE: Record<string, unknown> = {
+  kind: "recurring",
   frequency: "weekly",
-  frequencyLabel: "every week",
+  requested: true,
+  state: "active",
+  stateReason: null,
+  nextRunAt: "2026-09-23T04:41:00.000Z",
+  cadenceLabel: "every week",
   settingsUrl: SETTINGS_URL,
+  pauseUrl: "https://api.squirrelscan.com/v1/schedules/pause?s=a&t=b",
+  cap: { limit: 1, used: 1 },
+  upgradeUrl: null,
 };
+
+/** The three fields the CLI's line actually reads, and therefore validates. */
+const RENDERED_FIELDS = ["state", "cadenceLabel", "settingsUrl"] as const;
 
 function report(): AuditReport {
   return {
@@ -113,11 +126,11 @@ async function publishedSchedule() {
   return result.data.schedule;
 }
 
-describe("publishReport forwards the schedule notice (#2184)", () => {
-  test("a complete notice reaches the caller unchanged", async () => {
+describe("publishReport forwards the schedule summary (#2184)", () => {
+  test("a complete summary reaches the caller unchanged", async () => {
     responseSchedule = COMPLETE;
 
-    expect(await publishedSchedule()).toEqual(COMPLETE);
+    expect(await publishedSchedule()).toEqual(COMPLETE as never);
   });
 
   test("a server that sent none leaves the field absent", async () => {
@@ -127,8 +140,8 @@ describe("publishReport forwards the schedule notice (#2184)", () => {
   // Each of these would satisfy the declared type only because the response is
   // a cast. Dropping the whole object is what keeps `PublishResult.schedule`
   // from being a claim nothing checks.
-  test("a partial notice is dropped, not forwarded", async () => {
-    for (const key of Object.keys(COMPLETE)) {
+  test("a summary missing a rendered field is dropped, not forwarded", async () => {
+    for (const key of RENDERED_FIELDS) {
       const partial = { ...COMPLETE } as Record<string, unknown>;
       delete partial[key];
       responseSchedule = partial;
@@ -139,8 +152,22 @@ describe("publishReport forwards the schedule notice (#2184)", () => {
     }
   });
 
-  test("a wrongly-typed notice is dropped", async () => {
-    responseSchedule = { ...COMPLETE, enabled: "yes" };
+  // The guard checks what the CLI RENDERS, not the whole contract. A server that
+  // starts populating the rest later must not be silenced by this validation,
+  // and the fields it omits are the server's to define.
+  test("a summary whose unrendered fields are absent is still forwarded", async () => {
+    const rendered = {
+      state: "active",
+      cadenceLabel: "every week",
+      settingsUrl: SETTINGS_URL,
+    };
+    responseSchedule = rendered;
+
+    expect(await publishedSchedule()).toEqual(rendered as never);
+  });
+
+  test("a wrongly-typed summary is dropped", async () => {
+    responseSchedule = { ...COMPLETE, state: 1 };
     expect(await publishedSchedule()).toBeUndefined();
 
     responseSchedule = "weekly";

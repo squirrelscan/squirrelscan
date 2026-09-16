@@ -82,7 +82,7 @@ import {
   resolveRunFinalizeScore,
   startRunHeartbeat,
 } from "@/lib/run-tracker";
-import { scheduleNoticeLine } from "@/lib/schedule-notice";
+import { scheduleSummaryLine } from "@/lib/schedule-notice";
 import { syncTechnologies } from "@/lib/technology-sync";
 import {
   AUDIT_BASE_CREDITS,
@@ -2261,7 +2261,7 @@ export const audit = defineCommand({
             // completed cloud audit, so this is where the CLI tells its user a
             // weekly credit charge has started and where one click stops it.
             // Silent when the server said nothing, or said the schedule is off.
-            const scheduleLine = scheduleNoticeLine(
+            const scheduleLine = scheduleSummaryLine(
               publishResult.data.schedule
             );
             if (scheduleLine) log(scheduleLine);

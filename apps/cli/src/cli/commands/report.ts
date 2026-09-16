@@ -32,7 +32,7 @@ import {
   LOCAL_HOST_NOT_PUBLISHED_LINE,
   nonPublicHostLabel,
 } from "@/lib/non-public-host";
-import { scheduleNoticeLine } from "@/lib/schedule-notice";
+import { scheduleSummaryLine } from "@/lib/schedule-notice";
 import { diffReports, isSameBaseUrl } from "@/reports/diff";
 import {
   generateDiffConsole,
@@ -485,7 +485,7 @@ export const report = defineCommand({
       // but on STDERR. This path's contract is a bare URL on stdout — it is the
       // one people pipe into other commands — so the notice goes where the
       // errors already go and the pipe keeps working.
-      const scheduleLine = scheduleNoticeLine(publishResult.data.schedule);
+      const scheduleLine = scheduleSummaryLine(publishResult.data.schedule);
       if (scheduleLine) console.error(scheduleLine);
 
       // Save published report info for tracking in report --list

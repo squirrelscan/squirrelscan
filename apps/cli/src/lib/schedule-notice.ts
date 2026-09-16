@@ -10,35 +10,54 @@
 //   2. each run costs credits;
 //   3. where one click turns it off.
 //
-// The API BUILDS the notice and the CLI renders it, the same rule #2183 applied
-// to the upgrade offer. Both the cadence wording and the settings link depend on
-// things the CLI cannot know (which cadence the plan clamped the site to, and
-// the org slug the dashboard route needs), and a client that composed either
-// would be one release away from disagreeing with the dashboard and the email
-// about the same website.
+// The API BUILDS the summary and the CLI renders it, the same rule #2183 applied
+// to the upgrade offer. Everything in it depends on something the CLI cannot
+// know: the cadence the plan clamped the site to, the org slug the dashboard
+// route needs, the plan's scheduled-site allowance. A client that composed any
+// of it would be one release away from disagreeing with the dashboard and the
+// email about the same website.
+//
+// ── ONE renderer, one line ───────────────────────────────────────────────
+//
+// `scheduleSummaryLine` is the single seam that turns a summary into terminal
+// output, and it answers at most ONE line for any state. #2225 adds the `capped`
+// branch here rather than at the call sites: two call sites each printing their
+// own state's line is how a publish ends up saying two things about one
+// schedule.
 
-import type { ScheduleNotice } from "@squirrelscan/cloud-client";
+import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";
 
 import { fmt } from "@/cli/format";
 
+/** The states this CLI renders today. Everything else is silent until #2225. */
+const RENDERED_STATES = new Set(["active"]);
+
 /**
- * Whether a value off the wire is a notice we can print.
+ * Whether a value off the wire is a summary we can print.
  *
- * The publish response is parsed as JSON and cast, never validated, so every
- * field is checked here rather than trusted. A half-populated notice is treated
- * as no notice at all: telling somebody a recurring charge has started and then
- * failing to say where to stop it is worse than saying nothing.
+ * The publish response is parsed as JSON and cast, never validated, so the
+ * fields this renderer actually READS are checked here rather than trusted. A
+ * summary missing one of them is treated as no summary at all: telling somebody
+ * a recurring charge has started and then failing to say where to stop it is
+ * worse than saying nothing.
+ *
+ * Deliberately narrow. It validates what is rendered, not the whole contract:
+ * requiring fields the CLI never touches (`nextRunAt`, `cap`, `pauseUrl`) would
+ * make an older or a partially-populated server silent for no reason, and the
+ * server owns those fields' meaning anyway.
  */
-export function isScheduleNotice(value: unknown): value is ScheduleNotice {
+export function isScheduleSummary(
+  value: unknown
+): value is WebsiteScheduleSummary {
   if (!value || typeof value !== "object") return false;
-  const n = value as Partial<Record<keyof ScheduleNotice, unknown>>;
+  const s = value as Partial<Record<keyof WebsiteScheduleSummary, unknown>>;
   return (
-    typeof n.enabled === "boolean" &&
-    typeof n.frequency === "string" &&
-    typeof n.frequencyLabel === "string" &&
-    n.frequencyLabel.length > 0 &&
-    typeof n.settingsUrl === "string" &&
-    n.settingsUrl.length > 0
+    typeof s.state === "string" &&
+    s.state.length > 0 &&
+    typeof s.cadenceLabel === "string" &&
+    s.cadenceLabel.length > 0 &&
+    typeof s.settingsUrl === "string" &&
+    s.settingsUrl.length > 0
   );
 }
 
@@ -50,13 +69,16 @@ export function isScheduleNotice(value: unknown): value is ScheduleNotice {
  * seen once is one that can be missed, and the cost of repeating it is a single
  * dim line under a URL the reader is already looking at.
  *
- * Null when the schedule is off. The CLI never announces a schedule that is not
- * running, and it never pitches one either: that belongs to the dashboard,
- * which knows what the plan funds and which of its slots are free.
+ * Null for every state but `active`. A site that is off has nothing to opt out
+ * of; `capped`, `unschedulable` and `paused` each need their own sentence and
+ * their own next step, and #2225 adds them to THIS function. Rendering an
+ * unrecognised state with the active wording would claim a schedule that is not
+ * running, which is the one error this line must never make.
  */
-export function scheduleNoticeLine(notice: unknown): string | null {
-  if (!isScheduleNotice(notice) || !notice.enabled) return null;
+export function scheduleSummaryLine(summary: unknown): string | null {
+  if (!isScheduleSummary(summary)) return null;
+  if (!RENDERED_STATES.has(summary.state)) return null;
   return fmt.dim(
-    `This site is re-audited ${notice.frequencyLabel} and each run costs credits. Turn it off: ${notice.settingsUrl}`
+    `Scheduled audits: ${summary.cadenceLabel}, and each run costs credits. Turn it off: ${summary.settingsUrl}`
   );
 }

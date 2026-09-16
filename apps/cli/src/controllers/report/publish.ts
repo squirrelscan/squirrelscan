@@ -2,7 +2,7 @@
  * Report publishing controller - publishes audit reports to reports.squirrelscan.com
  */
 
-import type { ScheduleNotice } from "@squirrelscan/cloud-client";
+import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";
 import type { ResolutionSignal } from "@squirrelscan/core-contracts";
 
 import { computeLockedRules } from "@squirrelscan/audit-engine";
@@ -34,7 +34,7 @@ import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { cliApi } from "@/lib/api-client";
 import { teamPlanRequiredMessage } from "@/lib/plan-messages";
-import { isScheduleNotice } from "@/lib/schedule-notice";
+import { isScheduleSummary } from "@/lib/schedule-notice";
 import {
   API_TOKEN_ENV_VAR,
   envTokenRejectedMessage,
@@ -76,7 +76,7 @@ export interface PublishResult {
   // #2184: what the server says about this website's recurring audits, or
   // undefined when it said nothing (an older server, or a publish that linked
   // no website). Absence means "say nothing", never "there is no schedule".
-  schedule?: ScheduleNotice;
+  schedule?: WebsiteScheduleSummary;
   // #1179: the server's AUTHORITATIVE post-merge score/counts (it re-merges the
   // published payload against the cross-audit finding store and can differ from
   // the CLI's local pre-publish estimate). The caller stamps these into
@@ -370,7 +370,7 @@ export async function publishReport(
       issuesFound: data.issuesFound,
       totalPages: data.totalPages,
       // #2184: forwarded only when the server sent a complete one.
-      ...(isScheduleNotice(data.schedule) ? { schedule: data.schedule } : {}),
+      ...(isScheduleSummary(data.schedule) ? { schedule: data.schedule } : {}),
     });
   } catch (error) {
     return err(

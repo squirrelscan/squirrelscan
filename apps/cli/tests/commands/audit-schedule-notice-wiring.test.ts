@@ -33,6 +33,21 @@ const SETTINGS_URL =
 /** What the publish route answers with. Reassigned per test. */
 let publishSchedule: unknown;
 
+/** A live weekly schedule, as the API builds it. */
+const active = () => ({
+  kind: "recurring" as const,
+  frequency: "weekly" as const,
+  requested: true,
+  state: "active",
+  stateReason: null,
+  nextRunAt: "2026-09-23T04:41:00.000Z",
+  cadenceLabel: "every week",
+  settingsUrl: SETTINGS_URL,
+  pauseUrl: "https://api.squirrelscan.com/v1/schedules/pause?s=a&t=b",
+  cap: { limit: 1, used: 1 },
+  upgradeUrl: null,
+});
+
 const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-sched-settings-"));
 let restoreSettingsPath: () => void = () => {};
 
@@ -142,17 +157,12 @@ async function runAudit(extra: Record<string, unknown> = {}) {
 const output = () => printed.join("\n");
 
 describe("squirrel audit — the recurring-audit disclosure (#2184)", () => {
-  test("an enabled schedule is disclosed, with the link that turns it off", async () => {
-    publishSchedule = {
-      enabled: true,
-      frequency: "weekly",
-      frequencyLabel: "every week",
-      settingsUrl: SETTINGS_URL,
-    };
+  test("an active schedule is disclosed, with the link that turns it off", async () => {
+    publishSchedule = active();
 
     await runAudit();
 
-    expect(output()).toContain("re-audited every week");
+    expect(output()).toContain("Scheduled audits: every week");
     expect(output()).toContain("costs credits");
     expect(output()).toContain(SETTINGS_URL);
   });
@@ -166,37 +176,36 @@ describe("squirrel audit — the recurring-audit disclosure (#2184)", () => {
     expect(output()).toContain("https://reports.squirrelscan.com/rep_1");
   });
 
-  test("a disabled schedule says nothing", async () => {
-    publishSchedule = {
-      enabled: false,
-      frequency: "weekly",
-      frequencyLabel: "every week",
-      settingsUrl: SETTINGS_URL,
-    };
+  // Every state but `active` is silent until #2225 adds its branch to the same
+  // renderer. The report URL assertion is what keeps these from passing because
+  // the run stopped publishing.
+  test.each([["off"], ["capped"], ["unschedulable"], ["paused"]])(
+    "state %p says nothing",
+    async (state) => {
+      publishSchedule = { ...active(), state };
 
+      await runAudit();
+
+      expect(output()).toContain("https://reports.squirrelscan.com/rep_1");
+      expect(output()).not.toContain("Scheduled audits:");
+    }
+  );
+
+  test("a server that sends no summary says nothing", async () => {
     await runAudit();
 
-    expect(output()).toContain("https://reports.squirrelscan.com/rep_1");
-    expect(output()).not.toContain("re-audited");
+    expect(output()).not.toContain("Scheduled audits:");
   });
 
-  test("a server that sends no notice says nothing", async () => {
-    await runAudit();
-
-    expect(output()).not.toContain("re-audited");
-  });
-
-  // A partial notice must be dropped whole rather than printed half-formed:
-  // naming a recurring charge with no way to stop it is worse than silence.
-  test("a notice missing its link says nothing", async () => {
-    publishSchedule = {
-      enabled: true,
-      frequency: "weekly",
-      frequencyLabel: "every week",
-    };
+  // A summary missing a field the line renders must be dropped whole rather
+  // than printed half-formed: naming a recurring charge with no way to stop it
+  // is worse than silence.
+  test("a summary missing its link says nothing", async () => {
+    const { settingsUrl: _dropped, ...withoutLink } = active();
+    publishSchedule = withoutLink;
 
     await runAudit();
 
-    expect(output()).not.toContain("re-audited");
+    expect(output()).not.toContain("Scheduled audits:");
   });
 });
