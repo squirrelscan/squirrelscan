@@ -30,8 +30,19 @@ type Balance = {
   unlimited?: boolean;
 };
 
+type Offer = {
+  url: string;
+  plan: string;
+  interval: string;
+  name: string;
+  priceMonthUsd: number;
+  priceYearUsd: number;
+  monthlyCredits: number;
+};
+
 let balancePayload: Balance;
 let planPayload: { id: string; name: string; monthlyCredits: number };
+let upgradePayload: Offer | undefined;
 
 const PRICING = {
   audit_base: { cost: AUDIT_BASE_CREDITS, per: 1, unit: "audit" },
@@ -54,6 +65,7 @@ const cloudClientSpy = spyOn(
         plan: planPayload,
         pricing: PRICING,
         pricingVersion: 10,
+        ...(upgradePayload ? { upgrade: upgradePayload } : {}),
       }),
     }) as unknown as ReturnType<
       typeof cloudModule.createCloudClientFromSettings
@@ -88,6 +100,8 @@ beforeEach(() => {
     unlimited: true,
   };
   planPayload = { id: "enterprise", name: "Enterprise", monthlyCredits: 0 };
+  // An unmetered org never gets an offer from the API — see buildUpgradeOffer.
+  upgradePayload = undefined;
 });
 
 const output = () => logged.join("\n");
@@ -178,5 +192,84 @@ describe("`squirrel credits` on a metered account (control)", () => {
     expect(text).toContain("Balance: 0 credits");
     expect(text).toContain("audit base");
     expect(text).not.toContain("Balance: unlimited");
+  });
+});
+
+/**
+ * #2183 F6b. `squirrel credits` reads the same `/v1/credits` the audit preflight
+ * does, so leaving it on the static marketing URL meant one binary printing two
+ * different upgrade links depending on which command you ran — and the static
+ * one resolves to whichever org the browser last used, whose credits cannot pay
+ * for the blocked audit.
+ *
+ * Command-level for the reason this file's header already gives: a helper can be
+ * perfectly correct while the caller never passes the offer through.
+ */
+describe("`squirrel credits` and the server's offer", () => {
+  const OFFER: Offer = {
+    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A&src=cli",
+    plan: "pro",
+    interval: "month",
+    name: "Pro",
+    priceMonthUsd: 19,
+    priceYearUsd: 190,
+    monthlyCredits: 3000,
+  };
+
+  beforeEach(() => {
+    balancePayload = {
+      monthly: 10,
+      pack: 0,
+      total: 10,
+      periodEnd: "2026-10-01T00:00:00.000Z",
+    };
+    planPayload = { id: "free", name: "Free", monthlyCredits: 500 };
+    upgradePayload = OFFER;
+  });
+
+  test("a free plan is pitched with the org-scoped link", async () => {
+    await runCredits();
+    expect(output()).toContain(OFFER.url);
+    expect(output()).not.toContain("squirrelscan.com/upgrade?src=cli-credits");
+  });
+
+  test("a paid plan tops up through the same link, with no plan pitch", async () => {
+    planPayload = { id: "starter", name: "Pro", monthlyCredits: 3000 };
+    await runCredits();
+    expect(output()).toContain(`Top up: `);
+    expect(output()).toContain(OFFER.url);
+    // Already paying: do not sell them the plan they are on.
+    expect(output()).not.toContain("Pro: $19/month");
+  });
+
+  test("falls back to the static URL when the server sends no offer", async () => {
+    // An older API. The link is worse but it still resolves, which is the whole
+    // reason the field is optional on the wire.
+    upgradePayload = undefined;
+    await runCredits();
+    expect(output()).toContain("squirrelscan.com/upgrade?src=cli-credits");
+  });
+
+  test("still prints the reset date and the below-base warning", async () => {
+    // Control: the offer is additive, not a replacement for what was there.
+    await runCredits();
+    expect(output()).toContain("2026-10-01");
+    expect(output()).toContain("audit base");
+  });
+
+  test("an unmetered account gets no link at all, even if one is sent", async () => {
+    // Defensive: the API suppresses the offer for an unmetered org, so this can
+    // only mean a stale deploy. The CLI must not pitch a contracted account.
+    planPayload = { id: "enterprise", name: "Enterprise", monthlyCredits: 0 };
+    balancePayload = {
+      monthly: 0,
+      pack: 0,
+      total: 0,
+      periodEnd: null,
+      unlimited: true,
+    };
+    await runCredits();
+    expect(output()).not.toContain(OFFER.url);
+    expect(output()).not.toContain("Top up");
   });
 });

@@ -11,6 +11,7 @@ import { getPlan } from "@squirrelscan/core-contracts/plans";
 import { describe, expect, test } from "bun:test";
 
 import {
+  computePreflightAffordability,
   lowBalanceFooterLines,
   registerFailureLines,
 } from "../../src/cli/commands/audit";
@@ -341,5 +342,120 @@ describe("lowBalanceFooterLines with a server offer (#2183)", () => {
         resetAt: "2026-10-01T00:00:00.000Z",
       })
     ).toEqual([]);
+  });
+});
+
+// #2183 F6a. The preflight shortfall warning fires when the balance covers the
+// 50-credit base but not the pages — an audit that will start and then quietly
+// stop rendering. It is the one CLI wall that was left on the org-less
+// marketing URL, and it carried no reset date.
+describe("computePreflightAffordability with a server offer", () => {
+  const OFFER_URL =
+    "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A&src=cli";
+  const opts = {
+    balance: 120,
+    maxPages: 100,
+    cloudRendering: "browser" as const,
+    topUpUrl: OFFER_URL,
+  };
+
+  test("warns with the org-scoped link rather than the marketing URL", () => {
+    const out = text(computePreflightAffordability(opts).warningLines);
+    expect(out).toContain(OFFER_URL);
+    expect(out).not.toContain(UPGRADE);
+  });
+
+  test("names the cost, the balance and the reset date", () => {
+    const out = text(
+      computePreflightAffordability({
+        ...opts,
+        resetAt: "2026-10-01T00:00:00.000Z",
+      }).warningLines
+    );
+    // 50 base + 2 x 100 rendered pages.
+    expect(out).toContain("250");
+    expect(out).toContain("120");
+    expect(out).toContain("2026-10-01");
+  });
+
+  test("drops the reset clause rather than inventing a date", () => {
+    const out = text(computePreflightAffordability(opts).warningLines);
+    expect(out).not.toContain("Credits reset");
+    expect(out).toContain(OFFER_URL);
+  });
+
+  test("stays silent when the balance covers the whole estimate", () => {
+    expect(
+      computePreflightAffordability({ ...opts, balance: 5000 }).warningLines
+    ).toEqual([]);
+  });
+
+  test("an unmetered account is never warned, offer or no offer", () => {
+    expect(
+      computePreflightAffordability({ ...opts, balance: 0, unlimited: true })
+        .warningLines
+    ).toEqual([]);
+  });
+
+  test("http-only rendering has no page charge, so no shortfall to warn about", () => {
+    // The base alone is 50 and the balance is 120, so only the render estimate
+    // can push this over — proving the warning is about the pages, not the base.
+    expect(
+      computePreflightAffordability({ ...opts, cloudRendering: "http" })
+        .warningLines
+    ).toEqual([]);
+  });
+});
+
+/**
+ * #2183 F6a. The pure builders above take `topUpUrl` as an argument, so they
+ * prove nothing about which URL the command actually hands them — reverting the
+ * call site to `upgradeUrl("cli-audit")` left every test green, which is the
+ * same composition gap the review found on the API side.
+ *
+ * These read the command source. Not elegant, but the alternative is driving a
+ * full audit run, and a wall nobody can reach is exactly what this issue exists
+ * to fix.
+ */
+describe("the audit command wires the server offer into its walls", () => {
+  const source = require("node:fs").readFileSync(
+    require("node:path").join(
+      import.meta.dir,
+      "../../src/cli/commands/audit.ts"
+    ),
+    "utf8"
+  ) as string;
+
+  /** The argument object of a call, bounded generously. */
+  function callArgs(marker: string): string {
+    const at = source.indexOf(marker);
+    expect(`${marker} found`).toBe(`${marker} found`);
+    expect(at).toBeGreaterThan(-1);
+    return source.slice(at, at + 800);
+  }
+
+  test("the preflight shortfall warning prefers the offer link", () => {
+    const args = callArgs("computePreflightAffordability({");
+    expect(args).toContain("upgradeOffer?.url");
+    expect(args).toContain("resetAt: creditsResetAt");
+  });
+
+  test("the end-of-run low-balance footer gets the offer and the reset date", () => {
+    const args = callArgs("lowBalanceFooterLines({");
+    expect(args).toContain("upgrade: upgradeOffer");
+    expect(args).toContain("resetAt: creditsResetAt");
+  });
+
+  test("the local-only preflight line prefers the offer link", () => {
+    // The most-seen CLI wall: the run never registers, so it never collects a
+    // 402, and this single line is the whole offer.
+    expect(source).toContain('upgrade?.url ?? upgradeUrl("cli-audit")');
+  });
+
+  test("the probe reads real call arguments, not just any substring", () => {
+    // A green suite above means nothing if `callArgs` matched an import line or
+    // a comment; prove the window really contains the argument object.
+    expect(callArgs("computePreflightAffordability({")).toContain("maxPages");
+    expect(callArgs("lowBalanceFooterLines({")).toContain("monthlyCredits");
   });
 });

@@ -204,6 +204,12 @@ export function computePreflightAffordability(opts: {
    * Absent = metered.
    */
   unlimited?: boolean;
+  /**
+   * #2183: when the monthly grant comes back (`balance.periodEnd`). Waiting is
+   * a real answer to a shortfall — an audit that would degrade halfway is often
+   * worth postponing — but only once it has a date on it.
+   */
+  resetAt?: string | null;
 }): PreflightAffordability {
   const base = computeCost("audit_base", 1);
   const renderCost =
@@ -212,12 +218,18 @@ export function computePreflightAffordability(opts: {
       : 0;
   const estimate = base + renderCost;
   const shortfall = !opts.unlimited && opts.balance < estimate;
+  const resetOn = resetDateLabel(opts.resetAt);
   const warningLines = shortfall
     ? [
         `⚠ This audit may cost up to ${estimate.toLocaleString("en-US")} credits ` +
           `(${base} base + up to ${renderCost.toLocaleString("en-US")} to render ${opts.maxPages} pages), ` +
           `but your balance is ${opts.balance.toLocaleString("en-US")}.`,
-        `  Charging stops when credits run out — later pages won't render. Top up: ${opts.topUpUrl}`,
+        // #2183: the same four facts the other CLI walls carry. `topUpUrl` is
+        // the server's org-scoped link when there is one, so one click lands on
+        // checkout for the org that is short rather than the last-used one.
+        `  Charging stops when credits run out — later pages won't render.` +
+          (resetOn ? ` Credits reset ${resetOn}.` : "") +
+          ` Top up: ${opts.topUpUrl}`,
       ]
     : [];
   return { base, renderCost, estimate, shortfall, warningLines };
@@ -1505,8 +1517,10 @@ export const audit = defineCommand({
           balance: startingBalance,
           maxPages,
           cloudRendering,
-          topUpUrl: upgradeUrl("cli-audit"),
+          // #2183: the server's org-scoped link when the preflight read one.
+          topUpUrl: upgradeOffer?.url ?? upgradeUrl("cli-audit"),
           unlimited: unlimitedCredits,
+          resetAt: creditsResetAt,
         });
         if (preflight.shortfall) {
           log("");

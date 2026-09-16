@@ -55,7 +55,7 @@ Pricing:
   issue_enrich           3 per issue
   keyword_gaps          25 per run
 
-Top up: https://squirrelscan.com/upgrade?src=cli-credits
+Top up: https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01J0ORGEXAMPLE0000000000A&src=cli
 ```
 
 `squirrel auth status` also shows your balance, and the start banner of every audit shows the estimated spend against it.
@@ -105,4 +105,8 @@ See the [cloud configuration reference](/configuration/cloud) for all options.
 
 Nothing breaks. A cloud audit needs a balance of at least 50 credits (the base) to start: below that, the CLI runs the audit locally instead and tells you so. If credits run out mid-audit, cloud rules report `skipped` with reason `insufficient-credits`, the audit completes with all local rules, and you see a single warning with a top-up link. If an audit fails after you were charged, the charge is automatically refunded.
 
-Wherever that warning appears, it states what the run would have cost, the credits you have left, the date your monthly credits reset, and an upgrade link. The link is scoped to the organization that ran out, so it opens checkout for that organization rather than whichever one your browser used last. Credits are not shared between organizations, so that distinction matters: topping up the wrong one leaves the blocked audit blocked. The MCP server returns the same four facts as fields on its `run_audit` response, so an agent can relay them without a second call.
+Every credit warning the CLI prints states what the run would have cost, the credits you have left, the date your monthly credits reset, and an upgrade link: the shortfall warning before a render-heavy audit, the out-of-credits notice when a run cannot be tracked, and the low-balance footer after one. `squirrel credits` shows the same balance, reset date and link.
+
+That link is scoped to the organization that ran out, so it opens checkout for that organization rather than whichever one your browser used last. Credits are not shared between organizations, so the distinction matters: topping up the wrong one leaves the blocked audit blocked. The link works signed out, and carries the organization through the login. The MCP server returns the same facts as fields on its `run_audit` response, so an agent can relay them without a second call.
+
+One exception: `squirrel credits --upgrade` answers before reading your balance, so you can reach the upgrade page without logging in first. It prints the general upgrade URL rather than an organization-scoped one.
