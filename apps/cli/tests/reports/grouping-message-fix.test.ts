@@ -102,13 +102,15 @@ describe("groupIssuesByCategory with message-based grouping", () => {
     expect(grouped.length).toBe(1);
     expect(grouped[0].rules.length).toBe(1);
     // "too short" and "too long" are semantically different → 2 groups
-    // "too long (65)" and "too long (114)" merge → 1 group with generic message
+    // "too long (65)" and "too long (114)" merge → 1 group whose message
+    // carries the range the pages covered and keeps the limit they agree on
+    // (#2231).
     expect(grouped[0].rules[0].checks.length).toBe(2);
 
     const checks = grouped[0].rules[0].checks.sort((a, b) =>
       a.message.localeCompare(b.message)
     );
-    expect(checks[0].message).toBe("Title too long (N chars, max N)");
+    expect(checks[0].message).toBe("Title too long (65 to 114 chars, max 60)");
     expect(checks[0].count).toBe(2);
     expect(checks[0].pages.length).toBe(2);
     expect(checks[1].message).toBe("Title too short (22 chars, min 30)");
@@ -165,11 +167,12 @@ describe("groupIssuesByCategory with message-based grouping", () => {
 
     expect(grouped.length).toBe(1);
     expect(grouped[0].rules.length).toBe(1);
-    // All checks merge into 1 group (numbers normalized away)
+    // All checks merge into 1 group, and the merged message spans the counts
+    // the pages reported rather than erasing them (#2231).
     expect(grouped[0].rules[0].checks.length).toBe(1);
 
     const check = grouped[0].rules[0].checks[0];
-    expect(check.message).toBe("N image(s) missing alt attribute");
+    expect(check.message).toBe("1 to 5 image(s) missing alt attribute");
     expect(check.count).toBe(4);
     expect(check.pages.length).toBe(4);
     // Auto-generated items from per-page messages (no explicit items)
