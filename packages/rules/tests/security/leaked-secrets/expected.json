@@ -3336,6 +3336,87 @@
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"AZ2kcu********************zyd3"}
   ],
   "neg:paypal-client-id-mixed-case": [],
+  "real:sanity-webpack-chunk-id": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skFVfL********************F06i"},
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skQ7yg********************6hlO"},
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"skQ7yg********************6hlO"}
+  ],
+  "real:sanity-base64-image-fragment": [
+    {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"skI1VJ********************O94d"}
+  ],
+  "real:linkedin-share-link-plus-shopify-wpm-script": [
+    {"type":"LinkedIn Client Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"8fad6c******cc68"}
+  ],
+  "real:cloudflare-fronted-page-sri-and-challenge": [
+    {"type":"Cloudflare API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"KJCNqf********************nGnP"}
+  ],
+  "real:together-in-prose-plus-sha256-attr": [],
+  "real:segment-in-prose-plus-hash-attr": [],
+  "real:heroku-in-prose-plus-uuid-attr": [
+    {"type":"Heroku API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"41b80b********************7e9b"}
+  ],
+  "real:mistral-in-prose-plus-cryptojs-salted-blob": [],
+  "real:datadog-in-prose-plus-md5-attr": [],
+  "real:telegram-uuid-pair-in-webflow-id-path": [
+    {"type":"Telegram Bot Token","confidence":"high","publicByDesign":false,"location":"html","masked":"844374********************21fb"}
+  ],
+  "real:resend-mid-token-in-image-filename": [
+    {"type":"Resend API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"re_Dry********************Balm"},
+    {"type":"Resend API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"re_sGr********************1szT"}
+  ],
+  "real:neon-product-slug": [
+    {"type":"Neon Database Token","confidence":"high","publicByDesign":false,"location":"html","masked":"neon_a********************tion"}
+  ],
+  "real:paypal-azione-slug": [
+    {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"azione********************nale"}
+  ],
+  "real:generic-secret-i18n-strings": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo********************ion'"},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwd********************in?\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret******************** us\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Passwo********************rd?\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Passwo********************tch\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo********************ion'"},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwd********************in?\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret******************** us\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Passwo********************rd?\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Passwo********************tch\""}
+  ],
+  "real:shopify-storefront-access-token": [
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Access********************4af\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************a85\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Access********************4af\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************a85\""}
+  ],
+  "real:shopify-web-pixel-api-key": [
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Api-Ke********************9UM\""},
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Api-Ke********************9UM\""}
+  ],
+  "real:bearer-template-and-concat-in-auth-spa": [],
+  "real:bearer-literal-in-auth-spa": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer*****************NiJ9"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer*****************NiJ9"}
+  ],
+  "real:aiza-is-public-not-high": [
+    {"type":"Google API Key (browser)","confidence":"high","publicByDesign":true,"location":"html","masked":"AIzaSy********************XBdf"},
+    {"type":"Google API Key (browser)","confidence":"high","publicByDesign":true,"location":"inline-script","masked":"AIzaSy********************XBdf"}
+  ],
+  "real:prefix-mid-token-ghp": [
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ghp_mc********************kfAq"},
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ghp_mc********************kfAq"}
+  ],
+  "real:prefix-mid-token-sk-live": [
+    {"type":"Stripe Live Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk_liv********************VvX3"},
+    {"type":"Stripe Live Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk_liv********************VvX3"}
+  ],
+  "real:prefix-mid-token-akia": [
+    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"html","masked":"AKIAC6**********NY0D"},
+    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AKIAC6**********NY0D"}
+  ],
+  "dedup:shared-theme-bundle-one-finding-per-distinct-value": [
+    {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"external-script","masked":"https:********************7113"},
+    {"type":"Mapbox Access Token","confidence":"high","publicByDesign":true,"location":"external-script","masked":"pk.eyJ********************YSJ9"}
+  ],
   "probe:paypal-eats-azure-account-key": [
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"az5hmz********************hxcu"},
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"az5hmz********************hxcu"}

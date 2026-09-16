@@ -64,6 +64,17 @@ Found while building the corpus:
 19. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
 20. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
 
+Real-world shapes (`real-world.ts`, synthesised from what the detector fired on across 776 audited sites; 13 more distinct gaps, 33 total):
+
+21. The CONTEXT keywords `linkedin`, `cloudflare`, `together`, `segment`, `heroku`, `mistral`, `datadog` are ordinary words on real pages (share links, CDN hosts, prose), and a hash, nonce or UUID nearby under a minified member key (`e.k="…"`) or a keyword-named attribute (`data-heroku-dyno`) reports. The window spans the whole document, so a keyword in an anchor reaches a value in a script.
+22. Prefix patterns have no left boundary: `re_` fires inside `_Care_Dry…` in an image filename, `[0-9]{8,10}:` fires on the tail of a UUID pair in a Webflow id path, and `fooghp_…`, `xsk_live_…`, `abcAKIA…` all report.
+23. Neon `neon_[\w-]{32,}` matches any `neon_`-prefixed hyphenated URL slug.
+24. PayPal matches Italian/Malay words (`azione-…`, `azilah-…`) inside 60+ char hyphenated slugs.
+25. Generic Secret Assignment accepts human sentences: i18n labels under `password`/`secret` keys report (five findings on one Clerk-style i18n object).
+26. Scoping questions, not hard misses: Shopify Storefront API access tokens and web-pixel `Api-Key` values are public storefront identifiers but report as medium generic assignments.
+
+Also pinned in `real-world.ts`: Bearer templates and concatenations stay silent while a literal reports; `AIza…` lands in the public tier, never high; a shared theme bundle carrying the same Sentry DSN three times yields one finding per distinct value.
+
 Documented ordering rule, not a gap: the generic FAST assignments run before the CONTEXT tier, so a value under `auth0ClientSecret` or `twilioAuthToken` reports as "Generic Secret/Token Assignment", not under the brand (probe `generic-assignment-outranks-a-keyed-brand-pattern`).
 
 ## Benchmark
