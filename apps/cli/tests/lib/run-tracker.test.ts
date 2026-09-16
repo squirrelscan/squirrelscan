@@ -321,6 +321,9 @@ describe("registerRun", () => {
         code: "WEBSITE_LIMIT",
         message: "Website limit reached. Contact support if you need more.",
         balance: null,
+        required: null,
+        resetAt: null,
+        upgrade: null,
       },
     ]);
   });
@@ -346,8 +349,92 @@ describe("registerRun", () => {
         code: "INSUFFICIENT_CREDITS",
         message: "Not enough credits",
         balance: null,
+        required: null,
+        resetAt: null,
+        upgrade: null,
       },
     ]);
+  });
+
+  // #2183. The refusal's detail lives under `error.*` (the typed envelope),
+  // while the TOP-LEVEL `balance` only ever appears on a successful register.
+  // This read used to go to the top level, so `registerFailureLines` had a
+  // balance branch that could never fire and the wall showed no numbers at all.
+  test("reads the wall's cost, balance, reset date and offer off the ENVELOPE", async () => {
+    const upgrade = {
+      url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A",
+      plan: "pro",
+      interval: "month",
+      name: "Pro",
+      priceMonthUsd: 19,
+      priceYearUsd: 190,
+      monthlyCredits: 3000,
+    };
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "INSUFFICIENT_CREDITS",
+            message: "Insufficient credits for the audit base",
+            required: 50,
+            balance: { total: 12, periodEnd: "2026-10-01T00:00:00.000Z" },
+            upgrade,
+          },
+        }),
+        { status: 402 }
+      )) as unknown as typeof fetch;
+
+    const warnings: RegisterFailure[] = [];
+    await registerRun({ url: "https://example.com" }, (f) => warnings.push(f));
+    expect(warnings).toEqual([
+      {
+        code: "INSUFFICIENT_CREDITS",
+        message: "Insufficient credits for the audit base",
+        balance: 12,
+        required: 50,
+        resetAt: "2026-10-01T00:00:00.000Z",
+        upgrade,
+      },
+    ]);
+  });
+
+  test("ignores a top-level balance on a refusal — that shape is the SUCCESS one", async () => {
+    // Guards the direction of the #2183 fix: a server that (wrongly) echoed a
+    // top-level balance alongside a refusal must not have it read as the
+    // failure balance, because the envelope is the only authoritative place.
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          balance: { total: 999 },
+          error: { code: "INSUFFICIENT_CREDITS", message: "nope" },
+        }),
+        { status: 402 }
+      )) as unknown as typeof fetch;
+
+    const warnings: RegisterFailure[] = [];
+    await registerRun({ url: "https://example.com" }, (f) => warnings.push(f));
+    expect(warnings[0]?.balance).toBeNull();
+  });
+
+  test("drops a PARTIAL offer rather than rendering half of one", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "INSUFFICIENT_CREDITS",
+            message: "nope",
+            upgrade: {
+              url: "https://app.squirrelscan.com/upgrade",
+              name: "Pro",
+            },
+          },
+        }),
+        { status: 402 }
+      )) as unknown as typeof fetch;
+
+    const warnings: RegisterFailure[] = [];
+    await registerRun({ url: "https://example.com" }, (f) => warnings.push(f));
+    expect(warnings[0]?.upgrade).toBeNull();
   });
 
   test("does NOT warn on a transient 5xx — best-effort tracking stays quiet (#816)", async () => {

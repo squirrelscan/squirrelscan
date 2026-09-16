@@ -202,6 +202,9 @@ describe("registerFailureLines on an unmetered account", () => {
     code: "INSUFFICIENT_CREDITS" as const,
     message: "Out of credits",
     balance: 0,
+    required: null,
+    resetAt: null,
+    upgrade: null,
   };
 
   // An unmetered account cannot genuinely run out, so this code can only mean
@@ -240,6 +243,9 @@ describe("registerFailureLines on an unmetered account", () => {
       code: "WEBSITE_LIMIT" as const,
       message: "at your website limit",
       balance: null,
+      required: null,
+      resetAt: null,
+      upgrade: null,
     };
     for (const unlimited of [true, false]) {
       const lines = text(registerFailureLines(limit, unlimited));

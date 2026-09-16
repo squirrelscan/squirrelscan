@@ -5,10 +5,15 @@ import { defineCommand } from "citty";
 import { fmt } from "@/cli/format";
 import { isUnlimitedBalance } from "@/lib/balance";
 import { openBrowser } from "@/lib/browser";
-import { AUDIT_BASE_CREDITS, proPitchLines, upgradeUrl } from "@/lib/upgrade";
+import { AUDIT_BASE_CREDITS, offerPitchLines, upgradeUrl } from "@/lib/upgrade";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { safeExit } from "@/self/updater";
 
+/**
+ * The static fallback, and the ONLY link `--upgrade` can print: that flag is
+ * answered before the credential check on purpose, so there is no balance read
+ * and therefore no server offer to carry an org.
+ */
 const UPGRADE_URL = upgradeUrl("cli-credits");
 
 export const credits = defineCommand({
@@ -60,7 +65,13 @@ export const credits = defineCommand({
         return;
       }
 
-      const { balance, plan, pricing } = res;
+      const { balance, plan, pricing, upgrade } = res;
+      // #2183: the server's org-scoped link when it sent one. `squirrel credits`
+      // reads the same endpoint the audit preflight does, so leaving it on the
+      // static marketing URL meant one binary printing two different upgrade
+      // links depending on which command you ran — and the static one resolves
+      // to whichever org the browser last used.
+      const topUpUrl = upgrade?.url ?? UPGRADE_URL;
       const unlimited = isUnlimitedBalance(balance);
       console.log(`Plan:    ${plan.name}`);
       if (unlimited) {
@@ -135,10 +146,11 @@ export const credits = defineCommand({
       // plan above it to sell (see SELF_SERVE_PLAN_IDS).
       if (!unlimited) {
         if (plan.id === "free") {
-          for (const line of proPitchLines("cli-credits")) console.log(line);
+          for (const line of offerPitchLines(upgrade ?? null, "cli-credits"))
+            console.log(line);
           console.log(fmt.dim("  Or run `squirrel credits --upgrade`."));
         } else {
-          console.log(`Top up: ${fmt.cyan(UPGRADE_URL)}`);
+          console.log(`Top up: ${fmt.cyan(topUpUrl)}`);
         }
       }
     } catch (error) {

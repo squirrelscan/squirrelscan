@@ -13,6 +13,8 @@
 // already on someone's machine can never be corrected — so the CLI points at a
 // stable marketing URL and lets the site own the mapping.
 
+import type { UpgradeOffer } from "@squirrelscan/cloud-client";
+
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { getPlan } from "@squirrelscan/core-contracts/plans";
 
@@ -56,3 +58,47 @@ export function proPitchLines(
 
 /** What an audit costs, stated in the same words everywhere. */
 export const AUDIT_PRICING_LINE = `Every cloud audit costs ${AUDIT_BASE_CREDITS} credits base plus ${RENDER_PAGE_CREDITS} per rendered page.`;
+
+/**
+ * The upgrade pitch built from the SERVER's offer (#2183).
+ *
+ * The difference from {@link proPitchLines} is the link: this one already names
+ * the org that hit the wall, so one click lands on that org's checkout instead
+ * of on whichever org the browser happened to use last. Credits are not
+ * transferable between orgs, so paying for the wrong one leaves the blocked
+ * audit exactly as blocked — which is why the URL must come from the refusal
+ * and never from `upgradeUrl()` here.
+ *
+ * Falls back to the static pitch when the server sent no offer: an older API,
+ * or an unmetered account that has nothing to buy (the caller checks the
+ * latter before it ever gets here).
+ */
+export function offerPitchLines(
+  offer: UpgradeOffer | null,
+  fallbackSrc: "cli" | "cli-audit" | "cli-credits"
+): string[] {
+  if (!offer) return proPitchLines(fallbackSrc);
+  return [
+    `  ${fmt.bold(
+      `${offer.name}: $${offer.priceMonthUsd}/month (or $${offer.priceYearUsd}/year) for ${n(offer.monthlyCredits)} credits a month`
+    )}`,
+    `  ${fmt.dim(`Also unlocks daily audits on every site, faster crawls, and up to ${n(PRO.maxPagesPerAudit)} pages per audit.`)}`,
+    `  Upgrade: ${fmt.cyan(offer.url)}`,
+  ];
+}
+
+/**
+ * "your credits reset on 2026-10-01", or null when there is nothing to say.
+ *
+ * A bare calendar day, not a timestamp: the hour a billing period rolls over is
+ * noise to someone deciding whether to wait. Null for an absent or unparseable
+ * value (and for a pack-only balance, which genuinely never resets) so the
+ * caller drops the clause instead of printing "Invalid Date".
+ */
+export function resetDateLabel(
+  periodEnd: string | null | undefined
+): string | null {
+  if (!periodEnd) return null;
+  const at = new Date(periodEnd);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString().slice(0, 10);
+}

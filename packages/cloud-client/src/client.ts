@@ -84,6 +84,31 @@ export interface CallOpts {
   maxAttempts?: number;
 }
 
+/**
+ * The upgrade offer the API attaches to a credit wall (#2183).
+ *
+ * The SERVER builds this — the price, what it buys, and a link that already
+ * names the org that hit the wall. A client that composes its own is how the
+ * CLI, the MCP tool and the dashboard ended up quoting three different URLs, one
+ * of which had never been a route. Render these fields; do not derive them.
+ *
+ * Optional everywhere it appears: any server older than #2183 omits it, and an
+ * unmetered (enterprise) org gets no offer at all because it has nothing to buy.
+ */
+export interface UpgradeOffer {
+  /** Deep link that lands on checkout for the right org, after login if needed. */
+  url: string;
+  /** URL vocabulary — "pro" is the marketing name for the "starter" plan id. */
+  plan: string;
+  /** "month": the wall offers monthly Pro; the upgrade page keeps its toggle. */
+  interval: string;
+  /** Display name, e.g. "Pro". Never the internal plan id. */
+  name: string;
+  priceMonthUsd: number;
+  priceYearUsd: number;
+  monthlyCredits: number;
+}
+
 /** `GET /v1/credits` response. */
 export interface CreditsResponse {
   balance: {
@@ -108,6 +133,13 @@ export interface CreditsResponse {
   pricingVersion: number;
   /** White-label branding (#810) — present only for Team orgs. */
   branding?: ReportBranding;
+  /**
+   * #2183: the org-targeted upgrade offer. Present on every read, so the CLI's
+   * preflight wall — which fires WITHOUT ever reaching a 402, because a balance
+   * under the audit base drops the run to local-only before it registers — has
+   * the same price and link the refusal would have carried.
+   */
+  upgrade?: UpgradeOffer;
 }
 
 export interface CloudServicesClient {
