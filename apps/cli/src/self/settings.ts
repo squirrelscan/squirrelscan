@@ -60,6 +60,8 @@ const DEFAULT_SETTINGS: UserSettings = {
   cloud_render_consent: null,
   cloud_spend_ack: null,
   auto_publish_notice_shown: null,
+  first_publish_at: null,
+  publish_nudge_shown: null,
 };
 
 // Check if a key is a writable setting
