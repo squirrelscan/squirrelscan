@@ -9,7 +9,7 @@
 
 import { page } from "./contexts";
 import type { Case } from "./cases";
-import { mixedRun, runOf, seededRng, supabaseJwt, type Rng } from "./generators";
+import { githubTokenFrom, mixedRun, runOf, seededRng, supabaseJwt, type Rng } from "./generators";
 
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const DIGIT = "0123456789";
@@ -118,10 +118,11 @@ export const NEGATIVES: Case[] = [
         )}.${runOf(r, ALNUM + "-_", 43)}",expires:1700003600};</script>`,
       ),
     {
-      // Same header as every HS256 JWT on the web; the pattern reads nothing
-      // past it, so a first-party session token is "a Supabase anon key".
-      expect: [{ pattern: "Supabase Anon Key", check: "public", location: "inline-script" }],
-      knownGap: "any HS256 JWT with a 100+ char payload is reported as a Supabase anon key: the pattern is the generic HS256 header, not anything Supabase-specific",
+      // Same header as every HS256 JWT on the web. The payload is decoded
+      // (#361): another issuer, and an `exp` in 2023, so it is an expired
+      // first-party session token — shown as info, never as Supabase's key.
+      expect: [{ pattern: "JSON Web Token (expired)", check: "info", location: "inline-script" }],
+      mustNotFire: ["Supabase Anon Key"],
     },
   ),
 
@@ -309,13 +310,22 @@ export const NEGATIVES: Case[] = [
       // A `ghp_` token of the right length whose random body happens to say
       // `dummy`. The placeholder list is anchored to the value's head and
       // tail now (#357), so a word in the middle of a token is not a verdict.
-      page("", `<script>const t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${runOf(r, ALNUM, 12)}dummy${runOf(r, ALNUM, 19)}"};</script>`),
+      // The checksum is valid (#361), so nothing else can drop it either.
+      page("", `<script>const t={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `${runOf(r, ALNUM, 12)}dummy${runOf(r, ALNUM, 13)}`)}"};</script>`),
     { expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "inline-script" }] },
   ),
 
+  neg("url-query-string-with-only-percent-twenty", (r) =>
+    // Three `%20`s make it a run the percent decoder reads, and it decodes to
+    // spaces and a search phrase: nothing to find, and the page is unchanged
+    // in every way that matters.
+    page("", `<a href="/search?q=${runOf(r, LOWER, 6)}%20${runOf(r, LOWER, 5)}%20${runOf(r, LOWER, 7)}%20${runOf(r, LOWER, 4)}&page=2">Next</a>`),
+  ),
+
   neg("placeholder-shaped-token-at-the-head", (r) =>
-    // `ghp_dummy…`: the word right after the prefix IS the value.
-    page("", `<script>const t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}dummy${runOf(r, ALNUM, 31)}"};</script>`),
+    // `ghp_dummy…`: the word right after the prefix IS the value. The
+    // checksum is valid, so the placeholder list is what keeps it silent.
+    page("", `<script>const t={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `dummy${runOf(r, ALNUM, 25)}`)}"};</script>`),
   ),
 
   neg("css-class-soup", () =>

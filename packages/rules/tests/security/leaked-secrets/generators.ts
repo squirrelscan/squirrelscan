@@ -18,6 +18,8 @@
 //                emits the whole JSON entry `"key":"value"`; contexts that hold
 //                object entries drop it in as-is.
 
+import { decodeAwsAccountId, githubChecksum } from "../../../src/security/secrets/confidence";
+
 export type Tier = "prefixed" | "keyed" | "assignment";
 
 export interface Generated {
@@ -33,6 +35,13 @@ export interface Generator {
   tier: Tier;
   /** Object key a `keyed` value is assigned to. Ignored for the other tiers. */
   keyName?: string;
+  /**
+   * The check the finding lands in when the detector's decoders (#361) move
+   * it off the pattern's own tier. Absent = the table's confidence.
+   */
+  check?: "high" | "medium" | "public" | "info";
+  /** The type the decoders rename the finding to (`Supabase Anon Key`). */
+  reportedAs?: string;
   /**
    * Context ids this value never realistically appears in: a connection
    * string is not a Bearer token and a PEM block is not a sourcemap query
@@ -107,6 +116,52 @@ function upperNoDo(r: Rng, n: number): string {
   return out;
 }
 
+// RFC 4648 base32: what the 16 characters after an AWS key id's prefix are
+// drawn from. `0`, `1`, `8` and `9` are outside it, and an id carrying one is
+// not an id AWS issued (#361) — the detector reads it as medium, not high.
+const B32 = UPPER + "234567";
+
+/**
+ * An AWS access key id suffix: base32, no `DO` (see upperNoDo), and one that
+ * decodes to a 12-digit account id (about one draw in ten decodes past the
+ * largest possible id, and the detector reads those as not issued by AWS).
+ */
+export function awsKeySuffix(r: Rng): string {
+  for (;;) {
+    let out = runOf(r, B32, 16);
+    while (out.includes("DO")) out = out.replace("DO", "D" + runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ", 1));
+    if (decodeAwsAccountId(P.akia + out) !== null) return out;
+  }
+}
+
+/**
+ * A GitHub classic token: prefix + 30 random characters + the 6-character
+ * checksum GitHub appends (#361). The checksum is computed by the detector's
+ * own encoder; tests/security/secrets-confidence.test.ts proves that encoder
+ * against an independent CRC32.
+ */
+export function githubToken(r: Rng, prefix: string): string {
+  return githubTokenFrom(prefix, runOf(r, ALNUM, 30));
+}
+
+/** The same, from a body a probe chose itself (to plant a filter word in it). */
+export function githubTokenFrom(prefix: string, body: string): string {
+  if (body.length !== 30) throw new Error(`GitHub token body must be 30 chars, got ${body.length}`);
+  return prefix + body + githubChecksum(body);
+}
+
+/**
+ * An Algolia secured API key: base64 of a 64-hex HMAC and a restriction query
+ * string. Redrawn until PayPal's `[Aa][Zz]…{60,}` cannot claim a substring of
+ * the encoding (it runs first and would downgrade the finding to public).
+ */
+export function algoliaSecuredKey(r: Rng, params: string): string {
+  for (;;) {
+    const key = Buffer.from(runOf(r, HEX, 64) + params).toString("base64");
+    if (!/[Aa][Zz][Aa-zZ0-9-_]{60,}/.test(key)) return key;
+  }
+}
+
 /** A UUID v4: version nibble 4, variant nibble 8–b. */
 function uuid(r: Rng): string {
   const [a, b, c, d, e] = [8, 4, 3, 3, 12].map((n) => runOf(r, HEX, n));
@@ -120,14 +175,22 @@ function bytes(r: Rng, n: number): Buffer {
 const b64url = (s: string | Buffer) => Buffer.from(s).toString("base64url");
 
 /** A structurally valid HS256 JWT: real header, JSON payload, random signature. */
-function jwt(r: Rng, payload: Record<string, unknown>): string {
-  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  return `${header}.${b64url(JSON.stringify(payload))}.${b64url(bytes(r, 32))}`;
+function jwt(r: Rng, payload: Record<string, unknown>, alg = "HS256"): string {
+  const header = b64url(JSON.stringify({ alg, typ: "JWT" }));
+  return `${header}.${b64url(JSON.stringify(payload))}.${b64url(bytes(r, alg === "HS256" ? 32 : 64))}`;
 }
 
 /** Supabase's JWT claims. `role` is the only thing telling anon from service_role. */
-export function supabaseJwt(r: Rng, role: "anon" | "service_role"): string {
-  return jwt(r, { iss: "supabase", ref: runOf(r, LOWER, 20), role, iat: 1700000000, exp: 2000000000 });
+export function supabaseJwt(r: Rng, role: "anon" | "service_role", exp = 2000000000): string {
+  return jwt(r, { iss: "supabase", ref: runOf(r, LOWER, 20), role, iat: 1700000000, exp });
+}
+
+/**
+ * An HS256 JWT from some other issuer, with the claims given. A `jti` pads the
+ * payload past the pattern's 100-character floor whatever the claims are.
+ */
+export function issuerJwt(r: Rng, claims: Record<string, unknown>, alg = "HS256"): string {
+  return jwt(r, { jti: runOf(r, ALNUM, 32), ...claims }, alg);
 }
 
 /**
@@ -253,7 +316,11 @@ export const GENERATORS: Generator[] = [
 
   // ── Database / backend ────────────────────────────────────────────────
   {
-    pattern: "Supabase Anon Key",
+    // The table's pattern is the general JWT; the decoded `iss`/`role` name
+    // this one Supabase's anon key and put it in the public tier (#361).
+    pattern: "JSON Web Token",
+    reportedAs: "Supabase Anon Key",
+    check: "public",
     tier: "prefixed",
     make: (r) => value(supabaseJwt(r, "anon")),
   },
@@ -354,7 +421,7 @@ export const GENERATORS: Generator[] = [
   {
     pattern: "AWS Access Key ID",
     tier: "prefixed",
-    make: (r) => value(P.akia + upperNoDo(r, 16)),
+    make: (r) => value(P.akia + awsKeySuffix(r)),
   },
   {
     pattern: "AWS Secret Access Key",
@@ -415,14 +482,14 @@ export const GENERATORS: Generator[] = [
   {
     pattern: "GitHub Personal Access Token",
     tier: "prefixed",
-    make: (r) => value(P.ghp + runOf(r, ALNUM, 36)),
+    make: (r) => value(githubToken(r, P.ghp)),
   },
-  { pattern: "GitHub OAuth Token", tier: "prefixed", make: (r) => value(P.gho + runOf(r, ALNUM, 36)) },
-  { pattern: "GitHub App Token", tier: "prefixed", make: (r) => value(P.ghu + runOf(r, ALNUM, 36)) },
+  { pattern: "GitHub OAuth Token", tier: "prefixed", make: (r) => value(githubToken(r, P.gho)) },
+  { pattern: "GitHub App Token", tier: "prefixed", make: (r) => value(githubToken(r, P.ghu)) },
   {
     pattern: "GitHub Refresh Token",
     tier: "prefixed",
-    make: (r) => value(P.ghr + runOf(r, ALNUM, 36)),
+    make: (r) => value(githubToken(r, P.ghr)),
   },
   {
     pattern: "GitLab Personal Access Token",
@@ -627,6 +694,16 @@ export const GENERATORS: Generator[] = [
   // value that would otherwise read as `skAbc…`; the gap is pinned in cases.ts.
   { pattern: "Sanity Token", tier: "keyed", keyName: "sanityToken", make: (r) => value("sk" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 47)) },
   { pattern: "Algolia API Key", tier: "keyed", keyName: "algoliaKey", make: (r) => value(keyedRun(r, HEX, 32)) },
+  {
+    // Decoded by the detector (#361): with restrictions it is a scoped search
+    // key, reported public. The positive here carries an index restriction and
+    // an expiry; cases.ts probes the unrestricted and non-decodable shapes.
+    pattern: "Algolia Secured API Key",
+    tier: "keyed",
+    keyName: "algoliaSearchKey",
+    check: "public",
+    make: (r) => value(algoliaSecuredKey(r, `restrictIndices=products_${runOf(r, LOWER, 4)}&validUntil=19${runOf(r, DIGIT, 8)}`)),
+  },
   { pattern: "LinkedIn Client Secret", tier: "keyed", keyName: "linkedinCredential", make: (r) => value(keyedRun(r, ALNUM, 16)) },
 ];
 

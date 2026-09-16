@@ -8,12 +8,20 @@ A unit-test and benchmark harness for `security/leaked-secrets`
 | File | What it is |
 |---|---|
 | `generators.ts` | One seeded generator per `FAST_PATTERNS` / `CONTEXT_PATTERNS` entry. Values are assembled at runtime from parts; no line is a token-shaped literal and nothing is a real credential. |
-| `contexts.ts` | Twelve embedding contexts (inline config object, `window.__ENV`, `__NEXT_DATA__`, `__NUXT__`, HTML comment, `<meta content>`, `data-*`, JSON-LD, external bundle, `fetch()` Bearer header, `.env` dump in `<pre>`, sourcemap comment). Each declares the rule-level location it reports at. |
+| `contexts.ts` | Eighteen embedding contexts (inline config object, `window.__ENV`, `__NEXT_DATA__`, `__NUXT__`, HTML comment, `<meta content>`, `data-*`, JSON-LD, external bundle, `fetch()` Bearer header, `.env` dump in `<pre>`, sourcemap comment, and the six encoded forms of #360: entity-encoded attribute, `\u`/`\x`-escaped script string, base64 blob in a data attribute, base64 blob in a global, URL-encoded JSON in a data attribute, URL-encoded JSON in inline settings). Each declares the rule-level location it reports at, including the ` (base64)` suffix. |
 | `negatives.ts` | Hand-written look-alikes that must not fire, or must fire only as `public`. |
-| `cases.ts` | Every generator in every accepting context, plus the negatives and interaction probes. Each case states the exact `(pattern, check, location)` set the rule must report. |
-| `expected.json` | Snapshot of the raw `scanPageForSecrets` + external-script output per case (type, confidence, publicByDesign, location, masked value). Any detector change diffs here. |
+| `cases.ts` | Every generator in every accepting context, plus the negatives and interaction probes. Each case states the exact `(pattern, check, location)` set the rule must report. `check` can also be `info` (the `leaked-secrets-info` check: expired and session tokens). |
+| `expected.json` | Snapshot of the raw `scanPageForSecrets` + external-script output per case (type, confidence, publicByDesign, location, masked value, and the decoded `extra` fields of #361). Any detector change diffs here. |
 | `../leaked-secrets.test.ts` | The suite. |
+| `../secrets-decode.test.ts` | Unit tests for the content decoders (`src/security/secrets/decode.ts`): entities, JS escapes, the base64 run finder against a brute-force definition, exclusions, depth, and the 200 KB data URI cost budget. |
+| `../secrets-confidence.test.ts` | Unit tests for the token decoders (`src/security/secrets/confidence.ts`): GitHub checksum against an independent CRC32 and a published expired token, AWS account id against an independent base32 decode, JWT tiers, Algolia restrictions, and a `fetch`-throws guard over the whole scan. |
 | `../../../scripts/bench-leaked-secrets.ts` | The benchmark. |
+
+Generators for GitHub tokens and AWS key ids produce values that pass the
+detector's own structural checks (a valid checksum, a base32 suffix that
+decodes to a 12-digit account id): a random body would now be dropped or
+downgraded, and the corpus wants every positive to be a positive. The checks
+themselves are proven independently in `secrets-confidence.test.ts`.
 
 ## Run
 
@@ -57,13 +65,21 @@ real tokens; word-bounded context values (Cohere no longer claims the head of
 a Together key). The keyword prefilter is declared per pattern and asserted
 by the meta-test.
 
-### Remaining (9 distinct)
+### Closed by pub#360 / pub#361
+
+The JWT payload is decoded: `role: service_role` from Supabase is high,
+`anon` is public, an expired `exp` or a first-party session token lands in
+the `leaked-secrets-info` check, any other issuer is medium at most and
+never labelled Supabase (gap 7 below is closed). Entity-, escape-, percent-
+and base64-encoded content is decoded before the scan (`decode.ts`).
+
+### Remaining (8 distinct)
 
 1. Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live runs first and the overlap dedup drops it.
 2. `Authorization: Bearer <value>` with a value under 20 chars is reported by neither tier.
 3. PayPal's class omits uppercase B–Y, so a real mixed-case client id never fires.
 4. Neon `neon_[\w-]{32,}` matches a `neon_`-prefixed hyphenated URL slug (a left boundary does not help: `/` precedes it).
-5. The "Supabase Anon Key" pattern is the generic HS256 JWT header: any session JWT with a 100+ char payload reports as Supabase anon, and a `service_role` JWT reports as public.
+5. ~~The "Supabase Anon Key" pattern is the generic HS256 JWT header: any session JWT with a 100+ char payload reports as Supabase anon, and a `service_role` JWT reports as public.~~ Closed by pub#361 (see above): the pattern is the general `JSON Web Token` now, any algorithm, named from the decoded claims.
 6. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
 7. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
 8. No size cap: a 5 MB external script is scanned in full (cost, not a wrong result).
@@ -120,3 +136,41 @@ comparison that holds (13% faster best-of-7, 19% faster mean). Findings went
 up because Twitter bearer tokens and the values the old identifier heuristic
 dropped now report; time went down because the context tier reads a
 40-character region per keyword instead of a 1,128-character window.
+
+### Decoders (pub#360 / pub#361)
+
+Same machine, Bun 1.3.14, seed 1, 5 iterations, back to back on the
+pre-#357 detector (`cd9f746` vs the decoders on top of it; the corpus grew
+with the new cases, so the finding counts are not comparable):
+
+| build | best | ms/MB | findings |
+|---|---|---|---|
+| before, `cd9f746` | 931 ms | 13.97 | 148 |
+| after (entity, escape and percent decode as content enters, base64 blob pass, token decoders) | 990 ms | 14.85 | 137 |
+
+Rebased onto pub#357 / pub#363 round 2 (`f445a7d`), same machine and
+settings, back to back:
+
+| build | best | ms/MB | findings |
+|---|---|---|---|
+| `f445a7d` (precision lane) | 931 ms | 13.96 | 146 |
+| decoders on top of it | 975 ms | 14.62 | 139 |
+
++4.7% ms/MB: the fixed cost of the three in-place decoders (three `indexOf`
+gates per body), the base64 sampler and the general JWT pattern.
+
+On the private real-site corpus (383 pages and scripts, 126 MB), paired runs
+back to back on the same machine state: precision `f445a7d` 6240 ms summed
+per-file vs decoders 6739 ms (+8%); precision `cb46651` vs decoders +10.6%
+on a busier box. Per-file timing on that corpus is only meaningful as a
+pair: at load 20+ the precision head alone measured 12x its quiet number.
+Most of the decoders' share was the base64 pass trying to decode URL paths
+(the alphabet includes `/`; a Shopify product page carries 300 such runs),
+which `looksLikeBase64Text` now rejects before anything is allocated. A 3 MB
+page of inline base64 fonts, 2000 entities and 200 percent escapes is pinned
+in `secrets-decode.test.ts` to cost the decoders less than the rest of its
+own scan.
+
++6.3% ms/MB. The base64 pass samples every 32nd character rather than
+scanning them all (`findBase64Runs` in `decode.ts`); a character loop or a
+global `{64,}` regex both cost more than the whole budget on this corpus.

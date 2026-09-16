@@ -31,7 +31,12 @@ import {
   readKeyLookBack,
   scanContent,
 } from "../src/security/leaked-secrets";
+import { githubChecksum } from "../src/security/secrets/confidence";
 import type { RuleContext } from "../src/types";
+
+// A GitHub token body (30 characters); the checksum it needs (#361) is
+// appended at runtime, so no line here is a whole token.
+const GH_BODY = "016b3f2c9d4e7a815c0b2d6f39ea47"; // pragma: allowlist secret
 
 // A real SHA-256 of a release artifact: 64 hex characters, which is also the
 // exact shape of a Together AI key.
@@ -248,7 +253,7 @@ describe("security/leaked-secrets: real credentials still report", () => {
       slack: "xoxb-",
     };
     const fixtures: Array<[string, string]> = [
-      ["GitHub Personal Access Token", `${PREFIX.github}016b3f2c9d4e7a815c0b2d6f39ea47c1b5d8`], // pragma: allowlist secret
+      ["GitHub Personal Access Token", `${PREFIX.github}${GH_BODY}${githubChecksum(GH_BODY)}`], // pragma: allowlist secret
       ["Stripe Live Key", `${PREFIX.stripe}51HxQ2mKz9pLvA3nR7dTfJw8Y`], // pragma: allowlist secret
       ["AWS Access Key ID", `${PREFIX.aws}2XJQ7LP4RNVD3KEB`], // pragma: allowlist secret
       ["Slack Token", `${PREFIX.slack}2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa`], // pragma: allowlist secret
@@ -418,7 +423,7 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
     `const togetherKey = ${q}${TOGETHER_KEY}${q}`, // pragma: allowlist secret
     `{${q}together_secret${q}:${q}${TOGETHER_KEY}${q}}`, // pragma: allowlist secret
     `together\nAuthorization: Bearer ${TOGETHER_KEY}`, // pragma: allowlist secret
-    `const v = ${q}${PREFIX.github}016b3f2c9d4e7a815c0b2d6f39ea47c1b5d8${q};`, // pragma: allowlist secret
+    `const v = ${q}${PREFIX.github}${GH_BODY}${githubChecksum(GH_BODY)}${q};`, // pragma: allowlist secret
     `const v = ${q}${PREFIX.stripe}51HxQ2mKz9pLvA3nR7dTfJw8Y${q};`, // pragma: allowlist secret
     `const v = ${q}${PREFIX.aws}2XJQ7LP4RNVD3KEB${q};`, // pragma: allowlist secret
     `const v = ${q}${PREFIX.slack}2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa${q};`, // pragma: allowlist secret
