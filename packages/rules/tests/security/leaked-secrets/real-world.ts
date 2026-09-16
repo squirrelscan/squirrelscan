@@ -13,7 +13,7 @@
 
 import { page } from "./contexts";
 import type { Case, Expectation } from "./cases";
-import { runOf, seededRng, type Rng } from "./generators";
+import { runOf, seededRng, supabaseJwt, type Rng } from "./generators";
 
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const DIGIT = "0123456789";
@@ -133,7 +133,9 @@ export const REAL_WORLD: Case[] = [
   // name, the pixel manager's storefront URL).
   rw("shopify-storefront-access-token", (r) =>
     page("", `<script>window.Shopify={shop:"acme.myshopify.com",storefrontAccessToken:"${runOf(r, HEX, 32)}"};fetch("/api/2024-01/graphql.json",{headers:{"X-Shopify-Storefront-Access-Token":"${runOf(r, HEX, 32)}"}});</script>`),
-    [inl("inline-script", "Shopify Storefront Access Token", "public"), inl("inline-script", "Shopify Storefront Access Token", "public")], undefined,
+    // The key-named FAST pattern owns the first; the header form is the
+    // context tier's.
+    [inl("inline-script", "Shopify Storefront Access Token (key)", "public"), inl("inline-script", "Shopify Storefront Access Token", "public")], undefined,
     { mustNotFire: ["Generic Token Assignment"] }),
   rw("shopify-web-pixel-api-key", (r) =>
     page("", `<script src="/cdn/shopifycloud/web-pixels-manager/0.0.1/sandbox.modern.js"></script><script>webPixelsManager.init({"storefrontBaseUrl":"https://acme.myshopify.com","Api-Key":"${runOf(r, HEX, 32)}",storefrontDigest:"${runOf(r, HEX, 40)}"});</script>`),
@@ -164,10 +166,9 @@ export const REAL_WORLD: Case[] = [
     []),
   rw("bearer-literal-in-auth-spa", (r) =>
     page("", `<script>const h={Authorization:"Bearer ${Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url")}.${runOf(r, ALNUM, 40)}.${runOf(r, ALNUM, 30)}"};</script>`),
-    // A JWT in a Bearer header is the JWT pattern's, so the Bearer match no
-    // longer reports it. Until a generic JWT pattern lands (decode lane), a
-    // non-HS256 JWT here reports nothing at all.
-    [], "a non-HS256 JWT in a Bearer header reports nothing: the Bearer pattern yields to the JWT pattern, and only the Supabase HS256 head has one"),
+    // A JWT no pattern recognises is an opaque bearer token: the Bearer
+    // match yields only to a JWT finding that actually claimed the value.
+    [inl("inline-script", "Bearer Token")]),
   rw("bearer-literal-opaque-token-in-auth-spa", (r) =>
     page("", `<script>const h={Authorization:"Bearer ${runOf(r, ALNUM, 40)}"};</script>`),
     [inl("inline-script", "Bearer Token")]),
@@ -181,6 +182,87 @@ export const REAL_WORLD: Case[] = [
   rw("prefix-mid-token-ghp", (r) => page("", `<script>var id="foo${["gh", "p_"].join("")}${runOf(r, ALNUM, 36)}";</script>`), []),
   rw("prefix-mid-token-sk-live", (r) => page("", `<script>var id="x${["s", "k_li", "ve_"].join("")}${runOf(r, ALNUM, 24)}";</script>`), []),
   rw("prefix-mid-token-akia", (r) => page("", `<script>var id="abc${["AK", "IA"].join("")}${runOf(r, UPPER + DIGIT, 16).replace(/DO/g, "DQ")}";</script>`), []),
+];
+
+// Round 3, from the full 383-file real corpus.
+export const ROUND_3: Case[] = [
+  // 1. Shopify's own boot JSON and theme code.
+  rw("shopify-features-boot-json", (r) =>
+    page("", `<script id="shopify-features" type="application/json">{"accessToken":"${runOf(r, HEX, 32)}","betas":["rich-media-storefront-analytics"],"domain":"acme.myshopify.com","predictiveSearch":true,"shopId":${runOf(r, DIGIT, 8)},"locale":"en"}</script>`),
+    // Reported at `html`: the whole-document scan sees the naming tag, the
+    // inline-script rescan of the same text does not, and the public
+    // classification wins the rule's dedup.
+    [inl("html", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
+  rw("storefront-access-token-key-anywhere", (r) =>
+    page("", `<script>window.theme={settings:{currency:"USD"},"storefrontAccessToken":"${runOf(r, HEX, 32)}"};// Storefront Access Token\nvar t="${runOf(r, HEX, 32)}";</script>`),
+    [inl("inline-script", "Shopify Storefront Access Token (key)", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
+  rw("access-token-on-a-cdn-shopify-page", (r) =>
+    page(`<link rel="preload" href="https://cdn.shopify.com/s/files/1/0001/theme.css" as="style">`, `<script>window.__cfg={theme:"dawn",locale:"en",currency:"USD",country:"US",access_token:"${runOf(r, HEX, 32)}"};</script>`),
+    // `html` for the same reason: cdn.shopify.com is in the head, not in
+    // the script text.
+    [inl("html", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
+
+  // 3. A brand as the parent key or the tag name.
+  rw("raygun-parent-object", (r) =>
+    page("", `<script>window.__cfg={raygun:{enabled:!0,apiKey:"${runOf(r, DIGIT, 1)}${runOf(r, ALNUM, 27)}"}};</script>`),
+    [inl("inline-script", "Raygun API Key", "public")], undefined, { mustNotFire: ["Generic API Key Assignment"] }),
+  rw("builder-component-tag", (r) =>
+    page("", `<builder-component model="page" api-key="${runOf(r, HEX, 32)}"></builder-component>`),
+    [inl("html", "Builder.io API Key", "public")], undefined, { mustNotFire: ["Generic API Key Assignment"] }),
+  rw("intercom-settings-object", (r) =>
+    page("", `<script>window.intercomSettings={api_base:"https://api-iam.intercom.io",app_id:"${runOf(r, LOWER + DIGIT, 8)}",access_token:"${runOf(r, ALNUM, 24)}"};</script>`),
+    [inl("inline-script", "Intercom App ID", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
+  rw("brand-parent-does-not-claim-a-secret-or-auth-token", (r) =>
+    // Only an API key or an access token is an SDK's client credential; a
+    // password, secret or auth token under a brand parent is still a leak.
+    page("", `<script>window.__cfg={sentry:{dsn:"https://x@o1.ingest.sentry.io/1",authToken:"${runOf(r, ALNUM, 32)}"},hotjar:{secret:"${runOf(r, ALNUM, 24)}"}};</script>`),
+    [inl("inline-script", "Generic Token Assignment"), inl("inline-script", "Generic Secret Assignment")], undefined,
+    { mustNotFire: ["Sentry Client Key", "Hotjar Site ID"] }),
+  rw("credential-in-a-query-string-is-not-a-path", (r) =>
+    page("", `<a href="/login?password=${runOf(r, ALNUM, 16)}&next=%2F">go</a><script>u=new URL("https://api.acme.test/x?api_key=${runOf(r, ALNUM, 24)}")</script>`),
+    // The href query carries no quotes so the generic pattern cannot match
+    // it; the script URL's `api_key=…` has no quote either. What must NOT
+    // happen is the path rule eating a quoted one after a `?`.
+    []),
+  rw("quoted-credential-after-a-query-mark-in-an-href", (r) =>
+    // Single quotes inside the attribute: the parser normalises attribute
+    // quoting to double quotes and would entity-encode an inner `"`.
+    page("", `<a href="/login?secret='${runOf(r, ALNUM, 24)}'">go</a>`),
+    [inl("html", "Generic Secret Assignment")]),
+  rw("two-hs256-jwts-only-the-claimed-one-yields", (r) =>
+    // A Supabase anon JWT is public; a DIFFERENT HS256 JWT in a Bearer
+    // header shares its head and must still report as a bearer token.
+    page("", `<script>const s=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "anon"))});const h={Authorization:"Bearer ${Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url")}.${runOf(r, ALNUM, 40)}.${runOf(r, ALNUM, 30)}"};</script>`),
+    [inl("inline-script", "Supabase Anon Key", "public"), inl("inline-script", "Bearer Token")]),
+  rw("public-username-inside-a-database-url-does-not-hide-it", (r) => {
+    const token = runOf(r, HEX, 32);
+    // (`mixpanel.init("…")` as a call argument is not a value position, a
+    // documented gap; the token is assigned under the brand instead.)
+    return page("", `<script>window.mixpanel={token:"${token}"};const db="postgres://${token}:${runOf(r, ALNUM, 16)}@db.internal:5432/prod";</script>`);
+  },
+    // The connection string is claimed first and CONTAINS the token, so the
+    // token's own finding is the overlap dedup's duplicate: what must hold is
+    // that the database URL reports.
+    [inl("inline-script", "PostgreSQL Connection String", "high")]),
+  rw("brand-far-from-the-key-stays-generic", (r) =>
+    page("", `<script>/* raygun */ var a=1,b=2,c=3,d=4,e=5,f=6,g=7,h=8,i=9,j=10;window.__cfg={apiKey:"${runOf(r, DIGIT, 1)}${runOf(r, ALNUM, 27)}"};</script>`),
+    [inl("inline-script", "Generic API Key Assignment")]),
+
+  // 4. The tail of a URL is not an assignment.
+  rw("generic-match-inside-a-url-path", (r) =>
+    page("", `<img src="https://cdn.shopify.com/s/files/1/0001/products/Access_Token_${runOf(r, ALNUM, 24)}.png" alt=""><a href="/docs/api_key=${runOf(r, ALNUM, 24)}">docs</a><div style="background:url(/img/secret_key=${runOf(r, ALNUM, 24)})"></div>`),
+    []),
+
+  // 5. Real leaks that must keep reporting.
+  rw("rsc-flight-payload-bearer-jwt", (r) =>
+    page("", `<script>self.__next_f.push([1,"3:[\\"$\\",\\"div\\",null,{\\"x-vercel-sc-headers\\":\\"{\\\\\\"Authorization\\\\\\":\\\\\\"Bearer ${Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url")}.${runOf(r, ALNUM, 60)}.${runOf(r, ALNUM, 43)}\\\\\\"}\\"}]\\n"])</script>`),
+    [inl("inline-script", "Bearer Token")]),
+  rw("fetch-header-literal-first-party-api", (r) =>
+    page("", `<script>async function load(){const r=await fetch("https://api.successvisa.test/v1/applications",{headers:{"Content-Type":"application/json","Authorization":"Bearer ${runOf(r, ALNUM, 48)}"}});return r.json()}</script>`),
+    [inl("inline-script", "Bearer Token")]),
+  rw("screaming-snake-env-dump-with-turnstile-test-key", (r) =>
+    page("", `<script>window.__ENV__={NODE_ENV:"production",ENCRYPTED_STORAGE_SECRET_KEY:"${runOf(r, ALNUM, 32)}",TURNSTILE_SITE_KEY:"1x00000000000000000000AA",API_URL:"https://api.louisedutka.test"};</script>`),
+    [inl("inline-script", "Generic Secret Assignment")]),
 ];
 
 export const DEDUP_CASES: Case[] = (() => {

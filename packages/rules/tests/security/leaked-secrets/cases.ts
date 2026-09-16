@@ -16,7 +16,7 @@ import {
   type Generator,
 } from "./generators";
 import { NEGATIVES } from "./negatives";
-import { DEDUP_CASES, REAL_WORLD } from "./real-world";
+import { DEDUP_CASES, REAL_WORLD, ROUND_3 } from "./real-world";
 
 export type Check = "high" | "medium" | "public";
 
@@ -285,7 +285,7 @@ const PROBES: Case[] = [
   }),
 ];
 
-export const CASES: Case[] = [...POSITIVES, ...NEGATIVES, ...REAL_WORLD, ...DEDUP_CASES, ...PROBES];
+export const CASES: Case[] = [...POSITIVES, ...NEGATIVES, ...REAL_WORLD, ...ROUND_3, ...DEDUP_CASES, ...PROBES];
 
 export function caseById(id: string): Case {
   const found = CASES.find((c) => c.id === id);

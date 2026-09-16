@@ -2093,6 +2093,69 @@
   "sentry-dsn@pre-env-dump": [
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"html","masked":"https:********************2445"}
   ],
+  "posthog-project-key@inline-config-object": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_IU********************nfyV"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_IU********************nfyV"}
+  ],
+  "posthog-project-key@window-env": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_hc********************whGV"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_hc********************whGV"}
+  ],
+  "posthog-project-key@next-data": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Gw********************rj9a"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_Gw********************rj9a"}
+  ],
+  "posthog-project-key@nuxt-payload": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_nO********************eeRI"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_nO********************eeRI"}
+  ],
+  "posthog-project-key@html-comment": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Em********************iF65"}
+  ],
+  "posthog-project-key@meta-content": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_1y********************Y8cE"}
+  ],
+  "posthog-project-key@data-attribute": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Jd********************tjDw"}
+  ],
+  "posthog-project-key@json-ld": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_XM********************zw16"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_XM********************zw16"}
+  ],
+  "posthog-project-key@external-bundle": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"phc_mX********************THhk"}
+  ],
+  "posthog-project-key@fetch-bearer-header": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"phc_SN********************Rlw1"}
+  ],
+  "posthog-project-key@pre-env-dump": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_aX********************MkKR"}
+  ],
+  "posthog-project-key@sourcemap-comment": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"phc_DS********************L6tJ"}
+  ],
+  "shopify-storefront-access-token-key@inline-config-object": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************cea\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************cea\""}
+  ],
+  "shopify-storefront-access-token-key@window-env": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************534\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************534\""}
+  ],
+  "shopify-storefront-access-token-key@next-data": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************7cd\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************7cd\""}
+  ],
+  "shopify-storefront-access-token-key@nuxt-payload": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************f1b\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************f1b\""}
+  ],
+  "shopify-storefront-access-token-key@html-comment": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************5a7\""}
+  ],
+  "shopify-storefront-access-token-key@external-bundle": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"storef********************18e\""}
+  ],
   "new-relic-license-key@inline-config-object": [
     {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"html","masked":"3N5BPQ********************NRAL"},
     {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"3N5BPQ********************NRAL"}
@@ -3379,7 +3442,10 @@
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"html","masked":"https:********************4822"},
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"inline-script","masked":"https:********************4822"}
   ],
-  "neg:posthog-project-key": [],
+  "neg:posthog-project-key": [
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"phc_Y7********************7mod"},
+    {"type":"PostHog Project Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"phc_Y7********************7mod"}
+  ],
   "neg:supabase-anon-jwt": [
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************wMH0"},
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************wMH0"}
@@ -3468,9 +3534,9 @@
   "real:paypal-azione-slug": [],
   "real:generic-secret-i18n-strings": [],
   "real:shopify-storefront-access-token": [
-    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"e149a5********************d4af"},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************4af\""},
     {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"de297e********************1a85"},
-    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"e149a5********************d4af"},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************4af\""},
     {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"de297e********************1a85"}
   ],
   "real:shopify-web-pixel-api-key": [
@@ -3491,7 +3557,10 @@
   ],
   "real:url-encoded-sentence-under-password-key": [],
   "real:bearer-template-and-concat-in-auth-spa": [],
-  "real:bearer-literal-in-auth-spa": [],
+  "real:bearer-literal-in-auth-spa": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer*****************NiJ9"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer*****************NiJ9"}
+  ],
   "real:bearer-literal-opaque-token-in-auth-spa": [
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************imsV"},
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************imsV"}
@@ -3503,6 +3572,66 @@
   "real:prefix-mid-token-ghp": [],
   "real:prefix-mid-token-sk-live": [],
   "real:prefix-mid-token-akia": [],
+  "real:shopify-features-boot-json": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"239256********************994c"},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************94c\""}
+  ],
+  "real:storefront-access-token-key-anywhere": [
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"html","masked":"storef********************d98\""},
+    {"type":"Shopify Storefront Access Token (key)","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"storef********************d98\""}
+  ],
+  "real:access-token-on-a-cdn-shopify-page": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"access********************122\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************122\""}
+  ],
+  "real:raygun-parent-object": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"3pwIz5******************tG6u"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3pwIz5******************tG6u"}
+  ],
+  "real:builder-component-tag": [
+    {"type":"Builder.io API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"api-ke********************607\""}
+  ],
+  "real:intercom-settings-object": [
+    {"type":"Intercom App ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"access********************NBY\""},
+    {"type":"Intercom App ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"access********************NBY\""}
+  ],
+  "real:brand-parent-does-not-claim-a-secret-or-auth-token": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************Qh2\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"authTo********************gCM\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************Qh2\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"authTo********************gCM\""}
+  ],
+  "real:credential-in-a-query-string-is-not-a-path": [],
+  "real:quoted-credential-after-a-query-mark-in-an-href": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************MeJ'"}
+  ],
+  "real:two-hs256-jwts-only-the-claimed-one-yields": [
+    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************wMH0"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************VCJ9"},
+    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************wMH0"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************VCJ9"}
+  ],
+  "real:public-username-inside-a-database-url-does-not-hide-it": [
+    {"type":"PostgreSQL Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"postgr********************prod"},
+    {"type":"PostgreSQL Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"postgr********************prod"}
+  ],
+  "real:brand-far-from-the-key-stays-generic": [
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"apiKey********************QCH\""},
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"apiKey********************QCH\""}
+  ],
+  "real:generic-match-inside-a-url-path": [],
+  "real:rsc-flight-payload-bearer-jwt": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************VCJ9"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************VCJ9"}
+  ],
+  "real:fetch-header-literal-first-party-api": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************HfFT"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************HfFT"}
+  ],
+  "real:screaming-snake-env-dump-with-turnstile-test-key": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"SECRET********************Sw9\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"SECRET********************Sw9\""}
+  ],
   "dedup:shared-theme-bundle-one-finding-per-distinct-value": [
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"external-script","masked":"https:********************7113"},
     {"type":"Mapbox Access Token","confidence":"high","publicByDesign":true,"location":"external-script","masked":"pk.eyJ********************YSJ9"}

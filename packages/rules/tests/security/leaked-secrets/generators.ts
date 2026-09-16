@@ -504,6 +504,16 @@ export const GENERATORS: Generator[] = [
       value(`https://${runOf(r, HEX, 32)}@o${runOf(r, DIGIT, 6)}.ingest.sentry.io/${runOf(r, DIGIT, 7)}`),
   },
   {
+    pattern: "PostHog Project Key",
+    tier: "prefixed",
+    make: (r) => value(["ph", "c_"].join("") + runOf(r, ALNUM, 43)),
+  },
+  {
+    pattern: "Shopify Storefront Access Token (key)",
+    tier: "assignment",
+    make: (r) => entry("storefrontAccessToken", runOf(r, HEX, 32)),
+  },
+  {
     pattern: "New Relic License Key",
     tier: "prefixed",
     make: (r) => value(upperNoDo(r, 40) + P.nral),

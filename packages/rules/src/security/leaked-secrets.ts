@@ -541,6 +541,25 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "high",
   },
 
+  // Public client keys with their own prefix or key, ahead of the generic
+  // assignments so the specific pattern claims the value first (#357 r3).
+  {
+    // posthog.init("phc_…") ships the project key to the browser by design.
+    name: "PostHog Project Key",
+    pattern: /phc_[A-Za-z0-9]{40,}/g,
+    keywords: ["phc_"],
+    confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    // The key names the public Storefront API token wherever it appears.
+    name: "Shopify Storefront Access Token (key)",
+    pattern: /storefrontAccessToken['"]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-f0-9]{32}['"]/g,
+    keywords: ["storefrontaccesstoken"],
+    confidence: "medium",
+    publicByDesign: true,
+  },
+
   // Generic patterns (lower confidence, check context)
   //
   // Four things can sit between the key and its value here, and all four are
@@ -1639,6 +1658,83 @@ const PUBLIC_CONTEXT = CONTEXT_PATTERNS.filter((p) => p.publicByDesign).map((p) 
 }));
 const PUBLIC_KEYWORD_MAX = Math.max(0, ...PUBLIC_CONTEXT.map((p) => p.keyword.length));
 
+/**
+ * Client SDKs whose configuration object or custom element carries a key
+ * that is public by design. A generic assignment under one of these — the
+ * brand as the parent key (`raygun:{apiKey:"…"}`), as the tag name
+ * (`<builder-component api-key="…">`) or within the look-behind — reports at
+ * the public tier under the brand's name (#357 r3). Deliberately short; the
+ * rest of the brands are pub#359's job.
+ */
+const PUBLIC_BRANDS: ReadonlyArray<readonly [brand: string, type: string]> = [
+  ["raygun", "Raygun API Key"],
+  ["builder", "Builder.io API Key"],
+  ["posthog", "PostHog Project Key"],
+  ["mixpanel", "Mixpanel Token"],
+  ["sentry", "Sentry Client Key"],
+  ["mapbox", "Mapbox Access Token"],
+  ["algolia-docsearch", "Algolia DocSearch Key"],
+  ["intercom", "Intercom App ID"],
+  ["hotjar", "Hotjar Site ID"],
+  ["fullstory", "FullStory Org ID"],
+  ["logrocket", "LogRocket App ID"],
+  ["launchdarkly-client", "LaunchDarkly Client ID"],
+];
+const PUBLIC_BRAND_MAX = Math.max(...PUBLIC_BRANDS.map(([b]) => b.length));
+
+// Shopify's own boot JSON and theme code inline the Storefront token under
+// `accessToken`; on a page that loads from cdn.shopify.com a 32-hex value
+// under that key is it.
+const SHOPIFY_TOKEN_KEY_RE = /^(?:access[_-]?token|accesstoken)$/i;
+const SHOPIFY_TOKEN_RE = /^[a-f0-9]{32}$/;
+const SHOPIFY_CDN = "cdn.shopify.com";
+
+// A `<script …>` open tag, for the blocks whose attributes name a public
+// keyword (`<script id="shopify-features">`): the whole block is that
+// keyword's look-behind.
+const SCRIPT_OPEN_RE = /<script\b([^>]*)>/gi;
+const SCRIPT_BLOCK_LIMIT = 65536;
+const SCRIPT_CLOSE_RE = /<\/script/i;
+
+/** Where a script block opened at `from` ends: its close tag, case-insensitive, or the cap. */
+function scriptBlockEnd(text: string, from: number): number {
+  const slice = text.slice(from, from + SCRIPT_BLOCK_LIMIT);
+  const close = SCRIPT_CLOSE_RE.exec(slice);
+  return from + (close ? close.index : slice.length);
+}
+
+/**
+ * Is the match the tail of a URL, not an assignment? `src="https://cdn…/
+ * Access…"` matched the generic token pattern part-way through a path.
+ * Reads back 60 characters for an unclosed `src="`, `href="` or `url(`.
+ */
+const URL_OPENERS: ReadonlyArray<readonly [marker: string, closer: string]> = [
+  ['src="', '"'],
+  ["src='", "'"],
+  ['href="', '"'],
+  ["href='", "'"],
+];
+
+function insideUrlValue(text: string, index: number): boolean {
+  const window = text.slice(Math.max(0, index - 60), index).toLowerCase();
+  for (const [marker, closer] of URL_OPENERS) {
+    const at = window.lastIndexOf(marker);
+    if (at === -1) continue;
+    // The PATH runs from the marker's end. A closer before the match means
+    // the attribute ended; a `?` means the match is in the query string,
+    // where `?password=…` is a credential, not a path segment.
+    const path = window.slice(at + marker.length);
+    if (!path.includes(closer) && !path.includes("?")) return true;
+  }
+  return false;
+}
+
+// The generic keys a public brand may claim: an API key or an access token
+// is the SDK's client credential, a password, secret or auth token is not,
+// whatever object it sits in (`sentry:{authToken:"sntrys_…"}` is a server
+// token).
+const BRAND_CLAIMABLE_KEY_RE = /^(?:api[_-]?key|apikey|access[_-]?token|accesstoken)$/i;
+
 /** The key a generic assignment match opens with: `password` of `password:"…"`. */
 function keyOf(match: string): string {
   return /^[A-Za-z_-]+/.exec(match)?.[0] ?? "";
@@ -1728,6 +1824,30 @@ export function scanContent(
   // The window is cut from the ORIGINAL content and lowercased on its own:
   // lowercasing the whole body can change its length (U+0130 becomes two
   // code units), and an index into one is not an index into the other.
+  //
+  // `<script id="shopify-features">{"accessToken":"…"}`: a block whose open
+  // tag names a public keyword is that keyword's look-behind for its whole
+  // body. The blocks are indexed once per body, on the first generic match.
+  let scriptBlocks: Array<{ from: number; to: number; tag: string }> | null = null;
+  const publicScriptBlocks = () => {
+    if (scriptBlocks) return scriptBlocks;
+    scriptBlocks = [];
+    if (content.includes("<script") || content.includes("<SCRIPT")) {
+      SCRIPT_OPEN_RE.lastIndex = 0;
+      let open: RegExpExecArray | null;
+      while ((open = SCRIPT_OPEN_RE.exec(content)) !== null) {
+        // The same rule the context pass applies: the keyword has to sit in
+        // a NAMING attribute (`id="shopify-features"`), not in a `src`.
+        const tagText = open[0];
+        const named = PUBLIC_CONTEXT.filter((p) => tagNamesKeyword(tagText, p.keyword)).map((p) => p.keyword);
+        if (named.length === 0) continue;
+        const from = open.index + tagText.length;
+        scriptBlocks.push({ from, to: scriptBlockEnd(content, from), tag: named.join(" ") });
+      }
+    }
+    return scriptBlocks;
+  };
+
   const publicContextClaims = (valueAt: number, body: string): boolean => {
     if (PUBLIC_CONTEXT.length === 0) return false;
     if (keywordFilter && !PUBLIC_CONTEXT.some((p) => mayContain(keywordFilter, p.keyword))) return false;
@@ -1736,9 +1856,30 @@ export function scanContent(
     return PUBLIC_CONTEXT.some(({ keyword, whole }) => {
       if (!whole.test(body)) return false;
       const at = window.lastIndexOf(keyword);
-      return at !== -1 && window.length - (at + keyword.length) <= CONTEXT_KEYWORD_GAP;
+      if (at !== -1 && window.length - (at + keyword.length) <= CONTEXT_KEYWORD_GAP) return true;
+      return publicScriptBlocks().some((b) => b.from <= valueAt && valueAt < b.to && b.tag.includes(keyword));
     });
   };
+
+  // The public brand a generic assignment sits under, if any: as the parent
+  // key or anything else within the look-behind of the KEY, or as the name
+  // of the enclosing tag.
+  const publicBrandNear = (keyAt: number): string | undefined => {
+    const from = Math.max(0, keyAt - CONTEXT_KEYWORD_GAP - PUBLIC_BRAND_MAX);
+    const window = content.slice(from, keyAt).toLowerCase();
+    let tagName: string | undefined;
+    const tag = tagBoundsAround(content, keyAt);
+    if (tag) tagName = /^<([A-Za-z][\w-]*)/.exec(content.slice(tag.start, Math.min(tag.end, tag.start + 80)))?.[1]?.toLowerCase();
+    for (const [brand, type] of PUBLIC_BRANDS) {
+      const at = window.lastIndexOf(brand);
+      if (at !== -1 && window.length - (at + brand.length) <= CONTEXT_KEYWORD_GAP) return type;
+      if (tagName?.includes(brand)) return type;
+    }
+    return undefined;
+  };
+
+  let shopifyPage: boolean | null = null;
+  const isShopifyPage = () => (shopifyPage ??= content.includes(SHOPIFY_CDN));
 
   // Pass 1: FAST patterns, gated twice — by the literals proven from each
   // regex (#1864) and by the keywords each pattern declares (#357). Both
@@ -1795,10 +1936,19 @@ export function scanContent(
         // it (`storefrontAccessToken:"…"` after `shopify`) is that tier's:
         // the context pass reports it as informational, not as a leak.
         if (publicContextClaims(match.index + value.lastIndexOf(body), body)) continue;
-        // A Bearer whose value is a JWT belongs to the JWT pattern: the
-        // three-segment token is one credential, and the Bearer match stops
-        // at its first dot, so reporting it too was a duplicate.
-        if (name === "Bearer Token" && isJwtHead(body, content, match.index + value.length)) continue;
+        // A Bearer whose value is a JWT that a JWT pattern already claimed
+        // belongs to that pattern: the three-segment token is one credential,
+        // and the Bearer match stops at its first dot. A JWT no pattern
+        // recognises still reports here as an opaque bearer token.
+        if (name === "Bearer Token" && isJwtHead(body, content, match.index + value.length)) {
+          // The JWT pattern's value is head + "." + payload. Only THAT exact
+          // token, at this occurrence, counts as claimed: every HS256 JWT
+          // shares the head, and a different one is still an opaque bearer.
+          const rest = /^\.([A-Za-z0-9_-]+)/.exec(content.slice(match.index + value.length, match.index + value.length + 4096));
+          if (rest && seenValues.has(`${body}.${rest[1]}`)) continue;
+        }
+        // The tail of a URL is not an assignment.
+        if (insideUrlValue(content, match.index)) continue;
       }
 
       // Skip duplicates, overlapping rematches, and false positives
@@ -1810,12 +1960,28 @@ export function scanContent(
         continue;
       }
 
+      // A generic assignment under a public brand, or Shopify's own
+      // accessToken on a Shopify page, is a public client key: reported
+      // under the brand's name at the informational tier.
+      let reportType = name;
+      let reportPublic = publicByDesign ?? false;
+      if (generic) {
+        const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? publicBrandNear(match.index) : undefined;
+        if (brand) {
+          reportType = brand;
+          reportPublic = true;
+        } else if (SHOPIFY_TOKEN_KEY_RE.test(keyOf(value)) && SHOPIFY_TOKEN_RE.test(body) && isShopifyPage()) {
+          reportType = "Shopify Storefront Access Token";
+          reportPublic = true;
+        }
+      }
+
       seenValues.add(value);
       found.push({
-        type: name,
+        type: reportType,
         value,
         confidence,
-        publicByDesign: publicByDesign ?? false,
+        publicByDesign: reportPublic,
         location,
         sourceUrl,
       });
@@ -1851,6 +2017,10 @@ export function scanContent(
       if (tag && tagNamesKeyword(content.slice(tag.start, tag.end), keyword)) {
         from = tag.start;
         limit = tag.end - tag.start;
+        // `<script id="shopify-features">`: the tag names its whole block.
+        if (/^<script\b/i.test(content.slice(tag.start, tag.start + 8))) {
+          limit = scriptBlockEnd(content, tag.end) - tag.start;
+        }
       }
       const region = content.slice(from, from + Math.max(CONTEXT_SCAN_SPAN, limit));
 
@@ -2004,9 +2174,30 @@ export const leakedSecretsRule: Rule = {
       }
     }
 
-    // Deduplicate by value (same secret may appear in multiple places)
-    const uniqueSecrets = Array.from(
-      new Map(leakedSecrets.map((s) => [s.value, s])).values()
+    // Deduplicate by value (same secret may appear in multiple places).
+    // The same value can be classified twice — the whole-document scan sees
+    // the `<script id="shopify-features">` tag and the cdn.shopify.com link
+    // that make a token public, the inline-script scan of the same text does
+    // not — and the classification with more context wins: public over a
+    // generic leak, otherwise the last record.
+    const byValue = new Map<string, LeakedSecret>();
+    for (const s of leakedSecrets) {
+      const prior = byValue.get(s.value);
+      if (prior?.publicByDesign && !s.publicByDesign) continue;
+      byValue.set(s.value, s);
+    }
+    // A generic assignment's value carries its key (`accessToken":"…"`), so
+    // it never equals the bare token another scan classified as public. A
+    // generic record whose BODY is exactly a public value is that public
+    // value, keyed. Exact equality, by Set: containment would let a public
+    // username hide the database URL it sits in.
+    const publicValues = new Set(
+      Array.from(byValue.values())
+        .filter((s) => s.publicByDesign)
+        .map((s) => s.value)
+    );
+    const uniqueSecrets = Array.from(byValue.values()).filter(
+      (s) => s.publicByDesign || !s.type.startsWith("Generic ") || !publicValues.has(genericValueOf(s.value))
     );
 
     // Public-by-design client keys are informational only — never leaks

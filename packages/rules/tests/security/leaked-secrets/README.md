@@ -57,18 +57,19 @@ real tokens; word-bounded context values (Cohere no longer claims the head of
 a Together key). The keyword prefilter is declared per pattern and asserted
 by the meta-test.
 
-### Remaining (11 distinct)
+### Remaining (9 distinct)
 
 1. Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live runs first and the overlap dedup drops it.
 2. `Authorization: Bearer <value>` with a value under 20 chars is reported by neither tier.
-3. A non-HS256 JWT in a Bearer header reports nothing: the Bearer pattern yields to the JWT pattern (round 2), and only the Supabase HS256 head has one until the decode lane's JWT pattern lands.
-4. PayPal's class omits uppercase B–Y, so a real mixed-case client id never fires.
-5. Neon `neon_[\w-]{32,}` matches a `neon_`-prefixed hyphenated URL slug (a left boundary does not help: `/` precedes it).
-6. PostHog `phc_` project keys are not recognised at all.
-7. The "Supabase Anon Key" pattern is the generic HS256 JWT header: any session JWT with a 100+ char payload reports as Supabase anon, and a `service_role` JWT reports as public.
-8. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
-9. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
-10. No size cap: a 5 MB external script is scanned in full (cost, not a wrong result).
+3. PayPal's class omits uppercase B–Y, so a real mixed-case client id never fires.
+4. Neon `neon_[\w-]{32,}` matches a `neon_`-prefixed hyphenated URL slug (a left boundary does not help: `/` precedes it).
+5. The "Supabase Anon Key" pattern is the generic HS256 JWT header: any session JWT with a 100+ char payload reports as Supabase anon, and a `service_role` JWT reports as public.
+6. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
+7. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
+8. No size cap: a 5 MB external script is scanned in full (cost, not a wrong result).
+9. A call argument is not a value position: `rg4js('apiKey', '…')`, `mixpanel.init("…")` and `posthog.init("…")` report only when the argument's own shape is a pattern (PostHog's `phc_` is; Raygun's and Mixpanel's are not).
+
+Closed in round 3 (from the full 383-file real corpus): Shopify's own boot JSON (`<script id="shopify-features">`, `storefrontAccessToken` anywhere, `accessToken` + 32 hex on a page loading from cdn.shopify.com) lands in the public tier; PostHog `phc_` project keys have a public FAST pattern; a generic API key or access token under a public brand parent or tag (`raygun:{apiKey}`, `<builder-component api-key>`; 12 brands, listed in the detector) reports public under the brand's name, while a password, secret or auth token under the same parent stays a leak; a generic match that is the tail of a URL path is dropped (never a query string); a Bearer yields to a JWT finding only for that exact token, so an unrecognised JWT still reports; the rule's dedup prefers the public classification of a value and drops a generic record whose body is exactly a public value. Three real leak shapes from the corpus are pinned as positives: a Bearer JWT inside a Next.js RSC flight payload, a literal Bearer header in a first-party `fetch()`, and `ENCRYPTED_STORAGE_SECRET_KEY` in an inline env dump beside a Turnstile test key that stays silent.
 
 Closed in round 2: the Bearer duplicate on a JWT value (the Bearer match yields to the JWT pattern); Shopify Storefront access tokens, the web-pixel `Api-Key`, Mixpanel project tokens and Raygun API keys are public-tier context patterns, and a generic assignment yields to one of them when its keyword is within the look-behind AND the value is that pattern's whole shape; a value that equals its own key (`password:"Password"`) or is a URL-encoded label (`%20`, letters ending in `%`) is dropped; a token preceded by the tail of a `%XX` escape (`%22pk_live_…`) passes the left-boundary guard. <!-- pragma: allowlist secret -->
 
@@ -110,6 +111,7 @@ Apple M2, 16 GB, macOS 24.6.0, Bun 1.3.14, commit `10ef2e7`, 2026-09-16, seed 1,
 | `cd9f746` (origin/main, stashed detector), A/B run | 7 | 1247 ms | 1773 ms | 18.7 | 144 | 243 MB |
 | pub#357 + pub#363, same A/B run | 7 | 1081 ms | 1434 ms | 16.2 | 148 | 248 MB |
 | round 2 (+ #365 Discord bound, public tiers, tag-scoped look-behind) | 7 | 947 ms | 1049 ms | 14.2 | 146 | 486 MB |
+| round 3 (Shopify boot JSON, phc_, brand parents, URL-path drop, pinned leaks) | 7 | 948 ms | 1042 ms | 14.2 | 133 | 303 MB |
 
 The A/B pair was measured back to back on the same 66.67 MB corpus (200
 pages, 53 external scripts, 400 bodies), same seed, on a loaded machine: both

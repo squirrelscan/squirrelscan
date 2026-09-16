@@ -95,7 +95,7 @@ export const NEGATIVES: Case[] = [
   neg(
     "posthog-project-key",
     (r) => page("", `<script>posthog.init(${JSON.stringify(["ph", "c_"].join("") + runOf(r, ALNUM, 43))},{api_host:"https://us.i.posthog.com"});</script>`),
-    { knownGap: "PostHog phc_ project keys are not recognised at all (no pattern); a public-tier info finding would be right" },
+    { expect: [{ pattern: "PostHog Project Key", check: "public", location: "inline-script" }] },
   ),
 
   neg(
@@ -254,6 +254,8 @@ export const NEGATIVES: Case[] = [
   // Round 2 (codex): the label/public/percent guards must not eat these.
   neg(
     "password-near-a-public-brand-word-is-still-a-password",
+    // A brand parent claims an API key or an access token (the SDK's client
+    // credential), never a password or a secret: both of these stay leaks.
     () => page("", `<script>window.__cfg={shopify:{password:"R7m!q2Z#v9L"},mixpanel:{secret:"Zq9#Lm2!vR7x"}};</script>`), // pragma: allowlist secret
     {
       expect: [
