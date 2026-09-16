@@ -70,15 +70,32 @@ export function decodeAwsAccountId(keyId: string): string | null {
 }
 
 // A presigned S3 URL carries the key id in the clear, as the first field of
-// `X-Amz-Credential`. That is the public half of the signature: the signature
-// beside it is derived from the secret key and scoped to one object, one
-// method and an expiry, and the key id on its own grants nothing. Shown, never
-// counted (#2213).
-const PRESIGNED_LEAD_RE = /x-amz-credential=$/i;
+// `X-Amz-Credential` (SigV4) or as `AWSAccessKeyId` (the older SigV2). That is
+// the public half of the signature, and the key id on its own grants nothing.
+//
+// What makes it harmless is the rest of the URL, so the rest of the URL has to
+// be there: a signature derived from the secret key, and an expiry that bounds
+// it. A value sitting under a credential-shaped query name with neither of
+// those beside it is not a presigned URL, and downgrading it on the name alone
+// would hide a key id someone pasted into a query string. Shown, never counted
+// (#2213).
+const PRESIGNED_LEAD_RE = /(?:x-amz-credential|awsaccesskeyid)=$/i;
+const PRESIGNED_SIGNATURE_RE = /[?&](?:x-amz-)?signature=[^&\s]/i;
+const PRESIGNED_EXPIRY_RE = /[?&](?:x-amz-expires|expires)=\d/i;
 
-function refineAwsAccessKeyId(value: string, before: string | undefined): Refinement {
+function isPresigned(before: string | undefined, after: string | undefined): boolean {
+  if (before === undefined || !PRESIGNED_LEAD_RE.test(before)) return false;
+  const around = before + (after ?? "");
+  return PRESIGNED_SIGNATURE_RE.test(around) && PRESIGNED_EXPIRY_RE.test(around);
+}
+
+function refineAwsAccessKeyId(
+  value: string,
+  before: string | undefined,
+  after: string | undefined,
+): Refinement {
   const accountId = decodeAwsAccountId(value);
-  const presigned = before !== undefined && PRESIGNED_LEAD_RE.test(before);
+  const presigned = isPresigned(before, after);
   const extra: FindingExtra = {
     accountId: accountId ?? "undecodable",
     prefix: value.slice(0, 4),
@@ -95,24 +112,46 @@ const CONNECTION_STRING_TYPES = new Set([
   "Redis Connection String",
 ]);
 
+// A driver will take the password from the query string as readily as from
+// the authority: `postgresql://app@host/db?password=…` is what libpq documents,
+// JDBC spells it the same way, and a value there is every bit as leaked as one
+// before the `@`. The names below are the ones the common drivers accept.
+const CREDENTIAL_QUERY_RE =
+  /[?&](?:password|passwd|pwd|secret|token|auth|api[_-]?key|sslpassword)=[^&\s]/i;
+
+// `%3A` is a colon the userinfo escaped (`mongodb://app%3Asecret@host`). Only
+// that one escape is undone, and only inside the userinfo: a password may
+// carry an escaped `@` of its own, so the authority's separator has to be
+// found on the raw text first.
+const ESCAPED_COLON_RE = /%3a/gi;
+
 /**
- * What a connection string leaks is the password in its authority. A docs
- * snippet writes the shape without one — `postgresql://…`, `redis://…`, or a
+ * What a connection string leaks is the credential in it. A docs snippet
+ * writes the shape without one — `postgresql://…`, `redis://…`, or a
  * `mongodb+srv://user:` whose rest an email obfuscator replaced — and a string
- * carrying no credential has no credential to leak (#2218). The host it names
- * may still be one a site would rather not publish, but that is a different
- * finding from this one.
+ * carrying no credential has no credential to leak (#2218).
+ *
+ * The credential can sit in either of two places, and the first version of
+ * this check read only the first of them, which silenced a real leak: a URI
+ * whose password is a query parameter, and one whose userinfo colon is
+ * percent-encoded, both reported on main and reported nothing here. So the
+ * whole URI is read, and the finding is dropped only when NEITHER place holds
+ * a credential. The host it names may still be one a site would rather not
+ * publish, but that is a different finding from this one.
  */
 function refineConnectionString(value: string): Refinement {
   const scheme = value.indexOf("://");
   if (scheme === -1) return { drop: true };
-  const authority = value.slice(scheme + 3).split(/[/?#]/, 1)[0] ?? "";
+  const rest = value.slice(scheme + 3);
+  const authority = rest.split(/[/?#]/, 1)[0] ?? "";
   const at = authority.lastIndexOf("@");
-  if (at === -1) return { drop: true };
-  const userinfo = authority.slice(0, at);
-  const colon = userinfo.indexOf(":");
-  if (colon === -1 || colon === userinfo.length - 1) return { drop: true };
-  return {};
+  if (at !== -1) {
+    const userinfo = authority.slice(0, at).replace(ESCAPED_COLON_RE, ":");
+    const colon = userinfo.indexOf(":");
+    if (colon !== -1 && colon !== userinfo.length - 1) return {};
+  }
+  if (CREDENTIAL_QUERY_RE.test(rest)) return {};
+  return { drop: true };
 }
 
 // ── GitHub tokens ───────────────────────────────────────────────────────────
@@ -490,6 +529,8 @@ const STRIPE_TYPES = new Set(["Stripe Live Key", "Stripe Test Key", "Stripe Publ
 export interface FindingContext {
   /** The bounded look-behind before the value, computed only if asked for. */
   before?: () => string;
+  /** The bounded text AFTER the value: a signature sits past the key it signs. */
+  after?: () => string;
 }
 
 /**
@@ -505,7 +546,8 @@ export function refineFinding(
   context: FindingContext = {},
 ): Refinement | null {
   try {
-    if (type === "AWS Access Key ID") return refineAwsAccessKeyId(value, context.before?.());
+    if (type === "AWS Access Key ID")
+      return refineAwsAccessKeyId(value, context.before?.(), context.after?.());
     if (CONNECTION_STRING_TYPES.has(type)) return refineConnectionString(value);
     if (GITHUB_TYPES.has(type)) return refineGithubToken(value);
     if (type === "JSON Web Token" || type === "Supabase Anon Key") return refineJwt(value, now, context.before);

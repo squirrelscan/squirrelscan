@@ -374,9 +374,10 @@ export const ROUND_5: Case[] = [
     page("", `<script>window.__ENV={DO_SPACES_KEY:"DO${runOf(r, UPPER + DIGIT, 22)}"};</script>`),
     [inl("inline-script", "DigitalOcean Spaces Key")]),
 
-  // 6. The key id in a presigned S3 URL is the public half of the signature.
+  // 6. The key id in a presigned S3 URL is the public half of the signature,
+  // which means the signature and the expiry have to be there beside it.
   rw("aws-key-id-in-a-presigned-url-is-informational", (r) =>
-    page("", `<script>self.__next_f.push([1,"{\\"href\\":\\"https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256\\u0026X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}%2F20260916%2Fus-east-1%2Fs3%2Faws4_request\\u0026X-Amz-Expires=86400\\"}"])</script>`),
+    page("", `<script>self.__next_f.push([1,"{\\"href\\":\\"https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256\\u0026X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}%2F20260916%2Fus-east-1%2Fs3%2Faws4_request\\u0026X-Amz-Date=20260916T023448Z\\u0026X-Amz-Expires=86400\\u0026X-Amz-SignedHeaders=host\\u0026X-Amz-Signature=${runOf(r, HEX, 64)}\\"}"])</script>`),
     [inl("inline-script", "AWS Access Key ID", "info")]),
   rw("aws-key-id-under-a-key-still-reports", (r) =>
     page("", `<script>window.__ENV={AWS_ACCESS_KEY_ID:"${["AK", "IA"].join("")}${awsKeySuffix(r)}"};</script>`),
@@ -412,6 +413,46 @@ export const ROUND_5: Case[] = [
   rw("connection-string-with-a-password-still-reports", (r) =>
     page("", `<script>const url="mysql://app_user:${runOf(r, ALNUM, 18)}@db.internal:3306/prod";</script>`),
     [inl("inline-script", "MySQL Connection String", "high")]),
+
+  // Round 5, second pass: the shapes the first version of two of these guards
+  // silenced. A guard that looks in one place and concludes "no credential"
+  // when it finds none there is the bug these pin.
+
+  // 1. A driver takes the password from the query string as readily as from
+  // the authority, and a userinfo colon can be percent-encoded.
+  rw("connection-string-with-the-password-in-the-query-still-reports", (r) =>
+    page("", `<script>const url="postgresql://app@db.internal:5432/prod?sslmode=require&password=${runOf(r, ALNUM, 20)}";</script>`),
+    [inl("inline-script", "PostgreSQL Connection String", "high")]),
+  rw("jdbc-connection-string-with-the-password-in-the-query-still-reports", (r) =>
+    page("", `<script>const url="jdbc:mysql://db.internal:3306/prod?user=app&password=${runOf(r, ALNUM, 20)}";</script>`),
+    [inl("inline-script", "MySQL Connection String", "high")]),
+  rw("connection-string-with-a-percent-encoded-userinfo-colon-still-reports", (r) =>
+    page("", `<script>const url="mongodb://app%3A${runOf(r, ALNUM, 18)}@cluster0.${runOf(r, LOWER, 5)}.mongodb.test/prod";</script>`),
+    [inl("inline-script", "MongoDB Connection String", "high")]),
+
+  // 2. An absolute URL under a credential key is often the credential itself:
+  // a webhook endpoint is a bearer token in URL form.
+  rw("teams-incoming-webhook-url-under-a-secret-key-still-reports", (r) =>
+    page("", `<script>const cfg={webhookSecret:"https://acme.webhook.office.test/webhookb2/${uuid(r)}@${uuid(r)}/IncomingWebhook/${runOf(r, HEX, 32)}/${uuid(r)}"};</script>`), // pragma: allowlist secret
+    [inl("inline-script", "Generic Secret Assignment")]),
+  rw("zapier-catch-hook-url-under-a-secret-key-still-reports", (r) =>
+    page("", `<script>const cfg={secret:"https://hooks.zapier.test/hooks/catch/${runOf(r, DIGIT, 7)}/${runOf(r, ALNUM, 8)}/"};</script>`), // pragma: allowlist secret
+    [inl("inline-script", "Generic Secret Assignment")]),
+
+  // 3. A first-party bundle's `data-api-key` is the site's own key in the
+  // site's own markup: nothing about that says public.
+  rw("data-api-key-on-a-first-party-script-is-still-a-leak", (r) =>
+    page("", `<script src="/assets/app.js" data-api-key="${runOf(r, ALNUM, 32)}"></script>`),
+    [inl("html", "Generic API Key Assignment")]),
+  rw("data-api-key-on-a-relative-script-is-still-a-leak", (r) =>
+    page("", `<script src="app.js" data-api-key="${runOf(r, ALNUM, 32)}"></script>`),
+    [inl("html", "Generic API Key Assignment")]),
+
+  // 4. A credential-shaped query name with no signature and no expiry beside
+  // it is not a presigned URL.
+  rw("aws-key-id-in-a-bare-credential-query-parameter-still-reports", (r) =>
+    page("", `<script>var u="https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}";</script>`),
+    [inl("inline-script", "AWS Access Key ID", "high")]),
 ];
 
 export const DEDUP_CASES: Case[] = (() => {

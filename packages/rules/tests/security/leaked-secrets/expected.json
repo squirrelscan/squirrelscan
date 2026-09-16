@@ -5809,6 +5809,36 @@
     {"type":"MySQL Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"mysql:********************prod"},
     {"type":"MySQL Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"mysql:********************prod"}
   ],
+  "real:connection-string-with-the-password-in-the-query-still-reports": [
+    {"type":"PostgreSQL Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"postgr********************udjo"},
+    {"type":"PostgreSQL Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"postgr********************udjo"}
+  ],
+  "real:jdbc-connection-string-with-the-password-in-the-query-still-reports": [
+    {"type":"MySQL Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"mysql:********************BAbN"},
+    {"type":"MySQL Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"mysql:********************BAbN"}
+  ],
+  "real:connection-string-with-a-percent-encoded-userinfo-colon-still-reports": [
+    {"type":"MongoDB Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"mongod********************prod"},
+    {"type":"MongoDB Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"mongod********************prod"}
+  ],
+  "real:teams-incoming-webhook-url-under-a-secret-key-still-reports": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Secret********************299\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Secret********************299\""}
+  ],
+  "real:zapier-catch-hook-url-under-a-secret-key-still-reports": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************6Z/\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************6Z/\""}
+  ],
+  "real:data-api-key-on-a-first-party-script-is-still-a-leak": [
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"api-ke********************qFJ\""}
+  ],
+  "real:data-api-key-on-a-relative-script-is-still-a-leak": [
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"api-ke********************VPD\""}
+  ],
+  "real:aws-key-id-in-a-bare-credential-query-parameter-still-reports": [
+    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"html","masked":"AKIAST**********4LXE","extra":{"accountId":"179243920811","prefix":"AKIA"}},
+    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AKIAST**********4LXE","extra":{"accountId":"179243920811","prefix":"AKIA"}}
+  ],
   "dedup:shared-theme-bundle-one-finding-per-distinct-value": [
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"external-script","masked":"https:********************7113","extra":{"org":"o647855","projectId":"3777113"}},
     {"type":"Mapbox Access Token","confidence":"high","publicByDesign":true,"location":"external-script","masked":"pk.eyJ********************YSJ9"}

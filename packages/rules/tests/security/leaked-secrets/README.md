@@ -75,12 +75,13 @@ and base64-encoded content is decoded before the scan (`decode.ts`).
 
 ### Closed in round 5 (the 197-site Product Hunt launch corpus)
 
-Measured before anything changed: the corpus was first audited on a build that
-predates pub#357, and re-auditing the same 56 sites on current main took 228
-findings to 24. Those 24 were read back against the crawled bytes one at a
-time. All 24 were false positives or public client keys reported as leaks, and
-each class below has a regression case in `real-world.ts` paired with the
-positive its fix must not silence.
+Measured before anything changed. The corpus was first audited on a build that
+predates pub#357; re-auditing the same 56 finding-bearing sites on current main
+took 228 findings to 24, and a full pass over all 197 targets found one more,
+for 25. Every one of the 25 was read back against the crawled bytes. All were
+false positives or public client keys reported as leaks, and each class below
+has a regression case in `real-world.ts` paired with the positive its fix must
+not silence.
 
 A run of `A` inside a base64 payload is not a Twitter bearer token (nineteen
 `A`s is nineteen zero bytes, which is what a WebP, a PNG or a zlib stream pads
@@ -168,20 +169,25 @@ Apple M2, 16 GB, macOS 24.6.0, Bun 1.3.14, commit `10ef2e7`, 2026-09-16, seed 1,
 | round 2 (+ #365 Discord bound, public tiers, tag-scoped look-behind) | 7 | 947 ms | 1049 ms | 14.2 | 146 | 486 MB |
 | round 3 (Shopify boot JSON, phc_, brand parents, URL-path drop, pinned leaks) | 7 | 948 ms | 1042 ms | 14.2 | 133 | 303 MB |
 
-Round 5 was measured differently, because the machine was at load 7 on 8
-cores and a single back-to-back pair drifted further than the effect: a
-reverting harness alternated the two builds and benched each five times, and
-the statistic is the minimum per side. Two such runs, 3 iterations each:
+Round 5 was measured differently, because the machine was at load 7 on 8 cores
+and a single back-to-back pair drifted further than the effect. A reverting
+harness alternated the two builds, benching each side once per alternation at 3
+timed iterations, and the statistic is the minimum per side. Two runs, the first
+of 4 alternations and the second of 5:
 
 | run | before, best / ms per MB | after, best / ms per MB | delta |
 |---|---|---|---|
-| min of 4 alternations | 998 ms / 14.97 | 1026 ms / 15.39 | +2.8% |
-| min of 5 alternations | 1208 ms / 18.11 | 1218 ms / 18.27 | +0.9% |
+| 4 alternations, min per side | 998 ms / 14.97 | 1026 ms / 15.39 | +2.8% |
+| 5 alternations, min per side | 1208 ms / 18.11 | 1218 ms / 18.27 | +0.9% |
 
-The absolute numbers differ between the two runs by more than the effect does,
-which is the point of the method: within one alternating run the pair holds.
-Findings went 152 to 146 on the bench corpus, which is the new guards firing on
-the cases that carry them.
+Read this as **no measurable regression**, not as a point estimate. The two
+runs' absolute numbers differ by 21% while the effect is 1 to 3%, so the
+spread between runs is an order of magnitude larger than the difference being
+measured; what the method establishes is that the change does not move the
+number out of its own noise. Every guard runs per match rather than per byte
+and matches are rare, so near-zero is also the expected cost. Findings went 152
+to 146 on the bench corpus, which is the new guards firing on the cases that
+carry them.
 
 The A/B pair was measured back to back on the same 66.67 MB corpus (200
 pages, 53 external scripts, 400 bodies), same seed, on a loaded machine: both

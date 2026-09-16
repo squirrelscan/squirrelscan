@@ -154,11 +154,12 @@ const POSITIVES: Case[] = GENERATORS.flatMap((g) =>
     let knownGap = gap?.gap;
 
     if (c.claims === "Bearer Token" && g.tier === "keyed" && !BEARER_RE.test(`Bearer ${value.text}`)) {
-      // Under the Bearer pattern's 20-char floor, and the context tier does
-      // not read `Bearer ` as a value position: nothing reports.
+      // Under the Bearer pattern's 20-character floor. `Bearer ` IS a value
+      // position now (#2218), so the keyword tier reaches the value; it is the
+      // floor alone that leaves nothing to report.
       expect.length = 0;
       knownGap =
-        "`Authorization: Bearer <value>` with a value under 20 chars (LinkedIn's 16) is reported by neither tier: Bearer has a 20-char floor and isInValuePosition does not treat `Bearer ` as an assignment";
+        "`Authorization: Bearer <value>` with a value under 20 chars (LinkedIn's 16) is reported by neither tier: the Bearer pattern has a 20-char floor, and the keyword tier needs its brand word within the look-behind, which the scheme has pushed out of reach";
     }
 
     if (c.claims === "Bearer Token" && g.tier === "prefixed" && bearerDuplicate(value.text)) {

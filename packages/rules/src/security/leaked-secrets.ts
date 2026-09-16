@@ -1456,7 +1456,6 @@ function isLikelyFalsePositive(value: string): boolean {
 // some other script, not a credential. A share rather than a flag, so a
 // passphrase carrying one accented letter still reports.
 const NON_ASCII_SHARE_DIVISOR = 4;
-const URL_VALUE_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
 const PATH_SEGMENT_RE = /^[a-z0-9]+(?:[_.-][a-z0-9]+)*$/;
 const DOTTED_SEGMENT_RE = /^[a-z][A-Za-z0-9]{0,19}$/;
 const DOTTED_MAX = 64;
@@ -1471,9 +1470,17 @@ function isNonAsciiText(body: string): boolean {
   return outside > 0 && outside * NON_ASCII_SHARE_DIVISOR >= body.length;
 }
 
-/** A URL, a rooted path, or a multi-segment lowercase route key. */
+/**
+ * A rooted path or a multi-segment lowercase route key.
+ *
+ * Deliberately NOT "anything with a scheme": an absolute URL under a
+ * credential key is often the credential. A Teams incoming-webhook URL under
+ * `webhookSecret:` and a Zapier catch-hook under `secret:` are bearer
+ * credentials in URL form, and an earlier version of this test dropped both.
+ * A `scheme://` value fails the segment test below on its own (`https:`
+ * carries a colon), so it is left to report.
+ */
 function isLocationValue(body: string): boolean {
-  if (URL_VALUE_RE.test(body)) return true;
   if (!body.includes("/")) return false;
   const rooted = body.startsWith("/");
   const segments = body.split("/").filter((segment, i) => !(i === 0 && segment === ""));
@@ -1527,21 +1534,44 @@ function separatorTailOf(value: string): string {
   return at === -1 ? value : value.slice(at + 1);
 }
 
+const SCRIPT_SRC_ATTR_RE = /\bsrc\s*=\s*["']([^"']+)["']/i;
+
+/** Does this script's `src` point at a host other than the page's own? */
+function isCrossOriginScript(src: string, pageUrl: string): boolean {
+  try {
+    return new URL(src, pageUrl).hostname !== new URL(pageUrl).hostname;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * A `data-*` credential attribute on a `<script src="…">` element is that
- * script's own configuration, read by the vendor's loader in the browser:
- * `<script src="https://app.vendor.test/w.js" data-vendor="true"
+ * A `data-*` credential attribute on a THIRD-PARTY `<script src="…">` element
+ * is that script's own configuration, read by the vendor's loader in the
+ * browser: `<script src="https://app.vendor.test/w.js" data-vendor="true"
  * data-api-key="…">`. A key a third-party loader reads out of the DOM is a
  * client key by construction, so it reports as public rather than as a leak —
  * shown, with the usual "verify usage restrictions" note, never counted
  * (#2218).
+ *
+ * The src has to resolve to a different host from the page's. A first-party
+ * bundle (`src="/assets/app.js"`, `src="app.js"`) carrying a `data-api-key` is
+ * the site's own key in the site's own markup, and nothing about that says
+ * public. Without a page URL to resolve against, nothing is downgraded.
  */
-function isVendorScriptDataAttribute(text: string, index: number): boolean {
+function isVendorScriptDataAttribute(
+  text: string,
+  index: number,
+  pageUrl: string | undefined
+): boolean {
+  if (pageUrl === undefined) return false;
   if (text.slice(Math.max(0, index - 5), index).toLowerCase() !== "data-") return false;
   const tag = tagBoundsAround(text, index);
   if (!tag) return false;
   const open = text.slice(tag.start, tag.end);
-  return /^<script\b/i.test(open) && /\bsrc\s*=/i.test(open);
+  if (!/^<script\b/i.test(open)) return false;
+  const src = SCRIPT_SRC_ATTR_RE.exec(open)?.[1];
+  return src !== undefined && isCrossOriginScript(src, pageUrl);
 }
 
 function maskSecret(value: string): string {
@@ -2009,6 +2039,13 @@ export function selectFastPatterns(content: string): string[] {
   return FAST_PATTERNS.filter((p) => fastPatternMayFire(p, index)).map((p) => p.name);
 }
 
+/**
+ * How much text after a value a decoder may read. A signature sits PAST the
+ * key it signs, so a presigned S3 URL cannot be recognised from the
+ * look-behind alone; one kilobyte covers the query string of one.
+ */
+const FORWARD_REACH = 1024;
+
 export function scanContent(
   content: string,
   location: ReportedLocation,
@@ -2029,9 +2066,10 @@ export function scanContent(
     value: string,
     confidence: Confidence,
     publicByDesign: boolean,
-    before: () => string
+    before: () => string,
+    after: () => string
   ): LeakedSecret | null => {
-    const refined = refineFinding(name, value, Date.now(), { before });
+    const refined = refineFinding(name, value, Date.now(), { before, after });
     if (refined?.drop) return null;
     return {
       type: refined?.type ?? name,
@@ -2255,7 +2293,7 @@ export function scanContent(
           reportPublic = true;
         } else if (
           BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) &&
-          isVendorScriptDataAttribute(content, match.index)
+          isVendorScriptDataAttribute(content, match.index, sourceUrl)
         ) {
           reportType = "Third-party Widget Key";
           reportPublic = true;
@@ -2263,8 +2301,13 @@ export function scanContent(
       }
 
       seenValues.add(value);
-      const finding = build(reportType, value, confidence, reportPublic, () =>
-        readKeyLookBack(content, match!.index).before
+      const finding = build(
+        reportType,
+        value,
+        confidence,
+        reportPublic,
+        () => readKeyLookBack(content, match!.index).before,
+        () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH)
       );
       if (finding) found.push(finding);
     }
@@ -2369,7 +2412,14 @@ export function scanContent(
         }
 
         seenValues.add(value);
-        const finding = build(name, value, confidence, publicByDesign ?? false, () => back.before);
+        const finding = build(
+          name,
+          value,
+          confidence,
+          publicByDesign ?? false,
+          () => back.before,
+          () => content.slice(at + value.length, at + value.length + FORWARD_REACH)
+        );
         if (finding) found.push(finding);
       }
     }
