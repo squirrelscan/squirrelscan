@@ -10,12 +10,44 @@
 //
 // `--input` is a real, supported entry point (load a report from JSON), so this
 // drives the actual command with no storage or network mocking beyond fetch.
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { report } from "@/cli/commands/report";
+import * as pathsModule from "@/self/paths";
+
+// #2182: a SUCCESSFUL publish now stamps `first_publish_at` in the user
+// settings (controllers/report/publish.ts), and this file mocks fetch into a
+// 201 — so without isolation the "a public host still publishes" case below
+// writes to the developer's REAL ~/.squirrel/settings.json. homedir() is fixed
+// at process start in Bun, so $HOME cannot redirect it; spy on the paths
+// module's getSettingsPath export instead, exactly as tests/self/settings.test.ts
+// does and for the same reason.
+const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-publish-settings-"));
+let restoreSettingsPath: () => void = () => {};
+
+beforeAll(() => {
+  const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
+    join(settingsHome, "settings.json")
+  );
+  restoreSettingsPath = () => spy.mockRestore();
+});
+
+afterAll(() => {
+  restoreSettingsPath();
+  rmSync(settingsHome, { recursive: true, force: true });
+});
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */
 class ExitSignal extends Error {
@@ -146,5 +178,46 @@ describe("squirrel report --publish — a host no hosted runner can reach (#1841
     await runReport("https://example.com/");
     expect(requested.length).toBeGreaterThan(0);
     expect(requested.some((u) => u.includes("/v1/reports"))).toBe(true);
+  });
+
+  // #2182: the same run is the only place a successful publish can be observed
+  // end to end, so it doubles as the wiring test for the first-publish stamp —
+  // the flag the one-time "kept local" nudge reads to know it has nothing left
+  // to say. Asserted on the SANDBOX file, which also proves the isolation above
+  // is doing its job rather than the write landing in the real home.
+  test("a successful publish stamps first_publish_at", async () => {
+    rmSync(join(settingsHome, "settings.json"), { force: true });
+    await runReport("https://example.com/");
+
+    const saved = JSON.parse(
+      readFileSync(join(settingsHome, "settings.json"), "utf8")
+    ) as { first_publish_at?: string | null };
+    expect(saved.first_publish_at).toBeString();
+    expect(Number.isNaN(Date.parse(saved.first_publish_at!))).toBe(false);
+  });
+
+  // "never again after their first publish" has to survive a SECOND publish
+  // without moving: the stamp is the FIRST one, not the latest.
+  test("a later publish does not move the stamp", async () => {
+    const path = join(settingsHome, "settings.json");
+    rmSync(path, { force: true });
+    // Publish once so the file on disk is a complete, schema-valid settings
+    // object, then back-date the stamp by years. Comparing two same-run
+    // timestamps would not do: both publishes can land in the same
+    // millisecond, and an overwriting implementation would look correct.
+    await runReport("https://example.com/");
+    const settings = JSON.parse(readFileSync(path, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    settings.first_publish_at = "2020-01-01T00:00:00.000Z";
+    writeFileSync(path, JSON.stringify(settings));
+
+    await runReport("https://example.com/");
+
+    const after = JSON.parse(readFileSync(path, "utf8")) as {
+      first_publish_at?: string;
+    };
+    expect(after.first_publish_at).toBe("2020-01-01T00:00:00.000Z");
   });
 });
