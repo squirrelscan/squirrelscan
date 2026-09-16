@@ -400,7 +400,7 @@
           {
             "name": "format",
             "in": "query",
-            "description": "Export format. `csv`, `dot`, `graphml` and `mermaid` are accepted but answer 501 until the `squirrel entities` command ships them.\n\nEvery value in the map is declared by the audited site, so treat it as untrusted. The `html` rendering escapes it and is safe to open directly. The `markdown` rendering escapes only table delimiters, which is sufficient while it is read as markdown: if you render it to HTML, sanitize it first, or use `format=json` and render the fields yourself.",
+            "description": "Export format. All eight render.\n\n`json` is the canonical document and `jsonld` the merged graph for a schema validator. `html` is the interactive viewer, `markdown` the findings-first text rendering. `csv` is one row per entity for a spreadsheet, `dot` for Graphviz, `graphml` for Gephi, and `mermaid` for a diagram, capped at 150 entities by reach.\n\nEvery value in the map is declared by the audited site, so treat it as untrusted. The `html` rendering escapes it and is safe to open directly. The `markdown`, `csv`, `dot`, `graphml` and `mermaid` renderings escape only what their own syntax requires: render any of them into HTML and you must sanitize first, or use `format=json` and render the fields yourself.",
             "schema": {
               "type": "string",
               "enum": ["json", "jsonld", "html", "markdown", "csv", "dot", "graphml", "mermaid"],
@@ -443,25 +443,23 @@
         ],
         "responses": {
           "200": {
-            "description": "The entity map. `application/json` for `format=json`; otherwise the requested rendering.",
+            "description": "The entity map. `application/json` for `format=json`; otherwise the requested rendering, with a content type matching the format.",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/EntityMapResponse" } },
               "application/ld+json": { "schema": { "type": "object" } },
               "text/html": { "schema": { "type": "string" } },
-              "text/markdown": { "schema": { "type": "string" } }
+              "text/markdown": { "schema": { "type": "string" } },
+              "text/csv": { "schema": { "type": "string" } },
+              "text/vnd.graphviz": { "schema": { "type": "string" } },
+              "application/xml": { "schema": { "type": "string" } },
+              "text/plain": { "schema": { "type": "string" } }
             }
           },
           "400": { "$ref": "#/components/responses/ValidationError" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
           "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" },
-          "501": {
-            "description": "The requested export format is not implemented in this release.",
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
-            }
-          }
+          "429": { "$ref": "#/components/responses/RateLimited" }
         }
       }
     },
