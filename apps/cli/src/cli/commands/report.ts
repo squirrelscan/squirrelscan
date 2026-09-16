@@ -32,6 +32,7 @@ import {
   LOCAL_HOST_NOT_PUBLISHED_LINE,
   nonPublicHostLabel,
 } from "@/lib/non-public-host";
+import { scheduleSummaryLine } from "@/lib/schedule-notice";
 import { diffReports, isSameBaseUrl } from "@/reports/diff";
 import {
   generateDiffConsole,
@@ -479,6 +480,13 @@ export const report = defineCommand({
 
       // Just output the URL
       console.log(publishResult.data.url);
+
+      // #2184: the same recurring-audit disclosure the audit command prints,
+      // but on STDERR. This path's contract is a bare URL on stdout — it is the
+      // one people pipe into other commands — so the notice goes where the
+      // errors already go and the pipe keeps working.
+      const scheduleLine = scheduleSummaryLine(publishResult.data.schedule);
+      if (scheduleLine) console.error(scheduleLine);
 
       // Save published report info for tracking in report --list
       if (reportData.crawlId) {

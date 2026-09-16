@@ -2,6 +2,7 @@
  * Report publishing controller - publishes audit reports to reports.squirrelscan.com
  */
 
+import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";
 import type { ResolutionSignal } from "@squirrelscan/core-contracts";
 
 import { computeLockedRules } from "@squirrelscan/audit-engine";
@@ -33,6 +34,7 @@ import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { cliApi } from "@/lib/api-client";
 import { teamPlanRequiredMessage } from "@/lib/plan-messages";
+import { isScheduleSummary } from "@/lib/schedule-notice";
 import {
   API_TOKEN_ENV_VAR,
   envTokenRejectedMessage,
@@ -71,6 +73,10 @@ export interface PublishResult {
   url: string;
   visibility: ReportVisibility;
   createdAt: string;
+  // #2184: what the server says about this website's recurring audits, or
+  // undefined when it said nothing (an older server, or a publish that linked
+  // no website). Absence means "say nothing", never "there is no schedule".
+  schedule?: WebsiteScheduleSummary;
   // #1179: the server's AUTHORITATIVE post-merge score/counts (it re-merges the
   // published payload against the cross-audit finding store and can differ from
   // the CLI's local pre-publish estimate). The caller stamps these into
@@ -101,6 +107,10 @@ interface ApiSuccessResponse {
   url: string;
   visibility: string;
   createdAt: string;
+  // #2184: optional, and validated rather than trusted — this whole object is
+  // a cast over `response.json()`, so a partial notice would otherwise reach
+  // the renderer as a half-printed sentence.
+  schedule?: unknown;
   // #1179: present on current servers; optional so an older server (or the
   // internal route shape) parses without these into undefined.
   healthScore?: number | null;
@@ -359,6 +369,8 @@ export async function publishReport(
       healthScore: data.healthScore,
       issuesFound: data.issuesFound,
       totalPages: data.totalPages,
+      // #2184: forwarded only when the server sent a complete one.
+      ...(isScheduleSummary(data.schedule) ? { schedule: data.schedule } : {}),
     });
   } catch (error) {
     return err(

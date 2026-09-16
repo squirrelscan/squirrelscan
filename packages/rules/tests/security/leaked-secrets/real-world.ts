@@ -290,6 +290,171 @@ export const ROUND_3: Case[] = [
     [inl("inline-script", "Generic Secret Assignment")]),
 ];
 
+// Round 5, from the 197-site Product Hunt launch corpus (private #2218).
+// Every negative here is a shape the detector fired on across those sites,
+// re-synthesised; no value below is a real one, and every one of them is
+// chosen to clear the generic entropy floor, so what drops it is the guard
+// the case is named for and not an accident of its letters.
+export const ROUND_5: Case[] = [
+  // 1. A run of `A` is a run of zero bytes in base64: a WebP placeholder, a
+  // zlib stream, a PNG. The alphabet's own `/` and `+` give the run a clean
+  // left boundary, so only a value position tells it from a token.
+  rw("twitter-bearer-run-of-a-in-a-webp-data-uri", (r) =>
+    page("", `<script>self.__next_f.push([1,"{\\"blurWidth\\":8,\\"blurDataURL\\":\\"data:image/webp;base64,UklGR${runOf(r, ALNUM, 18)}/${"A".repeat(64)}${runOf(r, ALNUM, 16)}=\\",\\"alt\\":\\"Hero\\"}"])</script>`),
+    []),
+  rw("twitter-bearer-run-of-a-in-a-binary-base64-blob", (r) =>
+    page("", `<script>var wasm="${runOf(r, ALNUM, 40)}+${"A".repeat(180)}${runOf(r, ALNUM, 24)}";</script>`),
+    []),
+  rw("twitter-bearer-token-in-an-authorization-header", (r) =>
+    // The position a real one occupies: after the scheme rather than after a
+    // separator. This case is why isInValuePosition has an auth-scheme arm.
+    page("", `<script>fetch("https://api.acme.test/v2/tweets",{headers:{Authorization:"Bearer ${"A".repeat(19)}${runOf(r, ALNUM, 12)}%3D${runOf(r, ALNUM, 60)}"}});</script>`),
+    [inl("inline-script", "Twitter Bearer Token", "high")]),
+  rw("twitter-bearer-token-under-a-key", (r) =>
+    page("", `<script>window.__ENV={TWITTER_BEARER_TOKEN:"${"A".repeat(19)}${runOf(r, ALNUM, 12)}%3D${runOf(r, ALNUM, 60)}"};</script>`),
+    [inl("inline-script", "Twitter Bearer Token", "high")]),
+
+  // 2. `<8-10 digits>:<35 characters>` is also the shape of a row in a
+  // minified decoder table. What separates them is that a token's tail is
+  // random and a table's is two digits.
+  rw("telegram-shape-on-a-digit-decoder-table", (r) =>
+    page("", `<script>var A=new Int32Array(318).fill(-1),t=d("${runOf(r, DIGIT, 8)}:${runOf(r, "24", 35)}");</script>`),
+    []),
+  rw("telegram-bot-token-still-fires", (r) =>
+    page("", `<script>const cfg={telegramBotToken:"${runOf(r, DIGIT, 9)}:${runOf(r, ALNUM + "-_", 35)}"};</script>`),
+    [inl("inline-script", "Telegram Bot Token", "high")]),
+
+  // 3. Values a credential word was assigned that no credential could be.
+  rw("password-key-with-an-unspaced-i18n-label", () =>
+    // Japanese has no spaces, so the whitespace test cannot see the label.
+    page("", `<script>const t={ja:{weakPassword:"パスワードは8文字以上にしてください。",emailTaken:"このメールアドレスには既にアカウントがあります。"}};</script>`),
+    []),
+  rw("password-key-with-a-catalogue-key-value", () =>
+    page("", `<script>const E={invalidEmail:"login.err.invalidEmail",password:"login.err.weakPassword"};</script>`), // pragma: allowlist secret
+    []),
+  rw("password-key-with-a-rooted-route-path", () =>
+    page("", `<script>const R={LOGIN:"/auth/login",RESET_PASSWORD:"/account/security/change-password"};</script>`),
+    []),
+  rw("password-key-with-a-relative-route-key", () =>
+    page("", `<script>class C{FORGOT_PASSWORD="auth/auth/forgot_password";RESET_PASSWORD="auth/auth/reset_password"}</script>`), // pragma: allowlist secret
+    []),
+  rw("password-key-with-a-redaction-placeholder", () =>
+    page("", `<script>function scrub(a){const r=a.auth?.ciLogin;return r&&typeof r=="object"&&"password"in r&&(r.password="(redacted)"),a}</script>`),
+    []),
+  // Next.js's URL sanitiser, which the old build reported on seven of the
+  // 197 sites. It needs no new rule: isPercentEncodedLabel reads `%filtered%`
+  // as the label it is. Pinned so that stays true.
+  rw("password-key-with-a-framework-filtered-value", () =>
+    page("", `<script>function sanitize(u){const t=new URL(u);t.password="%filtered%";return t.toString()}</script>`),
+    []),
+  rw("password-assignment-still-fires", (r) =>
+    page("", `<script>window.__ENV={DB_PASSWORD:"${runOf(r, ALNUM + "!#", 24)}"};</script>`),
+    [inl("inline-script", "Generic Secret Assignment")]),
+
+  // 4. A credential word in a ternary branch reads as a key character for
+  // character: `'password' : 'emailLink'`, `? "Reset Password" : "…"`. What
+  // tells them apart is what opens the quoted string the word sits in.
+  rw("password-in-a-ternary-branch", () =>
+    page("", `<script>function m(q){return q["emailSignInMethod"] === "password" ?\n      "password" :\n      "emailLink"}</script>`),
+    []),
+  rw("autocomplete-password-ternary-on-an-input", () =>
+    // React's `autoComplete={isNew ? "new-password" : "current-password"}`,
+    // which every sign-up form in a bundled app carries.
+    page("", `<script>const f=(l,b,x)=>y.jsx("input",{type:"password",value:b,onChange:x,autoComplete:l?"new-password":"current-password"});</script>`), // pragma: allowlist secret
+    []),
+  rw("password-as-the-last-word-of-a-ternary-label", (r) =>
+    page("", `<script>const T=e=>e.startsWith("/reset-password")?"Reset Password":"${runOf(r, ALNUM, 12)}";</script>`),
+    []),
+
+  // 5. `DO` plus twenty uppercase characters is also a font CDN path segment.
+  rw("digitalocean-spaces-shape-in-a-font-path", (r) =>
+    page(`<style>@font-face{font-family:"Satoshi";src:url("https://fonts.acme-cdn.test/third-party-assets/fontshare/wf/${runOf(r, UPPER + DIGIT, 32)}/DO${runOf(r, UPPER + DIGIT, 30)}/${runOf(r, UPPER + DIGIT, 32)}.woff2")}</style>`, ""),
+    []),
+  rw("digitalocean-spaces-key-still-fires", (r) =>
+    page("", `<script>window.__ENV={DO_SPACES_KEY:"DO${runOf(r, UPPER + DIGIT, 22)}"};</script>`),
+    [inl("inline-script", "DigitalOcean Spaces Key")]),
+
+  // 6. The key id in a presigned S3 URL is the public half of the signature,
+  // which means the signature and the expiry have to be there beside it.
+  rw("aws-key-id-in-a-presigned-url-is-informational", (r) =>
+    page("", `<script>self.__next_f.push([1,"{\\"href\\":\\"https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256\\u0026X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}%2F20260916%2Fus-east-1%2Fs3%2Faws4_request\\u0026X-Amz-Date=20260916T023448Z\\u0026X-Amz-Expires=86400\\u0026X-Amz-SignedHeaders=host\\u0026X-Amz-Signature=${runOf(r, HEX, 64)}\\"}"])</script>`),
+    [inl("inline-script", "AWS Access Key ID", "info")]),
+  rw("aws-key-id-under-a-key-still-reports", (r) =>
+    page("", `<script>window.__ENV={AWS_ACCESS_KEY_ID:"${["AK", "IA"].join("")}${awsKeySuffix(r)}"};</script>`),
+    [inl("inline-script", "AWS Access Key ID", "high")]),
+
+  // 7. Public client keys the generic tiers were reporting as leaks.
+  rw("amplitude-browser-key-under-its-own-name", (r) =>
+    page("", `<script>var AMPLITUDE_KEY="${runOf(r, HEX, 32)}";amplitude.init(AMPLITUDE_KEY);</script>`),
+    [inl("inline-script", "Amplitude API Key", "public")]),
+  rw("amplitude-browser-key-under-a-build-time-env-name", (r) =>
+    page("", `<script>const env={MODE:"production",VITE_AMPLITUDE_API_KEY:"${runOf(r, HEX, 32)}",VITE_APP_URL:"https://app.acme.test"};</script>`),
+    [inl("inline-script", "Amplitude API Key", "public")]),
+  rw("supabase-publishable-key-is-public", (r) =>
+    page("", `<script>const h={apikey:"${["sb", "_publish", "able_"].join("")}${runOf(r, ALNUM + "-_", 28)}","Content-Type":"application/json"};</script>`),
+    [inl("inline-script", "Supabase Publishable Key", "public")]),
+  rw("supabase-secret-key-is-a-leak", (r) =>
+    page("", `<script>const h={apikey:"${["sb", "_sec", "ret_"].join("")}${runOf(r, ALNUM + "-_", 28)}"};</script>`),
+    [inl("inline-script", "Supabase Secret Key", "high")]),
+
+  // 8. A `data-*` credential attribute on a `<script src>` is that loader's
+  // own configuration, read out of the DOM by the vendor's script.
+  rw("vendor-widget-data-api-key-on-a-script-tag", (r) =>
+    page("", `<script async src="https://app.vendorwidget.test/w.js" data-vendorwidget="true" data-api-key="vw_${runOf(r, HEX, 32)}"></script>`),
+    [inl("html", "Third-party Widget Key", "public")]),
+  rw("data-api-key-on-a-plain-element-is-still-a-leak", (r) =>
+    page("", `<div id="app" data-env="production" data-api-key="${runOf(r, ALNUM, 32)}"></div>`),
+    [inl("html", "Generic API Key Assignment")]),
+
+  // 9. A connection string carrying no credentials has none to leak.
+  rw("docs-connection-strings-without-credentials", () =>
+    page("", `<pre class="snippet"><code>DATABASE_URL=postgresql://…\nREDIS_URL=redis://…\nMONGO_URL=mongodb+srv://user:</code></pre>`),
+    []),
+  rw("connection-string-with-a-password-still-reports", (r) =>
+    page("", `<script>const url="mysql://app_user:${runOf(r, ALNUM, 18)}@db.internal:3306/prod";</script>`),
+    [inl("inline-script", "MySQL Connection String", "high")]),
+
+  // Round 5, second pass: the shapes the first version of two of these guards
+  // silenced. A guard that looks in one place and concludes "no credential"
+  // when it finds none there is the bug these pin.
+
+  // 1. A driver takes the password from the query string as readily as from
+  // the authority, and a userinfo colon can be percent-encoded.
+  rw("connection-string-with-the-password-in-the-query-still-reports", (r) =>
+    page("", `<script>const url="postgresql://app@db.internal:5432/prod?sslmode=require&password=${runOf(r, ALNUM, 20)}";</script>`),
+    [inl("inline-script", "PostgreSQL Connection String", "high")]),
+  rw("jdbc-connection-string-with-the-password-in-the-query-still-reports", (r) =>
+    page("", `<script>const url="jdbc:mysql://db.internal:3306/prod?user=app&password=${runOf(r, ALNUM, 20)}";</script>`),
+    [inl("inline-script", "MySQL Connection String", "high")]),
+  rw("connection-string-with-a-percent-encoded-userinfo-colon-still-reports", (r) =>
+    page("", `<script>const url="mongodb://app%3A${runOf(r, ALNUM, 18)}@cluster0.${runOf(r, LOWER, 5)}.mongodb.test/prod";</script>`),
+    [inl("inline-script", "MongoDB Connection String", "high")]),
+
+  // 2. An absolute URL under a credential key is often the credential itself:
+  // a webhook endpoint is a bearer token in URL form.
+  rw("teams-incoming-webhook-url-under-a-secret-key-still-reports", (r) =>
+    page("", `<script>const cfg={webhookSecret:"https://acme.webhook.office.test/webhookb2/${uuid(r)}@${uuid(r)}/IncomingWebhook/${runOf(r, HEX, 32)}/${uuid(r)}"};</script>`), // pragma: allowlist secret
+    [inl("inline-script", "Generic Secret Assignment")]),
+  rw("zapier-catch-hook-url-under-a-secret-key-still-reports", (r) =>
+    page("", `<script>const cfg={secret:"https://hooks.zapier.test/hooks/catch/${runOf(r, DIGIT, 7)}/${runOf(r, ALNUM, 8)}/"};</script>`), // pragma: allowlist secret
+    [inl("inline-script", "Generic Secret Assignment")]),
+
+  // 3. A first-party bundle's `data-api-key` is the site's own key in the
+  // site's own markup: nothing about that says public.
+  rw("data-api-key-on-a-first-party-script-is-still-a-leak", (r) =>
+    page("", `<script src="/assets/app.js" data-api-key="${runOf(r, ALNUM, 32)}"></script>`),
+    [inl("html", "Generic API Key Assignment")]),
+  rw("data-api-key-on-a-relative-script-is-still-a-leak", (r) =>
+    page("", `<script src="app.js" data-api-key="${runOf(r, ALNUM, 32)}"></script>`),
+    [inl("html", "Generic API Key Assignment")]),
+
+  // 4. A credential-shaped query name with no signature and no expiry beside
+  // it is not a presigned URL.
+  rw("aws-key-id-in-a-bare-credential-query-parameter-still-reports", (r) =>
+    page("", `<script>var u="https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}";</script>`),
+    [inl("inline-script", "AWS Access Key ID", "high")]),
+];
+
 export const DEDUP_CASES: Case[] = (() => {
   const r = seededRng(seedOf("dedup"));
   const dsn = `https://${runOf(r, HEX, 32)}@o${runOf(r, DIGIT, 6)}.ingest.sentry.io/${runOf(r, DIGIT, 7)}`;
