@@ -264,8 +264,11 @@ export const ROUND_3: Case[] = [
   rw("cdn-shopify-lookalike-host-is-not-a-shopify-page", (r) =>
     // The page test is a host match, not a substring: neither lookalike
     // makes a 32-hex access_token Shopify's, so it stays a generic leak.
-    page(`<link rel="preload" href="https://cdn.shopify.com.evil.test/theme.css" as="style"><script src="https://notcdn.shopify.com/x.js"></script>`, `<script>window.__cfg={access_token:"${runOf(r, HEX, 32)}"};</script>`),
+    page(`<link rel="preload" href="https://cdn.shopify.com.evil.test/theme.css" as="style"><script src="https://notcdn.shopify.com/x.js"></script>`, `<a href="https://cdn.shopify.com.evil.test/x">x</a><a href="//cdn.shopify.com.evil.test/y">y</a><script>window.__cfg={access_token:"${runOf(r, HEX, 32)}"};</script>`),
     [inl("inline-script", "Generic Token Assignment")]),
+  rw("protocol-relative-cdn-shopify-url-counts", (r) =>
+    page(`<script src="//cdn.shopify.com/s/javascripts/x.js"></script>`, `<script>window.__cfg={access_token:"${runOf(r, HEX, 32)}"};</script>`),
+    [inl("html", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
   rw("sentry-dsn-host-lookalike", (r) =>
     // `sentryXio` for `sentry.io`: the DSN pattern's dots are escaped.
     page("", `<script>Sentry.init({dsn:"https://${runOf(r, HEX, 32)}@o${runOf(r, DIGIT, 6)}.ingest.sentryXio/${runOf(r, DIGIT, 7)}"});</script>`),

@@ -3626,6 +3626,10 @@
     {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************0b5\""},
     {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************0b5\""}
   ],
+  "real:protocol-relative-cdn-shopify-url-counts": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"access********************745\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************745\""}
+  ],
   "real:sentry-dsn-host-lookalike": [],
   "real:ga4-api-secret-assignment": [
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"SECRET********************rCZ'"},

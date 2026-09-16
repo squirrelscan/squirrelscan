@@ -1687,9 +1687,28 @@ const PUBLIC_BRAND_MAX = Math.max(...PUBLIC_BRANDS.map(([b]) => b.length));
 // under that key is it.
 const SHOPIFY_TOKEN_KEY_RE = /^(?:access[_-]?token|accesstoken)$/i;
 const SHOPIFY_TOKEN_RE = /^[a-f0-9]{32}$/;
-// A real host test, not a substring: `cdn.shopify.com.evil.test` and
-// `notcdn.shopify.com` must not make a page Shopify's.
-const SHOPIFY_CDN_RE = /(?:https?:)?\/\/cdn\.shopify\.com\//i;
+// A parsed-host test, not a substring and not a regex over the content:
+// `cdn.shopify.com.evil.test` and `notcdn.shopify.com` must not make a page
+// Shopify's. Every absolute or protocol-relative URL in the body is a
+// candidate; each is parsed and its hostname compared whole.
+const SHOPIFY_CDN_HOST = "cdn.shopify.com";
+const URL_CANDIDATE_RE = /(?:https?:)?\/\/[^\s"'<>]+/g;
+const URL_CANDIDATE_CAP = 2000;
+
+/** Does the page reference `hostname` by URL? Parsed, never matched. */
+function pageLoadsFrom(text: string, hostname: string): boolean {
+  URL_CANDIDATE_RE.lastIndex = 0;
+  let seen = 0;
+  let m: RegExpExecArray | null;
+  while ((m = URL_CANDIDATE_RE.exec(text)) !== null && seen++ < URL_CANDIDATE_CAP) {
+    try {
+      if (new URL(m[0], "https://page.invalid/").hostname === hostname) return true;
+    } catch {
+      // not a URL after all
+    }
+  }
+  return false;
+}
 
 // A `<script …>` open tag, for the blocks whose attributes name a public
 // keyword (`<script id="shopify-features">`): the whole block is that
@@ -1890,7 +1909,7 @@ export function scanContent(
   };
 
   let shopifyPage: boolean | null = null;
-  const isShopifyPage = () => (shopifyPage ??= SHOPIFY_CDN_RE.test(content));
+  const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
 
   // Pass 1: FAST patterns, gated twice — by the literals proven from each
   // regex (#1864) and by the keywords each pattern declares (#357). Both
