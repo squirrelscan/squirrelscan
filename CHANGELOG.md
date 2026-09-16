@@ -45,6 +45,7 @@ Every audit now builds a map of the entities your site declares, a new command a
 ### Docs
 
 - New pages for the entity map (CLI, formats, cloud), cloud crawl scope, include/exclude patterns and authorised crawls; the rule catalogue counts refreshed.
+- Scheduled audits: the docs now name every place a schedule is disclosed (report page, completion email, digest, CLI line), the resolved findings the digest lists, and what happens when a run is skipped for credits (#373).
 
 ## v0.0.95
 
