@@ -50,6 +50,7 @@ Every audit now builds a map of the entities your site declares, a new command a
 - New pages for the entity map (CLI, formats, cloud), cloud crawl scope, include/exclude patterns and authorised crawls; the rule catalogue counts refreshed.
 - Scheduled audits: the docs now name every place a schedule is disclosed (report page, completion email, digest, CLI line), the resolved findings the digest lists, and what happens when a run is skipped for credits (#373).
 - Adding a website in the dashboard now asks for a scan depth (default surface) and a schedule (default weekly, on from creation); the docs page for adding a website describes both and what happens when the plan's scheduled-site slots are spent (#378).
+- The hosted MCP server's reference page lists its five entity tools, and the published API spec documents the entity export endpoint's eight formats and its new `exclude_type` parameter (#379, #380, #381).
 
 ## v0.0.95
 
