@@ -41,6 +41,9 @@ export { checkOccurrences } from "./occurrences";
 
 // Grouping
 export { groupIssuesByCategory, groupCategoriesByGroup, flattenIssuesBySeverity } from "./grouping";
+// Merged check messages (#2231). Exported so the cloud API groups the same
+// findings from its own store and reaches the same text.
+export { mergeCheckMessages, messageMergeKey } from "./message-merge";
 export type { GroupedCheck, GroupedRule, GroupedCategory, GroupedGroup, FlatIssue } from "./grouping";
 
 // Scoring
