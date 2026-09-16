@@ -147,7 +147,7 @@ const NOT_A_BEARER = ["fetch-bearer-header", "sourcemap-comment"];
 
 const value = (secret: string, text = secret): Generated => ({ text, secret });
 const entry = (key: string, secret: string, wrap = (s: string) => s): Generated => ({
-  text: `"${key}":"${wrap(secret)}"`,
+  text: `${JSON.stringify(key)}:${JSON.stringify(wrap(secret))}`,
   secret,
 });
 
@@ -196,9 +196,11 @@ const P = {
  * case silently empty. cases.ts redraws such values and pins the behaviour
  * itself as a probe.
  */
-export const FALSE_POSITIVE_MIRROR = [
-  /^(GTM|G|UA|AW|DC)-[A-Z0-9-]+$/i,
-  /example\.com/i,
+export const FALSE_POSITIVE_MIRROR: Array<(value: string) => boolean> = [
+  (v) => /^(GTM|G|UA|AW|DC)-[A-Z0-9-]+$/i.test(v),
+  // The detector's `/example\.com/i` is a substring test, not a host check.
+  (v) => v.toLowerCase().includes("example.com"),
+  ...[
   /placeholder/i,
   /your[_-]?api[_-]?key/i,
   /xxx+/i,
@@ -210,10 +212,11 @@ export const FALSE_POSITIVE_MIRROR = [
   /0{16,}/,
   /1{16,}/,
   /a{16,}/i,
+  ].map((re) => (v: string) => re.test(v)),
 ];
 
 export const tripsFalsePositiveFilter = (value: string) =>
-  FALSE_POSITIVE_MIRROR.some((re) => re.test(value));
+  FALSE_POSITIVE_MIRROR.some((test) => test(value));
 
 export const GENERATORS: Generator[] = [
   // ── AI/ML ──────────────────────────────────────────────────────────────

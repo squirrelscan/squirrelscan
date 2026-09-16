@@ -38,12 +38,12 @@ const toKebab = (keyName: string) => keyName.replace(/([a-z0-9])([A-Z])/g, "$1-$
 
 /** A JSON entry for the value under `keyName`, or the assignment's own entry. */
 const jsonEntry = (v: Generated, keyName: string, tier: Tier) =>
-  tier === "assignment" ? v.text : `"${keyName}":${JSON.stringify(v.text)}`;
+  tier === "assignment" ? v.text : `${JSON.stringify(keyName)}:${JSON.stringify(v.text)}`;
 
-// Text an object literal in a script can hold. A `prefixed` value can carry a
-// backslash-n (PEM bodies), which JSON.stringify escapes for us.
-const jsEntry = (v: Generated, keyName: string, tier: Tier) =>
-  tier === "assignment" ? v.text : `${keyName}:${JSON.stringify(v.text)}`;
+// Text an object literal in a script can hold. Both halves go through
+// JSON.stringify: a `prefixed` value can carry a newline (PEM bodies), and a
+// quoted key is what an embedded config blob writes anyway.
+const jsEntry = jsonEntry;
 
 export function page(head: string, body: string): string {
   return [
@@ -92,7 +92,7 @@ export const CONTEXTS = [
   define("window-env", "inline-script", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
     html: page(
       `<script>window.__ENV = {"NODE_ENV":"production","PUBLIC_URL":"https://app.acme.test",${
-        t === "assignment" ? v.text : `"${toEnvName(k)}":${JSON.stringify(v.text)}`
+        t === "assignment" ? v.text : `${JSON.stringify(toEnvName(k))}:${JSON.stringify(v.text)}`
       },"SENTRY_ENV":"prod"};</script>`,
       "",
     ),
@@ -144,7 +144,7 @@ export const CONTEXTS = [
         url: "https://app.acme.test/static/js/main.7b1e9c.js",
         content:
           `!function(){"use strict";var e={},n=function(t){return t&&t.__esModule?t.default:t};` +
-          `var r={${t === "assignment" ? v.text : `${k}:${JSON.stringify(v.text)}`},endpoint:"https://api.acme.test/v2"};` +
+          `var r={${jsEntry(v, k, t)},endpoint:"https://api.acme.test/v2"};` +
           `e.init=function(){return fetch(r.endpoint+"/session",{credentials:"include"})};n(e).init()}();`,
       },
     ],
@@ -162,7 +162,7 @@ export const CONTEXTS = [
         {
           url: "https://app.acme.test/static/js/api-client.a91f03.js",
           content:
-            `const ${k}=1;export async function getAccount(){const res=await fetch("https://api.acme.test/v1/account",{` +
+            `const cfg=${JSON.stringify({ [k]: 1 })};export async function getAccount(){const res=await fetch("https://api.acme.test/v1/account",{` +
             `headers:{"Content-Type":"application/json",Authorization:${JSON.stringify(`Bearer ${v.text}`)}}});` +
             `if(!res.ok)throw new Error("account: "+res.status);return res.json()}`,
         },
@@ -187,7 +187,7 @@ export const CONTEXTS = [
         url: "https://app.acme.test/static/js/vendor.c04d2e.js",
         content:
           `(function(g){g.__vendor={version:"4.2.1",loaded:Date.now()}})(window);\n` +
-          `//# sourceMappingURL=https://maps.acme-cdn.test/vendor.c04d2e.js.map?${k}=${v.text}\n`,
+          `//# sourceMappingURL=https://maps.acme-cdn.test/vendor.c04d2e.js.map?${encodeURI(k)}=${encodeURI(v.text)}\n`,
       },
     ],
   })),
