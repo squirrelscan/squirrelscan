@@ -47,9 +47,42 @@ Sortable, with conflicts and dangling references highlighted. Below `md` the gra
 
 ### History
 
+Below the table, and independent of which audit is drawn above it.
+
+**The metric series** plots the six card metrics across every audit of the site that produced a map: entities, types, pages without entities, stable `@id` share, conflicts, and dangling references. The two audits being compared are drawn as larger points. A counter that had to be reconstructed is drawn hollow and labelled "at least", for the same reason the card is.
+
+**The change list** compares two audits. The newer side is the audit the picker at the top of the page selected, so there is one notion of "the audit you are looking at"; the older side is a second picker, and both survive in the URL as `?report=` and `?from=`. Each row opens that entity in the graph, switching audits if it has to.
+
+The rows are grouped, worst first:
+
+| Group | What it means |
+|---|---|
+| `@id` replaced | The entity kept its identity but moved to a different `@id`. Every page still pointing at the old one now dangles. Usually a plugin swap. |
+| Lost a stable `@id` | It is now identified by name and type alone. |
+| New conflicts | An entity started carrying disagreeing values for a property across pages. |
+| No longer seen | It was in the older audit and is not in the newer one. |
+| Gained a stable `@id` | The fix the [identity guide](/entity-map/fixing) describes, landing. |
+| Conflicts no longer reported | It was conflicting and is not now. |
+| Added | New in the newer audit. |
+| Occurrence changes | Declared on more or fewer pages than before. |
+
 <Warning>
-The history view, metric series over time and a change list between audits, is not built yet. It is tracked separately and the cards' single-step deltas are what exists today.
+**Two of those groups are observations, not conclusions,** and the page labels them "not proven".
+
+The hosted comparison is answered from stored snapshot summaries, which carry a per-entity identity and no page index at all. So it cannot establish that the pages which declared an entity were crawled again. "No longer seen" can mean the markup was deleted, or it can mean the page was simply not visited this time, and from the stored data those are the same reading. A conflict needs two disagreeing declarations to exist, so one of them going uncrawled makes the conflict stop being reported with nothing corrected.
+
+That is why the headings say "No longer seen" rather than "Removed", and "Conflicts no longer reported" rather than "Resolved". Where the newer audit crawled fewer pages than the older one, the page says so and gives both counts, because that is positive evidence for the second reading.
+
+`squirrel entities --diff` does not have this limitation: it reads the uncapped local maps, which keep their page index, so it can separate `removed` from `notCrawled` and prove a fix. See [the entity map on your machine](/entity-map/cli).
 </Warning>
+
+<Note>
+A row is also flagged individually when the change set argues against it: a conflict that stopped being reported for an entity now declared **fewer** times than before names the alternative explanation on the row.
+</Note>
+
+An empty change list says "no tracked change", not "nothing changed". The hosted comparison follows entities appearing, disappearing, changing `@id`, moving occurrence count, and starting or stopping conflicting. It does not follow a conflict count moving between two non-zero values, which property was conflicting, or any property value.
+
+A site with one audit shows the series and an explanation instead of a change list. That is not an error state, and neither is a site whose audits all predate the entity map; a history that fails to load says so and offers a retry.
 
 ### If a site has no structured data
 
@@ -57,7 +90,7 @@ The page says so and links to [Fixing structured data identity](/entity-map/fixi
 
 ## The API
 
-Two endpoints, both under a report. Authentication is the same as the rest of the [API](/api).
+Three endpoints: two under a report, one under a website. Authentication is the same as the rest of the [API](/api).
 
 ### Get the map
 
@@ -146,6 +179,55 @@ One node with its properties, occurrences, conflicts, declaring pages, and the e
 curl -H "Authorization: Bearer $SQUIRRELSCAN_API_KEY" \
   "https://api.squirrelscan.com/v1/reports/$REPORT/entities/https%3A%2F%2Fexample.com%2F%23organization"
 ```
+
+### Get the history
+
+```http
+GET /v1/websites/{id}/entities/history
+```
+
+One summary point per audit that produced a map, plus the change set between two of them. It is what the dashboard's history view draws.
+
+| Query | Meaning |
+|---|---|
+| `from` | Report id of the older side. Defaults to the audit immediately before `to`. |
+| `to` | Report id of the newer side. Defaults to the latest audit with a map. |
+| `limit` | Points in the `series`, newest first. Default 50, maximum 200. |
+
+```json
+{
+  "websiteId": "…",
+  "series": [
+    {
+      "reportId": "…",
+      "runId": "…",
+      "auditedAt": "2026-09-13T05:20:00.000Z",
+      "summary": { },
+      "backfilled": []
+    }
+  ],
+  "comparison": {
+    "from": { "reportId": "…", "auditedAt": "2026-08-13T05:20:00.000Z" },
+    "to": { "reportId": "…", "auditedAt": "2026-09-13T05:20:00.000Z" }
+  },
+  "changes": {
+    "added": [], "removed": [], "gainedId": [], "lostId": [], "changedId": [],
+    "occurrenceDeltas": [], "newConflicts": [], "resolvedConflicts": [],
+    "summaryDelta": []
+  }
+}
+```
+
+Things worth knowing before you build on it:
+
+- **`limit` bounds the `series` only.** `from` and `to` resolve by their own lookup, so they can name an audit older than the window. A report id that is not one of this website's snapshots is a 404, never a silent fall back to the default pair.
+- **`comparison` and `changes` are null together** when the site has fewer than two snapshots, or when `from` and `to` name the same one. That is a first audit, not an error.
+- **`from` must be at or before `to`.** An inverted pair is a 400 rather than a quiet swap, because the response labels the two sides and reversing your arguments would answer a different question.
+- **`backfilled` is per point**, not per series. Rows were written at different times, so an older snapshot can be missing a counter a newer one recorded, and one flag for the whole series would either over-claim or under-claim.
+- **`summaryDelta` only names metrics that moved**, and its metric list is not the same as the dashboard's six cards: it has no `conflictCount` and no notion of a type count. Derive those from two points in `series` rather than expecting them here.
+- **`newConflicts` and `resolvedConflicts` are per entity, as counts**, carrying `before` and `after`. They cannot name the property, and they only fire on a transition through zero. A conflict count moving from 2 to 1 produces no row.
+- **`removed` and `resolvedConflicts` are not proven.** Same limitation as the dashboard above: the snapshot carries no page index, so absence cannot be told from a page that was not crawled again. Treat both as observations.
+- **Dangling movement and not-crawled reconciliation are not here yet.** `squirrel entities --diff` reports them from the local maps.
 
 ### Untrusted content
 
