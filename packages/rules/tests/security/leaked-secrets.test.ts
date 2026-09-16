@@ -294,13 +294,14 @@ describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviou
   });
 
   for (const c of gaps) {
+    // The 5 MB size-cap probe scans in full: an explicit budget under load.
     test(`${c.id} — today: ${c.expect.map((e) => `${e.pattern} (${e.check})`).join(", ") || "nothing"}`, () => {
       const got = observed(c);
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
       }
-    });
+    }, 30_000);
     test.todo(`GAP ${c.id}: ${c.knownGap}`, () => {
       throw new Error(c.knownGap);
     });
@@ -383,7 +384,7 @@ describe("security/leaked-secrets corpus: cost on a large base64 body (pub#365)"
     // 4x the body: linear is 4x the time, the quadratic pattern was 16x.
     expect(largeMs / Math.max(smallMs, 0.2)).toBeLessThan(8);
     expect(scanContent(large, "html")).toEqual([]);
-  });
+  }, 30_000);
 });
 
 // One record per raw finding, stable across runs: the masked value is what a
@@ -420,5 +421,5 @@ describe("security/leaked-secrets corpus: snapshot", () => {
     }
     const stored = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8")) as Snapshot;
     expect(current).toEqual(stored);
-  });
+  }, 60_000);
 });

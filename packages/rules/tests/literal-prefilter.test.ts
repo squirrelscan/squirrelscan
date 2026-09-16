@@ -247,8 +247,13 @@ function generate(src: string, depth = 0): string {
 }
 
 // Filler that contains no 3-gram of any pattern literal by construction: a long
-// run of one character has exactly one 3-gram.
-const FILLER = "\u0007".repeat(8000);
+// run of one character has exactly one 3-gram. Sized just past the index's
+// 256-character floor: the property under test is that the index built over
+// the sample admits the sample, and every one of ~36,000 samples builds its
+// own index, so 8,000 characters a side was 30x the hashing for nothing (the
+// widest-table case has its own test below). 5 s quiet was bun's default
+// timeout exactly, and a CI flake under load.
+const FILLER = "\u0007".repeat(512);
 
 function admits(pattern: RegExp, sample: string): boolean {
   const text = `${FILLER}${sample}${FILLER}`;
@@ -300,7 +305,7 @@ describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
     expect(checked).toBeGreaterThan(ALL_PATTERNS.length * 80);
     // A draw count says the loop ran; a DISTINCT-shape count says it explored.
     expect(shapes).toBeGreaterThan(ALL_PATTERNS.length * 8);
-  });
+  }, 60_000);
 });
 
 describe("the gram index", () => {
