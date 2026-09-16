@@ -1,6 +1,13 @@
 // security/leaked-secrets - Detect leaked API keys and secrets in HTML/JS
 
-import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckItem,
+  CheckResult,
+  ParsedPage,
+} from "../types";
 
 import { SECRET_KEY_LOOKBEHIND_SIZE } from "@squirrelscan/utils/constants";
 
@@ -12,6 +19,10 @@ import {
   withPrefilter,
   type GramIndex,
 } from "../shared/literal-prefilter";
+import { refineFinding, type Confidence, type FindingExtra } from "./secrets/confidence";
+import { decodeForLocation, scanBase64Blobs, type ReportedLocation } from "./secrets/decode";
+
+export type { ReportedLocation, SecretLocation } from "./secrets/decode";
 
 // Secret detection patterns with service names
 // Sources: secrets-patterns-db, secret-regex-list, gitleaks patterns
@@ -155,12 +166,15 @@ export const FAST_PATTERNS: FastPattern[] = [
 
   // Database/Backend Services
   {
-    // Anon keys are public by design — Row Level Security is the guard
-    name: "Supabase Anon Key",
-    pattern: /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_-]{100,}/g,
-    keywords: ["eyjhbgcioijiuzi1niisinr5cci6ikpxvcj9."],
+    // Any JWT, whatever its `alg`: header, payload and signature, the first
+    // two of them base64url JSON (`eyJ` is `{"`). Which token it is comes
+    // from the decoded claims (secrets/confidence.ts, #361): a Supabase anon
+    // key reports as public, a service_role key as high, an expired one or a
+    // first-party session token as info, anything else medium.
+    name: "JSON Web Token",
+    pattern: /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}={0,2}/g,
+    keywords: ["eyj"],
     confidence: "medium",
-    publicByDesign: true,
   },
   {
     name: "Supabase Service Role Key",
@@ -795,6 +809,16 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
     pattern: /[a-zA-Z0-9]{16}/gi,
     confidence: "medium",
   },
+  {
+    // base64 of a 64-hex HMAC plus a restriction query string. Decoded by
+    // secrets/confidence.ts: with restrictions it is a scoped search key and
+    // public; a base64 run near "algolia" that does not decode that way is
+    // dropped, so the shape alone never reports (#361).
+    name: "Algolia Secured API Key",
+    keyword: "algolia",
+    pattern: /[A-Za-z0-9+/]{86,}={0,2}/g,
+    confidence: "medium",
+  },
 ];
 
 // False positive filters - common non-sensitive patterns.
@@ -1343,10 +1367,14 @@ export function classifyKeyContext(
 export interface LeakedSecret {
   type: string;
   value: string;
-  confidence: "high" | "medium";
+  /** `info`: expired, or a session token the crawl itself was issued. Never a leak. */
+  confidence: Confidence;
   publicByDesign: boolean;
-  location: "html" | "inline-script" | "external-script";
+  /** Where it was read, with ` (base64)` when it sat inside a decoded blob. */
+  location: ReportedLocation;
   sourceUrl?: string; // URL of the script file or page
+  /** What the value's own structure decoded to (#361): account id, role… */
+  extra?: FindingExtra;
 }
 
 function isLikelyFalsePositive(value: string): boolean {
@@ -1820,10 +1848,38 @@ export function selectFastPatterns(content: string): string[] {
 
 export function scanContent(
   content: string,
-  location: "html" | "inline-script" | "external-script",
-  sourceUrl?: string
+  location: ReportedLocation,
+  sourceUrl?: string,
+  depth = 0
 ): LeakedSecret[] {
   const found: LeakedSecret[] = [];
+
+  // Entities in HTML, `\u`/`\x` escapes in script text (#360): every pattern
+  // below reads the decoded form, once. See secrets/decode.ts.
+  content = decodeForLocation(content, location);
+
+  // What the value's own structure says (#361): a checksum that fails drops
+  // the finding, a decoded claim moves it between tiers, and whatever else
+  // decoded rides along as `extra` for the report. See secrets/confidence.ts.
+  const build = (
+    name: string,
+    value: string,
+    confidence: Confidence,
+    publicByDesign: boolean,
+    before: () => string
+  ): LeakedSecret | null => {
+    const refined = refineFinding(name, value, Date.now(), { before });
+    if (refined?.drop) return null;
+    return {
+      type: refined?.type ?? name,
+      value,
+      confidence: refined?.confidence ?? confidence,
+      publicByDesign: refined?.publicByDesign ?? publicByDesign,
+      location,
+      sourceUrl,
+      ...(refined?.extra ? { extra: refined.extra } : {}),
+    };
+  };
 
   // A later (more generic) pattern re-matching a value an earlier (more
   // specific) pattern already classified — e.g. apiKey:"AIza…" catching the
@@ -1982,11 +2038,14 @@ export function scanContent(
         // and the Bearer match stops at its first dot. A JWT no pattern
         // recognises still reports here as an opaque bearer token.
         if (name === "Bearer Token" && isJwtHead(body, content, match.index + value.length)) {
-          // The JWT pattern's value is head + "." + payload. Only THAT exact
-          // token, at this occurrence, counts as claimed: every HS256 JWT
-          // shares the head, and a different one is still an opaque bearer.
-          const rest = /^\.([A-Za-z0-9_-]+)/.exec(content.slice(match.index + value.length, match.index + value.length + 4096));
-          if (rest && seenValues.has(`${body}.${rest[1]}`)) continue;
+          // The JWT pattern's value is head + "." + payload + "." + signature
+          // (#361). Only THAT exact token, at this occurrence, counts as
+          // claimed: every HS256 JWT shares the head, and a different one is
+          // still an opaque bearer.
+          const rest = /^\.([A-Za-z0-9_-]+)(?:\.([A-Za-z0-9_-]+={0,2}))?/.exec(
+            content.slice(match.index + value.length, match.index + value.length + 16384)
+          );
+          if (rest && (seenValues.has(`${body}.${rest[1]}`) || (rest[2] && seenValues.has(`${body}.${rest[1]}.${rest[2]}`)))) continue;
         }
         // The tail of a URL is not an assignment.
         if (insideUrlValue(content, match.index)) continue;
@@ -2018,14 +2077,10 @@ export function scanContent(
       }
 
       seenValues.add(value);
-      found.push({
-        type: reportType,
-        value,
-        confidence,
-        publicByDesign: reportPublic,
-        location,
-        sourceUrl,
-      });
+      const finding = build(reportType, value, confidence, reportPublic, () =>
+        readKeyLookBack(content, match!.index).before
+      );
+      if (finding) found.push(finding);
     }
   }
 
@@ -2091,9 +2146,14 @@ export function scanContent(
         const local = content.slice(lo, at + value.length + CONTEXT_LOCAL_REACH);
         const localAt = at - lo;
 
+        // A value whose structure decodes (an Algolia secured key's restriction
+        // list, #361) is proven by that structure; the heuristics below exist
+        // for bare shapes that nothing else vouches for.
+        const structural = refineFinding(name, value)?.structural === true;
+
         // For context patterns, require the value to be in a value position
         // (assigned via = or :) to reduce false positives from array elements
-        if (!isInValuePosition(local, value, localAt)) {
+        if (!structural && !isInValuePosition(local, value, localAt)) {
           continue;
         }
 
@@ -2101,12 +2161,9 @@ export function scanContent(
         // front of the value decides: never report under sha256/integrity/
         // checksum/commit/cache, or with no assignment context at all.
         const back = readKeyLookBack(local, localAt);
-        const keyContext = classifyKeyContext(
-          back.before,
-          keyword,
-          enclosingTag(local, localAt),
-          back.cut
-        );
+        const keyContext = structural
+          ? "credential"
+          : classifyKeyContext(back.before, keyword, enclosingTag(local, localAt), back.cut);
         if (keyContext === "digest" || keyContext === "none") {
           continue;
         }
@@ -2121,21 +2178,22 @@ export function scanContent(
         // quoted, under a credential key, and made of words.
         const literal =
           QUOTE_CHAR_RE.test(content[at - 1] ?? "") && keyContext === "credential" && /[0-9]/.test(value);
-        if (!literal && looksLikeCodeIdentifier(value)) {
+        if (!structural && !literal && looksLikeCodeIdentifier(value)) {
           continue;
         }
 
         seenValues.add(value);
-        found.push({
-          type: name,
-          value,
-          confidence,
-          publicByDesign: publicByDesign ?? false,
-          location,
-          sourceUrl,
-        });
+        const finding = build(name, value, confidence, publicByDesign ?? false, () => back.before);
+        if (finding) found.push(finding);
       }
     }
+  }
+
+  // Pass 3: base64 blobs that decode to text (#360) — a config object handed
+  // to the client as one string — scanned as content of their own, two
+  // levels deep, reported with a ` (base64)` location suffix.
+  for (const finding of scanBase64Blobs(content, location, sourceUrl, depth, scanContent)) {
+    found.push(finding);
   }
 
   return found;
@@ -2259,7 +2317,13 @@ export const leakedSecretsRule: Rule = {
 
     // Public-by-design client keys are informational only — never leaks
     const publicKeys = uniqueSecrets.filter((s) => s.publicByDesign);
-    const realSecrets = uniqueSecrets.filter((s) => !s.publicByDesign);
+    // Expired tokens and session tokens: shown, never counted (#361)
+    const informational = uniqueSecrets.filter(
+      (s) => !s.publicByDesign && s.confidence === "info"
+    );
+    const realSecrets = uniqueSecrets.filter(
+      (s) => !s.publicByDesign && s.confidence !== "info"
+    );
 
     // Separate by confidence
     const highConfidence = realSecrets.filter((s) => s.confidence === "high");
@@ -2267,15 +2331,21 @@ export const leakedSecretsRule: Rule = {
       (s) => s.confidence === "medium"
     );
 
+    // One item per finding: the pattern and masked value as the id, where it
+    // was read as the label, and whatever its structure decoded to (#361) as
+    // `meta`, which the JSON, LLM and XML renderers carry through verbatim.
+    const item = (s: LeakedSecret): CheckItem => ({
+      id: `${s.type}: ${maskSecret(s.value)}`,
+      label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
+      ...(s.extra ? { meta: s.extra } : {}),
+    });
+
     if (highConfidence.length > 0) {
       checks.push({
         name: "leaked-secrets-high",
         status: "fail",
         message: `${highConfidence.length} high-confidence leaked secret(s) detected`,
-        items: highConfidence.map((s) => ({
-          id: `${s.type}: ${maskSecret(s.value)}`,
-          label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
-        })),
+        items: highConfidence.map(item),
       });
     }
 
@@ -2284,10 +2354,7 @@ export const leakedSecretsRule: Rule = {
         name: "leaked-secrets-medium",
         status: "warn",
         message: `${mediumConfidence.length} potential secret(s) detected (verify manually)`,
-        items: mediumConfidence.map((s) => ({
-          id: `${s.type}: ${maskSecret(s.value)}`,
-          label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
-        })),
+        items: mediumConfidence.map(item),
       });
     }
 
@@ -2296,10 +2363,16 @@ export const leakedSecretsRule: Rule = {
         name: "leaked-secrets-public",
         status: "info",
         message: `${publicKeys.length} public client-side key(s) found (public by design — verify usage restrictions are configured)`,
-        items: publicKeys.map((s) => ({
-          id: `${s.type}: ${maskSecret(s.value)}`,
-          label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
-        })),
+        items: publicKeys.map(item),
+      });
+    }
+
+    if (informational.length > 0) {
+      checks.push({
+        name: "leaked-secrets-info",
+        status: "info",
+        message: `${informational.length} expired or session-scoped token(s) found (informational, not counted as a leak)`,
+        items: informational.map(item),
       });
     }
 

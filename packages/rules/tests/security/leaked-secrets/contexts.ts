@@ -8,9 +8,10 @@
 // twice; the rule keeps the last record, which is the `inline-script` one. The
 // double scan itself is pinned in the test file as a known defect.
 
+import type { ReportedLocation } from "../../../src/security/leaked-secrets";
 import type { Generated, Tier } from "./generators";
 
-export type Location = "html" | "inline-script" | "external-script";
+export type Location = ReportedLocation;
 
 export interface Embedded {
   html: string;
@@ -44,6 +45,39 @@ const jsonEntry = (v: Generated, keyName: string, tier: Tier) =>
 // JSON.stringify: a `prefixed` value can carry a newline (PEM bodies), and a
 // quoted key is what an embedded config blob writes anyway.
 const jsEntry = jsonEntry;
+
+// The encodings of #360. Each hides the value from a byte-level scan while a
+// browser reads it perfectly well.
+
+/** What an HTML serializer writes for text inside a double-quoted attribute. */
+const escapeAttr = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * A JS string body with every alphanumeric written as an escape, alternating
+ * `\uXXXX` and `\xXX` so both forms are exercised. The input is the inside of
+ * a JSON string, so its own escapes (`\n` in a PEM body) are left alone.
+ */
+const escapeJsBody = (s: string) => {
+  let i = 0;
+  return s.replace(/[A-Za-z0-9]/g, (c) => {
+    const code = c.charCodeAt(0);
+    return i++ % 2 === 0 ? `\\u${code.toString(16).padStart(4, "0")}` : `\\x${code.toString(16).padStart(2, "0")}`;
+  });
+};
+
+/** A JSON entry whose value is written with JS escapes. */
+const escapedEntry = (v: Generated, keyName: string, tier: Tier) => {
+  const entry = jsonEntry(v, keyName, tier);
+  // The entry is `"key":"value"`; escape the value's body only.
+  const sep = entry.indexOf('":"');
+  if (sep === -1) return entry;
+  return `${entry.slice(0, sep + 3)}${escapeJsBody(entry.slice(sep + 3, -1))}"`;
+};
+
+/** A config object as the page's bootstrap hands it to the client: base64 JSON. */
+const b64Config = (v: Generated, keyName: string, tier: Tier) =>
+  Buffer.from(`{"session":null,"config":{${jsonEntry(v, keyName, tier)},"locale":"en","flags":["beta"]}}`).toString("base64");
 
 export function page(head: string, body: string): string {
   return [
@@ -190,6 +224,51 @@ export const CONTEXTS = [
           `//# sourceMappingURL=https://maps.acme-cdn.test/vendor.c04d2e.js.map?${encodeURI(k)}=${encodeURI(v.text)}\n`,
       },
     ],
+  })),
+
+  // ── Encoded forms (#360) ──────────────────────────────────────────────
+
+  // A JSON state object serialized into an attribute: every quote is `&quot;`.
+  define("entity-encoded-attribute", "html", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
+    html: page(
+      "",
+      `<div id="app" data-state="${escapeAttr(`{"user":{"id":"u_1","plan":"pro"},"config":{${jsonEntry(v, k, t)},"locale":"en"}}`)}"></div>`,
+    ),
+  })),
+
+  // A string literal a minifier or an obfuscator wrote with `\u` / `\x`
+  // escapes. The serialized HTML is not unescaped, so it reports at the
+  // script's own location.
+  define("unicode-escaped-script-string", "inline-script", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
+    html: page("", `<script>window.__CFG__={region:"eu-west-1",${escapedEntry(v, k, t)},debug:false};</script>`),
+  })),
+
+  // The whole config as one base64 string in a data attribute, decoded by the
+  // app at boot. Read from the serialized document, so `html (base64)`.
+  define("base64-data-attribute", "html (base64)", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
+    html: page("", `<div id="root" data-initial-state="${b64Config(v, k, t)}"></div>`),
+  })),
+
+  // The same blob assigned to a global. The inline script is scanned last, so
+  // the rule's dedup keeps `inline-script (base64)`.
+  define("base64-global", "inline-script (base64)", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
+    html: page(
+      "",
+      `<script>window.__CONFIG__="${b64Config(v, k, t)}";window.__CFG=JSON.parse(atob(window.__CONFIG__));</script>`,
+    ),
+  })),
+
+  // A settings object embedded URL-encoded (a WooCommerce payment-gateway
+  // settings blob does this), decoded in place, so the location is the plain
+  // one.
+  define("url-encoded-data-attribute", "html", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
+    html: page("", `<div id="checkout" data-settings="${encodeURIComponent(`{"currency":"usd","config":{${jsonEntry(v, k, t)}},"locale":"en"}`)}"></div>`),
+  })),
+  define("url-encoded-inline-settings", "inline-script", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
+    html: page(
+      "",
+      `<script>var wc_settings=JSON.parse(decodeURIComponent("${encodeURIComponent(`{"currency":"usd","config":{${jsonEntry(v, k, t)}},"locale":"en"}`)}"));</script>`,
+    ),
   })),
 ];
 

@@ -13,7 +13,7 @@
 
 import { page } from "./contexts";
 import type { Case, Expectation } from "./cases";
-import { runOf, seededRng, supabaseJwt, type Rng } from "./generators";
+import { awsKeySuffix, githubToken, runOf, seededRng, supabaseJwt, type Rng } from "./generators";
 
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const DIGIT = "0123456789";
@@ -153,7 +153,7 @@ export const REAL_WORLD: Case[] = [
     page("", `<script>window.__STATE__="%7B%22key%22%3A%22${["p", "k_li", "ve_"].join("")}${runOf(r, ALNUM, 24)}%22%2C%22mode%22%3A%22live%22%7D";</script>`),
     [inl("inline-script", "Stripe Publishable Key", "public")]),
   rw("url-encoded-json-github-token", (r) =>
-    page("", `<script>window.__STATE__="%7B%22token%22%3A%22${["gh", "p_"].join("")}${runOf(r, ALNUM, 36)}%22%7D";</script>`),
+    page("", `<script>window.__STATE__="%7B%22token%22%3A%22${githubToken(r, ["gh", "p_"].join(""))}%22%7D";</script>`),
     [inl("inline-script", "GitHub Personal Access Token", "high")]),
   rw("url-encoded-sentence-under-password-key", () =>
     // hotal.co.uk: a URL-encoded i18n sentence under a password key.
@@ -179,9 +179,9 @@ export const REAL_WORLD: Case[] = [
     [inl("inline-script", "Google API Key (browser)", "public")], undefined, { mustNotFire: ["Generic API Key Assignment"] }),
 
   // Boundary probes, one per prefix family: the prefix mid-token.
-  rw("prefix-mid-token-ghp", (r) => page("", `<script>var id="foo${["gh", "p_"].join("")}${runOf(r, ALNUM, 36)}";</script>`), []),
+  rw("prefix-mid-token-ghp", (r) => page("", `<script>var id="foo${githubToken(r, ["gh", "p_"].join(""))}";</script>`), []),
   rw("prefix-mid-token-sk-live", (r) => page("", `<script>var id="x${["s", "k_li", "ve_"].join("")}${runOf(r, ALNUM, 24)}";</script>`), []),
-  rw("prefix-mid-token-akia", (r) => page("", `<script>var id="abc${["AK", "IA"].join("")}${runOf(r, UPPER + DIGIT, 16).replace(/DO/g, "DQ")}";</script>`), []),
+  rw("prefix-mid-token-akia", (r) => page("", `<script>var id="abc${["AK", "IA"].join("")}${awsKeySuffix(r)}";</script>`), []),
 ];
 
 // Round 3, from the full 383-file real corpus.

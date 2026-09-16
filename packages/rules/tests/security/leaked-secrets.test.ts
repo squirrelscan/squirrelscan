@@ -62,7 +62,12 @@ const CHECK_NAMES: Record<Check, string> = {
   high: "leaked-secrets-high",
   medium: "leaked-secrets-medium",
   public: "leaked-secrets-public",
+  info: "leaked-secrets-info",
 };
+
+// The rule's item label: `Found in <location> (<url>)`, where the location
+// may carry the ` (base64)` suffix of a decoded blob (#360).
+const LOCATION_RE = /^Found in ([a-z-]+(?: \(base64\))?)/;
 
 /** What the rule reported, in the same shape as a case's `expect`. */
 function observed(c: Case): { findings: Expectation[]; ids: string[]; passed: boolean } {
@@ -74,7 +79,7 @@ function observed(c: Case): { findings: Expectation[]; ids: string[]; passed: bo
     for (const item of found?.items ?? []) {
       // id = `${type}: ${masked}`; label = `Found in ${location} (${url})`
       const pattern = item.id.slice(0, item.id.lastIndexOf(": "));
-      const location = /^Found in ([a-z-]+)/.exec(item.label ?? "")?.[1] as Expectation["location"];
+      const location = LOCATION_RE.exec(item.label ?? "")?.[1] as Expectation["location"];
       findings.push({ pattern, check, location });
       ids.push(item.id);
     }
@@ -134,7 +139,7 @@ describe("security/leaked-secrets corpus: coverage", () => {
       const keyName = g.keyName ?? "value";
       const js = g.tier === "assignment" ? `var c={${v.text}};` : `var c={${keyName}:${JSON.stringify(v.text)}};`;
       const types = scanContent(js, "inline-script").map((f) => f.type);
-      const expected = g.pattern === "Clerk Secret Key" ? "Stripe Live Key" : g.pattern;
+      const expected = g.pattern === "Clerk Secret Key" ? "Stripe Live Key" : (g.reportedAs ?? g.pattern);
       if (!types.includes(expected)) {
         wrong.push(`${g.pattern}: got [${types.join(", ")}]`);
       }
@@ -180,7 +185,7 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
   });
 
   for (const g of GENERATORS) {
-    const expected = CLAIMED[g.pattern] ?? g.pattern;
+    const expected = CLAIMED[g.pattern] ?? g.reportedAs ?? g.pattern;
     const value = g.make(seededRng(11));
     const input = bare(g, value.text);
     const keywords = keywordsOf(g.pattern);
@@ -216,7 +221,9 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
 
     test(`${g.pattern}: the prefilter selects it for its own positive and deselects a corrupted keyword`, () => {
       if (isFast) {
-        expect(selectFastPatterns(pad(input))).toContain(expected);
+        // The prefilter selects PATTERNS; a decoder may rename the finding.
+        const selected = CLAIMED[g.pattern] ?? g.pattern;
+        expect(selectFastPatterns(pad(input))).toContain(selected);
         // A keyword under four characters proves nothing to a 4-gram index,
         // so its pattern is always selected; only longer ones can deselect.
         // The keyword is REMOVED here rather than corrupted by a character:
@@ -226,7 +233,7 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
         if (keywords.every((k) => k.length >= 4)) {
           let removed = input;
           for (const k of keywords) removed = rewrite(removed, k, () => "#");
-          expect(selectFastPatterns(pad(removed))).not.toContain(expected);
+          expect(selectFastPatterns(pad(removed))).not.toContain(selected);
         }
       } else {
         expect(input.toLowerCase().includes(keywords[0]!)).toBe(true);
@@ -280,8 +287,8 @@ describe("security/leaked-secrets corpus: rule output", () => {
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
       }
-      // A page with only public-tier findings still passes the rule.
-      const leaks = c.expect.filter((e) => e.check !== "public");
+      // A page with only public-tier or expired findings still passes the rule.
+      const leaks = c.expect.filter((e) => e.check !== "public" && e.check !== "info");
       expect(got.passed).toBe(leaks.length === 0);
       // Masked output never carries the sensitive core.
       if (c.secret && c.secret.length > 12) {
@@ -396,7 +403,15 @@ describe("security/leaked-secrets corpus: cost on a large base64 body (pub#365)"
 
 // One record per raw finding, stable across runs: the masked value is what a
 // user sees and the only thing about the value that belongs in git.
-type SnapshotRow = { type: string; confidence: string; publicByDesign: boolean; location: string; masked: string };
+type SnapshotRow = {
+  type: string;
+  confidence: string;
+  publicByDesign: boolean;
+  location: string;
+  masked: string;
+  /** What the value decoded to (#361). Never carries the value itself. */
+  extra?: Record<string, string | number | boolean>;
+};
 type Snapshot = Record<string, SnapshotRow[]>;
 
 function mask(value: string): string {
@@ -417,6 +432,7 @@ describe("security/leaked-secrets corpus: snapshot", () => {
         publicByDesign: f.publicByDesign,
         location: f.location,
         masked: mask(f.value),
+        ...(f.extra ? { extra: f.extra } : {}),
       }));
     }
     if (UPDATE) {
