@@ -49,7 +49,7 @@ export function checkFor(pattern: string): Check {
   const fast = FAST_PATTERNS.find((p) => p.name === pattern);
   if (fast) return fast.publicByDesign ? "public" : fast.confidence;
   const ctx = CONTEXT_PATTERNS.find((p) => p.name === pattern);
-  if (ctx) return ctx.confidence;
+  if (ctx) return ctx.publicByDesign ? "public" : ctx.confidence;
   throw new Error(`no such pattern: ${pattern}`);
 }
 
@@ -111,6 +111,8 @@ function shannon(s: string): number {
 function bearerDuplicate(text: string): boolean {
   const m = BEARER_RE.exec(`Bearer ${text}`);
   if (m === null || m[0].includes(text)) return false;
+  // A JWT head is the JWT pattern's, never a second Bearer finding.
+  if (/^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]/.test(text)) return false;
   const body = m[0].replace(/^Bearer\s+/, "").replace(/=+$/, "");
   return shannon(body) >= 3.5 && !tripsFalsePositiveFilter(body);
 }

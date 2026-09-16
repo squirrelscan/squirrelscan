@@ -57,19 +57,20 @@ real tokens; word-bounded context values (Cohere no longer claims the head of
 a Together key). The keyword prefilter is declared per pattern and asserted
 by the meta-test.
 
-### Remaining (13 distinct)
+### Remaining (11 distinct)
 
 1. Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live runs first and the overlap dedup drops it.
-2. `Authorization: Bearer <value>` around a value containing `.` (a JWT) reports a second medium "Bearer Token" for the prefix. For a Supabase anon JWT that is a false warning on a public key.
-3. `Authorization: Bearer <value>` with a value under 20 chars is reported by neither tier.
+2. `Authorization: Bearer <value>` with a value under 20 chars is reported by neither tier.
+3. A non-HS256 JWT in a Bearer header reports nothing: the Bearer pattern yields to the JWT pattern (round 2), and only the Supabase HS256 head has one until the decode lane's JWT pattern lands.
 4. PayPal's class omits uppercase B–Y, so a real mixed-case client id never fires.
 5. Neon `neon_[\w-]{32,}` matches a `neon_`-prefixed hyphenated URL slug (a left boundary does not help: `/` precedes it).
 6. PostHog `phc_` project keys are not recognised at all.
 7. The "Supabase Anon Key" pattern is the generic HS256 JWT header: any session JWT with a 100+ char payload reports as Supabase anon, and a `service_role` JWT reports as public.
 8. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
 9. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
-10. Scoping question: Shopify Storefront API access tokens and web-pixel `Api-Key` values are public storefront identifiers but report as medium generic assignments.
-11. No size cap: a 5 MB external script is scanned in full (cost, not a wrong result).
+10. No size cap: a 5 MB external script is scanned in full (cost, not a wrong result).
+
+Closed in round 2: the Bearer duplicate on a JWT value (the Bearer match yields to the JWT pattern); Shopify Storefront access tokens, the web-pixel `Api-Key`, Mixpanel project tokens and Raygun API keys are public-tier context patterns, and a generic assignment yields to one of them when its keyword is within the look-behind AND the value is that pattern's whole shape; a value that equals its own key (`password:"Password"`) or is a URL-encoded label (`%20`, letters ending in `%`) is dropped; a token preceded by the tail of a `%XX` escape (`%22pk_live_…`) passes the left-boundary guard. <!-- pragma: allowlist secret -->
 
 Documented choices, not gaps: unquoted identifiers under a credential key stay
 silent (`apiKey: getSegmentKey`); `password: "changeme"` reports (a weak <!-- pragma: allowlist secret -->
@@ -102,6 +103,7 @@ Apple M2, 16 GB, macOS 24.6.0, Bun 1.3.14, commit `10ef2e7`, 2026-09-16, seed 1,
 | `10ef2e7` (before pub#357), first baseline run | 3 | 946 ms | 991 ms | 14.2 | 145 | 383 MB |
 | `cd9f746` (origin/main, stashed detector), A/B run | 7 | 1247 ms | 1773 ms | 18.7 | 144 | 243 MB |
 | pub#357 + pub#363, same A/B run | 7 | 1081 ms | 1434 ms | 16.2 | 148 | 248 MB |
+| round 2 (+ #365 Discord bound, public tiers) | 7 | 1022 ms | 1339 ms | 15.3 | 140 | 260 MB |
 
 The A/B pair was measured back to back on the same 66.67 MB corpus (200
 pages, 53 external scripts, 400 bodies), same seed, on a loaded machine: both

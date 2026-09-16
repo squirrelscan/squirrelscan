@@ -127,12 +127,36 @@ export const REAL_WORLD: Case[] = [
     []),
 
   // 10. Shopify storefront tokens: public by design, scoping question.
+  // 10. Shopify storefront tokens: public by design, and the generic
+  // assignments defer to the public context pattern when `shopify` sits
+  // within the keyword gap before the value (the shop domain, the header
+  // name, the pixel manager's storefront URL).
   rw("shopify-storefront-access-token", (r) =>
-    page("", `<script>window.ShopifyStorefront={domain:"acme.myshopify.com",storefrontAccessToken:"${runOf(r, HEX, 32)}",access_token:"${runOf(r, HEX, 32)}"};</script>`),
-    [inl("inline-script", "Generic Token Assignment"), inl("inline-script", "Generic Token Assignment")], "scoping question: Shopify Storefront API access tokens are public by design (like pk_live_) but report as a medium Generic Token Assignment"),
+    page("", `<script>window.Shopify={shop:"acme.myshopify.com",storefrontAccessToken:"${runOf(r, HEX, 32)}"};fetch("/api/2024-01/graphql.json",{headers:{"X-Shopify-Storefront-Access-Token":"${runOf(r, HEX, 32)}"}});</script>`),
+    [inl("inline-script", "Shopify Storefront Access Token", "public"), inl("inline-script", "Shopify Storefront Access Token", "public")], undefined,
+    { mustNotFire: ["Generic Token Assignment"] }),
   rw("shopify-web-pixel-api-key", (r) =>
-    page("", `<script src="/cdn/shopifycloud/web-pixels-manager/0.0.1/sandbox.modern.js"></script><script>webPixelsManager.init({"Api-Key":"${runOf(r, ALNUM, 32)}",storefrontDigest:"${runOf(r, HEX, 40)}"});</script>`),
-    [inl("inline-script", "Generic API Key Assignment")], "scoping question: Shopify web-pixel `Api-Key` values are public storefront identifiers but report as a medium Generic API Key Assignment"),
+    page("", `<script src="/cdn/shopifycloud/web-pixels-manager/0.0.1/sandbox.modern.js"></script><script>webPixelsManager.init({"storefrontBaseUrl":"https://acme.myshopify.com","Api-Key":"${runOf(r, HEX, 32)}",storefrontDigest:"${runOf(r, HEX, 40)}"});</script>`),
+    [inl("inline-script", "Shopify Storefront Access Token", "public")], undefined,
+    { mustNotFire: ["Generic API Key Assignment"] }),
+  rw("shopify-access-token-far-from-the-brand-word-stays-generic", (r) =>
+    // Without `shopify` within the gap the generic assignment keeps it: a
+    // medium warning, which is the tier for an unattributed token.
+    page("", `<script>window.__cfg={shop:"acme.myshopify.com",theme:"dawn",locale:"en",currency:"USD",country:"US",access_token:"${runOf(r, HEX, 32)}"};</script>`),
+    [inl("inline-script", "Generic Token Assignment")]),
+
+  // Round 2: URL-encoded JSON. The left-boundary guard must read the `2` of
+  // `%22` as punctuation in disguise, decoder or no decoder.
+  rw("url-encoded-json-stripe-publishable-key", (r) =>
+    page("", `<script>window.__STATE__="%7B%22key%22%3A%22${["p", "k_li", "ve_"].join("")}${runOf(r, ALNUM, 24)}%22%2C%22mode%22%3A%22live%22%7D";</script>`),
+    [inl("inline-script", "Stripe Publishable Key", "public")]),
+  rw("url-encoded-json-github-token", (r) =>
+    page("", `<script>window.__STATE__="%7B%22token%22%3A%22${["gh", "p_"].join("")}${runOf(r, ALNUM, 36)}%22%7D";</script>`),
+    [inl("inline-script", "GitHub Personal Access Token", "high")]),
+  rw("url-encoded-sentence-under-password-key", () =>
+    // hotal.co.uk: a URL-encoded i18n sentence under a password key.
+    page("", `<script>window.__i18n=\{password:"Password%20must%20be%20at%20least%208%20characters%20and%20be%20confirmed%",passwd:"passwd",Password:"Password"};</script>`.replace("\\{", "{")), // pragma: allowlist secret
+    []),
 
   // 11. Bearer: literal reports, template/concatenation must not.
   rw("bearer-template-and-concat-in-auth-spa", () =>
@@ -140,6 +164,12 @@ export const REAL_WORLD: Case[] = [
     []),
   rw("bearer-literal-in-auth-spa", (r) =>
     page("", `<script>const h={Authorization:"Bearer ${Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url")}.${runOf(r, ALNUM, 40)}.${runOf(r, ALNUM, 30)}"};</script>`),
+    // A JWT in a Bearer header is the JWT pattern's, so the Bearer match no
+    // longer reports it. Until a generic JWT pattern lands (decode lane), a
+    // non-HS256 JWT here reports nothing at all.
+    [], "a non-HS256 JWT in a Bearer header reports nothing: the Bearer pattern yields to the JWT pattern, and only the Supabase HS256 head has one"),
+  rw("bearer-literal-opaque-token-in-auth-spa", (r) =>
+    page("", `<script>const h={Authorization:"Bearer ${runOf(r, ALNUM, 40)}"};</script>`),
     [inl("inline-script", "Bearer Token")]),
 
   // 12. AIza lands in the public tier, never high.

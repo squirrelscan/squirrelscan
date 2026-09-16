@@ -401,8 +401,7 @@
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"eyJhbG********************wMH0"}
   ],
   "supabase-anon-key@fetch-bearer-header": [
-    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"eyJhbG********************wMH0"},
-    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************VCJ9"}
+    {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"eyJhbG********************wMH0"}
   ],
   "supabase-anon-key@pre-env-dump": [
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************wMH0"}
@@ -2996,41 +2995,115 @@
     {"type":"Segment Write Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"5xPIpv********************DcwX"}
   ],
   "mixpanel-token@inline-config-object": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"2372d9********************2a6a"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2372d9********************2a6a"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"2372d9********************2a6a"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"2372d9********************2a6a"}
   ],
   "mixpanel-token@window-env": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"6efc2e********************d4e3"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6efc2e********************d4e3"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"6efc2e********************d4e3"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"6efc2e********************d4e3"}
   ],
   "mixpanel-token@next-data": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"622372********************3eaf"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"622372********************3eaf"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"622372********************3eaf"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"622372********************3eaf"}
   ],
   "mixpanel-token@nuxt-payload": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"43097c********************288b"},
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"43097c********************288b"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"43097c********************288b"},
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"43097c********************288b"}
   ],
   "mixpanel-token@html-comment": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"262278********************b378"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"262278********************b378"}
   ],
   "mixpanel-token@meta-content": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"8403a9********************9cc8"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"8403a9********************9cc8"}
   ],
   "mixpanel-token@data-attribute": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"108f07********************05ef"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"108f07********************05ef"}
   ],
   "mixpanel-token@external-bundle": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"59b09f********************c84d"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"59b09f********************c84d"}
   ],
   "mixpanel-token@fetch-bearer-header": [
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************30c4"}
   ],
   "mixpanel-token@pre-env-dump": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9d2371********************99a6"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"9d2371********************99a6"}
   ],
   "mixpanel-token@sourcemap-comment": [
-    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"54af50********************cee3"}
+    {"type":"Mixpanel Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"54af50********************cee3"}
+  ],
+  "shopify-storefront-access-token@inline-config-object": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"510ff4********************701e"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"510ff4********************701e"}
+  ],
+  "shopify-storefront-access-token@window-env": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"21cfcb********************1521"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"21cfcb********************1521"}
+  ],
+  "shopify-storefront-access-token@next-data": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"3346f4********************f59b"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3346f4********************f59b"}
+  ],
+  "shopify-storefront-access-token@nuxt-payload": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"38b56e********************d97a"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"38b56e********************d97a"}
+  ],
+  "shopify-storefront-access-token@html-comment": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"3e71bb********************69df"}
+  ],
+  "shopify-storefront-access-token@meta-content": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"99184b********************be0d"}
+  ],
+  "shopify-storefront-access-token@data-attribute": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"42d9e4********************7ebd"}
+  ],
+  "shopify-storefront-access-token@external-bundle": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"960757********************8759"}
+  ],
+  "shopify-storefront-access-token@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************393a"}
+  ],
+  "shopify-storefront-access-token@pre-env-dump": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"0d45c1********************9b91"}
+  ],
+  "shopify-storefront-access-token@sourcemap-comment": [
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"7d1376********************1c90"}
+  ],
+  "raygun-api-key@inline-config-object": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"1bDQyL******************rC51"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"1bDQyL******************rC51"}
+  ],
+  "raygun-api-key@window-env": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"6ydEBp******************X1w2"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"6ydEBp******************X1w2"}
+  ],
+  "raygun-api-key@next-data": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"90yM4m******************pfkt"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"90yM4m******************pfkt"}
+  ],
+  "raygun-api-key@nuxt-payload": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"70go4V******************SlEp"},
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"70go4V******************SlEp"}
+  ],
+  "raygun-api-key@html-comment": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"5xeiMQ******************nXkO"}
+  ],
+  "raygun-api-key@meta-content": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"3YBteG******************f2y8"}
+  ],
+  "raygun-api-key@data-attribute": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"1ze076******************sSRy"}
+  ],
+  "raygun-api-key@external-bundle": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"1FxQfx******************Hbg8"}
+  ],
+  "raygun-api-key@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************XPAS"}
+  ],
+  "raygun-api-key@pre-env-dump": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"9n2I1y******************PNNj"}
+  ],
+  "raygun-api-key@sourcemap-comment": [
+    {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"2zM17j******************X5ZE"}
   ],
   "amplitude-api-key@inline-config-object": [
     {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"3d70d3********************1be4"},
@@ -3336,6 +3409,23 @@
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*********eme\""},
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo*********eme\""}
   ],
+  "neg:password-near-a-public-brand-word-is-still-a-password": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo************v9L\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret***********R7x\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo************v9L\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret***********R7x\""}
+  ],
+  "neg:secret-key-value-differing-from-its-key-by-a-digit": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret*************ey1\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo**************24!\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret*************ey1\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo**************24!\""}
+  ],
+  "neg:value-equal-to-its-key-is-a-label": [],
+  "neg:password-with-a-percent-sign-is-still-a-password": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*************9L%\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"passwo*************9L%\""}
+  ],
   "neg:quoted-instruction-string-under-a-credential-key": [],
   "neg:password-sixteen-random-chars": [
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"passwo*****************Je9\""},
@@ -3378,19 +3468,33 @@
   "real:paypal-azione-slug": [],
   "real:generic-secret-i18n-strings": [],
   "real:shopify-storefront-access-token": [
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Access********************4af\""},
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************a85\""},
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Access********************4af\""},
-    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************a85\""}
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"e149a5********************d4af"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"de297e********************1a85"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"e149a5********************d4af"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"de297e********************1a85"}
   ],
   "real:shopify-web-pixel-api-key": [
-    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"Api-Ke********************9UM\""},
-    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Api-Ke********************9UM\""}
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"html","masked":"f2828d********************dfba"},
+    {"type":"Shopify Storefront Access Token","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"f2828d********************dfba"}
   ],
+  "real:shopify-access-token-far-from-the-brand-word-stays-generic": [
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************6e0\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************6e0\""}
+  ],
+  "real:url-encoded-json-stripe-publishable-key": [
+    {"type":"Stripe Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_liv********************wWOU"},
+    {"type":"Stripe Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_liv********************wWOU"}
+  ],
+  "real:url-encoded-json-github-token": [
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ghp_m3********************3Z03"},
+    {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ghp_m3********************3Z03"}
+  ],
+  "real:url-encoded-sentence-under-password-key": [],
   "real:bearer-template-and-concat-in-auth-spa": [],
-  "real:bearer-literal-in-auth-spa": [
-    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer*****************NiJ9"},
-    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer*****************NiJ9"}
+  "real:bearer-literal-in-auth-spa": [],
+  "real:bearer-literal-opaque-token-in-auth-spa": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"Bearer********************imsV"},
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"Bearer********************imsV"}
   ],
   "real:aiza-is-public-not-high": [
     {"type":"Google API Key (browser)","confidence":"high","publicByDesign":true,"location":"html","masked":"AIzaSy********************XBdf"},

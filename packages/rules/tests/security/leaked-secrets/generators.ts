@@ -603,6 +603,10 @@ export const GENERATORS: Generator[] = [
   { pattern: "Datadog API Key", tier: "keyed", keyName: "datadogKey", make: (r) => value(keyedRun(r, HEX, 32)) },
   { pattern: "Segment Write Key", tier: "keyed", keyName: "segmentKey", make: (r) => value(keyedRun(r, ALNUM, 32)) },
   { pattern: "Mixpanel Token", tier: "keyed", keyName: "mixpanelToken", make: (r) => value(keyedRun(r, HEX, 32)) },
+  // Public tier, and keyed under a name the generic assignments would claim:
+  // the generic defers to the public context pattern in front of it.
+  { pattern: "Shopify Storefront Access Token", tier: "keyed", keyName: "shopifyStorefrontAccessToken", make: (r) => value(keyedRun(r, HEX, 32)) },
+  { pattern: "Raygun API Key", tier: "keyed", keyName: "raygunApiKey", make: (r) => value(keyedRun(r, ALNUM, 28)) },
   { pattern: "Amplitude API Key", tier: "keyed", keyName: "amplitudeKey", make: (r) => value(keyedRun(r, HEX, 32)) },
   { pattern: "Auth0 Client Secret", tier: "keyed", keyName: "auth0Credential", make: (r) => value(keyedRun(r, ALNUM, 64)) },
   { pattern: "Okta API Token", tier: "keyed", keyName: "oktaToken", make: (r) => value("00" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 39)) },

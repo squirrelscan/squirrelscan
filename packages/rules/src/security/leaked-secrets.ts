@@ -73,6 +73,13 @@ type ContextPattern = {
   keyword: string; // Lowercase keyword to check via includes() first
   pattern: RegExp; // Pattern WITHOUT lookahead
   confidence: "high" | "medium";
+  /**
+   * A client-side key documented as public (Shopify Storefront tokens,
+   * Mixpanel project tokens, Raygun API keys): reported under the
+   * informational check, and claimed AHEAD of the generic assignments, which
+   * would otherwise read `storefrontAccessToken:"…"` as a medium leak.
+   */
+  publicByDesign?: boolean;
 };
 
 // Fast patterns - have distinctive prefixes, safe to run on all content
@@ -685,10 +692,32 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
     confidence: "medium",
   },
   {
+    // Project tokens are embedded by mixpanel.init() on every page that uses
+    // it; the docs call them public.
     name: "Mixpanel Token",
     keyword: "mixpanel",
     pattern: /[a-f0-9]{32}/gi,
     confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    // rg4js('apiKey', …) ships the key to the browser by design.
+    name: "Raygun API Key",
+    keyword: "raygun",
+    // Padding outside the run: with `=` in the class, `RAYGUN_API_KEY=…`
+    // merges the key's letters into the match.
+    pattern: /[A-Za-z0-9+/]{24,40}={0,2}/g,
+    confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    // The Storefront API access token (and the web-pixel Api-Key) is a
+    // public client credential: Shopify's own theme code inlines it.
+    name: "Shopify Storefront Access Token",
+    keyword: "shopify",
+    pattern: /[a-f0-9]{32}/gi,
+    confidence: "medium",
+    publicByDesign: true,
   },
   {
     name: "Amplitude API Key",
@@ -1552,6 +1581,58 @@ function fastPatternMayFire(pattern: { keywords?: string[] }, index: GramIndex |
   return false;
 }
 
+// The public-by-design context patterns, each with its shape anchored to a
+// whole value: a generic assignment yields to one of these only when its
+// keyword is in front of the value AND the value IS that shape. Proximity
+// alone would let `shopify: {password: "…"}` hide a real password.
+const PUBLIC_CONTEXT = CONTEXT_PATTERNS.filter((p) => p.publicByDesign).map((p) => ({
+  keyword: p.keyword,
+  whole: new RegExp(`^(?:${p.pattern.source})$`, p.pattern.flags.replace("g", "")),
+}));
+const PUBLIC_KEYWORD_MAX = Math.max(0, ...PUBLIC_CONTEXT.map((p) => p.keyword.length));
+
+/** The key a generic assignment match opens with: `password` of `password:"…"`. */
+function keyOf(match: string): string {
+  return /^[A-Za-z_-]+/.exec(match)?.[0] ?? "";
+}
+
+/** Lowercase alphanumerics: what is left of a word once case and separators go.
+ *  Digits stay, so `secretkey1` is not `secret_key`. */
+function alnum(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// A URL-encoded label: `%20` is a space however it is spelt, and a body of
+// letters and percent signs that ends on one (`…characters%`) is a sentence
+// cut off mid-escape. A real password ending in `%` still has digits or
+// punctuation in it.
+function isPercentEncodedLabel(body: string): boolean {
+  return body.includes("%20") || (body.endsWith("%") && /^[A-Za-z%]+$/.test(body));
+}
+
+/**
+ * Is the character before `index` the last hex digit of a `%XX` escape? A
+ * URL-encoded JSON blob writes `%22pk_live_…%22`, and the `2` that precedes
+ * the token is punctuation in disguise, not the tail of a longer word.
+ */
+function endsPercentEscape(text: string, index: number): boolean {
+  if (index < 3 || text.charCodeAt(index - 3) !== 37) return false; // %
+  return isHexAt(text, index - 2) && isHexAt(text, index - 1);
+}
+
+function isHexAt(text: string, index: number): boolean {
+  const c = text.charCodeAt(index);
+  return (c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102);
+}
+
+/**
+ * Is a Bearer value the head of a JWT — `eyJ…` up to the first dot, with a
+ * second segment following?
+ */
+function isJwtHead(body: string, text: string, end: number): boolean {
+  return /^eyJ[A-Za-z0-9_-]+$/.test(body) && text.charCodeAt(end) === 46 && isWordCharAt(text, end + 1);
+}
+
 /**
  * The FAST patterns the keyword prefilter selects for this content, by name.
  * Exported for the corpus meta-test, which asserts that every positive's
@@ -1582,6 +1663,35 @@ export function scanContent(
   // skipped and behaviour is exactly as it was.
   const gramIndex = buildGramIndex(content);
 
+  // The lowercase copy locates the context tier's brand words, and the
+  // public-tier check the generic assignments make. Built on first use.
+  //
+  // The index folds ASCII case, which over-approximates `content` but NOT
+  // `content.toLowerCase()` — the keyword is looked for in the latter. Two
+  // characters lowercase into ASCII the content does not itself contain, and on
+  // a page carrying either of them the keyword tier runs unfiltered rather than
+  // risk skipping a keyword the lowercased copy really has.
+  let contentLower: string | null = null;
+  const keywordFilter = gramIndex && !gramIndex.lowercaseAddsAscii ? gramIndex : null;
+
+  // The keywords of the public-by-design context patterns, looked for within
+  // the keyword gap before a generic assignment's value.
+  //
+  // The window is cut from the ORIGINAL content and lowercased on its own:
+  // lowercasing the whole body can change its length (U+0130 becomes two
+  // code units), and an index into one is not an index into the other.
+  const publicContextClaims = (valueAt: number, body: string): boolean => {
+    if (PUBLIC_CONTEXT.length === 0) return false;
+    if (keywordFilter && !PUBLIC_CONTEXT.some((p) => mayContain(keywordFilter, p.keyword))) return false;
+    const from = Math.max(0, valueAt - CONTEXT_KEYWORD_GAP - PUBLIC_KEYWORD_MAX);
+    const window = content.slice(from, valueAt).toLowerCase();
+    return PUBLIC_CONTEXT.some(({ keyword, whole }) => {
+      if (!whole.test(body)) return false;
+      const at = window.lastIndexOf(keyword);
+      return at !== -1 && window.length - (at + keyword.length) <= CONTEXT_KEYWORD_GAP;
+    });
+  };
+
   // Pass 1: FAST patterns, gated twice — by the literals proven from each
   // regex (#1864) and by the keywords each pattern declares (#357). Both
   // gates read the gram index, so a body the index rules out costs nothing.
@@ -1602,7 +1712,11 @@ export function scanContent(
       // assignments are exempt: they anchor on a credential word that is
       // allowed to sit part-way through its key (`stripeApiKey`), and
       // startsInsideDigestKey reads that key instead.
-      if (!keyAnchored && isWordCharAt(content, match.index - 1)) {
+      if (
+        !keyAnchored &&
+        isWordCharAt(content, match.index - 1) &&
+        !endsPercentEscape(content, match.index)
+      ) {
         continue;
       }
 
@@ -1622,8 +1736,21 @@ export function scanContent(
       // placeholder list reads the same body, since the key is part of the
       // match and `apiKey:"YOUR_API_KEY…"` is a placeholder however keyed. // pragma: allowlist secret
       const body = generic ? genericValueOf(value) : value;
-      if (generic && (/\s/.test(body) || shannonEntropy(body) < genericEntropyFloor(body.length))) {
-        continue;
+      if (generic) {
+        if (/\s/.test(body) || shannonEntropy(body) < genericEntropyFloor(body.length)) continue;
+        // `password:"Password"`, `passwd:"passwd"`: an i18n label whose value // pragma: allowlist secret
+        // is its own key. And a URL-encoded sentence (`…ed%`, `%20`) is a
+        // label too, however the encoding scattered its letters. // pragma: allowlist secret
+        if (alnum(body) === alnum(keyOf(value))) continue;
+        if (isPercentEncodedLabel(body)) continue;
+        // A value the public tier claims under a brand keyword in front of
+        // it (`storefrontAccessToken:"…"` after `shopify`) is that tier's:
+        // the context pass reports it as informational, not as a leak.
+        if (publicContextClaims(match.index + value.lastIndexOf(body), body)) continue;
+        // A Bearer whose value is a JWT belongs to the JWT pattern: the
+        // three-segment token is one credential, and the Bearer match stops
+        // at its first dot, so reporting it too was a duplicate.
+        if (name === "Bearer Token" && isJwtHead(body, content, match.index + value.length)) continue;
       }
 
       // Skip duplicates, overlapping rematches, and false positives
@@ -1655,18 +1782,10 @@ export function scanContent(
   // screen with it. A keyword after the value never counts. The key-context
   // gate (digest keys, value position, minified members) still applies.
   //
-  // The lowercase copy exists only to locate the keywords, so it is built the
-  // first time a keyword survives the index: on a page where none does, the pass
-  // costs nothing and the megabyte-sized allocation never happens.
-  //
-  // The index folds ASCII case, which over-approximates `content` but NOT
-  // `content.toLowerCase()` — the keyword is looked for in the latter. Two
-  // characters lowercase into ASCII the content does not itself contain, and on
-  // a page carrying either of them the keyword tier runs unfiltered rather than
-  // risk skipping a keyword the lowercased copy really has.
-  let contentLower: string | null = null;
-  const keywordFilter = gramIndex && !gramIndex.lowercaseAddsAscii ? gramIndex : null;
-  for (const { name, keyword, pattern, confidence } of CONTEXT_PATTERNS) {
+  // The lowercase copy is built the first time a keyword survives the index:
+  // on a page where none does, the pass costs nothing and the megabyte-sized
+  // allocation never happens.
+  for (const { name, keyword, pattern, confidence, publicByDesign } of CONTEXT_PATTERNS) {
     if (keywordFilter && !mayContain(keywordFilter, keyword)) continue;
     contentLower ??= content.toLowerCase();
 
@@ -1741,7 +1860,7 @@ export function scanContent(
           type: name,
           value,
           confidence,
-          publicByDesign: false,
+          publicByDesign: publicByDesign ?? false,
           location,
           sourceUrl,
         });

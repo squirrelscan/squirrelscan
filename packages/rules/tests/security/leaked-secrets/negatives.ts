@@ -251,6 +251,40 @@ export const NEGATIVES: Case[] = [
     { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
   ),
 
+  // Round 2 (codex): the label/public/percent guards must not eat these.
+  neg(
+    "password-near-a-public-brand-word-is-still-a-password",
+    () => page("", `<script>window.__cfg={shopify:{password:"R7m!q2Z#v9L"},mixpanel:{secret:"Zq9#Lm2!vR7x"}};</script>`), // pragma: allowlist secret
+    {
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
+    },
+  ),
+  neg(
+    "secret-key-value-differing-from-its-key-by-a-digit",
+    () => page("", `<script>const c={secret_key:"secretkey1",password:"password2024!"};</script>`), // pragma: allowlist secret
+    {
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
+    },
+  ),
+  neg("value-equal-to-its-key-is-a-label", () =>
+    page("", `<script>const l={password:"Password",passwd:"passwd",secret:"SECRET",secretKey:"secret-key"};</script>`), // pragma: allowlist secret
+  ),
+  neg(
+    "password-with-a-percent-sign-is-still-a-password",
+    () => page("", `<script>const c={password:"R7m!q2Z#v9L%",pwd:"R7m!q2Z%20v9L#"};</script>`), // pragma: allowlist secret
+    {
+      // `%20` is read as a space wherever it appears, so the second one is a
+      // documented casualty of the URL-encoded-label rule: one finding.
+      expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }],
+    },
+  ),
+
   neg("quoted-instruction-string-under-a-credential-key", () =>
     // Quoted and under a credential key, but made of words with no digit:
     // the identifier heuristic still applies and drops it.
