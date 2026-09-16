@@ -153,6 +153,18 @@ export const UserSettingsSchema = z.object({
   // null/undefined ⇒ not shown yet; "true" once shown so we don't repeat it.
   auto_publish_notice_shown: z.boolean().nullable().optional(),
 
+  // #2182: ISO timestamp of the FIRST report this install put in the dashboard,
+  // written by both publish paths (auto-publish in `audit`, and `report
+  // --publish`). Its only job is to answer "has this user ever published"
+  // permanently — a per-crawl row in the project database cannot, because the
+  // next project starts with an empty one.
+  first_publish_at: z.string().nullable().optional(),
+
+  // #2182: the one-time "kept local, here is how to publish" footer line has
+  // been shown. Separate from `first_publish_at` because they are separate
+  // facts: this says we have already spoken, that says there is nothing to say.
+  publish_nudge_shown: z.boolean().nullable().optional(),
+
   // Per-tool BYOK credentials. Keys are tool ids (google-search, pangram,
   // dataforseo, gsc, google-indexing, bing-webmaster, github, analytics).
   // Values are either:

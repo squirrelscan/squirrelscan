@@ -27,6 +27,7 @@ import { join } from "node:path";
 
 import type { AuditReport, CheckResult } from "@/types";
 
+import { hasEverPublished } from "@/cli/publish-nudge";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
@@ -38,6 +39,7 @@ import {
   resolveCredential,
 } from "@/self/credentials";
 import { getProjectsPath } from "@/self/paths";
+import { loadUserSettings, updateSettings } from "@/self/settings";
 
 import { version } from "../../../package.json";
 
@@ -331,6 +333,21 @@ export async function publishReport(
     }
 
     const data = (await response.json()) as ApiSuccessResponse;
+
+    // #2182: stamp the FIRST publish, here and nowhere else. Every publish path
+    // in the CLI funnels through this function — auto-publish at the end of an
+    // audit, and `squirrel report --publish` — so one write covers both, and no
+    // future third caller can forget it. The one-time "kept local" nudge reads
+    // this flag, and "never again after their first publish" has to hold for a
+    // user who published before the nudge ever had a chance to print.
+    //
+    // Non-fatal by construction: the report IS published, and a settings write
+    // that fails must not turn a successful publish into an error. The worst
+    // case is one extra nudge line on a later run.
+    const settings = loadUserSettings();
+    if (settings.ok && !hasEverPublished(settings.data)) {
+      updateSettings({ first_publish_at: new Date().toISOString() });
+    }
 
     return ok({
       id: data.id,

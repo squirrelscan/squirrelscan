@@ -134,6 +134,11 @@ import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
 import { fmt, pageLimitHint } from "../format";
 import { createProgress } from "../progress";
 import { promptForProjectName } from "../prompt";
+import {
+  hasEverPublished,
+  publishNudgeLine,
+  shouldShowPublishNudge,
+} from "../publish-nudge";
 import { pickTip, shouldShowTip, tipLabel } from "../tips";
 
 /** Operator-facing labels for cloud services in coverage warnings. */
@@ -2347,6 +2352,29 @@ export const audit = defineCommand({
               resetAt: creditsResetAt,
             })
           );
+          // #2182: a signed-in user whose reports never reach the dashboard has
+          // no idea what publishing gets them. Said exactly once, and never at
+          // all once anything has been published.
+          if (
+            shouldShowPublishNudge({
+              signedIn,
+              offline: !!args.offline,
+              publishedThisRun: publishedReportId !== null,
+              publishFailed: autoPublishError !== null,
+              everPublished: hasEverPublished(effectiveSettings),
+              nudgeShown: effectiveSettings?.publish_nudge_shown === true,
+              nonPublicHost: !!nonPublicHost,
+              ruleFilterActive,
+              stderrIsTTY: process.stderr.isTTY === true,
+              isConsoleFormat,
+              outputPath: args.output,
+            })
+          ) {
+            footerLines.push(publishNudgeLine());
+            // Non-fatal: a failed write just re-shows the line next run, which
+            // is the same failure mode auto_publish_notice_shown accepts.
+            updateSettings({ publish_nudge_shown: true });
+          }
         } else {
           footerLines.push(
             `${fmt.dim("Unlock cloud features:")} squirrel auth login  •  ${fmt.cyan(DASHBOARD_URL)}`

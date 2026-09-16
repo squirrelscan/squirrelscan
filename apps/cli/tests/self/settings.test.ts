@@ -36,6 +36,42 @@ import {
   writeFileAtomic,
   DEFAULT_SETTINGS,
 } from "../../src/self/settings";
+import { UserSettingsSchema } from "../../src/self/types";
+
+// #2182: the two flags behind the one-time "kept local" publish nudge. They are
+// declared on the zod schema, which is what makes them survive a save — the
+// schema STRIPS every key it does not know, so a field that exists only at the
+// write site is silently dropped on the next load and the nudge repeats forever.
+describe("publish nudge flags (#2182)", () => {
+  test("survive a settings parse, where an undeclared key would not", () => {
+    const parsed = UserSettingsSchema.parse({
+      ...DEFAULT_SETTINGS,
+      first_publish_at: "2026-09-16T00:00:00.000Z",
+      publish_nudge_shown: true,
+      // The control: an undeclared key is dropped on the way through. This is
+      // the exact fate a flag that skipped the schema would meet.
+      never_declared_flag: true,
+    });
+    expect(parsed.first_publish_at).toBe("2026-09-16T00:00:00.000Z");
+    expect(parsed.publish_nudge_shown).toBe(true);
+    expect(parsed).not.toHaveProperty("never_declared_flag");
+  });
+
+  test("default to null, so a fresh install has never published and has not been nudged", () => {
+    expect(DEFAULT_SETTINGS.first_publish_at).toBeNull();
+    expect(DEFAULT_SETTINGS.publish_nudge_shown).toBeNull();
+  });
+
+  // Neither is a preference. `squirrel self settings set first_publish_at ...`
+  // would let a user silence the nudge by claiming a publish that never
+  // happened, and #1398 uses the same list to block repo-local override
+  // injection — a checked-in .squirrel/settings.json must not be able to write
+  // a personal install's publish history either.
+  test("are not user-writable", () => {
+    expect(isWritableSetting("first_publish_at")).toBe(false);
+    expect(isWritableSetting("publish_nudge_shown")).toBe(false);
+  });
+});
 
 // setSettingValue(..., "user") does a real load-merge-SAVE to
 // getSettingsPath() → homedir()/.squirrel/settings.json. Without isolation

@@ -19,12 +19,44 @@
 // part of it; the contract is that nothing hands the ADDRESS to a hosted
 // runner. The public-host control below is what proves the gate is a gate and
 // not an outage.
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
+import * as pathsModule from "@/self/paths";
+
+// #2182: a SUCCESSFUL publish now stamps `first_publish_at` in the user
+// settings (controllers/report/publish.ts), and this file stubs fetch into
+// success responses — so without isolation the public-host control below can
+// write to the developer's REAL ~/.squirrel/settings.json. homedir() is fixed
+// at process start in Bun, so $HOME cannot redirect it; spy on the paths
+// module's getSettingsPath export instead, exactly as tests/self/settings.test.ts
+// does and for the same reason.
+const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-publish-settings-"));
+let restoreSettingsPath: () => void = () => {};
+
+beforeAll(() => {
+  const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
+    join(settingsHome, "settings.json")
+  );
+  restoreSettingsPath = () => spy.mockRestore();
+});
+
+afterAll(() => {
+  restoreSettingsPath();
+  rmSync(settingsHome, { recursive: true, force: true });
+});
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */
 class ExitSignal extends Error {
