@@ -3622,6 +3622,11 @@
   "real:generic-match-inside-a-url-path": [],
   "real:wordpress-oembed-data-secret-nonce": [],
   "real:meta-description-mentioning-access": [],
+  "real:cdn-shopify-lookalike-host-is-not-a-shopify-page": [
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"access********************0b5\""},
+    {"type":"Generic Token Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"access********************0b5\""}
+  ],
+  "real:sentry-dsn-host-lookalike": [],
   "real:ga4-api-secret-assignment": [
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"SECRET********************rCZ'"},
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"SECRET********************rCZ'"}

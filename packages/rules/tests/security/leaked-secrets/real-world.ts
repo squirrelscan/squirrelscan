@@ -261,6 +261,15 @@ export const ROUND_3: Case[] = [
   rw("meta-description-mentioning-access", () =>
     page(`<meta name="description" content="Discover handcrafted necklaces and accessories designed for style, focus, and confidence. Every piece stands out."><meta property="og:description" content="Access to our token program is by invitation.">`, ""),
     []),
+  rw("cdn-shopify-lookalike-host-is-not-a-shopify-page", (r) =>
+    // The page test is a host match, not a substring: neither lookalike
+    // makes a 32-hex access_token Shopify's, so it stays a generic leak.
+    page(`<link rel="preload" href="https://cdn.shopify.com.evil.test/theme.css" as="style"><script src="https://notcdn.shopify.com/x.js"></script>`, `<script>window.__cfg={access_token:"${runOf(r, HEX, 32)}"};</script>`),
+    [inl("inline-script", "Generic Token Assignment")]),
+  rw("sentry-dsn-host-lookalike", (r) =>
+    // `sentryXio` for `sentry.io`: the DSN pattern's dots are escaped.
+    page("", `<script>Sentry.init({dsn:"https://${runOf(r, HEX, 32)}@o${runOf(r, DIGIT, 6)}.ingest.sentryXio/${runOf(r, DIGIT, 7)}"});</script>`),
+    []),
   rw("ga4-api-secret-assignment", (r) =>
     // packomic: a Measurement Protocol API secret inlined next to the id.
     page("", `<script>const GA4_MEASUREMENT_ID = 'G-${runOf(r, UPPER + DIGIT, 10)}';const GA4_API_SECRET = '${runOf(r, ALNUM + "-_", 22)}';</script>`),

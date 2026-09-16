@@ -1687,7 +1687,9 @@ const PUBLIC_BRAND_MAX = Math.max(...PUBLIC_BRANDS.map(([b]) => b.length));
 // under that key is it.
 const SHOPIFY_TOKEN_KEY_RE = /^(?:access[_-]?token|accesstoken)$/i;
 const SHOPIFY_TOKEN_RE = /^[a-f0-9]{32}$/;
-const SHOPIFY_CDN = "cdn.shopify.com";
+// A real host test, not a substring: `cdn.shopify.com.evil.test` and
+// `notcdn.shopify.com` must not make a page Shopify's.
+const SHOPIFY_CDN_RE = /(?:https?:)?\/\/cdn\.shopify\.com\//i;
 
 // A `<script …>` open tag, for the blocks whose attributes name a public
 // keyword (`<script id="shopify-features">`): the whole block is that
@@ -1888,7 +1890,7 @@ export function scanContent(
   };
 
   let shopifyPage: boolean | null = null;
-  const isShopifyPage = () => (shopifyPage ??= content.includes(SHOPIFY_CDN));
+  const isShopifyPage = () => (shopifyPage ??= SHOPIFY_CDN_RE.test(content));
 
   // Pass 1: FAST patterns, gated twice — by the literals proven from each
   // regex (#1864) and by the keywords each pattern declares (#357). Both

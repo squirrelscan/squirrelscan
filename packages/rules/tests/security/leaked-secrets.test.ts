@@ -192,13 +192,22 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
       expect(keywords.some((k) => lower.includes(k))).toBe(true);
     });
 
+    // Keywords are plain substrings, never regexes: every occurrence is
+    // found case-insensitively by indexOf and rewritten in place.
+    const rewrite = (text: string, needle: string, by: (m: string) => string) => {
+      const lower = text.toLowerCase();
+      let out = "";
+      let pos = 0;
+      for (let at = lower.indexOf(needle, pos); at !== -1; at = lower.indexOf(needle, pos)) {
+        out += text.slice(pos, at) + by(text.slice(at, at + needle.length));
+        pos = at + needle.length;
+      }
+      return out + text.slice(pos);
+    };
     // Every keyword occurrence with its last character replaced.
     const corrupt = (text: string) => {
       let out = text;
-      for (const k of keywords) {
-        const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-        out = out.replace(re, (m) => m.slice(0, -1) + "#");
-      }
+      for (const k of keywords) out = rewrite(out, k, (m) => m.slice(0, -1) + "#");
       return out;
     };
     // The gram index is only built past 256 characters; pad so the prefilter
@@ -216,9 +225,7 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
         // say "maybe", which is the sound answer.
         if (keywords.every((k) => k.length >= 4)) {
           let removed = input;
-          for (const k of keywords) {
-            removed = removed.replace(new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "#");
-          }
+          for (const k of keywords) removed = rewrite(removed, k, () => "#");
           expect(selectFastPatterns(pad(removed))).not.toContain(expected);
         }
       } else {
