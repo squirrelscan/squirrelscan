@@ -190,28 +190,21 @@ const P = {
 };
 
 /**
- * The detector's FALSE_POSITIVE_PATTERNS, mirrored. They are substring tests
- * over the whole matched value, so a random key that happens to contain `xxx`
- * or `fake` is dropped; a generator that produced one would make a positive
- * case silently empty. cases.ts redraws such values and pins the behaviour
- * itself as a probe.
+ * The detector's FALSE_POSITIVE_PATTERNS, mirrored. Anchored to the value's
+ * head and tail (#357), so a generated value trips them only when its random
+ * body happens to start or end on a placeholder word or a repeated-character
+ * run; cases.ts redraws such values so every positive is a positive.
  */
+const PLACEHOLDER_WORDS =
+  "placeholder|your[_-]?api[_-]?key|test[_-]?key|demo[_-]?key|sample|dummy|fake";
 export const FALSE_POSITIVE_MIRROR: Array<(value: string) => boolean> = [
   (v) => /^(GTM|G|UA|AW|DC)-[A-Z0-9-]+$/i.test(v),
   // The detector's `/example\.com/i` is a substring test, not a host check.
   (v) => v.toLowerCase().includes("example.com"),
   ...[
-  /placeholder/i,
-  /your[_-]?api[_-]?key/i,
-  /xxx+/i,
-  /test[_-]?key/i,
-  /demo[_-]?key/i,
-  /sample/i,
-  /dummy/i,
-  /fake/i,
-  /0{16,}/,
-  /1{16,}/,
-  /a{16,}/i,
+    new RegExp(`^[A-Za-z0-9]{0,12}[_.-]?(?:${PLACEHOLDER_WORDS})`, "i"),
+    new RegExp(`(?:${PLACEHOLDER_WORDS})[_.-]?[A-Za-z0-9]{0,4}$`, "i"),
+    /(?:0{16,}|1{16,}|x{3,}|a{16,})$/i,
   ].map((re) => (v: string) => re.test(v)),
 ];
 
@@ -340,6 +333,7 @@ export const GENERATORS: Generator[] = [
   {
     pattern: "PayPal Client ID",
     tier: "prefixed",
+    notIn: NOT_A_BEARER,
     // Real PayPal client ids are mixed case. The pattern's character class
     // omits B–Y, so a faithful one never fires; this one is shaped to fire and
     // the faithful one is pinned as a gap in cases.ts.
@@ -536,12 +530,6 @@ export const GENERATORS: Generator[] = [
     make: (r) => value(mapboxToken(r, "sk")),
   },
 
-  // ── CMS ───────────────────────────────────────────────────────────────
-  {
-    pattern: "Sanity Token",
-    tier: "prefixed",
-    make: (r) => value("sk" + runOf(r, ALNUM, 48)),
-  },
 
   // ── Private keys ──────────────────────────────────────────────────────
   ...(["RSA", "DSA", "EC", "OpenSSH", "PGP"] as const).map(
@@ -619,6 +607,11 @@ export const GENERATORS: Generator[] = [
   { pattern: "Auth0 Client Secret", tier: "keyed", keyName: "auth0Credential", make: (r) => value(keyedRun(r, ALNUM, 64)) },
   { pattern: "Okta API Token", tier: "keyed", keyName: "oktaToken", make: (r) => value("00" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 39)) },
   { pattern: "Contentful Access Token", tier: "keyed", keyName: "contentfulToken", make: (r) => value(keyedRun(r, ALNUM, 43)) },
+  // Sanity moved from the FAST tier (#357): `sk` + 30 alphanumerics needs the
+  // brand word and a credential key like every other bare shape.
+  // A digit after `sk` keeps looksLikeCodeIdentifier's camelCase test off a
+  // value that would otherwise read as `skAbc…`; the gap is pinned in cases.ts.
+  { pattern: "Sanity Token", tier: "keyed", keyName: "sanityToken", make: (r) => value("sk" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 47)) },
   { pattern: "Algolia API Key", tier: "keyed", keyName: "algoliaKey", make: (r) => value(keyedRun(r, HEX, 32)) },
   { pattern: "LinkedIn Client Secret", tier: "keyed", keyName: "linkedinCredential", make: (r) => value(keyedRun(r, ALNUM, 16)) },
 ];

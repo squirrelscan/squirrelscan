@@ -77,10 +77,6 @@ const PATTERN_GAPS: Record<string, { expectPattern: string | null; gap: string }
     expectPattern: "Stripe Live Key",
     gap: "Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live `sk_live_{24,}` runs first and the overlap dedup drops it",
   },
-  "Twitter Bearer Token": {
-    expectPattern: null,
-    gap: "Twitter bearer tokens open with 19 `A`s and the false-positive filter `/a{16,}/i` drops every one of them",
-  },
 };
 
 /**
@@ -91,7 +87,7 @@ const PATTERN_GAPS: Record<string, { expectPattern: string | null; gap: string }
 function draw(g: Generator, id: string): Generated {
   for (let attempt = 0; ; attempt++) {
     const value = g.make(seededRng(seedOf(attempt === 0 ? id : `${id}#${attempt}`)));
-    if (g.pattern === "Twitter Bearer Token" || !tripsFalsePositiveFilter(value.text)) return value;
+    if (!tripsFalsePositiveFilter(value.text)) return value;
   }
 }
 
@@ -101,9 +97,22 @@ function draw(g: Generator, id: string): Generated {
 // value's own finding, so it is reported as a second, unrelated Bearer Token.
 const BEARER_RE = /Bearer\s+[a-zA-Z0-9_+/-]{20,}={0,2}/;
 
+// The detector's generic-value entropy floor, mirrored: a Bearer prefix that
+// is mostly one repeated character (Twitter's nineteen `A`s) or a small
+// alphabet (base64 of a decimal snowflake) is not reported as a token.
+function shannon(s: string): number {
+  const freq = new Map<string, number>();
+  for (const ch of s) freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  let h = 0;
+  for (const n of freq.values()) h -= (n / s.length) * Math.log2(n / s.length);
+  return h;
+}
+
 function bearerDuplicate(text: string): boolean {
   const m = BEARER_RE.exec(`Bearer ${text}`);
-  return m !== null && !m[0].includes(text) && !tripsFalsePositiveFilter(m[0]);
+  if (m === null || m[0].includes(text)) return false;
+  const body = m[0].replace(/^Bearer\s+/, "").replace(/=+$/, "");
+  return shannon(body) >= 3.5 && !tripsFalsePositiveFilter(body);
 }
 
 const POSITIVES: Case[] = GENERATORS.flatMap((g) =>
@@ -168,61 +177,54 @@ const PROBES: Case[] = [
     html: inline(
       `window.__AZ__={conn:"DefaultEndpointsProtocol=https;AccountName=acmeprod;AccountKey=az${runOf(r, LOWER + DIGIT, 84)}==;EndpointSuffix=core.windows.net"};`,
     ),
-    // PayPal runs before Azure and its class covers lowercase+digits, so a
-    // 60+ run of those after `az` inside the AccountKey is claimed first and
-    // the whole connection string is then an "overlap" of it.
-    expect: [{ pattern: "PayPal Client ID", check: "public", location: "inline-script" }],
-    mustNotFire: ["Azure Storage Key"],
-    knownGap:
-      "PayPal `[Aa][Zz]…{60,}` runs before Azure Storage Key and claims a substring of the AccountKey, so a high finding is downgraded to a public info one",
+    // PayPal used to run before Azure and claim a 60+ lowercase run inside
+    // the AccountKey, and the whole connection string was then an "overlap"
+    // of it. Azure runs first now, and PayPal needs a value position (#357).
+    expect: [{ pattern: "Azure Storage Key", check: "high", location: "inline-script" }],
+    mustNotFire: ["PayPal Client ID"],
   })),
   probe("cohere-window-claims-together-key", (r) => ({
     html: inline(
       `window.__AI__={provider:"cohere",fallback:"together",togetherKey:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 63)}"};`,
     ),
-    // CONTEXT_PATTERNS run in order and Cohere's `[a-zA-Z0-9]{40}` is first:
-    // with both brand words in the window it takes the first 40 hex chars and
-    // Together's 64-char match is then suppressed as an overlap.
-    expect: [{ pattern: "Cohere API Key", check: "medium", location: "inline-script" }],
-    mustNotFire: ["Together AI Key"],
-    knownGap:
-      "with two brand keywords in one window the first CONTEXT pattern (Cohere, 40 alnum) claims a prefix of a longer Together key",
+    // Cohere's `[a-zA-Z0-9]{40}` used to take the first 40 hex chars and
+    // Together's 64-char match was suppressed as an overlap. Values are
+    // word-bounded now, so a 40-run inside a 64-run is not a value (#357).
+    expect: [{ pattern: "Together AI Key", check: "medium", location: "inline-script" }],
+    mustNotFire: ["Cohere API Key"],
   })),
-  probe("keyed-value-dropped-as-camelcase", (r) => ({
+  // A QUOTED value under a key that says credential is a string literal, and
+  // reads as one however it is spelt (#357). The identifier heuristic still
+  // applies to unquoted values (`apiKey: getSegmentKey`).
+  probe("keyed-value-opening-camelcase-is-kept-when-quoted", (r) => ({
     html: inline(`window.__CFG__={cohereKey:"ab${runOf(r, "CDEFGHJKLMNPQRSTUVWXYZ", 1)}${runOf(r, ALNUM, 37)}"};`),
-    expect: [],
-    knownGap:
-      "a keyed value opening lowercase-then-uppercase (`abK…`, ~30% of random alnum keys) is dropped by looksLikeCodeIdentifier's camelCase test",
+    expect: [{ pattern: "Cohere API Key", check: "medium", location: "inline-script" }],
   })),
-  probe("keyed-value-dropped-as-snake-case", (r) => ({
+  probe("keyed-value-with-underscore-is-kept-when-quoted", (r) => ({
     html: inline(`window.__CFG__={cloudflareToken:"${runOf(r, DIGIT, 1)}${runOf(r, LOWER + DIGIT, 20)}_${runOf(r, LOWER + DIGIT, 18)}"};`),
-    expect: [],
-    knownGap:
-      "Cloudflare/Auth0/Contentful tokens with an `_` and a lowercase letter are dropped as snake_case identifiers; real Cloudflare tokens carry `_` and `-`",
+    expect: [{ pattern: "Cloudflare API Token", check: "medium", location: "inline-script" }],
   })),
-  probe("keyed-value-dropped-by-verb-prefix", (r) => ({
+  probe("keyed-value-with-verb-prefix-is-kept-when-quoted", (r) => ({
     html: inline(`window.__CFG__={mistralKey:"on${runOf(r, DIGIT, 30)}"};`),
+    expect: [{ pattern: "Mistral API Key", check: "medium", location: "inline-script" }],
+  })),
+  probe("keyed-identifier-unquoted-is-still-dropped", () => ({
+    html: inline(`window.__CFG__={segmentKey:segmentAnalyticsMiddlewareFactoryInstance,mistralKey:getMistralCredential()};`),
     expect: [],
-    knownGap:
-      "a keyed value starting with `on`/`is`/`get`/… is dropped by looksLikeCodeIdentifier's verb-prefix test regardless of what follows",
   })),
   probe("digitalocean-spaces-eats-new-relic", (r) => ({
     html: inline(`window.__NR__={licenseKey:"${runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ0123456789", 20)}DO${runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ0123456789", 18)}${["NR", "AL"].join("")}"};`),
-    // DigitalOcean Spaces `DO[A-Z0-9]{20,}` runs before New Relic and claims
-    // the tail; New Relic's full match then overlaps and is dropped.
-    expect: [{ pattern: "DigitalOcean Spaces Key", check: "medium", location: "inline-script" }],
-    mustNotFire: ["New Relic License Key"],
-    knownGap:
-      "DigitalOcean Spaces `DO[A-Z0-9]{20,}` runs before New Relic and claims the tail of any NRAL key containing `DO`, downgrading high to medium",
+    // DigitalOcean Spaces `DO[A-Z0-9]{20,}` used to run before New Relic and
+    // claim the tail. It runs after now, and the tail is mid-token anyway.
+    expect: [{ pattern: "New Relic License Key", check: "high", location: "inline-script" }],
+    mustNotFire: ["DigitalOcean Spaces Key"],
   })),
   probe("fp-filter-is-a-substring-test", (r) => ({
     // A GitHub token whose random body happens to contain `xxx`. The filter
-    // list is applied as substring tests over the whole value, so this real
-    // shaped high-confidence token is dropped outright.
+    // list used to be substring tests over the whole value and dropped it;
+    // it is anchored to the value's head and tail now (#357).
     html: inline(`window.__T__={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${runOf(r, ALNUM, 14)}Xxx${runOf(r, ALNUM, 19)}"};`),
-    expect: [],
-    knownGap:
-      "FALSE_POSITIVE_PATTERNS are unanchored substring tests (`xxx`, `fake`, `sample`, `dummy`, `a{16}`…): a random key containing one anywhere is dropped, prefix and all",
+    expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "inline-script" }],
   })),
   probe("supabase-service-role-jwt-is-called-public", (r) => ({
     html: inline(`const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "service_role"))});`),
