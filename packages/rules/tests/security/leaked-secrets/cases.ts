@@ -210,6 +210,12 @@ const PROBES: Case[] = [
     html: inline(`window.__CFG__={mistralKey:"on${runOf(r, DIGIT, 30)}"};`),
     expect: [{ pattern: "Mistral API Key", check: "medium", location: "inline-script" }],
   })),
+  probe("naming-attribute-after-the-value-in-the-same-tag", (r) => ({
+    // The tag-scoped exception to the keyword gap: the naming attribute may
+    // follow the value, with other attributes between them.
+    html: `<!DOCTYPE html><html><head><title>x</title><meta content="${runOf(r, DIGIT, 1)}${runOf(r, HEX, 31)}" lang="en" dir="ltr" data-testid="row" name="algolia-search-key"></head><body></body></html>`,
+    expect: [{ pattern: "Algolia API Key", check: "medium", location: "html" }],
+  })),
   probe("keyed-identifier-unquoted-is-still-dropped", () => ({
     html: inline(`window.__CFG__={segmentKey:segmentAnalyticsMiddlewareFactoryInstance,mistralKey:getMistralCredential()};`),
     expect: [],

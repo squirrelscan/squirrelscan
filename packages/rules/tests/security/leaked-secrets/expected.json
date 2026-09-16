@@ -3527,6 +3527,9 @@
     {"type":"Mistral API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"on7813********************6447"},
     {"type":"Mistral API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"on7813********************6447"}
   ],
+  "probe:naming-attribute-after-the-value-in-the-same-tag": [
+    {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"6d7a26********************6435"}
+  ],
   "probe:keyed-identifier-unquoted-is-still-dropped": [],
   "probe:digitalocean-spaces-eats-new-relic": [
     {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"html","masked":"3RJ1Z3********************NRAL"},

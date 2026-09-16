@@ -72,6 +72,12 @@ by the meta-test.
 
 Closed in round 2: the Bearer duplicate on a JWT value (the Bearer match yields to the JWT pattern); Shopify Storefront access tokens, the web-pixel `Api-Key`, Mixpanel project tokens and Raygun API keys are public-tier context patterns, and a generic assignment yields to one of them when its keyword is within the look-behind AND the value is that pattern's whole shape; a value that equals its own key (`password:"Password"`) or is a URL-encoded label (`%20`, letters ending in `%`) is dropped; a token preceded by the tail of a `%XX` escape (`%22pk_live_…`) passes the left-boundary guard. <!-- pragma: allowlist secret -->
 
+Judgement calls the lead accepted (pub#357 round 2):
+
+- Minified member keys (`t.a=`, `e.k=`, `n["a"]=`) are "none", not "assigned". This blinds the rule to a leak assigned to a one-letter member in a bundle; on 776 real sites that shape was 100% noise (Cloudflare challenge and Shopify pixel bootstraps).
+- FAST keywords are the literal every match contains, lowercase. Distinctive ones are the provider prefixes (`ghp_`, `sk_live_`, `akia`, `hooks.slack.com`, `.ingest.sentry.io/`, the PEM armour lines). Weak ones exist because the pattern has nothing better: Telegram `:`, Discord `.`, Twilio SID `ac`, DO Spaces `do`, PayPal `az`, Mailchimp `-us`, Mailgun `key-`, OpenAI `t3blbkfj`/`sk-`. Anything under four characters proves nothing to the 4-gram index, so those patterns always run, exactly as before; the declared keyword there is documentation plus the meta-test's near-miss anchor.
+- The 40-character keyword gap counts raw characters, whitespace included. A pretty-printed manifest aligning `"together_token"` more than 40 characters from its value is a documented limit. Inside one HTML tag the whole tag is the look-behind: a naming attribute (`name`, `id`, `property`, `itemprop`, `data-*`) counts in either attribute order.
+
 Documented choices, not gaps: unquoted identifiers under a credential key stay
 silent (`apiKey: getSegmentKey`); `password: "changeme"` reports (a weak <!-- pragma: allowlist secret -->
 credential as often as a placeholder); the generic FAST assignments outrank
@@ -103,7 +109,7 @@ Apple M2, 16 GB, macOS 24.6.0, Bun 1.3.14, commit `10ef2e7`, 2026-09-16, seed 1,
 | `10ef2e7` (before pub#357), first baseline run | 3 | 946 ms | 991 ms | 14.2 | 145 | 383 MB |
 | `cd9f746` (origin/main, stashed detector), A/B run | 7 | 1247 ms | 1773 ms | 18.7 | 144 | 243 MB |
 | pub#357 + pub#363, same A/B run | 7 | 1081 ms | 1434 ms | 16.2 | 148 | 248 MB |
-| round 2 (+ #365 Discord bound, public tiers) | 7 | 1022 ms | 1339 ms | 15.3 | 140 | 260 MB |
+| round 2 (+ #365 Discord bound, public tiers, tag-scoped look-behind) | 7 | 947 ms | 1049 ms | 14.2 | 146 | 486 MB |
 
 The A/B pair was measured back to back on the same 66.67 MB corpus (200
 pages, 53 external scripts, 400 bodies), same seed, on a loaded machine: both

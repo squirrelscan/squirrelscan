@@ -287,17 +287,28 @@ describe("security/leaked-secrets: real credentials still report", () => {
     expect(scanContent(named, "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
   });
 
-  test("a naming attribute is read before the value, not after it (#357)", () => {
-    // The brand word has to precede the value within the keyword gap. In
-    // `name="algolia-api-key" content="…"` it does; with the attributes the
-    // other way round the keyword sits after the value and does not count.
+  test("a naming attribute of the same tag is read in either order (#357)", () => {
+    // The 40-character keyword gap is about prose distance. Inside one tag
+    // the whole tag is the look-behind: `<meta content="…" name="…">` is the
+    // attribute order a lot of generated HTML writes, and it names its value
+    // exactly as the other order does.
     // Algolia's shape is 32 hex, and values are word-bounded now, so a
     // 64-hex value is not an Algolia key: this uses one of Algolia's length.
     const ALGOLIA_KEY = TOGETHER_KEY.slice(0, 32);
     const before = `<meta name="algolia-api-key" content="${ALGOLIA_KEY}">`; // pragma: allowlist secret
     expect(scanContent(before, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
     const after = `<meta content="${ALGOLIA_KEY}" name="algolia-api-key">`; // pragma: allowlist secret
-    expect(scanContent(after, "html")).toEqual([]);
+    expect(scanContent(after, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    // With other attributes between them, past the gap, still one tag.
+    const spread = `<meta content="${ALGOLIA_KEY}" lang="en" dir="ltr" data-testid="release-row" property="og:x" name="algolia-api-key">`; // pragma: allowlist secret
+    expect(scanContent(spread, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    // The exception is the TAG's: the same keyword in the next tag, or in
+    // text after the value, does not reach back.
+    expect(scanContent(`<meta content="${ALGOLIA_KEY}"><meta name="algolia-api-key">`, "html")).toEqual([]);
+    expect(scanContent(`<meta content="${ALGOLIA_KEY}"> algolia`, "html")).toEqual([]);
+    // And a digest-naming attribute still suppresses in either order.
+    expect(scanContent(`<meta content="${DIGEST}" name="release-sha256"> together`, "html")).toEqual([]);
+    expect(scanContent(`<meta name="together" content="${DIGEST}" data-sha256="x">`, "html")).toEqual([]);
   });
 
   test("the brand word names the value from up to the keyword gap before it, never after (#357)", () => {

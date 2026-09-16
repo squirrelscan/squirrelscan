@@ -1082,6 +1082,52 @@ function classifyKeyName(key: string, keyword: string): KeyContext | "unknown" {
 }
 
 /** The whole tag a value sits inside, or undefined if it sits between tags. */
+// How far a tag may extend either side of a keyword before the tag-scoped
+// exception gives up on it: attribute soup past this is not one tag's worth.
+const TAG_SCAN_LIMIT = 2048;
+
+/**
+ * The `<`…`>` bounds of the tag `index` sits inside, or undefined when it
+ * sits between tags or the tag is longer than TAG_SCAN_LIMIT either way.
+ * Bounded, unlike enclosingTag's lastIndexOf: a keyword deep in a script body
+ * with no `<` for a megabyte must not walk that megabyte per occurrence.
+ */
+function tagBoundsAround(text: string, index: number): { start: number; end: number } | undefined {
+  let start = -1;
+  for (let i = index; i >= 0 && index - i <= TAG_SCAN_LIMIT; i--) {
+    const c = text.charCodeAt(i);
+    if (c === 62) return undefined; // > : between tags
+    if (c === 60) {
+      start = i;
+      break;
+    }
+  }
+  if (start === -1) return undefined;
+  for (let i = index; i < text.length && i - index <= TAG_SCAN_LIMIT; i++) {
+    if (text.charCodeAt(i) === 62) return { start, end: i + 1 };
+  }
+  return undefined;
+}
+
+/**
+ * Does a naming attribute of this tag carry the keyword? `<meta
+ * name="algolia-api-key" content="…">` and the same tag with the attributes
+ * the other way round both name their value, and the 40-character rule is
+ * about prose distance, not attribute order: inside one tag the whole tag is
+ * the look-behind.
+ */
+function tagNamesKeyword(tag: string, keyword: string): boolean {
+  for (const re of [TAG_NAMING_ATTR_RE, TAG_DATA_ATTR_RE]) {
+    // matchAll clones the regex WITH its lastIndex, so the shared global
+    // regexes are reset first; an early return must not leave them dirty.
+    re.lastIndex = 0;
+    for (const attr of tag.matchAll(re)) {
+      if (attr[1]!.toLowerCase().includes(keyword)) return true;
+    }
+  }
+  return false;
+}
+
 export function enclosingTag(text: string, index: number): string | undefined {
   const open = text.lastIndexOf("<", index);
   if (open === -1) return undefined;
@@ -1177,9 +1223,11 @@ function classifyTagKeys(tag: string, keyword: string): KeyContext | "unknown" {
     else if (cls === "credential" && verdict === "unknown") verdict = cls;
   };
 
+  TAG_NAMING_ATTR_RE.lastIndex = 0;
   for (const attr of tag.matchAll(TAG_NAMING_ATTR_RE)) {
     if (attr[1]) consider(attr[1]);
   }
+  TAG_DATA_ATTR_RE.lastIndex = 0;
   for (const attr of tag.matchAll(TAG_DATA_ATTR_RE)) {
     if (attr[1]) consider(attr[1]);
   }
@@ -1791,14 +1839,25 @@ export function scanContent(
 
     let pos = 0;
     while ((pos = contentLower.indexOf(keyword, pos)) !== -1) {
-      const from = pos + keyword.length;
-      pos = from;
-      const region = content.slice(from, from + CONTEXT_SCAN_SPAN);
+      const keywordAt = pos;
+      pos = keywordAt + keyword.length;
+
+      // The region the value may START in: the keyword gap after the
+      // keyword, or, when the keyword is a naming attribute of a tag, the
+      // whole tag in either direction.
+      let from = pos;
+      let limit = CONTEXT_KEYWORD_GAP;
+      const tag = tagBoundsAround(content, keywordAt);
+      if (tag && tagNamesKeyword(content.slice(tag.start, tag.end), keyword)) {
+        from = tag.start;
+        limit = tag.end - tag.start;
+      }
+      const region = content.slice(from, from + Math.max(CONTEXT_SCAN_SPAN, limit));
 
       pattern.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(region)) !== null) {
-        if (match.index > CONTEXT_KEYWORD_GAP) break;
+        if (match.index > limit) break;
         const value = match[0];
         const at = from + match.index;
 
