@@ -18,7 +18,8 @@
     "zod": "^4.4.3"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "bench:secrets": "bun run scripts/bench-leaked-secrets.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.1"
