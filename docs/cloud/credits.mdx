@@ -104,3 +104,5 @@ See the [cloud configuration reference](/configuration/cloud) for all options.
 ## When credits run out
 
 Nothing breaks. A cloud audit needs a balance of at least 50 credits (the base) to start: below that, the CLI runs the audit locally instead and tells you so. If credits run out mid-audit, cloud rules report `skipped` with reason `insufficient-credits`, the audit completes with all local rules, and you see a single warning with a top-up link. If an audit fails after you were charged, the charge is automatically refunded.
+
+Wherever that warning appears, it states what the run would have cost, the credits you have left, the date your monthly credits reset, and an upgrade link. The link is scoped to the organization that ran out, so it opens checkout for that organization rather than whichever one your browser used last. Credits are not shared between organizations, so that distinction matters: topping up the wrong one leaves the blocked audit blocked. The MCP server returns the same four facts as fields on its `run_audit` response, so an agent can relay them without a second call.

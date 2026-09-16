@@ -16,8 +16,10 @@ import {
 } from "../../src/cli/commands/audit";
 import {
   AUDIT_BASE_CREDITS,
+  offerPitchLines,
   PRO_HEADLINE,
   proPitchLines,
+  resetDateLabel,
   upgradeUrl,
 } from "../../src/lib/upgrade";
 
@@ -55,6 +57,12 @@ describe("registerFailureLines", () => {
     code: "INSUFFICIENT_CREDITS",
     message: "Insufficient credits for the audit base",
     balance: 12,
+    // #2183: the server now states the cost, the reset date and the offer.
+    // Null here is the OLD server's answer, which every assertion below still
+    // has to survive — a released binary talks to whatever API it finds.
+    required: null,
+    resetAt: null,
+    upgrade: null,
   };
 
   test("out of credits gets the balance, the price and a working upgrade URL", () => {
@@ -84,6 +92,9 @@ describe("registerFailureLines", () => {
           code,
           message: "Website limit reached.",
           balance: null,
+          required: null,
+          resetAt: null,
+          upgrade: null,
         })
       );
       expect(out).toContain("Website limit reached.");
@@ -167,5 +178,168 @@ describe("lowBalanceFooterLines", () => {
       lowBalanceFooterLines({ balance: 10, monthlyCredits: 0, plan: "paid" })
         .length
     ).toBeGreaterThan(0);
+  });
+});
+
+// #2183: the wall is now built from the API's refusal, not from copy compiled
+// into the binary. That is what lets the link name the ORG that hit the wall —
+// credits are not transferable, so a link that lands on the user's default org
+// sells credits the blocked audit cannot spend.
+describe("the server's offer", () => {
+  const OFFER = {
+    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01M12TN7ABCDEFGHJKMNPQRSTV",
+    plan: "pro",
+    interval: "month",
+    name: "Pro",
+    priceMonthUsd: 19,
+    priceYearUsd: 190,
+    monthlyCredits: 3000,
+  };
+
+  test("the pitch carries the org-targeted link, not the static marketing URL", () => {
+    const pitch = text(offerPitchLines(OFFER, "cli-audit"));
+    expect(pitch).toContain("org=01M12TN7ABCDEFGHJKMNPQRSTV");
+    expect(pitch).toContain("plan=pro");
+    expect(pitch).toContain("interval=month");
+    expect(pitch).not.toContain(UPGRADE);
+  });
+
+  test("the price comes from the offer, so a binary cannot quote a stale one", () => {
+    const pitch = text(
+      offerPitchLines({ ...OFFER, priceMonthUsd: 29 }, "cli-audit")
+    );
+    expect(pitch).toContain("$29");
+  });
+
+  test("falls back to the static pitch when the server sent no offer", () => {
+    expect(text(offerPitchLines(null, "cli-audit"))).toBe(
+      text(proPitchLines("cli-audit"))
+    );
+  });
+
+  test("the reset date is a calendar day, and absent rather than invented", () => {
+    expect(resetDateLabel("2026-10-01T00:00:00.000Z")).toBe("2026-10-01");
+    expect(resetDateLabel(null)).toBeNull();
+    expect(resetDateLabel(undefined)).toBeNull();
+    expect(resetDateLabel("not a date")).toBeNull();
+  });
+});
+
+describe("registerFailureLines with a server offer (#2183)", () => {
+  const OFFER = {
+    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01M12TN7ABCDEFGHJKMNPQRSTV",
+    plan: "pro",
+    interval: "month",
+    name: "Pro",
+    priceMonthUsd: 19,
+    priceYearUsd: 190,
+    monthlyCredits: 3000,
+  };
+  const walled = {
+    code: "INSUFFICIENT_CREDITS",
+    message: "Insufficient credits for the audit base",
+    balance: 12,
+    required: 50,
+    resetAt: "2026-10-01T00:00:00.000Z",
+    upgrade: OFFER,
+  };
+
+  test("states the cost, what is left, the reset date and the deep link", () => {
+    const out = text(registerFailureLines(walled));
+    expect(out).toContain("12 credits");
+    expect(out).toContain("needs 50");
+    expect(out).toContain("2026-10-01");
+    expect(out).toContain(OFFER.url);
+  });
+
+  test("quotes the SERVER's cost, not the compiled-in base", () => {
+    // A price change ships in the API long before every installed binary is
+    // replaced, so the number on screen has to be the one that refused the run.
+    const out = text(registerFailureLines({ ...walled, required: 75 }));
+    expect(out).toContain("needs 75");
+  });
+
+  test("still names a cost when the balance is unknown", () => {
+    const out = text(registerFailureLines({ ...walled, balance: null }));
+    expect(out).not.toContain("null");
+    expect(out).toContain("needs 50");
+    expect(out).toContain(OFFER.url);
+  });
+
+  test("drops the reset clause rather than guessing a date", () => {
+    const out = text(registerFailureLines({ ...walled, resetAt: null }));
+    expect(out).not.toContain("reset on");
+    expect(out).toContain(OFFER.url);
+  });
+
+  test("an unmetered account is still never pitched, offer or no offer", () => {
+    const out = text(registerFailureLines(walled, true));
+    expect(out).not.toContain(OFFER.url);
+    expect(out).toContain("unmetered");
+  });
+});
+
+describe("lowBalanceFooterLines with a server offer (#2183)", () => {
+  const OFFER = {
+    url: "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01M12TN7ABCDEFGHJKMNPQRSTV",
+    plan: "pro",
+    interval: "month",
+    name: "Pro",
+    priceMonthUsd: 19,
+    priceYearUsd: 190,
+    monthlyCredits: 3000,
+  };
+
+  test("a free plan gets the org-targeted link and the reset date", () => {
+    const out = text(
+      lowBalanceFooterLines({
+        balance: 12,
+        monthlyCredits: getPlan("free").monthlyCredits,
+        plan: "free",
+        upgrade: OFFER,
+        resetAt: "2026-10-01T00:00:00.000Z",
+      })
+    );
+    expect(out).toContain(OFFER.url);
+    expect(out).toContain("2026-10-01");
+    expect(out).not.toContain(UPGRADE);
+  });
+
+  test("a paid plan tops up through the same org-targeted link", () => {
+    const out = text(
+      lowBalanceFooterLines({
+        balance: 12,
+        monthlyCredits: 3000,
+        plan: "paid",
+        upgrade: OFFER,
+      })
+    );
+    expect(out).toContain(OFFER.url);
+    // Still no plan pitch for someone already paying.
+    expect(out).not.toContain(`$${PRO.priceMonthUsd}/month`);
+  });
+
+  test("without an offer it falls back to the static URL, as an old API leaves it", () => {
+    const out = text(
+      lowBalanceFooterLines({
+        balance: 12,
+        monthlyCredits: getPlan("free").monthlyCredits,
+        plan: "free",
+      })
+    );
+    expect(out).toContain(UPGRADE);
+  });
+
+  test("an unmetered account says nothing, whatever offer is passed", () => {
+    expect(
+      lowBalanceFooterLines({
+        balance: 0,
+        monthlyCredits: 3000,
+        plan: "paid",
+        unlimited: true,
+        upgrade: OFFER,
+        resetAt: "2026-10-01T00:00:00.000Z",
+      })
+    ).toEqual([]);
   });
 });
