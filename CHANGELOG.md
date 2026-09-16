@@ -34,6 +34,7 @@ Every audit now builds a map of the entities your site declares, a new command a
 ### Changed
 
 - Leaked-secrets precision. Prefix patterns respect a left boundary, brand keywords must sit within 40 characters before the value, minified member keys no longer count as assignments, and public-by-design keys (PostHog, Shopify Storefront, Mixpanel, Raygun, and generic API keys under twelve public brands) report as public instead of leaks. On a private corpus of 383 real pages: 1,235 findings before, 352 after, none high. Scans are also faster.
+- Leaked-secrets checked against a 197-site launch corpus (#371). Twelve false-positive classes fixed, each paired with the real shape it must still catch: a run of `A` in a base64 payload is not a Twitter bearer token, a decoder table is not a Telegram token, a font CDN path is not a DigitalOcean key, a credential word in a ternary branch is not a key, a connection string with no password has nothing to leak, and Amplitude and Supabase publishable keys report as public while `sb_secret_` keys are now caught. On the 56 sites that fired at the previous release: 172 findings before, 0 after, with no true positive lost.
 - The Discord bot token pattern no longer goes quadratic on long base64 runs (1.6 s to 2.5 ms on a 200 KB data URI page).
 
 ### Fixed
