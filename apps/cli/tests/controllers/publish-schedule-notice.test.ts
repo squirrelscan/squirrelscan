@@ -1,4 +1,4 @@
-// #2184: what `publishReport` forwards out of the API's publish response.
+// #2184, #2225: what `publishReport` forwards out of the API's publish response.
 //
 // The CLI's renderer validates the summary again before printing, so this file
 // pins the OTHER half of the contract: `PublishResult.schedule` is typed
@@ -49,8 +49,22 @@ const COMPLETE: Record<string, unknown> = {
   upgradeUrl: null,
 };
 
-/** The three fields the CLI's line actually reads, and therefore validates. */
+/** The three fields EVERY state's line reads, and therefore validates. */
 const RENDERED_FIELDS = ["state", "cadenceLabel", "settingsUrl"] as const;
+
+const UPGRADE_URL = "https://app.squirrelscan.com/acme/settings/billing";
+
+/** A capped summary, whose line reads `upgradeUrl` on top of the three (#2225). */
+const CAPPED: Record<string, unknown> = {
+  ...COMPLETE,
+  frequency: null,
+  state: "capped",
+  stateReason: "plan_cap",
+  nextRunAt: null,
+  cadenceLabel: "off",
+  pauseUrl: null,
+  upgradeUrl: UPGRADE_URL,
+};
 
 function report(): AuditReport {
   return {
@@ -172,5 +186,33 @@ describe("publishReport forwards the schedule summary (#2184)", () => {
 
     responseSchedule = "weekly";
     expect(await publishedSchedule()).toBeUndefined();
+  });
+
+  // #2225: "what is rendered" became per state, and the controller's guard is
+  // the same one. A capped summary's line ends in the upgrade link, so a capped
+  // summary without one is as incomplete as an active one with no settings URL.
+  test("a complete capped summary reaches the caller unchanged", async () => {
+    responseSchedule = CAPPED;
+
+    expect(await publishedSchedule()).toEqual(CAPPED as never);
+  });
+
+  test.each([[null], [undefined], [""], [42]])(
+    "a capped summary whose upgrade link is %p is dropped",
+    async (upgradeUrl) => {
+      responseSchedule = { ...CAPPED, upgradeUrl };
+
+      expect(await publishedSchedule()).toBeUndefined();
+    }
+  );
+
+  // And the widening stops there. An active summary has never carried an
+  // upgrade link, and requiring one of everything would have silenced every
+  // server that ever sent a correct one.
+  test("an active summary with no upgrade link is still forwarded", async () => {
+    const { upgradeUrl: _dropped, ...withoutLink } = COMPLETE;
+    responseSchedule = withoutLink;
+
+    expect(await publishedSchedule()).toEqual(withoutLink as never);
   });
 });

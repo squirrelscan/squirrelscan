@@ -137,7 +137,15 @@ https://reports.squirrelscan.com/XVv4NO7aPr
 Scheduled audits: every week, and each run costs credits. Turn it off: https://app.squirrelscan.com/acme/website/web_1/settings/schedule
 ```
 
-The line is absent when the site has no schedule running, and the cadence it names is the one your plan actually funds.
+The cadence it names is the one your plan actually funds.
+
+A site that asked for a schedule your plan has no slot left for is [capped](/cloud/scheduled-audits#schedule-states), and the line says so instead:
+
+```text
+Scheduled audits: this site is not scheduled, your plan schedules <n> website(s). Upgrade: <upgrade-url>
+```
+
+Every other state prints nothing, and so does a run that published nothing.
 
 Skip publishing for a single run (still runs online):
 

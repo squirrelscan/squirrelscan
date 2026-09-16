@@ -17,7 +17,7 @@ Scheduled audits re-run a full cloud audit of a website on a fixed cadence - **d
 | Websites on a schedule | 1 | Every website |
 | Cadences | Weekly, Monthly | Daily, Weekly, Monthly |
 
-On the free plan, picking a cadence for a second website asks you to upgrade, and choosing **Daily** saves as **Weekly** with a notice. Which website gets the free schedule is your choice: turn the first one off and any other can take the slot.
+On the free plan, picking a cadence for a second website asks you to upgrade, and choosing **Daily** saves as **Weekly** with a notice. Which website gets the free schedule is your choice: turn the first one off and any other can take the slot. A site that asked for a schedule it cannot have is [capped](#schedule-states) rather than switched off.
 
 A weekly audit spends roughly half the free plan's monthly [credit](/cloud/credits) grant, which is why daily is a paid cadence: four runs a week would exhaust the grant in days.
 
@@ -29,6 +29,24 @@ Schedules are managed from the dashboard, per website:
 2. Use the **Scheduled Audits** card on the website overview (or go to **Settings → Schedule**).
 3. Pick a cadence - **Daily**, **Weekly**, **Monthly**, or **Disabled**.
 
+## Schedule states
+
+A website's schedule is in one of five states. The dashboard shows the state on the website list and on the website's **Settings → Schedule** page, and the API and MCP tools report the same one.
+
+| State | What it means | What you see |
+| --- | --- | --- |
+| Off | Nothing recurring is set up, and nothing is stopping one. | No cadence, and the control to pick one. |
+| Active | Recurring audits are running. | The cadence, the next run, and a **Turn off** control. |
+| Capped | The site asked for a schedule and your plan's scheduled-website slots are all in use. | A **Capped** chip with an upgrade link, on the website list and on the schedule settings page. |
+| Unschedulable | The site's address can never be reached from the cloud, such as a `localhost` or private-network host. | The reason, in place of a cadence. |
+| Paused | The schedule was running and the system stopped it, after three failed audits in a row or a balance that could not cover a run. | The reason, and where to start it again. |
+
+<Note>
+  A capped website never shows as **Weekly**. It is not running, and saying otherwise is the one thing this state exists to stop.
+</Note>
+
+A capped site keeps what you asked for. Turn another site's schedule off, or upgrade, and the freed slot goes to a capped site by itself: there is nothing to switch back on. Where several are waiting, the one that has waited longest goes first, and it is re-checked on the way in, so a site whose host stopped resolving while it waited does not take the slot.
+
 ## When a schedule turns itself on
 
 A newly added website is **not** scheduled straight away. Recurring audits turn on by themselves once that website has **one successful audit**, and you are notified in the dashboard when that happens.
@@ -37,7 +55,7 @@ Waiting for a real result means a site we cannot reach is never enrolled. A doma
 
 Two things still apply at that moment:
 
-- Your plan needs a free scheduled-website slot. On the free plan that means your first website; the next one stays unscheduled until you free the slot or upgrade.
+- Your plan needs a free scheduled-website slot. On the free plan that means your first website; the next one lands in the [capped](#schedule-states) state until you free the slot or upgrade.
 - The first scheduled run is at least one full cadence period after that audit. A weekly schedule that turns on today next runs in a week, never the same night.
 
 You can also switch recurring audits on yourself at any time from the **Scheduled Audits** card, without waiting for an audit to complete. Turning them off is permanent until you turn them back on: a later audit will not switch them on again.
@@ -48,8 +66,30 @@ A schedule that starts by itself is still recurring spend, so every surface that
 
 - The **report page** in the dashboard carries the notice with a **Turn off** button.
 - The **completion email** names the cadence and carries a one-click pause link that needs no sign-in.
-- The **CLI** prints one line after a published audit with the link to the site's schedule settings.
+- The **CLI** prints one line after a published audit, for an active schedule and for a capped one. See [what the CLI prints](#what-the-cli-prints).
 - The **digest email** for each scheduled run carries the same pause link.
+
+### What the CLI prints
+
+`squirrel audit --publish` and `squirrel report --publish` each end with at most one line about the audited site's schedule. Two states have something to say.
+
+An **active** schedule:
+
+```text
+Scheduled audits: <cadence>, and each run costs credits. Turn it off: <schedule-settings-url>
+```
+
+A **capped** one:
+
+```text
+Scheduled audits: this site is not scheduled, your plan schedules <n> website(s). Upgrade: <upgrade-url>
+```
+
+`<cadence>` and `<n>` come from the server, so the CLI, the dashboard and the emails cannot describe the same website differently. Where the plan's allowance is not known, the capped line drops the count and keeps the upgrade link. A capped site with no upgrade link prints nothing rather than half a sentence.
+
+**Off**, **unschedulable** and **paused** print nothing. Neither does a run that published nothing, or one whose server sent no schedule at all.
+
+On `squirrel report --publish` the line goes to standard error, because that command's standard output is the report URL on its own and people pipe it.
 
 ## When a run is skipped for credits
 

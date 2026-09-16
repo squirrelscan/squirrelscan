@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { report } from "@/cli/commands/report";
+import { scheduleSummaryLine } from "@/lib/schedule-notice";
 import * as pathsModule from "@/self/paths";
 
 // #2182: a SUCCESSFUL publish now stamps `first_publish_at` in the user
@@ -251,9 +252,10 @@ describe("squirrel report --publish — a host no hosted runner can reach (#1841
  * because a stream is the only place the difference between stdout and stderr
  * is observable.
  */
-describe("squirrel report --publish — stdout stays pipeable (#2184)", () => {
+describe("squirrel report --publish — stdout stays pipeable (#2184, #2225)", () => {
   const SETTINGS_URL =
     "https://app.squirrelscan.com/acme/website/web_1/settings/schedule";
+  const UPGRADE_URL = "https://app.squirrelscan.com/acme/settings/billing";
 
   const active = () => ({
     kind: "recurring" as const,
@@ -267,6 +269,18 @@ describe("squirrel report --publish — stdout stays pipeable (#2184)", () => {
     pauseUrl: "https://api.squirrelscan.com/v1/schedules/pause?s=a&t=b",
     cap: { limit: 1, used: 1 },
     upgradeUrl: null,
+  });
+
+  /** The site wants a schedule and the plan's slots are spent (#2225). */
+  const capped = () => ({
+    ...active(),
+    frequency: null,
+    state: "capped",
+    stateReason: "plan_cap",
+    nextRunAt: null,
+    cadenceLabel: "off",
+    pauseUrl: null,
+    upgradeUrl: UPGRADE_URL,
   });
 
   test("with an active schedule: stdout is the URL alone, the notice is on stderr", async () => {
@@ -296,12 +310,43 @@ describe("squirrel report --publish — stdout stays pipeable (#2184)", () => {
     expect(stderr.join("\n")).not.toContain("Scheduled audits:");
   });
 
-  // Every state but `active` is silent until #2225 adds its branch to the same
-  // renderer, and none of them may reach stdout on the way.
-  test.each([["off"], ["capped"], ["unschedulable"], ["paused"]])(
+  // #2225: the capped line goes to the SAME stream for the same reason. The
+  // stdout contract does not bend for a second state.
+  test("with a capped schedule: stdout is the URL alone, the notice is on stderr", async () => {
+    publishSchedule = capped();
+
+    await runReport("https://example.com/");
+
+    expect(stdout).toEqual(["https://reports.test/rep_1"]);
+    expect(stderr.join("\n")).toContain(
+      "Scheduled audits: this site is not scheduled"
+    );
+    expect(stderr.join("\n")).toContain(UPGRADE_URL);
+  });
+
+  // ONE RENDERER, checked at this call site too. A second composer here would
+  // print a different sentence, or a second one, and both fail.
+  test.each([
+    ["an active schedule", active],
+    ["a capped schedule", capped],
+  ])("%s prints the renderer's line and only that", async (_name, build) => {
+    const summary = build();
+    publishSchedule = summary;
+
+    await runReport("https://example.com/");
+
+    const notices = stderr.filter((l) => l.includes("Scheduled audits:"));
+    const expected = scheduleSummaryLine(summary);
+    expect(expected, "the renderer answered no line at all").toBeString();
+    expect(notices).toEqual([expected as string]);
+  });
+
+  // `unschedulable` and `paused` are still silent, and none of them may reach
+  // stdout on the way.
+  test.each([["off"], ["unschedulable"], ["paused"]])(
     "state %p prints nothing on either stream",
     async (state) => {
-      publishSchedule = { ...active(), state };
+      publishSchedule = { ...capped(), state };
 
       await runReport("https://example.com/");
 
@@ -309,6 +354,18 @@ describe("squirrel report --publish — stdout stays pipeable (#2184)", () => {
       expect(stderr.join("\n")).not.toContain("Scheduled audits:");
     }
   );
+
+  // A capped site with nowhere to upgrade to prints nothing rather than a line
+  // ending "Upgrade: undefined".
+  test("a capped schedule with no upgrade link prints nothing", async () => {
+    publishSchedule = { ...capped(), upgradeUrl: null };
+
+    await runReport("https://example.com/");
+
+    expect(stdout).toEqual(["https://reports.test/rep_1"]);
+    expect(stderr.join("\n")).not.toContain("Scheduled audits:");
+    expect(stderr.join("\n")).not.toContain("undefined");
+  });
 
   // A summary missing a field the line renders is dropped whole: naming a
   // recurring charge with no way to stop it is worse than silence, and it must
