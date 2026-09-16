@@ -73,6 +73,45 @@ the `leaked-secrets-info` check, any other issuer is medium at most and
 never labelled Supabase (gap 7 below is closed). Entity-, escape-, percent-
 and base64-encoded content is decoded before the scan (`decode.ts`).
 
+### Closed in round 5 (the 197-site Product Hunt launch corpus)
+
+Measured before anything changed: the corpus was first audited on a build that
+predates pub#357, and re-auditing the same 56 sites on current main took 228
+findings to 24. Those 24 were read back against the crawled bytes one at a
+time. All 24 were false positives or public client keys reported as leaks, and
+each class below has a regression case in `real-world.ts` paired with the
+positive its fix must not silence.
+
+A run of `A` inside a base64 payload is not a Twitter bearer token (nineteen
+`A`s is nineteen zero bytes, which is what a WebP, a PNG or a zlib stream pads
+with, and the alphabet's own `/` and `+` hand the run a clean left boundary):
+the pattern needs a value position, and `isInValuePosition` grew an auth-scheme
+arm so `Authorization: Bearer AAAA…` still fires. A decoder table is not a
+Telegram bot token: a pattern whose only distinctive mark is a separator can
+declare a `minTailEntropy`, and 35 characters drawn from a 64-character
+alphabet never measured below 4.0 bits per character over 500 draws while a
+table of two digits measures 0.7. `DO` plus twenty uppercase characters is a
+font CDN path segment, so DigitalOcean Spaces needs a value position too. A
+generic assignment's value is not a credential when it is a URL, a rooted path
+or a lowercase `a/b/c` route key, a dotted catalogue key, a label in a script
+that does not space its words (which the whitespace test cannot see), or a
+value the page already redacted (`(redacted)`). A credential word inside a
+ternary branch is not a key: `m === "password" ? "password" : "emailLink"` and
+`autoComplete={isNew ? "new-password" : "current-password"}` are assignments
+character for character, and what tells them apart is that a key's quote
+follows `{` or `,` while a branch's follows the `?`. The key id in a presigned
+S3 URL reports at the informational tier. Amplitude's browser key is public by
+design; Supabase's current key format gets a public pattern for
+`sb_publishable_` and a high one for `sb_secret_`, which had no pattern at all.
+A connection string whose authority carries no password has no credential to
+leak. And a `data-*` credential attribute on a `<script src="…">` element is
+that loader's own client key: public tier, while the same attribute on any
+other element stays a leak.
+
+Needed no new rule: Next.js's `password="%filtered%"`, which
+`isPercentEncodedLabel` already reads as the label it is. Pinned so it stays
+that way.
+
 ### Remaining (8 distinct)
 
 1. Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live runs first and the overlap dedup drops it.
@@ -128,6 +167,21 @@ Apple M2, 16 GB, macOS 24.6.0, Bun 1.3.14, commit `10ef2e7`, 2026-09-16, seed 1,
 | pub#357 + pub#363, same A/B run | 7 | 1081 ms | 1434 ms | 16.2 | 148 | 248 MB |
 | round 2 (+ #365 Discord bound, public tiers, tag-scoped look-behind) | 7 | 947 ms | 1049 ms | 14.2 | 146 | 486 MB |
 | round 3 (Shopify boot JSON, phc_, brand parents, URL-path drop, pinned leaks) | 7 | 948 ms | 1042 ms | 14.2 | 133 | 303 MB |
+
+Round 5 was measured differently, because the machine was at load 7 on 8
+cores and a single back-to-back pair drifted further than the effect: a
+reverting harness alternated the two builds and benched each five times, and
+the statistic is the minimum per side. Two such runs, 3 iterations each:
+
+| run | before, best / ms per MB | after, best / ms per MB | delta |
+|---|---|---|---|
+| min of 4 alternations | 998 ms / 14.97 | 1026 ms / 15.39 | +2.8% |
+| min of 5 alternations | 1208 ms / 18.11 | 1218 ms / 18.27 | +0.9% |
+
+The absolute numbers differ between the two runs by more than the effect does,
+which is the point of the method: within one alternating run the pair holds.
+Findings went 152 to 146 on the bench corpus, which is the new guards firing on
+the cases that carry them.
 
 The A/B pair was measured back to back on the same 66.67 MB corpus (200
 pages, 53 external scripts, 400 bodies), same seed, on a loaded machine: both

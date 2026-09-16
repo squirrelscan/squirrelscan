@@ -69,15 +69,50 @@ export function decodeAwsAccountId(keyId: string): string | null {
   return account.toString().padStart(12, "0");
 }
 
-function refineAwsAccessKeyId(value: string): Refinement {
+// A presigned S3 URL carries the key id in the clear, as the first field of
+// `X-Amz-Credential`. That is the public half of the signature: the signature
+// beside it is derived from the secret key and scoped to one object, one
+// method and an expiry, and the key id on its own grants nothing. Shown, never
+// counted (#2213).
+const PRESIGNED_LEAD_RE = /x-amz-credential=$/i;
+
+function refineAwsAccessKeyId(value: string, before: string | undefined): Refinement {
   const accountId = decodeAwsAccountId(value);
-  if (accountId === null) {
-    return {
-      confidence: "medium",
-      extra: { accountId: "undecodable", prefix: value.slice(0, 4) },
-    };
-  }
-  return { confidence: "high", extra: { accountId, prefix: value.slice(0, 4) } };
+  const presigned = before !== undefined && PRESIGNED_LEAD_RE.test(before);
+  const extra: FindingExtra = {
+    accountId: accountId ?? "undecodable",
+    prefix: value.slice(0, 4),
+  };
+  if (presigned) extra.presigned = true;
+  if (accountId === null) return { confidence: presigned ? "info" : "medium", extra };
+  return { confidence: presigned ? "info" : "high", extra };
+}
+
+const CONNECTION_STRING_TYPES = new Set([
+  "MongoDB Connection String",
+  "PostgreSQL Connection String",
+  "MySQL Connection String",
+  "Redis Connection String",
+]);
+
+/**
+ * What a connection string leaks is the password in its authority. A docs
+ * snippet writes the shape without one — `postgresql://…`, `redis://…`, or a
+ * `mongodb+srv://user:` whose rest an email obfuscator replaced — and a string
+ * carrying no credential has no credential to leak (#2218). The host it names
+ * may still be one a site would rather not publish, but that is a different
+ * finding from this one.
+ */
+function refineConnectionString(value: string): Refinement {
+  const scheme = value.indexOf("://");
+  if (scheme === -1) return { drop: true };
+  const authority = value.slice(scheme + 3).split(/[/?#]/, 1)[0] ?? "";
+  const at = authority.lastIndexOf("@");
+  if (at === -1) return { drop: true };
+  const userinfo = authority.slice(0, at);
+  const colon = userinfo.indexOf(":");
+  if (colon === -1 || colon === userinfo.length - 1) return { drop: true };
+  return {};
 }
 
 // ── GitHub tokens ───────────────────────────────────────────────────────────
@@ -470,7 +505,8 @@ export function refineFinding(
   context: FindingContext = {},
 ): Refinement | null {
   try {
-    if (type === "AWS Access Key ID") return refineAwsAccessKeyId(value);
+    if (type === "AWS Access Key ID") return refineAwsAccessKeyId(value, context.before?.());
+    if (CONNECTION_STRING_TYPES.has(type)) return refineConnectionString(value);
     if (GITHUB_TYPES.has(type)) return refineGithubToken(value);
     if (type === "JSON Web Token" || type === "Supabase Anon Key") return refineJwt(value, now, context.before);
     if (type === "Algolia Secured API Key") return refineAlgoliaSecuredKey(value);

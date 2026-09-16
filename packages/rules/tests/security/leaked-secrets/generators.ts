@@ -224,6 +224,8 @@ const P = {
   r8: ["r", "8_"].join(""),
   pplx: ["pp", "lx-"].join(""),
   sbp: ["sb", "p_"].join(""),
+  sbPublishable: ["sb", "_publish", "able_"].join(""),
+  sbSecret: ["sb", "_sec", "ret_"].join(""),
   pscale: ["psca", "le_tkn_"].join(""),
   skLive: ["s", "k_li", "ve_"].join(""),
   skTest: ["s", "k_te", "st_"].join(""),
@@ -331,6 +333,16 @@ export const GENERATORS: Generator[] = [
     pattern: "Supabase Service Role Key",
     tier: "prefixed",
     make: (r) => value(P.sbp + runOf(r, HEX, 40)),
+  },
+  {
+    pattern: "Supabase Publishable Key",
+    tier: "prefixed",
+    make: (r) => value(P.sbPublishable + runOf(r, ALNUM + "-_", 28)),
+  },
+  {
+    pattern: "Supabase Secret Key",
+    tier: "prefixed",
+    make: (r) => value(P.sbSecret + runOf(r, ALNUM + "-_", 28)),
   },
   {
     pattern: "MongoDB Connection String",

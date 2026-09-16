@@ -21,7 +21,7 @@ import {
   type Generator,
 } from "./generators";
 import { NEGATIVES } from "./negatives";
-import { DEDUP_CASES, REAL_WORLD, ROUND_3 } from "./real-world";
+import { DEDUP_CASES, REAL_WORLD, ROUND_3, ROUND_5 } from "./real-world";
 
 /** `info`: the `leaked-secrets-info` check (#361): expired or session tokens, never a leak. */
 export type Check = "high" | "medium" | "public" | "info";
@@ -584,7 +584,7 @@ const PROBES: Case[] = [
   }),
 ];
 
-export const CASES: Case[] = [...POSITIVES, ...NEGATIVES, ...REAL_WORLD, ...ROUND_3, ...DEDUP_CASES, ...PROBES];
+export const CASES: Case[] = [...POSITIVES, ...NEGATIVES, ...REAL_WORLD, ...ROUND_3, ...ROUND_5, ...DEDUP_CASES, ...PROBES];
 
 export function caseById(id: string): Case {
   const found = CASES.find((c) => c.id === id);

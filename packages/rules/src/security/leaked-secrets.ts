@@ -67,6 +67,15 @@ type FastPattern = {
    * (`clientId:"…"`, `client-id=…`), never in prose or a path (#357).
    */
   valuePosition?: boolean;
+  /**
+   * The pattern's only distinctive mark is a separator, not a prefix:
+   * `<8-10 digits>:` opens every Telegram bot token and also every third row
+   * of a minified decoder table. The characters AFTER that separator are
+   * drawn at random in a real token — 35 from a 64-character alphabet never
+   * measured below 4.0 bits per character over 500 draws — so a tail under
+   * this floor is a table, a digit run or a repeated nibble (#2218).
+   */
+  minTailEntropy?: number;
 };
 
 // Type for context patterns (generic patterns, only run if keyword present)
@@ -180,6 +189,22 @@ export const FAST_PATTERNS: FastPattern[] = [
     name: "Supabase Service Role Key",
     pattern: /sbp_[a-f0-9]{40}/g,
     keywords: ["sbp_"],
+    confidence: "high",
+  },
+  {
+    // Supabase's current key format. The publishable half is the browser
+    // credential its own docs tell you to ship; the secret half is the one
+    // that must never leave a server.
+    name: "Supabase Publishable Key",
+    pattern: /sb_publishable_[A-Za-z0-9_-]{20,}/g,
+    keywords: ["sb_publishable_"],
+    confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    name: "Supabase Secret Key",
+    pattern: /sb_secret_[A-Za-z0-9_-]{20,}/g,
+    keywords: ["sb_secret_"],
     confidence: "high",
   },
   {
@@ -426,6 +451,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     pattern: /[0-9]{8,10}:[a-zA-Z0-9_-]{35}/g,
     keywords: [":"],
     confidence: "high",
+    minTailEntropy: 3,
   },
 
   // Email Services
@@ -479,10 +505,14 @@ export const FAST_PATTERNS: FastPattern[] = [
   // key that happens to contain `DO`, and claiming that tail first dropped the
   // New Relic finding as an overlap (#357).
   {
+    // `DO` plus twenty uppercase characters is also one segment of a font
+    // CDN path (`/fontshare/wf/BRQA…/DOBF…/MVBF….woff2`), so the shape counts
+    // only where a value goes (#2218).
     name: "DigitalOcean Spaces Key",
     pattern: /DO[A-Z0-9]{20,}/g,
     keywords: ["do"],
     confidence: "medium",
+    valuePosition: true,
   },
 
   // Auth Services
@@ -549,10 +579,16 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "high",
   },
   {
+    // Nineteen `A`s is nineteen zero bytes in base64, which is what the
+    // padding of a WebP, a PNG or a zlib stream looks like — and the
+    // alphabet's own `/` hands that run a clean left boundary, so the
+    // boundary guard cannot see it. A token is assigned or handed to an auth
+    // scheme; a payload's interior is neither (#2218).
     name: "Twitter Bearer Token",
     pattern: /AAAAAAAAAAAAAAAAAAA[A-Za-z0-9%]+/g,
     keywords: ["aaaaaaaaaaaaaaaaaaa"],
     confidence: "high",
+    valuePosition: true,
   },
 
   // Public client keys with their own prefix or key, ahead of the generic
@@ -753,10 +789,14 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
     publicByDesign: true,
   },
   {
+    // The Browser SDK's API key is read by the page that reports to it; the
+    // docs call it safe to expose. Ingest restrictions, not secrecy, are what
+    // protect it.
     name: "Amplitude API Key",
     keyword: "amplitude",
     pattern: /[a-f0-9]{32}/gi,
     confidence: "medium",
+    publicByDesign: true,
   },
   // "LogRocket App ID" (/[a-z0-9]{6}\/[a-z0-9-]+/) was dropped: it matches any
   // short path segment ("assets/logo-dark"), and a LogRocket app id is a public
@@ -830,15 +870,19 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
 // because the word IS the value (after at most a short prefix such as `ghp_`)
 // or ends it; a run of one repeated character is one because it runs to the
 // end.
+// `redacted` is what a config dumper writes OVER a credential: `(redacted)`,
+// wrapped in punctuation, which is why the head anchor below tolerates a
+// couple of non-alphanumerics in front of the word (#2218). Next.js's own
+// `%filtered%` needs no entry: isPercentEncodedLabel already reads it.
 const PLACEHOLDER_WORDS =
-  "placeholder|your[_-]?api[_-]?key|test[_-]?key|demo[_-]?key|sample|dummy|fake";
+  "placeholder|your[_-]?api[_-]?key|test[_-]?key|demo[_-]?key|sample|dummy|fake|redacted";
 const FALSE_POSITIVE_PATTERNS = [
   // Google tag IDs (GTM containers, GA4/UA measurement IDs, Ads/DC tags)
   // are public identifiers — never secrets, whatever pattern caught them
   /^(GTM|G|UA|AW|DC)-[A-Z0-9-]+$/i,
   // A host, so anywhere: a connection string to example.com is a placeholder
   /example\.com/i,
-  new RegExp(`^[A-Za-z0-9]{0,12}[_.-]?(?:${PLACEHOLDER_WORDS})`, "i"),
+  new RegExp(`^[^A-Za-z0-9]{0,2}[A-Za-z0-9]{0,12}[_.-]?(?:${PLACEHOLDER_WORDS})`, "i"),
   new RegExp(`(?:${PLACEHOLDER_WORDS})[_.-]?[A-Za-z0-9]{0,4}$`, "i"),
 ];
 
@@ -925,6 +969,13 @@ function isInValuePosition(
     before
   );
   if (keywordMatch && /['"`]$/.test(before) && /^['"`]/.test(after)) {
+    return true;
+  }
+
+  // `Authorization: Bearer <value>` hands the value to a scheme rather than to
+  // a separator. classifyKeyContext already reads that as a credential
+  // context; a value position is what it is (#2218).
+  if (AUTH_SCHEME_RE.test(before)) {
     return true;
   }
 
@@ -1379,6 +1430,118 @@ export interface LeakedSecret {
 
 function isLikelyFalsePositive(value: string): boolean {
   return endsInRepeatedChar(value) || FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+// ── What a generic assignment's value cannot be (#2218) ─────────────────────
+//
+// The generic assignments anchor on a credential word in the KEY, so the key
+// says nothing about whether the VALUE could be a credential. Three shapes on
+// the 197-site launch corpus never could be, and each of them is a class:
+//
+// - a translated label in a script that does not space its words, which the
+//   whitespace test cannot see (`weakPassword:"パスワードは8文字以上…"`);
+// - a location: a URL, a rooted path, or a lowercase `a/b/c` route key
+//   (`FORGOT_PASSWORD:"/shop/forgot-password"`, `"auth/auth/reset_password"`);
+// - a dotted identifier chain, which is how an i18n catalogue and an analytics
+//   event map name their entries (`"login.err.weakPassword"`,
+//   `"hatch.connect.password"`).
+//
+// Each test is written so that a credential cannot fall into it. A token is
+// ASCII, and base64, hex and the random alphanumerics every generated key is
+// made of mix case or run longer than the segment bounds below, so the
+// all-lowercase segments the path test demands and the twenty-character
+// segments the identifier test allows both rule a real value out.
+
+// A quarter of the characters outside printable ASCII makes the value text in
+// some other script, not a credential. A share rather than a flag, so a
+// passphrase carrying one accented letter still reports.
+const NON_ASCII_SHARE_DIVISOR = 4;
+const URL_VALUE_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
+const PATH_SEGMENT_RE = /^[a-z0-9]+(?:[_.-][a-z0-9]+)*$/;
+const DOTTED_SEGMENT_RE = /^[a-z][A-Za-z0-9]{0,19}$/;
+const DOTTED_MAX = 64;
+
+/** Text in a script that does not space its words: a translated label. */
+function isNonAsciiText(body: string): boolean {
+  let outside = 0;
+  for (let i = 0; i < body.length; i++) {
+    const code = body.charCodeAt(i);
+    if (code > 0x7e || code < 0x20) outside++;
+  }
+  return outside > 0 && outside * NON_ASCII_SHARE_DIVISOR >= body.length;
+}
+
+/** A URL, a rooted path, or a multi-segment lowercase route key. */
+function isLocationValue(body: string): boolean {
+  if (URL_VALUE_RE.test(body)) return true;
+  if (!body.includes("/")) return false;
+  const rooted = body.startsWith("/");
+  const segments = body.split("/").filter((segment, i) => !(i === 0 && segment === ""));
+  if (segments.length === 0) return false;
+  if (!segments.every((segment) => PATH_SEGMENT_RE.test(segment))) return false;
+  return rooted || segments.length > 1;
+}
+
+/** `login.err.weakPassword`: a catalogue key, not a secret. */
+function isDottedIdentifier(body: string): boolean {
+  if (!body.includes(".") || body.length > DOTTED_MAX) return false;
+  const segments = body.split(".");
+  return segments.length > 1 && segments.every((segment) => DOTTED_SEGMENT_RE.test(segment));
+}
+
+/** Could this body be a credential at all? */
+function isNotACredentialValue(body: string): boolean {
+  return isNonAsciiText(body) || isLocationValue(body) || isDottedIdentifier(body);
+}
+
+// How far back a quoted key's own opening quote may sit.
+const TERNARY_SCAN_LIMIT = 96;
+
+/**
+ * Is the credential word this match opens with the inside of a ternary branch
+ * rather than a key? `m === 'password' ? 'password' : 'emailLink'` and
+ * `p.startsWith("/reset-password") ? "Reset Password" : "Acme"` both
+ * put a credential word immediately in front of a `:` and a string, which is
+ * the shape of an assignment character for character (#2218).
+ *
+ * What tells them apart is what opens the quoted string the word sits in: a
+ * key's quote follows `{`, `,` or the start of a line; a branch's follows the
+ * `?`. Bounded, and the walk stops at the first quote either way.
+ */
+function startsInTernaryBranch(text: string, index: number): boolean {
+  const floor = Math.max(0, index - TERNARY_SCAN_LIMIT);
+  let at = index;
+  while (at > floor && !QUOTE_CHAR_RE.test(text[at - 1] ?? "")) at--;
+  if (at === floor || at === 0) return false;
+  let quote = at - 1;
+  while (quote > 0 && isSpaceAt(text, quote - 1)) quote--;
+  return text[quote - 1] === "?";
+}
+
+/**
+ * The shortest tail of a separator-shaped value: everything after its first
+ * `:`. See FastPattern.minTailEntropy.
+ */
+function separatorTailOf(value: string): string {
+  const at = value.indexOf(":");
+  return at === -1 ? value : value.slice(at + 1);
+}
+
+/**
+ * A `data-*` credential attribute on a `<script src="…">` element is that
+ * script's own configuration, read by the vendor's loader in the browser:
+ * `<script src="https://app.vendor.test/w.js" data-vendor="true"
+ * data-api-key="…">`. A key a third-party loader reads out of the DOM is a
+ * client key by construction, so it reports as public rather than as a leak —
+ * shown, with the usual "verify usage restrictions" note, never counted
+ * (#2218).
+ */
+function isVendorScriptDataAttribute(text: string, index: number): boolean {
+  if (text.slice(Math.max(0, index - 5), index).toLowerCase() !== "data-") return false;
+  const tag = tagBoundsAround(text, index);
+  if (!tag) return false;
+  const open = text.slice(tag.start, tag.end);
+  return /^<script\b/i.test(open) && /\bsrc\s*=/i.test(open);
 }
 
 function maskSecret(value: string): string {
@@ -1971,7 +2134,7 @@ export function scanContent(
   // regex (#1864) and by the keywords each pattern declares (#357). Both
   // gates read the gram index, so a body the index rules out costs nothing.
   for (const entry of PREFILTERED_FAST_PATTERNS) {
-    const { name, pattern, confidence, publicByDesign, keyAnchored, generic, valuePosition, literals } =
+    const { name, pattern, confidence, publicByDesign, keyAnchored, generic, valuePosition, minTailEntropy, literals } =
       entry;
     if (!mayMatch(gramIndex, literals)) continue;
     if (!fastPatternMayFire(entry, gramIndex)) continue;
@@ -2001,6 +2164,20 @@ export function scanContent(
         continue;
       }
 
+      // …and a credential word inside a ternary's branch is not a key at all.
+      if (keyAnchored && startsInTernaryBranch(content, match.index)) {
+        continue;
+      }
+
+      // A value whose only distinctive mark is a separator has to have a
+      // random tail: a decoder table is `<digits>:<digits>`.
+      if (
+        minTailEntropy !== undefined &&
+        shannonEntropy(separatorTailOf(value)) < minTailEntropy
+      ) {
+        continue;
+      }
+
       // A shape that is also a word counts only where a value goes.
       if (valuePosition && !isInValuePosition(content, value, match.index)) {
         continue;
@@ -2018,6 +2195,9 @@ export function scanContent(
         // label too, however the encoding scattered its letters. // pragma: allowlist secret
         if (alnum(body) === alnum(keyOf(value))) continue;
         if (isPercentEncodedLabel(body)) continue;
+        // A label in a script that does not space its words, a route path or
+        // a catalogue key cannot be a credential whatever the key says.
+        if (isNotACredentialValue(body)) continue;
         // WordPress's oEmbed nonce: `data-secret` on a wp-embedded-content
         // element, or a ten-character alphanumeric under `data-secret`.
         if (
@@ -2072,6 +2252,12 @@ export function scanContent(
           reportPublic = true;
         } else if (SHOPIFY_TOKEN_KEY_RE.test(keyOf(value)) && SHOPIFY_TOKEN_RE.test(body) && isShopifyPage()) {
           reportType = "Shopify Storefront Access Token";
+          reportPublic = true;
+        } else if (
+          BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) &&
+          isVendorScriptDataAttribute(content, match.index)
+        ) {
+          reportType = "Third-party Widget Key";
           reportPublic = true;
         }
       }
@@ -2371,7 +2557,7 @@ export const leakedSecretsRule: Rule = {
       checks.push({
         name: "leaked-secrets-info",
         status: "info",
-        message: `${informational.length} expired or session-scoped token(s) found (informational, not counted as a leak)`,
+        message: `${informational.length} expired, session-scoped or signature-bound token(s) found (informational, not counted as a leak)`,
         items: informational.map(item),
       });
     }

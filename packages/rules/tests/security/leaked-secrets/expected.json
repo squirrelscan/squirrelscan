@@ -681,6 +681,130 @@
     {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_7d********************c0e6"},
     {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_7d********************c0e6"}
   ],
+  "supabase-publishable-key@inline-config-object": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************Pgds"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************Pgds"}
+  ],
+  "supabase-publishable-key@window-env": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************bEFX"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************bEFX"}
+  ],
+  "supabase-publishable-key@next-data": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************p_fA"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************p_fA"}
+  ],
+  "supabase-publishable-key@nuxt-payload": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************BC73"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************BC73"}
+  ],
+  "supabase-publishable-key@html-comment": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************8IsH"}
+  ],
+  "supabase-publishable-key@meta-content": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************I9ab"}
+  ],
+  "supabase-publishable-key@data-attribute": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************zCKE"}
+  ],
+  "supabase-publishable-key@json-ld": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************i-lf"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************i-lf"}
+  ],
+  "supabase-publishable-key@external-bundle": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"sb_pub********************4FU8"}
+  ],
+  "supabase-publishable-key@fetch-bearer-header": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"sb_pub********************JfNS"}
+  ],
+  "supabase-publishable-key@pre-env-dump": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************u9W_"}
+  ],
+  "supabase-publishable-key@sourcemap-comment": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"sb_pub********************P8kV"}
+  ],
+  "supabase-publishable-key@entity-encoded-attribute": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************UacZ"}
+  ],
+  "supabase-publishable-key@unicode-escaped-script-string": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************p60b"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************p60b"}
+  ],
+  "supabase-publishable-key@base64-data-attribute": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"sb_pub********************hlry"}
+  ],
+  "supabase-publishable-key@base64-global": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"sb_pub********************RK0r"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"sb_pub********************RK0r"}
+  ],
+  "supabase-publishable-key@url-encoded-data-attribute": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************j3VC"}
+  ],
+  "supabase-publishable-key@url-encoded-inline-settings": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************Y7Nk"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************Y7Nk"}
+  ],
+  "supabase-secret-key@inline-config-object": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************aanF"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************aanF"}
+  ],
+  "supabase-secret-key@window-env": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************HqtQ"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************HqtQ"}
+  ],
+  "supabase-secret-key@next-data": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************BBhQ"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************BBhQ"}
+  ],
+  "supabase-secret-key@nuxt-payload": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************pKbQ"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************pKbQ"}
+  ],
+  "supabase-secret-key@html-comment": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************xcbl"}
+  ],
+  "supabase-secret-key@meta-content": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************n4Jv"}
+  ],
+  "supabase-secret-key@data-attribute": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************dXh5"}
+  ],
+  "supabase-secret-key@json-ld": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************UPh0"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************UPh0"}
+  ],
+  "supabase-secret-key@external-bundle": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sb_sec********************a6M8"}
+  ],
+  "supabase-secret-key@fetch-bearer-header": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sb_sec********************E74a"}
+  ],
+  "supabase-secret-key@pre-env-dump": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************nMUl"}
+  ],
+  "supabase-secret-key@sourcemap-comment": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sb_sec********************wZ46"}
+  ],
+  "supabase-secret-key@entity-encoded-attribute": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************yRL8"}
+  ],
+  "supabase-secret-key@unicode-escaped-script-string": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************hVjT"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************hVjT"}
+  ],
+  "supabase-secret-key@base64-data-attribute": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sb_sec********************z_gk"}
+  ],
+  "supabase-secret-key@base64-global": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sb_sec********************WRus"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sb_sec********************WRus"}
+  ],
+  "supabase-secret-key@url-encoded-data-attribute": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************jhmR"}
+  ],
+  "supabase-secret-key@url-encoded-inline-settings": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************xWmh"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************xWmh"}
+  ],
   "mongodb-connection-string@inline-config-object": [
     {"type":"MongoDB Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"mongod********************true"},
     {"type":"MongoDB Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"mongod********************true"}
@@ -4933,62 +5057,62 @@
     {"type":"Raygun API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"1uOwfw******************wfxm"}
   ],
   "amplitude-api-key@inline-config-object": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"3d70d3********************1be4"},
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"3d70d3********************1be4"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"3d70d3********************1be4"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3d70d3********************1be4"}
   ],
   "amplitude-api-key@window-env": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"2bf370********************b510"},
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2bf370********************b510"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"2bf370********************b510"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"2bf370********************b510"}
   ],
   "amplitude-api-key@next-data": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"3c5df1********************d7ce"},
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"3c5df1********************d7ce"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"3c5df1********************d7ce"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3c5df1********************d7ce"}
   ],
   "amplitude-api-key@nuxt-payload": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"0c864a********************74a4"},
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0c864a********************74a4"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"0c864a********************74a4"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"0c864a********************74a4"}
   ],
   "amplitude-api-key@html-comment": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"4b91e5********************d78f"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"4b91e5********************d78f"}
   ],
   "amplitude-api-key@meta-content": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"13ae62********************8cfe"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"13ae62********************8cfe"}
   ],
   "amplitude-api-key@data-attribute": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"4a9d43********************24d0"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"4a9d43********************24d0"}
   ],
   "amplitude-api-key@external-bundle": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"2fab03********************a4dd"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"2fab03********************a4dd"}
   ],
   "amplitude-api-key@fetch-bearer-header": [
     {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************577d"}
   ],
   "amplitude-api-key@pre-env-dump": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"947732********************c66f"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"947732********************c66f"}
   ],
   "amplitude-api-key@sourcemap-comment": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"76d04e********************6068"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"76d04e********************6068"}
   ],
   "amplitude-api-key@entity-encoded-attribute": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"8c2bcd********************fad9"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"8c2bcd********************fad9"}
   ],
   "amplitude-api-key@unicode-escaped-script-string": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"066fab********************b03e"},
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"066fab********************b03e"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"066fab********************b03e"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"066fab********************b03e"}
   ],
   "amplitude-api-key@base64-data-attribute": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"263db7********************19ab"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"263db7********************19ab"}
   ],
   "amplitude-api-key@base64-global": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"489dfc********************07aa"},
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"489dfc********************07aa"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"489dfc********************07aa"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"489dfc********************07aa"}
   ],
   "amplitude-api-key@url-encoded-data-attribute": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"661afb********************51f1"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"661afb********************51f1"}
   ],
   "amplitude-api-key@url-encoded-inline-settings": [
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"1cdd77********************890d"},
-    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"1cdd77********************890d"}
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"1cdd77********************890d"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"1cdd77********************890d"}
   ],
   "auth0-client-secret@inline-config-object": [
     {"type":"Auth0 Client Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"4ajvEA********************MmYA"},
@@ -5616,6 +5740,74 @@
   "real:screaming-snake-env-dump-with-turnstile-test-key": [
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"SECRET********************Sw9\""},
     {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"SECRET********************Sw9\""}
+  ],
+  "real:twitter-bearer-run-of-a-in-a-webp-data-uri": [],
+  "real:twitter-bearer-run-of-a-in-a-binary-base64-blob": [],
+  "real:twitter-bearer-token-in-an-authorization-header": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************wj06"},
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AAAAAA********************wj06"}
+  ],
+  "real:twitter-bearer-token-under-a-key": [
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"html","masked":"AAAAAA********************bkEn"},
+    {"type":"Twitter Bearer Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AAAAAA********************bkEn"}
+  ],
+  "real:telegram-shape-on-a-digit-decoder-table": [],
+  "real:telegram-bot-token-still-fires": [
+    {"type":"Telegram Bot Token","confidence":"high","publicByDesign":false,"location":"html","masked":"612163********************fCuN"},
+    {"type":"Telegram Bot Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"612163********************fCuN"}
+  ],
+  "real:password-key-with-an-unspaced-i18n-label": [],
+  "real:password-key-with-a-catalogue-key-value": [],
+  "real:password-key-with-a-rooted-route-path": [],
+  "real:password-key-with-a-relative-route-key": [],
+  "real:password-key-with-a-redaction-placeholder": [],
+  "real:password-key-with-a-framework-filtered-value": [],
+  "real:password-assignment-still-fires": [
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"PASSWO********************G5u\""},
+    {"type":"Generic Secret Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"PASSWO********************G5u\""}
+  ],
+  "real:password-in-a-ternary-branch": [],
+  "real:autocomplete-password-ternary-on-an-input": [],
+  "real:password-as-the-last-word-of-a-ternary-label": [],
+  "real:digitalocean-spaces-shape-in-a-font-path": [],
+  "real:digitalocean-spaces-key-still-fires": [
+    {"type":"DigitalOcean Spaces Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"DOVQOQ**************XB5F"},
+    {"type":"DigitalOcean Spaces Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"DOVQOQ**************XB5F"}
+  ],
+  "real:aws-key-id-in-a-presigned-url-is-informational": [
+    {"type":"AWS Access Key ID","confidence":"info","publicByDesign":false,"location":"html","masked":"AKIAAM**********7D4X","extra":{"accountId":"027483721190","prefix":"AKIA","presigned":true}},
+    {"type":"AWS Access Key ID","confidence":"info","publicByDesign":false,"location":"inline-script","masked":"AKIAAM**********7D4X","extra":{"accountId":"027483721190","prefix":"AKIA","presigned":true}}
+  ],
+  "real:aws-key-id-under-a-key-still-reports": [
+    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"html","masked":"AKIAFL**********I7DX","extra":{"accountId":"367792706240","prefix":"AKIA"}},
+    {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"AKIAFL**********I7DX","extra":{"accountId":"367792706240","prefix":"AKIA"}}
+  ],
+  "real:amplitude-browser-key-under-its-own-name": [
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"f8d8ce********************4c1e"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"f8d8ce********************4c1e"}
+  ],
+  "real:amplitude-browser-key-under-a-build-time-env-name": [
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"5d0bd8********************4c83"},
+    {"type":"Amplitude API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"5d0bd8********************4c83"}
+  ],
+  "real:supabase-publishable-key-is-public": [
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************Qq5i"},
+    {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sb_pub********************Qq5i"}
+  ],
+  "real:supabase-secret-key-is-a-leak": [
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sb_sec********************Fmby"},
+    {"type":"Supabase Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sb_sec********************Fmby"}
+  ],
+  "real:vendor-widget-data-api-key-on-a-script-tag": [
+    {"type":"Third-party Widget Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"api-ke********************2f3\""}
+  ],
+  "real:data-api-key-on-a-plain-element-is-still-a-leak": [
+    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"html","masked":"api-ke********************jqr\""}
+  ],
+  "real:docs-connection-strings-without-credentials": [],
+  "real:connection-string-with-a-password-still-reports": [
+    {"type":"MySQL Connection String","confidence":"high","publicByDesign":false,"location":"html","masked":"mysql:********************prod"},
+    {"type":"MySQL Connection String","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"mysql:********************prod"}
   ],
   "dedup:shared-theme-bundle-one-finding-per-distinct-value": [
     {"type":"Sentry DSN","confidence":"high","publicByDesign":true,"location":"external-script","masked":"https:********************7113","extra":{"org":"o647855","projectId":"3777113"}},
