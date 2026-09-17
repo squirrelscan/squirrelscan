@@ -5,7 +5,7 @@ license: See LICENSE file in repository root
 compatibility: Requires the squirrel CLI installed and accessible in PATH, or a connected SquirrelScan MCP server for stored-audit entity-map work
 metadata:
   author: squirrelscan
-  version: "2.1"
+  version: "2.2"
 allowed-tools: Bash(squirrel:*) Read Edit Grep Glob
 ---
 
@@ -82,15 +82,13 @@ squirrel report --regression-since example.com --format llm
 
 ## Entity-map fixes
 
-For site-wide JSON-LD and entity-rule findings, use the entity map before editing. With native MCP, call `get_entity_findings`, record the returned audit/run ID, inspect each exact key with `get_entity`, and use `list_entities` and `get_entity_graph` to understand related entities. Pin every follow-up call to that ID so the evidence remains reproducible.
+For site-wide JSON-LD and entity-rule findings, inspect the saved map before editing: call native MCP `get_entity_findings`, record the returned audit/run ID, inspect each exact key with `get_entity`, and use `list_entities` and `get_entity_graph` for context. Pin all follow-up reads to that ID. `problem: ["no-id"]` also includes anonymous entities, so prioritize repeated Organization or Person nodes named by the rule finding. Page filtering searches only five published samples per entity; an empty result is not proof of absence. `get_entity` caps references at 50 in each direction, and a disconnected filtered node may connect globally.
 
-`problem: ["no-id"]` also returns anonymous entities, so it is a lead, not a universal fix list. Prioritize the repeated Organization or Person nodes named by `schema/entity-*` findings. Page filtering searches only five published page samples per entity, so a zero result does not prove an entity is absent from that page. `get_entity` lists at most 50 references in each direction; inspect its truncation before drawing a graph conclusion. A node isolated in a filtered graph may still connect in the full map.
+Find the shared JSON-LD generator, template, or CMS configuration. For a confirmed shared-identity defect, give the affected entity a stable absolute `@id` and reuse it in references. Do not merge an Organization and SoftwareApplication merely because names match; determine whether they are distinct identities or one legitimate multi-type entity. Resolve confirmed conflicts, dangling references, and split identities at their source without inventing facts or deleting valid entities. Add `sameAs` only when verified evidence shows the target represents the same entity. Validate generated JSON-LD and project checks; do not promise ranking gains.
 
-Locate the shared JSON-LD generator, template, or CMS configuration. For a confirmed shared-identity defect, assign the affected entity a stable absolute `@id` and reuse it in `publisher`, `author`, and related references. Do not merge an Organization and SoftwareApplication merely because their names match; determine whether they are distinct identities or one legitimate multi-type entity. Resolve confirmed property conflicts, dangling references, and split identities at their source without inventing facts or deleting valid entities. Add `sameAs` only when verified evidence shows the referenced profile represents that entity. Validate the generated JSON-LD and the project checks after the change.
+Work within the user's authorized source-change scope. Deployment and paid/cloud re-audits require the applicable authorization and must stay within the approved coverage and credit budget. After deployment, re-audit and inspect findings; call `compare_entities` with explicit before and after IDs, both of which need maps. A missing-map error does not prove no markup: the run may predate map storage. Confirm an identity repair with the intended `gainedId` and coverage, not merely an anonymous row disappearing; `gainedId` can be absent when the type or name changed in the same edit.
 
-Work within the user's authorized source-change scope. Deployment and a paid/cloud re-audit require the applicable authorization and must stay within the approved coverage and credit budget. After deployment, re-run the audit and inspect `get_entity_findings`; use `compare_entities` with explicit before and after run IDs, both of which must have maps. A missing-map error does not prove the site has no markup: that run may predate map storage. Verify the intended `gainedId` and its coverage rather than claiming success from an anonymous row disappearing; its absence can mean the type or name changed in the same edit. Do not promise SEO ranking gains.
-
-Example request: “Inspect the saved entity map, pin every call to its run ID, show the Organization and Person findings and their sampled evidence, then fix the shared markup. Keep the SoftwareApplication distinct. Validate the generated JSON-LD, and after an approved deployment compare the explicit before and after map runs.”
+Example request: “Inspect the saved entity map, pin every call to its run ID, show entity findings and sampled evidence, then fix the shared markup. Keep the SoftwareApplication distinct. Validate the JSON-LD, and after an approved deployment compare explicit before and after map runs.”
 
 ## Completion
 

@@ -1,13 +1,15 @@
 # squirrelscan skills
 
-Two [Agent Skills](https://agentskills.io) that let a coding agent (Claude Code, Cursor, Codex, OpenCode, Gemini CLI, or anything else that reads `SKILL.md`) audit a website with the `squirrel` CLI and fix what it finds.
+Two [Agent Skills](https://agentskills.io) that let a coding agent (Claude Code, Cursor, Codex, OpenCode, Gemini CLI, or anything else that reads `SKILL.md`) audit a website with the `squirrel` CLI or inspect stored audits through SquirrelScan MCP.
+
+This repository is the canonical source for these skills. Mirror the complete `skills/squirrelscan/` and `skills/audit-website/` directories to the legacy `squirrelscan/skills` repository after every skill change, and bump the affected skill's metadata version.
 
 | Skill | What it does |
 |---|---|
 | [`audit-website`](./audit-website/SKILL.md) | The full fix loop: run an audit, read the LLM report, map each finding to the source file that causes it, fix in batches, re-audit until the site scores well. |
 | [`squirrelscan`](./squirrelscan/SKILL.md) | Operating the CLI: install, login, API keys, credits, running audits, publishing reports, MCP setup, config, troubleshooting. |
 
-Both require the `squirrel` CLI on your PATH. Install it from [squirrelscan.com/download](https://squirrelscan.com/download) and check with `squirrel --version`. Local audits are free.
+Run new audits with the `squirrel` CLI on your PATH; install it from [squirrelscan.com/download](https://squirrelscan.com/download) and check with `squirrel --version`. Stored entity-map investigations can instead use a connected SquirrelScan MCP server. Local CLI audits are free.
 
 ## Install
 
