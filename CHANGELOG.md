@@ -15,7 +15,7 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
-## [Unreleased]
+## v0.0.96 — 2026-09-17
 
 Every audit now builds a map of the entities your site declares, a new command and five MCP tools read it, thirteen rules check it, and the leaked-secrets scanner went from a thousand false alarms on real sites to a few hundred correct public keys.
 
@@ -29,30 +29,30 @@ Every audit now builds a map of the entities your site declares, a new command a
 - Thirteen `schema/entity-*` rules over the map: missing organisation and website entities, split identities, conflicting declarations, dangling references, orphans, publisher mismatches, type drift, `@id` format, missing `sameAs`, authors, and one local business per page. Each has a rule doc page.
 - After a local audit, a signed-in user whose reports have never reached the cloud gets a one-line nudge to publish (with an explicit unlisted visibility). It shows once; the first publish switches it off for good.
 - When an audit is refused for lack of credits, the CLI shows the cost, your balance, the reset date and an upgrade link scoped to the organisation that hit the wall, on the preflight warning and on `squirrel credits`. The wall also prints the balance again (it never did: the number was read from the wrong place in the response).
-- After a published audit of a site on a recurring schedule, the CLI prints one line naming the cadence and the link that turns it off (#372). When the site wanted a schedule but the plan's scheduled-site slots are spent, the line says so instead, with the plan's limit and an upgrade link (#383). `squirrel report --publish` keeps a bare URL on stdout and prints the line on stderr. The line renders what the cloud sends, never a guess of its own.
+- After a published audit of a site on a recurring schedule, the CLI prints one line naming the cadence and the link that turns it off. When the site wanted a schedule but the plan's scheduled-site slots are spent, the line says so instead, with the plan's limit and an upgrade link. `squirrel report --publish` keeps a bare URL on stdout and prints the line on stderr. The line renders what the cloud sends, never a guess of its own.
 - Leaked-secrets decodes what it scans: HTML character references, `\u` and `\x` escapes in scripts, and base64 runs that decode to text (data URIs and SRI hashes are never decoded). AWS access key ids, GitHub tokens, JWTs (Supabase `service_role` is high, `anon` is public, an expired token is a new `leaked-secrets-expired` info check), Algolia secured keys, Stripe, Slack and Sentry tokens are decoded offline so the finding carries what the token is, and a GitHub token with a bad checksum is dropped.
 
 ### Changed
 
 - Leaked-secrets precision. Prefix patterns respect a left boundary, brand keywords must sit within 40 characters before the value, minified member keys no longer count as assignments, and public-by-design keys (PostHog, Shopify Storefront, Mixpanel, Raygun, and generic API keys under twelve public brands) report as public instead of leaks. On a private corpus of 383 real pages: 1,235 findings before, 352 after, none high. Scans are also faster.
-- Leaked-secrets checked against a 197-site launch corpus (#371). Twelve false-positive classes fixed, each paired with the real shape it must still catch: a run of `A` in a base64 payload is not a Twitter bearer token, a decoder table is not a Telegram token, a font CDN path is not a DigitalOcean key, a credential word in a ternary branch is not a key, a connection string with no password has nothing to leak, and Amplitude and Supabase publishable keys report as public while `sb_secret_` keys are now caught. On the 56 sites that fired at the previous release: 172 findings before, 0 after, with no true positive lost.
+- Leaked-secrets checked against a 197-site launch corpus. Twelve false-positive classes fixed, each paired with the real shape it must still catch: a run of `A` in a base64 payload is not a Twitter bearer token, a decoder table is not a Telegram token, a font CDN path is not a DigitalOcean key, a credential word in a ternary branch is not a key, a connection string with no password has nothing to leak, and Amplitude and Supabase publishable keys report as public while `sb_secret_` keys are now caught. On the 56 sites that fired at the previous release: 172 findings before, 0 after, with no true positive lost.
 - The Discord bot token pattern no longer goes quadratic on long base64 runs (1.6 s to 2.5 ms on a 200 KB data URI page).
 
 ### Fixed
 
 - Reports print the page limit you asked for alongside the one the run used, so a run clamped from 10,000 to 4,320 pages no longer tells you to raise a limit that was already higher.
-- Merged check messages carry their counts instead of a bare `N` (#374). When pages disagree on a count the message shows the range (`3 to 6 image(s) missing alt`); pages that disagree on any other number (a date, a size, a code) keep their own message instead of being merged. Digits inside words are left alone, so `H1` no longer reads `HN`.
-- `perf/bad-caching` no longer fails a page that revalidates correctly (#375). A document served with `max-age=0` or `no-cache` plus an ETag or Last-Modified declares a caching policy and passes; `no-store`, and a validator with no `Cache-Control` and no `Expires`, still do not. On the launch corpus this check failed 163 of 196 sites, most of them doing the right thing.
-- `integrity/template-discontinuity` no longer calls a site's own signed-out or empty-state page "likely injected" (#376). A page that loads the site's own stylesheets or scripts is reported for review, never escalated; shared public hosts (font and script CDNs) do not count as the site's own. Escalation is now a warning rather than a failure, so one off-template page cannot zero Site Integrity, and the escalation is withheld when the crawl hit its page limit with fewer than `minBaselinePagesWhenCapped` pages (default 20).
+- Merged check messages carry their counts instead of a bare `N`. When pages disagree on a count the message shows the range (`3 to 6 image(s) missing alt`); pages that disagree on any other number (a date, a size, a code) keep their own message instead of being merged. Digits inside words are left alone, so `H1` no longer reads `HN`.
+- `perf/bad-caching` no longer fails a page that revalidates correctly. A document served with `max-age=0` or `no-cache` plus an ETag or Last-Modified declares a caching policy and passes; `no-store`, and a validator with no `Cache-Control` and no `Expires`, still do not. On the launch corpus this check failed 163 of 196 sites, most of them doing the right thing.
+- `integrity/template-discontinuity` no longer calls a site's own signed-out or empty-state page "likely injected". A page that loads the site's own stylesheets or scripts is reported for review, never escalated; shared public hosts (font and script CDNs) do not count as the site's own. Escalation is now a warning rather than a failure, so one off-template page cannot zero Site Integrity, and the escalation is withheld when the crawl hit its page limit with fewer than `minBaselinePagesWhenCapped` pages (default 20).
 
 ### Docs
 
 - New pages for the entity map (CLI, formats, cloud), cloud crawl scope, include/exclude patterns and authorised crawls; the rule catalogue counts refreshed.
-- Scheduled audits: the docs now name every place a schedule is disclosed (report page, completion email, digest, CLI line), the resolved findings the digest lists, and what happens when a run is skipped for credits (#373).
-- Scheduled audits: a table of the five schedule states (off, active, capped, unschedulable, paused), what the dashboard shows for a site whose plan slots are spent, and how a freed slot is filled (#383).
-- Adding a website in the dashboard now asks for a scan depth (default surface) and a schedule (default weekly, on from creation); the docs page for adding a website describes both and what happens when the plan's scheduled-site slots are spent (#378).
-- The hosted MCP server's reference page lists its five entity tools, and the published API spec documents the entity export endpoint's eight formats and its new `exclude_type` parameter (#379, #380, #381).
-- The cloud entity map docs describe the dashboard's history view: metric series across audits and the change list between two audits, with the eight change kinds it can show and the one gap it cannot yet (#382).
+- Scheduled audits: the docs now name every place a schedule is disclosed (report page, completion email, digest, CLI line), the resolved findings the digest lists, and what happens when a run is skipped for credits.
+- Scheduled audits: a table of the five schedule states (off, active, capped, unschedulable, paused), what the dashboard shows for a site whose plan slots are spent, and how a freed slot is filled.
+- Adding a website in the dashboard now asks for a scan depth (default surface) and a schedule (default weekly, on from creation); the docs page for adding a website describes both and what happens when the plan's scheduled-site slots are spent.
+- The hosted MCP server's reference page lists its five entity tools, and the published API spec documents the entity export endpoint's eight formats and its new `exclude_type` parameter.
+- The cloud entity map docs describe the dashboard's history view: metric series across audits and the change list between two audits, with the eight change kinds it can show and the one gap it cannot yet.
 
 ## v0.0.95
 
