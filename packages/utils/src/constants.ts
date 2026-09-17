@@ -453,13 +453,11 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 
 // Public rule/category counts for marketing and doc copy that can't read the
 // live catalog (MDX, plugin manifests, skill files, MCP tool descriptions).
-// PUBLIC_RULE_COUNT_FLOOR is deliberately rounded DOWN from the live total
-// (currently 264) so copy doesn't need a bump on every rule add/remove;
-// PUBLIC_CATEGORY_COUNT tracks exactly since categories change far less often.
-// The hosted catalog drift guard fails if the floor exceeds the live count.
-// Bump both by hand when the
-// live count moves meaningfully past the floor. #1019 #986 #981
-export const PUBLIC_RULE_COUNT_FLOOR = 260;
+// Keep these equal to the active built-in registry. The catalog drift guard
+// verifies the equality so public product copy does not silently become stale.
+export const PUBLIC_RULE_COUNT = 295;
+/** @deprecated Use PUBLIC_RULE_COUNT. */
+export const PUBLIC_RULE_COUNT_FLOOR = PUBLIC_RULE_COUNT;
 export const PUBLIC_CATEGORY_COUNT = 21;
 
 // Hosted MCP (#113). These appear in the well-known manifests, the /add/<agent>
