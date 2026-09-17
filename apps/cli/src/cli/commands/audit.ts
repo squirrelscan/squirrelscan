@@ -2260,7 +2260,9 @@ export const audit = defineCommand({
             // #2184: recurring audits switch themselves on after a site's first
             // completed cloud audit, so this is where the CLI tells its user a
             // weekly credit charge has started and where one click stops it.
-            // Silent when the server said nothing, or said the schedule is off.
+            // #2225: the same line, from the same renderer, is also where a
+            // `capped` site learns it is not scheduled at all. Silent when the
+            // server said nothing, or said the schedule is off.
             const scheduleLine = scheduleSummaryLine(
               publishResult.data.schedule
             );

@@ -1,4 +1,4 @@
-// #2184 at the `squirrel audit` command boundary.
+// #2184 and #2225 at the `squirrel audit` command boundary.
 //
 // `scheduleSummaryLine` has its own suite, and it would stay green with the call
 // site deleted. This drives the real command against a stubbed API and asserts
@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
+import { scheduleSummaryLine } from "@/lib/schedule-notice";
 import * as pathsModule from "@/self/paths";
 
 const SETTINGS_URL =
@@ -46,6 +47,20 @@ const active = () => ({
   pauseUrl: "https://api.squirrelscan.com/v1/schedules/pause?s=a&t=b",
   cap: { limit: 1, used: 1 },
   upgradeUrl: null,
+});
+
+const UPGRADE_URL = "https://app.squirrelscan.com/acme/settings/billing";
+
+/** The site wants a schedule and the plan's slots are spent (#2225). */
+const capped = () => ({
+  ...active(),
+  frequency: null,
+  state: "capped",
+  stateReason: "plan_cap",
+  nextRunAt: null,
+  cadenceLabel: "off",
+  pauseUrl: null,
+  upgradeUrl: UPGRADE_URL,
 });
 
 const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-sched-settings-"));
@@ -176,13 +191,46 @@ describe("squirrel audit — the recurring-audit disclosure (#2184)", () => {
     expect(output()).toContain("https://reports.squirrelscan.com/rep_1");
   });
 
-  // Every state but `active` is silent until #2225 adds its branch to the same
-  // renderer. The report URL assertion is what keeps these from passing because
-  // the run stopped publishing.
-  test.each([["off"], ["capped"], ["unschedulable"], ["paused"]])(
+  // A capped site is the one a free-plan user actually has, and the run that
+  // publishes it is the moment they find out. #2225.
+  test("a capped schedule is disclosed, with the plan's allowance and the way out", async () => {
+    publishSchedule = capped();
+
+    await runAudit();
+
+    expect(output()).toContain("Scheduled audits: this site is not scheduled");
+    expect(output()).toContain("your plan schedules 1 website");
+    expect(output()).toContain(UPGRADE_URL);
+  });
+
+  // ONE RENDERER, checked at the boundary. The line that reached the terminal
+  // is the one `scheduleSummaryLine` answers, and there is exactly one of it:
+  // a second composer at this call site would either print a different sentence
+  // or print a second "Scheduled audits:" line, and both fail here.
+  test.each([
+    ["an active schedule", active],
+    ["a capped schedule", capped],
+  ])("%s prints the renderer's line and only that", async (_name, build) => {
+    const summary = build();
+    publishSchedule = summary;
+
+    await runAudit();
+
+    const notices = output()
+      .split("\n")
+      .filter((l) => l.includes("Scheduled audits:"));
+    const expected = scheduleSummaryLine(summary);
+    expect(expected, "the renderer answered no line at all").toBeString();
+    expect(notices).toEqual([expected as string]);
+  });
+
+  // `unschedulable` and `paused` are still silent, and they still owe the
+  // reader nothing. The report URL assertion is what keeps these from passing
+  // because the run stopped publishing.
+  test.each([["off"], ["unschedulable"], ["paused"]])(
     "state %p says nothing",
     async (state) => {
-      publishSchedule = { ...active(), state };
+      publishSchedule = { ...capped(), state };
 
       await runAudit();
 
@@ -190,6 +238,18 @@ describe("squirrel audit — the recurring-audit disclosure (#2184)", () => {
       expect(output()).not.toContain("Scheduled audits:");
     }
   );
+
+  // A capped site with nowhere to upgrade to is the half-printed case: the
+  // whole line is withheld rather than ending in "Upgrade: undefined".
+  test("a capped schedule with no upgrade link says nothing", async () => {
+    publishSchedule = { ...capped(), upgradeUrl: null };
+
+    await runAudit();
+
+    expect(output()).toContain("https://reports.squirrelscan.com/rep_1");
+    expect(output()).not.toContain("Scheduled audits:");
+    expect(output()).not.toContain("undefined");
+  });
 
   test("a server that sends no summary says nothing", async () => {
     await runAudit();
