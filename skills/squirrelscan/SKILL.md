@@ -1,8 +1,8 @@
 ---
 name: squirrelscan
-description: squirrelscan audits websites for SEO, performance, security, accessibility, content, and structured data issues (260+ rules) and scores site health, via the squirrel CLI. Use when the user wants to check, audit, or improve a website's SEO, ranking, speed, or health, and for anything squirrelscan itself, installing or updating the CLI, login and API keys, running audits, publishing and sharing reports, cloud credits, MCP server setup, configuration, or troubleshooting.
+description: squirrelscan audits websites for SEO, performance, security, accessibility, content, and structured data issues (260+ rules) and scores site health, via the squirrel CLI. Use when the user wants to check, audit, or improve a website's SEO, ranking, speed, or health; inspect structured-data entity maps; or operate squirrelscan itself.
 license: See LICENSE file in repository root
-compatibility: Requires squirrel CLI installed and accessible in PATH (or guides the user to install it)
+compatibility: Requires squirrel CLI installed and accessible in PATH (or guides the user to install it), or a connected SquirrelScan MCP server for stored entity-map inspection
 metadata:
   author: squirrelscan
   version: "1.3"
@@ -154,6 +154,18 @@ Two ways to connect agents over MCP:
 - **Hosted (streamable-http)**: `https://mcp.squirrelscan.com/mcp`. Sign in via OAuth from the MCP client, or send an `Authorization: Bearer sq_...` API key header.
 
 Docs: https://docs.squirrelscan.com/developers/mcp
+
+### Entity-map investigation
+
+Use the native MCP tools for a stored entity-map investigation: `list_entities`, `get_entity_findings`, `get_entity`, `get_entity_graph`, and `compare_entities`. Record the returned audit/run ID from the first response and pass it to every follow-up read; otherwise a new audit can silently change the snapshot being investigated.
+
+Start with `get_entity_findings` and inspect each returned exact key with `get_entity`. Use `list_entities` to find related nodes, paging through `hasMore`; `problem: ["no-id"]` is broad and can include anonymous entities, while the actionable identity rule usually identifies repeated Organization or Person declarations. Filter by type and inspect the finding rather than treating every anonymous node as an identity defect.
+
+Treat returned page evidence as sampled: published-map page filtering searches only five stored samples per entity, so an empty page-filter result cannot prove absence. `get_entity` also caps incoming and outgoing references at 50 in each direction. A disconnected node in a type-filtered graph is disconnected only in that filtered graph, not necessarily globally.
+
+For a confirmed shared-identity defect, change the shared JSON-LD source or template, then validate the generated markup before deployment. Give the affected real entity a stable absolute `@id` and reuse it in references. Do not merge `Organization` and `SoftwareApplication` merely because their names match; determine whether they are distinct identities or one legitimate multi-type entity. Resolve confirmed property conflicts, dangling references, and split identities at their source without inventing facts or deleting valid entities. Add `sameAs` only when verified evidence shows the referenced profile represents that same entity. Do not promise a ranking gain.
+
+After an authorized deployment, re-audit within the approved crawl coverage and credit budget, then check the new findings. Call `compare_entities` with explicit `from_run_id` and `to_run_id`; both audits must have entity maps. A missing-map error establishes neither that the site lacks markup nor that it has zero entities: the run may predate map storage. Confirm an identity repair with the intended `gainedId` entry and its coverage, not merely a removed anonymous row. A missing `gainedId` can result from changing the type or name at the same time.
 
 ### Agent feedback
 
