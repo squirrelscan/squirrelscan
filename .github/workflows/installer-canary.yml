@@ -1,0 +1,128 @@
+name: Installer canary
+
+# The release workflow proves the installer works for the version it just
+# built, using the script in the git tree. Nothing exercised the thing a user
+# actually runs — the worker-served script, the live channel metadata, the CDN
+# and the published binary — between releases. #2310 shipped a darwin binary
+# with an invalid ad-hoc signature that installed fine and was SIGKILLed on
+# first run; it took three days and six failed installs to find out.
+#
+# This runs the same install matrix daily against the LIVE stable channel and,
+# because a scheduled workflow going red emails only the last person to edit
+# the file, files the failure as an issue anyone can see.
+
+on:
+  schedule:
+    # 09:17 UTC daily. Off the hour on purpose: scheduled runs bunch up at :00
+    # and get queued.
+    - cron: "17 9 * * *"
+  # No channel input: install.sh defaults to stable, and asking it to verify
+  # against a channel it was not told to install from would only ever produce a
+  # false failure. Beta would need SQUIRREL_CHANNEL plumbed through the matrix
+  # as well, and nothing needs that yet.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-canary
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Install from the live channel
+    # A fork inherits the schedule, and a fork's run would file issues against
+    # its own copy for a break it has no part in.
+    if: github.repository == 'squirrelscan/squirrelscan'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test-install.yml
+    with:
+      # No version: resolving "latest on this channel" through the live
+      # releases endpoint is part of what is under test.
+      installer_url: https://install.squirrelscan.com
+      installer_ps1_url: https://install.squirrelscan.com/install.ps1
+      verify_channel: stable
+
+  report:
+    name: Report
+    needs: install
+    if: always() && github.repository == 'squirrelscan/squirrelscan'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # One open issue, reused: a daily canary that opened a fresh issue per
+      # failing run would bury the repo in duplicates within a week, and the
+      # history of "how long has this been broken" is worth more on one thread.
+      - name: File or clear the canary issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.install.result }}
+          FAILED_PLATFORMS: ${{ needs.install.outputs.failed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: "installer canary failing"
+          LABEL: installer-canary
+        run: |
+          set -euo pipefail
+
+          # The label is the identity, and it is created here so the first run
+          # on a fresh repo works. Title matching alone is not identity: this
+          # is a public repo, anyone can open an issue with any title, and
+          # closing a stranger's issue (or commenting a run URL on it) because
+          # it happened to be named the same would be worse than filing a
+          # duplicate.
+          gh label create "$LABEL" \
+            --description "Opened by the daily installer canary" \
+            --color B60205 2> /dev/null || true
+
+          # A label filter is a real API filter, not a search query: no search
+          # indexing lag after a create, and no 30-result cap. The author and
+          # exact-title checks then pin it to an issue this workflow itself
+          # filed, since a label can be applied by anyone with write access.
+          existing=$(gh issue list \
+            --state open \
+            --label "$LABEL" \
+            --limit 100 \
+            --json number,title,author \
+            --jq '[.[]
+                   | select(.title == env.TITLE)
+                   | select(.author.login == "github-actions" or .author.login == "github-actions[bot]")]
+                  | first | .number // empty')
+
+          # `success` is the only green: a cancelled or skipped run proves
+          # nothing, so it must not close an open issue.
+          if [ "$RESULT" = "success" ]; then
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "Installer canary is green again: $RUN_URL"
+              gh issue close "$existing" --reason completed
+              echo "closed #$existing"
+            else
+              echo "canary green, nothing open"
+            fi
+            exit 0
+          fi
+
+          if [ "$RESULT" != "failure" ]; then
+            echo "::notice::install matrix ended as '$RESULT'; not treating that as a canary failure"
+            exit 0
+          fi
+
+          # The matrix reports which legs broke; a run that died before the
+          # summary job leaves it empty, and saying so is better than implying
+          # every platform is fine.
+          platforms="${FAILED_PLATFORMS:-unknown (the matrix did not reach its summary)}"
+          body=$(printf '%s\n\n%s\n\n%s\n' \
+            "Installing squirrel from the documented one-liner failed." \
+            "Failing platforms: ${platforms}" \
+            "Run: ${RUN_URL}")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+            echo "commented on #$existing"
+          else
+            gh issue create --title "$TITLE" --label "$LABEL" --body "$body"
+          fi

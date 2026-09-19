@@ -7,10 +7,43 @@ on:
         description: 'Version to test (e.g., v0.0.15). Leave empty for latest.'
         required: false
         type: string
+      installer_url:
+        description: 'install.sh to pipe into bash. Empty uses the script in the git tree on main.'
+        required: false
+        type: string
+      installer_ps1_url:
+        description: 'install.ps1 to run. Empty uses the script in the git tree on main.'
+        required: false
+        type: string
+      verify_channel:
+        description: >-
+          When set (stable or beta), additionally assert that the installed
+          binary matches that channel's published manifest. Empty skips it.
+        required: false
+        type: string
+    outputs:
+      failed:
+        description: >-
+          Space-separated list of platforms that failed, for a caller that has
+          to say more than "the run went red" (installer-canary.yml files it in
+          an issue). Empty when everything required passed.
+        value: ${{ jobs.summary.outputs.failed }}
   workflow_dispatch:
     inputs:
       version:
         description: 'Version to test (e.g., v0.0.15). Leave empty for latest.'
+        required: false
+        type: string
+      installer_url:
+        description: 'install.sh to pipe into bash. Empty uses the script in the git tree on main.'
+        required: false
+        type: string
+      installer_ps1_url:
+        description: 'install.ps1 to run. Empty uses the script in the git tree on main.'
+        required: false
+        type: string
+      verify_channel:
+        description: 'stable or beta to assert against that channel manifest. Empty skips it.'
         required: false
         type: string
 
@@ -19,6 +52,13 @@ permissions:
 
 env:
   NO_TELEMETRY: "1"
+  # The release path tests the script as it sits on main against a version that
+  # was built minutes ago. The canary (installer-canary.yml) overrides these
+  # with the documented one-liner so it exercises what a user actually runs:
+  # the worker-served script, the live channel metadata and the CDN, none of
+  # which the release path touches.
+  DEFAULT_INSTALL_SH: https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh
+  DEFAULT_INSTALL_PS1: https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.ps1
 
 jobs:
   test-install-linux-glibc:
@@ -27,13 +67,23 @@ jobs:
     env:
       TEST_VERSION: ${{ inputs.version }}
     steps:
+      # Only for the local composite action below, so the release path keeps
+      # doing exactly what it did: install, verify, no repository checkout.
+      - name: Checkout
+        if: inputs.verify_channel != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Create test user
         run: |
           sudo useradd -m -s /bin/bash testuser
           sudo mkdir -p /home/testuser/.local/bin
           sudo chown -R testuser:testuser /home/testuser
 
+      # INSTALL_URL is a step env, not a job env: the `env` context (which is
+      # where the default lives) is not available in `jobs.<id>.env`.
       - name: Install squirrel as test user
+        env:
+          INSTALL_URL: ${{ inputs.installer_url || env.DEFAULT_INSTALL_SH }}
         run: |
           sudo -u testuser bash -c "
             export HOME=/home/testuser
@@ -41,7 +91,7 @@ jobs:
             if [ -n '$TEST_VERSION' ]; then
               export SQUIRREL_VERSION='$TEST_VERSION'
             fi
-            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+            curl -fsSL '$INSTALL_URL' | bash
           "
 
       - name: Verify installation
@@ -56,6 +106,16 @@ jobs:
             export PATH=/home/testuser/.local/bin:\$PATH
             squirrel --version
           "
+
+      - name: Verify against the published channel manifest
+        if: inputs.verify_channel != ''
+        uses: ./.github/actions/verify-installed-squirrel
+        with:
+          channel: ${{ inputs.verify_channel }}
+          platform: linux-x64
+          binary: /home/testuser/.local/bin/squirrel
+          home: /home/testuser
+          run-as: testuser
 
       - name: Verify version output
         run: |
@@ -81,7 +141,12 @@ jobs:
   test-install-linux-musl:
     name: Linux (musl/Alpine)
     runs-on: ubuntu-latest
-    continue-on-error: true  # Binary may not be published yet
+    # Advisory on the release path, where the musl binary for the version under
+    # test may not be published yet. Not advisory for the canary: it installs
+    # whatever stable currently advertises, the channel manifest has carried
+    # linux-x64-musl for a long time now, and a canary that cannot go red for a
+    # platform is not watching it.
+    continue-on-error: ${{ inputs.verify_channel == '' }}
     container:
       image: alpine:latest
     env:
@@ -101,14 +166,21 @@ jobs:
           chown -R testuser:testuser /home/testuser
           echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
+      # No manifest verification on this leg, and deliberately so: the job runs
+      # in an Alpine container, where checking the repository out (which the
+      # local composite action needs) is its own source of breakage, and the
+      # job is `continue-on-error` anyway, so an assertion here could never
+      # fail a run. Promoting musl to a required leg is a separate decision.
       - name: Install squirrel as test user
+        env:
+          INSTALL_URL: ${{ inputs.installer_url || env.DEFAULT_INSTALL_SH }}
         run: |
           su - testuser -c "
             export PATH=/home/testuser/.local/bin:\$PATH
             if [ -n '$TEST_VERSION' ]; then
               export SQUIRREL_VERSION='$TEST_VERSION'
             fi
-            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+            curl -fsSL '$INSTALL_URL' | bash
           "
 
       - name: Verify installation
@@ -144,6 +216,12 @@ jobs:
       TEST_VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # Only for the local composite action below, so the release path keeps
+      # doing exactly what it did: install, verify, no repository checkout.
+      - name: Checkout
+        if: inputs.verify_channel != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Create test user
         run: |
           # Create a test user on macOS.
@@ -177,6 +255,8 @@ jobs:
           sudo chown -R testuser:staff /Users/testuser
 
       - name: Install squirrel as test user
+        env:
+          INSTALL_URL: ${{ inputs.installer_url || env.DEFAULT_INSTALL_SH }}
         run: |
           sudo -u testuser bash -c "
             export HOME=/Users/testuser
@@ -186,7 +266,7 @@ jobs:
             if [ -n '$TEST_VERSION' ]; then
               export SQUIRREL_VERSION='$TEST_VERSION'
             fi
-            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+            curl -fsSL '$INSTALL_URL' | bash
           "
 
       - name: Verify installation
@@ -201,6 +281,16 @@ jobs:
             export PATH=/Users/testuser/.local/bin:\$PATH
             squirrel --version
           "
+
+      - name: Verify against the published channel manifest
+        if: inputs.verify_channel != ''
+        uses: ./.github/actions/verify-installed-squirrel
+        with:
+          channel: ${{ inputs.verify_channel }}
+          platform: darwin-arm64
+          binary: /Users/testuser/.local/bin/squirrel
+          home: /Users/testuser
+          run-as: testuser
 
       # The end-to-end version of the release workflow's signature gate: this
       # checks the binary as it actually lands on a user's disk. `bun build
@@ -245,6 +335,12 @@ jobs:
       TEST_VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # Only for the local composite action below, so the release path keeps
+      # doing exactly what it did: install, verify, no repository checkout.
+      - name: Checkout
+        if: inputs.verify_channel != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Create test user
         run: |
           # Create a test user on macOS.
@@ -278,6 +374,8 @@ jobs:
           sudo chown -R testuser:staff /Users/testuser
 
       - name: Install squirrel as test user
+        env:
+          INSTALL_URL: ${{ inputs.installer_url || env.DEFAULT_INSTALL_SH }}
         run: |
           sudo -u testuser bash -c "
             export HOME=/Users/testuser
@@ -287,7 +385,7 @@ jobs:
             if [ -n '$TEST_VERSION' ]; then
               export SQUIRREL_VERSION='$TEST_VERSION'
             fi
-            curl -fsSL https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.sh | bash
+            curl -fsSL '$INSTALL_URL' | bash
           "
 
       - name: Verify installation
@@ -300,6 +398,16 @@ jobs:
             export PATH=/Users/testuser/.local/bin:\$PATH
             squirrel --version
           "
+
+      - name: Verify against the published channel manifest
+        if: inputs.verify_channel != ''
+        uses: ./.github/actions/verify-installed-squirrel
+        with:
+          channel: ${{ inputs.verify_channel }}
+          platform: darwin-x64
+          binary: /Users/testuser/.local/bin/squirrel
+          home: /Users/testuser
+          run-as: testuser
 
       # Same gate as the arm64 leg (#2310): the darwin-x64 asset carried the
       # same stale ad-hoc signature.
@@ -338,6 +446,12 @@ jobs:
     env:
       TEST_VERSION: ${{ inputs.version }}
     steps:
+      # Only for the local composite action below, so the release path keeps
+      # doing exactly what it did: install, verify, no repository checkout.
+      - name: Checkout
+        if: inputs.verify_channel != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Create test user
         shell: pwsh
         run: |
@@ -348,6 +462,8 @@ jobs:
 
       - name: Install squirrel as test user
         shell: pwsh
+        env:
+          INSTALL_PS1_URL: ${{ inputs.installer_ps1_url || env.DEFAULT_INSTALL_PS1 }}
         run: |
           # Run install script as test user using runas
           $cred = New-Object System.Management.Automation.PSCredential("testuser", (ConvertTo-SecureString "T3stP@ssw0rd!Secure2026" -AsPlainText -Force))
@@ -371,7 +487,7 @@ jobs:
           New-Item -ItemType Directory -Path `$env:LOCALAPPDATA -Force | Out-Null
 
           # Download and execute install script
-          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.ps1' -OutFile 'C:\Users\testuser\install.ps1'
+          Invoke-WebRequest -Uri '$env:INSTALL_PS1_URL' -OutFile 'C:\Users\testuser\install.ps1'
           & 'C:\Users\testuser\install.ps1'
           "@
 
@@ -386,7 +502,7 @@ jobs:
 
           New-Item -ItemType Directory -Path $env:LOCALAPPDATA -Force | Out-Null
 
-          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/squirrelscan/squirrelscan/main/install.ps1' -OutFile 'C:\Users\testuser\install.ps1'
+          Invoke-WebRequest -Uri $env:INSTALL_PS1_URL -OutFile 'C:\Users\testuser\install.ps1'
           & 'C:\Users\testuser\install.ps1'
 
       - name: Verify installation
@@ -402,6 +518,15 @@ jobs:
 
           # Verify squirrel runs
           & $binPath --version
+
+      - name: Verify against the published channel manifest
+        if: inputs.verify_channel != ''
+        uses: ./.github/actions/verify-installed-squirrel
+        with:
+          channel: ${{ inputs.verify_channel }}
+          platform: windows-x64
+          binary: C:\Users\testuser\AppData\Local\squirrel\bin\squirrel.exe
+          home: C:\Users\testuser
 
       - name: Verify version output
         shell: pwsh
@@ -437,26 +562,47 @@ jobs:
     needs: [test-install-linux-glibc, test-install-linux-musl, test-install-macos-arm64, test-install-macos-x64, test-install-windows]
     if: always()
     runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.results.outputs.failed }}
     steps:
       - name: Check results
+        id: results
+        env:
+          LINUX_GLIBC: ${{ needs.test-install-linux-glibc.result }}
+          LINUX_MUSL: ${{ needs.test-install-linux-musl.result }}
+          MACOS_ARM64: ${{ needs.test-install-macos-arm64.result }}
+          MACOS_X64: ${{ needs.test-install-macos-x64.result }}
+          WINDOWS: ${{ needs.test-install-windows.result }}
+          VERIFY_CHANNEL: ${{ inputs.verify_channel }}
         run: |
           {
             echo "## Install Test Results"
             echo ""
             echo "| Platform | Status |"
             echo "|----------|--------|"
-            echo "| Linux (glibc) | ${{ needs.test-install-linux-glibc.result }} |"
-            echo "| Linux (musl) | ${{ needs.test-install-linux-musl.result }} |"
-            echo "| macOS (arm64) | ${{ needs.test-install-macos-arm64.result }} |"
-            echo "| macOS (x64) | ${{ needs.test-install-macos-x64.result }} |"
-            echo "| Windows | ${{ needs.test-install-windows.result }} |"
+            echo "| Linux (glibc) | ${LINUX_GLIBC} |"
+            echo "| Linux (musl) | ${LINUX_MUSL} |"
+            echo "| macOS (arm64) | ${MACOS_ARM64} |"
+            echo "| macOS (x64) | ${MACOS_X64} |"
+            echo "| Windows | ${WINDOWS} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Fail if any required job failed (musl is optional since binary may not be published)
-          if [ "${{ needs.test-install-linux-glibc.result }}" = "failure" ] || \
-             [ "${{ needs.test-install-macos-arm64.result }}" = "failure" ] || \
-             [ "${{ needs.test-install-macos-x64.result }}" = "failure" ] || \
-             [ "${{ needs.test-install-windows.result }}" = "failure" ]; then
+          # Fail if any required job failed. musl is advisory only on the
+          # release path, where its binary may not be published yet; the canary
+          # sets verify_channel and holds it to the same bar as the rest.
+          failed=""
+          if [ "$LINUX_GLIBC" = "failure" ]; then failed="$failed linux-glibc"; fi
+          if [ "$MACOS_ARM64" = "failure" ]; then failed="$failed macos-arm64"; fi
+          if [ "$MACOS_X64" = "failure" ]; then failed="$failed macos-x64"; fi
+          if [ "$WINDOWS" = "failure" ]; then failed="$failed windows"; fi
+          if [ -n "$VERIFY_CHANNEL" ] && [ "$LINUX_MUSL" = "failure" ]; then failed="$failed linux-musl"; fi
+
+          # Written before the exit below: the caller reads this output to say
+          # WHICH platform broke, and a job that failed without setting it would
+          # leave the canary's issue saying only that something went red.
+          echo "failed=${failed# }" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$failed" ]; then
             echo ""
             echo "One or more required tests failed!"
             exit 1

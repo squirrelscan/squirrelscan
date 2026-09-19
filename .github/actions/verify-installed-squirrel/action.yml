@@ -1,0 +1,194 @@
+name: Verify installed squirrel
+description: >-
+  Check an installed squirrel against the live release channel manifest: the
+  version it reports and the sha256 of the file on disk. Used by the daily
+  installer canary, where the point is to catch a published artefact that is
+  broken, stale or mismatched for a whole platform (#2310). The macOS signature
+  check stays in the install jobs themselves, because that one has to run on
+  release too.
+
+inputs:
+  channel:
+    description: Release channel whose manifest is the source of truth (stable or beta).
+    required: true
+  platform:
+    description: Manifest platform key, e.g. darwin-arm64, linux-x64-musl, windows-x64.
+    required: true
+  binary:
+    description: Path to the installed squirrel (the link a user would run).
+    required: true
+  home:
+    description: HOME (or USERPROFILE on Windows) the binary should run under.
+    required: true
+  run-as:
+    description: >-
+      Unix user to run the checks as. Empty runs them as the runner user. The
+      install tests install into a separate user's home, so the checks have to
+      reach the file the same way.
+    default: ""
+  releases-endpoint:
+    description: Base URL serving /{channel} release metadata.
+    default: https://install.squirrelscan.com/releases
+  release-race-window-seconds:
+    description: >-
+      How recently the channel must have moved for a version mismatch to count
+      as "a release landed during this run" rather than a stale channel. An
+      hour comfortably covers a release workflow plus the endpoint's 300s edge
+      cache.
+    default: "3600"
+
+runs:
+  using: composite
+  steps:
+    # One bash step rather than one per assertion: every check needs the same
+    # resolved target and the same manifest, and re-deriving them per step would
+    # let two steps disagree about which file they are talking about.
+    - name: Verify against the channel manifest
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        PLATFORM: ${{ inputs.platform }}
+        BINARY: ${{ inputs.binary }}
+        RUN_HOME: ${{ inputs.home }}
+        RUN_AS: ${{ inputs.run-as }}
+        RELEASES_ENDPOINT: ${{ inputs.releases-endpoint }}
+        RELEASE_RACE_WINDOW_SECONDS: ${{ inputs.release-race-window-seconds }}
+      run: |
+        set -euo pipefail
+
+        # Every command that touches the installed file goes through this: the
+        # install tests install into another user's home, which the runner user
+        # cannot necessarily read (useradd gives 0750 on current Ubuntu images).
+        run_as() {
+          if [ -n "$RUN_AS" ]; then
+            sudo -u "$RUN_AS" "$@"
+          else
+            "$@"
+          fi
+        }
+
+        manifest=$(curl -fsSL --connect-timeout 10 --max-time 60 "${RELEASES_ENDPOINT}/${CHANNEL}")
+        expected_version=$(printf '%s' "$manifest" | jq -r '.version // empty')
+        expected_sha=$(printf '%s' "$manifest" | jq -r ".binaries[\"${PLATFORM}\"].sha256 // empty")
+        released_at=$(printf '%s' "$manifest" | jq -r '.released_at // empty')
+        if [ -z "$expected_version" ] || [ -z "$expected_sha" ]; then
+          echo "::error::${RELEASES_ENDPOINT}/${CHANNEL} does not describe ${PLATFORM}"
+          printf '%s\n' "$manifest" | head -c 2000
+          exit 1
+        fi
+        echo "channel ${CHANNEL} advertises ${expected_version} for ${PLATFORM}"
+
+        # The installed path is a link into ~/.squirrel/releases/<version>/; the
+        # hash has to be of the file that was downloaded, not of the link.
+        target=$(run_as readlink -f "$BINARY")
+        echo "installed binary resolves to ${target}"
+
+        # NO_TELEMETRY because the workflow env does not survive sudo, and a
+        # canary must not look like a user. The first-run telemetry notice goes
+        # to stderr either way, so stdout is clean JSON for jq.
+        actual_version=$(run_as env HOME="$RUN_HOME" NO_TELEMETRY=1 "$BINARY" self version --json | jq -r '.version // empty')
+
+        # The install resolved the channel minutes before this read did. A
+        # release that lands in between leaves a correctly installed previous
+        # version staring at a newer manifest, and failing on that would teach
+        # everyone to ignore the canary. `released_at` says whether that is what
+        # happened: inside the window the mismatch is a race and the run says so
+        # instead of asserting; outside it, the channel really is advertising a
+        # version the installer did not deliver. The freshly released version is
+        # covered anyway, by the release workflow's own install-tests.
+        # The manifest carries a bare version and the CLI may carry a v-prefix;
+        # comparing the raw strings would fail on a cosmetic difference.
+        if [ "${actual_version#v}" != "${expected_version#v}" ]; then
+          age=-1
+          if [ -n "$released_at" ]; then
+            released_epoch=$(date -u -d "$released_at" +%s 2> /dev/null \
+              || date -u -j -f '%Y-%m-%dT%H:%M:%S' "${released_at%%.*}" +%s 2> /dev/null \
+              || echo "")
+            if [ -n "$released_epoch" ]; then
+              age=$(( $(date -u +%s) - released_epoch ))
+            fi
+          fi
+          if [ "$age" -ge 0 ] && [ "$age" -lt "$RELEASE_RACE_WINDOW_SECONDS" ]; then
+            echo "::notice::installed ${actual_version} while the ${CHANNEL} channel moved to ${expected_version} ${age}s ago; a release landed mid-run, not asserting against it"
+            exit 0
+          fi
+          echo "::error::installed squirrel reports ${actual_version}, the ${CHANNEL} channel advertises ${expected_version}"
+          exit 1
+        fi
+        echo "version matches the channel manifest: ${actual_version}"
+
+        if command -v sha256sum > /dev/null 2>&1; then
+          actual_sha=$(run_as sha256sum "$target" | cut -d' ' -f1)
+        else
+          actual_sha=$(run_as shasum -a 256 "$target" | cut -d' ' -f1)
+        fi
+        # install.sh already checked this hash against the manifest IT fetched.
+        # The point of repeating it is that this manifest comes from the other
+        # source: the worker serves R2, install.sh takes the GitHub release
+        # asset first. The two disagreeing is exactly the failure #1468 shipped
+        # (a channel endpoint advertising a nine-day-old release), and nothing
+        # that only reads one of them can see it.
+        if [ "$actual_sha" != "$expected_sha" ]; then
+          echo "::error::${target} hashes to ${actual_sha}, the ${CHANNEL} manifest records ${expected_sha} for ${PLATFORM}"
+          exit 1
+        fi
+        echo "sha256 matches the channel manifest: ${actual_sha}"
+
+    - name: Verify against the channel manifest
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        PLATFORM: ${{ inputs.platform }}
+        BINARY: ${{ inputs.binary }}
+        RUN_HOME: ${{ inputs.home }}
+        RELEASES_ENDPOINT: ${{ inputs.releases-endpoint }}
+        RELEASE_RACE_WINDOW_SECONDS: ${{ inputs.release-race-window-seconds }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # Bound to locals first: a member access written as $obj.$env:NAME is
+        # parsed as the member "env" followed by a label, not as the value of
+        # the environment variable.
+        $channel = $env:CHANNEL
+        $platform = $env:PLATFORM
+
+        $manifest = Invoke-RestMethod -Uri "$env:RELEASES_ENDPOINT/$channel" -TimeoutSec 60
+        $entry = $manifest.binaries.$platform
+        if (-not $manifest.version -or -not $entry.sha256) {
+          Write-Output "::error::$env:RELEASES_ENDPOINT/$channel does not describe $platform"
+          exit 1
+        }
+        Write-Host "channel $channel advertises $($manifest.version) for $platform"
+
+        $env:USERPROFILE = $env:RUN_HOME
+        $env:NO_TELEMETRY = '1'
+        $actual = (& $env:BINARY self version --json | ConvertFrom-Json).version
+
+        # Same reasoning as the bash leg: the install resolved the channel
+        # minutes before this read did, so a release landing in between is a
+        # race, not a broken install, and a canary that fails on it gets muted.
+        if ($actual.TrimStart('v') -ne $manifest.version.TrimStart('v')) {
+          $age = -1
+          if ($manifest.released_at) {
+            $released = [datetimeoffset]::MinValue
+            if ([datetimeoffset]::TryParse($manifest.released_at, [ref]$released)) {
+              $age = [int]([datetimeoffset]::UtcNow - $released).TotalSeconds
+            }
+          }
+          if ($age -ge 0 -and $age -lt [int]$env:RELEASE_RACE_WINDOW_SECONDS) {
+            Write-Output "::notice::installed $actual while the $channel channel moved to $($manifest.version) ${age}s ago; a release landed mid-run, not asserting against it"
+            exit 0
+          }
+          Write-Output "::error::installed squirrel reports $actual, the $channel channel advertises $($manifest.version)"
+          exit 1
+        }
+        Write-Host "version matches the channel manifest: $actual"
+
+        $actualSha = (Get-FileHash -Algorithm SHA256 -Path $env:BINARY).Hash.ToLower()
+        if ($actualSha -ne $entry.sha256.ToLower()) {
+          Write-Output "::error::$env:BINARY hashes to $actualSha, the $channel manifest records $($entry.sha256) for $platform"
+          exit 1
+        }
+        Write-Host "sha256 matches the channel manifest: $actualSha"
