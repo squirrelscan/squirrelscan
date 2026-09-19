@@ -7,7 +7,7 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
-import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 
 import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
 
@@ -521,24 +521,22 @@ export function discoverSitemaps(
     const robotsSitemaps = new Set<string>();
 
     // #1393: robots.txt is untrusted page content. A `Sitemap:` directive can
-    // carry any scheme/host — reject non-http(s) targets (a `file://` sitemap
-    // would otherwise be fetched and its body parsed/stored). Off-origin http(s)
-    // sitemaps are still fetched (legit CDN case) but without customHeaders,
-    // enforced by the baseHost gate passed to fetchSitemapsRecursive below.
+    // carry any scheme/host, so `resolveRobotsSitemapUrl` rejects non-http(s)
+    // targets (a `file://` sitemap would otherwise be fetched and its body
+    // parsed/stored). Off-origin http(s) sitemaps are still fetched (legit CDN
+    // case) but without customHeaders, enforced by the baseHost gate passed to
+    // fetchSitemapsRecursive below. #2316: the same resolver reads a scheme-less
+    // line as a HOST, so the URL fetched here is the one the report stores.
     const baseHost = new URL(baseUrl).host;
     if (robotsTxt?.sitemaps) {
       for (const sitemap of robotsTxt.sitemaps) {
-        try {
-          const resolvedUrl = new URL(sitemap, baseUrl).toString();
-          if (!isHttpOrHttpsUrl(resolvedUrl)) {
-            logger.debug(`Non-http(s) sitemap URL in robots.txt skipped: ${sitemap}`);
-            continue;
-          }
-          sitemapUrls.add(resolvedUrl);
-          robotsSitemaps.add(resolvedUrl);
-        } catch {
-          logger.debug(`Invalid sitemap URL in robots.txt: ${sitemap}`);
+        const resolvedUrl = resolveRobotsSitemapUrl(sitemap, baseUrl).url;
+        if (resolvedUrl === null) {
+          logger.debug(`Unusable sitemap URL in robots.txt skipped: ${sitemap}`);
+          continue;
         }
+        sitemapUrls.add(resolvedUrl);
+        robotsSitemaps.add(resolvedUrl);
       }
     }
 

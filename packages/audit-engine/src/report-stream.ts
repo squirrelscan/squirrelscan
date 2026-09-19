@@ -21,7 +21,7 @@ import {
 } from "@squirrelscan/rules";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
-import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+import { parseRobotsTxt, resolveRobotsSitemapUrls } from "@squirrelscan/utils/robots-txt";
 
 import { logger } from "./adapter-logger";
 import {
@@ -128,14 +128,21 @@ export function buildRobotsData(robots: RobotsTxtRecord | null): RobotsTxtData |
     errors = [robots.error];
   }
 
+  // #2316: the stored list is the raw `Sitemap:` lines. Resolve them with the
+  // same reading the crawl's fetch path used, so the report never names a URL
+  // the crawl did not try, and a publish can never be rejected on one of these
+  // values (squirrelscan/repo#2308). A scheme-less line is repaired but not
+  // silently: the repair is reported as a robots.txt parse problem.
+  const declared = resolveRobotsSitemapUrls(robots.sitemaps, robots.url);
+
   return {
     exists: robots.exists,
     url: robots.url,
     content: robots.content,
     sizeBytes: robots.sizeBytes,
-    sitemaps: robots.sitemaps,
+    sitemaps: declared.urls,
     rules,
-    errors,
+    errors: [...errors, ...declared.issues],
   };
 }
 
@@ -594,7 +601,9 @@ export function buildV1Report(
           errors: s.errors,
           urlCount: s.urlCount,
         })),
-        sources: { robotsTxt: robots?.sitemaps ?? [], commonLocations: [] },
+        // #2316: robotsData, NOT the raw record. One robots.txt line must not
+        // appear as two different URLs across the report's own fields.
+        sources: { robotsTxt: robotsData?.sitemaps ?? [], commonLocations: [] },
         totalUrls: sitemaps.reduce((sum, s) => sum + s.urlCount, 0),
         orphanPages: [],
         missingPages: [],
@@ -883,7 +892,9 @@ export function buildV2Report(
           errors: s.errors,
           urlCount: s.urlCount,
         })),
-        sources: { robotsTxt: robots?.sitemaps ?? [], commonLocations: [] },
+        // #2316: robotsData, NOT the raw record. One robots.txt line must not
+        // appear as two different URLs across the report's own fields.
+        sources: { robotsTxt: robotsData?.sitemaps ?? [], commonLocations: [] },
         totalUrls: sitemaps.reduce((sum, s) => sum + s.urlCount, 0),
         orphanPages: [],
         missingPages: [],

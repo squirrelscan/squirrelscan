@@ -1,6 +1,7 @@
 // Discover sitemaps processor
 // Discovers and parses sitemaps from robots.txt and common locations
 
+import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 import { Effect, pipe } from "effect";
 import { XMLParser } from "fast-xml-parser";
 
@@ -333,17 +334,19 @@ export function discoverSitemaps(
     const sitemapUrls = new Set<string>();
     const robotsSitemaps = new Set<string>();
 
-    // Add sitemaps from robots.txt (resolve relative URLs)
+    // Add sitemaps from robots.txt. #2316: one shared reading of a declared
+    // value, so a scheme-less `Sitemap: host/path` line resolves to that host
+    // here exactly as it does in packages/crawler and in the publish repair.
     if (robotsTxt?.sitemaps) {
       for (const sitemap of robotsTxt.sitemaps) {
-        try {
-          const resolvedUrl = new URL(sitemap, baseUrl).toString();
-          sitemapUrls.add(resolvedUrl);
-          robotsSitemaps.add(resolvedUrl);
-        } catch {
-          // Invalid URL - will be tracked as failed
-          logger.debug(`Invalid sitemap URL in robots.txt: ${sitemap}`);
+        const resolvedUrl = resolveRobotsSitemapUrl(sitemap, baseUrl).url;
+        if (resolvedUrl === null) {
+          // Not reachable as http(s) - will be tracked as failed
+          logger.debug(`Unusable sitemap URL in robots.txt: ${sitemap}`);
+          continue;
         }
+        sitemapUrls.add(resolvedUrl);
+        robotsSitemaps.add(resolvedUrl);
       }
     }
 
