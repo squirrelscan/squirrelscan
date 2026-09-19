@@ -1,10 +1,8 @@
 // content/stale-copyright - Footer copyright year older than the current year
 
 import { z } from "zod";
-import type { Element } from "linkedom";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { ComponentOccurrenceCache, componentOccurrence } from "../shared/component-occurrence";
 
 export const optionsSchema = z.object({
   // Injected so a test never depends on the wall clock: a rule that reads the
@@ -67,43 +65,6 @@ export function latestCopyrightYear(text: string): number | undefined {
   return latest;
 }
 
-/**
- * The elements that assert `year` and have no descendant asserting it — the
- * innermost notice, which is the thing a fix would edit.
- *
- * ONE bottom-up pass. The first cut computed `textContent` for every candidate
- * AND ran `querySelectorAll("*")` on each of them to test for a matching
- * descendant, which is quadratic twice over on a deep wrapper chain. Here each
- * element is visited once and "some descendant matched" is aggregated from the
- * children on the way back up.
- */
-function innermostAssertingElements(
-  footers: readonly Element[],
-  year: number,
-): Element[] {
-  const out: Element[] = [];
-  const seen = new Set<Element>();
-
-  /** Returns true when this subtree contains an element asserting `year`. */
-  const visit = (element: Element): boolean => {
-    let descendantAsserts = false;
-    for (const child of element.children as unknown as Iterable<Element>) {
-      // No short-circuit: every innermost asserter in every branch is wanted.
-      if (visit(child)) descendantAsserts = true;
-    }
-    if (descendantAsserts) return true;
-    if (latestCopyrightYear(element.textContent || "") !== year) return false;
-    if (!seen.has(element)) {
-      seen.add(element);
-      out.push(element);
-    }
-    return true;
-  };
-
-  for (const footer of footers) visit(footer);
-  return out;
-}
-
 export const staleCopyrightRule: Rule = {
   meta: {
     id: "content/stale-copyright",
@@ -129,22 +90,11 @@ export const staleCopyrightRule: Rule = {
     if (!doc) return { checks: [] };
 
     const checks: CheckResult[] = [];
-    const occurrenceCache = new ComponentOccurrenceCache();
-    const matchedPerSelector = FOOTER_SELECTORS.flatMap((selector) => [
-      ...doc.querySelectorAll(selector),
-    ]);
-    // DETECTION: byte-identical to the pre-#2307 rule, which concatenates the
-    // matches of every selector. One element matching both `footer` and
-    // `.footer` therefore contributes its text TWICE, and that duplication can
-    // decide the verdict: `<footer class="footer">2025 &copy;</footer>` only
-    // matches because the seam between the two copies reads "&copy; 2025".
-    // Deduping here silently dropped that finding. Evidence uses the deduped
-    // element set below; detection must not.
-    const footerText = matchedPerSelector
-      .map((el) => el.textContent || "")
+    const footerText = FOOTER_SELECTORS.flatMap((selector) =>
+      [...doc.querySelectorAll(selector)].map((el) => el.textContent || ""),
+    )
       .join(" ")
       .trim();
-    const footers = [...new Set(matchedPerSelector)];
 
     if (!footerText) {
       checks.push({
@@ -175,23 +125,6 @@ export const staleCopyrightRule: Rule = {
             message: `Footer copyright year is ${year}, behind the current year ${currentYear}`,
             value: year,
             expected: currentYear,
-            // The legacy detection intentionally judges the newest copyright
-            // assertion across all footer regions. Attach evidence only for
-            // elements that assert THAT selected value, so older suppressed
-            // notices never become invented findings.
-            componentOccurrences: innermostAssertingElements(footers, year).map((element) =>
-              componentOccurrence(
-                {
-                  pageUrl: ctx.page.url,
-                  observedUrl: ctx.page.finalUrl ?? ctx.page.url,
-                    rendered: ctx.page.rendered === true,
-                  element,
-                  kind: "stale-copyright",
-                  values: { year, currentYear },
-                },
-                occurrenceCache,
-              ),
-            ),
           }
         : {
             name: "footer-copyright-year",

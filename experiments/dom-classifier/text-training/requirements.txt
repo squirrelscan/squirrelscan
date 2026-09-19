@@ -1,3 +1,0 @@
-# Kept out of the repository-wide dependency graph.
--r ../base-model/requirements.txt
-scikit-learn==1.5.2

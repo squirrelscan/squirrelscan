@@ -1,7 +1,7 @@
 // Plain text report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
-import type { AuditReport, CheckResult } from "../types";
+import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { reportFailureReasonCode } from "../failure-notice";
@@ -97,17 +97,6 @@ function formatRateLimitedHosts(hosts: string[]): string {
   if (hosts.length === 0) return "the host";
   if (hosts.length <= 2) return hosts.join(" and ");
   return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
-}
-
-/** Plain-language cause for an `omitted` component-evidence marker. */
-function componentEvidenceReason(
-  reason: NonNullable<CheckResult["componentEvidence"]>["reason"],
-): string {
-  if (reason === "payload-limit") return "they exceeded the stored finding payload limit.";
-  if (reason === "page-sample-limit") {
-    return "their pages fall outside this rule's recorded page sample.";
-  }
-  return "the stored row that carried them was not available.";
 }
 
 export function renderText(report: AuditReport, options?: TextRenderOptions): string {
@@ -310,18 +299,6 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
         write(`  Solution: ${wrapped[0]}`);
         for (const line of wrapped.slice(1)) write(`            ${line}`);
       }
-      for (const fixGroup of rule.componentFixGroups ?? []) {
-        write(
-          `    Actionable component fix target: ${fixGroup.defect.kind} in ${fixGroup.region.role} (${fixGroup.region.nestedIn}), slot ${fixGroup.semanticSlot}; ${fixGroup.affectedPageCount} affected page(s), ${fixGroup.occurrences.length} observed occurrence(s)`,
-        );
-        write(`        Values: ${JSON.stringify(fixGroup.defect.values)}`);
-        write(`        Value hashes: ${JSON.stringify(fixGroup.defect.valueHashes)}`);
-        const sample = fixGroup.affectedPages.slice(0, 10);
-        for (const page of sample) write(`        -> ${pathOnly(page)}`);
-        if (sample.length < fixGroup.affectedPageCount) {
-          write(`        ... showing ${sample.length} bounded URL examples of ${fixGroup.affectedPageCount}`);
-        }
-      }
       write("");
 
       for (const check of rule.checks) {
@@ -331,11 +308,6 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
         const countStr = count > 1 ? ` (${count} pages)` : "";
         const icon = check.status === "fail" ? "X" : "!";
         write(`    [${icon}] ${check.name}: ${check.message}${countStr}${carriedTag(check)}`);
-        if (check.componentEvidence?.state === "omitted") {
-          write(
-            `        Component fix evidence unavailable for ${check.componentEvidence.occurrenceCount} occurrence(s): ${componentEvidenceReason(check.componentEvidence.reason)}`,
-          );
-        }
 
         if (sample.length > 0) {
           for (const page of sample) write(`        -> ${pathOnly(page)}`);
