@@ -1,5 +1,5 @@
 # Isolated experiment environment only. Keep the venv and Hugging Face cache outside Git.
-torch==2.2.2
+torch==2.13.0
 numpy==1.26.4
 transformers==4.40.2
 safetensors==0.4.3
