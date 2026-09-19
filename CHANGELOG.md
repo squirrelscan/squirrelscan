@@ -15,7 +15,9 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
-## [Unreleased]
+## v0.0.97 — 2026-09-19
+
+The macOS binaries carry a signature macOS accepts again, the installer stops blaming memory for a binary the system killed, and a `Sitemap:` line in robots.txt written without a scheme is read as the host it names.
 
 ### Fixed
 
