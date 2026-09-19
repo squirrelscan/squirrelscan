@@ -23,8 +23,8 @@ export interface CrawlMetadataWithPublished extends CrawlMetadata {
   published?: PublishedReportRecord;
 }
 
-import { WITHHELD_SEED_REDIRECT_TARGET } from "@squirrelscan/report";
 import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import { WITHHELD_SEED_REDIRECT_TARGET } from "@squirrelscan/report";
 
 import {
   OUTPUT_FORMATS,
@@ -213,8 +213,11 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
       const restored =
         unpackComponentOccurrences(
           check.componentShapes
-            ? { ...check.componentShapes, occurrences: check.componentOccurrences }
-            : check.componentOccurrences,
+            ? {
+                ...check.componentShapes,
+                occurrences: check.componentOccurrences,
+              }
+            : check.componentOccurrences
         ) ?? [];
       const occurrencesByPage = new Map<string, ComponentOccurrence[]>();
       for (const occurrence of restored) {
@@ -227,7 +230,9 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
         // Evidence for a page the serialized sample does not list cannot be
         // placed on a row without inventing one. Record the count instead.
         const sampled = new Set(check.affectedPages);
-        const unplaceable = restored.filter((occurrence) => !sampled.has(occurrence.pageUrl));
+        const unplaceable = restored.filter(
+          (occurrence) => !sampled.has(occurrence.pageUrl)
+        );
         const evidence =
           check.componentEvidence ??
           (unplaceable.length > 0
@@ -237,7 +242,7 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
                 occurrenceCount: unplaceable.length,
               }
             : undefined);
-        check.affectedPages.forEach((page, index) => {
+        for (const [index, page] of check.affectedPages.entries()) {
           checks.push({
             name: check.name,
             status: check.status,
@@ -251,7 +256,7 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
             // first, as the fold does with `details.additional`.
             componentEvidence: index === 0 ? evidence : undefined,
           });
-        });
+        }
       } else {
         checks.push({
           name: check.name,

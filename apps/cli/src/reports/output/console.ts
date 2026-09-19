@@ -263,15 +263,28 @@ export function generateConsoleReport(
         for (const fixGroup of rule.componentFixGroups ?? []) {
           log(
             box.line(
-              `   ${fmt.bold("Actionable component fix target:")} ${fixGroup.defect.kind} in ${fixGroup.region.role} (${fixGroup.region.nestedIn}), slot ${fixGroup.semanticSlot}; ${fixGroup.affectedPageCount} affected page(s)`,
-            ),
+              `   ${fmt.bold("Actionable component fix target:")} ${fixGroup.defect.kind} in ${fixGroup.region.role} (${fixGroup.region.nestedIn}), slot ${fixGroup.semanticSlot}; ${fixGroup.affectedPageCount} affected page(s)`
+            )
           );
-          log(box.line(`     ${fmt.dim(`values: ${JSON.stringify(fixGroup.defect.values)}`)}`));
-          log(box.line(`     ${fmt.dim(`value hashes: ${JSON.stringify(fixGroup.defect.valueHashes)}`)}`));
+          log(
+            box.line(
+              `     ${fmt.dim(`values: ${JSON.stringify(fixGroup.defect.values)}`)}`
+            )
+          );
+          log(
+            box.line(
+              `     ${fmt.dim(`value hashes: ${JSON.stringify(fixGroup.defect.valueHashes)}`)}`
+            )
+          );
           const sample = fixGroup.affectedPages.slice(0, 5);
-          for (const page of sample) log(box.line(`     ${fmt.dim(`→ ${pathOnly(page)}`)}`));
+          for (const page of sample)
+            log(box.line(`     ${fmt.dim(`→ ${pathOnly(page)}`)}`));
           if (sample.length < fixGroup.affectedPageCount) {
-            log(box.line(`     ${fmt.dim(`... showing ${sample.length} bounded URL examples of ${fixGroup.affectedPageCount}`)}`));
+            log(
+              box.line(
+                `     ${fmt.dim(`... showing ${sample.length} bounded URL examples of ${fixGroup.affectedPageCount}`)}`
+              )
+            );
           }
         }
 

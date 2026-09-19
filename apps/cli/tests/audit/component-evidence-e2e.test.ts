@@ -61,7 +61,9 @@ beforeAll(() => {
       }
       const html = PAGES[pathname];
       if (!html) return new Response("Not found", { status: 404 });
-      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+      return new Response(html, {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
     },
   });
   base = `http://127.0.0.1:${server.port}`;
@@ -114,117 +116,129 @@ describe("#2307 component evidence survives the real audit pipeline", () => {
     }>;
   };
 
-  test(
-    "audit writes component evidence and one cross-page fix group to JSON",
-    async () => {
-      const file = join(out, "report.json");
-      await cli([
-        "audit",
-        base,
-        "-m",
-        "5",
-        "--offline",
-        "--http",
-        "--refresh",
-        "-y",
-        "-f",
-        "json",
-        "--rule-include",
-        "content/stale-copyright,a11y/link-text",
-        "-o",
-        file,
-      ]);
-      report = JSON.parse(readFileSync(file, "utf8"));
+  test("audit writes component evidence and one cross-page fix group to JSON", async () => {
+    const file = join(out, "report.json");
+    await cli([
+      "audit",
+      base,
+      "-m",
+      "5",
+      "--offline",
+      "--http",
+      "--refresh",
+      "-y",
+      "-f",
+      "json",
+      "--rule-include",
+      "content/stale-copyright,a11y/link-text",
+      "-o",
+      file,
+    ]);
+    report = JSON.parse(readFileSync(file, "utf8"));
 
-      const stale = report.issues.find((issue) => issue.ruleId === "content/stale-copyright");
-      expect(stale).toBeDefined();
+    const stale = report.issues.find(
+      (issue) => issue.ruleId === "content/stale-copyright"
+    );
+    expect(stale).toBeDefined();
 
-      // The evidence exists at all — this is what the store used to drop.
-      const occurrences = stale!.checks.flatMap((check) => check.componentOccurrences ?? []);
-      expect(occurrences.length).toBeGreaterThanOrEqual(3);
-      for (const occurrence of occurrences) {
-        expect(typeof occurrence.siteOrigin).toBe("string");
-        expect(occurrence.provenance).toEqual({ source: "page-dom", rendered: false });
-      }
+    // The evidence exists at all — this is what the store used to drop.
+    const occurrences = stale!.checks.flatMap(
+      (check) => check.componentOccurrences ?? []
+    );
+    expect(occurrences.length).toBeGreaterThanOrEqual(3);
+    for (const occurrence of occurrences) {
+      expect(typeof occurrence.siteOrigin).toBe("string");
+      expect(occurrence.provenance).toEqual({
+        source: "page-dom",
+        rendered: false,
+      });
+    }
 
-      // The identical footer on three pages across two layouts is ONE target.
-      const groups = stale!.componentFixGroups ?? [];
-      expect(groups).toHaveLength(1);
-      const group = groups[0]!;
-      expect(group.id).toMatch(/^component-fix:[0-9a-f]{32}(-\d+)?$/);
-      expect(group.defect.kind).toBe("stale-copyright");
-      expect(group.region).toMatchObject({ role: "footer", nestedIn: "none" });
-      expect(group.affectedPageCount).toBe(3);
-      expect(new Set(group.affectedPages).size).toBe(3);
-      expect(group.affectedPagesHasMore).toBe(false);
+    // The identical footer on three pages across two layouts is ONE target.
+    const groups = stale!.componentFixGroups ?? [];
+    expect(groups).toHaveLength(1);
+    const group = groups[0]!;
+    expect(group.id).toMatch(/^component-fix:[0-9a-f]{32}(-\d+)?$/);
+    expect(group.defect.kind).toBe("stale-copyright");
+    expect(group.region).toMatchObject({ role: "footer", nestedIn: "none" });
+    expect(group.affectedPageCount).toBe(3);
+    expect(new Set(group.affectedPages).size).toBe(3);
+    expect(group.affectedPagesHasMore).toBe(false);
 
-      // Evidence is serialized once and referenced, never repeated.
-      expect((group as { occurrences?: unknown }).occurrences).toBeUndefined();
-      expect(group.occurrenceRefs).toHaveLength(group.occurrenceCount);
-      for (const ref of group.occurrenceRefs) {
-        expect(stale!.checks[ref.checkIndex]?.componentOccurrences?.[ref.occurrenceIndex]).toBeDefined();
-      }
-    },
-    120_000,
-  );
+    // Evidence is serialized once and referenced, never repeated.
+    expect((group as { occurrences?: unknown }).occurrences).toBeUndefined();
+    expect(group.occurrenceRefs).toHaveLength(group.occurrenceCount);
+    for (const ref of group.occurrenceRefs) {
+      expect(
+        stale!.checks[ref.checkIndex]?.componentOccurrences?.[
+          ref.occurrenceIndex
+        ]
+      ).toBeDefined();
+    }
+  }, 120_000);
 
-  test(
-    "the stored audit renders the group with a labelled page sample in llm, markdown and text",
-    async () => {
-      const llm = await cli(["report", "-f", "llm"]);
-      expect(llm).toContain("<component-fix-group");
-      expect(llm).toContain('defect_kind="stale-copyright"');
-      expect(llm).toContain('affected_pages="3"');
-      expect(llm).toMatch(/<affected-page-sample bounded="true" shown="\d+" total="3">/);
+  test("the stored audit renders the group with a labelled page sample in llm, markdown and text", async () => {
+    const llm = await cli(["report", "-f", "llm"]);
+    expect(llm).toContain("<component-fix-group");
+    expect(llm).toContain('defect_kind="stale-copyright"');
+    expect(llm).toContain('affected_pages="3"');
+    expect(llm).toMatch(
+      /<affected-page-sample bounded="true" shown="\d+" total="3">/
+    );
 
-      const markdown = await cli(["report", "-f", "markdown"]);
-      expect(markdown).toContain("**Actionable component fix target:**");
-      expect(markdown).toContain("3 affected page(s)");
+    const markdown = await cli(["report", "-f", "markdown"]);
+    expect(markdown).toContain("**Actionable component fix target:**");
+    expect(markdown).toContain("3 affected page(s)");
 
-      const text = await cli(["report", "-f", "text"]);
-      expect(text).toContain("Actionable component fix target: stale-copyright in footer (none)");
-      expect(text).toContain("3 affected page(s)");
-    },
-    120_000,
-  );
+    const text = await cli(["report", "-f", "text"]);
+    expect(text).toContain(
+      "Actionable component fix target: stale-copyright in footer (none)"
+    );
+    expect(text).toContain("3 affected page(s)");
+  }, 120_000);
 
-  test(
-    "reimporting the JSON with -i keeps the evidence and re-derives the same group",
-    async () => {
-      const file = join(out, "report.json");
+  test("reimporting the JSON with -i keeps the evidence and re-derives the same group", async () => {
+    const file = join(out, "report.json");
 
-      // `convertSlimReport` rebuilds CheckResults field-by-field from the file,
-      // so this is the second place (after the SQLite row mapper) where an
-      // additive field is dropped unless it is explicitly carried.
-      const reimported = JSON.parse(await cli(["report", "-i", file, "-f", "json"]));
-      const stale = reimported.issues.find(
-        (issue: { ruleId: string }) => issue.ruleId === "content/stale-copyright",
-      );
-      expect(stale).toBeDefined();
-      const occurrences = stale.checks.flatMap(
-        (check: { componentOccurrences?: unknown[] }) => check.componentOccurrences ?? [],
-      );
-      expect(occurrences).toHaveLength(3);
+    // `convertSlimReport` rebuilds CheckResults field-by-field from the file,
+    // so this is the second place (after the SQLite row mapper) where an
+    // additive field is dropped unless it is explicitly carried.
+    const reimported = JSON.parse(
+      await cli(["report", "-i", file, "-f", "json"])
+    );
+    const stale = reimported.issues.find(
+      (issue: { ruleId: string }) => issue.ruleId === "content/stale-copyright"
+    );
+    expect(stale).toBeDefined();
+    const occurrences = stale.checks.flatMap(
+      (check: { componentOccurrences?: unknown[] }) =>
+        check.componentOccurrences ?? []
+    );
+    expect(occurrences).toHaveLength(3);
 
-      const groups = stale.componentFixGroups ?? [];
-      expect(groups).toHaveLength(1);
-      expect(groups[0].affectedPageCount).toBe(3);
-      expect(groups[0].occurrenceRefs).toHaveLength(3);
-      for (const ref of groups[0].occurrenceRefs) {
-        expect(stale.checks[ref.checkIndex]?.componentOccurrences?.[ref.occurrenceIndex]).toBeDefined();
-      }
-      // Reimport must reach the SAME target id as the audit that wrote the file.
-      const original = JSON.parse(readFileSync(file, "utf8"));
-      const originalGroup = original.issues.find(
-        (issue: { ruleId: string }) => issue.ruleId === "content/stale-copyright",
-      ).componentFixGroups[0];
-      expect(groups[0].id).toBe(originalGroup.id);
+    const groups = stale.componentFixGroups ?? [];
+    expect(groups).toHaveLength(1);
+    expect(groups[0].affectedPageCount).toBe(3);
+    expect(groups[0].occurrenceRefs).toHaveLength(3);
+    for (const ref of groups[0].occurrenceRefs) {
+      expect(
+        stale.checks[ref.checkIndex]?.componentOccurrences?.[
+          ref.occurrenceIndex
+        ]
+      ).toBeDefined();
+    }
+    // Reimport must reach the SAME target id as the audit that wrote the file.
+    const original = JSON.parse(readFileSync(file, "utf8"));
+    const originalGroup = original.issues.find(
+      (issue: { ruleId: string }) => issue.ruleId === "content/stale-copyright"
+    ).componentFixGroups[0];
+    expect(groups[0].id).toBe(originalGroup.id);
 
-      const llm = await cli(["report", "-i", file, "-f", "llm"]);
-      expect(llm).toContain("<component-fix-group");
-      expect(llm).toContain('affected_pages="3"');
-      expect(llm).toMatch(/<affected-page-sample bounded="true" shown="\d+" total="3">/);
-    },
-    120_000,
-  );
+    const llm = await cli(["report", "-i", file, "-f", "llm"]);
+    expect(llm).toContain("<component-fix-group");
+    expect(llm).toContain('affected_pages="3"');
+    expect(llm).toMatch(
+      /<affected-page-sample bounded="true" shown="\d+" total="3">/
+    );
+  }, 120_000);
 });
