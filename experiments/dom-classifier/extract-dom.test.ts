@@ -138,6 +138,41 @@ describe("semantic attributes for elements without text", () => {
   });
 });
 
+describe("link scheme categories", () => {
+  function categories(hrefs: string[]) {
+    const anchors = hrefs.map((href) => `<a href="${href}">x</a>`).join("");
+    const html = `<body><main><div>${anchors}</div></main></body>`;
+    return candidate(html, "div[0]").linkCategories as Record<string, number>;
+  }
+
+  test("treats every non-navigable scheme as unsafe, not just javascript and data", () => {
+    // vbscript: is what the denylist missed; the allowlist covers it and any
+    // scheme added later without this test needing to know the name.
+    expect(categories(["vbscript:msgbox(1)"])).toEqual({ unsafe: 1 });
+    expect(categories(["javascript:alert(1)"])).toEqual({ unsafe: 1 });
+    expect(categories(["data:text/html,<script>x</script>"])).toEqual({ unsafe: 1 });
+    expect(categories(["file:///etc/passwd"])).toEqual({ unsafe: 1 });
+    expect(categories(["blob:https://example.test/abc"])).toEqual({ unsafe: 1 });
+  });
+
+  test("ignores case and embedded whitespace the way a browser does", () => {
+    // A browser strips these before reading the scheme, so "java\tscript:" runs.
+    expect(categories(["JaVaScRiPt:alert(1)"])).toEqual({ unsafe: 1 });
+    expect(categories(["  vbscript:msgbox(1)"])).toEqual({ unsafe: 1 });
+    expect(categories(["java\tscript:alert(1)"])).toEqual({ unsafe: 1 });
+    expect(categories(["java\nscript:alert(1)"])).toEqual({ unsafe: 1 });
+  });
+
+  test("keeps the ordinary categories intact", () => {
+    expect(categories(["https://example.test/guides/other"])).toEqual({ same_site: 1 });
+    expect(categories(["https://other.test/x"])).toEqual({ external: 1 });
+    expect(categories(["/relative"])).toEqual({ relative: 1 });
+    expect(categories(["#section"])).toEqual({ anchor: 1 });
+    expect(categories(["mailto:a@b.test"])).toEqual({ mailto: 1 });
+    expect(categories(["tel:+15550134"])).toEqual({ tel: 1 });
+  });
+});
+
 describe("structure summary", () => {
   test("orders by count, drops the element's own tag and caps the list", () => {
     expect(structureSummary({ div: 4, a: 3, img: 1, span: 2 }, "div")).toBe("a*3,span*2,img");

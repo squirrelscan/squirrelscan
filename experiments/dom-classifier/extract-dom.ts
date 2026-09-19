@@ -37,18 +37,26 @@ function hidden(element: Element): boolean {
   return false;
 }
 
+// Schemes that may be followed. Anything else with a scheme is unsafe, so a
+// new dangerous scheme cannot be missed the way a denylist missed vbscript:.
+const navigableSchemes = new Set(["http", "https"]);
+// Categorised separately: not navigable, but not a script sink either.
+const contactSchemes = new Set(["mailto", "tel"]);
+
 function hrefCategory(raw: string | null, pageUrl: string): string {
   if (!raw) return "none";
-  const value = raw.trim().toLowerCase();
-  if (value.startsWith("mailto:")) return "mailto";
-  if (value.startsWith("tel:")) return "tel";
-  if (value.startsWith("#")) return "anchor";
-  if (value.startsWith("javascript:") || value.startsWith("data:")) return "unsafe";
+  // Browsers strip ASCII whitespace and control characters before reading the
+  // scheme, so `java\tscript:alert(1)` navigates as javascript:. Strip them
+  // here too, or the scheme test sees a different string than the browser.
+  const value = raw.replace(/[\u0000- ]/g, "").toLowerCase();
+  if (raw.trim().startsWith("#")) return "anchor";
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(value)?.[1];
+  if (!scheme) return "relative";
+  if (contactSchemes.has(scheme)) return scheme;
+  if (!navigableSchemes.has(scheme)) return "unsafe";
   try {
     const target = new URL(raw, pageUrl);
-    const rawUrl = new URL(raw, pageUrl);
-    if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) return "relative";
-    return target.hostname === rawUrl.hostname && target.hostname === new URL(pageUrl).hostname ? "same_site" : "external";
+    return target.hostname === new URL(pageUrl).hostname ? "same_site" : "external";
   } catch { return "other"; }
 }
 

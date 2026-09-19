@@ -366,16 +366,22 @@ def sanitize_text(value: str, limit: int = 280) -> str:
 def href_category(raw: str | None, page_url: str) -> str:
     if not raw:
         return "none"
-    raw = raw.strip()
-    lower = raw.lower()
-    if lower.startswith("mailto:"):
-        return "mailto"
-    if lower.startswith("tel:"):
-        return "tel"
-    if lower.startswith("#"):
+    # Allowlist, mirroring hrefCategory in extract-dom.ts: a denylist of
+    # javascript:/data: silently missed vbscript: and anything added later.
+    # Control characters and spaces are stripped first because browsers ignore
+    # them when reading the scheme, so "java\tscript:" navigates as javascript:.
+    value = re.sub(r"[\x00-\x20]", "", raw).lower()
+    if raw.strip().startswith("#"):
         return "anchor"
-    if lower.startswith(("javascript:", "data:")):
+    scheme_match = re.match(r"^([a-z][a-z0-9+.-]*):", value)
+    if not scheme_match:
+        return "relative"
+    scheme = scheme_match.group(1)
+    if scheme in {"mailto", "tel"}:
+        return scheme
+    if scheme not in {"http", "https"}:
         return "unsafe"
+    raw = raw.strip()
     try:
         target, base = urlsplit(raw), urlsplit(page_url)
     except ValueError:

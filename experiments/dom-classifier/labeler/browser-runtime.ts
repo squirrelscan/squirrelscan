@@ -38,6 +38,28 @@ export function resolvePlaywrightModule() {
   }
 }
 
+/**
+ * Why a browser suite cannot run here, or null when it can.
+ *
+ * CI deliberately has no Playwright, so browser suites must skip rather than
+ * fail. Resolution is sync and launches nothing, so a suite can decide at
+ * registration time. It deliberately does not consult
+ * `chromium.executablePath()`: that reports the headed Chromium build while
+ * `browserLaunchOptions()` runs headless and Playwright picks the headless
+ * shell, so an installed shell would read as missing.
+ */
+export function browserRuntimeUnavailableReason(): string | null {
+  try {
+    resolvePlaywrightModule();
+  } catch (error) {
+    return error instanceof Error ? error.message : "Playwright module could not be resolved";
+  }
+  const configured =
+    process.env.LABELER_BROWSER_EXECUTABLE?.trim() || process.env.PLAYWRIGHT_EXECUTABLE_PATH?.trim();
+  if (configured && !existsSync(configured)) return `Browser executable does not exist: ${configured}`;
+  return null;
+}
+
 export function browserLaunchOptions() {
   const executablePath =
     process.env.LABELER_BROWSER_EXECUTABLE?.trim() ||

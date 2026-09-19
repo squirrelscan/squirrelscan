@@ -3,7 +3,7 @@
  * Read-only staging-capture preflight. It never changes a capture or manifest;
  * importers can use its heldOut ids to keep unusable renders separate.
  */
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { LabelStore } from "../labeler/store.ts";
 import { validateCapture } from "./import-stage.ts";
@@ -59,9 +59,19 @@ function nodeIntegrityReasons(capture: Capture) {
 function review(capture: Capture, imagePath: string, stage: LabelStore) {
   const reasons: string[] = [], reviewFlags: string[] = [];
   const nodes = capture.nodes || [];
-  if (!existsSync(imagePath) || statSync(imagePath).size < 64) reasons.push("missing_or_empty_png");
+  // Read once and handle the failure, rather than exists/stat then read: the
+  // file can be replaced or removed between the check and the read, and the
+  // read would then throw or return bytes the check never saw.
+  let png: Buffer | null = null;
+  try {
+    const bytes = readFileSync(imagePath);
+    png = bytes.length < 64 ? null : bytes;
+  } catch {
+    png = null;
+  }
+  if (!png) reasons.push("missing_or_empty_png");
   else {
-    const dimensions = pngSize(readFileSync(imagePath));
+    const dimensions = pngSize(png);
     if (!dimensions || dimensions.width !== capture.width || dimensions.height !== capture.height) reasons.push("png_manifest_geometry_mismatch");
     if (typeof capture.documentHeight === "number") {
       const expectedHeight = Math.min(Math.ceil(capture.documentHeight), 12_000);
