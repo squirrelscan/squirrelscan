@@ -1,10 +1,6 @@
 // Fold over-cap per-rule check arrays into per-issue-class aggregates (#910).
 
-import type {
-  CheckItem,
-  CheckResult,
-  ComponentOccurrence,
-} from "@squirrelscan/core-contracts";
+import type { CheckItem, CheckResult } from "@squirrelscan/core-contracts";
 import {
   clampDetailsRecord,
   clampItemId,
@@ -717,43 +713,12 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
     }
   }
 
-  // Component evidence rides along on the rows this fold already recorded; it
-  // never adds rows. `pages` is the aggregate's own record of which pages the
-  // fold kept, and the unfolded row set IS that record — the scorer keys its
-  // density penalty on (name,pageUrl), so a row invented for a page the fold
-  // never counted would manufacture a finding and shift the score. Group the
-  // evidence by page once, then attach it to matching rows only.
-  const occurrencesByPage = new Map<string, ComponentOccurrence[]>();
-  for (const occurrence of check.componentOccurrences ?? []) {
-    const list = occurrencesByPage.get(occurrence.pageUrl);
-    if (list) list.push(occurrence);
-    else occurrencesByPage.set(occurrence.pageUrl, [occurrence]);
-  }
-  // Evidence for a page outside the bounded sample cannot be placed on any row.
-  // Record how much was dropped rather than losing it silently or inventing a
-  // row for it. A marker the check already carries describes a harder loss
-  // (the payload boundary), so it is never overwritten by this softer one.
-  const pageSet = new Set(check.pages);
-  const unplaceable = (check.componentOccurrences ?? []).filter(
-    (occurrence) => !pageSet.has(occurrence.pageUrl),
-  );
-  const componentEvidence =
-    check.componentEvidence ??
-    (unplaceable.length > 0
-      ? {
-          state: "omitted" as const,
-          reason: "page-sample-limit" as const,
-          occurrenceCount: unplaceable.length,
-        }
-      : undefined);
-
   return check.pages.map((page, i) => {
     const pageItems = itemsByPage.get(page);
     const details: Record<string, unknown> = { ...baseDetails };
     if (i === 0 && typeof additional === "number" && additional > 0) {
       details.additional = additional;
     }
-    const pageOccurrences = occurrencesByPage.get(page);
     return {
       ...check,
       message: perPageMessage,
@@ -761,10 +726,6 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
       pages: undefined,
       items: pageItems && pageItems.length > 0 ? pageItems : undefined,
       details: Object.keys(details).length > 0 ? details : undefined,
-      componentOccurrences: pageOccurrences,
-      // Same rationale as `additional`: a whole-fold fact cannot be split
-      // across rows, so it is pinned to the first one rather than repeated.
-      componentEvidence: i === 0 ? componentEvidence : undefined,
     };
   });
 }
@@ -991,36 +952,6 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
     0,
     REPORT_LIMITS.maxMediumString,
   );
-  // Component-aware fix grouping requires every observed element, unlike legacy
-  // items/pages which are explicitly presentation samples. Do not cap this list:
-  // a cap would turn affected-page membership into an unlabelled guess.
-  // An omission marker is the only record that evidence existed and was lost.
-  // Folding rebuilds the aggregate field-by-field, so a marker on any member
-  // check has to be merged forward or the fold erases the fact.
-  const markers = group
-    .map((check) => check.componentEvidence)
-    .filter((marker): marker is NonNullable<CheckResult["componentEvidence"]> => Boolean(marker));
-  const componentEvidence =
-    markers.length > 0
-      ? {
-          state: "omitted" as const,
-          // `payload-limit` outranks `page-sample-limit`: the evidence could not
-          // be stored at all, rather than merely falling outside a page sample.
-          reason: markers.some((marker) => marker.reason === "payload-limit")
-            ? ("payload-limit" as const)
-            : markers.some((marker) => marker.reason === "page-sample-limit")
-              ? ("page-sample-limit" as const)
-              : ("sibling-row" as const),
-          occurrenceCount: markers.reduce((sum, marker) => sum + marker.occurrenceCount, 0),
-        }
-      : undefined;
-  const componentOccurrences = group
-    .flatMap((check) => check.componentOccurrences ?? [])
-    .sort((a, b) => {
-      const left = `${a.pageUrl}\0${a.family.key}\0${a.variant.key}\0${a.element.locator}\0${a.defect.kind}`;
-      const right = `${b.pageUrl}\0${b.family.key}\0${b.variant.key}\0${b.element.locator}\0${b.defect.kind}`;
-      return left < right ? -1 : left > right ? 1 : 0;
-    });
 
   return {
     name: first.name,
@@ -1030,8 +961,6 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
     ...(items.length > 0 ? { items } : {}),
     details,
     ...(first.skipReason !== undefined ? { skipReason: first.skipReason } : {}),
-    ...(componentOccurrences.length > 0 ? { componentOccurrences } : {}),
-    ...(componentEvidence ? { componentEvidence } : {}),
     ...(allUnrendered
       ? { provenance: "unrendered" as const }
       : allCarried

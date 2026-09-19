@@ -15,7 +15,6 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 
 import { findingFingerprint } from "./fingerprint";
@@ -323,129 +322,29 @@ export function itemFindingMessage(check: CheckResult, item: CheckItem): string 
  * around a transport limit would destroy data that the local path would have
  * kept. Shrinking an already-over-cap payload for transport belongs at the
  * transport boundary (`clampFindingPayload` in the API's chunk ingest), not here.
- *
- * Component evidence obeys the SAME budget. It is additive display evidence, so
- * it can never be the reason a payload tips over the cap and gets dropped whole
- * — that would trade a complete legacy finding for an incomplete new one. When
- * it does not fit, the row keeps an `omitted` marker instead, which costs a
- * fixed ~80 bytes and makes the loss legible to every reader.
  */
 function itemFindingPayload(
   check: CheckResult,
   item: CheckItem,
   i: number,
   value: string | null,
-  expected: string | null,
-  ownsComponentEvidence: boolean,
+  expected: string | null
 ): string {
-  const base = {
-    items: [item],
-    details: check.details,
-    pages: check.pages,
-    i,
-  };
-  // Short keys: this rides on EVERY item row. `v`/`e` are omitted when the
-  // check carried none, and `m` is the marker a reader keys the whole restore
-  // on — a pre-#1881 row has no `m`, and a whole-check row never writes one.
-  const stash = {
+  const base = { items: [item], details: check.details, pages: check.pages, i };
+  const withAggregate = JSON.stringify({
     ...base,
+    // Short keys: this rides on EVERY item row. `v`/`e` are omitted when the
+    // check carried none, and `m` is the marker a reader keys the whole restore
+    // on — a pre-#1881 row has no `m`, and a whole-check row never writes one.
     m: check.message,
     ...(value !== null ? { v: value } : {}),
     ...(expected !== null ? { e: expected } : {}),
-  };
-  const occurrenceCount = check.componentOccurrences?.length ?? 0;
-  const fits = (payload: string): boolean =>
-    payload.length <= REPORT_LIMITS.maxFindingPayload;
-
-  // A marker the check ALREADY carries (unfold's `page-sample-limit`) is the
-  // only record that evidence existed upstream. Carry it through unchanged when
-  // this check has nothing left to serialize, or the omission is erased.
-  if (occurrenceCount === 0 && check.componentEvidence) {
-    const carried = JSON.stringify({ ...stash, componentEvidence: check.componentEvidence });
-    if (fits(carried)) return carried;
-  }
-
-  if (occurrenceCount > 0) {
-    // Exactly ONE row per check owns the evidence, so the store holds a single
-    // copy rather than one per item. Every other row of the same check records
-    // that an owner exists, so a rebuild that finds only markers can tell "the
-    // owning row was lost" apart from "this check never had evidence".
-    const evidence = {
-      state: "omitted" as const,
-      reason: (ownsComponentEvidence ? "payload-limit" : "sibling-row") as
-        | "payload-limit"
-        | "sibling-row",
-      occurrenceCount,
-    };
-    if (ownsComponentEvidence) {
-      const withEvidence = JSON.stringify({
-        ...stash,
-        componentOccurrences: packComponentOccurrences(check.componentOccurrences!),
-      });
-      if (fits(withEvidence)) return withEvidence;
-    }
-    const withMarker = JSON.stringify({ ...stash, componentEvidence: evidence });
-    if (fits(withMarker)) return withMarker;
-    // The marker does NOT outrank legacy data that would otherwise fit:
-    // `details` feeds scoring (`details.additional` drives the density
-    // penalty), so trading it for an ~80-byte note would move the health score
-    // — the #1179 class. The marker is only preferred once the legacy payload
-    // is itself over cap and therefore doomed either way; that case falls
-    // through to the ladder below, which keeps the row under the cap.
-    const withAggregateOnly = JSON.stringify(stash);
-    if (fits(withAggregateOnly)) return withAggregateOnly;
-    const baseWithMarker = JSON.stringify({ ...base, componentEvidence: evidence });
-    if (fits(baseWithMarker)) return baseWithMarker;
-    return JSON.stringify({ i, componentEvidence: evidence });
-  }
-
-  const withAggregate = JSON.stringify(stash);
-  if (fits(withAggregate)) return withAggregate;
+  });
+  if (withAggregate.length <= REPORT_LIMITS.maxFindingPayload) return withAggregate;
   // Byte-identical to the pre-#1881 payload, so an over-cap finding is no worse
   // off than it was — the ingest drops it exactly as before, and the local store
   // keeps every field exactly as before.
   return JSON.stringify(base);
-}
-
-/**
- * Serialize an itemless check's payload. `details`/`pages` are load-bearing and
- * deliberately uncapped here (see {@link itemFindingPayload}); the additive
- * component evidence is the only part that yields to the ingest cap, and it
- * leaves a marker behind when it does.
- */
-function wholeCheckPayload(check: CheckResult): string | null {
-  const base = { details: check.details, pages: check.pages };
-  const fits = (payload: string): boolean =>
-    payload.length <= REPORT_LIMITS.maxFindingPayload;
-  const occurrenceCount = check.componentOccurrences?.length ?? 0;
-
-  if (occurrenceCount === 0) {
-    // Preserve a marker the check already carried (see `itemFindingPayload`).
-    if (check.componentEvidence) {
-      const carried = JSON.stringify({ ...base, componentEvidence: check.componentEvidence });
-      if (fits(carried)) return carried;
-    }
-    return check.details || check.pages ? JSON.stringify(base) : null;
-  }
-
-  const withEvidence = JSON.stringify({
-    ...base,
-    componentOccurrences: packComponentOccurrences(check.componentOccurrences!),
-  });
-  if (fits(withEvidence)) return withEvidence;
-
-  const evidence = { state: "omitted" as const, reason: "payload-limit" as const, occurrenceCount };
-  const withMarker = JSON.stringify({ ...base, componentEvidence: evidence });
-  if (fits(withMarker)) return withMarker;
-  // Legacy fields first while they still fit (see `itemFindingPayload`): they
-  // feed scoring, the marker does not. Only once they are over cap on their own
-  // — where the ingest would drop the whole row anyway — does the marker win,
-  // which is strictly better than emitting an oversized payload.
-  const legacyOnly = JSON.stringify(base);
-  if (fits(legacyOnly)) return legacyOnly;
-  const trimmed = JSON.stringify({ pages: check.pages, componentEvidence: evidence });
-  if (fits(trimmed)) return trimmed;
-  return JSON.stringify({ componentEvidence: evidence });
 }
 
 /**
@@ -499,9 +398,7 @@ export function flattenChecks(
           message: itemFindingMessage(check, item),
           value: null,
           expected: null,
-          // Last emission survives `buildStreamFindings` latest-wins dedupe if
-          // duplicate item ids share a locator, so it is the sole evidence owner.
-          payload: itemFindingPayload(check, item, i, value, expected, i === items.length - 1),
+          payload: itemFindingPayload(check, item, i, value, expected),
         });
       }
     } else {
@@ -514,7 +411,9 @@ export function flattenChecks(
         message: check.message,
         value,
         expected,
-        payload: wholeCheckPayload(check),
+        payload: check.details || check.pages
+          ? JSON.stringify({ details: check.details, pages: check.pages })
+          : null,
       });
     }
   }

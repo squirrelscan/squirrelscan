@@ -50,7 +50,3 @@ plans/
 # Full paths, not bare `results/`, so nothing else in the tree is swallowed.
 /benchmarks/harness/results/
 /benchmarks/harness/stores/
-
-# Python bytecode
-__pycache__/
-*.pyc
