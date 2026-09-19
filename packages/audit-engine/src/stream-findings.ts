@@ -11,6 +11,7 @@
 // the package's `./smart-audits` entry so the container can import it.
 
 import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
@@ -24,6 +25,46 @@ import { findingKey, flattenChecks } from "./merge-core";
  * meta; `fingerprint` is the portable change hash (CLI+server parity).
  */
 export type StreamFindingLine = Omit<PageFindingRecord, "siteKey" | "lastSeenCrawlId">;
+
+/**
+ * Safety net for an over-cap payload carrying component evidence.
+ *
+ * `flattenChecks` already keeps every payload it builds within
+ * `maxFindingPayload`, so in practice nothing here fires — it exists because
+ * the chunk ingest DROPS an over-cap payload whole, and an additive field must
+ * never be the reason a complete legacy finding is lost. It mirrors
+ * `itemFindingPayload`'s ladder exactly: evidence, then a marker, then the
+ * untouched legacy fields.
+ */
+function clampComponentEvidenceForStream(payload: string | null): string | null {
+  if (!payload || payload.length <= REPORT_LIMITS.maxFindingPayload) return payload;
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value: unknown = JSON.parse(payload);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return payload;
+    parsed = value as Record<string, unknown>;
+  } catch {
+    return payload;
+  }
+
+  const occurrences = parsed.componentOccurrences;
+  if (!Array.isArray(occurrences)) return payload;
+
+  const { componentOccurrences: _componentOccurrences, ...withoutEvidence } = parsed;
+  const omitted = JSON.stringify({
+    ...withoutEvidence,
+    componentEvidence: {
+      state: "omitted",
+      reason: "payload-limit",
+      occurrenceCount: occurrences.length,
+    },
+  });
+  if (omitted.length <= REPORT_LIMITS.maxFindingPayload) return omitted;
+  // No room for even the marker without trimming legacy data. Keep that data
+  // byte-identical rather than emitting an over-cap payload the ingest drops.
+  return JSON.stringify(withoutEvidence);
+}
 
 /**
  * Flatten a report's `ruleResults` into complete streamable finding lines. Only
@@ -74,7 +115,7 @@ export function buildStreamFindings(
           message: f.message,
           value: f.value,
           expected: f.expected,
-          payload: f.payload,
+          payload: clampComponentEvidenceForStream(f.payload),
           fingerprint: findingFingerprint(f.status, f.message, f.value, f.expected),
           firstSeenAt: now,
           lastSeenAt: now,
