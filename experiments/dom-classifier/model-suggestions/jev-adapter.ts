@@ -4,6 +4,7 @@ import {
   PAGE_TYPES,
   PURPOSES,
   REGIONS,
+  TAXONOMY_REVISION,
   type CapturedPage,
   type CapturedNode,
   type ComponentType,
@@ -14,9 +15,11 @@ import {
 import { createHash } from "node:crypto";
 
 export const JEV_MODEL = "jev-1.13.0";
-export const PROMPT_REVISION = "dom-suggestions-v3";
+/** This prompt is bound to the additive `dom-taxonomy-v2` vocabulary. */
+export const PROMPT_REVISION = "dom-suggestions-v4";
 export const TYPESAFE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
-export const DEFAULT_MAX_CANDIDATES = 10;
+/** Small, diverse evidence set per page; this is not a DOM inventory. */
+export const DEFAULT_MAX_CANDIDATES = 6;
 const MAX_TEXT = 320;
 const MAX_TITLE = 240;
 const MAX_PATH = 500;
@@ -176,12 +179,48 @@ function candidateRank(node: CapturedNode): number {
     "dialog",
   ]);
   const interactive = new Set(["button", "a", "input", "select", "textarea"]);
+  const media = new Set(["img", "picture", "figure", "video", "audio", "iframe"]);
   return (
     (landmark.has(tag) || role.length > 0 ? 100 : 0) +
     (interactive.has(tag) ? 35 : 0) +
+    (media.has(tag) ? 85 : 0) +
+    (tag === "div" && node.text.length >= 100 ? 45 : 0) +
     Math.min(30, Math.floor(Math.log1p(Math.max(0, node.text.length)) * 5)) +
     Math.min(20, Math.floor(Math.sqrt(Math.max(0, node.rect.width * node.rect.height)) / 100))
   );
+}
+
+type CandidateBucket = "content" | "media" | "commerce" | "header" | "footer" | "layout";
+
+/**
+ * These buckets only reserve a varied set of observable DOM candidates. They
+ * neither create labels nor imply that a matching node belongs to a taxonomy
+ * category; Jev still receives the raw bounded state and answers each question.
+ */
+function candidateBuckets(node: CapturedNode): CandidateBucket[] {
+  const tag = node.tag.toLowerCase();
+  const text = node.text.toLowerCase();
+  const buckets: CandidateBucket[] = [];
+  if (["main", "article", "section", "table", "dl"].includes(tag) || node.text.length >= 80)
+    buckets.push("content");
+  if (["img", "picture", "figure", "video", "audio", "iframe"].includes(tag)) buckets.push("media");
+  if (
+    /\b(add to (cart|bag)|buy now|checkout|price|in stock|out of stock|sku|reviews?)\b/.test(text)
+  )
+    buckets.push("commerce");
+  if (tag === "header" || node.role === "banner") buckets.push("header");
+  if (tag === "footer" || node.role === "contentinfo") buckets.push("footer");
+  if (
+    ["nav", "main", "article", "aside", "form", "dialog", "section"].includes(tag) ||
+    Boolean(node.role)
+  )
+    buckets.push("layout");
+  return buckets;
+}
+
+function parentFamily(node: CapturedNode, byId: Map<string, CapturedNode>) {
+  const parent = node.parentId ? byId.get(node.parentId) : undefined;
+  return `${node.tag.toLowerCase()}:${parent?.tag.toLowerCase() ?? "root"}:${parent?.role ?? "-"}`;
 }
 
 /** Selects bounded, deterministic candidates without consulting weak or human labels. */
@@ -192,22 +231,65 @@ export function selectCandidates(
   if (!Number.isInteger(maxCandidates) || maxCandidates < 1 || maxCandidates > 50)
     throw new Error("maxCandidates must be an integer between 1 and 50");
   const byId = new Map(page.nodes.map((node) => [node.id, node]));
-  return page.nodes
+  const ranked = page.nodes
     .filter(
       (node) =>
         node.id &&
+        Number.isFinite(node.rect.width) &&
+        Number.isFinite(node.rect.height) &&
         node.rect.width > 0 &&
         node.rect.height > 0 &&
         (redact(node.text, MAX_TEXT).length > 0 ||
-          ["button", "input", "select", "textarea"].includes(node.tag.toLowerCase()) ||
+          [
+            "button",
+            "input",
+            "select",
+            "textarea",
+            "img",
+            "picture",
+            "figure",
+            "video",
+            "audio",
+            "iframe",
+          ].includes(node.tag.toLowerCase()) ||
           node.role),
     )
     .map((node, index) => ({ node, index, rank: candidateRank(node) }))
     .sort(
       (left, right) =>
         right.rank - left.rank || left.node.depth - right.node.depth || left.index - right.index,
-    )
-    .slice(0, maxCandidates)
+    );
+  const selected: (typeof ranked)[number][] = [];
+  const selectedIds = new Set<string>();
+  const familyCounts = new Map<string, number>();
+  const canAdd = (candidate: (typeof ranked)[number]) =>
+    !selectedIds.has(candidate.node.id) &&
+    (familyCounts.get(parentFamily(candidate.node, byId)) ?? 0) < 2;
+  const add = (candidate: (typeof ranked)[number]) => {
+    selected.push(candidate);
+    selectedIds.add(candidate.node.id);
+    const family = parentFamily(candidate.node, byId);
+    familyCounts.set(family, (familyCounts.get(family) ?? 0) + 1);
+  };
+  // Preserve the highest-ranked deterministic candidate even for callers that
+  // deliberately request a one-node probe; diversity fills the remaining budget.
+  if (ranked[0]) {
+    add(ranked[0]);
+  }
+  for (const bucket of ["content", "media", "commerce", "header", "footer", "layout"] as const) {
+    const candidate = ranked.find(
+      (item) => canAdd(item) && candidateBuckets(item.node).includes(bucket),
+    );
+    if (candidate && selected.length < maxCandidates) {
+      add(candidate);
+    }
+  }
+  for (const candidate of ranked) {
+    if (selected.length >= maxCandidates) break;
+    if (canAdd(candidate)) add(candidate);
+  }
+  return selected
+    .sort((left, right) => left.index - right.index)
     .map(({ node }) => {
       const candidate = safeNode(node);
       let parentId = node.parentId;
@@ -320,6 +402,26 @@ const COMPONENT_DEFINITIONS: Partial<Record<ComponentType, string>> = {
   layout_container:
     "A structural grouping used to arrange content without being a user-facing component itself.",
   navigation_menu: "A group of links or controls used to move among pages or sections.",
+  ad_unit:
+    "A paid or sponsored advertising creative or container. Do not use for the site's own promotion; use banner or another component when it is first-party content.",
+  media_gallery:
+    "A coordinated gallery or carousel of multiple visual media items, often showing several views of one product or story. A single image or video is image or media instead.",
+  purchase_panel:
+    "A grouped product purchase area containing price, availability, variant selection, add-to-cart, or buy controls. It is a shape, not merely any button that purchases.",
+  specification_list:
+    "A structured list or table of product attributes, dimensions, technical details, or specifications.",
+  rating_summary:
+    "A compact presentation of a rating, score, stars, or review count for one item. It is not a full list of individual reviews.",
+  review_list:
+    "A collection of individual user, customer, or editorial review entries for one item.",
+  video_player:
+    "An interactive player or embedded surface for viewing video, including its controls. A still image, thumbnail, or surrounding media area is not a video player.",
+  audio_player:
+    "An interactive player or embedded surface for listening to audio, including its controls. Do not use for ordinary text about audio.",
+  author_card:
+    "A compact author identity or biography unit, usually showing an author name, image, credentials, or profile link.",
+  comment_thread:
+    "A threaded or chronological collection of reader, user, or community comments and replies.",
   unknown: "Evidence is insufficient to identify a component type.",
 };
 
@@ -331,6 +433,23 @@ const REGION_DEFINITIONS: Partial<Record<Region, string>> = {
     "A banner area near the bottom of the page, usually before or alongside the footer content.",
   overlay:
     "A layer presented above the normal page flow, such as a modal, drawer, popover, consent prompt, or notification.",
+  article_body:
+    "The long-form prose body of one editorial article or news story, below any headline or article header. Do not use for all main content on a non-editorial page.",
+  advertisement:
+    "A page area reserved for paid or sponsored third-party advertising. Do not use for the site's own campaign or promotional content.",
+  product_gallery:
+    "The visual gallery area for one product, containing its images, video, thumbnails, or alternate views.",
+  product_buy_box:
+    "The purchase-focused area for one product, typically combining price, availability, variants, and buy or add-to-cart controls.",
+  product_details:
+    "The product information area for description, attributes, dimensions, or technical specifications after or beside the purchase area.",
+  product_reviews:
+    "The area showing ratings, review summaries, or individual reviews for one product.",
+  author_bio:
+    "The page area identifying or describing the author, byline, credentials, or profile associated with editorial content.",
+  related_content:
+    "The area recommending related articles, products, resources, or next items after the primary content.",
+  comments: "The page area containing reader, user, or community comments and replies.",
 };
 
 const PURPOSE_DEFINITIONS: Partial<Record<Purpose, string>> = {
@@ -345,6 +464,26 @@ const PURPOSE_DEFINITIONS: Partial<Record<Purpose, string>> = {
     "The node collects, submits, or presents feedback about a product, service, or experience.",
   support:
     "The node helps a user get assistance, documentation, contact support, or resolve a problem.",
+  advertising:
+    "The node serves paid or sponsored third-party advertising. Do not use for a first-party offer; use promotion for that purpose.",
+  purchase:
+    "The node lets a user begin or complete a purchase, such as adding an item to a cart, choosing a purchasable variant, or checking out.",
+  media_playback:
+    "The node starts, pauses, seeks, controls, or presents playback of audio or video media. Do not use solely because an image is present.",
+  review:
+    "The node lets a user read, write, submit, or evaluate ratings and reviews for an item, product, service, or experience.",
+  information:
+    "The node primarily explains factual information about a subject without being instructional, promotional, or an interaction control.",
+  editorial:
+    "The node primarily presents authored reporting, analysis, opinion, or narrative editorial content.",
+  instruction:
+    "The node primarily teaches a task, procedure, or workflow through directions or steps.",
+  product_information:
+    "The node primarily explains a product's features, attributes, compatibility, or specifications, separate from purchase controls.",
+  comparison:
+    "The node primarily compares alternatives, plans, products, or options to help a user evaluate a choice.",
+  social_proof:
+    "The node primarily provides endorsements, testimonials, customer logos, ratings, or other evidence of others' approval.",
 };
 
 function pageDefinition(label: PageType): string {
@@ -483,6 +622,7 @@ export type ModelSuggestionRow = {
   modelId: string;
   modelRevision: string;
   promptRevision: string;
+  taxonomyRevision: typeof TAXONOMY_REVISION;
   pageId: string;
   nodeId: string | null;
   captureHash: string;
@@ -546,6 +686,7 @@ export function toModelSuggestionRows(
     modelId: evaluation.model,
     modelRevision: evaluation.response.model || JEV_MODEL,
     promptRevision: evaluation.promptRevision,
+    taxonomyRevision: TAXONOMY_REVISION,
     pageId: page.id,
     nodeId: null,
     captureHash: page.captureHash,
@@ -632,6 +773,7 @@ export function toModelSuggestionRows(
       modelId: evaluation.model,
       modelRevision: evaluation.response.model || JEV_MODEL,
       promptRevision: evaluation.promptRevision,
+      taxonomyRevision: TAXONOMY_REVISION,
       pageId: page.id,
       nodeId: candidate.nodeId,
       captureHash: page.captureHash,

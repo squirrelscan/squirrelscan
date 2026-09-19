@@ -6,13 +6,20 @@ import {
   buildRequest,
   createHttpTransport,
   evaluatePage,
+  selectCandidates,
   type JevAnswer,
   type JevResponse,
   toModelSuggestionRows,
   validateResponse,
 } from "./jev-adapter.ts";
 import type { CapturedPage } from "../labeler/types.ts";
-import { PAGE_TYPES, COMPONENT_TYPES } from "../labeler/types.ts";
+import {
+  COMPONENT_TYPES,
+  PAGE_TYPES,
+  PURPOSES,
+  REGIONS,
+  TAXONOMY_REVISION,
+} from "../labeler/types.ts";
 
 const page: CapturedPage = {
   id: "page_1234567890abcdef12345678",
@@ -97,12 +104,13 @@ describe("Jev adapter", () => {
     expect(Object.keys(request.questions)).toContain(
       "node_node_1234567890abcdef12345678_component_type",
     );
-    expect(PROMPT_REVISION).toBe("dom-suggestions-v3");
+    expect(PROMPT_REVISION).toBe("dom-suggestions-v4");
+    expect(TAXONOMY_REVISION).toBe("dom-taxonomy-v2");
     expect(
       request.questions["node_node_1234567890abcdef12345678_region_top_banner"]?.criteria?.true,
     ).toContain("near the top");
     expect(
-      request.questions["node_node_1234567890abcdef12345678_purpose_authentication"]?.criteria
+      request.questions["node_node_1234567890abcdef12345678_purpose_authentication"]?.criteria // pragma: allowlist secret
         ?.true,
     ).toContain("sign in");
     expect(
@@ -111,6 +119,25 @@ describe("Jev adapter", () => {
     expect(
       request.questions["node_node_1234567890abcdef12345678_component_type"]?.criteria?.dialog,
     ).toContain("focused content");
+    expect(REGIONS).toContain("article_body");
+    expect(PURPOSES).toContain("advertising");
+    expect(COMPONENT_TYPES).toContain("ad_unit");
+    expect(COMPONENT_TYPES).toContain("video_player");
+    expect(
+      request.questions["node_node_1234567890abcdef12345678_region_product_buy_box"]?.criteria // pragma: allowlist secret
+        ?.true,
+    ).toContain("purchase-focused");
+    expect(
+      request.questions["node_node_1234567890abcdef12345678_purpose_advertising"]?.criteria?.true, // pragma: allowlist secret
+    ).toContain("sponsored");
+    expect(
+      request.questions["node_node_1234567890abcdef12345678_component_type"]?.criteria
+        ?.media_gallery,
+    ).toContain("gallery");
+    expect(
+      request.questions["node_node_1234567890abcdef12345678_component_type"]?.criteria
+        ?.video_player,
+    ).toContain("video");
   });
 
   test("replaces malformed Unicode before bounded text truncation", () => {
@@ -133,6 +160,107 @@ describe("Jev adapter", () => {
     expect(
       Object.values(request.questions).filter((question) => question.type === "choice"),
     ).toHaveLength(1);
+  });
+
+  test("reserves observable editorial, media, and commerce evidence without emitting labels", () => {
+    const diverse = {
+      ...page,
+      nodes: [
+        page.nodes[0]!,
+        {
+          ...page.nodes[1]!,
+          id: "node_4234567890abcdef12345678",
+          tag: "div",
+          role: null,
+          text: "A long editorial article body that explains the topic in enough bounded text to be representative evidence for a content candidate.",
+        },
+        {
+          ...page.nodes[1]!,
+          id: "node_5234567890abcdef12345678",
+          tag: "img",
+          role: null,
+          text: "",
+          rect: { x: 20, y: 500, width: 480, height: 320 },
+        },
+        {
+          ...page.nodes[2]!,
+          id: "node_6234567890abcdef12345678",
+          tag: "div",
+          role: null,
+          text: "Price $24.99. Add to cart.",
+        },
+      ],
+    } as CapturedPage;
+    const candidates = selectCandidates(diverse, 4);
+    expect(candidates.map((candidate) => candidate.nodeId)).toEqual([
+      "node_1234567890abcdef12345678",
+      "node_4234567890abcdef12345678",
+      "node_5234567890abcdef12345678",
+      "node_6234567890abcdef12345678",
+    ]);
+    expect(JSON.stringify(candidates)).not.toContain("product_buy_box");
+    expect(JSON.stringify(candidates)).not.toContain("advertisement");
+  });
+
+  test("limits repeated sibling-card families and reserves distinct page areas", () => {
+    const repeatedCards = {
+      ...page,
+      nodes: [
+        {
+          ...page.nodes[0]!,
+          id: "node_4234567890abcdef12345678",
+          tag: "header",
+          role: "banner",
+          text: "Store",
+        },
+        {
+          ...page.nodes[1]!,
+          id: "node_5234567890abcdef12345678",
+          tag: "main",
+          role: "main",
+          text: "Featured products and editorial content",
+        },
+        {
+          ...page.nodes[1]!,
+          id: "node_6234567890abcdef12345678",
+          tag: "section",
+          role: null,
+          text: "Featured collection",
+          rect: { x: 0, y: 220, width: 1440, height: 600 },
+        },
+        {
+          ...page.nodes[1]!,
+          id: "node_7234567890abcdef12345678",
+          tag: "footer",
+          role: "contentinfo",
+          text: "Customer service",
+          rect: { x: 0, y: 2100, width: 1440, height: 300 },
+        },
+        {
+          ...page.nodes[1]!,
+          id: "node_8234567890abcdef12345678",
+          tag: "div",
+          role: null,
+          text: "Product cards",
+          rect: { x: 0, y: 300, width: 1440, height: 400 },
+        },
+        ...Array.from({ length: 5 }, (_, index) => ({
+          ...page.nodes[2]!,
+          id: `node_${String(9 + index).repeat(24)}`,
+          parentId: "node_8234567890abcdef12345678",
+          tag: "a",
+          role: null,
+          text: `Product ${index + 1}: Price $24.99. Add to cart.`,
+          rect: { x: index * 240, y: 330, width: 220, height: 280 },
+        })),
+      ],
+    } as CapturedPage;
+    const candidates = selectCandidates(repeatedCards, 6);
+    expect(candidates.filter((candidate) => candidate.tag === "a")).toHaveLength(2);
+    expect(candidates.map((candidate) => candidate.tag)).toEqual(
+      expect.arrayContaining(["header", "main", "footer"]),
+    );
+    expect(candidates.some((candidate) => candidate.tag === "section")).toBeTrue();
   });
 
   test("validates every requested answer and preserves raw response", () => {
@@ -174,7 +302,7 @@ describe("Jev adapter", () => {
 
   test("bounds live requests and does not echo provider error bodies", async () => {
     const timeoutTransport = createHttpTransport({
-      apiKey: "test-key",
+      apiKey: "test-key", // pragma: allowlist secret
       timeoutMs: 5,
       fetchImpl: async (_input, init) =>
         await new Promise<never>((_resolve, reject) =>
@@ -186,7 +314,7 @@ describe("Jev adapter", () => {
     await expect(timeoutTransport(buildRequest(page, 1))).rejects.toThrow("timed out");
 
     const errorTransport = createHttpTransport({
-      apiKey: "test-key",
+      apiKey: "test-key", // pragma: allowlist secret
       fetchImpl: async () =>
         new Response(JSON.stringify({ detail: { message: "secret state payload" } }), {
           status: 400,
@@ -224,6 +352,8 @@ describe("Jev adapter", () => {
     expect(rows[0]?.mappedLabels.pageTypes).not.toContain("unknown");
     expect(rows[1]?.mappedLabels.regions).not.toContain("unknown");
     expect(rows[0]?.snapshotHash).toBe(rows[1]?.snapshotHash);
+    expect(rows[0]?.taxonomyRevision).toBe(TAXONOMY_REVISION);
+    expect(rows[1]?.taxonomyRevision).toBe(TAXONOMY_REVISION);
     expect(() =>
       toModelSuggestionRows(page, { ...evaluation, pageId: "page_000000000000000000000000" }),
     ).toThrow("pageId");

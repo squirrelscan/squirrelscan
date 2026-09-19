@@ -5,7 +5,8 @@ model suggestions. It constructs one typed request from a rendered capture and
 keeps the returned judgments separate from human annotations. It does not write
 labels, modify captures, or claim that a suggestion is DOM ground truth.
 
-The adapter uses `jev-1.13.0` and prompt revision `dom-suggestions-v3`. Jev is
+The adapter uses `jev-1.13.0`, taxonomy revision `dom-taxonomy-v2`, and prompt
+revision `dom-suggestions-v4`. Jev is
 text-only, so the request includes page metadata and bounded node state but no
 screenshot bytes. The node state is limited to fields already present in the
 capture: id, parent id, tag, ARIA role, bounded text, rectangle, and depth. CSS,
@@ -22,18 +23,30 @@ response, including Noul probabilities, Choice distributions, Choice
 confidence, model id, and token usage. It does not convert probabilities into
 human labels or thresholds.
 
-Revision `v3` explicitly defines the additive region labels (`hero`,
-`top_banner`, `bottom_banner`, and `overlay`), purpose labels (`promotion`,
-`announcement`, `authentication`, `subscription`, `feedback`, and `support`),
-and component shapes including `dialog`, `drawer`, `banner`, `popover`, and
-`content_section`. Earlier v2 sidecars remain valid historical suggestions;
-they intentionally do not contain these newer axes and are not rewritten.
+Revision `v4` binds suggestions to the additive `dom-taxonomy-v2` vocabulary.
+It adds regions for `article_body`, `advertisement`, author and comment areas,
+and distinct product gallery, buy-box, details, and review areas; purposes for
+paid advertising, purchase, media playback, reviews, information, editorial,
+instruction, product information, comparison, and social proof; and component
+shapes for advertising units, media galleries, purchase panels, specifications,
+rating summaries, review lists, media players, author cards, and comment
+threads. The exact definitions and observation rules are in
+[`../taxonomy.json`](../taxonomy.json). Existing `image`, `media`, `banner`,
+`promotion`, product page types, and editorial page types retain their prior
+meaning. Earlier sidecars remain valid historical suggestions and are not
+rewritten or silently projected to v2.
+
+Each v4 flat row carries `taxonomyRevision: "dom-taxonomy-v2"`. Omitted or
+empty axes are unobserved, never negative; only an `unknown` singleton records
+an explicit unknown observation. The adapter asks independent Noul questions
+for multi-label regions and purposes, and one Choice for component shape.
 Component subtypes remain human-only in this contract; adding model subtype
 judgments would require a new sidecar axis and another versioned prompt.
 
-`selectCandidates` is deterministic and bounded (ten by default). It ranks
-semantic landmarks and interactive nodes using only the captured tag, role,
-text length, geometry, and depth. This is a request-size control, not a claim
+`selectCandidates` is deterministic and bounded (six by default). It reserves
+representative content, media, commerce-evidence, and structural candidates
+using only captured tag, role, bounded text, geometry, and depth. This is a
+request-size control, not a claim that any candidate has a taxonomy label or
 that omitted nodes are negative examples.
 
 ## Private generator
