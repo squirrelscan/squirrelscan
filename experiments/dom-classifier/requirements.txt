@@ -1,0 +1,6 @@
+# Keep this environment local to the private experiment data directory. Do not add
+# these packages to a repository-wide lockfile for this exploratory baseline.
+joblib==1.4.2
+numpy==1.26.4
+scikit-learn==1.5.2
+scipy==1.13.1

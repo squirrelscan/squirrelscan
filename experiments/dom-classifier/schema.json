@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Private DOM annotation packet record",
+  "$comment": "This packet schema carries capture evidence only. The independent, versioned label vocabulary is experiments/dom-classifier/taxonomy.json (dom-taxonomy-v2); packets must not infer label values.",
+  "type": "object",
+  "required": ["candidateId", "pageId", "siteId", "pageProvenance", "node"],
+  "properties": {
+    "candidateId": {"type": "string", "pattern": "^dom_[a-f0-9]+$"},
+    "pageId": {"type": "string", "pattern": "^page_[a-f0-9]+$"},
+    "siteId": {"type": "string", "pattern": "^site_[a-f0-9]+$"},
+    "pageProvenance": {
+      "type": "object",
+      "required": ["capturedAt", "captureMode", "contentHashVerified"],
+      "properties": {
+        "capturedAt": {"type": ["string", "null"]},
+        "capturedAtEpochMs": {"type": ["integer", "null"]},
+        "captureMode": {"enum": ["source", "unknown"]},
+        "captureEvidence": {"type": ["string", "null"]},
+        "contentHashVerified": {"const": true},
+        "sourceHashPresent": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "required": ["tag", "roles", "context", "ancestorTags", "siblingPosition", "siblingCount", "childCount", "childTags", "subtreeTagCounts", "linkCategories", "text", "contextText", "textLength", "textWordCount", "linkCount", "locator", "semanticAncestorChain", "classTokens", "idTokens", "repeatedSiblingPatternCount", "shapeFingerprint"],
+      "properties": {
+        "tag": {"type": "string"},
+        "roles": {"type": "array", "items": {"type": "string"}},
+        "context": {"enum": ["site", "article", "main", "header", "footer", "unknown"]},
+        "ancestorTags": {"type": "array", "items": {"type": "string"}},
+        "siblingPosition": {"type": "integer", "minimum": 0},
+        "siblingCount": {"type": "integer", "minimum": 0},
+        "childCount": {"type": "integer", "minimum": 0},
+        "childTags": {"type": "array", "items": {"type": "string"}},
+        "subtreeTagCounts": {"type": "object", "propertyNames": {"pattern": "^[a-z][a-z0-9-]{0,40}$"}, "additionalProperties": {"type": "integer", "minimum": 0}},
+        "linkCategories": {"type": "object", "propertyNames": {"enum": ["none", "mailto", "tel", "anchor", "unsafe", "relative", "same_site", "external", "other"]}, "additionalProperties": {"type": "integer", "minimum": 0}},
+        "text": {"type": "string", "maxLength": 280},
+        "contextText": {"type": "string", "maxLength": 180},
+        "textLength": {"type": "integer", "minimum": 0, "maximum": 280},
+        "textWordCount": {"type": "integer", "minimum": 0},
+        "linkCount": {"type": "integer", "minimum": 0},
+        "locator": {"type": "string", "maxLength": 1000},
+        "semanticAncestorChain": {"type": "array", "maxItems": 6, "items": {"type": "object", "required": ["tag", "role"], "properties": {"tag": {"type": "string"}, "role": {"type": ["string", "null"]}}, "additionalProperties": false}},
+        "classTokens": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 40}},
+        "idTokens": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 40}},
+        "repeatedSiblingPatternCount": {"type": "integer", "minimum": 1},
+        "shapeFingerprint": {"type": "string", "pattern": "^[a-f0-9]{24}$"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
