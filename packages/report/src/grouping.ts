@@ -1,7 +1,7 @@
 // Category-grouped issues derived from rule results
 
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
-import type { ReportRuleResult, CheckItem, CheckResult } from "./types";
+import type { ReportRuleResult, CheckItem, CheckResult, ComponentOccurrence } from "./types";
 import { KEY_SEPARATOR } from "./constants";
 import { checkOccurrences } from "./occurrences";
 import {
@@ -10,6 +10,11 @@ import {
   type MessageShape,
 } from "./message-merge";
 import { checkAffectedPages } from "./affected-pages";
+import {
+  componentFixGroups,
+  componentOccurrenceKey,
+  type ComponentFixGroup,
+} from "./component-fix-groups";
 import { ruleMixedProvenanceNote, type MixedProvenanceCheck } from "./coverage";
 import {
   isValidCategory,
@@ -34,6 +39,9 @@ export interface GroupedCheck {
   // Structured data (preferred)
   items?: CheckItem[];
   details?: Record<string, unknown>;
+  /** Complete raw occurrence evidence, including uncertain/page-scoped observations. */
+  componentOccurrences?: ComponentOccurrence[];
+  componentEvidence?: CheckResult["componentEvidence"];
 
   // Legacy field (deprecated)
   value?: string;
@@ -76,6 +84,8 @@ export interface GroupedRule {
   // still shows red only from pages carried forward (not re-crawled) — e.g.
   // "Fixed on all 75 pages checked this run; 28 pages pending re-check."
   mixedProvenanceNote?: string;
+  /** Additive actionable groups derived only from component occurrence evidence. */
+  componentFixGroups?: ComponentFixGroup[];
 }
 
 export interface GroupedCategory {
@@ -126,6 +136,23 @@ function attributeItemToPage(item: CheckItem, pageUrl: string | undefined): Chec
   if (sources.includes(pageUrl)) return item;
   if (sources.length >= PUBLISH_LIMITS.maxSourcePagesPerItemPublish) return item;
   return { ...item, sourcePages: [...sources, pageUrl] };
+}
+
+/**
+ * Drop repeated observations while preserving order and the first reference of
+ * each. Identity is the full observation key (page + component + provenance),
+ * so this only ever collapses the SAME observation seen twice.
+ */
+function dedupeOccurrences(occurrences: ComponentOccurrence[]): ComponentOccurrence[] {
+  const seen = new Set<string>();
+  const out: ComponentOccurrence[] = [];
+  for (const occurrence of occurrences) {
+    const key = componentOccurrenceKey(occurrence);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(occurrence);
+  }
+  return out;
 }
 
 /**
@@ -222,6 +249,9 @@ export function groupIssuesByCategory(
       const existing = checkMap.get(key);
 
       const details = (check as { details?: Record<string, unknown> }).details;
+      const componentOccurrences = (check as { componentOccurrences?: ComponentOccurrence[] })
+        .componentOccurrences;
+      const componentEvidence = (check as CheckResult).componentEvidence;
       // A folded aggregate check (#910) stands in for `details.occurrences`
       // per-page checks — count them all so "×N" badges stay truthful.
       const occurrences = checkOccurrences({ details });
@@ -294,6 +324,19 @@ export function groupIssuesByCategory(
         if (details) {
           existing.details = { ...existing.details, ...details };
         }
+        if (componentOccurrences?.length) {
+          // Two checks under one key can be the SAME observation arriving twice
+          // (a carried finding re-merged with its fresh re-observation), which
+          // would double every occurrence count. Dedupe on the full observation
+          // key — page + component identity + provenance — so a genuinely
+          // distinct element, which differs in its locator or structural
+          // signature, is still kept alongside its lookalike.
+          existing.componentOccurrences = dedupeOccurrences([
+            ...(existing.componentOccurrences ?? []),
+            ...componentOccurrences,
+          ]);
+        }
+        if (componentEvidence) existing.componentEvidence = componentEvidence;
       } else {
         const itemById = new Map<string, CheckItem>();
         for (const item of items ?? []) {
@@ -325,6 +368,8 @@ export function groupIssuesByCategory(
           carriedPages: initialCarriedPages.length > 0 ? initialCarriedPages : undefined,
           carriedPageSet: initialCarriedPageSet,
           details: details ? { ...details } : undefined,
+          componentOccurrences: componentOccurrences ? [...componentOccurrences] : undefined,
+          componentEvidence,
           value: typeof (check as { value?: unknown }).value === "string"
             ? (check as { value: string }).value
             : undefined,
@@ -358,6 +403,18 @@ export function groupIssuesByCategory(
             a < b ? -1 : a > b ? 1 : 0
           );
         }
+        if (check.componentOccurrences) {
+          // Codepoint order over the canonical observation key. `localeCompare`
+          // over `JSON.stringify` would order by ICU collation AND by key
+          // insertion order, so the same report could serialize differently on
+          // two machines or after a payload round-trip.
+          // Decorate-sort-undecorate: the key is a canonical serialization of
+          // the whole observation, too expensive to rebuild inside a comparator.
+          check.componentOccurrences = check.componentOccurrences
+            .map((occurrence) => ({ occurrence, key: componentOccurrenceKey(occurrence) }))
+            .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+            .map((entry) => entry.occurrence);
+        }
         return check;
       }
     );
@@ -389,6 +446,7 @@ export function groupIssuesByCategory(
     const severity: "error" | "warning" | "info" =
       failCount > 0 ? metaSeverity : metaSeverity === "error" ? "warning" : metaSeverity;
 
+    const actionableComponentFixGroups = componentFixGroups(ruleId, result.checks);
     const rule: GroupedRule = {
       id: ruleId,
       name: meta.name,
@@ -405,6 +463,9 @@ export function groupIssuesByCategory(
       failCount,
       warnCount,
       mixedProvenanceNote,
+      ...(actionableComponentFixGroups.length > 0
+        ? { componentFixGroups: actionableComponentFixGroups }
+        : {}),
     };
 
     const rules = categoryMap.get(categoryKey) || [];
