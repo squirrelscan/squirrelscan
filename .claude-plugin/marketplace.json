@@ -9,7 +9,7 @@
     {
       "name": "squirrelscan",
       "source": "./",
-      "description": "Website QA tool built for coding agents (Claude Code, Cursor). 260+ rules across SEO, performance, security, accessibility & agent experience: audit from the CLI, fix findings in code, publish reports, and connect over MCP.",
+      "description": "Website QA tool built for coding agents (Claude Code, Cursor). 295 rules across 21 categories for SEO, performance, security, accessibility & agent experience: audit from the CLI, fix findings in code, publish reports, and connect over MCP.",
       "category": "productivity",
       "tags": ["seo", "audit", "website", "performance", "security"]
     }

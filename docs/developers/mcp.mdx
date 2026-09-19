@@ -4,7 +4,7 @@ description: "Connect any MCP client to the hosted squirrelscan MCP server: clou
 icon: "plug"
 ---
 
-squirrelscan runs a hosted [Model Context Protocol](https://modelcontextprotocol.io) server in the cloud. Point any MCP client at it and your agent gets tools for running cloud audits, reading reports, working the per-website issue tracker, sending product feedback, and browsing the 260+ rule catalog. Nothing to install, nothing to keep running:
+squirrelscan runs a hosted [Model Context Protocol](https://modelcontextprotocol.io) server in the cloud. Point any MCP client at it and your agent gets tools for running cloud audits, reading reports, working the per-website issue tracker, sending product feedback, and browsing the 295-rule catalog across 21 categories. Nothing to install, nothing to keep running:
 
 ```text
 https://mcp.squirrelscan.com/mcp
@@ -69,7 +69,7 @@ All tools require authentication. Write tools are marked; everything else only r
 | Tool | What it does | Access |
 |------|--------------|--------|
 | `whoami` | Identify the active credentials: org, plan, auth kind, credit balance. Call it first. | Read |
-| `run_audit` | Run a cloud audit of a URL (crawl + 260+ rule analysis + report). Estimate and confirm rail, see [Credits](#credits). Registers the website automatically on first audit. If the requested page count exceeds the org's plan ceiling, the audit still runs at the plan's max (never a hard error) and the response carries a `notice` field saying so. | Write, spends credits |
+| `run_audit` | Run a cloud audit of a URL (crawl + 295-rule analysis + report). Estimate and confirm rail, see [Credits](#credits). Registers the website automatically on first audit. If the requested page count exceeds the org's plan ceiling, the audit still runs at the plan's max (never a hard error) and the response carries a `notice` field saying so. | Write, spends credits |
 | `get_audit_status` | Poll a running audit by `run_id` until it completes. While running, the response includes a `progress` field (phase, message, page/link counts) when available. `notice` is present when the run's page count was clamped to the plan's ceiling at dispatch time. | Read |
 | `get_report` | Fetch a finished report: `summary` (JSON scores, top issues grouped by rule with fix text deduped into a `rules` dict, and score/issue-count history across prior audits), `llm` (compact text for agent context), or `markdown` (full report). | Read |
 | `list_audits` | Active and recent audit runs for the org. An active run carries `notice` when its page count was clamped to the plan's ceiling at dispatch time. | Read |
