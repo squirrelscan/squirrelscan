@@ -26,6 +26,7 @@
 // top.
 
 import type { CheckItem, CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
+import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 
 import type { SkippedPassCounts } from "./stream-findings";
@@ -74,6 +75,11 @@ interface ParsedPayload {
   v?: string;
   /** (#1881) Parent check's page-level `expected`; absent when it had none. */
   e?: string;
+  /** Component evidence as `flattenChecks` wrote it: the hoisted wire form, or
+   * a plain occurrence array from before the codec. `unpackComponentOccurrences`
+   * accepts both. */
+  componentOccurrences?: unknown;
+  componentEvidence?: CheckResult["componentEvidence"];
 }
 
 /** Emission-order key for an item finding's payload; findings without a stamped
@@ -181,6 +187,27 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
     }
     if (payload.details) check.details = payload.details;
     if (payload.pages) check.pages = payload.pages;
+    // Exactly ONE row of a check owns the component evidence (flattenChecks
+    // stamps the last item); the rest carry a `sibling-row` marker. So take the
+    // single complete copy, and fall back to a marker only when no row has the
+    // evidence — which is precisely the case where the owning row was lost in
+    // transit, and the marker is what makes that loss visible instead of
+    // looking like a check that never produced evidence at all.
+    const componentOccurrences = parsed
+      .map((entry) => unpackComponentOccurrences(entry.componentOccurrences))
+      .find((entry) => entry !== undefined && entry.length > 0);
+    if (componentOccurrences) {
+      check.componentOccurrences = componentOccurrences;
+    } else {
+      // Prefer a real omission reason over the bookkeeping one: `payload-limit`
+      // says the evidence never fit, `sibling-row` alone says it went missing.
+      const markers = parsed
+        .map((entry) => entry.componentEvidence)
+        .filter((marker): marker is NonNullable<typeof marker> => Boolean(marker));
+      const componentEvidence =
+        markers.find((marker) => marker.reason !== "sibling-row") ?? markers[0];
+      if (componentEvidence) check.componentEvidence = componentEvidence;
+    }
 
     checks.push(check);
   }
