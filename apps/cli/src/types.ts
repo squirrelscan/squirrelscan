@@ -185,6 +185,7 @@ import type {
   AuditStatus as _AS,
   CacheStats as _CST,
   CategoryScore as _CS,
+  ComponentOccurrence as _CO,
   DomainStats as _DST,
   EditorSummary as _ES,
   EntityMap as _EM,
@@ -206,6 +207,7 @@ export type EditorSummary = _ES;
 export type EntityMap = _EM;
 export type DomainStats = _DST;
 export type CacheStats = _CST;
+export type ComponentOccurrence = _CO;
 
 // Structured item for CheckResult - represents a single affected resource
 export interface CheckItem {
@@ -231,6 +233,17 @@ export interface CheckResult {
   value?: string | number | null;
   expected?: string | number | null;
   skipReason?: string; // Why rule was skipped (e.g., "LLM unavailable")
+
+  // #2307: additive DOM evidence for component-aware fix grouping. This
+  // interface is a hand-maintained twin of the core-contracts CheckResult, so a
+  // field missing here is silently dropped by every CLI path typed against it —
+  // which is how the feature reached production emitting nothing.
+  componentOccurrences?: ComponentOccurrence[];
+  componentEvidence?: {
+    state: "omitted";
+    reason: "payload-limit" | "page-sample-limit" | "sibling-row";
+    occurrenceCount: number;
+  };
 
   // Smart audits (#110): provenance for findings carried across audits.
   // `carried` = re-injected from the store for a page not re-crawled this run.

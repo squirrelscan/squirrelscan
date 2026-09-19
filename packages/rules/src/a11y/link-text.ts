@@ -4,6 +4,7 @@
 import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { ComponentOccurrenceCache, componentOccurrence } from "../shared/component-occurrence";
 
 // Generic link text that doesn't describe the destination
 // Expanded list based on Lighthouse and common patterns
@@ -183,6 +184,33 @@ export const linkTextRule: Rule = {
     const links = doc.querySelectorAll("a[href]");
     const genericLinks: string[] = [];
     const emptyLinks: Array<{ href: string; reason: string }> = [];
+    const genericOccurrences = [];
+    const emptyOccurrences = [];
+    const occurrenceCache = new ComponentOccurrenceCache();
+
+    // Browser URL resolution uses the first document base. Only use an HTTP(S)
+    // base for evidence: custom schemes could turn an otherwise ordinary link
+    // into a sensitive or non-navigable value that this rule does not model.
+    const documentBase = (() => {
+      const raw = doc.querySelector("base[href]")?.getAttribute("href");
+      if (!raw) return ctx.page.finalUrl ?? ctx.page.url;
+      try {
+        const resolved = new URL(raw, ctx.page.finalUrl ?? ctx.page.url);
+        return resolved.protocol === "http:" || resolved.protocol === "https:"
+          ? resolved.toString()
+          : (ctx.page.finalUrl ?? ctx.page.url);
+      } catch {
+        return ctx.page.finalUrl ?? ctx.page.url;
+      }
+    })();
+
+    const resolvedHref = (href: string): string => {
+      try {
+        return new URL(href, documentBase).toString();
+      } catch {
+        return href;
+      }
+    };
 
     for (const link of links) {
       const href = link.getAttribute("href") || "";
@@ -202,6 +230,20 @@ export const linkTextRule: Rule = {
           .trim();
         if (GENERIC_LINK_TEXT.includes(normalizedName)) {
           genericLinks.push(accessibleName);
+          genericOccurrences.push(
+            componentOccurrence(
+              {
+                pageUrl: ctx.page.url,
+                observedUrl: ctx.page.finalUrl ?? ctx.page.url,
+                rendered: ctx.page.rendered === true,
+                element: link,
+                kind: "link-text-generic",
+                values: { nameSource: "accessible-name", normalizedText: normalizedName },
+                sensitiveValues: { destination: resolvedHref(href) },
+              },
+              occurrenceCache,
+            ),
+          );
         }
         continue;
       }
@@ -214,6 +256,20 @@ export const linkTextRule: Rule = {
           href: href.substring(0, 50),
           reason: contentType,
         });
+        emptyOccurrences.push(
+          componentOccurrence(
+            {
+              pageUrl: ctx.page.url,
+              observedUrl: ctx.page.finalUrl ?? ctx.page.url,
+              rendered: ctx.page.rendered === true,
+              element: link,
+              kind: "link-text-empty",
+              values: { reason: contentType },
+              sensitiveValues: { destination: resolvedHref(href) },
+            },
+            occurrenceCache,
+          ),
+        );
         continue;
       }
 
@@ -222,6 +278,20 @@ export const linkTextRule: Rule = {
       const normalizedText = text.replace(/[.,!?;:'"]+/g, "").trim();
       if (GENERIC_LINK_TEXT.includes(normalizedText)) {
         genericLinks.push(text);
+        genericOccurrences.push(
+          componentOccurrence(
+            {
+              pageUrl: ctx.page.url,
+              observedUrl: ctx.page.finalUrl ?? ctx.page.url,
+              rendered: ctx.page.rendered === true,
+              element: link,
+              kind: "link-text-generic",
+              values: { nameSource: "text", normalizedText },
+              sensitiveValues: { destination: resolvedHref(href) },
+            },
+            occurrenceCache,
+          ),
+        );
       }
     }
 
@@ -237,6 +307,7 @@ export const linkTextRule: Rule = {
         details: {
           reasons: [...new Set(emptyLinks.map((e) => e.reason))],
         },
+        componentOccurrences: emptyOccurrences,
       });
     }
 
@@ -247,6 +318,8 @@ export const linkTextRule: Rule = {
         status: "warn",
         message: `${genericLinks.length} link(s) with generic text`,
         items: uniqueGeneric.map((text) => ({ id: text })),
+        componentOccurrences: genericOccurrences,
+
       });
     }
 

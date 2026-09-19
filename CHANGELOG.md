@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- The macOS binaries are signed again. `bun build --compile` writes its bundle into the executable but leaves the linker's ad-hoc signature describing the file as it was before, so `codesign --verify --strict` failed on every darwin asset we have published, and a Mac that enforces signatures killed the binary on sight. That is what the installs failing on Apple Silicon with exit 137 were hitting. Both darwin binaries are now re-signed after the build and before anything hashes them, and a macOS step verifies the signature and the recorded hashes before a release can publish.
+- The installer no longer tells a Mac user that a killed binary is out of memory. On macOS it names the two causes that are actually possible, a rejected code signature or security software, gives the command that tells them apart, and puts the macOS version in the report it sends.
 - A `Sitemap:` line in robots.txt that leaves out the scheme is read as the host it names instead of as a path on the audited site. `Sitemap: example.com/sitemap.xml` is now fetched at `https://example.com/sitemap.xml`, where it used to be fetched at `https://example.com/example.com/sitemap.xml` and 404. A declared sitemap whose path is not one of the common locations is reached again, so its URLs count towards sitemap coverage, orphan pages and missing pages, and a sitemap declared on another host (a CDN) is fetched there, still without the audit's own request headers. The report no longer lists a robots.txt sitemap failure that only our own resolution created, stores the resolved URL in every field that carries one, and reports the missing scheme as a robots.txt problem rather than repairing it silently.
 
 ## v0.0.96 — 2026-09-17

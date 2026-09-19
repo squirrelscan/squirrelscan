@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.95",
+      "version": "0.0.96",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -268,6 +268,7 @@
     "@astrojs/vercel": "^11.0.8",
     "@hono/node-server": "2.0.11",
     "astro": ">=7.2.8 <7.2.10",
+    "devalue": "^5.9.1",
     "dompurify": "3.4.13",
     "esbuild": "0.28.1",
     "fast-uri": "^3.1.6",
@@ -1486,7 +1487,7 @@
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
-    "devalue": ["devalue@5.8.2", "", {}, "sha512-DObPPAfdtFbXjxLqK8s2Xk9ZuWz5+ZoFEhC7J76es4GU/rEiXwHTmbImoCdyoCOcBH1UF3+Cz6Z2sYD4hyl5TA=="],
+    "devalue": ["devalue@5.9.4", "", {}, "sha512-sPAT4pztbu6586/hrhOnMKS17IJrvg12mXiSPSS3W5qDeN2RGgvZ0diZCm31dBbnevfVmujNO3IM2wrS4Y2Rhg=="],
 
     "devlop": ["devlop@1.1.0", "", { "dependencies": { "dequal": "^2.0.0" } }, "sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA=="],
 
