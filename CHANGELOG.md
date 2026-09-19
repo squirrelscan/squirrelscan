@@ -15,6 +15,12 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Fixed
+
+- A `Sitemap:` line in robots.txt that leaves out the scheme is read as the host it names instead of as a path on the audited site. `Sitemap: example.com/sitemap.xml` is now fetched at `https://example.com/sitemap.xml`, where it used to be fetched at `https://example.com/example.com/sitemap.xml` and 404. A declared sitemap whose path is not one of the common locations is reached again, so its URLs count towards sitemap coverage, orphan pages and missing pages, and a sitemap declared on another host (a CDN) is fetched there, still without the audit's own request headers. The report no longer lists a robots.txt sitemap failure that only our own resolution created, stores the resolved URL in every field that carries one, and reports the missing scheme as a robots.txt problem rather than repairing it silently.
+
 ## v0.0.96 — 2026-09-17
 
 Every audit now builds a map of the entities your site declares, a new command and five MCP tools read it, thirteen rules check it, and the leaked-secrets scanner went from a thousand false alarms on real sites to a few hundred correct public keys.
