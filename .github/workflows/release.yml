@@ -186,10 +186,37 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.tag }}
       - uses: ./.github/actions/setup-bun
+
+      # `make build-all` re-signs the darwin binaries after compiling them
+      # (#2310), and this job runs on Linux, where Apple's `codesign` does not
+      # exist. rcodesign is pinned by version AND by digest: a release must
+      # never be able to pull down a different signing tool than the reviewed
+      # one, and `cargo install` at release time would do exactly that.
+      - name: Install rcodesign
+        env:
+          RCODESIGN_VERSION: 0.29.0
+          RCODESIGN_SHA256: dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002 # pragma: allowlist secret
+        run: |
+          set -euo pipefail
+          tarball="apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 3 -fsSL \
+            -o "$tarball" \
+            "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/${tarball}"
+          echo "${RCODESIGN_SHA256}  ${tarball}" | sha256sum --check --status
+          tar xzf "$tarball"
+          mkdir -p "${RUNNER_TEMP}/bin"
+          install -m 0755 \
+            "apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl/rcodesign" \
+            "${RUNNER_TEMP}/bin/rcodesign"
+          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
+          "${RUNNER_TEMP}/bin/rcodesign" --version
+
       - name: Build all platforms
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: make build-all VERSION="$VERSION"
+      # Signing happens inside `make build-all`, so the hashes below are taken
+      # from the signed bytes. Never move this step above the build.
       - name: Generate manifest
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -203,9 +230,63 @@ jobs:
           name: release-binaries
           path: release-assets/
 
+  # The authoritative signature gate, and the only place in the pipeline where
+  # Apple's own verifier exists. It runs BEFORE anything publishes, so a build
+  # whose darwin assets do not verify can no longer reach users (#2310). It
+  # also re-hashes the two assets against the manifest, which is what proves
+  # the manifest was generated from the signed bytes rather than the
+  # pre-signing ones.
+  verify-darwin:
+    name: Verify darwin signatures
+    needs: [version, build]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-binaries
+          path: release-assets
+      - name: Verify signatures and manifest hashes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for arch in arm64 x64; do
+            file="release-assets/squirrel-${VERSION}-darwin-${arch}"
+            if [ ! -f "$file" ]; then
+              echo "::error::${file} is missing from the release artifact"
+              exit 1
+            fi
+            # upload-artifact drops the executable bit; restoring it does not
+            # touch the bytes, so the hash below is still the published one.
+            chmod +x "$file"
+            codesign -dv "$file" 2>&1 || true
+            if ! codesign --verify --strict "$file"; then
+              echo "::error::${file} is not validly signed. Nothing was published."
+              exit 1
+            fi
+            recorded=$(jq -r ".binaries[\"darwin-${arch}\"].sha256 // \"\"" release-assets/manifest.json)
+            actual=$(shasum -a 256 "$file" | cut -d' ' -f1)
+            if [ "$recorded" != "$actual" ]; then
+              echo "::error::manifest.json records ${recorded} for darwin-${arch}, the asset hashes to ${actual}. The manifest was generated before signing."
+              exit 1
+            fi
+            echo "darwin-${arch}: signature valid, manifest hash matches"
+          done
+      # macos-latest runners are arm64, so the asset that was being SIGKILLed
+      # in the field is the one this executes.
+      - name: Run the signed arm64 binary
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          home=$(mktemp -d)
+          HOME="$home" "./release-assets/squirrel-${VERSION}-darwin-arm64" --version
+
   github-release:
     name: Publish GitHub release
-    needs: [version, build]
+    needs: [version, build, verify-darwin]
     runs-on: ubuntu-latest
     permissions:
       attestations: write
