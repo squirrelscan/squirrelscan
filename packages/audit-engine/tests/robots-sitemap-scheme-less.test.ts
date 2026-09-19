@@ -99,6 +99,37 @@ function declaredFetches(origin = ORIGIN): string[] {
   return requested.filter((url) => !common.has(url));
 }
 
+/**
+ * Did the crawl request anything AT this host?
+ *
+ * Parsed, never prefix-matched. `url.startsWith("https://sitemap.xml")` reads
+ * as a host check and is not one: it misses `https://sitemap.xml:443/` and
+ * `https://user@sitemap.xml/`, and matches `https://sitemap.xml.evil.test/`.
+ * Since the whole point of these assertions is "the crawl never went to a host
+ * the audited site does not own", the weaker form would be the wrong test even
+ * where it happens to pass.
+ */
+function requestedHost(host: string): boolean {
+  return requested.some((url) => {
+    try {
+      return new URL(url).host === host;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** Did the crawl request anything under one of these schemes? */
+function requestedProtocol(...protocols: string[]): boolean {
+  return requested.some((url) => {
+    try {
+      return protocols.includes(new URL(url).protocol);
+    } catch {
+      return false;
+    }
+  });
+}
+
 async function discover(robotsTxt: RobotsTxtData, origin = ORIGIN) {
   return await Effect.runPromise(
     discoverSitemaps(origin, robotsTxt, "squirrel-test", { maxUrls: 50 }),
@@ -167,7 +198,7 @@ describe("scheme-less Sitemap line, crawl side (#2316)", () => {
 
     // The trap #2315 hit: `sitemap.xml` must never be read as a HOST.
     expect(declaredFetches()).toEqual(["https://worldairops.com/sitemap.xml?offset=100"]);
-    expect(requested.some((url) => url.startsWith("https://sitemap.xml"))).toBe(false);
+    expect(requestedHost("sitemap.xml")).toBe(false);
   });
 
   test("relative declarations resolve against the origin", async () => {
@@ -202,7 +233,7 @@ describe("scheme-less Sitemap line, crawl side (#2316)", () => {
     );
 
     expect(declaredFetches()).toEqual([]);
-    expect(requested.some((url) => url.startsWith("ftp:") || url.startsWith("file:"))).toBe(false);
+    expect(requestedProtocol("ftp:", "file:")).toBe(false);
     expect(requested).not.toContain(`${ORIGIN}/`);
     expect(result.failed.filter((entry) => entry.source === "robots.txt")).toEqual([]);
   });
@@ -232,7 +263,7 @@ describe("scheme-less Sitemap line, crawl side (#2316)", () => {
     // resolved against the base either.
     await discover(robotsTxtData(["https:sitemap.xml", "https:/sitemap.xml"]));
 
-    expect(requested.some((url) => url.startsWith("https://sitemap.xml"))).toBe(false);
+    expect(requestedHost("sitemap.xml")).toBe(false);
     expect(declaredFetches()).toEqual([]);
   });
 });
@@ -371,7 +402,7 @@ describe("the crawl and the report agree on one line (#2316)", () => {
       "https://worldairops.com/absolute.xml",
     ]);
     // Nothing the report dropped was fetched either.
-    expect(requested.some((url) => url.startsWith("ftp:"))).toBe(false);
+    expect(requestedProtocol("ftp:")).toBe(false);
     expect(requested.some((url) => url.includes("not%20a%20url"))).toBe(false);
     // ...and nothing the crawl reached is missing from the report.
     expect(declaredFetches().every((url) => reportedSet.has(url))).toBe(true);
