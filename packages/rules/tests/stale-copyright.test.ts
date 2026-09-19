@@ -11,10 +11,10 @@ import type { ParsedPage, RuleContext } from "../src/types";
 
 const NOW = 2026;
 
-function run(html: string, currentYear: number = NOW) {
+function run(html: string, currentYear: number = NOW, pageUrl = "https://example.com/") {
   const { document } = parseHTML(`<html><body>${html}</body></html>`);
   const ctx: RuleContext = {
-    page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
+    page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: { document } as unknown as ParsedPage,
     options: { current_year: currentYear },
   };
@@ -62,6 +62,47 @@ describe("staleCopyrightRule", () => {
     expect(check?.expected).toBe(NOW);
     // Severity is a rule-level property; assert it so nobody promotes this to a hard failure.
     expect(staleCopyrightRule.meta.severity).toBe("warning");
+    expect(check?.componentOccurrences).toHaveLength(1);
+    expect(check?.componentOccurrences?.[0]).toMatchObject({
+      groupable: true,
+      confidence: "observed",
+      region: { role: "footer", nestedIn: "none" },
+      defect: { kind: "stale-copyright", values: { year: 2024, currentYear: NOW } },
+    });
+  });
+
+  test("preserves distinct copyright elements but not superseded older notices", () => {
+    const [check] = run(
+      "<footer><span>© 2022 Acme</span><span>© 2024 Acme</span><span>© 2024 Other</span></footer>",
+    );
+    expect(check?.value).toBe(2024);
+    expect(check?.componentOccurrences).toHaveLength(2);
+    expect(check?.componentOccurrences?.map((occurrence) => occurrence.element.locator)).toEqual([
+      "footer:1>footer>span:2",
+      "footer:1>footer>span:3",
+    ]);
+  });
+
+  test("does not duplicate one nested copyright element matched through overlapping footer selectors", () => {
+    const [check] = run('<footer><div class="footer"><p>© 2024 Acme</p></div></footer>');
+    expect(check?.componentOccurrences).toHaveLength(1);
+    expect(check?.componentOccurrences?.[0]?.element.locator).toBe("footer:1>footer>div:1>p:1");
+  });
+
+  test("article-local footers do not shift a shared site footer's region slot", () => {
+    const withArticleFooter = run(
+      "<article><footer>© 2024 Article</footer></article><footer>© 2024 Acme</footer>",
+      NOW,
+      "https://example.com/a/",
+    )[0]!;
+    const plainPage = run("<footer>© 2024 Acme</footer>", NOW, "https://example.com/b/")[0]!;
+    const siteFooter = withArticleFooter.componentOccurrences?.find(
+      (occurrence) => occurrence.groupable,
+    )!;
+    const plainFooter = plainPage.componentOccurrences?.[0]!;
+    expect(siteFooter.element.locator).toBe("footer:1>footer");
+    expect(siteFooter.family).toEqual(plainFooter.family);
+    expect(siteFooter.variant).toEqual(plainFooter.variant);
   });
 
   test("a range ending this year is clean; ending last year is not", () => {

@@ -1,0 +1,20 @@
+{
+  "name": "@squirrelscan/dom-classifier-experiment",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "oxfmt --write labeler/*.ts labeler/*.js labeler/*.html labeler/*.css model-suggestions/*.ts",
+    "format:check": "oxfmt --check labeler/*.ts labeler/*.js labeler/*.html labeler/*.css model-suggestions/*.ts",
+    "lint": "oxlint labeler model-suggestions",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "test": "bun test extract-dom.test.ts labeler/*.test.ts model-suggestions/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.0",
+    "@types/node": "24.13.1",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "oxfmt": "0.21.0",
+    "oxlint": "1.73.0",
+    "playwright": "1.55.0"
+  }
+}

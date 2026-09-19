@@ -82,6 +82,71 @@ export interface CheckItem {
 
 export type CheckStatus = "pass" | "warn" | "fail" | "info" | "skipped";
 
+/**
+ * THE site-identity function for component evidence. The rule that scopes a
+ * component family to a site calls this once and RECORDS the result on the
+ * occurrence (`siteOrigin`); every later consumer reads that field instead of
+ * re-deriving one. An earlier revision derived the rule's scope from the
+ * fetched URL and the report's from the source URL, which disagreed on a
+ * cross-origin redirect — recording it makes that drift unrepresentable.
+ *
+ * A URL that will not parse cannot safely be shared across pages, so it becomes
+ * its own scope rather than collapsing every unparseable page into one.
+ */
+export function componentSiteOrigin(pageUrl: string): string {
+  try {
+    return new URL(pageUrl).origin;
+  } catch {
+    return `invalid:${pageUrl}`;
+  }
+}
+
+/**
+ * Additive, DOM-observed evidence for a finding in a reusable page region.
+ *
+ * These keys identify an observed DOM shape, not a source-code component. The
+ * values are deliberately hashes where crawler content could be sensitive.
+ */
+export interface ComponentOccurrence {
+  version: 1;
+  pageUrl: string;
+  /**
+   * The site this observation is scoped to, from {@link componentSiteOrigin} on
+   * the FETCHED url — a page that redirects off-origin belongs to where it
+   * landed, while `pageUrl` above preserves where it was reached from. Recorded
+   * rather than re-derived so no consumer can scope a component differently
+   * from the rule that produced it.
+   */
+  siteOrigin: string;
+  /** This describes the supplied DOM only; it does not claim a fresh fetch. */
+  provenance: { source: "page-dom"; rendered: boolean };
+  /** Report consumers must keep false/unknown evidence page-scoped. */
+  groupable: boolean;
+  confidence: "observed" | "uncertain";
+  /**
+   * Why an occurrence is `uncertain`, so a degraded observation is never a
+   * silent one. Absent exactly when `confidence` is "observed".
+   */
+  uncertainReason?:
+    | "no-region"
+    | "content-nested"
+    | "region-main"
+    | "structure-truncated";
+  region: {
+    role: "footer" | "header" | "navigation" | "main" | "unknown";
+    nestedIn: "article" | "main" | "none" | "unknown";
+    structuralSignature: string;
+  };
+  family: { key: string; structuralSignature: string };
+  variant: { key: string; structuralSignature: string; contentHash: string };
+  element: { locator: string; structuralSignature: string };
+  defect: {
+    kind: "stale-copyright" | "link-text-empty" | "link-text-generic";
+    values: Record<string, string | number>;
+    valueHashes: Record<string, string>;
+  };
+}
+
 export interface CheckResult {
   name: string;
   status: CheckStatus;
@@ -93,6 +158,31 @@ export interface CheckResult {
   value?: string | number | null;
   expected?: string | number | null;
   skipReason?: string;
+  /**
+   * Complete, additive element evidence for component-aware report grouping.
+   * It never replaces items, pages, or the original rule detection.
+   */
+  componentOccurrences?: ComponentOccurrence[];
+  /**
+   * Evidence this check HAD but that a bounded surface could not carry. It is
+   * the honest counterpart of {@link componentOccurrences}: a reader that finds
+   * neither field knows the check never produced evidence, and a reader that
+   * finds this one knows exactly how much was dropped and where.
+   *
+   * - `payload-limit`  — the finding payload would have exceeded
+   *   `REPORT_LIMITS.maxFindingPayload`, so the evidence was left out of it.
+   * - `page-sample-limit` — the aggregate's bounded `pages[]` sample does not
+   *   contain these occurrences' pages, so unfolding cannot place them on a row
+   *   without inventing per-page findings that the fold never recorded.
+   * - `sibling-row` — one item row of this check owns the evidence; this row
+   *   deliberately does not repeat it. Seeing only this reason after a rebuild
+   *   means the owning row was lost in transit.
+   */
+  componentEvidence?: {
+    state: "omitted";
+    reason: "payload-limit" | "page-sample-limit" | "sibling-row";
+    occurrenceCount: number;
+  };
   /**
    * Smart audits (#110): provenance for findings carried across audits.
    * `carried` = re-injected from the per-page store for a page not re-crawled

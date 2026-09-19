@@ -1,7 +1,24 @@
 // JSON report output
 
 import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
-import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
+import type {
+  AuditReport,
+  AuditStatus,
+  CheckItem,
+  CheckResult,
+  ComponentOccurrence,
+  EntityMap,
+} from "../types";
+import type { ComponentFixGroup } from "../component-fix-groups";
+import type {
+  ComponentShape,
+  PackedComponentOccurrence,
+} from "@squirrelscan/core-contracts/component-evidence";
+import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import { componentOccurrenceKey } from "../component-fix-groups";
+import type { GroupedCheck } from "../grouping";
+
+import { REPORT_PAGES_HARD_CAP } from "../constants";
 import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
@@ -11,6 +28,65 @@ import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { seedRedirect } from "../coverage";
+
+/**
+ * A fix group as it is SERIALIZED: identical to {@link ComponentFixGroup} except
+ * that its occurrence objects are replaced by references into the check that
+ * already carries them. An occurrence is ~800 bytes of hashes, so repeating a
+ * group's members next to `checks[].componentOccurrences` doubled the evidence
+ * in every report and added no information.
+ */
+type SlimComponentFixGroup = Omit<ComponentFixGroup, "occurrences"> & {
+  /** #1023 R-F: `affectedPages` is a labeled sample; the count is authoritative. */
+  affectedPagesHasMore: boolean;
+  occurrenceCount: number;
+  /**
+   * Where this group's evidence lives: `checkIndex` indexes the sibling
+   * `checks[]` array and `occurrenceIndex` indexes that check's
+   * `componentOccurrences[]`.
+   */
+  occurrenceRefs: Array<{ checkIndex: number; occurrenceIndex: number }>;
+};
+
+/**
+ * Replace a group's inline occurrences with positions in the already-serialized
+ * check evidence.
+ *
+ * Resolution is by IDENTITY KEY, not object identity. `groupIssuesByCategory`
+ * dedupes merged occurrence arrays, so the object a group holds is not
+ * necessarily the same allocation the check ends up serializing — and a
+ * reference-based lookup silently dropped those, leaving `occurrenceCount`
+ * larger than `occurrenceRefs.length` with no indication which were missing.
+ * Equal keys mean equal serialized content, so any match is a correct target.
+ */
+function slimComponentFixGroups(
+  groups: ComponentFixGroup[],
+  checks: GroupedCheck[],
+  pageSampleLimit: number,
+): SlimComponentFixGroup[] {
+  const positions = new Map<string, { checkIndex: number; occurrenceIndex: number }>();
+  checks.forEach((check, checkIndex) => {
+    check.componentOccurrences?.forEach((occurrence, occurrenceIndex) => {
+      const key = componentOccurrenceKey(occurrence);
+      if (!positions.has(key)) positions.set(key, { checkIndex, occurrenceIndex });
+    });
+  });
+  return groups.map(({ occurrences, affectedPages: pages, ...group }) => {
+    const occurrenceRefs = occurrences
+      .map((occurrence) => positions.get(componentOccurrenceKey(occurrence)))
+      .filter((position): position is NonNullable<typeof position> => position !== undefined);
+    return {
+      ...group,
+      affectedPages: pages.slice(0, pageSampleLimit),
+      affectedPagesHasMore: pages.length > pageSampleLimit,
+      // Every occurrence a group counts must be reachable. A shortfall means
+      // the serialized evidence and the group disagree, which is a bug rather
+      // than a degradation, so the count follows the refs that actually resolve.
+      occurrenceCount: occurrenceRefs.length,
+      occurrenceRefs,
+    };
+  });
+}
 
 export interface JsonRenderOptions {
   version?: string;
@@ -111,6 +187,8 @@ interface SlimJsonReport {
     group: string;
     subcategory?: string;
     severity: "error" | "warning" | "info";
+    /** Additive, evidence-backed actionable targets; raw occurrences are complete. */
+    componentFixGroups?: SlimComponentFixGroup[];
     checks: Array<{
       name: string;
       status: "fail" | "warn";
@@ -120,6 +198,19 @@ interface SlimJsonReport {
       affectedPagesHasMore: boolean;
       items?: CheckItem[];
       details?: Record<string, unknown>;
+      /**
+       * Complete raw evidence, and the ONLY copy in this document: fix groups
+       * above reference these entries by index instead of repeating them.
+       * Present even when no cross-page group is safe.
+       *
+       * Serialized in the HOISTED form: the shared region/family/variant triples
+       * live in `componentShapes` and each row carries a `shape` index. Indices
+       * into this array are stable, so `occurrenceRefs` still address it.
+       */
+      componentOccurrences?: PackedComponentOccurrence[];
+      /** Shape table for `componentOccurrences`; `v` is the layout version. */
+      componentShapes?: { v: number; shapes: ComponentShape[] };
+      componentEvidence?: CheckResult["componentEvidence"];
       legacyValue?: string;
     }>;
   }>;
@@ -273,33 +364,52 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       group: rule.group,
       ...(rule.subcategory ? { subcategory: rule.subcategory } : {}),
       severity: rule.severity,
-        checks: rule.checks.map((check) => {
-          // #1023 R-F: affectedPages is a labeled sample; count is authoritative.
-          const ap = affectedPages(check);
-          return {
-            name: check.name,
-            status: check.status as "fail" | "warn",
-            message: check.message,
-            affectedPages: ap.sample,
-            affectedPagesCount: ap.count,
-            affectedPagesHasMore: ap.hasMore,
-            items: check.items,
-            details: check.details,
-            ...(check.value ? { legacyValue: check.value } : {}),
-            // Smart audits (#110): provenance for findings carried across audits.
-            // (#1652) "unrendered" is tested FIRST and emits no `lastSeenAt` —
-            // no audit has rendered the page, so there is nothing it was last
-            // seen at, and calling it "carried" would invent a prior audit.
-            ...(check.unrenderedCount && check.unrenderedCount >= check.count
-              ? { provenance: "unrendered" as const }
-              : check.carriedCount && check.carriedCount >= check.count
-                ? {
-                    provenance: "carried" as const,
-                    ...(check.lastSeenAt ? { lastSeenAt: check.lastSeenAt } : {}),
-                  }
-                : {}),
-          };
-      }),
+      ...(rule.componentFixGroups
+        ? {
+            componentFixGroups: slimComponentFixGroups(
+              rule.componentFixGroups,
+              rule.checks,
+              REPORT_PAGES_HARD_CAP,
+            ),
+          }
+        : {}),
+      checks: rule.checks.map((check) => {
+      // #1023 R-F: affectedPages is a labeled sample; count is authoritative.
+      const ap = affectedPages(check);
+      return {
+        name: check.name,
+        status: check.status as "fail" | "warn",
+        message: check.message,
+        affectedPages: ap.sample,
+        affectedPagesCount: ap.count,
+        affectedPagesHasMore: ap.hasMore,
+        items: check.items,
+        details: check.details,
+        ...(check.componentOccurrences?.length
+          ? (() => {
+              const packed = packComponentOccurrences(check.componentOccurrences);
+              return {
+                componentOccurrences: packed.occurrences,
+                componentShapes: { v: packed.v, shapes: packed.shapes },
+              };
+            })()
+          : {}),
+        ...(check.componentEvidence ? { componentEvidence: check.componentEvidence } : {}),
+        ...(check.value ? { legacyValue: check.value } : {}),
+        // Smart audits (#110): provenance for findings carried across audits.
+        // (#1652) "unrendered" is tested FIRST and emits no `lastSeenAt` —
+        // no audit has rendered the page, so there is nothing it was last
+        // seen at, and calling it "carried" would invent a prior audit.
+        ...(check.unrenderedCount && check.unrenderedCount >= check.count
+          ? { provenance: "unrendered" as const }
+          : check.carriedCount && check.carriedCount >= check.count
+            ? {
+                provenance: "carried" as const,
+                ...(check.lastSeenAt ? { lastSeenAt: check.lastSeenAt } : {}),
+              }
+            : {}),
+      };
+  }),
     })),
     ...(report.technologies && report.technologies.items.length > 0
       ? {

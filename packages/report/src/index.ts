@@ -4,6 +4,7 @@
 export type {
   CheckItem,
   CheckResult,
+  ComponentOccurrence,
   ContactPoint,
   RuleMeta,
   ReportRuleResult,
@@ -45,6 +46,13 @@ export { groupIssuesByCategory, groupCategoriesByGroup, flattenIssuesBySeverity 
 // findings from its own store and reaches the same text.
 export { mergeCheckMessages, messageMergeKey } from "./message-merge";
 export type { GroupedCheck, GroupedRule, GroupedCategory, GroupedGroup, FlatIssue } from "./grouping";
+export {
+  componentFixGroupDigest,
+  componentFixGroups,
+  componentOccurrenceIdentity,
+  componentOccurrenceKey,
+} from "./component-fix-groups";
+export type { ComponentFixGroup } from "./component-fix-groups";
 
 // Scoring
 export { getScoreGrade, getScoreColor, getGroupColor, GROUP_COLORS } from "./scoring";

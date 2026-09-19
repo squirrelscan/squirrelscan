@@ -377,6 +377,24 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         lines.push("");
       }
 
+      for (const fixGroup of rule.componentFixGroups ?? []) {
+        lines.push(
+          `**Actionable component fix target:** \`${fixGroup.defect.kind}\` in \`${fixGroup.region.role}\` (${fixGroup.region.nestedIn}), slot \`${fixGroup.semanticSlot}\`; ${fixGroup.affectedPageCount} affected page(s), ${fixGroup.occurrences.length} observed occurrence(s).`,
+        );
+        lines.push("");
+        lines.push(`Safe values: \`${JSON.stringify(fixGroup.defect.values)}\``);
+        lines.push(`Value hashes: \`${JSON.stringify(fixGroup.defect.valueHashes)}\``);
+        const sample = fixGroup.affectedPages.slice(0, REPORT_SOURCE_PAGES_PREVIEW);
+        if (sample.length > 0) {
+          lines.push("");
+          for (const page of sample) lines.push(`- [${getPathname(page) || "/"}](${page})`);
+          if (sample.length < fixGroup.affectedPageCount) {
+            lines.push(`- _Showing ${sample.length} bounded URL examples of ${fixGroup.affectedPageCount} affected pages._`);
+          }
+        }
+        lines.push("");
+      }
+
       // #1135: carried-forward rollup + the "clean on every page checked
       // this run, only carried pages still red" note.
       const carriedRollup = ruleCarriedRollupLine(

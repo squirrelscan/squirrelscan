@@ -371,6 +371,18 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   
       const messages = rule.checks.map((c) => c.message).filter((m) => m);
       if (messages.length > 0) lines.push(`${indent(2)}${escapeXml(messages.join("; "))}`);
+      for (const fixGroup of rule.componentFixGroups ?? []) {
+        const sample = fixGroup.affectedPages.slice(0, 10);
+        lines.push(
+          `${indent(2)}<component-fix-group rule_id="${escapeXml(fixGroup.ruleId)}" check="${escapeXml(fixGroup.check.name)}" status="${fixGroup.check.status}" attribution="${fixGroup.attribution}" affected_pages="${fixGroup.affectedPageCount}" occurrences="${fixGroup.occurrences.length}" defect_kind="${escapeXml(fixGroup.defect.kind)}" region="${escapeXml(fixGroup.region.role)}" nested_in="${escapeXml(fixGroup.region.nestedIn)}" semantic_slot="${escapeXml(fixGroup.semanticSlot)}">`,
+        );
+        lines.push(`${indent(3)}<defect-values>${escapeXml(JSON.stringify(fixGroup.defect.values))}</defect-values>`);
+        lines.push(`${indent(3)}<defect-value-hashes>${escapeXml(JSON.stringify(fixGroup.defect.valueHashes))}</defect-value-hashes>`);
+        lines.push(
+          `${indent(3)}<affected-page-sample bounded="true" shown="${sample.length}" total="${fixGroup.affectedPageCount}">${escapeXml(sample.map((page) => compressUrl(page, baseOrigin)).join(", "))}</affected-page-sample>`,
+        );
+        lines.push(`${indent(2)}</component-fix-group>`);
+      }
       if (rule.mixedProvenanceNote) {
         lines.push(`${indent(2)}${escapeXml(rule.mixedProvenanceNote)}`);
       }

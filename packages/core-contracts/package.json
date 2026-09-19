@@ -19,7 +19,8 @@
     "./threat-intel": "./src/threat-intel.ts",
     "./resolution": "./src/resolution.ts",
     "./entity-map": "./src/entity-map.ts",
-    "./entity-mcp": "./src/entity-mcp.ts"
+    "./entity-mcp": "./src/entity-mcp.ts",
+    "./component-evidence": "./src/component-evidence.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
