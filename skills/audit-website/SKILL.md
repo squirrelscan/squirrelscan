@@ -1,19 +1,19 @@
 ---
 name: audit-website
-description: Audit a website with the squirrelscan CLI and fix the findings in code. Runs SEO, performance, security, technical, content, accessibility, and 15 other rule categories (260+ rules), returns an LLM-optimized report, then drives an iterative fix loop, mapping issues to source files, applying fixes, and re-auditing until the site scores well. Use to discover and assess website or webapp issues and drive them to fixed.
+description: Audit a website with SquirrelScan and fix the findings in code. Runs SEO, performance, security, technical, content, accessibility, and 15 other rule categories (260+ rules), returns an LLM-optimized report, and supports stored-audit entity-map investigation through MCP before an iterative fix loop.
 license: See LICENSE file in repository root
-compatibility: Requires squirrel CLI installed and accessible in PATH
+compatibility: Requires the squirrel CLI installed and accessible in PATH, or a connected SquirrelScan MCP server for stored-audit entity-map work
 metadata:
   author: squirrelscan
-  version: "2.1"
+  version: "2.2"
 allowed-tools: Bash(squirrel:*) Read Edit Grep Glob
 ---
 
 # Audit a Website and Fix It
 
-Run a squirrelscan audit against a website, read the LLM report, map each issue to the code or content that causes it, fix in batches, and re-audit until the score target is met.
+Run a squirrelscan audit or inspect a stored MCP audit, map each issue to the code or content that causes it, fix in batches, and re-audit until the score target is met.
 
-Requires the `squirrel` CLI ([squirrelscan.com/download](https://squirrelscan.com/download); verify with `squirrel --version`). For CLI setup, login, publishing, MCP, and general CLI usage, use the companion `squirrelscan` skill.
+Use the installed `squirrel` CLI ([squirrelscan.com/download](https://squirrelscan.com/download); verify with `squirrel --version`) to run audits, or a connected SquirrelScan MCP server to inspect stored audits. For CLI setup, login, publishing, MCP, and general CLI usage, use the companion `squirrelscan` skill.
 
 ## Rule docs
 
@@ -50,7 +50,7 @@ If the site blocks unknown crawlers (Shopify / Cloudflare), pass Web Bot Auth he
 ## The fix loop
 
 1. **Present the report**: score, grade, top issues by severity.
-2. **Propose fixes**: list the issues you can fix and confirm with the user before changing anything.
+2. **Propose fixes**: list the issues you can fix. Work within the user's authorized source-change scope; ask only when the needed scope is missing.
 3. **Map issues to source**: find the template, component, or content file behind each finding.
 4. **Fix in batches**: apply the approved fixes.
 5. **Re-audit** (use `--refresh` after deploys or content changes) and show before/after scores.
@@ -79,6 +79,16 @@ Compare against a baseline to prove improvement or catch regressions:
 squirrel report --diff <baseline-audit-id> --format llm
 squirrel report --regression-since example.com --format llm
 ```
+
+## Entity-map fixes
+
+For site-wide JSON-LD and entity-rule findings, inspect the saved map before editing: call native MCP `get_entity_findings`, record the returned audit/run ID, inspect each exact key with `get_entity`, and use `list_entities` and `get_entity_graph` for context. Pin all follow-up reads to that ID. `problem: ["no-id"]` also includes anonymous entities, so prioritize repeated Organization or Person nodes named by the rule finding. Page filtering searches only five published samples per entity; an empty result is not proof of absence. `get_entity` caps references at 50 in each direction, and a disconnected filtered node may connect globally.
+
+Find the shared JSON-LD generator, template, or CMS configuration. For a confirmed shared-identity defect, give the affected entity a stable absolute `@id` and reuse it in references. Do not merge an Organization and SoftwareApplication merely because names match; determine whether they are distinct identities or one legitimate multi-type entity. Resolve confirmed conflicts, dangling references, and split identities at their source without inventing facts or deleting valid entities. Add `sameAs` only when verified evidence shows the target represents the same entity. Validate generated JSON-LD and project checks; do not promise ranking gains.
+
+Work within the user's authorized source-change scope. Deployment and paid/cloud re-audits require the applicable authorization and must stay within the approved coverage and credit budget. After deployment, re-audit and inspect findings; call `compare_entities` with explicit before and after IDs, both of which need maps. A missing-map error does not prove no markup: the run may predate map storage. Confirm an identity repair with the intended `gainedId` and coverage, not merely an anonymous row disappearing; `gainedId` can be absent when the type or name changed in the same edit.
+
+Example request: “Inspect the saved entity map, pin every call to its run ID, show entity findings and sampled evidence, then fix the shared markup. Keep the SoftwareApplication distinct. Validate the JSON-LD, and after an approved deployment compare explicit before and after map runs.”
 
 ## Completion
 
