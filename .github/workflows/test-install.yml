@@ -202,6 +202,21 @@ jobs:
             squirrel --version
           "
 
+      # The end-to-end version of the release workflow's signature gate: this
+      # checks the binary as it actually lands on a user's disk. `bun build
+      # --compile` used to leave the linker's ad-hoc signature describing the
+      # file as it was before the bundle was appended, and macOS killed the
+      # result outright on machines that enforce signatures (#2310).
+      - name: Verify the installed binary is validly signed
+        run: |
+          sudo -u testuser bash -c '
+            set -eu
+            export HOME=/Users/testuser
+            target=$(readlink -f "$HOME/.local/bin/squirrel")
+            codesign -dv "$target" 2>&1 || true
+            codesign --verify --strict "$target"
+          '
+
       - name: Verify version output
         run: |
           VERSION_OUTPUT=$(sudo -u testuser bash -c "
@@ -285,6 +300,18 @@ jobs:
             export PATH=/Users/testuser/.local/bin:\$PATH
             squirrel --version
           "
+
+      # Same gate as the arm64 leg (#2310): the darwin-x64 asset carried the
+      # same stale ad-hoc signature.
+      - name: Verify the installed binary is validly signed
+        run: |
+          sudo -u testuser bash -c '
+            set -eu
+            export HOME=/Users/testuser
+            target=$(readlink -f "$HOME/.local/bin/squirrel")
+            codesign -dv "$target" 2>&1 || true
+            codesign --verify --strict "$target"
+          '
 
       - name: Verify version output
         run: |

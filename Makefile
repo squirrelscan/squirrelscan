@@ -5,7 +5,7 @@ APP_DIR := apps/cli
 VERSION ?= 0.0.0
 PLATFORMS := darwin-arm64 darwin-x64 linux-x64 linux-arm64 linux-x64-musl linux-arm64-musl windows-x64
 
-.PHONY: format format-check lint typecheck test test-release-tooling check ci build build-all manifest clean dev release
+.PHONY: format format-check lint typecheck test test-release-tooling check ci build build-all sign-darwin manifest clean dev release
 
 format:
 	@cd $(APP_DIR) && bun run format
@@ -47,6 +47,12 @@ build-all: ci
 			--target=bun-$$target \
 			--outfile=build/squirrel-$(VERSION)-$$platform$$ext); \
 	done
+	@$(MAKE) sign-darwin
+
+# Must run after the compile and before `manifest`: signing rewrites the file,
+# so a hash taken first would describe bytes nobody ever downloads (#2310).
+sign-darwin:
+	@bash scripts/sign-darwin.sh $(APP_DIR)/build
 
 manifest:
 	@cd $(APP_DIR) && VERSION=$(VERSION) bun run scripts/generate-manifest.ts

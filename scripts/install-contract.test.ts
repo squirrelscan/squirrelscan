@@ -1040,6 +1040,116 @@ describe("by-hand install after a killed self install (#2023)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 15_000);
+
+  // #2310. `bun build --compile` left the darwin binaries carrying a stale
+  // ad-hoc signature, and macOS SIGKILLs those. The generic 137 text sent
+  // those users off to add swap to a Mac that had plenty.
+  const DARWIN = "is_darwin() { return 0; }; macos_product_version() { printf '15.6'; }; ";
+  const NOT_DARWIN = "is_darwin() { return 1; }; ";
+
+  test("on macOS a killed binary is blamed on the signature, not on memory", async () => {
+    const { stdout } = await runWithCurlShim(
+      `${DARWIN}binary_unrunnable_guidance 137 /r/squirrel /b/squirrel`,
+    );
+    expect(stdout).toContain("code signature being rejected");
+    expect(stdout).toContain("security software");
+    expect(stdout).toContain("macOS version: 15.6");
+    // The one command that tells the two causes apart.
+    expect(stdout).toContain("codesign --verify --strict '/r/squirrel'");
+    expect(stdout).not.toContain("out-of-memory killer");
+    expect(stdout).not.toContain("swapfile");
+  });
+
+  // The stubbed tests here would stay green if `is_darwin` or
+  // `macos_product_version` themselves broke, so this shims what those two
+  // read (`uname`, `sw_vers`) and runs the real helpers.
+  const darwinShims = (productVersion: string | null): string => {
+    const dir = mkdtempSync(join(tmpdir(), "install-darwin-shim-"));
+    const uname = join(dir, "uname");
+    writeFileSync(uname, "#!/bin/bash\ncase \"$1\" in\n  -m) printf 'arm64\\n' ;;\n  *) printf 'Darwin\\n' ;;\nesac\n");
+    chmodSync(uname, 0o755);
+    const swVers = join(dir, "sw_vers");
+    // A Mac with no usable sw_vers is the case the version has to survive.
+    writeFileSync(
+      swVers,
+      productVersion === null ? "#!/bin/bash\nexit 1\n" : `#!/bin/bash\nprintf '${productVersion}\\n'\n`,
+    );
+    chmodSync(swVers, 0o755);
+    return dir;
+  };
+
+  test("the real helpers read a Mac off uname and sw_vers", async () => {
+    const dir = darwinShims("26.1");
+    try {
+      const { stdout } = await runWithCurlShim(
+        "binary_unrunnable_guidance 137 /r/squirrel /b/squirrel",
+        { env: { PATH: `${dir}:${process.env.PATH ?? ""}` } },
+      );
+      expect(stdout).toContain("code signature being rejected");
+      expect(stdout).toContain("macOS version: 26.1");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a Mac whose sw_vers fails still gets the signature guidance", async () => {
+    const dir = darwinShims(null);
+    try {
+      const { stdout, code } = await runWithCurlShim(
+        "binary_unrunnable_guidance 137 /r/squirrel /b/squirrel",
+        { env: { PATH: `${dir}:${process.env.PATH ?? ""}` } },
+      );
+      expect(code).toBe(0);
+      expect(stdout).toContain("code signature being rejected");
+      expect(stdout).not.toContain("macOS version:");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the printed codesign command quotes a path with a space", async () => {
+    const dir = darwinShims("26.1");
+    try {
+      const { stdout } = await runWithCurlShim(
+        `${DARWIN}binary_unrunnable_guidance 137 "/r/my squirrel" /b/squirrel`,
+        { env: { PATH: `${dir}:${process.env.PATH ?? ""}` } },
+      );
+      expect(stdout).toContain("codesign --verify --strict '/r/my squirrel'");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("off macOS a killed binary still reads as the out-of-memory killer", async () => {
+    const { stdout } = await runWithCurlShim(
+      `${NOT_DARWIN}binary_unrunnable_guidance 137 /r/squirrel /b/squirrel`,
+    );
+    expect(stdout).toContain("out-of-memory killer");
+    expect(stdout).toContain("swapfile");
+    expect(stdout).not.toContain("code signature");
+  });
+
+  test("the darwin verify_binary_killed report carries the macOS version", async () => {
+    const { dir, home, bin, tmp } = scratch();
+    try {
+      mkdirSync(tmp, { recursive: true });
+      const binary = fakeBinary(dir, "downloaded", alwaysKilled);
+      const { code, calls } = await runWithCurlShim(
+        `${DARWIN}TMPDIR_TO_CLEAN="${tmp}"; install_by_hand_and_verify "${binary}" v9.9.9 "${bin}" 137`,
+        { env: { HOME: home, NO_TELEMETRY: undefined }, settleMs: 5000 },
+      );
+      expect(code).toBe(1);
+      expect(calls).toHaveLength(1);
+      const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+      expect(report.step).toBe("verify_binary_killed");
+      // The worker keeps a fixed set of fields, so the version has to ride in
+      // the message, and the message keeps its HEAD when it is truncated.
+      expect(report.error_line).toContain("macOS 15.6");
+      expect(String(report.error_line).indexOf("macOS 15.6")).toBeLessThan(120);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });
 
 // --- the mirror fallback (#2064) ------------------------------------------

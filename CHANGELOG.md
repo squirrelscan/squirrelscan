@@ -15,6 +15,13 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Fixed
+
+- The macOS binaries are signed again. `bun build --compile` writes its bundle into the executable but leaves the linker's ad-hoc signature describing the file as it was before, so `codesign --verify --strict` failed on every darwin asset we have published, and a Mac that enforces signatures killed the binary on sight. That is what the installs failing on Apple Silicon with exit 137 were hitting. Both darwin binaries are now re-signed after the build and before anything hashes them, and a macOS step verifies the signature and the recorded hashes before a release can publish.
+- The installer no longer tells a Mac user that a killed binary is out of memory. On macOS it names the two causes that are actually possible, a rejected code signature or security software, gives the command that tells them apart, and puts the macOS version in the report it sends.
+
 ## v0.0.96 — 2026-09-17
 
 Every audit now builds a map of the entities your site declares, a new command and five MCP tools read it, thirteen rules check it, and the leaked-secrets scanner went from a thousand false alarms on real sites to a few hundred correct public keys.

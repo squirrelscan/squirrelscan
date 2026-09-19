@@ -601,17 +601,51 @@ place_release_by_hand() {
   printf '%s' "$target"
 }
 
+# Indirected so the tests can answer for a Mac from a Linux runner.
+is_darwin() {
+  [ "$(uname -s 2>/dev/null)" = "Darwin" ]
+}
+
+# The macOS release, e.g. 15.6. Empty anywhere else, and on a Mac where the
+# command is missing, so every caller has to cope with an empty value.
+macos_product_version() {
+  sw_vers -productVersion 2>/dev/null || true
+}
+
 # What to tell a user whose binary is installed but will not run. Everything
 # the user needs is stated as a path or a command: nothing here says "retry".
 binary_unrunnable_guidance() {
-  local code="$1" target="$2" link="$3" mib="" out=""
+  local code="$1" target="$2" link="$3" mib="" out="" macos_version=""
   mib=$( (available_memory_mib) 2>/dev/null || true)
   out="  squirrel is installed, but this machine could not run it:
     Binary: ${target}
     Link:   ${link}
   Nothing needs downloading again: once the machine can run it, use it as is.
 "
-  if [ "$code" = 137 ]; then
+  if [ "$code" = 137 ] && is_darwin; then
+    # On macOS a SIGKILL before the process prints anything is a rejection,
+    # not the OOM killer: `squirrel --version` does not exhaust a Mac. Either
+    # the code signature did not satisfy the kernel or security software
+    # refused a binary it has not approved (#2310).
+    macos_version=$(macos_product_version)
+    out="${out}
+  macOS killed it (SIGKILL) before it printed anything, which on a Mac is
+  almost always the code signature being rejected, or security software
+  (Santa, an MDM policy, an EDR agent) refusing a binary it has not approved."
+    if [ -n "$macos_version" ]; then
+      out="${out}
+  macOS version: ${macos_version}"
+    fi
+    out="${out}
+
+  Check which of the two it is:
+    codesign --verify --strict $(shell_quote "$target")
+  A signature error there is the published binary at fault, not this machine:
+  install the latest release, which re-signs its darwin binaries, or report it
+  at https://github.com/${REPO}/issues
+  A valid signature means your security software stopped it: allow
+  ${target} in its policy, then run: squirrel --version"
+  elif [ "$code" = 137 ]; then
     out="${out}
   The system killed it (SIGKILL), which on a small VPS or a memory-capped
   container is almost always the out-of-memory killer."
@@ -626,11 +660,6 @@ binary_unrunnable_guidance() {
       sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
       sudo mkswap /swapfile && sudo swapon /swapfile
     Or resize the machine, or raise the container memory limit, to 1GB or more."
-    if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
-      out="${out}
-  On macOS, endpoint security (Santa, an MDM policy) kills binaries it has not
-  approved the same way: check its log and allow ${target}."
-    fi
   elif [ "$code" = 143 ]; then
     out="${out}
   Something outside the installer stopped it (SIGTERM): a timeout wrapper, a
@@ -1287,7 +1316,7 @@ download_and_install() {
 # files are in place but the binary will not execute.
 install_by_hand_and_verify() {
   local binary="$1" version="$2" bin_dir="$3" kill_rc="$4"
-  local target link
+  local target link headline macos_version=""
 
   warn "$(self_install_kill_headline "$kill_rc")"
   log "Finishing the install by hand..."
@@ -1310,7 +1339,23 @@ install_by_hand_and_verify() {
     LAST_ERROR_OUTPUT=$(tail -n 40 "$verify_log" 2>/dev/null || true)
     LAST_ERROR_CODE="$rc"
     CURRENT_STEP=$(verify_binary_step_for_code "$rc")
-    error "squirrel is installed at $target but cannot run on this machine (exit $rc)" \
+    # The reported payload is a fixed set of fields (the worker drops anything
+    # it does not know), so the macOS release rides in the message itself,
+    # which is what Sentry shows as error_line. Without it a darwin kill is
+    # indistinguishable from every other darwin kill (#2310). It goes early in
+    # the line because the report keeps the message's HEAD when it truncates.
+    headline="squirrel is installed but cannot run on this machine"
+    if is_darwin; then
+      macos_version=$(macos_product_version)
+      if [ -n "$macos_version" ]; then
+        headline="${headline} (macOS ${macos_version}, exit $rc)"
+      else
+        headline="${headline} (macOS, exit $rc)"
+      fi
+    else
+      headline="${headline} (exit $rc)"
+    fi
+    error "${headline}: $target" \
       "$(binary_unrunnable_guidance "$rc" "$target" "$link")"
   fi
   info "Installed by hand after self install was killed (exit $kill_rc); the binary runs."
