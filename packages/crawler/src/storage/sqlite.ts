@@ -9,10 +9,6 @@ import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import {
-  packComponentOccurrences,
-  unpackComponentOccurrences,
-} from "@squirrelscan/core-contracts/component-evidence";
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
@@ -64,7 +60,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 30;
+export const SCHEMA_VERSION = 29;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -439,15 +435,6 @@ const MIGRATIONS: Record<number, string[]> = {
     `CREATE INDEX IF NOT EXISTS idx_entity_occurrences_url
       ON entity_occurrences(crawl_id, normalized_url)`,
   ],
-  // Version 30: component-aware findings (#2307). Additive DOM evidence for a
-  // check, stored as JSON beside the other CheckResult fields. Without these the
-  // report is rebuilt from `rule_results` with the evidence silently gone, which
-  // is how the whole feature was invisible to the real `squirrel audit` path.
-  30: [
-    "ALTER TABLE rule_results ADD COLUMN component_occurrences TEXT DEFAULT NULL",
-    "ALTER TABLE rule_results ADD COLUMN component_evidence TEXT DEFAULT NULL",
-  ],
-
 };
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
@@ -524,18 +511,6 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   // a database that skipped migration 27 would quietly put failed runs back in
   // the retention window instead of failing loudly.
   { name: "report_status", type: "TEXT" },
-];
-
-// Same guard for `rule_results`. Migration 30 added the two component-evidence
-// columns (#2307); a DB stamped past 30 by a build numbering its own migration
-// 30 would skip them forever. The failure splits both ways this file has already
-// seen: every saveRuleResults INSERT names the columns, so writes throw and the
-// audit stores no checks at all, while `SELECT *` reads map by key and would
-// merely yield `undefined` — a silent return to exactly the evidence-less report
-// that #2307 exists to fix. On the list at the same time as the migration.
-const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
-  { name: "component_occurrences", type: "TEXT" },
-  { name: "component_evidence", type: "TEXT" },
 ];
 
 const SCHEMA = `
@@ -814,8 +789,6 @@ CREATE TABLE IF NOT EXISTS rule_results (
   message TEXT NOT NULL,
   value TEXT,
   expected TEXT,
-  component_occurrences TEXT,
-  component_evidence TEXT,
   created_at INTEGER NOT NULL,
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -1244,7 +1217,6 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("links", LINKS_ALTER_COLUMNS);
     this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
     this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
-    this.reconcileColumns("rule_results", RULE_RESULTS_ALTER_COLUMNS);
     this.indexesAfterMigrations();
   }
 
@@ -1294,8 +1266,7 @@ export class SQLiteStorage implements CrawlStorage {
       | "robots_txt"
       | "links"
       | "sitemap_url_statuses"
-      | "crawls"
-      | "rule_results",
+      | "crawls",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -3184,10 +3155,9 @@ export class SQLiteStorage implements CrawlStorage {
         const stmt = db.prepare(`
           INSERT INTO rule_results (
             crawl_id, page_url, rule_id, check_name, status, message,
-            value, expected, items, details, pages, skip_reason,
-            component_occurrences, component_evidence, created_at
+            value, expected, items, details, pages, skip_reason, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const timestamp = Date.now();
@@ -3206,10 +3176,6 @@ export class SQLiteStorage implements CrawlStorage {
               check.details ? JSON.stringify(check.details) : null,
               check.pages ? JSON.stringify(check.pages) : null,
               check.skipReason || null,
-              check.componentOccurrences?.length
-                ? JSON.stringify(packComponentOccurrences(check.componentOccurrences))
-                : null,
-              check.componentEvidence ? JSON.stringify(check.componentEvidence) : null,
               timestamp
             );
           }
@@ -3609,10 +3575,9 @@ export class SQLiteStorage implements CrawlStorage {
         const stmt = db.prepare(`
           INSERT INTO rule_results (
             crawl_id, page_url, rule_id, check_name, status, message,
-            value, expected, items, details, pages, skip_reason,
-            component_occurrences, component_evidence, created_at
+            value, expected, items, details, pages, skip_reason, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const timestamp = Date.now();
@@ -3633,10 +3598,6 @@ export class SQLiteStorage implements CrawlStorage {
                   check.details ? JSON.stringify(check.details) : null,
                   check.pages ? JSON.stringify(check.pages) : null,
                   check.skipReason || null,
-                  check.componentOccurrences?.length
-                    ? JSON.stringify(packComponentOccurrences(check.componentOccurrences))
-                    : null,
-                  check.componentEvidence ? JSON.stringify(check.componentEvidence) : null,
                   timestamp
                 );
               }
@@ -3951,16 +3912,6 @@ export class SQLiteStorage implements CrawlStorage {
       details: row.details ? JSON.parse(row.details as string) : undefined,
       pages: row.pages ? JSON.parse(row.pages as string) : undefined,
       skipReason: row.skip_reason ? (row.skip_reason as string) : undefined,
-      // #2307: additive component evidence. Absent on rows written before the
-      // v30 migration, so both stay undefined rather than becoming empty arrays
-      // — a reader must be able to tell "no evidence recorded" from "none found".
-      // Reads BOTH the hoisted form and a plain occurrence array (see the codec).
-      componentOccurrences: row.component_occurrences
-        ? unpackComponentOccurrences(JSON.parse(row.component_occurrences as string))
-        : undefined,
-      componentEvidence: row.component_evidence
-        ? (JSON.parse(row.component_evidence as string) as CheckResult["componentEvidence"])
-        : undefined,
     };
   }
 

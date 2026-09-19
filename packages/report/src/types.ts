@@ -8,7 +8,6 @@ export type {
   CategoryScore,
   CheckItem,
   CheckResult,
-  ComponentOccurrence,
   ContactPoint,
   DomainStats,
   DomainStatsMetrics,
