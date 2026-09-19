@@ -21,7 +21,11 @@ import {
   REGIONS,
   ROLES,
   STATEFUL_COMPONENT_TYPES,
+  TAXONOMY_REVISION,
+  COHORT_ID_PATTERN,
+  PRIMARY_COHORT_ID,
   type Annotation,
+  type CohortSource,
   type AnnotationInput,
   type CapturedPage,
   type ContentKind,
@@ -39,12 +43,15 @@ import {
   type PageType,
   type Region,
   type Role,
+  type ReviewActionKind,
+  type ReviewUndoRecord,
 } from "./types.ts";
 
 const annotationFile = "annotations.jsonl";
 const pageAnnotationFile = "page-annotations.jsonl";
 const modelSuggestionFile = "model-suggestions.jsonl";
 const modelReviewFile = "model-reviews.jsonl";
+const reviewUndoFile = "review-undos.jsonl";
 const captureIdPattern = /^page_[a-f0-9]{24}$/;
 
 export class StoreError extends Error {
@@ -63,15 +70,26 @@ export class LabelStore {
   /** Immutable offline predictions; the labeler never writes this sidecar. */
   readonly modelSuggestionsPath: string;
   readonly modelReviewsPath: string;
+  readonly reviewUndosPath: string;
   readonly captureAttemptsPath: string;
   private readonly lockPath: string;
 
-  constructor(readonly dataDir: string) {
+  /** Extra read-only capture sets mounted beside the primary one. */
+  readonly cohorts: readonly CohortSource[];
+
+  constructor(readonly dataDir: string, cohorts: readonly CohortSource[] = []) {
+    for (const cohort of cohorts)
+      if (!COHORT_ID_PATTERN.test(cohort.id) || cohort.id === PRIMARY_COHORT_ID)
+        throw new StoreError(400, `Invalid cohort id: ${cohort.id}`);
+    if (new Set(cohorts.map((cohort) => cohort.id)).size !== cohorts.length)
+      throw new StoreError(400, "Duplicate cohort id");
+    this.cohorts = cohorts;
     this.capturesDir = join(dataDir, "captures");
     this.annotationsPath = join(dataDir, annotationFile);
     this.pageAnnotationsPath = join(dataDir, pageAnnotationFile);
     this.modelSuggestionsPath = join(dataDir, modelSuggestionFile);
     this.modelReviewsPath = join(dataDir, modelReviewFile);
+    this.reviewUndosPath = join(dataDir, reviewUndoFile);
     this.captureAttemptsPath = join(dataDir, "capture-attempts.jsonl");
     this.lockPath = join(dataDir, ".annotations.lock");
   }
@@ -81,21 +99,52 @@ export class LabelStore {
     mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
   }
 
-  capturePath(id: string) {
+  /** Primary first, then each mounted cohort, in mount order. */
+  private captureSources(): Array<{ id: string; dir: string }> {
+    return [
+      { id: PRIMARY_COHORT_ID, dir: this.capturesDir },
+      ...this.cohorts.map((cohort) => ({ id: cohort.id, dir: join(cohort.dir, "captures") })),
+    ];
+  }
+
+  /**
+   * Which mounted set holds this capture. Primary wins a collision, so mounting
+   * a cohort can never shadow an existing capture or its labels.
+   */
+  cohortIdForPage(id: string): string {
     if (!captureIdPattern.test(id)) throw new StoreError(404, "Unknown capture");
-    return join(this.capturesDir, `${id}.json`);
+    for (const source of this.captureSources())
+      if (existsSync(join(source.dir, `${id}.json`))) return source.id;
+    return PRIMARY_COHORT_ID;
+  }
+
+  private resolveCapture(id: string, extension: ".json" | ".png") {
+    if (!captureIdPattern.test(id)) throw new StoreError(404, "Unknown capture");
+    for (const source of this.captureSources()) {
+      const candidate = join(source.dir, `${id}${extension}`);
+      if (existsSync(candidate)) return candidate;
+    }
+    // Fall back to the primary path so writes and "not found" errors are unchanged.
+    return join(this.capturesDir, `${id}${extension}`);
+  }
+
+  capturePath(id: string) {
+    return this.resolveCapture(id, ".json");
   }
 
   screenshotPath(id: string) {
-    if (!captureIdPattern.test(id)) throw new StoreError(404, "Unknown capture");
-    return join(this.capturesDir, `${id}.png`);
+    return this.resolveCapture(id, ".png");
   }
 
   writeCapture(page: CapturedPage, png: Uint8Array) {
     this.ensureDirectories();
-    const imagePath = this.screenshotPath(page.id);
-    const manifestPath = this.capturePath(page.id);
-    if (existsSync(imagePath) || existsSync(manifestPath))
+    if (!captureIdPattern.test(page.id)) throw new StoreError(404, "Unknown capture");
+    // Always write to the primary set: a mounted cohort is read-only.
+    const imagePath = join(this.capturesDir, `${page.id}.png`);
+    const manifestPath = join(this.capturesDir, `${page.id}.json`);
+    // Resolving across sources makes a cohort collision a conflict, not a silent
+    // shadow of an existing capture.
+    if (existsSync(this.screenshotPath(page.id)) || existsSync(this.capturePath(page.id)))
       throw new StoreError(409, "Capture already exists");
     this.atomicWrite(imagePath, png);
     try {
@@ -106,10 +155,27 @@ export class LabelStore {
     }
   }
 
+  /** Every capture id across the primary set and each mounted cohort, deduped. */
+  private allCaptureIds(): string[] {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const source of this.captureSources()) {
+      if (!existsSync(source.dir)) continue;
+      for (const name of readdirSync(source.dir)) {
+        if (!/^page_[a-f0-9]{24}\.json$/.test(name)) continue;
+        const id = name.slice(0, -5);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+      }
+    }
+    return ids;
+  }
+
   listPages() {
-    if (!existsSync(this.capturesDir)) return [];
-    const annotations = this.readAnnotations();
-    const pageAnnotations = this.readPageAnnotations();
+    if (this.captureSources().every((source) => !existsSync(source.dir))) return [];
+    const annotations = this.effectiveAnnotations();
+    const pageAnnotations = this.effectivePageAnnotations();
     const reviewed = new Map<string, Set<string>>();
     for (const annotation of annotations) {
       const nodeIds = reviewed.get(annotation.pageId) ?? new Set<string>();
@@ -119,9 +185,8 @@ export class LabelStore {
     const pageReviewed = new Map<string, number>();
     for (const annotation of pageAnnotations)
       pageReviewed.set(annotation.pageId, (pageReviewed.get(annotation.pageId) ?? 0) + 1);
-    return readdirSync(this.capturesDir)
-      .filter((name) => /^page_[a-f0-9]{24}\.json$/.test(name))
-      .map((name) => this.readPage(name.slice(0, -5)))
+    return this.allCaptureIds()
+      .map((id) => this.readPage(id))
       .sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))
       .map((page) => ({
         id: page.id,
@@ -138,21 +203,19 @@ export class LabelStore {
 
   /** Computes current-capture progress directly from immutable captures and append-only journals. */
   stats(): LabelerStats {
-    if (!existsSync(this.capturesDir)) return emptyStats();
-    const pages = readdirSync(this.capturesDir)
-      .filter((name) => /^page_[a-f0-9]{24}\.json$/.test(name))
-      .flatMap((name) => {
-        try {
-          return [this.readPage(name.slice(0, -5))];
-        } catch {
-          return [];
-        }
-      });
+    if (this.captureSources().every((source) => !existsSync(source.dir))) return emptyStats();
+    const pages = this.allCaptureIds().flatMap((id) => {
+      try {
+        return [this.readPage(id)];
+      } catch {
+        return [];
+      }
+    });
     const pageById = new Map(pages.map((page) => [page.id, page]));
     const currentNodeKeys = new Set(
       pages.flatMap((page) => page.nodes.map((node) => `${page.id}\u0000${node.id}`)),
     );
-    const currentAnnotations = this.readAnnotations().filter(
+    const currentAnnotations = this.effectiveAnnotations().filter(
       (annotation) =>
         pageById.get(annotation.pageId)?.captureHash === annotation.captureHash &&
         currentNodeKeys.has(`${annotation.pageId}\u0000${annotation.nodeId}`),
@@ -161,7 +224,7 @@ export class LabelStore {
       currentAnnotations,
       (annotation) => `${annotation.pageId}\u0000${annotation.nodeId}`,
     );
-    const currentPageAnnotations = this.readPageAnnotations().filter(
+    const currentPageAnnotations = this.effectivePageAnnotations().filter(
       (annotation) => pageById.get(annotation.pageId)?.captureHash === annotation.captureHash,
     );
     const latestPageAnnotation = latestBy(
@@ -177,7 +240,7 @@ export class LabelStore {
     );
     for (const annotation of positivePageLabels) labelledPages.add(annotation.pageId);
 
-    const suggestionsById = new Map<string, ModelSuggestion>();
+    const latestSuggestionByTarget = new Map<string, ModelSuggestion>();
     for (const suggestion of this.readModelSuggestions()) {
       const page = pageById.get(suggestion.pageId);
       if (
@@ -186,8 +249,16 @@ export class LabelStore {
           !currentNodeKeys.has(`${suggestion.pageId}\u0000${suggestion.nodeId}`))
       )
         continue;
-      suggestionsById.set(suggestion.id, suggestion);
+      latestSuggestionByTarget.set(
+        `${suggestion.pageId}\u0000${suggestion.nodeId ?? "page"}\u0000${suggestion.captureHash}`,
+        suggestion,
+      );
     }
+    // The sidecar is append-only. Queue/stats describe only the latest model
+    // decision for each current target; exports retain every historical row.
+    const suggestionsById = new Map(
+      [...latestSuggestionByTarget.values()].map((suggestion) => [suggestion.id, suggestion]),
+    );
     const reviews = new Map<string, { review: ModelReview; timestamp: number; order: number }>();
     let order = 0;
     const considerReview = (
@@ -210,7 +281,7 @@ export class LabelStore {
       considerReview(annotation.modelSuggestionId, annotation.modelReview, annotation.timestamp);
     for (const annotation of currentPageAnnotations)
       considerReview(annotation.modelSuggestionId, annotation.modelReview, annotation.timestamp);
-    for (const review of this.readModelReviews()) {
+    for (const review of this.effectiveModelReviews()) {
       const suggestion = suggestionsById.get(review.modelSuggestionId);
       if (
         suggestion &&
@@ -227,6 +298,10 @@ export class LabelStore {
       else reviewed.rejected += 1;
     }
     const suggestions = [...suggestionsById.values()];
+    const humanReviewedTargets = new Set([
+      ...latestNodeAnnotation.keys(),
+      ...latestPageAnnotation.keys().map((pageId) => `${pageId}\u0000page`),
+    ]);
     return {
       generatedAt: new Date().toISOString(),
       pages: {
@@ -245,10 +320,93 @@ export class LabelStore {
         total: suggestions.length,
         page: suggestions.filter((suggestion) => suggestion.nodeId === null).length,
         element: suggestions.filter((suggestion) => suggestion.nodeId !== null).length,
-        pending: suggestions.length - reviews.size,
+        pending: suggestions.filter(
+          (suggestion) =>
+            !reviews.has(suggestion.id) &&
+            !humanReviewedTargets.has(`${suggestion.pageId}\u0000${suggestion.nodeId ?? "page"}`),
+        ).length,
         reviewed,
       },
+      byCohort: this.cohortBreakdown(
+        pages,
+        positiveNodes,
+        labelledPages,
+        this.sourceDecisions(pageById, currentNodeKeys, latestNodeAnnotation),
+      ),
     };
+  }
+
+  /**
+   * Which annotator a human sided with, per decision.
+   *
+   * Deliberately built from EVERY current suggestion rather than
+   * `latestSuggestionByTarget`: a disagreement node carries one suggestion per
+   * annotator, and keeping only the latest would hide the one that lost.
+   */
+  private sourceDecisions(
+    pageById: Map<string, CapturedPage>,
+    currentNodeKeys: Set<string>,
+    latestNodeAnnotation: Map<string, Annotation>,
+  ): Array<{ pageId: string; modelId: string; decision: "accepted" | "rejected" }> {
+    const current = new Map<string, ModelSuggestion>();
+    for (const suggestion of this.readModelSuggestions()) {
+      if (pageById.get(suggestion.pageId)?.captureHash !== suggestion.captureHash) continue;
+      if (
+        suggestion.nodeId !== null &&
+        !currentNodeKeys.has(`${suggestion.pageId}\u0000${suggestion.nodeId}`)
+      )
+        continue;
+      current.set(suggestion.id, suggestion);
+    }
+    const decisions: Array<{ pageId: string; modelId: string; decision: "accepted" | "rejected" }> = [];
+    for (const annotation of latestNodeAnnotation.values()) {
+      const suggestion = annotation.modelSuggestionId
+        ? current.get(annotation.modelSuggestionId)
+        : undefined;
+      if (!suggestion || annotation.modelReview !== "accept") continue;
+      decisions.push({ pageId: suggestion.pageId, modelId: suggestion.modelId, decision: "accepted" });
+    }
+    for (const review of this.effectiveModelReviews()) {
+      const suggestion = current.get(review.modelSuggestionId);
+      if (!suggestion || suggestion.pageId !== review.pageId || suggestion.nodeId !== review.nodeId)
+        continue;
+      decisions.push({ pageId: suggestion.pageId, modelId: suggestion.modelId, decision: "rejected" });
+    }
+    return decisions;
+  }
+
+  /**
+   * Counts per mounted cohort. A page's cohort comes from which set holds its
+   * capture, so a label written before cohorts existed lands under the primary
+   * id without any row being rewritten.
+   */
+  private cohortBreakdown(
+    pages: CapturedPage[],
+    positiveNodes: Annotation[],
+    labelledPages: Set<string>,
+    sourceDecisions: Array<{ pageId: string; modelId: string; decision: "accepted" | "rejected" }> = [],
+  ): LabelerStats["byCohort"] {
+    const empty = () => ({ pages: 0, labelledPages: 0, currentHumanLabels: 0, bySource: {} });
+    const breakdown: LabelerStats["byCohort"] = { [PRIMARY_COHORT_ID]: empty() };
+    for (const cohort of this.cohorts) breakdown[cohort.id] = empty();
+    const cohortByPage = new Map(pages.map((page) => [page.id, this.cohortIdForPage(page.id)]));
+    for (const page of pages) {
+      const bucket = breakdown[cohortByPage.get(page.id) ?? PRIMARY_COHORT_ID];
+      if (!bucket) continue;
+      bucket.pages += 1;
+      if (labelledPages.has(page.id)) bucket.labelledPages += 1;
+    }
+    for (const annotation of positiveNodes) {
+      const bucket = breakdown[cohortByPage.get(annotation.pageId) ?? PRIMARY_COHORT_ID];
+      if (bucket) bucket.currentHumanLabels += 1;
+    }
+    for (const entry of sourceDecisions) {
+      const bucket = breakdown[cohortByPage.get(entry.pageId) ?? PRIMARY_COHORT_ID];
+      if (!bucket) continue;
+      const source = (bucket.bySource[entry.modelId] ??= { accepted: 0, rejected: 0 });
+      source[entry.decision] += 1;
+    }
+    return breakdown;
   }
 
   readPage(id: string): CapturedPage {
@@ -263,11 +421,11 @@ export class LabelStore {
   }
 
   annotationsForPage(pageId: string) {
-    return this.readAnnotations().filter((annotation) => annotation.pageId === pageId);
+    return this.effectiveAnnotations().filter((annotation) => annotation.pageId === pageId);
   }
 
   pageAnnotationsForPage(pageId: string) {
-    return this.readPageAnnotations().filter((annotation) => annotation.pageId === pageId);
+    return this.effectivePageAnnotations().filter((annotation) => annotation.pageId === pageId);
   }
 
   /** Only predictions for this page's current immutable capture are exposed. */
@@ -278,24 +436,34 @@ export class LabelStore {
     );
   }
 
+  /**
+   * The primary sidecar plus each cohort's own, in mount order. All of them are
+   * read-only here; the labeler never writes a suggestion.
+   */
   readModelSuggestions(): ModelSuggestion[] {
-    if (!existsSync(this.modelSuggestionsPath)) return [];
-    return readFileSync(this.modelSuggestionsPath, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .flatMap((line) => {
-        try {
-          const suggestion = normalizeModelSuggestion(JSON.parse(line));
-          return suggestion ? [suggestion] : [];
-        } catch {
-          return [];
-        }
-      });
+    const paths = [
+      this.modelSuggestionsPath,
+      ...this.cohorts.map((cohort) => join(cohort.dir, modelSuggestionFile)),
+    ];
+    return paths.flatMap((path) => {
+      if (!existsSync(path)) return [];
+      return readFileSync(path, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .flatMap((line) => {
+          try {
+            const suggestion = normalizeModelSuggestion(JSON.parse(line));
+            return suggestion ? [suggestion] : [];
+          } catch {
+            return [];
+          }
+        });
+    });
   }
 
   modelReviewsForPage(pageId: string) {
     const page = this.readPage(pageId);
-    return this.readModelReviews().filter(
+    return this.effectiveModelReviews().filter(
       (review) => review.pageId === pageId && review.captureHash === page.captureHash,
     );
   }
@@ -342,6 +510,147 @@ export class LabelStore {
 
   rawModelReviewsJsonl() {
     return existsSync(this.modelReviewsPath) ? readFileSync(this.modelReviewsPath, "utf8") : "";
+  }
+
+  rawReviewUndosJsonl() {
+    return existsSync(this.reviewUndosPath) ? readFileSync(this.reviewUndosPath, "utf8") : "";
+  }
+
+  /** Current records omit append-only actions that have subsequently been undone. */
+  effectiveAnnotations() {
+    const undone = this.undoneActionKeys();
+    return this.readAnnotations().filter(
+      (annotation) => !undone.has(actionKey("annotation", annotation.id)),
+    );
+  }
+
+  effectivePageAnnotations() {
+    const undone = this.undoneActionKeys();
+    return this.readPageAnnotations().filter(
+      (annotation) => !undone.has(actionKey("page_annotation", annotation.id)),
+    );
+  }
+
+  effectiveModelReviews() {
+    const undone = this.undoneActionKeys();
+    return this.readModelReviews().filter(
+      (review) => !undone.has(actionKey("model_review", review.id)),
+    );
+  }
+
+  effectiveAnnotationsJsonl() {
+    const undone = this.undoneActionKeys();
+    const lines = this.rawAnnotationsJsonl()
+      .split("\n")
+      .filter(Boolean)
+      .filter((line) => {
+        try {
+          const value = JSON.parse(line) as { id?: unknown };
+          return typeof value.id !== "string" || !undone.has(actionKey("annotation", value.id));
+        } catch {
+          return true;
+        }
+      });
+    return lines.length ? `${lines.join("\n")}\n` : "";
+  }
+
+  undoReviewAction(input: {
+    pageId: string;
+    nodeId: string | null;
+    captureHash: string;
+    actionKind: ReviewActionKind;
+    actionId: string;
+  }) {
+    const page = this.readPage(input.pageId);
+    if (input.captureHash !== page.captureHash)
+      throw new StoreError(409, "Capture is stale; reload the page");
+    this.ensureDirectories();
+    this.acquireLock();
+    try {
+      const existing = this.readReviewUndos().find(
+        (undo) => undo.actionKind === input.actionKind && undo.actionId === input.actionId,
+      );
+      if (existing) {
+        if (
+          existing.pageId !== input.pageId ||
+          existing.nodeId !== input.nodeId ||
+          existing.captureHash !== input.captureHash
+        )
+          throw new StoreError(409, "Undo action does not match this capture target");
+        return { undo: existing, created: false };
+      }
+      const action = this.findUndoableAction(input);
+      if (!action) throw new StoreError(409, "Review action is not current for this target");
+      const undo: ReviewUndoRecord = {
+        id: `undo_${crypto.randomUUID()}`,
+        actionKind: input.actionKind,
+        actionId: input.actionId,
+        pageId: input.pageId,
+        nodeId: input.nodeId,
+        captureHash: input.captureHash,
+        timestamp: new Date().toISOString(),
+      };
+      appendFileSync(this.reviewUndosPath, `${JSON.stringify(undo)}\n`, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+      return { undo, created: true };
+    } finally {
+      rmSync(this.lockPath, { recursive: true, force: true });
+    }
+  }
+
+  private findUndoableAction(input: {
+    pageId: string;
+    nodeId: string | null;
+    captureHash: string;
+    actionKind: ReviewActionKind;
+    actionId: string;
+  }) {
+    if (input.actionKind === "annotation") {
+      if (input.nodeId === null) return null;
+      const current = this.effectiveAnnotations().filter(
+        (annotation) =>
+          annotation.pageId === input.pageId &&
+          annotation.nodeId === input.nodeId &&
+          annotation.captureHash === input.captureHash,
+      );
+      return current.at(-1)?.id === input.actionId ? current.at(-1) : null;
+    }
+    if (input.actionKind === "page_annotation") {
+      if (input.nodeId !== null) return null;
+      const current = this.effectivePageAnnotations().filter(
+        (annotation) =>
+          annotation.pageId === input.pageId && annotation.captureHash === input.captureHash,
+      );
+      return current.at(-1)?.id === input.actionId ? current.at(-1) : null;
+    }
+    const current = this.effectiveModelReviews().filter(
+      (review) =>
+        review.pageId === input.pageId &&
+        review.nodeId === input.nodeId &&
+        review.captureHash === input.captureHash,
+    );
+    return current.at(-1)?.id === input.actionId ? current.at(-1) : null;
+  }
+
+  private undoneActionKeys() {
+    return new Set(this.readReviewUndos().map((undo) => actionKey(undo.actionKind, undo.actionId)));
+  }
+
+  readReviewUndos(): ReviewUndoRecord[] {
+    if (!existsSync(this.reviewUndosPath)) return [];
+    return readFileSync(this.reviewUndosPath, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .flatMap((line) => {
+        try {
+          const undo = normalizeReviewUndoRecord(JSON.parse(line));
+          return undo ? [undo] : [];
+        } catch {
+          return [];
+        }
+      });
   }
 
   readPageAnnotations(): PageAnnotation[] {
@@ -450,7 +759,7 @@ export class LabelStore {
       }
       if (input.supersedes) {
         const original = current.find((annotation) => annotation.id === input.supersedes);
-        const latest = current
+        const latest = this.effectiveAnnotations()
           .filter(
             (annotation) =>
               annotation.pageId === input.pageId && annotation.nodeId === input.nodeId,
@@ -495,6 +804,8 @@ export class LabelStore {
         source: "human",
         gold: false,
         timestamp: new Date().toISOString(),
+        // Which mounted capture set this label belongs to.
+        cohortId: this.cohortIdForPage(input.pageId),
       };
       appendFileSync(this.annotationsPath, `${JSON.stringify(annotation)}\n`, {
         encoding: "utf8",
@@ -545,7 +856,9 @@ export class LabelStore {
       }
       if (input.supersedes) {
         const original = current.find((annotation) => annotation.id === input.supersedes);
-        const latest = current.filter((annotation) => annotation.pageId === input.pageId).at(-1);
+        const latest = this.effectivePageAnnotations()
+          .filter((annotation) => annotation.pageId === input.pageId)
+          .at(-1);
         if (!original || original.pageId !== input.pageId || latest?.id !== original.id)
           throw new StoreError(
             409,
@@ -568,6 +881,8 @@ export class LabelStore {
         source: "human",
         gold: false,
         timestamp: new Date().toISOString(),
+        // Which mounted capture set this label belongs to.
+        cohortId: this.cohortIdForPage(input.pageId),
       };
       appendFileSync(this.pageAnnotationsPath, `${JSON.stringify(annotation)}\n`, {
         encoding: "utf8",
@@ -624,6 +939,7 @@ export class LabelStore {
         captureHash: page.captureHash,
         source: "human",
         timestamp: new Date().toISOString(),
+        cohortId: this.cohortIdForPage(input.pageId),
       };
       appendFileSync(this.modelReviewsPath, `${JSON.stringify(review)}\n`, {
         encoding: "utf8",
@@ -762,6 +1078,10 @@ function latestBy<T>(items: T[], key: (item: T) => string) {
   return latest;
 }
 
+function actionKey(kind: ReviewActionKind, id: string) {
+  return `${kind}\u0000${id}`;
+}
+
 function emptyStats(): LabelerStats {
   return {
     generatedAt: new Date().toISOString(),
@@ -773,6 +1093,9 @@ function emptyStats(): LabelerStats {
       element: 0,
       pending: 0,
       reviewed: { accepted: 0, corrected: 0, rejected: 0 },
+    },
+    byCohort: {
+      [PRIMARY_COHORT_ID]: { pages: 0, labelledPages: 0, currentHumanLabels: 0, bySource: {} },
     },
   };
 }
@@ -1097,6 +1420,29 @@ function normalizeModelReviewRecord(value: unknown): ModelReviewRecord | null {
   return review as ModelReviewRecord;
 }
 
+function normalizeReviewUndoRecord(value: unknown): ReviewUndoRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const undo = value as Partial<ReviewUndoRecord>;
+  if (
+    typeof undo.id !== "string" ||
+    !/^undo_[0-9a-f-]{36}$/.test(undo.id) ||
+    (undo.actionKind !== "annotation" &&
+      undo.actionKind !== "page_annotation" &&
+      undo.actionKind !== "model_review") ||
+    typeof undo.actionId !== "string" ||
+    typeof undo.pageId !== "string" ||
+    !captureIdPattern.test(undo.pageId) ||
+    !(typeof undo.nodeId === "string" || undo.nodeId === null) ||
+    (typeof undo.nodeId === "string" && !/^node_[a-f0-9]{24}$/.test(undo.nodeId)) ||
+    typeof undo.captureHash !== "string" ||
+    !/^sha256:[a-f0-9]{64}$/.test(undo.captureHash) ||
+    typeof undo.timestamp !== "string" ||
+    Number.isNaN(Date.parse(undo.timestamp))
+  )
+    return null;
+  return undo as ReviewUndoRecord;
+}
+
 function normalizeModelSuggestion(value: unknown): ModelSuggestion | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Partial<ModelSuggestion> & { schemaVersion?: unknown };
@@ -1114,6 +1460,7 @@ function normalizeModelSuggestion(value: unknown): ModelSuggestion | null {
     !boundedIdentifier(row.modelId, 160) ||
     !boundedIdentifier(row.modelRevision, 160) ||
     !boundedIdentifier(row.promptRevision, 160) ||
+    (row.taxonomyRevision !== undefined && row.taxonomyRevision !== TAXONOMY_REVISION) ||
     typeof row.snapshotHash !== "string" ||
     !/^sha256:[a-f0-9]{64}$/.test(row.snapshotHash) ||
     !isJsonValue(row.rawAnswers) ||
@@ -1147,6 +1494,7 @@ function normalizeModelSuggestion(value: unknown): ModelSuggestion | null {
       modelId: row.modelId,
       modelRevision: row.modelRevision,
       promptRevision: row.promptRevision,
+      ...(row.taxonomyRevision === undefined ? {} : { taxonomyRevision: row.taxonomyRevision }),
       snapshotHash: row.snapshotHash,
       rawAnswers: row.rawAnswers,
       ...(row.rawClass === undefined ? {} : { rawClass: row.rawClass }),

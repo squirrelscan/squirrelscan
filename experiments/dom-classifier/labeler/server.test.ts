@@ -69,6 +69,169 @@ function fixture() {
 }
 
 describe("human label storage", () => {
+  test("undos the current action append-only, restores revisions, and keeps retries idempotent", async () => {
+    const { store, page } = fixture();
+    const nodeId = page.nodes[1]!.id;
+    const base = {
+      pageId: page.id,
+      nodeId,
+      decision: "label" as const,
+      regions: ["main_content"] as const,
+      boundary: "correct" as const,
+      captureHash: page.captureHash,
+    };
+    const first = store.saveAnnotation({ ...base, clientRequestId: "undo_first_123" });
+    const revisionInput = {
+      ...base,
+      regions: ["footer"] as const,
+      clientRequestId: "undo_revision_123",
+      supersedes: first.id,
+    };
+    const revision = store.saveAnnotation(revisionInput);
+    const undone = store.undoReviewAction({
+      pageId: page.id,
+      nodeId,
+      captureHash: page.captureHash,
+      actionKind: "annotation",
+      actionId: revision.id,
+    });
+    expect(undone.created).toBeTrue();
+    expect(store.readAnnotations()).toHaveLength(2);
+    expect(store.annotationsForPage(page.id).map((annotation) => annotation.id)).toEqual([first.id]);
+    expect(store.undoReviewAction({
+      pageId: page.id,
+      nodeId,
+      captureHash: page.captureHash,
+      actionKind: "annotation",
+      actionId: revision.id,
+    })).toMatchObject({ created: false, undo: { id: undone.undo.id } });
+    expect(store.saveAnnotation(revisionInput)).toEqual(revision);
+    expect(store.annotationsForPage(page.id).map((annotation) => annotation.id)).toEqual([first.id]);
+
+    const revisedAgain = store.saveAnnotation({
+      ...base,
+      regions: ["site_header"],
+      clientRequestId: "undo_revised_again",
+      supersedes: first.id,
+    });
+    expect(store.annotationsForPage(page.id).map((annotation) => annotation.id)).toEqual([
+      first.id,
+      revisedAgain.id,
+    ]);
+
+    const initial = await handleRequest(
+      new Request("http://127.0.0.1:4317/api/pages", { headers: { host: "127.0.0.1:4317" } }),
+      store,
+    );
+    const cookie = initial.headers.get("set-cookie")!.split(";")[0]!;
+    const token = cookie.split("=")[1]!;
+    const undoResponse = await handleRequest(
+      new Request("http://127.0.0.1:4317/api/review-actions/undo", {
+        method: "POST",
+        headers: {
+          host: "127.0.0.1:4317",
+          origin: "http://127.0.0.1:4317",
+          cookie,
+          "x-labeler-csrf": token,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          pageId: page.id,
+          nodeId,
+          captureHash: page.captureHash,
+          action: { kind: "annotation", id: revisedAgain.id },
+        }),
+      }),
+      store,
+    );
+    expect(undoResponse.status).toBe(201);
+    const body = (await undoResponse.json()) as { annotations: Array<{ id: string }>; undo: { id: string } };
+    expect(body.annotations.map((annotation) => annotation.id)).toEqual([first.id]);
+    const retry = await handleRequest(
+      new Request("http://127.0.0.1:4317/api/review-actions/undo", {
+        method: "POST",
+        headers: {
+          host: "127.0.0.1:4317",
+          origin: "http://127.0.0.1:4317",
+          cookie,
+          "x-labeler-csrf": token,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          pageId: page.id,
+          nodeId,
+          captureHash: page.captureHash,
+          action: { kind: "annotation", id: revisedAgain.id },
+        }),
+      }),
+      store,
+    );
+    expect(retry.status).toBe(200);
+    expect(((await retry.json()) as { undo: { id: string } }).undo.id).toBe(body.undo.id);
+    const exported = await handleRequest(
+      new Request("http://127.0.0.1:4317/api/export", { headers: { host: "127.0.0.1:4317" } }),
+      store,
+    );
+    expect(await exported.text()).toContain(first.id);
+    expect(await store.rawReviewUndosJsonl()).toContain(revision.id);
+
+    const pageLabel = store.savePageAnnotation({
+      pageId: page.id,
+      decision: "label",
+      pageTypes: ["homepage"],
+      contentKinds: [],
+      clientRequestId: "undo_page_label",
+      captureHash: page.captureHash,
+    });
+    store.undoReviewAction({
+      pageId: page.id,
+      nodeId: null,
+      captureHash: page.captureHash,
+      actionKind: "page_annotation",
+      actionId: pageLabel.id,
+    });
+    expect(store.pageAnnotationsForPage(page.id)).toEqual([]);
+
+    const suggestionId = "msug_00000000-0000-0000-0000-000000000009";
+    appendFileSync(
+      store.modelSuggestionsPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        id: suggestionId,
+        pageId: page.id,
+        nodeId: page.nodes[2]!.id,
+        captureHash: page.captureHash,
+        provider: "typesafe",
+        modelId: "jev",
+        modelRevision: "undo-v1",
+        promptRevision: "undo-v1",
+        snapshotHash: `sha256:${"d".repeat(64)}`,
+        rawAnswers: {},
+        provisional: true,
+        mappedLabels: { regions: ["main_content"] },
+        createdAt: "2026-09-19T00:00:00.000Z",
+      })}\n`,
+    );
+    const rejection = store.saveModelReview({
+      pageId: page.id,
+      nodeId: page.nodes[2]!.id,
+      modelSuggestionId: suggestionId,
+      review: "reject",
+      clientRequestId: "undo_reject_model",
+      captureHash: page.captureHash,
+    });
+    expect(store.stats().suggestions).toMatchObject({ pending: 0, reviewed: { rejected: 1 } });
+    store.undoReviewAction({
+      pageId: page.id,
+      nodeId: page.nodes[2]!.id,
+      captureHash: page.captureHash,
+      actionKind: "model_review",
+      actionId: rejection.id,
+    });
+    expect(store.modelReviewsForPage(page.id)).toEqual([]);
+    expect(store.stats().suggestions).toMatchObject({ pending: 1, reviewed: { rejected: 0 } });
+  });
+
   test("persists a human annotation once and preserves idempotent retries", () => {
     const { store, page } = fixture();
     const input = {
@@ -609,11 +772,19 @@ describe("labeler HTTP contract", () => {
       componentTypes: string[];
       purposes: string[];
       statefulComponentTypes: Record<string, string[]>;
+      taxonomyRevision: string;
     };
     expect(list.regions).toContain("sidebar");
     expect(list.functions).toContain("navigation");
     expect(list.componentTypes).toContain("button");
     expect(list.purposes).toContain("submit");
+    expect(list.taxonomyRevision).toBe("dom-taxonomy-v2");
+    expect(list.regions).toContain("article_body");
+    expect(list.regions).toContain("product_buy_box");
+    expect(list.componentTypes).toContain("ad_unit");
+    expect(list.componentTypes).toContain("purchase_panel");
+    expect(list.purposes).toContain("advertising");
+    expect(list.purposes).toContain("media_playback");
     expect(list.statefulComponentTypes.selected).toContain("tabs");
     const cookie = initial.headers.get("set-cookie")!.split(";")[0]!;
     const token = cookie.split("=")[1]!;
@@ -661,6 +832,29 @@ describe("labeler HTTP contract", () => {
       componentType: "navigation_menu",
       purposes: ["navigation"],
     });
+  });
+
+  test("keeps v2 commerce regions, component shape, and purpose independent", () => {
+    const { store, page } = fixture();
+    const label = store.saveAnnotation({
+      pageId: page.id,
+      nodeId: page.nodes[1]!.id,
+      decision: "label",
+      regions: ["product_buy_box", "product_details"],
+      componentType: "purchase_panel",
+      componentSubtype: "product",
+      purposes: ["purchase"],
+      boundary: "correct",
+      clientRequestId: "request-v2-purchase-panel",
+    });
+    expect(label).toMatchObject({
+      regions: ["product_buy_box", "product_details"],
+      componentType: "purchase_panel",
+      componentSubtype: "product",
+      purposes: ["purchase"],
+    });
+    expect(label.regions).not.toContain("advertisement");
+    expect(label.purposes).not.toContain("advertising");
   });
 
   test("saves, reads, revises, and validates page-level labels through the API", async () => {

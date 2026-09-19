@@ -17,9 +17,12 @@ import {
   REGIONS,
   ROLES,
   STATEFUL_COMPONENT_TYPES,
+  TAXONOMY_REVISION,
   type AnnotationInput,
+  type CohortSource,
   type ModelReviewInput,
   type PageAnnotationInput,
+  type ReviewActionKind,
 } from "./types.ts";
 
 export const DEFAULT_DATA_DIR = join(homedir(), ".local", "share", "squirrel", "dom-labeler");
@@ -35,8 +38,32 @@ const staticTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
 };
 
-export function createLabelerServer(options: { dataDir?: string; staticDir?: string } = {}) {
-  const store = new LabelStore(options.dataDir ?? process.env.LABELER_DATA_DIR ?? DEFAULT_DATA_DIR);
+/**
+ * Mount extra capture sets from `LABELER_COHORTS`, a comma-separated list of
+ * `id=/absolute/path` entries. Each path holds `captures/` and, optionally, its
+ * own `model-suggestions.jsonl`. Labels still land in the primary data
+ * directory, stamped with the cohort id, so existing labels are never moved.
+ */
+export function cohortsFromEnv(value = process.env.LABELER_COHORTS): CohortSource[] {
+  if (!value?.trim()) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separator = entry.indexOf("=");
+      if (separator <= 0) throw new Error(`LABELER_COHORTS entry must be id=path: ${entry}`);
+      return { id: entry.slice(0, separator).trim(), dir: entry.slice(separator + 1).trim() };
+    });
+}
+
+export function createLabelerServer(
+  options: { dataDir?: string; staticDir?: string; cohorts?: CohortSource[] } = {},
+) {
+  const store = new LabelStore(
+    options.dataDir ?? process.env.LABELER_DATA_DIR ?? DEFAULT_DATA_DIR,
+    options.cohorts ?? cohortsFromEnv(),
+  );
   const staticDir = options.staticDir ?? import.meta.dir;
   return Bun.serve({
     port: Number(process.env.PORT ?? 4317),
@@ -67,6 +94,7 @@ export async function handleRequest(
           purposes: PURPOSES,
           observedStates: OBSERVED_STATES,
           statefulComponentTypes: STATEFUL_COMPONENT_TYPES,
+          taxonomyRevision: TAXONOMY_REVISION,
           pageTypes: PAGE_TYPES,
           pageTypeGroups: PAGE_TYPE_GROUPS,
           contentKinds: CONTENT_KINDS,
@@ -102,7 +130,7 @@ export async function handleRequest(
       });
     }
     if (request.method === "GET" && url.pathname === "/api/export") {
-      return new Response(store.rawAnnotationsJsonl(), {
+      return new Response(store.effectiveAnnotationsJsonl(), {
         headers: {
           "content-type": "application/x-ndjson; charset=utf-8",
           "content-disposition": "attachment; filename=human-annotations.jsonl",
@@ -120,6 +148,7 @@ export async function handleRequest(
         nodeAnnotationHistory: jsonlRecords(store.rawAnnotationsJsonl()),
         pageAnnotationHistory: jsonlRecords(store.rawPageAnnotationsJsonl()),
         modelReviewHistory: jsonlRecords(store.rawModelReviewsJsonl()),
+        undoHistory: jsonlRecords(store.rawReviewUndosJsonl()),
       };
       return new Response(JSON.stringify(reviewExport), {
         headers: {
@@ -147,6 +176,20 @@ export async function handleRequest(
       const body = await request.json();
       const modelReview = store.saveModelReview(validateModelReview(body));
       return json({ modelReview }, 201);
+    }
+    if (request.method === "POST" && url.pathname === "/api/review-actions/undo") {
+      validateCsrf(request, url);
+      const result = store.undoReviewAction(validateReviewUndo(await request.json()));
+      return json(
+        {
+          undo: result.undo,
+          annotations: store.annotationsForPage(result.undo.pageId),
+          pageAnnotations: store.pageAnnotationsForPage(result.undo.pageId),
+          modelReviews: store.modelReviewsForPage(result.undo.pageId),
+          stats: store.stats(),
+        },
+        result.created ? 201 : 200,
+      );
     }
     if (request.method === "GET" && staticFiles.has(url.pathname))
       return staticResponse(staticDir, staticFiles.get(url.pathname)!);
@@ -377,6 +420,58 @@ function validateModelReview(value: unknown): ModelReviewInput {
   };
 }
 
+function validateReviewUndo(value: unknown): {
+  pageId: string;
+  nodeId: string | null;
+  captureHash: string;
+  actionKind: ReviewActionKind;
+  actionId: string;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new HttpError(400, "Undo object required");
+  const input = value as Record<string, unknown>;
+  if (
+    !["pageId", "nodeId", "captureHash", "action"].every((key) => key in input) ||
+    Object.keys(input).some((key) => !["pageId", "nodeId", "captureHash", "action"].includes(key))
+  )
+    throw new HttpError(400, "Invalid undo fields");
+  if (typeof input.pageId !== "string" || !/^page_[a-f0-9]{24}$/.test(input.pageId))
+    throw new HttpError(400, "Invalid pageId");
+  if (
+    input.nodeId !== null &&
+    (typeof input.nodeId !== "string" || !/^node_[a-f0-9]{24}$/.test(input.nodeId))
+  )
+    throw new HttpError(400, "Invalid nodeId");
+  if (typeof input.captureHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(input.captureHash))
+    throw new HttpError(400, "Invalid captureHash");
+  if (!input.action || typeof input.action !== "object" || Array.isArray(input.action))
+    throw new HttpError(400, "Invalid undo action");
+  const action = input.action as Record<string, unknown>;
+  if (
+    Object.keys(action).length !== 2 ||
+    !["kind", "id"].every((key) => key in action) ||
+    (action.kind !== "annotation" &&
+      action.kind !== "page_annotation" &&
+      action.kind !== "model_review") ||
+    typeof action.id !== "string" ||
+    !/^(ann_|pann_|mrev_)[0-9a-f-]{36}$/.test(action.id)
+  )
+    throw new HttpError(400, "Invalid undo action");
+  const expectedPrefix =
+    action.kind === "annotation" ? "ann_" : action.kind === "page_annotation" ? "pann_" : "mrev_";
+  if (!action.id.startsWith(expectedPrefix))
+    throw new HttpError(400, "Undo action kind does not match id");
+  if ((action.kind === "page_annotation") !== (input.nodeId === null))
+    throw new HttpError(400, "Undo action target does not match nodeId");
+  return {
+    pageId: input.pageId,
+    nodeId: input.nodeId,
+    captureHash: input.captureHash,
+    actionKind: action.kind,
+    actionId: action.id,
+  };
+}
+
 function validatePageAnnotation(value: unknown): PageAnnotationInput {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new HttpError(400, "Page annotation object required");
@@ -486,7 +581,7 @@ function staticResponse(staticDir: string, filename: string) {
 }
 
 if (import.meta.main) {
-  const store = new LabelStore(process.env.LABELER_DATA_DIR ?? DEFAULT_DATA_DIR);
+  const store = new LabelStore(process.env.LABELER_DATA_DIR ?? DEFAULT_DATA_DIR, cohortsFromEnv());
   if (process.argv[2] === "capture") {
     const pages = await captureSeedPages(store);
     console.log(`Captured ${pages.length} fixed public pages in ${store.dataDir}`);

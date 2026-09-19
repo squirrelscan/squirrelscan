@@ -6,11 +6,13 @@ import { createLabelerServer } from "./server.ts";
 import { LabelStore } from "./store.ts";
 import { browserLaunchOptions, loadPlaywright } from "./browser-runtime.ts";
 import { COMPONENT_SUBTYPES, PURPOSES, REGIONS, STATEFUL_COMPONENT_TYPES } from "./types.ts";
+import type { Browser } from "playwright";
 
 const labelerDir = import.meta.dir;
 const pageId = "page_aaaaaaaaaaaaaaaaaaaaaaaa";
 const secondPageId = "page_999999999999999999999999";
 const longFooterId = "node_444444444444444444444444";
+const longTargetId = "node_555555555555555555555555";
 const headerId = "node_bbbbbbbbbbbbbbbbbbbbbbbb";
 const navId = "node_cccccccccccccccccccccccc";
 const footerId = "node_dddddddddddddddddddddddd";
@@ -28,7 +30,9 @@ const pagePosts: Array<Record<string, unknown>> = [];
 const modelReviews: Array<Record<string, unknown>> = [];
 const modelReviewPosts: Array<Record<string, unknown>> = [];
 let server: ReturnType<typeof Bun.serve>;
-let browser: any;
+// Assigned in beforeAll; typing it is what gives every `page` below a real
+// Page, and with it typed evaluate/waitForFunction/waitForResponse callbacks.
+let browser!: Browser;
 
 const image = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#fafafa"/><rect width="1200" height="116" fill="#183b4d"/><text x="48" y="68" fill="white" font-size="36">Sample site</text><rect x="60" y="190" width="1080" height="480" fill="#edf4f0"/><text x="90" y="280" fill="#21303a" font-size="44">A captured article</text></svg>`;
 const longImage = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="4800"><rect width="1200" height="4800" fill="#fafafa"/><rect width="1200" height="120" fill="#183b4d"/><text x="48" y="72" fill="white" font-size="38">Long captured page</text><rect x="80" y="280" width="1040" height="4100" fill="#edf4f0"/><rect y="4500" width="1200" height="300" fill="#183b4d"/><text x="48" y="4650" fill="white" font-size="38">Footer links</text></svg>`;
@@ -147,7 +151,11 @@ const pageFixture = () => ({
       snapshotHash: "sha256:model",
       rawAnswers: {},
       rawClass: "header/navigation",
-      mappedLabels: { regions: ["site_header"], purposes: ["navigation"] },
+      mappedLabels: {
+        regions: ["site_header"],
+        purposes: ["navigation"],
+        componentType: "navigation_menu",
+      },
       axisProbabilities: {
         regions: [{ label: "site_header", yesProbability: 0.91 }],
         purposes: [{ label: "navigation", yesProbability: 0.84 }],
@@ -263,11 +271,37 @@ const secondPageFixture = () => {
         depth: 2,
         suggestion: null,
       },
+      {
+        id: longTargetId,
+        parentId: longFooterId,
+        tag: "a",
+        role: "link",
+        text: "Footer link",
+        selector: "html > body > footer > a",
+        rect: { x: 820, y: 4560, width: 140, height: 8.66 },
+        depth: 3,
+        suggestion: null,
+      },
     ],
     annotations: [],
     pageAnnotations: [],
     modelReviews: [],
-    modelSuggestions: [],
+    modelSuggestions: [
+      {
+        id: "model_long_target_aaaaaaaa",
+        pageId: secondPageId,
+        nodeId: longTargetId,
+        captureHash: hash,
+        modelId: "jev",
+        modelRevision: "2026-09",
+        promptRevision: "dom-v1",
+        snapshotHash: "sha256:model-long-target",
+        rawAnswers: {},
+        provisional: true,
+        mappedLabels: { regions: ["footer"], componentType: "link" },
+        createdAt: "2026-09-18T00:00:00.000Z",
+      },
+    ],
   };
 };
 
@@ -458,8 +492,9 @@ afterAll(async () => {
 });
 
 test("combines regions and functions, then hydrates revisions and legacy labels", async () => {
-  const page = await browser.newPage({ viewport: { width: 1260, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
   await page.goto(server.url.toString());
+  await page.getByRole("button", { name: /Sample site/ }).click();
   await page.locator("#page-image[src*='/captures/sample.svg']").waitFor();
 
   const stage = await page.locator("#screenshot-stage").boundingBox();
@@ -467,13 +502,29 @@ test("combines regions and functions, then hydrates revisions and legacy labels"
   await page.mouse.click(stage.x + stage.width * 0.5, stage.y + stage.height * 0.07);
   await page.locator("#selected-tag").getByText("<header>").waitFor();
   expect(await page.locator("#model-suggestion-section").isHidden()).toBe(false);
+  expect(await page.locator("#model-review-question").textContent()).toBe(
+    "Is this a navigation menu in the header?",
+  );
+  expect(await page.locator("#model-proposal-region").textContent()).toBe("Header");
+  expect(await page.locator("#model-proposal-component").textContent()).toBe("Navigation menu");
+  expect(await page.locator("#model-proposal-purpose").textContent()).toBe("Navigation");
+  const headerRegion = page.locator(`#node-layer [data-node-id="${headerId}"]`);
+  expect(await headerRegion.evaluate((element) => element.classList.contains("model-target"))).toBe(
+    true,
+  );
+  const stageBox = await page.locator("#screenshot-stage").boundingBox();
+  const headerBox = await headerRegion.boundingBox();
+  if (!stageBox || !headerBox) throw new Error("Target outline was not rendered");
+  expect(Math.abs(headerBox.y - stageBox.y)).toBeLessThan(2);
+  expect(Math.abs(headerBox.height - (stageBox.height * 116) / 800)).toBeLessThan(2);
+  await page.screenshot({ path: "/tmp/labeler-prepared-model-target.png", fullPage: true });
   expect(await page.locator("#regions-site_header").isChecked()).toBe(true);
+  await page.locator("#model-suggestion-section details > summary").click();
+  await page.locator("#advanced-editor > summary").click();
   await page.locator("#use-model-suggestion").click();
   expect(await page.locator("#regions-site_header").isChecked()).toBe(true);
   expect(await page.locator("#purposes-navigation").isChecked()).toBe(true);
-  expect(await page.locator("#model-suggestion-signals").textContent()).toContain(
-    "regions: Site Header 0.91",
-  );
+  expect(await page.locator("#model-suggestion-chips").textContent()).toContain("Region: Header");
   await page.screenshot({ path: "/tmp/labeler-model-node-review.png", fullPage: true });
   await page.locator("#regions-unknown").check();
   expect(await page.locator("#correct-model-suggestion").textContent()).toBe(
@@ -500,10 +551,18 @@ test("combines regions and functions, then hydrates revisions and legacy labels"
   });
 
   await page.locator("#selected-tag").getByText("<nav>").waitFor();
+  expect(
+    await page
+      .locator(`#node-layer [data-node-id="${navId}"]`)
+      .evaluate((element) => element.classList.contains("model-target")),
+  ).toBe(true);
+  expect(await headerRegion.evaluate((element) => element.classList.contains("selected"))).toBe(
+    false,
+  );
   await page.locator("#canvas").focus();
   await page.keyboard.press("k");
   await page.locator("#selected-tag").getByText("<header>").waitFor();
-  await page.keyboard.press("j");
+  await page.locator("#next-model-suggestion").click();
   await page.locator("#selected-tag").getByText("<nav>").waitFor();
   await page.locator("#correct-model-suggestion").click();
   expect(await page.locator("#regions-footer").isChecked()).toBe(true);
@@ -609,6 +668,7 @@ test("combines regions and functions, then hydrates revisions and legacy labels"
   });
 
   await page.reload();
+  await page.getByRole("button", { name: /Sample site/ }).click();
   await page.locator("#page-image[src*='/captures/sample.svg']").waitFor();
   const reloadedStage = await page.locator("#screenshot-stage").boundingBox();
   if (!reloadedStage) throw new Error("reloaded screenshot stage was not rendered");
@@ -637,12 +697,14 @@ test("combines regions and functions, then hydrates revisions and legacy labels"
 test("labels nested controls as components without inferring them from DOM semantics", async () => {
   const page = await browser.newPage({ viewport: { width: 1260, height: 900 } });
   await page.goto(server.url.toString());
+  await page.getByRole("button", { name: /Sample site/ }).click();
   await page.locator("#page-image[src*='/captures/sample.svg']").waitFor();
   await page.locator("#elements-mode").click();
   const stage = await page.locator("#screenshot-stage").boundingBox();
   if (!stage) throw new Error("screenshot stage was not rendered");
   await page.mouse.click(stage.x + stage.width * 0.44, stage.y + stage.height * 0.47);
   await page.locator("#selected-tag").getByText("<button>").waitFor();
+  await page.locator("#advanced-editor > summary").click();
   await page.locator("#component-trigger").click();
   await page
     .locator(".component-option")
@@ -756,12 +818,17 @@ test("labels nested controls as components without inferring them from DOM seman
     timestamp: "2026-09-18T00:00:00.000Z",
   });
   await page.reload();
+  await page.getByRole("button", { name: /Sample site/ }).click();
   await page.locator("#page-image[src*='/captures/sample.svg']").waitFor();
   await page.locator("#elements-mode").click();
-  const reloaded = await page.locator("#screenshot-stage").boundingBox();
-  if (!reloaded) throw new Error("reloaded screenshot stage was not rendered");
-  await page.mouse.click(reloaded.x + reloaded.width * 0.35, reloaded.y + reloaded.height * 0.36);
+  const reloaded = await page.locator("#page-image").boundingBox();
+  if (!reloaded) throw new Error("reloaded screenshot was not rendered");
+  await page.mouse.click(
+    reloaded.x + reloaded.width * (750 / 1200),
+    reloaded.y + reloaded.height * (290 / 800),
+  );
   await page.locator("#selected-tag").getByText("<form>").waitFor();
+  await page.locator("#advanced-editor > summary").click();
   expect(await page.locator("#component-trigger").textContent()).toBe("Form");
   expect(await page.locator("#component-projection").isHidden()).toBe(false);
   await page.close();
@@ -770,16 +837,24 @@ test("labels nested controls as components without inferring them from DOM seman
 test("keeps filtered page-type drafts, saves hidden choices, and can discard an unfinished page draft", async () => {
   const page = await browser.newPage({ viewport: { width: 1260, height: 900 } });
   await page.goto(server.url.toString());
+  await page.getByRole("button", { name: /Sample site/ }).click();
   await page.locator("#page-image[src*='/captures/sample.svg']").waitFor();
   await page.locator("#page-tab").click();
+  expect(
+    await page
+      .locator(`#node-layer [data-node-id="${headerId}"]`)
+      .evaluate((element) => element.classList.contains("selected")),
+  ).toBe(false);
   expect(await page.locator("#pageTypes-homepage").isChecked()).toBe(true);
+  await page.locator("#page-model-suggestion-section details > summary").click();
+  await page.locator("#page-advanced-editor > summary").click();
   await page.locator("#use-page-model-suggestion").click();
   expect(await page.locator("#pageTypes-homepage").isChecked()).toBe(true);
   expect(await page.locator("#pageTypes-blog_index").isChecked()).toBe(true);
   await page.screenshot({ path: "/tmp/labeler-model-page-review.png", fullPage: true });
   await page.locator("#page-type-search").fill("landing");
   await page.locator("#pageTypes-landing_page").check();
-  await page.locator("#page-annotation-form > details > summary").click();
+  await page.locator("#page-advanced-editor .advanced > summary").click();
   await page.locator("#content-kinds-grid").getByLabel("Article").check();
   await page.locator("#page-comment").fill("Editorial home with a news index.");
   await page.locator("#page-save-button").click();
@@ -827,6 +902,7 @@ test("keeps filtered page-type drafts, saves hidden choices, and can discard an 
 test("keeps the review shell fixed while selecting a footer in a long capture", async () => {
   const page = await browser.newPage({ viewport: { width: 1260, height: 720 } });
   await page.goto(server.url.toString());
+  await page.getByRole("button", { name: /Sample site/ }).click();
   await page.locator("#page-image[src*='/captures/sample.svg']").waitFor();
   await page.getByRole("button", { name: /Long sample/ }).click();
   await page.locator("#page-image[src*='/captures/long.svg']").waitFor();
@@ -835,6 +911,26 @@ test("keeps the review shell fixed while selecting a footer in a long capture", 
     return Boolean(image?.complete && image.naturalHeight === 4800);
   });
   await page.locator(`[data-node-id="${longFooterId}"]`).waitFor();
+  await page.locator("#next-model-suggestion").click();
+  await page.locator(`#node-layer [data-node-id="${longTargetId}"]`).waitFor();
+  await page.waitForFunction((targetId) => {
+    const canvas = document.getElementById("canvas-scroll");
+    const target = document.querySelector(`[data-node-id="${targetId}"]`);
+    if (!canvas || !target) return false;
+    const canvasBox = canvas.getBoundingClientRect();
+    const targetBox = target.getBoundingClientRect();
+    return targetBox.bottom > canvasBox.top && targetBox.top < canvasBox.bottom;
+  }, longTargetId);
+  expect(await page.locator("#zoom-select").inputValue()).toBe("200");
+  expect(
+    await page.locator("#canvas-scroll").evaluate((element: HTMLElement) => element.scrollTop),
+  ).toBeGreaterThan(0);
+  expect(
+    await page
+      .locator(`#node-layer [data-node-id="${longTargetId}"]`)
+      .evaluate((element) => element.classList.contains("model-target")),
+  ).toBe(true);
+  await page.locator("#zoom-select").selectOption("fit");
 
   const before = {
     header: await page.locator(".topbar").boundingBox(),
@@ -859,6 +955,7 @@ test("keeps the review shell fixed while selecting a footer in a long capture", 
     imageBox.y + imageBox.height * (4650 / 4800),
   );
   await page.locator("#selected-tag").getByText("<footer>").waitFor();
+  await page.locator("#advanced-editor > summary").click();
 
   const after = {
     header: await page.locator(".topbar").boundingBox(),
@@ -903,11 +1000,24 @@ test("keeps the review shell fixed while selecting a footer in a long capture", 
 test("keeps unfinished element edits when K looks back through model targets", async () => {
   const page = await browser.newPage({ viewport: { width: 1260, height: 900 } });
   await page.goto(server.url.toString());
+  await page.getByRole("button", { name: /Sample site/ }).click();
   await page.locator("#page-image[src*='/captures/sample.svg']").waitFor();
-  const stage = await page.locator("#screenshot-stage").boundingBox();
-  if (!stage) throw new Error("screenshot stage was not rendered");
-  await page.mouse.click(stage.x + stage.width * 0.5, stage.y + stage.height * 0.07);
+  await page.waitForFunction(() => {
+    const image = document.getElementById("page-image") as HTMLImageElement | null;
+    return Boolean(image?.complete && image.naturalWidth > 0);
+  });
+  await page.locator("#zoom-select").selectOption("fit");
+  await page
+    .locator("#canvas-scroll")
+    .evaluate((element: HTMLElement) => element.scrollTo({ left: 0, top: 0, behavior: "instant" }));
+  const screenshot = await page.locator("#page-image").boundingBox();
+  if (!screenshot) throw new Error("screenshot was not rendered");
+  await page.mouse.click(
+    screenshot.x + screenshot.width * (600 / 1200),
+    screenshot.y + screenshot.height * (58 / 800),
+  );
   await page.locator("#selected-tag").getByText("<header>").waitFor();
+  await page.locator("#advanced-editor > summary").click();
   await page.locator("#comment").fill("Keep this correction before moving back.");
   await page.locator("#canvas").focus();
   await page.keyboard.press("k");
@@ -993,14 +1103,20 @@ test("uses a Typesafe sidecar through the real server without touching active da
     await page.locator("#page-tab").click();
     await page
       .locator("#page-model-suggestion-section")
-      .getByText("Provisional model guess")
+      .getByText("Provisional model output")
       .waitFor();
     expect(await page.locator("#pageTypes-homepage").isChecked()).toBe(true);
+    await page.locator("#page-advanced-editor > summary").click();
     await page.locator("#page-comment").fill("Confirmed from captured page.");
-    await page.locator("#page-comment").press("Control+Enter");
-    await page.waitForFunction(
-      () => document.getElementById("save-status")?.textContent === "Page label saved",
+    await page.locator("#canvas").focus();
+    expect(
+      await page.locator("#canvas").evaluate((element) => document.activeElement === element),
+    ).toBe(true);
+    const savedResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/page-annotations") && response.status() === 201,
     );
+    await page.keyboard.press("Enter");
+    await savedResponse;
     const saved = store.pageAnnotationsForPage(realPageId).at(-1);
     expect(saved).toMatchObject({
       pageId: realPageId,
@@ -1009,6 +1125,333 @@ test("uses a Typesafe sidecar through the real server without touching active da
       modelReview: "accept",
       comment: "Confirmed from captured page.",
     });
+    expect(await page.locator("#undo-last-review").isDisabled()).toBe(false);
+    const undoneResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/review-actions/undo") && response.status() === 201,
+    );
+    await page.locator("#undo-last-review").click();
+    await undoneResponse;
+    await page.locator("#page-model-suggestion-section").waitFor();
+    expect(await page.locator("#page-model-suggestion-section").isHidden()).toBe(false);
+    expect(store.pageAnnotationsForPage(realPageId)).toHaveLength(0);
+    expect(await page.locator("#undo-last-review").isDisabled()).toBe(true);
+  } finally {
+    await page.close();
+    realServer.stop(true);
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("reviews one prepared model card per deliberate swipe and keeps skips local", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "labeler-swipe-ui-"));
+  const swipePageId = "page_1234567890abcdef12345678";
+  const swipeHash = `sha256:${"f".repeat(64)}`;
+  const nodeIds = [
+    "node_aaaaaaaaaaaaaaaaaaaaaaaa",
+    "node_bbbbbbbbbbbbbbbbbbbbbbbb",
+    "node_cccccccccccccccccccccccc",
+    "node_dddddddddddddddddddddddd",
+  ];
+  const suggestionIds = [
+    "msug_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "msug_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "msug_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "msug_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  ];
+  const store = new LabelStore(dataDir);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/sgAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  store.writeCapture(
+    {
+      id: swipePageId,
+      url: "https://example.test/swipe",
+      title: "Temporary swipe review",
+      capturedAt: "2026-09-19T00:00:00.000Z",
+      contentHash: swipeHash,
+      captureHash: swipeHash,
+      width: 1,
+      height: 1,
+      viewport: { width: 1, height: 1, deviceScaleFactor: 1 },
+      screenshotUrl: `/captures/${swipePageId}.png`,
+      split: "training-review",
+      nodes: nodeIds.map((id, index) => ({
+        id,
+        parentId: null,
+        tag: ["header", "nav", "footer", "main"][index],
+        role: null,
+        text: "",
+        selector: `[data-swipe-node=\"${index}\"]`,
+        rect: { x: 0, y: 0, width: 1, height: 1 },
+        depth: 1,
+        suggestion: null,
+      })),
+    },
+    png,
+  );
+  const suggestion = (id: string, nodeId: string, rawClass: string) => ({
+    schemaVersion: 1,
+    id,
+    pageId: swipePageId,
+    nodeId,
+    captureHash: swipeHash,
+    provider: "typesafe",
+    modelId: "jev",
+    modelRevision: "swipe-v1",
+    promptRevision: "dom-v1",
+    snapshotHash: `sha256:${id.slice(5).replaceAll("-", "").padEnd(64, "0")}`,
+    rawAnswers: {},
+    provisional: true,
+    rawClass,
+    mappedLabels: { regions: ["main_content"] },
+    axisProbabilities: { regions: [{ label: "main_content", yesProbability: 0.9 }] },
+    createdAt: "2026-09-19T00:00:00.000Z",
+  });
+  writeFileSync(
+    store.modelSuggestionsPath,
+    suggestionIds
+      .map((id, index) => JSON.stringify(suggestion(id, nodeIds[index], `swipe-${index + 1}`)))
+      .join("\n") + "\n",
+    { mode: 0o600 },
+  );
+  const existingPort = process.env.PORT;
+  process.env.PORT = "0";
+  const realServer = createLabelerServer({ dataDir, staticDir: labelerDir });
+  if (existingPort === undefined) delete process.env.PORT;
+  else process.env.PORT = existingPort;
+  const page = await browser.newPage({ viewport: { width: 1260, height: 900 } });
+  page.setDefaultTimeout(5_000);
+  const swipe = async (deltaX: number, deltaY = 0) => {
+    const box = await page.locator("#model-suggestion-section").boundingBox();
+    if (!box) throw new Error("Model review card was not visible");
+    const x = box.x + box.width / 2;
+    const y = box.y + 72;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + deltaX, y + deltaY, { steps: 3 });
+    await page.mouse.up();
+  };
+  try {
+    await page.goto(realServer.url.toString());
+    await page.locator("#model-suggestion-copy").getByText("swipe-1").waitFor();
+    expect(await page.locator("#selected-tag").textContent()).toBe("<header>");
+    expect(await page.locator("#model-suggestion-context").textContent()).toContain("<header>");
+
+    const noWrites = async () => {
+      await Bun.sleep(100);
+      expect(store.annotationsForPage(swipePageId)).toHaveLength(0);
+      expect(store.modelReviewsForPage(swipePageId)).toHaveLength(0);
+    };
+    const button = await page.locator("#model-ok").boundingBox();
+    if (!button) throw new Error("OK control was not visible");
+    await page.mouse.move(button.x + button.width / 2, button.y + button.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(button.x + button.width / 2 + 150, button.y + button.height / 2, {
+      steps: 3,
+    });
+    await page.mouse.up();
+    await noWrites();
+    await swipe(42);
+    await swipe(20, 140);
+    await noWrites();
+
+    await page.route("**/api/annotations", (route) => route.fulfill({ status: 500 }));
+    await swipe(150);
+    await page.locator("#save-status").getByText("Save failed").waitFor();
+    expect(await page.locator("#selected-tag").textContent()).toBe("<header>");
+    await noWrites();
+    await page.unroute("**/api/annotations");
+
+    const accepted = page.waitForResponse(
+      (response) => response.url().endsWith("/api/annotations") && response.status() === 201,
+    );
+    await swipe(150);
+    await accepted;
+    await page.locator("#model-suggestion-copy").getByText("swipe-2").waitFor();
+    expect(store.annotationsForPage(swipePageId)).toHaveLength(1);
+    expect(store.annotationsForPage(swipePageId)[0]).toMatchObject({
+      nodeId: nodeIds[0],
+      modelSuggestionId: suggestionIds[0],
+      modelReview: "accept",
+      regions: ["main_content"],
+      source: "human",
+      gold: false,
+    });
+
+    await page.locator("#canvas").focus();
+    await page.keyboard.press("j");
+    await page.locator("#model-suggestion-copy").getByText("swipe-3").waitFor();
+    expect(store.annotationsForPage(swipePageId)).toHaveLength(1);
+    expect(store.modelReviewsForPage(swipePageId)).toHaveLength(0);
+
+    const rejected = page.waitForResponse(
+      (response) => response.url().endsWith("/api/model-reviews") && response.status() === 201,
+    );
+    await swipe(-150);
+    await rejected;
+    await page.locator("#model-suggestion-copy").getByText("swipe-4").waitFor();
+    expect(store.modelReviewsForPage(swipePageId)[0]).toMatchObject({
+      nodeId: nodeIds[2],
+      modelSuggestionId: suggestionIds[2],
+      review: "reject",
+    });
+
+    await page.locator("#canvas").focus();
+    const keyboardRejected = page.waitForResponse(
+      (response) => response.url().endsWith("/api/model-reviews") && response.status() === 201,
+    );
+    await page.keyboard.press("x");
+    await keyboardRejected;
+    expect(store.annotationsForPage(swipePageId)).toHaveLength(1);
+    expect(
+      store.modelReviewsForPage(swipePageId).map((review) => review.modelSuggestionId),
+    ).toEqual([suggestionIds[2], suggestionIds[3]]);
+    const undoneReject = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/review-actions/undo") && response.status() === 201,
+    );
+    await page.locator("#canvas").focus();
+    await page.keyboard.press("Meta+z");
+    await undoneReject;
+    await page.locator("#model-suggestion-copy").getByText("swipe-4").waitFor();
+    expect(await page.locator("#selected-tag").textContent()).toBe("<main>");
+    expect(
+      store.modelReviewsForPage(swipePageId).map((review) => review.modelSuggestionId),
+    ).toEqual([suggestionIds[2]]);
+  } finally {
+    await page.close();
+    realServer.stop(true);
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("queues only the latest model version and never reopens a reviewed target", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "labeler-model-version-ui-"));
+  const versionPageId = "page_1234567890abcdef12345678";
+  const firstNodeId = "node_bcdef1234567890abcdef123";
+  const secondNodeId = "node_cdef1234567890abcdef1234";
+  const versionHash = `sha256:${"e".repeat(64)}`;
+  const oldSuggestionId = "msug_11111111-1111-4111-8111-111111111111";
+  const currentSuggestionId = "msug_22222222-2222-4222-8222-222222222222";
+  const nextSuggestionId = "msug_33333333-3333-4333-8333-333333333333";
+  const store = new LabelStore(dataDir);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/sgAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  store.writeCapture(
+    {
+      id: versionPageId,
+      url: "https://example.test/versioned",
+      title: "Temporary version queue test",
+      capturedAt: "2026-09-19T00:00:00.000Z",
+      contentHash: versionHash,
+      captureHash: versionHash,
+      width: 1,
+      height: 1,
+      viewport: { width: 1, height: 1, deviceScaleFactor: 1 },
+      screenshotUrl: `/captures/${versionPageId}.png`,
+      split: "training-review",
+      nodes: [
+        {
+          id: firstNodeId,
+          parentId: null,
+          tag: "header",
+          role: "banner",
+          text: "",
+          selector: "header",
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          depth: 1,
+          suggestion: null,
+        },
+        {
+          id: secondNodeId,
+          parentId: null,
+          tag: "footer",
+          role: "contentinfo",
+          text: "",
+          selector: "footer",
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          depth: 1,
+          suggestion: null,
+        },
+      ],
+    },
+    png,
+  );
+  const suggestion = (id: string, nodeId: string, revision: string, rawClass: string) => ({
+    schemaVersion: 1,
+    id,
+    pageId: versionPageId,
+    nodeId,
+    captureHash: versionHash,
+    provider: "typesafe",
+    modelId: "jev",
+    modelRevision: revision,
+    promptRevision: "dom-v3",
+    snapshotHash: `sha256:${id.slice(5).replaceAll("-", "").padEnd(64, "0")}`,
+    rawAnswers: {},
+    provisional: true,
+    rawClass,
+    mappedLabels: { regions: ["site_header"] },
+    axisProbabilities: { regions: [{ label: "site_header", yesProbability: 0.9 }] },
+    createdAt: "2026-09-19T00:00:00.000Z",
+  });
+  writeFileSync(
+    store.modelSuggestionsPath,
+    [
+      suggestion(oldSuggestionId, firstNodeId, "old", "old-model-target"),
+      suggestion(currentSuggestionId, firstNodeId, "new", "latest-model-target"),
+      suggestion(nextSuggestionId, secondNodeId, "new", "next-model-target"),
+    ]
+      .map((row) => JSON.stringify(row))
+      .join("\n") + "\n",
+    { mode: 0o600 },
+  );
+  const existingPort = process.env.PORT;
+  process.env.PORT = "0";
+  const realServer = createLabelerServer({ dataDir, staticDir: labelerDir });
+  if (existingPort === undefined) delete process.env.PORT;
+  else process.env.PORT = existingPort;
+  const page = await browser.newPage({ viewport: { width: 1260, height: 900 } });
+  page.setDefaultTimeout(5_000);
+  try {
+    await page.goto(realServer.url.toString());
+    await page.locator("#page-image").waitFor();
+    await page.locator("#selected-tag").getByText("<header>").waitFor();
+    expect(await page.locator("#model-suggestion-copy").textContent()).toBe("latest-model-target");
+    expect(await page.locator("#model-suggestion-model").textContent()).toContain("new");
+
+    await page.locator("#canvas").focus();
+    const firstReview = page.waitForResponse(
+      (response) => response.url().endsWith("/api/model-reviews") && response.status() === 201,
+    );
+    await page.keyboard.press("x");
+    await firstReview;
+    await page.locator("#selected-tag").getByText("<footer>").waitFor();
+    expect(
+      store.modelReviewsForPage(versionPageId).map((review) => review.modelSuggestionId),
+    ).toEqual([currentSuggestionId]);
+
+    expect(await page.locator("#model-suggestion-copy").textContent()).toBe("next-model-target");
+    await page.locator("#canvas").focus();
+    const secondReview = page.waitForResponse(
+      (response) => response.url().endsWith("/api/model-reviews") && response.status() === 201,
+    );
+    await page.keyboard.press("x");
+    await secondReview;
+    await page.keyboard.press("j");
+    expect(await page.locator("#selected-tag").textContent()).toBe("<footer>");
+    expect(
+      store.modelReviewsForPage(versionPageId).map((review) => review.modelSuggestionId),
+    ).toEqual([currentSuggestionId, nextSuggestionId]);
+    expect(
+      store
+        .modelReviewsForPage(versionPageId)
+        .some((review) => review.modelSuggestionId === oldSuggestionId),
+    ).toBe(false);
   } finally {
     await page.close();
     realServer.stop(true);

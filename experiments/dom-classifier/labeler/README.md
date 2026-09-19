@@ -147,6 +147,28 @@ New component-picker saves have `componentSchemaVersion: 3`.
 `GET /api/export` returns the original JSONL lines rather than normalized read
 projections.
 
+## Taxonomy revision v2
+
+`dom-taxonomy-v2` is additive: every existing canonical label remains valid
+with its prior meaning. The version adds article-body and paid-ad regions,
+separate product gallery, buy-box, details, and review regions; author, related,
+and comments regions; purposes for paid advertising, purchase, media playback,
+reviews, information, editorial, instruction, product information, comparison,
+and social proof; and component shapes for ad units, media galleries, purchase
+panels, specification lists, rating summaries, review lists, media players,
+author cards, and comment threads. It deliberately does **not** duplicate existing
+`image`, `media`, `banner`, `promotion`, product page types, or editorial page
+types. The full machine-readable vocabulary and definitions are in
+[`../taxonomy.json`](../taxonomy.json).
+
+Axes remain independent: a `media_gallery` component can sit in a
+`product_gallery` region without implying `media_playback`; a first-party
+`banner` can have `promotion` without becoming an `advertisement`; and a
+`purchase_panel` may have `purchase` only when it actually supports a purchase.
+An omitted or empty axis is unobserved, never a negative label. Only
+`["unknown"]` records an explicit unknown for one multi-label axis. Legacy
+records and sidecars are never silently mapped to new v2 labels.
+
 ## Page schema v1
 
 Page labels are a separate review stream: they never add, modify, or infer DOM
@@ -184,24 +206,45 @@ they do not affect page or node labels.
 ## Provisional Jev suggestions and keyboard review
 
 When the current capture has a Jev sidecar suggestion for an unreviewed node or
-page, the labeler shows **“Suggestion preselected”** and places its supported
-labels in a provisional draft. Nothing is saved until the reviewer saves it.
-An existing human annotation or a saved standalone model rejection always wins,
-so neither is overwritten by a later selection. A reviewer changing a region,
-purpose, component type, subtype, or observed state records a model
-`correct` review; a comment-only edit still records `accept`. “Reset to
-suggestion” intentionally replaces a changed draft with the model labels.
+page, the labeler starts in fast model-review mode. For element review, the
+card names the proposed **Page region**, **Element type**, and any **Purpose**,
+and asks the concrete question those values imply. An axis Jev did not map is
+shown as **Not suggested**; the labeler never infers it from the DOM tag. The
+exact captured target receives a strong outline and is panned into view. Page
+review shows page classification only and does not highlight an element. The
+card then offers **OK** and **Not OK**. OK saves the
+suggestion's exact mapped labels as a human acceptance and advances. Not OK
+saves a standalone model rejection and advances; it does not require a
+replacement label. A comment is optional in the advanced editor. Model scores
+are never presented as verified accuracy.
 
-Use `Enter` outside form fields to save and continue to the next unreviewed
-model target. `J` moves to the next unreviewed model target; `K` moves back
-through the current capture's model targets, including saved labels so they can
-be corrected. In Page mode, `K` moves to the previous captured page. `[` and
-`]` move between captured pages; `P` and `C` select the parent or first child; `Esc` clears the
+An existing human annotation or saved review is preserved and cannot be
+overwritten by the fast controls. Open the advanced editor to revise an earlier
+human label, add a manual label, or make a correction. Changing a region,
+purpose, component type, subtype, or observed state records a model `correct`
+review; “Reset to model labels” intentionally replaces a changed draft with the
+model labels.
+
+Use the dedicated model-review card for one prepared target at a time: swipe
+right to approve or left to reject. The gesture only triggers after a deliberate
+horizontal drag; vertical scrolling, short drags, and gestures that start on a
+control never save a review. **Skip** (or `J`) defers the current target for
+this browser session without writing a label or rejection, then moves to the
+next available target or page. In Page mode, Skip moves to the next captured
+page. `Enter` outside form fields marks the displayed model label OK and
+continues; `X` marks it Not OK and continues. **Undo last review** (or
+`Cmd/Ctrl` + `Z` outside a text field) reverses your most recent successful
+model acceptance, correction, page label, or rejection with an append-only
+undo record, then returns to the exact target. Finish or discard a current
+manual draft before undoing so that draft is preserved. `K` moves back through the current
+capture's model targets, including saved labels so they can be corrected. In
+Page mode, `K` moves to the previous captured page. `[` and `]` move between
+captured pages; `P` and `C` select the parent or first child; `Esc` clears the
 current element; and `?` opens the on-screen shortcut reference. `Cmd/Ctrl`
-`Enter` saves the current draft from any field, including a comment; add
-`Shift` to save and continue. These shortcuts do not intercept ordinary typing
-or native button/link activation. Unsaved human edits still use the inline
-keep-or-discard prompt before a page, mode, or selection change.
+`Enter` saves the current advanced draft from any field, including a comment;
+add `Shift` to save and continue. These shortcuts do not intercept ordinary
+typing or native button/link activation. Unsaved human edits still use the
+inline keep-or-discard prompt before a page, mode, or selection change.
 
 Run the focused checks with:
 

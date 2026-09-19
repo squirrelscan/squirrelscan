@@ -1,3 +1,11 @@
+/**
+ * Versioned, additive DOM taxonomy. v1-v3 records retain their original
+ * canonical strings; v2 only adds labels and never projects an old label to a
+ * new one. An omitted axis is unobserved, while `unknown` is an explicit,
+ * singleton observation for that axis.
+ */
+export const TAXONOMY_REVISION = "dom-taxonomy-v2" as const;
+
 export const ROLES = [
   "site_header",
   "footer",
@@ -23,6 +31,15 @@ export const REGIONS = [
   "top_banner",
   "bottom_banner",
   "overlay",
+  "article_body",
+  "advertisement",
+  "product_gallery",
+  "product_buy_box",
+  "product_details",
+  "product_reviews",
+  "author_bio",
+  "related_content",
+  "comments",
   "unknown",
 ] as const;
 /** What a component does. Multiple functions are permitted. */
@@ -61,6 +78,16 @@ export const COMPONENT_TYPES = [
   "notification",
   "banner",
   "popover",
+  "ad_unit",
+  "media_gallery",
+  "purchase_panel",
+  "specification_list",
+  "rating_summary",
+  "review_list",
+  "video_player",
+  "audio_player",
+  "author_card",
+  "comment_thread",
   "unknown",
 ] as const;
 /** v3: user-observed purpose; this intentionally does not describe source code. */
@@ -81,6 +108,16 @@ export const PURPOSES = [
   "subscription",
   "feedback",
   "support",
+  "advertising",
+  "purchase",
+  "media_playback",
+  "review",
+  "information",
+  "editorial",
+  "instruction",
+  "product_information",
+  "comparison",
+  "social_proof",
   "unknown",
 ] as const;
 export const OBSERVED_STATES = [
@@ -291,6 +328,9 @@ export const COMPONENT_SUBTYPES: Partial<
   /** This describes modal behavior, while observedState records whether it is currently open. */
   dialog: ["modal", "non_modal"],
   banner: ["announcement", "promotional", "cookie_consent"],
+  ad_unit: ["display", "sponsored_content"],
+  media_gallery: ["product", "editorial", "portfolio"],
+  purchase_panel: ["product", "subscription"],
   drawer: ["navigation", "cart", "preferences"],
   popover: ["menu", "help"],
   content_section: [
@@ -338,6 +378,20 @@ export type Boundary = (typeof BOUNDARIES)[number];
 export type Decision = (typeof DECISIONS)[number];
 export const MODEL_REVIEWS = ["accept", "correct", "reject"] as const;
 export type ModelReview = (typeof MODEL_REVIEWS)[number];
+
+/**
+ * An extra capture set mounted beside the primary one.
+ *
+ * A cohort brings its own read-only `captures/` directory and optional
+ * `model-suggestions.jsonl`. Labels for every cohort are still appended to the
+ * primary data directory's journals, stamped with the cohort id, so mounting a
+ * cohort never rewrites or relocates existing labels.
+ */
+export type CohortSource = { id: string; dir: string };
+/** Captures that live in the primary data directory carry this cohort id. */
+export const PRIMARY_COHORT_ID = "primary" as const;
+/** A cohort id is an opaque short slug, never a path. */
+export const COHORT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
@@ -398,14 +452,19 @@ export type AnnotationInput = {
   decision: Decision;
   role?: Role;
   context?: Context;
-  /** Additive v2 labels. Empty means this axis is unlabeled, not negative. */
-  regions?: Region[];
-  functions?: FunctionLabel[];
+  /**
+   * Additive v2 labels. Empty means this axis is unlabeled, not negative.
+   *
+   * Read-only: the store validates and copies every axis (see `checkedAxis`)
+   * and never writes back, so a caller may pass a frozen or `as const` array.
+   */
+  regions?: readonly Region[];
+  functions?: readonly FunctionLabel[];
   componentType?: ComponentType;
   componentSubtype?: string;
   /** States seen by the annotator, never inferred by the capture process. */
-  observedState?: ObservedState[];
-  purposes?: Purpose[];
+  observedState?: readonly ObservedState[];
+  purposes?: readonly Purpose[];
   comment?: string;
   boundary: Boundary;
   clientRequestId: string;
@@ -455,13 +514,16 @@ export type Annotation = Omit<
   source: "human";
   gold: false;
   timestamp: string;
+  /** Which mounted capture set this label belongs to. Absent on pre-cohort rows. */
+  cohortId?: string;
 };
 
 export type PageAnnotationInput = {
   pageId: string;
   decision: "label" | "unsure";
-  pageTypes?: PageType[];
-  contentKinds?: ContentKind[];
+  /** Read-only for the same reason as `AnnotationInput`'s axes. */
+  pageTypes?: readonly PageType[];
+  contentKinds?: readonly ContentKind[];
   comment?: string;
   clientRequestId: string;
   captureHash?: string;
@@ -485,6 +547,8 @@ export type PageAnnotation = Omit<
   source: "human";
   gold: false;
   timestamp: string;
+  /** Which mounted capture set this label belongs to. Absent on pre-cohort rows. */
+  cohortId?: string;
 };
 
 /** A standalone rejection preserves feedback without manufacturing a human label. */
@@ -503,6 +567,20 @@ export type ModelReviewRecord = Omit<ModelReviewInput, "comment" | "captureHash"
   comment: string | null;
   captureHash: string;
   source: "human";
+  timestamp: string;
+  /** Which mounted capture set this label belongs to. Absent on pre-cohort rows. */
+  cohortId?: string;
+};
+
+/** An append-only reversal of one effective human review action. */
+export type ReviewActionKind = "annotation" | "page_annotation" | "model_review";
+export type ReviewUndoRecord = {
+  id: string;
+  actionKind: ReviewActionKind;
+  actionId: string;
+  pageId: string;
+  nodeId: string | null;
+  captureHash: string;
   timestamp: string;
 };
 
@@ -534,6 +612,8 @@ export type ModelSuggestion = {
   modelId: string;
   modelRevision: string;
   promptRevision: string;
+  /** Present for taxonomy-aware sidecars; omitted legacy sidecars remain valid. */
+  taxonomyRevision?: typeof TAXONOMY_REVISION;
   snapshotHash: string;
   rawAnswers: unknown;
   usage?: { inputTokens?: number; outputTokens?: number };
@@ -585,4 +665,22 @@ export type LabelerStats = {
     pending: number;
     reviewed: { accepted: number; corrected: number; rejected: number };
   };
+  /**
+   * Per-cohort counts, keyed by cohort id. Always carries the primary cohort so
+   * a single-cohort install reads the same as before, plus one entry per mounted
+   * cohort. Labels written before cohorts existed count under the primary id.
+   */
+  byCohort: Record<
+    string,
+    {
+      pages: number;
+      labelledPages: number;
+      currentHumanLabels: number;
+      /**
+       * Per annotator, how often a human sided with it or rejected it. This is
+       * what makes agreement-with-human comparable between annotators.
+       */
+      bySource: Record<string, { accepted: number; rejected: number }>;
+    }
+  >;
 };

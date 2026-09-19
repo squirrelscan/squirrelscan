@@ -328,7 +328,7 @@ kbd {
 .screenshot-stage {
   position: relative;
   width: 100%;
-  min-height: 500px;
+  min-height: 0;
   margin: auto;
   background: white;
   box-shadow: var(--shadow);
@@ -340,11 +340,14 @@ kbd {
     0 0 0 3px #2675a766,
     var(--shadow);
 }
+.screenshot-stage:has(#page-image:not([src])) {
+  min-height: 500px;
+}
 #page-image {
   display: block;
   width: 100%;
   height: auto;
-  min-height: 500px;
+  min-height: 0;
   object-fit: contain;
 }
 .node-layer {
@@ -367,9 +370,30 @@ kbd {
   box-shadow: 0 0 0 1px #fff8;
 }
 .node-region.selected {
-  border: 2px solid var(--green);
-  background: #27a86925;
-  box-shadow: 0 0 0 2px #fff8;
+  z-index: 2;
+  border: 3px solid #08794f;
+  background: #27a8692b;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 6px #08794f88;
+}
+.node-region.model-target::after {
+  content: "Jev target " attr(data-node-tag);
+  position: absolute;
+  z-index: 3;
+  top: -23px;
+  left: -3px;
+  border-radius: 4px;
+  background: #08794f;
+  color: #fff;
+  padding: 3px 5px;
+  font:
+    800 12px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 .node-region.labeled {
   border-color: #c99037aa;
@@ -524,6 +548,134 @@ kbd {
   font-size: 12px;
   margin: 9px 0;
   color: #6d5537;
+}
+.model-review-question {
+  margin: 10px 0 7px;
+  color: #263b45;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.model-proposal {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 9px 0;
+}
+.model-proposal > div {
+  min-width: 0;
+  border: 1px solid #b7d0df;
+  border-radius: 7px;
+  background: #fff;
+  padding: 7px 8px;
+}
+.model-proposal-secondary {
+  grid-column: 1 / -1;
+}
+.model-proposal dt {
+  color: #64757d;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.model-proposal dd {
+  margin: 3px 0 0;
+  color: #235a79;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.model-label-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+.model-label-chip {
+  border: 1px solid #b7d0df;
+  border-radius: 999px;
+  background: #fff;
+  color: #235a79;
+  padding: 4px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.model-label-chip.empty {
+  color: var(--muted);
+  font-weight: 600;
+}
+.undo-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.fast-review-actions {
+  display: grid;
+  grid-template-columns: 1fr 0.72fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.fast-review-actions button {
+  min-height: 44px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 800;
+}
+#model-ok,
+#page-model-ok {
+  border: 1px solid var(--green);
+  background: var(--green);
+  color: #fff;
+}
+#model-not-ok,
+#page-model-not-ok {
+  border: 1px solid #b66464;
+  background: #fff;
+  color: #8c3434;
+}
+#model-skip,
+#page-model-skip {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: #48575e;
+}
+.swipe-review-card {
+  touch-action: pan-y;
+}
+.swipe-review-card[data-swipe-active="true"] {
+  user-select: none;
+}
+.model-review-context {
+  margin: 8px 0 -1px;
+  color: #52616a;
+  font-size: 11px;
+  font-weight: 700;
+}
+.swipe-review-hint {
+  margin: 10px 0 -3px;
+  color: #6d5537;
+  font-size: 11px;
+  font-weight: 650;
+}
+.fast-review-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.model-disclaimer {
+  margin-bottom: 0;
+}
+.advanced-editor {
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+}
+.advanced-editor > summary {
+  cursor: pointer;
+  padding: 13px 0;
+  color: #48575e;
+  font-size: 12px;
+  font-weight: 700;
+}
+.advanced-editor-content {
+  padding-bottom: 4px;
 }
 .suggestion-actions {
   display: flex;
@@ -760,6 +912,14 @@ dialog::backdrop {
     background-position: -250% 0;
   }
 }
+@media (prefers-reduced-motion: no-preference) {
+  .swipe-review-card {
+    transition: transform 0.14s ease-out;
+  }
+  .swipe-review-card[data-swipe-active="true"] {
+    transition: none;
+  }
+}
 @media (hover: hover) and (pointer: fine) {
   .page-item,
   .subtle-button,
@@ -837,4 +997,87 @@ dialog::backdrop {
   color: var(--green-dark);
   font-size: 10px;
   font-weight: 700;
+}
+
+/* Side-by-side review when two annotators disagree about one element. */
+.comparison-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+@media (max-width: 720px) {
+  .comparison-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.comparison-card {
+  border: 1px solid var(--border, #d5dde2);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.comparison-card.accepted {
+  border-color: #2f7d55;
+  box-shadow: inset 0 0 0 1px #2f7d55;
+}
+.comparison-source {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.comparison-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--border, #d5dde2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+.comparison-axes {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.comparison-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+}
+.comparison-axis dt {
+  font-size: 0.78rem;
+  color: var(--muted, #5b6b76);
+}
+.comparison-axis dd {
+  margin: 0;
+  font-size: 0.85rem;
+  text-align: right;
+}
+/* The axes the two annotators actually differ on. */
+.comparison-axis.differs {
+  background: #fdf3d8;
+}
+.comparison-axis.differs dd {
+  font-weight: 600;
+}
+.comparison-accept {
+  margin-top: auto;
+}
+/* The boundary rule from LABEL-DEFINITIONS.md, shown for the case it covers. */
+.comparison-guidance {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--blue, #2d8ab8);
+  background: #f2f8fb;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }

@@ -231,11 +231,11 @@ describe("read-only labeler stats", () => {
       pages: { total: 1, labelled: 1, currentPageLabels: 1 },
       elements: { total: 2, currentHumanLabels: 2, latestManualLabels: 1 },
       suggestions: {
-        total: 5,
+        total: 3,
         page: 1,
-        element: 4,
-        pending: 1,
-        reviewed: { accepted: 2, corrected: 1, rejected: 1 },
+        element: 2,
+        pending: 0,
+        reviewed: { accepted: 1, corrected: 0, rejected: 1 },
       },
     });
     const exported = await handleRequest(

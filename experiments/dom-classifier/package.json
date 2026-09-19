@@ -7,7 +7,7 @@
     "format:check": "oxfmt --check labeler/*.ts labeler/*.js labeler/*.html labeler/*.css model-suggestions/*.ts",
     "lint": "oxlint labeler model-suggestions",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
-    "test": "bun test labeler/*.test.ts model-suggestions/*.test.ts"
+    "test": "bun test extract-dom.test.ts labeler/*.test.ts model-suggestions/*.test.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",

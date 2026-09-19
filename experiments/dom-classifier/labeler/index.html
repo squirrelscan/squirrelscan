@@ -201,6 +201,9 @@
         <span class="brand-kicker">Component labels</span>
       </div>
       <div class="topbar-status" aria-live="polite" id="save-status">Loading review queue…</div>
+      <button class="subtle-button undo-button" type="button" id="undo-last-review" disabled>
+        Undo last review <kbd>⌘/Ctrl Z</kbd>
+      </button>
       <button
         class="subtle-button shortcuts-button"
         type="button"
@@ -268,6 +271,10 @@
               <option value="50">50%</option>
               <option value="75">75%</option>
               <option value="100">100%</option>
+              <option value="150">150%</option>
+              <option value="200">200%</option>
+              <option value="300">300%</option>
+              <option value="400">400%</option>
             </select>
             <button class="icon-button" id="previous-page" type="button" aria-label="Previous page">
               ←
@@ -320,6 +327,87 @@
           </button>
         </div>
         <div id="element-pane">
+          <section
+            class="suggestion-section model-suggestion swipe-review-card"
+            id="model-suggestion-section"
+            data-swipe-review-card="element"
+            hidden
+            aria-labelledby="model-suggestion-heading"
+          >
+            <div class="section-title-row">
+              <h2 id="model-suggestion-heading">Review the model label</h2>
+              <span class="muted" id="model-suggestion-model"></span>
+            </div>
+            <p class="model-review-question" id="model-review-question">
+              Does this selected element match Jev's proposal?
+            </p>
+            <p class="model-review-context" id="model-suggestion-context"></p>
+            <dl class="model-proposal" aria-label="Jev's proposed labels">
+              <div>
+                <dt>Page region</dt>
+                <dd id="model-proposal-region">Not suggested</dd>
+              </div>
+              <div>
+                <dt>Element type</dt>
+                <dd id="model-proposal-component">Not suggested</dd>
+              </div>
+              <div class="model-proposal-secondary">
+                <dt>Purpose</dt>
+                <dd id="model-proposal-purpose">Not suggested</dd>
+              </div>
+            </dl>
+            <p class="sr-only" id="model-suggestion-copy">Model output awaiting review.</p>
+            <div
+              class="model-label-chips sr-only"
+              id="model-suggestion-chips"
+              aria-label="All model labels"
+            ></div>
+            <p class="sr-only" id="model-suggestion-status">These are provisional model labels.</p>
+            <p class="swipe-review-hint">Swipe right to approve · left to reject</p>
+            <div class="fast-review-actions">
+              <button id="model-not-ok" type="button">Not OK <kbd>X</kbd></button
+              ><button id="model-skip" type="button">Skip <kbd>J</kbd></button
+              ><button id="model-ok" type="button">OK <kbd>Enter</kbd></button>
+            </div>
+            <details class="advanced model-details">
+              <summary>Adjust labels or add a note</summary>
+              <div class="model-suggestion-actions">
+                <button id="use-model-suggestion" type="button">Reset to model labels</button
+                ><button id="correct-model-suggestion" type="button">Edit labels</button
+                ><button id="reject-model-suggestion" type="button">Mark Not OK</button
+                ><button id="save-model-rejection" type="button" hidden>Save Not OK</button>
+              </div>
+            </details>
+            <p class="sr-only model-disclaimer">
+              Model output is not a human label. Scores are not shown as accuracy.
+            </p>
+          </section>
+
+          <section
+            id="suggestion-comparison-section"
+            hidden
+            aria-labelledby="suggestion-comparison-heading"
+          >
+            <div class="section-title-row">
+              <h2 id="suggestion-comparison-heading">Two annotators disagree</h2>
+            </div>
+            <p class="model-review-question">
+              Accept the option that matches this element, or reject both.
+            </p>
+            <div id="suggestion-comparison-list" class="comparison-list"></div>
+            <p id="comparison-guidance" class="comparison-guidance" hidden></p>
+            <div class="fast-review-actions">
+              <button id="comparison-reject-both" type="button">
+                Reject both <kbd>X</kbd>
+              </button>
+            </div>
+            <p id="suggestion-comparison-status" class="model-review-context"></p>
+            <p class="sr-only model-disclaimer">
+              Both options are provisional model output. Neither is a human label, and their
+              agreement is not truth.
+            </p>
+          </section>
+
           <div class="selection-header">
             <p class="eyebrow">Selected element</p>
             <div id="selection-empty" class="selection-empty">
@@ -382,129 +470,109 @@
               </button>
             </div>
           </section>
-          <section
-            class="suggestion-section model-suggestion"
-            id="model-suggestion-section"
-            hidden
-            aria-labelledby="model-suggestion-heading"
-          >
-            <div class="section-title-row">
-              <h2 id="model-suggestion-heading">Model suggestion</h2>
-              <span class="muted" id="model-suggestion-model"></span>
-            </div>
-            <p class="suggestion-copy" id="model-suggestion-copy"></p>
-            <p class="field-help" id="model-suggestion-signals"></p>
-            <details class="advanced model-details">
-              <summary>More model signals</summary>
-              <p class="field-help" id="model-suggestion-all-signals"></p>
-            </details>
+          <details class="advanced-editor" id="advanced-editor">
+            <summary>Advanced label editor</summary>
             <p class="field-help">
-              This is a model output, not a human label. Choose an action, then explicitly save your
-              human review.
+              Change the suggested labels, add a note, or create a manual label.
             </p>
-            <div class="model-suggestion-actions">
-              <button id="use-model-suggestion" type="button">Use suggestion</button
-              ><button id="correct-model-suggestion" type="button">Correct manually</button
-              ><button id="reject-model-suggestion" type="button">Reject</button
-              ><button id="save-model-rejection" type="button" hidden>Save rejection</button>
+            <div class="advanced-editor-content">
+              <form id="annotation-form" novalidate>
+                <section class="role-section" aria-labelledby="region-heading">
+                  <div class="section-title-row">
+                    <h2 id="region-heading">Page region</h2>
+                    <span class="required">Choose any that fit</span>
+                  </div>
+                  <p class="field-help">
+                    Where this section sits. A cookie notice can be an Overlay or a Bottom banner.
+                  </p>
+                  <div class="role-grid" id="regions-grid"></div>
+                </section>
+                <section class="function-section" aria-labelledby="function-heading">
+                  <div class="section-title-row">
+                    <h2 id="function-heading">Purpose</h2>
+                    <span class="required">Choose any that fit</span>
+                  </div>
+                  <p class="field-help">
+                    What this element is for. Consent describes a cookie prompt; keep it separate
+                    from region and component type.
+                  </p>
+                  <div class="role-grid" id="functions-grid"></div>
+                  <p id="legacy-purpose-projection" class="component-projection" hidden></p>
+                </section>
+                <section class="component-section" aria-labelledby="component-heading">
+                  <div class="section-title-row">
+                    <h2 id="component-heading">Component type</h2>
+                    <span class="muted">Optional</span>
+                  </div>
+                  <p class="field-help">
+                    Describe the visible pattern. A cookie notice can be a Dialog → Modal or Banner
+                    → Cookie consent.
+                  </p>
+                  <input id="component-type" name="componentType" type="hidden" />
+                  <button
+                    id="component-trigger"
+                    class="component-trigger"
+                    type="button"
+                    aria-expanded="false"
+                  >
+                    Choose a component type…
+                  </button>
+                  <p class="field-help">
+                    For common blocks, choose Content section and a variant such as Features or
+                    Pricing. Page types stay in the Page tab.
+                  </p>
+                  <div class="component-picker" id="component-picker" hidden>
+                    <label class="sr-only" for="component-search">Find a component type</label>
+                    <input
+                      id="component-search"
+                      type="search"
+                      autocomplete="off"
+                      placeholder="Search types…"
+                    />
+                    <div id="component-options" class="component-options"></div>
+                  </div>
+                  <div id="subtype-wrap" class="subtype-wrap" hidden>
+                    <label for="component-subtype">Variant</label
+                    ><select id="component-subtype" name="componentSubtype">
+                      <option value="">No specific variant</option>
+                    </select>
+                  </div>
+                  <fieldset id="state-wrap" class="state-wrap" hidden>
+                    <legend>Observed state</legend>
+                    <div id="state-options" class="state-options"></div>
+                  </fieldset>
+                  <p id="component-projection" class="component-projection" hidden>
+                    From an earlier label — confirm or change it before saving.
+                  </p>
+                </section>
+                <details class="advanced" id="advanced-options">
+                  <summary>More detail <span>Optional</span></summary>
+                  <div class="advanced-content">
+                    <label for="context-select">Page context</label>
+                    <select id="context-select" name="context">
+                      <option value="">Choose context…</option>
+                    </select>
+                    <fieldset class="boundary-fieldset">
+                      <legend>Section boundary</legend>
+                      <div class="boundary-options" id="boundary-options"></div>
+                    </fieldset>
+                  </div>
+                </details>
+                <label class="comment-label" for="comment">Comment <span>Optional</span></label>
+                <textarea
+                  id="comment"
+                  name="comment"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="Add a short note for a reviewer…"
+                ></textarea>
+                <p class="form-error" id="form-error" role="alert" hidden></p>
+                <button class="save-button" id="save-button" type="submit" disabled>
+                  Save label <kbd>⌘↵</kbd>
+                </button>
+              </form>
             </div>
-          </section>
-
-          <form id="annotation-form" novalidate>
-            <section class="role-section" aria-labelledby="region-heading">
-              <div class="section-title-row">
-                <h2 id="region-heading">Page region</h2>
-                <span class="required">Choose any that fit</span>
-              </div>
-              <p class="field-help">
-                Where this section sits. A cookie notice can be an Overlay or a Bottom banner.
-              </p>
-              <div class="role-grid" id="regions-grid"></div>
-            </section>
-            <section class="function-section" aria-labelledby="function-heading">
-              <div class="section-title-row">
-                <h2 id="function-heading">Purpose</h2>
-                <span class="required">Choose any that fit</span>
-              </div>
-              <p class="field-help">
-                What this element is for. Consent describes a cookie prompt; keep it separate from
-                region and component type.
-              </p>
-              <div class="role-grid" id="functions-grid"></div>
-              <p id="legacy-purpose-projection" class="component-projection" hidden></p>
-            </section>
-            <section class="component-section" aria-labelledby="component-heading">
-              <div class="section-title-row">
-                <h2 id="component-heading">Component type</h2>
-                <span class="muted">Optional</span>
-              </div>
-              <p class="field-help">
-                Describe the visible pattern. A cookie notice can be a Dialog → Modal or Banner →
-                Cookie consent.
-              </p>
-              <input id="component-type" name="componentType" type="hidden" />
-              <button
-                id="component-trigger"
-                class="component-trigger"
-                type="button"
-                aria-expanded="false"
-              >
-                Choose a component type…
-              </button>
-              <p class="field-help">
-                For common blocks, choose Content section and a variant such as Features or Pricing.
-                Page types stay in the Page tab.
-              </p>
-              <div class="component-picker" id="component-picker" hidden>
-                <label class="sr-only" for="component-search">Find a component type</label>
-                <input
-                  id="component-search"
-                  type="search"
-                  autocomplete="off"
-                  placeholder="Search types…"
-                />
-                <div id="component-options" class="component-options"></div>
-              </div>
-              <div id="subtype-wrap" class="subtype-wrap" hidden>
-                <label for="component-subtype">Variant</label
-                ><select id="component-subtype" name="componentSubtype">
-                  <option value="">No specific variant</option>
-                </select>
-              </div>
-              <fieldset id="state-wrap" class="state-wrap" hidden>
-                <legend>Observed state</legend>
-                <div id="state-options" class="state-options"></div>
-              </fieldset>
-              <p id="component-projection" class="component-projection" hidden>
-                From an earlier label — confirm or change it before saving.
-              </p>
-            </section>
-            <details class="advanced" id="advanced-options">
-              <summary>More detail <span>Optional</span></summary>
-              <div class="advanced-content">
-                <label for="context-select">Page context</label>
-                <select id="context-select" name="context">
-                  <option value="">Choose context…</option>
-                </select>
-                <fieldset class="boundary-fieldset">
-                  <legend>Section boundary</legend>
-                  <div class="boundary-options" id="boundary-options"></div>
-                </fieldset>
-              </div>
-            </details>
-            <label class="comment-label" for="comment">Comment <span>Optional</span></label>
-            <textarea
-              id="comment"
-              name="comment"
-              rows="3"
-              maxlength="500"
-              placeholder="Add a short note for a reviewer…"
-            ></textarea>
-            <p class="form-error" id="form-error" role="alert" hidden></p>
-            <button class="save-button" id="save-button" type="submit" disabled>
-              Save label <kbd>⌘↵</kbd>
-            </button>
-          </form>
+          </details>
           <div class="label-footer">
             <span>Labels are private</span><span aria-hidden="true">•</span
             ><span>Human review</span>
@@ -518,68 +586,99 @@
           </div>
           <form id="page-annotation-form" novalidate>
             <section
-              class="suggestion-section model-suggestion"
+              class="suggestion-section model-suggestion swipe-review-card"
               id="page-model-suggestion-section"
+              data-swipe-review-card="page"
               hidden
               aria-labelledby="page-model-suggestion-heading"
             >
               <div class="section-title-row">
-                <h2 id="page-model-suggestion-heading">Model suggestion</h2>
+                <h2 id="page-model-suggestion-heading">Review the model label</h2>
                 <span class="muted" id="page-model-suggestion-model"></span>
               </div>
-              <p class="suggestion-copy" id="page-model-suggestion-copy"></p>
-              <p class="field-help" id="page-model-suggestion-signals"></p>
-              <details class="advanced model-details">
-                <summary>More model signals</summary>
-                <p class="field-help" id="page-model-suggestion-all-signals"></p>
-              </details>
-              <p class="field-help">
-                This is a model output, not a human page label. Choose an action, then explicitly
-                save your human review.
+              <p class="model-review-question" id="page-model-review-question">
+                Does this captured page match Jev's page classification?
               </p>
-              <div class="model-suggestion-actions">
-                <button id="use-page-model-suggestion" type="button">Use suggestion</button
-                ><button id="correct-page-model-suggestion" type="button">Correct manually</button
-                ><button id="reject-page-model-suggestion" type="button">Reject</button
-                ><button id="save-page-model-rejection" type="button" hidden>Save rejection</button>
+              <p class="model-review-context" id="page-model-suggestion-context"></p>
+              <dl class="model-proposal" aria-label="Jev's proposed page labels">
+                <div>
+                  <dt>Page type</dt>
+                  <dd id="page-model-proposal-type">Not suggested</dd>
+                </div>
+                <div>
+                  <dt>Content kind</dt>
+                  <dd id="page-model-proposal-content">Not suggested</dd>
+                </div>
+              </dl>
+              <p class="sr-only" id="page-model-suggestion-copy">Model output awaiting review.</p>
+              <div
+                class="model-label-chips sr-only"
+                id="page-model-suggestion-chips"
+                aria-label="All model page labels"
+              ></div>
+              <p class="sr-only" id="page-model-suggestion-status">
+                These are provisional model labels.
+              </p>
+              <p class="swipe-review-hint">Swipe right to approve · left to reject</p>
+              <div class="fast-review-actions">
+                <button id="page-model-not-ok" type="button">Not OK <kbd>X</kbd></button
+                ><button id="page-model-skip" type="button">Skip <kbd>J</kbd></button
+                ><button id="page-model-ok" type="button">OK <kbd>Enter</kbd></button>
               </div>
+              <details class="advanced model-details">
+                <summary>Adjust labels or add a note</summary>
+                <div class="model-suggestion-actions">
+                  <button id="use-page-model-suggestion" type="button">Reset to model labels</button
+                  ><button id="correct-page-model-suggestion" type="button">Edit labels</button
+                  ><button id="reject-page-model-suggestion" type="button">Mark Not OK</button
+                  ><button id="save-page-model-rejection" type="button" hidden>Save Not OK</button>
+                </div>
+              </details>
+              <p class="field-help model-disclaimer">
+                Model output is not a human label. Scores are not shown as accuracy.
+              </p>
             </section>
-            <div class="page-type-search">
-              <label class="sr-only" for="page-type-search">Search page types</label
-              ><input
-                id="page-type-search"
-                type="search"
-                autocomplete="off"
-                placeholder="Search page types…"
-              />
-            </div>
-            <div id="page-types-grid" class="page-types-grid"></div>
-            <details class="advanced">
-              <summary>Content kind <span>Optional</span></summary>
-              <div class="advanced-content">
-                <p class="field-help">What is the primary subject of this page?</p>
-                <div id="content-kinds-grid" class="role-grid"></div>
+            <details class="advanced-editor" id="page-advanced-editor">
+              <summary>Advanced page editor</summary>
+              <div class="advanced-editor-content">
+                <div class="page-type-search">
+                  <label class="sr-only" for="page-type-search">Search page types</label
+                  ><input
+                    id="page-type-search"
+                    type="search"
+                    autocomplete="off"
+                    placeholder="Search page types…"
+                  />
+                </div>
+                <div id="page-types-grid" class="page-types-grid"></div>
+                <details class="advanced">
+                  <summary>Content kind <span>Optional</span></summary>
+                  <div class="advanced-content">
+                    <p class="field-help">What is the primary subject of this page?</p>
+                    <div id="content-kinds-grid" class="role-grid"></div>
+                  </div>
+                </details>
+                <label class="comment-label" for="page-comment">Comment <span>Optional</span></label
+                ><textarea
+                  id="page-comment"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="Add a short note about this page…"
+                ></textarea>
+                <div class="unsaved-notice" id="page-unsaved-notice" hidden aria-live="polite">
+                  <strong>Keep this unfinished page label?</strong
+                  ><span>Your selected page types are still here.</span>
+                  <div>
+                    <button type="button" id="page-keep-draft">Keep editing</button
+                    ><button type="button" id="page-discard-draft">Discard &amp; switch</button>
+                  </div>
+                </div>
+                <p class="form-error" id="page-form-error" role="alert" hidden></p>
+                <button class="save-button" id="page-save-button" type="submit">
+                  Save page label <kbd>⌘↵</kbd>
+                </button>
               </div>
             </details>
-            <label class="comment-label" for="page-comment">Comment <span>Optional</span></label
-            ><textarea
-              id="page-comment"
-              rows="3"
-              maxlength="500"
-              placeholder="Add a short note about this page…"
-            ></textarea>
-            <div class="unsaved-notice" id="page-unsaved-notice" hidden aria-live="polite">
-              <strong>Keep this unfinished page label?</strong
-              ><span>Your selected page types are still here.</span>
-              <div>
-                <button type="button" id="page-keep-draft">Keep editing</button
-                ><button type="button" id="page-discard-draft">Discard &amp; switch</button>
-              </div>
-            </div>
-            <p class="form-error" id="page-form-error" role="alert" hidden></p>
-            <button class="save-button" id="page-save-button" type="submit">
-              Save page label <kbd>⌘↵</kbd>
-            </button>
           </form>
           <p id="page-review-state" class="review-state" hidden></p>
         </section>
@@ -596,7 +695,15 @@
       <dl class="shortcut-list">
         <div>
           <dt><kbd>Enter</kbd></dt>
-          <dd>Save and continue to the next model target</dd>
+          <dd>Mark the displayed model label OK and continue</dd>
+        </div>
+        <div>
+          <dt><kbd>X</kbd></dt>
+          <dd>Mark the displayed model label Not OK and continue</dd>
+        </div>
+        <div>
+          <dt><kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>Z</kbd></dt>
+          <dd>Undo your last model review</dd>
         </div>
         <div>
           <dt><kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>↵</kbd></dt>
@@ -608,7 +715,7 @@
         </div>
         <div>
           <dt><kbd>J</kbd></dt>
-          <dd>Next unreviewed model target</dd>
+          <dd>Skip the current model target for this session</dd>
         </div>
         <div>
           <dt><kbd>K</kbd></dt>

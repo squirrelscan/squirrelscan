@@ -9,6 +9,15 @@ const roleLabels = {
   top_banner: "Top banner",
   bottom_banner: "Bottom banner",
   overlay: "Overlay",
+  article_body: "Article body",
+  advertisement: "Advertisement",
+  product_gallery: "Product gallery",
+  product_buy_box: "Product buy box",
+  product_details: "Product details",
+  product_reviews: "Product reviews",
+  author_bio: "Author bio",
+  related_content: "Related content",
+  comments: "Comments",
   card: "Card",
   form: "Form",
   consent_banner: "Consent",
@@ -22,6 +31,16 @@ const roleLabels = {
   subscription: "Subscription",
   feedback: "Feedback",
   support: "Support",
+  advertising: "Advertising",
+  purchase: "Purchase",
+  media_playback: "Media playback",
+  review: "Reviews",
+  information: "Information",
+  editorial: "Editorial",
+  instruction: "Instruction",
+  product_information: "Product information",
+  comparison: "Comparison",
+  social_proof: "Social proof",
   decorative: "Decorative",
   unknown: "Unsure",
 };
@@ -35,6 +54,15 @@ const fallbackRegions = [
   "top_banner",
   "bottom_banner",
   "overlay",
+  "article_body",
+  "advertisement",
+  "product_gallery",
+  "product_buy_box",
+  "product_details",
+  "product_reviews",
+  "author_bio",
+  "related_content",
+  "comments",
   "unknown",
 ];
 const fallbackFunctions = [
@@ -54,6 +82,16 @@ const fallbackFunctions = [
   "subscription",
   "feedback",
   "support",
+  "advertising",
+  "purchase",
+  "media_playback",
+  "review",
+  "information",
+  "editorial",
+  "instruction",
+  "product_information",
+  "comparison",
+  "social_proof",
   "unknown",
 ];
 const componentGroups = {
@@ -81,6 +119,15 @@ const componentGroups = {
     "hero",
     "navigation_menu",
     "content_section",
+    "media_gallery",
+    "purchase_panel",
+    "specification_list",
+    "rating_summary",
+    "review_list",
+    "video_player",
+    "audio_player",
+    "author_card",
+    "comment_thread",
   ],
   "Structure & overlays": [
     "layout_container",
@@ -90,6 +137,7 @@ const componentGroups = {
     "notification",
     "banner",
     "popover",
+    "ad_unit",
     "unknown",
   ],
 };
@@ -101,6 +149,9 @@ const subtypeOptions = {
   form: ["search", "sign_in", "contact", "newsletter", "checkout"],
   dialog: ["modal", "non_modal"],
   banner: ["announcement", "promotional", "cookie_consent"],
+  ad_unit: ["display", "sponsored_content"],
+  media_gallery: ["product", "editorial", "portfolio"],
+  purchase_panel: ["product", "subscription"],
   drawer: ["navigation", "cart", "preferences"],
   popover: ["menu", "help"],
   content_section: [
@@ -204,9 +255,18 @@ const state = {
   pagePendingAction: null,
   modelReview: null,
   pageModelReview: null,
+  // Blind review hides annotator names and shuffles the comparison columns, so
+  // a reviewer cannot systematically favour one annotator.
+  blind: new URLSearchParams(location.search).get("blind") === "1",
   autoModelDraft: false,
   autoPageModelDraft: false,
-  advanceModelOnLoad: false,
+  // Start in the fast review queue when this capture has model sidecars.
+  advanceModelOnLoad: true,
+  advancePageModelOnLoad: false,
+  skippedModelSuggestionIds: new Set(),
+  lastFocusedModelSuggestionId: null,
+  lastUndoableReview: null,
+  undoRestoring: false,
   labelMode: "element",
   zoom: "fit",
   loadGeneration: 0,
@@ -256,6 +316,20 @@ function selectedNode() {
 function nodeById(id) {
   return state.nodes.find((node) => node.id === id) || null;
 }
+function isVisibleCaptureNode(node) {
+  const rect = node?.rect;
+  return Boolean(
+    rect &&
+    state.page &&
+    [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) &&
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.x < state.page.width &&
+    rect.y < state.page.height &&
+    rect.x + rect.width > 0 &&
+    rect.y + rect.height > 0,
+  );
+}
 function annotationFor(id) {
   return [...state.annotations].reverse().find((annotation) => annotation.nodeId === id) || null;
 }
@@ -286,8 +360,70 @@ function pageModelSuggestionFor() {
 function savedModelReviewFor(suggestion) {
   return state.modelReviews.find((review) => review.modelSuggestionId === suggestion?.id) || null;
 }
+function isSkippedModelSuggestion(suggestion) {
+  return Boolean(suggestion && state.skippedModelSuggestionIds.has(suggestion.id));
+}
+function latestModelSuggestionsForCurrentPage() {
+  const seen = new Set();
+  const latest = [];
+  for (let index = state.modelSuggestions.length - 1; index >= 0; index -= 1) {
+    const suggestion = state.modelSuggestions[index];
+    if (!suggestion.nodeId || !nodeById(suggestion.nodeId) || seen.has(suggestion.nodeId)) continue;
+    seen.add(suggestion.nodeId);
+    latest.push(suggestion);
+  }
+  return latest.reverse();
+}
 function modelName(suggestion) {
   return suggestion?.modelId === "jev" ? "Jev" : suggestion?.modelId || "Model";
+}
+/** Every suggestion for this node on the current capture, in sidecar order. */
+function modelSuggestionsFor(id) {
+  return state.modelSuggestions.filter(
+    (suggestion) =>
+      suggestion.pageId === state.page?.id &&
+      suggestion.nodeId === id &&
+      suggestion.captureHash === state.page?.captureHash,
+  );
+}
+/** Stable 32-bit hash, so blind ordering is reproducible for a given node. */
+function stableHash(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash >>> 0;
+}
+/**
+ * Two or more competing suggestions for one node, in display order.
+ *
+ * In blind mode the left/right order is flipped by a hash of the node id: the
+ * reviewer cannot learn which annotator sits on which side, and the order is
+ * the same every time the same item is shown. Nothing extra is stored, because
+ * each saved review names the real suggestion id.
+ */
+function comparisonSuggestions(node) {
+  if (!node || !isVisibleCaptureNode(node)) return null;
+  // Two rows from the SAME model are a superseded version plus its latest, which
+  // the queue already resolves to the latest. Only rows from different sources
+  // are a disagreement, so keep the latest per source and compare those.
+  const latestBySource = new Map();
+  for (const suggestion of modelSuggestionsFor(node.id))
+    latestBySource.set(suggestion.modelId, suggestion);
+  if (latestBySource.size < 2) return null;
+  const ordered = [...latestBySource.values()].slice(0, 2);
+  return state.blind && stableHash(node.id) % 2 === 1 ? [ordered[1], ordered[0]] : ordered;
+}
+/** Axis values that differ between the two suggestions, for highlighting. */
+function comparisonDifferences(suggestions) {
+  const [first, second] = suggestions.map(mappedModelLabels);
+  const set = (values) => (values || []).slice().sort().join("|");
+  return {
+    regions: set(first.regions) !== set(second.regions),
+    componentType: (first.componentType || "") !== (second.componentType || ""),
+    purposes: set(first.purposes) !== set(second.purposes),
+  };
 }
 function roleText(role) {
   return roleLabels[role] || role || "Unsure";
@@ -348,6 +484,92 @@ function showStatus(message, kind = "") {
   const target = $("save-status");
   target.textContent = message;
   target.dataset.kind = kind;
+}
+function renderUndoAction() {
+  const button = $("undo-last-review");
+  button.disabled = !state.lastUndoableReview || state.saving || state.undoRestoring;
+}
+function rememberUndoableReview(action) {
+  state.lastUndoableReview = {
+    pageId: state.page.id,
+    pageIndex: state.currentPageIndex,
+    nodeId: action.nodeId ?? null,
+    captureHash: state.page.captureHash,
+    labelMode: action.nodeId ? "element" : "page",
+    summaryDelta: action.summaryDelta || 0,
+    action: { kind: action.kind, id: action.id },
+  };
+  renderUndoAction();
+}
+async function undoLastReview() {
+  const last = state.lastUndoableReview;
+  if (!last || state.saving || state.undoRestoring) return;
+  if (state.dirty || state.pageDirty) {
+    showStatus("Finish or discard the current draft before undoing", "error");
+    return;
+  }
+  state.saving = true;
+  state.undoRestoring = true;
+  renderUndoAction();
+  showStatus("Undoing last review…");
+  try {
+    const response = await api("/api/review-actions/undo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pageId: last.pageId,
+        nodeId: last.nodeId,
+        captureHash: last.captureHash,
+        action: last.action,
+      }),
+    });
+    state.saving = false;
+    if (response.stats) {
+      state.stats = response.stats;
+      renderStats();
+    }
+    const restore = () => {
+      const summary = state.pages[last.pageIndex];
+      if (summary && last.summaryDelta) {
+        if (last.action.kind === "annotation")
+          summary.reviewedCount = Math.max(0, (summary.reviewedCount || 0) - last.summaryDelta);
+        if (last.action.kind === "page_annotation")
+          summary.pageReviewedCount = Math.max(
+            0,
+            (summary.pageReviewedCount || 0) - last.summaryDelta,
+          );
+      }
+      state.annotations = response.annotations || [];
+      state.pageAnnotations = response.pageAnnotations || [];
+      state.modelReviews = response.modelReviews || [];
+      if (last.labelMode === "page") {
+        setLabelMode("page");
+        renderPageLabel();
+      } else {
+        setLabelMode("element");
+        if (last.nodeId) selectNode(last.nodeId);
+      }
+      renderQueue();
+      renderSelection();
+      syncNodeStates();
+    };
+    if (state.page?.id === last.pageId) restore();
+    else {
+      state.advanceModelOnLoad = false;
+      state.advancePageModelOnLoad = false;
+      await loadPage(last.pageIndex);
+      if (state.page?.id !== last.pageId) throw new Error("Undo target did not reload");
+      restore();
+    }
+    state.lastUndoableReview = null;
+    showStatus("Last review undone", "success");
+  } catch {
+    showStatus("Couldn’t undo the last review. Try again.", "error");
+  } finally {
+    state.saving = false;
+    state.undoRestoring = false;
+    renderUndoAction();
+  }
 }
 function renderStats() {
   const details = $("queue-stats"),
@@ -654,6 +876,16 @@ function componentLabel(type) {
     notification: "Notification",
     banner: "Banner",
     popover: "Popover",
+    ad_unit: "Ad unit",
+    media_gallery: "Media gallery",
+    purchase_panel: "Purchase panel",
+    specification_list: "Specification list",
+    rating_summary: "Rating summary",
+    review_list: "Review list",
+    video_player: "Video player",
+    audio_player: "Audio player",
+    author_card: "Author card",
+    comment_thread: "Comment thread",
     unknown: "Unknown",
   };
   return labels[type] || type.replaceAll("_", " ");
@@ -791,6 +1023,11 @@ function formatDate(value) {
   }
 }
 function renderStage() {
+  // The screenshot's onload can fire after the page was cleared or replaced,
+  // and this dereferences state.page. Without the guard that throws
+  // "Cannot read properties of null (reading 'width')" and the node layer is
+  // never drawn, so nothing on the capture is selectable.
+  if (!state.page) return;
   $("screenshot-stage").style.width =
     state.zoom === "fit"
       ? "100%"
@@ -798,8 +1035,12 @@ function renderStage() {
   const layer = $("node-layer");
   layer.replaceChildren();
   for (const node of state.nodes) {
-    if (!node.rect || !node.rect.width || !node.rect.height) continue;
-    const region = el("div", { className: "node-region", "data-node-id": node.id });
+    if (!isVisibleCaptureNode(node)) continue;
+    const region = el("div", {
+      className: "node-region",
+      "data-node-id": node.id,
+      "data-node-tag": `<${node.tag || "div"}>`,
+    });
     region.style.left = `${(node.rect.x / state.page.width) * 100}%`;
     region.style.top = `${(node.rect.y / state.page.height) * 100}%`;
     region.style.width = `${(node.rect.width / state.page.width) * 100}%`;
@@ -807,14 +1048,80 @@ function renderStage() {
     layer.append(region);
   }
   syncNodeStates();
+  focusSelectedNode();
 }
 function syncNodeStates() {
   for (const region of $("node-layer").children) {
     const id = region.dataset.nodeId;
-    region.classList.toggle("selected", id === state.selectedId);
-    region.classList.toggle("hovered", id === state.hoverId && id !== state.selectedId);
-    region.classList.toggle("labeled", Boolean(annotationFor(id)) && id !== state.selectedId);
+    const isCurrentTarget = state.labelMode === "element" && id === state.selectedId;
+    const reviewingModel = Boolean(
+      state.labelMode === "element" && modelSuggestionFor(state.selectedId),
+    );
+    region.classList.toggle("selected", isCurrentTarget);
+    region.classList.toggle("model-target", isCurrentTarget && reviewingModel);
+    region.classList.toggle(
+      "hovered",
+      state.labelMode === "element" && !reviewingModel && id === state.hoverId && !isCurrentTarget,
+    );
+    region.classList.toggle(
+      "labeled",
+      !reviewingModel && !isCurrentTarget && Boolean(annotationFor(id)),
+    );
   }
+}
+function centerSelectedNode(nodeId, suggestionId, pageId) {
+  if (
+    state.labelMode !== "element" ||
+    state.selectedId !== nodeId ||
+    state.page?.id !== pageId ||
+    modelSuggestionFor(nodeId)?.id !== suggestionId
+  )
+    return;
+  const region = $("node-layer").querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+  const canvas = $("canvas-scroll");
+  if (!region || !canvas) return;
+  const target = region.getBoundingClientRect();
+  const viewport = canvas.getBoundingClientRect();
+  canvas.scrollTo({
+    left: Math.max(
+      0,
+      canvas.scrollLeft + target.left - viewport.left - (canvas.clientWidth - target.width) / 2,
+    ),
+    top: Math.max(
+      0,
+      canvas.scrollTop + target.top - viewport.top - (canvas.clientHeight - target.height) / 2,
+    ),
+    behavior: "instant",
+  });
+}
+function focusSelectedNode() {
+  if (state.labelMode !== "element") return;
+  const node = selectedNode();
+  const suggestion = node && modelSuggestionFor(node.id);
+  if (!node || !suggestion || !isVisibleCaptureNode(node)) return;
+  const region = $("node-layer").querySelector(`[data-node-id="${CSS.escape(node.id)}"]`);
+  const image = $("page-image");
+  if (!region || !image.clientWidth || !image.clientHeight) return;
+  const isNewModelTarget = state.lastFocusedModelSuggestionId !== suggestion.id;
+  if (isNewModelTarget) {
+    state.lastFocusedModelSuggestionId = suggestion.id;
+    const fitScale = (($("canvas-scroll").clientWidth * 0.85) / state.page.width) * 100;
+    const shortestSide = Math.min(node.rect.width, node.rect.height);
+    const targetPercent = Math.min(200, Math.max(50, (32 / shortestSide) * 100));
+    if (shortestSide * (fitScale / 100) < 32) {
+      const zoomLevels = [50, 75, 100, 150, 200];
+      const zoom = zoomLevels.find((level) => level >= targetPercent) || 200;
+      state.zoom = String(zoom);
+      $("zoom-select").value = state.zoom;
+      renderStage();
+      return;
+    }
+    state.zoom = "fit";
+    $("zoom-select").value = state.zoom;
+    renderStage();
+    return;
+  }
+  centerSelectedNode(node.id, suggestion.id, state.page.id);
 }
 function findPointNode(event) {
   const image = $("page-image"),
@@ -892,8 +1199,8 @@ function attemptTransition(action) {
     showUnsavedNotice(true);
     return false;
   }
-  action();
-  return true;
+  const result = action();
+  return result instanceof Promise ? result : true;
 }
 function applyClearSelection() {
   state.selectedId = null;
@@ -951,9 +1258,10 @@ function applySelection(id) {
   showUnsavedNotice(false);
   renderSelection();
   syncNodeStates();
+  focusSelectedNode();
 }
 function selectNode(id) {
-  attemptTransition(() => applySelection(id));
+  return attemptTransition(() => applySelection(id));
 }
 function hydrateForm(annotation) {
   const legacy = hintLabels(annotation.role);
@@ -1086,66 +1394,176 @@ function modelSuggestionLabels(suggestion) {
   for (const value of labels.contentKinds || []) result.push(`Content: ${pageTypeLabel(value)}`);
   return result;
 }
-function modelSignals(suggestion) {
-  const axes = suggestion.axisProbabilities || {};
-  const labels = mappedModelLabels(suggestion),
-    summary = [],
-    all = [];
-  for (const [axis, answers] of Object.entries(axes)) {
-    if (!Array.isArray(answers)) continue;
-    const readableAxis = axis.replace(/([A-Z])/g, " $1");
-    const values = answers.map(
-      (answer) =>
-        `${readableAxis}: ${pageTypeLabel(answer.label)} ${Number(answer.yesProbability).toFixed(2)}`,
+function renderModelLabelChips(id, suggestion) {
+  const target = $(id);
+  target.replaceChildren();
+  const labels = modelSuggestionLabels(suggestion);
+  if (!labels.length) {
+    target.append(el("span", { className: "model-label-chip empty", text: "No mapped labels" }));
+    return;
+  }
+  for (const label of labels)
+    target.append(el("span", { className: "model-label-chip", text: label }));
+}
+function savedReviewForTarget(suggestion, annotation) {
+  const standalone = savedModelReviewFor(suggestion);
+  if (standalone) return standalone;
+  if (annotation?.modelSuggestionId === suggestion?.id && annotation.modelReview)
+    return { review: annotation.modelReview };
+  return null;
+}
+function proposalText(values, format) {
+  const items = (values || []).map(format).filter(Boolean);
+  return items.length ? items.join(" · ") : "Not suggested";
+}
+function renderElementProposal(node, suggestion) {
+  const labels = mappedModelLabels(suggestion);
+  const regions = proposalText(labels.regions, roleText);
+  const component = labels.componentType ? componentLabel(labels.componentType) : "Not suggested";
+  const purposes = proposalText(labels.purposes, roleText);
+  $("model-proposal-region").textContent = regions;
+  $("model-proposal-component").textContent = component;
+  $("model-proposal-purpose").textContent = purposes;
+  const tag = `<${node.tag || "div"}>`;
+  $("model-review-question").textContent =
+    component !== "Not suggested" && regions !== "Not suggested"
+      ? `Is this a ${component.toLowerCase()} in the ${regions.toLowerCase()}?`
+      : component !== "Not suggested"
+        ? `Is this selected ${tag} a ${component.toLowerCase()}?`
+        : regions !== "Not suggested"
+          ? `Is this selected ${tag} in the ${regions.toLowerCase()}?`
+          : `Does this selected ${tag} match Jev's proposal?`;
+}
+function renderPageProposal(suggestion) {
+  const labels = mappedModelLabels(suggestion);
+  $("page-model-proposal-type").textContent = proposalText(labels.pageTypes, pageTypeLabel);
+  $("page-model-proposal-content").textContent = proposalText(labels.contentKinds, pageTypeLabel);
+}
+/**
+ * Side-by-side review for a node two annotators disagreed about.
+ *
+ * The reviewer approves one or rejects both, so neither suggestion is treated
+ * as a default and no agreement between them is implied.
+ */
+function renderSuggestionComparison(node) {
+  const section = $("suggestion-comparison-section");
+  const suggestions = comparisonSuggestions(node);
+  const list = $("suggestion-comparison-list");
+  section.hidden = !suggestions;
+  if (!suggestions) {
+    // Clear on the way out, or a hidden panel keeps the previous node's options.
+    list.replaceChildren();
+    return;
+  }
+  const annotation = node && annotationFor(node.id);
+  const settled = suggestions.some((item) => savedReviewForTarget(item, annotation));
+  const existingHumanLabel = Boolean(annotation && !settled);
+  const differences = comparisonDifferences(suggestions);
+  list.replaceChildren();
+  suggestions.forEach((suggestion, index) => {
+    const saved = savedReviewForTarget(suggestion, annotation);
+    const card = el("div", {
+      className: `comparison-card${saved?.review === "accept" ? " accepted" : ""}`,
+    });
+    card.dataset.suggestionId = suggestion.id;
+    card.dataset.choice = String(index + 1);
+    const labels = mappedModelLabels(suggestion);
+    card.append(
+      el("div", { className: "comparison-source" }, [
+        el("span", {
+          className: "comparison-key",
+          text: String(index + 1),
+        }),
+        el("span", {
+          className: "comparison-name",
+          // Blind mode hides which annotator produced which column.
+          text: state.blind ? `Option ${index + 1}` : modelName(suggestion),
+        }),
+      ]),
     );
-    all.push(...values);
-    const selected = new Set(Array.isArray(labels[axis]) ? labels[axis] : []);
-    const shown = answers.filter((answer) => selected.has(answer.label));
-    const top = [...answers].sort(
-      (left, right) => Number(right.yesProbability) - Number(left.yesProbability),
-    )[0];
-    for (const answer of shown.length ? shown : top ? [top] : [])
-      summary.push(
-        `${readableAxis}: ${pageTypeLabel(answer.label)} ${Number(answer.yesProbability).toFixed(2)}`,
+    const rows = [
+      ["Page region", proposalText(labels.regions, roleText), differences.regions],
+      [
+        "Element type",
+        labels.componentType ? componentLabel(labels.componentType) : "Not suggested",
+        differences.componentType,
+      ],
+      ["Purpose", proposalText(labels.purposes, roleText), differences.purposes],
+    ];
+    const definition = el("dl", { className: "comparison-axes" });
+    for (const [term, value, differs] of rows)
+      definition.append(
+        el("div", { className: differs ? "comparison-axis differs" : "comparison-axis" }, [
+          el("dt", { text: term }),
+          el("dd", { text: value }),
+        ]),
       );
-  }
-  const choice = suggestion.componentTypeChoice;
-  if (choice) {
-    summary.push(
-      `component choice: ${componentLabel(choice.choice)}${typeof choice.confidence === "number" ? ` · confidence ${choice.confidence.toFixed(2)}` : ""}`,
-    );
-    all.push(
-      ...(choice.distribution || []).map(
-        (item) =>
-          `component choice: ${componentLabel(item.label)} ${Number(item.probability).toFixed(2)}`,
-      ),
-    );
-  }
-  if (typeof suggestion.score === "number") {
-    summary.push(`raw score ${suggestion.score.toFixed(2)}`);
-    all.push(`raw score ${suggestion.score.toFixed(2)}`);
-  }
-  return { summary: summary.join(" · "), all: all.join(" · ") };
+    card.append(definition);
+    const button = el("button", {
+      type: "button",
+      className: "comparison-accept",
+      text: saved?.review === "accept" ? "Accepted" : `Accept (${index + 1})`,
+    });
+    button.disabled =
+      settled || existingHumanLabel || !hasApplicableModelLabels(suggestion);
+    button.addEventListener("click", () => acceptComparisonSuggestion(index + 1));
+    card.append(button);
+    list.append(card);
+  });
+  const rejectBoth = $("comparison-reject-both");
+  rejectBoth.disabled = settled || existingHumanLabel;
+  // The container-versus-section boundary is the disagreement these cohorts are
+  // mostly made of, so show its rule from LABEL-DEFINITIONS.md right here.
+  const choices = new Set(
+    suggestions.map((item) => mappedModelLabels(item).componentType).filter(Boolean),
+  );
+  const boundary =
+    choices.size === 2 && choices.has("layout_container") && choices.has("content_section");
+  const guidance = $("comparison-guidance");
+  guidance.hidden = !boundary;
+  if (boundary)
+    guidance.textContent =
+      "Boundary rule: a content section has one subject of its own; a layout container only groups or positions other things. Site chrome such as a footer or masthead is a layout container. A <main> is a layout container when it wraps several sections, and a content section when it is itself one body of content. If still tied, choose layout container.";
+  $("suggestion-comparison-status").textContent = settled
+    ? "Human review saved for this element."
+    : existingHumanLabel
+      ? "A human label is already saved. Open the advanced editor to revise it."
+      : state.blind
+        ? "Blind review: sources are hidden. Accept one option or reject both."
+        : "Two annotators disagree. Accept one or reject both; neither is a default.";
 }
 function renderModelSuggestion(node) {
+  const comparison = comparisonSuggestions(node);
+  renderSuggestionComparison(node);
   const section = $("model-suggestion-section"),
-    suggestion = node && modelSuggestionFor(node.id);
+    // A disagreement is reviewed in the comparison panel instead, so the
+    // single-suggestion panel stays hidden and its behaviour is unchanged.
+    suggestion = !comparison && node && isVisibleCaptureNode(node) && modelSuggestionFor(node.id);
   section.hidden = !suggestion;
   if (!suggestion) return;
   $("model-suggestion-model").textContent = [suggestion.modelId, suggestion.modelRevision]
     .filter(Boolean)
     .join(" · ");
-  const labels = modelSuggestionLabels(suggestion);
-  $("model-suggestion-copy").textContent =
-    `${suggestion.rawClass || "Provisional model guess"}${labels.length ? ` · ${labels.join(" + ")}` : ""}`;
-  const signals = modelSignals(suggestion);
-  $("model-suggestion-signals").textContent =
-    signals.summary || "No probability signals were supplied.";
-  $("model-suggestion-all-signals").textContent =
-    signals.all || "No probability signals were supplied.";
+  $("model-suggestion-copy").textContent = suggestion.rawClass || "Provisional model output";
+  $("model-suggestion-context").textContent =
+    `Selected <${node.tag || "div"}>${node.role ? ` · ARIA ${node.role}` : ""}`;
+  renderElementProposal(node, suggestion);
+  renderModelLabelChips("model-suggestion-chips", suggestion);
   const review = state.modelReview?.suggestionId === suggestion.id ? state.modelReview.review : "";
-  const saved = savedModelReviewFor(suggestion);
+  const annotation = annotationFor(node.id);
+  const saved = savedReviewForTarget(suggestion, annotation);
   const applicable = hasApplicableModelLabels(suggestion);
+  const existingHumanLabel = Boolean(annotation && !saved);
+  $("model-ok").disabled = !applicable || Boolean(saved) || existingHumanLabel;
+  $("model-not-ok").disabled = Boolean(saved) || existingHumanLabel;
+  $("model-skip").disabled = Boolean(saved) || existingHumanLabel;
+  $("model-ok").textContent = saved?.review === "accept" ? "OK saved" : "OK (Enter)";
+  $("model-not-ok").textContent = saved?.review === "reject" ? "Not OK saved" : "Not OK (X)";
+  $("model-suggestion-status").textContent = saved
+    ? `Human review saved: ${saved.review === "accept" ? "OK" : saved.review === "reject" ? "Not OK" : "edited"}.`
+    : existingHumanLabel
+      ? "A human label is already saved. Open the advanced editor to revise it."
+      : "These are provisional model labels. OK saves these exact labels as a human acceptance; Not OK records a rejection without adding a replacement label.";
   $("use-model-suggestion").disabled = !applicable;
   $("use-model-suggestion").textContent = !applicable
     ? "No applicable labels"
@@ -1159,9 +1577,8 @@ function renderModelSuggestion(node) {
     : "This model response has no labels to add to a human draft.";
   $("correct-model-suggestion").textContent =
     review === "correct" ? "Manual correction selected" : "Correct manually";
-  $("reject-model-suggestion").textContent = review === "reject" ? "Suggestion rejected" : "Reject";
+  $("reject-model-suggestion").textContent = review === "reject" ? "Marked Not OK" : "Mark Not OK";
   $("save-model-rejection").hidden = review !== "reject" || Boolean(saved);
-  if (saved) $("model-suggestion-copy").textContent += " · rejection saved";
 }
 function chooseModelReview(review) {
   const node = selectedNode(),
@@ -1197,6 +1614,7 @@ function chooseModelReview(review) {
   if (review === "correct") {
     state.autoModelDraft = false;
     state.dirty = true;
+    $("advanced-editor").open = true;
   }
   setFormError();
   showStatus(
@@ -1208,9 +1626,97 @@ function chooseModelReview(review) {
   );
   renderModelSuggestion(node);
 }
-async function saveStandaloneModelRejection(pageLevel = false) {
+/**
+ * Accept the suggestion shown in display position `choice` (1 or 2).
+ *
+ * The saved annotation carries that suggestion's id, which is what makes
+ * agreement-with-human computable per annotator, and is the real identity even
+ * in blind mode where the displayed position was shuffled.
+ */
+function acceptComparisonSuggestion(choice) {
+  if (state.saving) return;
+  const node = selectedNode();
+  const suggestions = comparisonSuggestions(node);
+  const suggestion = suggestions?.[choice - 1];
+  if (!suggestion) return;
+  const annotation = annotationFor(node.id);
+  if (suggestions.some((item) => savedReviewForTarget(item, annotation))) return;
+  if (annotation && !state.modelReview) return;
+  if (!hasApplicableModelLabels(suggestion)) {
+    setFormError("This option has no applicable labels. Reject both or edit labels manually.");
+    return;
+  }
+  const action = () => {
+    const labels = mappedModelLabels(suggestion);
+    setChecked("regions", labels.regions || []);
+    setChecked("purposes", labels.purposes || []);
+    setComponentType(labels.componentType || "");
+    state.autoModelDraft = true;
+    state.dirty = false;
+    state.modelReview = { suggestionId: suggestion.id, review: "accept" };
+    setFormError();
+    saveAnnotation("label", { advance: true });
+  };
+  if (state.dirty && state.modelReview?.review === "correct") attemptTransition(action);
+  else action();
+}
+/** Reject every competing suggestion: no human label is manufactured. */
+async function rejectComparisonSuggestions() {
+  if (state.saving) return;
+  const node = selectedNode();
+  const suggestions = comparisonSuggestions(node);
+  if (!node || !suggestions) return;
+  const annotation = annotationFor(node.id);
+  if (suggestions.some((item) => savedReviewForTarget(item, annotation))) return;
+  if (annotation && !state.modelReview) return;
+  state.saving = true;
+  showStatus("Saving rejections…");
+  let saved = false;
+  try {
+    for (const suggestion of suggestions) {
+      const response = await api("/api/model-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageId: state.page.id,
+          nodeId: node.id,
+          modelSuggestionId: suggestion.id,
+          review: "reject",
+          comment: $("comment").value.trim(),
+          clientRequestId: crypto.randomUUID(),
+          captureHash: state.page.captureHash,
+        }),
+      });
+      if (response.modelReview) {
+        state.modelReviews.push(response.modelReview);
+        // Each rejection is separately undoable, newest first.
+        rememberUndoableReview({
+          kind: "model_review",
+          id: response.modelReview.id,
+          nodeId: node.id,
+        });
+      }
+    }
+    state.dirty = false;
+    state.modelReview = null;
+    state.autoModelDraft = false;
+    showStatus("Both options rejected", "success");
+    renderModelSuggestion(node);
+    refreshStats();
+    saved = true;
+  } catch {
+    setFormError("Couldn’t save these rejections. Check your connection and try again.");
+    showStatus("Save failed", "error");
+  } finally {
+    state.saving = false;
+    renderUndoAction();
+    if (saved) advanceAfterSave();
+  }
+}
+async function saveStandaloneModelRejection(pageLevel = false, { advance = false } = {}) {
   const suggestion = pageLevel ? pageModelSuggestionFor() : modelSuggestionFor(selectedNode()?.id);
   if (!suggestion || state.saving) return;
+  let saved = false;
   const review = pageLevel ? state.pageModelReview : state.modelReview;
   if (review?.suggestionId !== suggestion.id || review.review !== "reject") return;
   state.saving = true;
@@ -1230,7 +1736,14 @@ async function saveStandaloneModelRejection(pageLevel = false) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (response.modelReview) state.modelReviews.push(response.modelReview);
+    if (response.modelReview) {
+      state.modelReviews.push(response.modelReview);
+      rememberUndoableReview({
+        kind: "model_review",
+        id: response.modelReview.id,
+        nodeId: pageLevel ? null : selectedNode()?.id,
+      });
+    }
     if (pageLevel) {
       state.pageDirty = false;
       state.pageModelReview = null;
@@ -1244,6 +1757,7 @@ async function saveStandaloneModelRejection(pageLevel = false) {
     if (pageLevel) renderPageModelSuggestion();
     else renderModelSuggestion(selectedNode());
     refreshStats();
+    saved = true;
   } catch {
     if (pageLevel)
       setPageFormError("Couldn’t save this model rejection. Check your connection and try again.");
@@ -1251,6 +1765,8 @@ async function saveStandaloneModelRejection(pageLevel = false) {
     showStatus("Save failed", "error");
   } finally {
     state.saving = false;
+    renderUndoAction();
+    if (saved && advance) advanceAfterSave();
   }
 }
 function renderPageModelSuggestion() {
@@ -1261,18 +1777,27 @@ function renderPageModelSuggestion() {
   $("page-model-suggestion-model").textContent = [suggestion.modelId, suggestion.modelRevision]
     .filter(Boolean)
     .join(" · ");
-  const labels = modelSuggestionLabels(suggestion);
-  $("page-model-suggestion-copy").textContent =
-    `${suggestion.rawClass || "Provisional model guess"}${labels.length ? ` · ${labels.join(" + ")}` : ""}`;
-  const signals = modelSignals(suggestion);
-  $("page-model-suggestion-signals").textContent =
-    signals.summary || "No probability signals were supplied.";
-  $("page-model-suggestion-all-signals").textContent =
-    signals.all || "No probability signals were supplied.";
+  $("page-model-suggestion-copy").textContent = suggestion.rawClass || "Provisional model output";
+  $("page-model-suggestion-context").textContent =
+    `Captured page: ${state.page?.title || "Untitled page"}`;
+  renderPageProposal(suggestion);
+  renderModelLabelChips("page-model-suggestion-chips", suggestion);
   const review =
     state.pageModelReview?.suggestionId === suggestion.id ? state.pageModelReview.review : "";
-  const saved = savedModelReviewFor(suggestion);
+  const annotation = pageAnnotationFor();
+  const saved = savedReviewForTarget(suggestion, annotation);
   const applicable = hasApplicableModelLabels(suggestion, true);
+  const existingHumanLabel = Boolean(annotation && !saved);
+  $("page-model-ok").disabled = !applicable || Boolean(saved) || existingHumanLabel;
+  $("page-model-not-ok").disabled = Boolean(saved) || existingHumanLabel;
+  $("page-model-skip").disabled = Boolean(saved) || existingHumanLabel;
+  $("page-model-ok").textContent = saved?.review === "accept" ? "OK saved" : "OK (Enter)";
+  $("page-model-not-ok").textContent = saved?.review === "reject" ? "Not OK saved" : "Not OK (X)";
+  $("page-model-suggestion-status").textContent = saved
+    ? `Human review saved: ${saved.review === "accept" ? "OK" : saved.review === "reject" ? "Not OK" : "edited"}.`
+    : existingHumanLabel
+      ? "A human page label is already saved. Open the advanced editor to revise it."
+      : "These are provisional model labels. OK saves these exact labels as a human acceptance; Not OK records a rejection without adding a replacement label.";
   $("use-page-model-suggestion").disabled = !applicable;
   $("use-page-model-suggestion").textContent = !applicable
     ? "No applicable labels"
@@ -1287,9 +1812,8 @@ function renderPageModelSuggestion() {
   $("correct-page-model-suggestion").textContent =
     review === "correct" ? "Manual correction selected" : "Correct manually";
   $("reject-page-model-suggestion").textContent =
-    review === "reject" ? "Suggestion rejected" : "Reject";
+    review === "reject" ? "Marked Not OK" : "Mark Not OK";
   $("save-page-model-rejection").hidden = review !== "reject" || Boolean(saved);
-  if (saved) $("page-model-suggestion-copy").textContent += " · rejection saved";
 }
 function choosePageModelReview(review) {
   const suggestion = pageModelSuggestionFor();
@@ -1308,10 +1832,9 @@ function choosePageModelReview(review) {
       state.autoPageModelDraft
     )
       return;
-    if (Array.isArray(labels.pageTypes) && labels.pageTypes.length)
-      state.pageDraft.pageTypes = [...labels.pageTypes];
-    if (Array.isArray(labels.contentKinds) && labels.contentKinds.length)
-      state.pageDraft.contentKinds = [...labels.contentKinds];
+    // Reset both axes so this acceptance remains exactly the model's mapped labels.
+    state.pageDraft.pageTypes = [...(labels.pageTypes || [])];
+    state.pageDraft.contentKinds = [...(labels.contentKinds || [])];
     renderPageTypes($("page-type-search").value);
     renderPageCheckboxes(
       "content-kinds-grid",
@@ -1335,6 +1858,7 @@ function choosePageModelReview(review) {
   if (review === "correct") {
     state.autoPageModelDraft = false;
     state.pageDirty = true;
+    $("page-advanced-editor").open = true;
   }
   setPageFormError();
   showStatus(
@@ -1345,6 +1869,85 @@ function choosePageModelReview(review) {
         : "Model suggestion set aside; save the rejection or choose a human page label",
   );
   renderPageModelSuggestion();
+}
+function fastModelReview(review) {
+  if (state.saving) return;
+  const node = selectedNode();
+  const suggestion = node && modelSuggestionFor(node.id);
+  const existing = node && annotationFor(node.id);
+  if (
+    !node ||
+    !suggestion ||
+    savedReviewForTarget(suggestion, existing) ||
+    (existing && !state.modelReview)
+  )
+    return;
+  const action = () => {
+    chooseModelReview(review === "ok" ? "accept" : "reject");
+    if (review === "ok") saveAnnotation("label", { advance: true });
+    else saveStandaloneModelRejection(false, { advance: true });
+  };
+  // A note does not change the model label, so keep it and complete the fast action.
+  // Label edits still use the normal keep-or-discard protection.
+  if (state.dirty && state.modelReview?.review === "correct") attemptTransition(action);
+  else action();
+}
+function fastPageModelReview(review) {
+  if (state.saving) return;
+  const suggestion = pageModelSuggestionFor();
+  const existing = pageAnnotationFor();
+  if (
+    !suggestion ||
+    savedReviewForTarget(suggestion, existing) ||
+    (existing && !state.pageModelReview)
+  )
+    return;
+  const action = () => {
+    choosePageModelReview(review === "ok" ? "accept" : "reject");
+    if (review === "ok") savePageAnnotation({ advance: true });
+    else saveStandaloneModelRejection(true, { advance: true });
+  };
+  if (state.pageDirty && state.pageModelReview?.review === "correct") {
+    state.pagePendingAction = action;
+    $("page-unsaved-notice").hidden = false;
+    return;
+  }
+  action();
+}
+function skipModelReview(pageLevel = false) {
+  if (state.saving) return;
+  const suggestion = pageLevel ? pageModelSuggestionFor() : modelSuggestionFor(selectedNode()?.id);
+  if (!suggestion || savedModelReviewFor(suggestion) || isSkippedModelSuggestion(suggestion))
+    return;
+  const action = () => {
+    state.skippedModelSuggestionIds.add(suggestion.id);
+    if (!pageLevel && chooseNextModelSuggestion({ quiet: true })) {
+      showStatus("Skipped for this session");
+      return;
+    }
+    advanceToNextModelPage(pageLevel);
+  };
+  if (pageLevel && state.pageDirty) {
+    state.pagePendingAction = action;
+    $("page-unsaved-notice").hidden = false;
+    return;
+  }
+  if (!pageLevel && state.dirty) {
+    attemptTransition(action);
+    return;
+  }
+  action();
+}
+function advanceToNextModelPage(pageLevel = false) {
+  const nextIndex = state.currentPageIndex + 1;
+  if (nextIndex >= state.pages.length) {
+    showStatus("No more model labels in this session", "success");
+    return false;
+  }
+  state.advanceModelOnLoad = !pageLevel;
+  state.advancePageModelOnLoad = pageLevel;
+  loadPage(nextIndex);
+  return true;
 }
 function truncate(value, max) {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -1463,6 +2066,14 @@ async function saveAnnotation(decision, { advance = false } = {}) {
       body: JSON.stringify(payload),
     });
     const next = response.annotation;
+    if (next && state.modelReview) {
+      rememberUndoableReview({
+        kind: "annotation",
+        id: next.id,
+        nodeId: node.id,
+        summaryDelta: previous ? 0 : 1,
+      });
+    }
     state.annotations = state.annotations.filter((annotation) => annotation.nodeId !== node.id);
     if (next) state.annotations.push(next);
     const summary = state.pages[state.currentPageIndex];
@@ -1481,6 +2092,7 @@ async function saveAnnotation(decision, { advance = false } = {}) {
     showStatus("Save failed", "error");
   } finally {
     state.saving = false;
+    renderUndoAction();
     $("save-button").disabled = !selectedNode();
     if (saved && advance) advanceAfterSave();
   }
@@ -1544,6 +2156,14 @@ async function savePageAnnotation({ advance = false } = {}) {
       body: JSON.stringify(payload),
     });
     state.pageAnnotations = [response.annotation];
+    if (response.annotation && state.pageModelReview) {
+      rememberUndoableReview({
+        kind: "page_annotation",
+        id: response.annotation.id,
+        nodeId: null,
+        summaryDelta: previous ? 0 : 1,
+      });
+    }
     state.pageDirty = false;
     state.autoPageModelDraft = false;
     const summary = state.pages[state.currentPageIndex];
@@ -1558,6 +2178,7 @@ async function savePageAnnotation({ advance = false } = {}) {
     showStatus("Save failed", "error");
   } finally {
     state.saving = false;
+    renderUndoAction();
     $("page-save-button").disabled = false;
     if (saved && advance) advanceAfterSave();
   }
@@ -1603,9 +2224,27 @@ async function loadPageNow(index) {
     state.modelSuggestions = result.modelSuggestions || [];
     state.modelReviews = result.modelReviews || [];
     if (state.labelMode === "page") renderPageLabel();
+    const selectPageModelOnLoad = state.advancePageModelOnLoad;
+    state.advancePageModelOnLoad = false;
+    if (selectPageModelOnLoad) {
+      const suggestion = pageModelSuggestionFor();
+      const annotation = pageAnnotationFor();
+      if (
+        !suggestion ||
+        savedReviewForTarget(suggestion, annotation) ||
+        (annotation && !state.pageModelReview) ||
+        isSkippedModelSuggestion(suggestion)
+      ) {
+        advanceToNextModelPage(true);
+        return;
+      }
+    }
     const selectModelOnLoad = state.advanceModelOnLoad;
     state.advanceModelOnLoad = false;
-    if (selectModelOnLoad) chooseNextModelSuggestion({ quiet: true });
+    if (selectModelOnLoad && !chooseNextModelSuggestion({ quiet: true })) {
+      advanceToNextModelPage(false);
+      return;
+    }
     $("page-title").textContent = result.title || summary.title || "Captured page";
     $("page-url").textContent = result.url || "Private capture";
     const source = safeImageUrl(result.screenshotUrl);
@@ -1660,12 +2299,13 @@ function chooseNextModelSuggestion({ quiet = false } = {}) {
   }
   if (state.labelMode === "page") setLabelMode("element");
   if (state.labelMode !== "element") return false;
-  const suggested = state.modelSuggestions.filter(
+  const suggested = latestModelSuggestionsForCurrentPage().filter(
     (suggestion) =>
       suggestion.nodeId &&
-      nodeById(suggestion.nodeId) &&
+      isVisibleCaptureNode(nodeById(suggestion.nodeId)) &&
       !annotationFor(suggestion.nodeId) &&
-      !savedModelReviewFor(suggestion),
+      !savedModelReviewFor(suggestion) &&
+      !isSkippedModelSuggestion(suggestion),
   );
   if (!suggested.length) {
     if (!quiet) showStatus("No unreviewed model suggestions on this page");
@@ -1673,12 +2313,7 @@ function chooseNextModelSuggestion({ quiet = false } = {}) {
   }
   const index = suggested.findIndex((suggestion) => suggestion.nodeId === state.selectedId);
   const target = suggested[(index + 1) % suggested.length];
-  selectNode(target.nodeId);
-  requestAnimationFrame(() => {
-    const region = $("node-layer").querySelector(`[data-node-id="${CSS.escape(target.nodeId)}"]`);
-    region?.scrollIntoView({ behavior: "smooth", block: "center" });
-  });
-  return true;
+  return selectNode(target.nodeId);
 }
 function choosePreviousModelSuggestion() {
   if (state.labelMode === "page") {
@@ -1690,8 +2325,8 @@ function choosePreviousModelSuggestion() {
     $("page-unsaved-notice").hidden = false;
     return false;
   }
-  const targets = state.modelSuggestions.filter(
-    (suggestion) => suggestion.nodeId && nodeById(suggestion.nodeId),
+  const targets = latestModelSuggestionsForCurrentPage().filter((suggestion) =>
+    isVisibleCaptureNode(nodeById(suggestion.nodeId)),
   );
   if (!targets.length) {
     showStatus("No model suggestions on this page");
@@ -1699,24 +2334,12 @@ function choosePreviousModelSuggestion() {
   }
   const index = targets.findIndex((suggestion) => suggestion.nodeId === state.selectedId);
   const target = targets[(index <= 0 ? targets.length : index) - 1];
-  const moved = selectNode(target.nodeId);
-  if (!moved) return false;
-  requestAnimationFrame(() => {
-    const region = $("node-layer").querySelector(`[data-node-id="${CSS.escape(target.nodeId)}"]`);
-    region?.scrollIntoView({ behavior: "smooth", block: "center" });
-  });
-  return true;
+  return selectNode(target.nodeId);
 }
 function advanceAfterSave() {
   if (state.saving) return;
   if (state.labelMode === "element" && chooseNextModelSuggestion({ quiet: true })) return;
-  const nextIndex = state.currentPageIndex + 1;
-  if (nextIndex >= state.pages.length) {
-    showStatus("Saved — no more pages in this queue", "success");
-    return;
-  }
-  state.advanceModelOnLoad = state.labelMode === "element";
-  loadPage(nextIndex);
+  advanceToNextModelPage(state.labelMode === "page");
 }
 function isEditingTarget(target) {
   return (
@@ -1726,7 +2349,92 @@ function isEditingTarget(target) {
     target?.isContentEditable
   );
 }
+function installSwipeReview(card, pageLevel) {
+  const hint = card.querySelector(".swipe-review-hint");
+  const defaultHint = hint?.textContent || "";
+  const swipe = { pointerId: null, startX: 0, startY: 0, suggestionId: null, pageId: null };
+  const reset = () => {
+    swipe.pointerId = null;
+    swipe.suggestionId = null;
+    swipe.pageId = null;
+    card.dataset.swipeActive = "false";
+    card.style.transform = "";
+    if (hint) hint.textContent = defaultHint;
+  };
+  card.addEventListener("pointerdown", (event) => {
+    if (
+      swipe.pointerId !== null ||
+      state.saving ||
+      card.hidden ||
+      state.labelMode !== (pageLevel ? "page" : "element") ||
+      !event.isPrimary ||
+      event.button !== 0 ||
+      event.target.closest(
+        "button, input, textarea, select, summary, label, a, details, [contenteditable='true']",
+      )
+    )
+      return;
+    const suggestion = pageLevel
+      ? pageModelSuggestionFor()
+      : modelSuggestionFor(selectedNode()?.id);
+    if (!suggestion) return;
+    swipe.pointerId = event.pointerId;
+    swipe.startX = event.clientX;
+    swipe.startY = event.clientY;
+    swipe.suggestionId = suggestion.id;
+    swipe.pageId = state.page?.id || null;
+    card.dataset.swipeActive = "true";
+    card.setPointerCapture(event.pointerId);
+  });
+  card.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== swipe.pointerId) return;
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+      card.style.transform = "";
+      if (hint) hint.textContent = defaultHint;
+      return;
+    }
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      card.style.transform = `translateX(${Math.max(-24, Math.min(24, deltaX * 0.16))}px)`;
+    if (!hint) return;
+    hint.textContent =
+      Math.abs(deltaX) >= 96
+        ? deltaX > 0
+          ? "Release to approve"
+          : "Release to mark Not OK"
+        : defaultHint;
+  });
+  card.addEventListener("pointercancel", reset);
+  card.addEventListener("lostpointercapture", reset);
+  card.addEventListener("pointerup", (event) => {
+    if (event.pointerId !== swipe.pointerId) return;
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    const suggestion = pageLevel
+      ? pageModelSuggestionFor()
+      : modelSuggestionFor(selectedNode()?.id);
+    const matchesStart = suggestion?.id === swipe.suggestionId && state.page?.id === swipe.pageId;
+    reset();
+    if (
+      !matchesStart ||
+      card.hidden ||
+      state.labelMode !== (pageLevel ? "page" : "element") ||
+      Math.abs(deltaX) < 96 ||
+      Math.abs(deltaX) < Math.abs(deltaY) * 1.5 ||
+      state.saving
+    )
+      return;
+    if (deltaX > 0) {
+      if (pageLevel) fastPageModelReview("ok");
+      else fastModelReview("ok");
+    } else if (pageLevel) fastPageModelReview("not-ok");
+    else fastModelReview("not-ok");
+  });
+}
 function installListeners() {
+  installSwipeReview($("model-suggestion-section"), false);
+  installSwipeReview($("page-model-suggestion-section"), true);
   $("screenshot-stage").addEventListener("pointermove", updateHover);
   $("screenshot-stage").addEventListener("pointerleave", () => {
     state.hoverId = null;
@@ -1774,6 +2482,10 @@ function installListeners() {
   $("correct-model-suggestion").addEventListener("click", () => chooseModelReview("correct"));
   $("reject-model-suggestion").addEventListener("click", () => chooseModelReview("reject"));
   $("save-model-rejection").addEventListener("click", () => saveStandaloneModelRejection());
+  $("model-ok").addEventListener("click", () => fastModelReview("ok"));
+  $("model-not-ok").addEventListener("click", () => fastModelReview("not-ok"));
+  $("model-skip").addEventListener("click", () => skipModelReview());
+  $("comparison-reject-both").addEventListener("click", () => rejectComparisonSuggestions());
   $("use-page-model-suggestion").addEventListener("click", () => choosePageModelReview("accept"));
   $("correct-page-model-suggestion").addEventListener("click", () =>
     choosePageModelReview("correct"),
@@ -1784,6 +2496,9 @@ function installListeners() {
   $("save-page-model-rejection").addEventListener("click", () =>
     saveStandaloneModelRejection(true),
   );
+  $("page-model-ok").addEventListener("click", () => fastPageModelReview("ok"));
+  $("page-model-not-ok").addEventListener("click", () => fastPageModelReview("not-ok"));
+  $("page-model-skip").addEventListener("click", () => skipModelReview(true));
   $("element-tab").addEventListener("click", () => setLabelMode("element"));
   $("page-tab").addEventListener("click", () => setLabelMode("page"));
   $("page-type-search").addEventListener("input", () =>
@@ -1840,6 +2555,7 @@ function installListeners() {
     renderPageLabel();
     if (action) action();
   });
+  $("undo-last-review").addEventListener("click", undoLastReview);
   $("shortcut-toggle").addEventListener("click", () => $("shortcuts-dialog").showModal());
   $("shortcut-close").addEventListener("click", () => $("shortcuts-dialog").close());
   const saveCurrent = (advance = false) =>
@@ -1849,6 +2565,12 @@ function installListeners() {
   window.addEventListener("keydown", (event) => {
     if (event.repeat || event.isComposing || event.defaultPrevented) return;
     const dialogOpen = Boolean(document.querySelector("dialog[open]"));
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+      if (dialogOpen || isEditingTarget(event.target)) return;
+      event.preventDefault();
+      undoLastReview();
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === "Enter") {
       if (dialogOpen) return;
       event.preventDefault();
@@ -1876,7 +2598,32 @@ function installListeners() {
     } else if (event.key === "Enter") {
       if (event.target?.closest?.("button, a, [role='button']")) return;
       event.preventDefault();
-      saveCurrent(true);
+      if (
+        state.labelMode === "page" &&
+        pageModelSuggestionFor() &&
+        state.pageModelReview?.review !== "correct"
+      )
+        fastPageModelReview("ok");
+      // On a disagreement Enter must not pick a side: 1, 2 or X decide it.
+      else if (state.labelMode === "element" && comparisonSuggestions(selectedNode()))
+        saveCurrent(true);
+      else if (state.labelMode === "element" && modelSuggestionFor(selectedNode()?.id))
+        if (state.modelReview?.review === "correct") saveCurrent(true);
+        else fastModelReview("ok");
+      else saveCurrent(true);
+    } else if (
+      state.labelMode === "element" &&
+      (event.key === "1" || event.key === "2") &&
+      comparisonSuggestions(selectedNode())
+    ) {
+      event.preventDefault();
+      acceptComparisonSuggestion(Number(event.key));
+    } else if (event.key.toLowerCase() === "x") {
+      event.preventDefault();
+      if (state.labelMode === "page") fastPageModelReview("not-ok");
+      // X rejects both options when two annotators disagree.
+      else if (comparisonSuggestions(selectedNode())) rejectComparisonSuggestions();
+      else fastModelReview("not-ok");
     } else if (event.key.toLowerCase() === "p") {
       event.preventDefault();
       chooseParent();
@@ -1885,7 +2632,8 @@ function installListeners() {
       chooseChild();
     } else if (event.key.toLowerCase() === "j") {
       event.preventDefault();
-      chooseNextModelSuggestion();
+      if (state.labelMode === "page") skipModelReview(true);
+      else skipModelReview();
     } else if (event.key.toLowerCase() === "k") {
       event.preventDefault();
       choosePreviousModelSuggestion();
@@ -1903,6 +2651,7 @@ function installListeners() {
 }
 async function bootstrap() {
   installListeners();
+  renderUndoAction();
   try {
     const data = await api("/api/pages");
     state.pages = data.pages || [];
