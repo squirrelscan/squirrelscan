@@ -211,6 +211,9 @@ export type { TemplateFanout, TemplateFanoutStats } from "./template-fanout";
 
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";
+// Per-page result sink (#2343) — the seam that lets a caller spill page findings
+// as they are produced instead of holding them until the report.
+export type { PageResultSink, PageRuleEntries } from "./streaming";
 // Per-page rule-result cache (#1990).
 export {
   bindRuleCache,

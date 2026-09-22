@@ -154,5 +154,22 @@ export function extractPageFeatures(
     faviconHref: chrome.faviconHref,
     themeColor: chrome.themeColor,
     ogImage: chrome.ogImage,
+    // #2343: the report's own per-page scalars, taken here because this is the
+    // one pass that holds the DOM. Recovering them later meant re-parsing every
+    // stored page a second time.
+    // Optional-chained for the same reason `content`/`schemas` above are: a
+    // production ParsedPage always carries these, but the goldens hand in
+    // hand-built partials, and a report scalar is not worth throwing over.
+    reportScalars: {
+      metaRobots: parsed.meta.robots,
+      ogTitle: parsed.og?.title ?? null,
+      ogDescription: parsed.og?.description ?? null,
+      ogUrl: parsed.og?.url ?? null,
+      ogType: parsed.og?.type ?? null,
+      ogSiteName: parsed.og?.siteName ?? null,
+      twitterCard: parsed.twitter?.card ?? null,
+      h1Count: parsed.h1?.count ?? 0,
+      thinContent: parsed.content?.isThinContent ?? false,
+    },
   };
 }
