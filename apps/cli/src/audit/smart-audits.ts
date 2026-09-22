@@ -20,16 +20,21 @@ import type {
 
 import {
   buildScoringResultsFromMerged,
-  flattenChecks,
   mergeFindings,
   type CarriedFinding,
+  type FlatFinding,
+  type RuleTally,
 } from "@squirrelscan/audit-engine";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { Effect } from "effect";
 
-import type { RuleExecutionResult } from "@/audit/adapter";
-
-const REMOVED_STATUSES = new Set([404, 410]);
+/**
+ * Statuses that mean the page is GONE, so its checks are not active findings.
+ * Exported because the audit controller has to know them before the rules
+ * stream: the fresh findings are now flattened inside the stream, which is the
+ * last point a removed page's checks exist to be skipped (#2343).
+ */
+export const REMOVED_STATUSES = new Set([404, 410]);
 
 /** Stable identity for a carried finding, used to tag report checks. */
 function carriedKey(
@@ -41,8 +46,26 @@ function carriedKey(
 }
 
 export interface SmartAuditResult {
-  /** UNION rule results (fresh + carried) for scoring + report rebuild. */
-  unionRuleResults: Map<string, RuleRunResult>;
+  /**
+   * The CARRIED half of the union, per rule: replayed carried checks plus the
+   * `syntheticPassCount` that keeps clean carried pages in the pass-ratio
+   * denominator. Rules with neither are still present (empty checks, count 0) so
+   * the consumer sees the full rule set the union covered.
+   *
+   * It was the whole union until #2343. The fresh half is every check this run
+   * produced, which is exactly what `reconstructReport` already reads back out of
+   * `rule_results` — holding a second in-memory copy of it from the rules phase
+   * to the report was the largest single term in the audit's peak heap. The
+   * consumer now joins the two; see {@link SmartAuditResult.removedUrls} for the
+   * one filter the fresh half needs.
+   */
+  carriedRuleResults: Map<string, RuleRunResult>;
+  /**
+   * Normalized URLs that returned 404/410 this run. Their fresh checks must be
+   * dropped before the join: the page is gone, so it is not one of the "known
+   * non-removed" pages the union scores over.
+   */
+  removedUrls: Set<string>;
   /** Coverage line data for surfacing. */
   coverage: {
     auditedPages: number;
@@ -69,7 +92,17 @@ export interface RunSmartAuditsInput {
   crawlId: string;
   /** Site-scoped key = normalized base-site origin (same as getCrawlByUrl). */
   siteKey: string;
-  ruleResults: RuleExecutionResult;
+  /**
+   * This run's fail/warn checks, already flattened per (page, rule, item) by the
+   * rules-phase sink (#2343) in crawl order, with removed pages excluded. Same
+   * findings, same order, as the old `flattenChecks` walk over `pageRuleResults`
+   * — produced a page at a time instead of over a map held for the whole run.
+   */
+  freshFindings: FlatFinding[];
+  /** Normalized URLs page rules actually ran on, in crawl order. */
+  scoredPageUrls: readonly string[];
+  /** ruleId -> folded tally; read for `meta` only (the bounded rule index). */
+  ruleMeta: ReadonlyMap<string, RuleTally>;
   /** All page records for this crawl (status used to detect 404/410). */
   pages: Array<{ normalizedUrl: string; status: number }>;
 }
@@ -81,14 +114,22 @@ export interface RunSmartAuditsInput {
 export function runSmartAudits(
   input: RunSmartAuditsInput
 ): Effect.Effect<SmartAuditResult, Error, never> {
-  const { storage, crawlId, siteKey, ruleResults, pages } = input;
+  const {
+    storage,
+    crawlId,
+    siteKey,
+    freshFindings,
+    scoredPageUrls,
+    ruleMeta,
+    pages,
+  } = input;
 
   return Effect.gen(function* () {
     // Crawled this run = pages that produced page-rule results (keyed by
     // normalizedUrl). Include all stored pages too (some may be cache-fresh
     // with no fresh checks but still re-observed — they count as crawled).
     const crawledUrls = new Set<string>();
-    for (const url of ruleResults.pageRuleResults.keys()) crawledUrls.add(url);
+    for (const url of scoredPageUrls) crawledUrls.add(url);
     for (const p of pages) crawledUrls.add(p.normalizedUrl);
 
     const removedUrls = new Set<string>();
@@ -103,18 +144,8 @@ export function runSmartAudits(
 
     // Severity per rule (for surfacing carried findings).
     const severityByRule = new Map<string, string>();
-    for (const [ruleId, r] of ruleResults.ruleResultsMap) {
-      severityByRule.set(ruleId, r.meta.severity);
-    }
-
-    // Flatten fresh page-scope fail/warn checks into findings. Skip pages that
-    // returned 404/410 this run — they are removed, not active issues.
-    const freshFindings = [];
-    for (const [pageUrl, ruleChecks] of ruleResults.pageRuleResults) {
-      if (removedUrls.has(pageUrl)) continue;
-      for (const [ruleId, checks] of ruleChecks) {
-        freshFindings.push(...flattenChecks(pageUrl, ruleId, checks));
-      }
+    for (const [ruleId, t] of ruleMeta) {
+      severityByRule.set(ruleId, t.meta.severity);
     }
 
     const merged = yield* mergeFindings({
@@ -191,8 +222,8 @@ export function runSmartAudits(
 
     // Rule meta index for carried-only rules absent from this run.
     const ruleMetaIndex = new Map<string, RuleRunResult["meta"]>();
-    for (const [ruleId, r] of ruleResults.ruleResultsMap) {
-      ruleMetaIndex.set(ruleId, r.meta);
+    for (const [ruleId, t] of ruleMeta) {
+      ruleMetaIndex.set(ruleId, t.meta);
     }
     if (carriedFindings.length > 0) {
       const registry = loadAllRules();
@@ -203,34 +234,29 @@ export function runSmartAudits(
       }
     }
 
-    // Drop checks for removed (404/410) pages from the fresh results before
-    // union scoring — removed pages are not "known non-removed" pages. Only
-    // page-scope checks carry a pageUrl; site-scope checks (pageUrl undefined)
-    // pass through untouched.
-    const freshResults =
-      removedUrls.size === 0
-        ? ruleResults.ruleResultsMap
-        : new Map(
-            Array.from(ruleResults.ruleResultsMap, ([ruleId, r]) => [
-              ruleId,
-              {
-                meta: r.meta,
-                checks: r.checks.filter(
-                  (c) => !(c.pageUrl && removedUrls.has(c.pageUrl))
-                ),
-              },
-            ])
-          );
+    // The fresh half of the union is supplied EMPTY (#2343): every rule that ran,
+    // with its meta and no checks. `buildScoringResultsFromMerged` reads
+    // freshResults for exactly two things — the meta and which rules are
+    // page-scope (to decide which rules the carried pages count against) — and
+    // otherwise only appends to the checks array, so handing it empty arrays
+    // yields precisely the carried half. The consumer joins this with the fresh
+    // checks it reads back from `rule_results`, dropping the ones on
+    // `removedUrls` (a removed page is not one of the "known non-removed" pages
+    // the union covers), which is the filter this used to apply here.
+    const freshShell = new Map<string, RuleRunResult>();
+    for (const [ruleId, t] of ruleMeta)
+      freshShell.set(ruleId, { meta: t.meta, checks: [] });
 
-    const unionRuleResults = buildScoringResultsFromMerged({
-      freshResults,
+    const carriedRuleResults = buildScoringResultsFromMerged({
+      freshResults: freshShell,
       carriedFindings,
       carriedPageUrls,
       ruleMetaIndex,
     });
 
     return {
-      unionRuleResults,
+      carriedRuleResults,
+      removedUrls,
       coverage: {
         auditedPages: crawledUrls.size,
         knownPages: merged.activePageUrls.size,

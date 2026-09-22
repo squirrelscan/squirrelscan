@@ -17,7 +17,12 @@ export type { CrawlerEvent } from "@/crawler/core/types";
 import type { EntityMap, RenderChargeLine } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
-import { createCloudDocumentFetcher } from "@squirrelscan/audit-engine";
+import {
+  createCloudDocumentFetcher,
+  flattenChecks,
+  type FlatFinding,
+  type PageResultSink,
+} from "@squirrelscan/audit-engine";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
@@ -58,7 +63,10 @@ import {
   ruleCacheEnabled,
 } from "@/audit/rule-cache-store";
 import { resolveRulesConfig } from "@/audit/rule-filter";
-import { runSmartAudits } from "@/audit/smart-audits";
+import {
+  runSmartAudits,
+  REMOVED_STATUSES as SMART_REMOVED_STATUSES,
+} from "@/audit/smart-audits";
 import {
   resolveStreamBatchBytes,
   resolveStreamBatchPagesOverride,
@@ -1519,6 +1527,69 @@ export async function runAudit(
         );
       }
 
+      // #2343: SPILL the page-rule output instead of accumulating it.
+      //
+      // The phase used to hand back every scored page's checks in three maps and
+      // the CLI wrote them all in one transaction afterwards, so a crawl's entire
+      // findings set — message/value/items strings cut from every page — sat in
+      // heap from the first page to the last. That is the term that scales with
+      // pages × page BYTES: 4,000 gymshark pages projected ~3 GB before the
+      // report phase had even started. Each page's checks now go to `rule_results`
+      // with the batch they were produced in and are dropped; the phase retains
+      // only the per-rule tallies, which are bounded by the RULE count.
+      //
+      // `removedUrls` has to be known BEFORE the stream, because a 404/410 page's
+      // checks are not smart-audit findings and the sink is the only place the
+      // checks still exist. `pageStatuses` comes from the pre-rules walk, which
+      // has already run.
+      const smartAuditsOn = mergedConfig.smart_audits === true;
+      const removedPageUrls = new Set(
+        pageStatuses
+          .filter((p) => SMART_REMOVED_STATUSES.has(p.status))
+          .map((p) => p.normalizedUrl)
+      );
+      const freshFindings: FlatFinding[] = [];
+      const scoredPageUrls: string[] = [];
+      let pendingRuleRows = new Map<
+        string,
+        { ruleId: string; checks: import("@/types").CheckResult[] }[]
+      >();
+      const pageSink: PageResultSink = {
+        writePage(pageUrl, entries) {
+          scoredPageUrls.push(pageUrl);
+          pendingRuleRows.set(
+            pageUrl,
+            entries.map(([ruleId, checks]) => ({
+              ruleId,
+              checks: checks as import("@/types").CheckResult[],
+            }))
+          );
+          // Smart audits' fresh side, taken HERE because this is the last point
+          // the checks exist. Only fail/warn survive `flattenChecks`, so what is
+          // kept is the finding set the store was going to hold anyway, not the
+          // (mostly passing) check set.
+          if (!smartAuditsOn || removedPageUrls.has(pageUrl)) return;
+          for (const [ruleId, checks] of entries) {
+            const flat = flattenChecks(
+              pageUrl,
+              ruleId,
+              checks as import("@/types").CheckResult[]
+            );
+            for (const f of flat) freshFindings.push(f);
+          }
+        },
+        async flush() {
+          if (pendingRuleRows.size === 0) return;
+          const rows = pendingRuleRows;
+          // Swap rather than clear: the write below is async, and reusing the Map
+          // would let the next batch's pages land in the transaction mid-flight.
+          pendingRuleRows = new Map();
+          await Effect.runPromise(
+            sqliteStorage.saveRuleResultsBatch(crawlId, rows)
+          );
+        },
+      };
+
       // Thread cloud results + the resolved Stage-0 profile into the rules phase
       // per audit run — no process-global singleton. The metadata drives
       // `appliesWhen` rule gating; undefined = run as today.
@@ -1535,6 +1606,8 @@ export async function runAudit(
         {
           batchSize: streamBatchSize,
           onPhase: streamPhaseMemoryLogger(),
+          pageSink,
+          retainPageResults: false,
           ...(ruleCacheStore
             ? {
                 ruleCache: { store: ruleCacheStore, engineVersion: cliVersion },
@@ -1556,19 +1629,10 @@ export async function runAudit(
           )
         : await Effect.runPromise(rulesEffect);
 
-      // Batch all rule results into one transaction (mirrors analyze.ts:309),
-      // instead of a separate txn per (page, rule) pair.
-      type RuleEntry = {
-        ruleId: string;
-        checks: import("@/types").CheckResult[];
-      };
-      const batchResults = new Map<string, RuleEntry[]>();
-      for (const [url, ruleChecksMap] of ruleResults.pageRuleResults) {
-        batchResults.set(
-          url,
-          Array.from(ruleChecksMap, ([ruleId, checks]) => ({ ruleId, checks }))
-        );
-      }
+      // Page results already went to `rule_results` batch by batch through the
+      // sink above (#2343); only the site pass is left, and it is bounded by the
+      // rule count. Written under the same `page_url = ''` convention and AFTER
+      // every page row, so `getRuleResultsGrouped`'s rowid order is unchanged.
       const siteResultsList = Array.from(
         ruleResults.siteRuleResults,
         ([ruleId, checks]) => ({
@@ -1577,23 +1641,12 @@ export async function runAudit(
         })
       );
       if (siteResultsList.length > 0) {
-        batchResults.set("", siteResultsList);
-      }
-
-      if ("saveRuleResultsBatch" in storage) {
         await Effect.runPromise(
-          (
-            storage as import("@/crawler/storage/sqlite").SQLiteStorage
-          ).saveRuleResultsBatch(crawlId, batchResults)
+          sqliteStorage.saveRuleResultsBatch(
+            crawlId,
+            new Map([["", siteResultsList]])
+          )
         );
-      } else {
-        for (const [url, results] of batchResults) {
-          for (const { ruleId, checks } of results) {
-            await Effect.runPromise(
-              storage.saveRuleResults(crawlId, url, ruleId, checks)
-            );
-          }
-        }
       }
 
       const resourceRecords = [
@@ -1650,7 +1703,13 @@ export async function runAudit(
               storage,
               crawlId,
               siteKey: baseUrl,
-              ruleResults,
+              // #2343: the fresh side arrives as findings the sink flattened
+              // while each page's checks were in hand, and the rule metas come
+              // from the bounded tallies — neither needs the O(pages) result
+              // maps the phase no longer builds.
+              freshFindings,
+              scoredPageUrls,
+              ruleMeta: ruleResults.tallies,
               // Collected during the pre-rules walk in the same
               // normalized_url order `getPages` returns (#1913).
               pages: pageStatuses,

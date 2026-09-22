@@ -642,6 +642,36 @@ export interface SitePageRecord {
  * stored as 0/1 INTEGER — the eeat/legal per-URL rules only need presence, not
  * the underlying string.
  */
+/**
+ * The per-page scalars the REPORT needs and no rule reads (#2343).
+ *
+ * `reconstructReport` used to recover these by re-parsing every stored page —
+ * a second full DOM build per page, for ~200 bytes of output each. They are
+ * captured instead by the one pass that already has the DOM live (the streamed
+ * page-rule loop) and stored alongside the rest of the page's features.
+ *
+ * Everything the report needs that is ALREADY a feature column (title,
+ * description, canonical, schemaTypes, ogImage, wordCount) stays there; this
+ * carries only what had no other home. Bounded by construction: eight short
+ * strings and a count, never a slice of the page body.
+ */
+export interface PageReportScalars {
+  /** Raw `<meta name="robots">` content. */
+  metaRobots: string | null;
+  ogTitle: string | null;
+  ogDescription: string | null;
+  ogUrl: string | null;
+  ogType: string | null;
+  ogSiteName: string | null;
+  /** Raw `<meta name="twitter:card">` content. */
+  twitterCard: string | null;
+  /** `parsed.h1.count` — drives the report's multiple-H1 summary. */
+  h1Count: number;
+  /** `parsed.content.isThinContent` — stored, not re-derived from wordCount,
+   *  because the parser has two code paths that set it. */
+  thinContent: boolean;
+}
+
 export interface PageFeatureRow {
   normalizedUrl: string;
   status: number;
@@ -728,6 +758,12 @@ export interface PageFeatureRow {
   themeColor: string | null;
   /** Absolute URL of the page's `og:image` (the default/fallback one), or null. */
   ogImage: string | null;
+  /**
+   * Report-only per-page scalars (#2343). Null on a row written before schema
+   * v30, which is what makes the report's fallback parse reachable rather than
+   * dead code.
+   */
+  reportScalars: PageReportScalars | null;
 }
 
 /** Which hashed field a {@link SiteQuery.duplicateGroups} scan is keyed on. */

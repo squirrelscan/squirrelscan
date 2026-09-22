@@ -103,21 +103,58 @@ export interface StreamPageRulesHooks {
   onBatch?: (info: { batchIndex: number; pagesDone: number; batchMs: number }) => void;
 }
 
+/** One page's per-rule checks, in the runner's enabled-rule order. */
+export type PageRuleEntries = ReadonlyArray<readonly [ruleId: string, checks: CheckResultLike[]]>;
+
+/**
+ * Where a page's rule output GOES as it is produced (#2343).
+ *
+ * The three result maps below are what made the rules phase retain heap in
+ * proportion to pages × page BYTES: a check's message/value/items are content cut
+ * from the page it was found on, so a 1.8 MB page contributes ~700 KB of findings
+ * that nothing reads until the report. A sink takes ownership of each page's
+ * checks at the one point where they are already in hand, so the loop can retain
+ * nothing but the bounded per-rule {@link RuleTally}.
+ *
+ * Contract:
+ *  - `writePage` is called ONCE per scored page, in crawl order, with the checks
+ *    already stamped with `pageUrl` — the same objects, the same order, the same
+ *    universe the retained maps would have held.
+ *  - It MUST NOT retain them past the next `flush()`; retaining them re-creates
+ *    exactly the residency this exists to remove.
+ *  - `flush` is called at every batch boundary and once at the end, so a sink that
+ *    buffers (the CLI batches them into one SQLite transaction) is bounded to one
+ *    batch of pages rather than to the crawl.
+ */
+export interface PageResultSink {
+  writePage(pageUrl: string, entries: PageRuleEntries): void | Promise<void>;
+  flush?(): void | Promise<void>;
+}
+
 /** Yield to a macrotask so timers/heartbeats queued during sync work can fire. */
 function yieldToEventLoop(): Promise<void> {
   return new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 export interface StreamPageRulesResult {
-  /** pageUrl -> flat check list (RuleExecutionResult.pageResults). */
+  /**
+   * pageUrl -> flat check list (RuleExecutionResult.pageResults).
+   * EMPTY when `retainPageResults` is false (#2343) — the checks went to the sink.
+   */
   pageResults: Map<string, CheckResultLike[]>;
-  /** pageUrl -> (ruleId -> checks) (RuleExecutionResult.pageRuleResults). */
+  /**
+   * pageUrl -> (ruleId -> checks) (RuleExecutionResult.pageRuleResults).
+   * EMPTY when `retainPageResults` is false (#2343).
+   */
   pageRuleResults: Map<string, Map<string, CheckResultLike[]>>;
   /**
    * ruleId -> concatenated RuleRunResult across pages (RuleExecutionResult.ruleResultsMap).
    * Built via {@link mergeRuleRunResult} so `runStreamingRules` can assemble a
-   * byte-identical RuleExecutionResult for v1 parity. Still O(pages)-resident —
-   * the `tallies` above are the bounded PR-F scoring path that replaces it.
+   * byte-identical RuleExecutionResult for v1 parity. O(pages × page bytes)-resident
+   * — the `tallies` above are the bounded PR-F scoring path that replaces it, and
+   * `retainPageResults: false` (#2343) is what actually stops it being built.
+   * EMPTY of page-rule entries in that mode; `tallies` still carries every rule's
+   * meta and its exact counts.
    */
   ruleResultsMap: Map<string, RuleRunResult>;
   /** Folded per-rule tallies for page-scope rules (§3). */
@@ -216,6 +253,25 @@ export function streamPageRules(
      * store. Omitted → every page runs, byte-identically to before.
      */
     ruleCache?: StreamRuleCache;
+    /**
+     * Take ownership of each page's checks as they are produced (#2343). See
+     * {@link PageResultSink}. Independent of `retainPageResults`: a caller may
+     * sink AND retain (to diff the two), but the point of the sink is to make
+     * retaining unnecessary.
+     */
+    pageSink?: PageResultSink;
+    /**
+     * Keep `pageResults` / `pageRuleResults` / `ruleResultsMap` for page-scope
+     * rules. Default TRUE — today's behaviour, and what every v1-parity golden
+     * compares against.
+     *
+     * FALSE (#2343) is the bounded mode: the loop's only per-page retention
+     * becomes `pageUrls` (one string) and the fold into `tallies` (per RULE, not
+     * per page), so its heap stops scaling with page bytes. Only safe when a
+     * `pageSink` is taking the checks somewhere durable — the caller is then
+     * responsible for every consumer that used to read the three maps.
+     */
+    retainPageResults?: boolean;
   }
 ): Effect.Effect<StreamPageRulesResult, never, never> {
   return Effect.gen(function* () {
@@ -262,6 +318,9 @@ export function streamPageRules(
       !ruleCache && (opts?.templateFanout ?? templateFanoutEnabled())
         ? createTemplateFanout(runner, { maxClusters: opts?.templateFanoutMaxClusters })
         : null;
+
+    const pageSink = opts?.pageSink;
+    const retain = opts?.retainPageResults ?? true;
 
     const pageResults = new Map<string, CheckResultLike[]>();
     const pageRuleResults = new Map<string, Map<string, CheckResultLike[]>>();
@@ -339,19 +398,15 @@ export function streamPageRules(
 
         const replayEntry = replayByUrl.get(page.normalizedUrl);
         if (replayEntry) {
-          yield* replayPage(
-            page,
-            replayEntry,
-            runner,
-            crawlId,
-            storage,
-            collectors,
+          yield* replayPage(page, replayEntry, runner, crawlId, storage, collectors, {
+            retain,
+            pageSink,
             pageResults,
             pageRuleResults,
             ruleResultsMap,
             tallies,
             pageUrls,
-          );
+          });
           extractedCount++;
           ruleCacheStats.replayedPages++;
           ruleCache?.carryForward(keyByUrl.get(page.normalizedUrl)!, page);
@@ -476,18 +531,34 @@ export function streamPageRules(
         // this page ran the rules itself — a member has nothing new to say.
         if (!fanned) fanout?.record(clusterKey, result.ruleResults);
 
-        pageResults.set(pageUrl, result.checks);
-        const ruleChecksForPage = new Map<string, CheckResultLike[]>();
-        for (const [ruleId, rr] of result.ruleResults) {
-          ruleChecksForPage.set(ruleId, rr.checks);
-        }
-        pageRuleResults.set(pageUrl, ruleChecksForPage);
-        for (const [ruleId, rr] of result.ruleResults) {
+        // Stamp the page URL FIRST, then every consumer — the sink, the retained
+        // maps and the fold — sees identical checks and they stay byte-consistent
+        // with each other (mirrors runRulesOnStorage). Hoisted out of the
+        // accumulate loop because the sink needs the stamped objects too, and a
+        // rule's stamping only ever touches its own checks, so pass order is
+        // immaterial.
+        for (const [, rr] of result.ruleResults) {
           for (const check of rr.checks) if (!check.pageUrl) check.pageUrl = pageUrl;
-          // Stamp the page URL FIRST, then both accumulate (v1 parity) and fold
-          // (PR-F path) — so ruleResultsMap and tallies see identical checks and
-          // stay byte-consistent with each other (mirrors runRulesOnStorage).
-          mergeRuleRunResult(ruleResultsMap, ruleId, rr as RuleRunResult);
+        }
+        const entries = [...result.ruleResults].map(
+          ([ruleId, rr]) => [ruleId, rr.checks] as const,
+        );
+
+        // Hand this page's checks off BEFORE deciding whether to keep them, so
+        // the bounded mode has somewhere for them to have gone (#2343).
+        const written = pageSink?.writePage(pageUrl, entries);
+        if (written) yield* Effect.promise(() => written);
+
+        if (retain) {
+          pageResults.set(pageUrl, result.checks);
+          const ruleChecksForPage = new Map<string, CheckResultLike[]>();
+          for (const [ruleId, checks] of entries) ruleChecksForPage.set(ruleId, checks);
+          pageRuleResults.set(pageUrl, ruleChecksForPage);
+        }
+        for (const [ruleId, rr] of result.ruleResults) {
+          // The O(pages × page bytes) term. `tallies` below keeps this rule's
+          // exact counts either way, so skipping the merge costs scoring nothing.
+          if (retain) mergeRuleRunResult(ruleResultsMap, ruleId, rr as RuleRunResult);
           foldRuleResultIntoTallies(tallies, ruleId, rr as RuleRunResult);
         }
         pageUrls.push(pageUrl);
@@ -520,7 +591,7 @@ export function streamPageRules(
           // adds no residency — the implementation is what decides when to
           // serialize them.
           ruleCache.putFresh(cacheKey, page, {
-            ruleResults: [...result.ruleResults].map(([ruleId, rr]) => [ruleId, rr.checks] as const),
+            ruleResults: entries,
             features,
             signals,
           });
@@ -546,6 +617,11 @@ export function streamPageRules(
           opts?.signal?.throwIfAborted();
         }
       }
+
+      // Hand the batch's checks over before dropping it, so a buffering sink
+      // holds at most one batch of them and the GC pass below reclaims both the
+      // batch's DOMs and whatever the sink was holding (#2343).
+      if (pageSink?.flush) yield* Effect.promise(async () => void (await pageSink.flush!()));
 
       // Defensive backstop: every path in the per-page loop above already nulls
       // `parsed.document`, so this is a no-op today — but re-nulling the whole batch
@@ -577,6 +653,10 @@ export function streamPageRules(
       onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
     }
     if (ruleCache?.flush) yield* Effect.promise(() => ruleCache.flush!());
+    // Tail flush. The in-loop one already ran for the final batch, so this is a
+    // no-op for every sink that empties its buffer — it exists so a sink can
+    // treat "flushed after the last page" as guaranteed rather than inferred.
+    if (pageSink?.flush) yield* Effect.promise(async () => void (await pageSink.flush!()));
 
     return {
       pageResults,
@@ -623,11 +703,15 @@ function replayPage(
   crawlId: string,
   storage: SQLiteStorage,
   collectors: readonly PageSignalCollector[],
-  pageResults: Map<string, CheckResultLike[]>,
-  pageRuleResults: Map<string, Map<string, CheckResultLike[]>>,
-  ruleResultsMap: Map<string, RuleRunResult>,
-  tallies: Map<string, RuleTally>,
-  pageUrls: string[],
+  out: {
+    retain: boolean;
+    pageSink?: PageResultSink;
+    pageResults: Map<string, CheckResultLike[]>;
+    pageRuleResults: Map<string, Map<string, CheckResultLike[]>>;
+    ruleResultsMap: Map<string, RuleRunResult>;
+    tallies: Map<string, RuleTally>;
+    pageUrls: string[];
+  },
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
     const pageUrl = page.normalizedUrl;
@@ -648,13 +732,20 @@ function replayPage(
       }
       ruleChecksForPage.set(ruleId, checks);
     }
-    pageResults.set(pageUrl, flat);
-    pageRuleResults.set(pageUrl, ruleChecksForPage);
-    for (const [ruleId, rr] of byRule) {
-      mergeRuleRunResult(ruleResultsMap, ruleId, rr);
-      foldRuleResultIntoTallies(tallies, ruleId, rr);
+    // A replayed page reaches the sink exactly where a fresh one would, so the
+    // sink's stream is the crawl order either way (#2343) — the same invariant
+    // the collector replay above rests on.
+    const written = out.pageSink?.writePage(pageUrl, entry.ruleResults);
+    if (written) yield* Effect.promise(() => written);
+    if (out.retain) {
+      out.pageResults.set(pageUrl, flat);
+      out.pageRuleResults.set(pageUrl, ruleChecksForPage);
     }
-    pageUrls.push(pageUrl);
+    for (const [ruleId, rr] of byRule) {
+      if (out.retain) mergeRuleRunResult(out.ruleResultsMap, ruleId, rr);
+      foldRuleResultIntoTallies(out.tallies, ruleId, rr);
+    }
+    out.pageUrls.push(pageUrl);
 
     yield* storage
       .upsertPageFeatures(crawlId, entry.features)

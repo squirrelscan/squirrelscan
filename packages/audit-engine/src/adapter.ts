@@ -103,6 +103,7 @@ import {
 import {
   streamPageRules,
   STREAM_PAGE_BATCH,
+  type PageResultSink,
   type PageSignalCollector,
   type StreamPageRulesHooks,
 } from "./streaming";
@@ -2388,11 +2389,30 @@ export function runStreamingRules(
        */
       engineVersion: string;
     };
+    /**
+     * Take ownership of each page's rule output as it is produced (#2343), so it
+     * does not have to be held until the report. Forwarded verbatim to
+     * {@link streamPageRules} — see {@link PageResultSink}.
+     */
+    pageSink?: PageResultSink;
+    /**
+     * Keep the O(pages × page bytes) result maps. Default TRUE (today's
+     * behaviour, and what the cloud path runs on).
+     *
+     * FALSE (#2343) is the bounded mode the CLI runs: `pageResults`,
+     * `pageRuleResults` and `parsedPages` come back EMPTY, and `ruleResultsMap`
+     * carries the SITE rules only. `tallies` still carries every rule's meta and
+     * exact counts, which is everything scoring needs
+     * (`calculateHealthScoreFromTallies`). A caller passing false MUST have a
+     * `pageSink`, or the run's page-level findings go nowhere.
+     */
+    retainPageResults?: boolean;
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
     // Clamped — see streaming.ts; a 0 batch would loop forever over the crawl.
     const batchSize = Math.max(1, opts?.batchSize ?? STREAM_PAGE_BATCH);
+    const retainPageResults = opts?.retainPageResults ?? true;
     const onPhase = opts?.onPhase;
     const phase = <T,>(name: StreamingRulePhase, body: () => Effect.Effect<T, never, never>) =>
       Effect.gen(function* () {
@@ -2509,6 +2529,8 @@ export function runStreamingRules(
       pageLoopHooks: opts?.pageLoopHooks,
       templateFanout: opts?.templateFanout,
       ruleCache,
+      pageSink: opts?.pageSink,
+      retainPageResults: opts?.retainPageResults,
       }),
     );
     const collectedSignals: CollectedSiteSignals = { pages: collectedPages };
@@ -2560,9 +2582,16 @@ export function runStreamingRules(
 
         // Parsed-page cache for the report tail — same universe (auditable pages)
         // v1 returns, with DOMs already dropped (report reads only extracted
-        // fields).
+        // fields). Skipped in the bounded mode (#2343): its only readers are
+        // buildV1Report/buildV2Report's summary pass, and a caller that opted out
+        // of the retained maps is not on that path — the CLI rebuilds its report
+        // from SQLite. The pages themselves are held by `parsedPages` either way
+        // (this Map is a second index over the same objects), so what this saves
+        // is the index, and what it buys is a single owner for the universe.
         const cache = new Map<string, ParsedPage>();
-        for (const [url, { parsed }] of pageDataMap) cache.set(url, parsed);
+        if (retainPageResults) {
+          for (const [url, { parsed }] of pageDataMap) cache.set(url, parsed);
+        }
         return { ruleResultsMap: map, tallies: folded, parsedPagesCache: cache };
       }),
     );
