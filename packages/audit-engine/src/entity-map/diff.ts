@@ -14,6 +14,7 @@
 
 import {
   ENTITY_MAP_DIFF_FORMAT,
+  ENTITY_MAP_DIFF_PAGES_CAP,
   ENTITY_MAP_DIFF_VERSION,
   type EntityMap,
   type EntityMapDiff,
@@ -401,8 +402,13 @@ export function diffEntityMaps(
     summaryDelta[key] = metric(before, after);
   }
 
-  const pagesOnlyInOlder = [...olderPages].filter((url) => !newerPages.has(url)).sort(compareStrings);
-  const pagesOnlyInNewer = [...newerPages].filter((url) => !olderPages.has(url)).sort(compareStrings);
+  // Capped: two 5,000-page crawls covering different pages would otherwise put
+  // 10,000 URLs in this document. Sorted before the slice, so which ones survive
+  // is a property of the pages and not of iteration order.
+  const onlyInOlder = [...olderPages].filter((url) => !newerPages.has(url)).sort(compareStrings);
+  const onlyInNewer = [...newerPages].filter((url) => !olderPages.has(url)).sort(compareStrings);
+  const pagesOnlyInOlder = onlyInOlder.slice(0, ENTITY_MAP_DIFF_PAGES_CAP);
+  const pagesOnlyInNewer = onlyInNewer.slice(0, ENTITY_MAP_DIFF_PAGES_CAP);
 
   const byKey = (a: { key: string }, b: { key: string }) => compareStrings(a.key, b.key);
   const byAfterKey = (a: EntityMapDiffIdChange, b: EntityMapDiffIdChange) =>
@@ -443,5 +449,9 @@ export function diffEntityMaps(
     summaryDelta,
     pagesOnlyInOlder,
     pagesOnlyInNewer,
+    // The count is the TRUE total past the cap, so a reader sees how wide the
+    // coverage gap really is rather than a number that shrank with the list.
+    morePagesOnlyInOlder: onlyInOlder.length - pagesOnlyInOlder.length,
+    morePagesOnlyInNewer: onlyInNewer.length - pagesOnlyInNewer.length,
   };
 }

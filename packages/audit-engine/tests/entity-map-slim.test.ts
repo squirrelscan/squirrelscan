@@ -8,12 +8,13 @@ import {
   ENTITY_MAP_FORMAT,
   ENTITY_MAP_PUBLISH_LIMITS,
   ENTITY_MAP_VERSION,
+  ENTITY_MAP_VIEWER_LIMITS,
   type EntityMap,
   type EntityMapEdge,
   type EntityMapNode,
 } from "@squirrelscan/core-contracts/entity-map";
 
-import { slimEntityMapForPublish } from "../src/entity-map";
+import { slimEntityMapForPublish, slimEntityMapForViewer } from "../src/entity-map";
 
 function node(key: string, occurrences: number): EntityMapNode {
   return {
@@ -186,6 +187,111 @@ describe("slimEntityMapForPublish", () => {
     const source = map(many, []);
     expect(JSON.stringify(slimEntityMapForPublish(source))).toBe(
       JSON.stringify(slimEntityMapForPublish(source)),
+    );
+  });
+});
+
+// Every projection states what it dropped. The alternative is a consumer
+// inferring it from `summary.nodeCount` against `nodes.length`, which is an
+// inference each one has to make separately and any one of them can forget.
+describe("projection truncation", () => {
+  test("reports the nodes, edges and pages it dropped", () => {
+    const many: EntityMapNode[] = [];
+    for (let i = 0; i < ENTITY_MAP_PUBLISH_LIMITS.maxNodes + 40; i += 1) {
+      many.push(node(`n${String(i).padStart(4, "0")}`, i));
+    }
+    // An edge between two clipped nodes, so edges are dropped as well.
+    const edges = [edge("n0000", "n0001")];
+    const slim = slimEntityMapForPublish(map(many, edges, 7));
+
+    expect(slim.truncated).toEqual({
+      reason: "publish",
+      nodes: 40,
+      edges: 1,
+      pages: 7,
+    });
+    // And the counts really do reconcile against the full document.
+    expect(slim.nodes.length + slim.truncated!.nodes).toBe(many.length);
+    expect(slim.edges.length + slim.truncated!.edges).toBe(edges.length);
+  });
+
+  test("still marks a map that lost only its pages", () => {
+    // Nothing clipped but `pages`, which both projections always drop. Zero
+    // node loss must not read as "nothing was dropped".
+    const slim = slimEntityMapForPublish(map([node("a", 1)], [], 3));
+    expect(slim.pages).toEqual([]);
+    expect(slim.truncated).toEqual({ reason: "publish", nodes: 0, edges: 0, pages: 3 });
+  });
+
+  test("names which projection clipped it", () => {
+    const small = map([node("a", 1)], [], 0);
+    expect(slimEntityMapForPublish(small).truncated!.reason).toBe("publish");
+    expect(slimEntityMapForViewer(small).truncated!.reason).toBe("viewer");
+  });
+});
+
+describe("slimEntityMapForViewer", () => {
+  test("bounds the payload a browser has to parse", () => {
+    // The shape that made a 5,000-page crawl a 15.3MB inline blob: four
+    // entities per page, every one of them carried into the HTML.
+    const many: EntityMapNode[] = [];
+    for (let i = 0; i < 20_001; i += 1) {
+      many.push(node(`n${String(i).padStart(5, "0")}`, (i % 40) + 1));
+    }
+    const full = map(many, []);
+    const viewer = slimEntityMapForViewer(full);
+
+    expect(viewer.nodes).toHaveLength(ENTITY_MAP_VIEWER_LIMITS.maxNodes);
+    expect(viewer.truncated!.nodes).toBe(20_001 - ENTITY_MAP_VIEWER_LIMITS.maxNodes);
+    expect(JSON.stringify(viewer).length).toBeLessThanOrEqual(
+      ENTITY_MAP_VIEWER_LIMITS.maxBytes,
+    );
+    // An order of magnitude, not a few percent — the point of the projection.
+    expect(JSON.stringify(viewer).length).toBeLessThan(
+      JSON.stringify(full).length / 5,
+    );
+  });
+
+  test("keeps more per node than the publish copy, because this one is read", () => {
+    const wide = node("a", 3);
+    wide.pages = Array.from({ length: 50 }, (_, i) => `https://example.com/p${i}`);
+    wide.morePages = 10;
+    wide.properties = { description: "d".repeat(1500) };
+
+    const viewer = slimEntityMapForViewer(map([wide], []));
+    const published = slimEntityMapForPublish(map([wide], []));
+
+    // The detail panel lists twelve pages; the publish copy keeps five.
+    expect(viewer.nodes[0]!.pages).toHaveLength(ENTITY_MAP_VIEWER_LIMITS.maxPages);
+    expect(published.nodes[0]!.pages).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxPages);
+    // Both still account for every page they did not list.
+    expect(viewer.nodes[0]!.pages.length + viewer.nodes[0]!.morePages).toBe(60);
+    expect(published.nodes[0]!.pages.length + published.nodes[0]!.morePages).toBe(60);
+    // A description survives at viewer width and is cut at publish width.
+    expect(viewer.nodes[0]!.properties.description).toHaveLength(1500);
+    expect(published.nodes[0]!.properties.description).toHaveLength(
+      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength,
+    );
+  });
+
+  test("leaves the summary describing the site, not the projection", () => {
+    const many: EntityMapNode[] = [];
+    for (let i = 0; i < ENTITY_MAP_VIEWER_LIMITS.maxNodes + 500; i += 1) {
+      many.push(node(`n${String(i).padStart(5, "0")}`, i));
+    }
+    const viewer = slimEntityMapForViewer(map(many, [], 5_000));
+    expect(viewer.summary.nodeCount).toBe(many.length);
+    expect(viewer.summary.pagesTotal).toBe(5_000);
+  });
+
+  test("is deterministic", () => {
+    const many: EntityMapNode[] = [];
+    for (let i = 0; i < ENTITY_MAP_VIEWER_LIMITS.maxNodes + 30; i += 1) {
+      many.push(node(`n${String(i).padStart(5, "0")}`, i % 7));
+    }
+    const source = map(many, []);
+    expect(JSON.stringify(slimEntityMapForViewer(source))).toBe(
+      JSON.stringify(slimEntityMapForViewer(source)),
     );
   });
 });
