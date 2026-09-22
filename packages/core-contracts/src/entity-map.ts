@@ -131,6 +131,11 @@ export const ENTITY_MAP_PUBLISH_LIMITS = {
   maxPages: 5,
   /** Serialized ceiling for the whole map. Well under the 20MB publish gate. */
   maxBytes: 512_000,
+  /**
+   * Small: the hosted graph hides page-local entities by default, so spending
+   * the body on one BreadcrumbList per page buys a reader nothing.
+   */
+  maxPageLocalShare: 0.1,
 } as const;
 
 /**
@@ -157,6 +162,8 @@ export const ENTITY_MAP_VIEWER_LIMITS = {
   /** The detail panel lists twelve, so fewer would clip what a reader sees. */
   maxPages: 12,
   maxBytes: 4_000_000,
+  /** Looser than publish: the viewer has a toggle that reveals these. */
+  maxPageLocalShare: 0.25,
 } as const;
 
 /**
@@ -173,7 +180,17 @@ export interface EntityMapLimits {
   readonly maxConflictValues: number;
   readonly maxPages: number;
   readonly maxBytes: number;
+  /**
+   * Share of the node budget page-local entities may take, 0 to 1.
+   *
+   * Optional so an older limit set still satisfies this type; the projection
+   * falls back to {@link ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE}.
+   */
+  readonly maxPageLocalShare?: number;
 }
+
+/** Page-local share used when a limit set does not name one. */
+export const ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE = 0.1;
 
 // ── Node properties ────────────────────────────────────────────────
 

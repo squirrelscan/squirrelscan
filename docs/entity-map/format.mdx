@@ -43,7 +43,9 @@ Absent from the document `squirrel entities -f json` writes, which always carrie
 }
 ```
 
-`reason` is `publish` or `viewer`. The three counts are what that copy left out: entities are kept by how many pages declare them, so what goes is what the site says least often, and `pages` is dropped whole.
+`reason` is `publish` or `viewer`. The three counts are what that copy left out, and `pages` is dropped whole.
+
+What survives is a sample chosen to look like the site rather than the top of one list. Entities declared on more than one page go first: the Organization, the WebSite, the Brand every product points at. The rest of the budget is split evenly between the types that are left, so a 5,000-product catalogue cannot crowd out its own Offers, and within a type the better-connected entity wins. Entities that describe a single page, such as a per-page BreadcrumbList or WebPage, are kept last and capped at a tenth of the copy, since there is one of them per page and a graph hides them by default. Ranking on declaration count alone is what this replaced: on a store that declares its entities per page, every entity occurs exactly once, and the copy became an alphabetical slice of the catalogue with whole types missing from it.
 
 `summary` is never recomputed, so a truncated copy still reports the site's real `nodeCount`, `edgeCount` and `pagesTotal`. Read totals from `summary` rather than from the length of `nodes` — on a large site those are different numbers, which is the whole reason this field exists. For the complete graph, run `squirrel entities -f json` locally.
 

@@ -12,14 +12,20 @@
 // Counts alone do NOT bound bytes. Every string in this document is a
 // site-controlled value, so fifty conflict values of a megabyte each pass a
 // node-count cap and still blow the limit. Three layers, cheapest first: clamp
-// every string, sample the conflict and page arrays, then drop
-// lowest-occurrence nodes until the serialized document fits.
+// every string, sample the conflict and page arrays, then sample the nodes
+// themselves until the serialized document fits.
+//
+// That last sample is the part with judgement in it, and getting it wrong is
+// quiet: the document still validates, still reports true totals in `summary`,
+// and simply describes a different site than the one audited. See
+// `projectEntityMap` for the tiers.
 //
 // Lives in core-contracts rather than in the engine because `@squirrelscan/report`
 // needs it for the viewer payload and the engine depends on report, never the
 // reverse. The engine re-exports it from `./entity-map/slim`.
 
 import {
+  ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE,
   ENTITY_MAP_PUBLISH_LIMITS,
   ENTITY_MAP_VIEWER_LIMITS,
   type EntityMap,
@@ -110,6 +116,80 @@ function compareKeys(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+// ── Sampling ───────────────────────────────────────────────────────
+//
+// Ranking on occurrences alone put the whole budget into one type. On a store
+// that declares its entities per page — Shopify, WooCommerce, most of the CMS
+// world — every Product, Offer, BreadcrumbList and WebPage occurs exactly once,
+// so the ranking degenerated to its tie-break and the published body became an
+// alphabetical slab: a 1,000-page synthetic store published 125 Products, 125
+// BreadcrumbLists, 124 WebPages and zero Offers, and grew no more representative
+// at 5,000 pages. A reader looking at that map cannot tell what the site sells.
+//
+// So the budget is allocated in three tiers instead, and stratified by type
+// inside each one.
+
+/** Edges touching a node, inbound and outbound: how connected it is. */
+function degreesByKey(edges: EntityMapEdge[]): Map<string, number> {
+  // A Map, not a plain object: type names and node keys are site-controlled.
+  const out = new Map<string, number>();
+  for (const edge of edges) {
+    out.set(edge.source, (out.get(edge.source) ?? 0) + 1);
+    if (!edge.dangling) out.set(edge.target, (out.get(edge.target) ?? 0) + 1);
+  }
+  return out;
+}
+
+type NodeCompare = (a: EntityMapNode, b: EntityMapNode) => number;
+
+/**
+ * Nodes grouped by primary type, each group in priority order.
+ *
+ * Groups are ordered by their own best node, so a budget too small to reach
+ * every type still spends itself on the types that reach furthest.
+ */
+function bucketsByType(nodes: EntityMapNode[], compare: NodeCompare): EntityMapNode[][] {
+  const byType = new Map<string, EntityMapNode[]>();
+  for (const node of nodes) {
+    const type = node.types[0] ?? "";
+    const bucket = byType.get(type);
+    if (bucket) bucket.push(node);
+    else byType.set(type, [node]);
+  }
+  const buckets = [...byType.entries()].map(([type, bucket]) => {
+    bucket.sort(compare);
+    return { type, bucket };
+  });
+  buckets.sort((a, b) => compare(a.bucket[0]!, b.bucket[0]!) || compareKeys(a.type, b.type));
+  return buckets.map(({ bucket }) => bucket);
+}
+
+/**
+ * Round-robin across the type buckets until the budget runs out.
+ *
+ * Equal shares with redistribution, deliberately, rather than shares
+ * proportional to how many nodes each type has: proportional is what the old
+ * ranking effectively did, and on a 5,000-page store it hands 749 of 750 slots
+ * to Product and leaves the one Organization the map exists to show fighting
+ * for the last. A type that runs out early gives its remaining slots back to
+ * the types that still have nodes, so nothing is wasted on a rare type.
+ */
+function takeStratified(buckets: EntityMapNode[][], budget: number): EntityMapNode[] {
+  const taken: EntityMapNode[] = [];
+  for (let round = 0; taken.length < budget; round += 1) {
+    let progressed = false;
+    for (const bucket of buckets) {
+      if (taken.length >= budget) break;
+      const node = bucket[round];
+      if (node === undefined) continue;
+      taken.push(node);
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+  return taken;
+}
+
 /** Keep only edges whose source survived; a dangling edge keeps regardless. */
 function edgesFor(
   edges: EntityMapEdge[],
@@ -124,12 +204,25 @@ function edgesFor(
 /**
  * Cap an entity map for a copy that travels.
  *
- * Nodes are kept by occurrence count, since an entity declared on 200 pages is
- * the one a reader cares about and a one-off is not. Edges follow the nodes
- * they connect; a dangling edge is kept regardless of its target, because the
- * missing target IS the finding. `pages` is dropped: it is the largest array in
- * the document, neither consumer reads it, and `summary.pagesTotal` /
- * `pagesWithoutEntities` already carry what a reader needs from it.
+ * The surviving nodes are a SAMPLE of the map, not its head. Three tiers, in
+ * order:
+ *
+ *   1. shared subjects — entities declared on more than one page. The
+ *      Organization, the WebSite, the Brand every product points at: the things
+ *      the map exists to show, ranked by occurrences then by degree.
+ *   2. one-off subjects — everything else that is not page-local, stratified by
+ *      type so a 5,000-product catalogue cannot crowd out its own Offers,
+ *      ranked inside a type by degree, since a connected node explains more of
+ *      the graph than an isolated one.
+ *   3. page-local entities — the per-page BreadcrumbList and WebPage a graph
+ *      hides by default. Capped at `maxPageLocalShare` of the budget, because
+ *      there is one of them per page and they say nothing about the site.
+ *
+ * Edges follow the nodes they connect; a dangling edge is kept regardless of
+ * its target, because the missing target IS the finding. `pages` is dropped: it
+ * is the largest array in the document, neither consumer reads it, and
+ * `summary.pagesTotal` / `pagesWithoutEntities` already carry what a reader
+ * needs from it.
  *
  * `summary` is NOT recomputed. It describes the site, not this projection, so a
  * clipped map still reports the true node and edge counts. What was dropped is
@@ -143,20 +236,56 @@ export function projectEntityMap(
   limits: EntityMapLimits,
   reason: EntityMapTruncation["reason"],
 ): EntityMap {
-  // Rank once, by reach, ties broken on key so the projection is deterministic.
-  const ranked = [...map.nodes].sort(
-    (a, b) => b.occurrences - a.occurrences || compareKeys(a.key, b.key),
-  );
+  const degrees = degreesByKey(map.edges);
+  const degree = (node: EntityMapNode): number => degrees.get(node.key) ?? 0;
+  const byReach: NodeCompare = (a, b) =>
+    b.occurrences - a.occurrences || degree(b) - degree(a) || compareKeys(a.key, b.key);
+  const byDegree: NodeCompare = (a, b) =>
+    degree(b) - degree(a) || b.occurrences - a.occurrences || compareKeys(a.key, b.key);
 
-  let budget = Math.min(ranked.length, limits.maxNodes);
-  let result = project(ranked, budget, map, limits, reason);
+  const shared: EntityMapNode[] = [];
+  const oneOff: EntityMapNode[] = [];
+  const pageLocal: EntityMapNode[] = [];
+  for (const node of map.nodes) {
+    if (node.pageLocal) pageLocal.push(node);
+    else if (node.occurrences > 1) shared.push(node);
+    else oneOff.push(node);
+  }
+
+  // Ranked once; only the budget moves between attempts.
+  const sharedBuckets = bucketsByType(shared, byReach);
+  const oneOffBuckets = bucketsByType(oneOff, byDegree);
+  const pageLocalBuckets = bucketsByType(pageLocal, byReach);
+  const pageLocalShare = limits.maxPageLocalShare ?? ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE;
+
+  const select = (budget: number): EntityMapNode[] => {
+    // Reserved, not merely capped: the page-local slice is set aside first so
+    // tier 3 still gets its share, and held to what the pool actually holds so
+    // a site with none of them spends the whole budget on subjects.
+    const localBudget = Math.min(pageLocal.length, Math.floor(budget * pageLocalShare));
+    const subjects = takeStratified(sharedBuckets, budget - localBudget);
+    const rest = takeStratified(oneOffBuckets, budget - localBudget - subjects.length);
+    // Whatever tiers 1 and 2 could not fill falls back here rather than going
+    // unspent, so a page-local-heavy map still publishes a full budget.
+    const locals = takeStratified(pageLocalBuckets, budget - subjects.length - rest.length);
+    return [...subjects, ...rest, ...locals];
+  };
+
+  let budget = Math.min(map.nodes.length, limits.maxNodes);
+  let result = project(select(budget), map, limits, reason);
+  let size = JSON.stringify(result).length;
 
   // Only now does byte size enter, and only when the clamps were not enough.
-  // Halving rather than stepping keeps this O(log n) serializations instead of
-  // one per dropped node.
-  while (budget > 0 && JSON.stringify(result).length > limits.maxBytes) {
-    budget = Math.floor(budget / 2);
-    result = project(ranked, budget, map, limits, reason);
+  // Scaled to the overshoot rather than halved: halving cost a 5,000-page map
+  // half its budget (750 to 375 nodes) to shed 4% of its bytes. Shrinking the
+  // budget shrinks every tier and every type bucket with it, so the mix of the
+  // sample survives the shrink; only its resolution drops. `budget - 1` bounds
+  // the loop when the fixed overhead alone is over the limit.
+  while (budget > 0 && size > limits.maxBytes) {
+    const scaled = Math.floor((budget * limits.maxBytes) / size);
+    budget = Math.max(0, Math.min(budget - 1, scaled));
+    result = project(select(budget), map, limits, reason);
+    size = JSON.stringify(result).length;
   }
   return result;
 }
@@ -178,14 +307,12 @@ export function slimEntityMapForViewer(map: EntityMap): EntityMap {
 }
 
 function project(
-  ranked: EntityMapNode[],
-  budget: number,
+  selected: EntityMapNode[],
   map: EntityMap,
   limits: EntityMapLimits,
   reason: EntityMapTruncation["reason"],
 ): EntityMap {
-  const kept = ranked
-    .slice(0, budget)
+  const kept = selected
     .map((node) => clampNode(node, limits))
     .sort((a, b) => compareKeys(a.key, b.key));
   const keys = new Set(kept.map((node) => node.key));
