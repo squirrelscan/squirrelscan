@@ -30,7 +30,11 @@ export type { DiffEntityMapsOptions } from "./diff";
 export { jsonLdGeneratedIds, toJsonLd } from "./jsonld";
 export { renderEntityMapHtml } from "./html";
 export { renderEntityMapMarkdown } from "./markdown";
-export { slimEntityMapForPublish } from "./slim";
+export {
+  projectEntityMap,
+  slimEntityMapForPublish,
+  slimEntityMapForViewer,
+} from "./slim";
 
 // Re-exported so a consumer of this subpath never has to reach for a second
 // package just to type the thing it was handed.
@@ -39,7 +43,9 @@ export type {
   EntityMapDiff,
   EntityMapEdge,
   EntityMapJsonLd,
+  EntityMapLimits,
   EntityMapNode,
   EntityMapPage,
   EntityMapSummary,
+  EntityMapTruncation,
 } from "@squirrelscan/core-contracts/entity-map";

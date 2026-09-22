@@ -224,7 +224,15 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
   }
 
   // Coverage last, because it qualifies everything above it.
-  const changedPages = diff.pagesOnlyInOlder.length + diff.pagesOnlyInNewer.length;
+  //
+  // The diff SAMPLES these two lists (ENTITY_MAP_DIFF_PAGES_CAP), so the array
+  // length is not the count — a 5,000-page coverage gap arrives here as 25 URLs
+  // and `morePagesOnlyIn*`. Reading the length alone would report the widest
+  // possible gap as the narrowest, in the one section whose whole job is to say
+  // how much of the diff above to trust.
+  const olderTotal = diff.pagesOnlyInOlder.length + (diff.morePagesOnlyInOlder ?? 0);
+  const newerTotal = diff.pagesOnlyInNewer.length + (diff.morePagesOnlyInNewer ?? 0);
+  const changedPages = olderTotal + newerTotal;
   lines.push(`## Crawl coverage (${changedPages})`, "");
   if (changedPages === 0) {
     lines.push("Both audits covered exactly the same pages.", "");
@@ -233,31 +241,23 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
       "The two audits did not cover the same pages, so read the lists above with that in mind.",
       "",
     );
-    if (diff.pagesOnlyInOlder.length > 0) {
-      lines.push(`**Only in the older audit (${diff.pagesOnlyInOlder.length}):**`, "");
+    if (olderTotal > 0) {
+      lines.push(`**Only in the older audit (${olderTotal}):**`, "");
       for (const url of diff.pagesOnlyInOlder.slice(0, ENTITY_DIFF_PAGE_LIMIT)) {
         lines.push(`- ${entityCell(url)}`);
       }
       lines.push(
-        ...tail(
-          Math.min(diff.pagesOnlyInOlder.length, ENTITY_DIFF_PAGE_LIMIT),
-          diff.pagesOnlyInOlder.length,
-          "pages",
-        ),
+        ...tail(Math.min(diff.pagesOnlyInOlder.length, ENTITY_DIFF_PAGE_LIMIT), olderTotal, "pages"),
         "",
       );
     }
-    if (diff.pagesOnlyInNewer.length > 0) {
-      lines.push(`**Only in the newer audit (${diff.pagesOnlyInNewer.length}):**`, "");
+    if (newerTotal > 0) {
+      lines.push(`**Only in the newer audit (${newerTotal}):**`, "");
       for (const url of diff.pagesOnlyInNewer.slice(0, ENTITY_DIFF_PAGE_LIMIT)) {
         lines.push(`- ${entityCell(url)}`);
       }
       lines.push(
-        ...tail(
-          Math.min(diff.pagesOnlyInNewer.length, ENTITY_DIFF_PAGE_LIMIT),
-          diff.pagesOnlyInNewer.length,
-          "pages",
-        ),
+        ...tail(Math.min(diff.pagesOnlyInNewer.length, ENTITY_DIFF_PAGE_LIMIT), newerTotal, "pages"),
         "",
       );
     }

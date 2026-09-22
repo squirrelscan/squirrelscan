@@ -16,6 +16,8 @@
 //   - Everything in the map comes from audited pages. The map reaches the page
 //     as escaped JSON and reaches the DOM only through `textContent`.
 
+import { slimEntityMapForViewer } from "@squirrelscan/core-contracts/entity-map-project";
+
 import type { EntityMap } from "./types";
 
 /** Nodes drawn in the force graph before it stops being readable (or fast). */
@@ -37,9 +39,22 @@ export function escapeEntityJsonForScript(json: string): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-/** The map as the escaped JSON body of the viewer's data script. */
+/**
+ * The map as the escaped JSON body of the viewer's data script.
+ *
+ * BOUNDED, because this blob is inlined into an HTML document and the browser
+ * parses all of it before the viewer draws anything. The full document grows
+ * linearly with the crawl — a 5,000-page store declaring four entities per page
+ * measures 20,001 nodes and 15.3MB of inline JSON — while the graph draws 400
+ * nodes and the table shows 25. `slimEntityMapForViewer` takes that to 1.4MB by
+ * keeping the 2,000 entities with the most reach and dropping `pages`, which
+ * nothing in this file reads.
+ *
+ * `summary` survives the projection intact, so every count the viewer shows is
+ * still the site's real one.
+ */
 export function entityViewerData(map: EntityMap): string {
-  return escapeEntityJsonForScript(JSON.stringify(map));
+  return escapeEntityJsonForScript(JSON.stringify(slimEntityMapForViewer(map)));
 }
 
 /** Scoped CSS for the viewer. Safe to inline next to any other stylesheet. */
@@ -212,6 +227,16 @@ const SCRIPT = String.raw`
   // Present only in the standalone document; the report has its own header.
   setText("em-site", map.site);
   setText("em-generated", map.generatedAt);
+
+  // The payload is a bounded projection on a large site, so "how many entities
+  // does this site have" is summary.nodeCount and NOT map.nodes.length. Reading
+  // the array length instead is how a clipped graph reports itself as a small
+  // site; every total below goes through siteTotal.
+  var siteTotal = map.summary.nodeCount;
+  var clippedNodes = (map.truncated && map.truncated.nodes) || 0;
+  var clipNote = clippedNodes > 0
+    ? " The " + clippedNodes + " entities with the least reach are left out of this page; squirrel entities lists them all."
+    : "";
 
   function primaryType(node) { return (node.types && node.types[0]) || "Thing"; }
 
@@ -390,7 +415,7 @@ const SCRIPT = String.raw`
     var pageLocalTotal = 0;
     for (var i = 0; i < sim.length; i++) if (sim[i].pageLocal) pageLocalTotal++;
     setText("em-table-note", showPageLocal
-      ? "Showing all " + map.nodes.length + " entities, including the " + pageLocalTotal + " page-local ones (per-page types and unnamed images)."
+      ? "Showing " + map.nodes.length + " of " + siteTotal + " entities, including the " + pageLocalTotal + " page-local ones (per-page types and unnamed images)." + clipNote
       : pageLocalTotal + " page-local entities (per-page types and unnamed images) are hidden from both the graph and the table. Tick the box to include them.");
   }
 
@@ -940,7 +965,7 @@ const SCRIPT = String.raw`
     });
     setText(
       "em-row-count",
-      shown.length + " of " + rows.length + " shown · " + map.nodes.length + " total"
+      shown.length + " of " + rows.length + " shown · " + siteTotal + " total"
     );
     if (head) {
       for (var i = 0; i < COLUMNS.length; i++) {
@@ -978,7 +1003,8 @@ const SCRIPT = String.raw`
     var note = el("em-note");
     if (note) {
       note.textContent += " Showing the " + GRAPH_NODE_CAP +
-        " entities with the most occurrences; the table below lists all " + map.nodes.length + ".";
+        " entities with the most occurrences; the table below lists " + map.nodes.length +
+        " of " + siteTotal + "." + clipNote;
     }
   }
   window.addEventListener("resize", resize);

@@ -131,7 +131,66 @@ export const ENTITY_MAP_PUBLISH_LIMITS = {
   maxPages: 5,
   /** Serialized ceiling for the whole map. Well under the 20MB publish gate. */
   maxBytes: 512_000,
+  /**
+   * Small: the hosted graph hides page-local entities by default, so spending
+   * the body on one BreadcrumbList per page buys a reader nothing.
+   */
+  maxPageLocalShare: 0.1,
 } as const;
+
+/**
+ * Caps applied when the map is inlined into an HTML page for the viewer.
+ *
+ * The viewer's payload is a `<script type="application/json">` block the browser
+ * must parse in full before it draws anything, and the document grows linearly
+ * with the crawl: a 5,000-page store declaring four entities per page measures
+ * 20,001 nodes and a 15.3MB inline blob, of which the graph draws 400 and the
+ * table shows 25. Capping the payload at 2,000 nodes takes that to 1.4MB while
+ * still shipping five times what the graph can draw.
+ *
+ * Looser than the publish limits on the per-node fields, because this copy is
+ * READ rather than merely stored: the detail panel lists twelve declaring pages
+ * and a description is worth showing at more than 512 characters. `maxBytes` is
+ * the backstop for a site whose property values are pathologically long, since
+ * a node count alone bounds no bytes.
+ */
+export const ENTITY_MAP_VIEWER_LIMITS = {
+  maxNodes: 2000,
+  maxEdges: 4000,
+  maxStringLength: 2048,
+  maxConflictValues: 10,
+  /** The detail panel lists twelve, so fewer would clip what a reader sees. */
+  maxPages: 12,
+  maxBytes: 4_000_000,
+  /** Looser than publish: the viewer has a toggle that reveals these. */
+  maxPageLocalShare: 0.25,
+} as const;
+
+/**
+ * The caps one projection of a map was built with.
+ *
+ * Spelled out rather than `typeof ENTITY_MAP_PUBLISH_LIMITS`: the constants are
+ * `as const`, so that would be a type of literal numbers and no other limit set
+ * would satisfy it.
+ */
+export interface EntityMapLimits {
+  readonly maxNodes: number;
+  readonly maxEdges: number;
+  readonly maxStringLength: number;
+  readonly maxConflictValues: number;
+  readonly maxPages: number;
+  readonly maxBytes: number;
+  /**
+   * Share of the node budget page-local entities may take, 0 to 1.
+   *
+   * Optional so an older limit set still satisfies this type; the projection
+   * falls back to {@link ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE}.
+   */
+  readonly maxPageLocalShare?: number;
+}
+
+/** Page-local share used when a limit set does not name one. */
+export const ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE = 0.1;
 
 // ── Node properties ────────────────────────────────────────────────
 
@@ -306,6 +365,28 @@ export type EntityMapSummary = Static<typeof EntityMapSummarySchema>;
  * then predicate, `pages` by url, `countsByType` by type. `generatedAt` is the
  * only field that changes between two runs over an unchanged site.
  */
+/**
+ * What a bounded projection of a map left out.
+ *
+ * Present only on a projection; the document the builder produces carries the
+ * whole crawl and omits this field. `summary` is never recomputed, so a reader
+ * that ignores this still sees the TRUE site-wide counts — but "ignores this"
+ * is exactly how a clipped graph gets mistaken for a small one, so a projection
+ * states the loss rather than leaving it to be inferred from two lengths.
+ */
+export const EntityMapTruncationSchema = Type.Object({
+  /** Which projection clipped it: the publish body, or an inlined viewer. */
+  reason: Type.Union([Type.Literal("publish"), Type.Literal("viewer")]),
+  /** Nodes present in the full map but not in `nodes`. */
+  nodes: Type.Integer({ minimum: 0 }),
+  /** Edges present in the full map but not in `edges`. */
+  edges: Type.Integer({ minimum: 0 }),
+  /** Page records dropped from `pages`. Both projections drop all of them. */
+  pages: Type.Integer({ minimum: 0 }),
+});
+
+export type EntityMapTruncation = Static<typeof EntityMapTruncationSchema>;
+
 export const EntityMapSchema = Type.Object({
   format: Type.Literal(ENTITY_MAP_FORMAT),
   version: Type.Literal(ENTITY_MAP_VERSION),
@@ -317,6 +398,11 @@ export const EntityMapSchema = Type.Object({
   nodes: Type.Array(EntityMapNodeSchema),
   edges: Type.Array(EntityMapEdgeSchema),
   pages: Type.Array(EntityMapPageSchema),
+  /**
+   * Set when this copy is a bounded projection rather than the full document.
+   * Optional so a v1 document written before the field still validates.
+   */
+  truncated: Type.Optional(EntityMapTruncationSchema),
 });
 
 export type EntityMap = Static<typeof EntityMapSchema>;
@@ -456,9 +542,19 @@ export const EntityMapDiffSchema = Type.Object({
   resolvedDangling: Type.Array(EntityMapDiffDanglingSchema),
   /** Every summary metric, before and after. */
   summaryDelta: Type.Record(Type.String(), EntityMapDiffMetricSchema),
-  /** Pages the older map saw and the newer one did not, and the reverse. */
+  /**
+   * Pages the older map saw and the newer one did not, and the reverse.
+   *
+   * Sampled, sorted, capped at {@link ENTITY_MAP_DIFF_PAGES_CAP}: two 5,000-page
+   * crawls that happened to cover different pages would otherwise put 10,000
+   * URLs in this document, and a reader acts on the count plus a handful of
+   * examples, never on the whole list.
+   */
   pagesOnlyInOlder: Type.Array(Type.String()),
   pagesOnlyInNewer: Type.Array(Type.String()),
+  /** Pages past the cap on each side. Optional so a v1 diff still validates. */
+  morePagesOnlyInOlder: Type.Optional(Type.Integer({ minimum: 0 })),
+  morePagesOnlyInNewer: Type.Optional(Type.Integer({ minimum: 0 })),
 });
 
 export type EntityMapDiff = Static<typeof EntityMapDiffSchema>;

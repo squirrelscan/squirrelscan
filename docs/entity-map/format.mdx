@@ -30,6 +30,25 @@ Entity names, `@id`s, types and property values are declared by the audited site
 
 `format` and `version` are the discriminator. Check both before reading the rest: `version` is bumped whenever a change would make an already-stored document invalid, and stored documents exist in the wild.
 
+### truncated
+
+Absent from the document `squirrel entities -f json` writes, which always carries the whole crawl. Present on the two copies that travel: the map published to the cloud, and the map inlined into an HTML report for the interactive viewer. Both are bounded, because a 5,000-page site declaring four entities per page is 20,001 nodes and 15MB of JSON.
+
+```json
+{
+  "reason": "viewer",
+  "nodes": 18001,
+  "edges": 18002,
+  "pages": 5000
+}
+```
+
+`reason` is `publish` or `viewer`. The three counts are what that copy left out, and `pages` is dropped whole.
+
+What survives is a sample chosen to look like the site rather than the top of one list. Entities declared on more than one page go first: the Organization, the WebSite, the Brand every product points at. The rest of the budget is split evenly between the types that are left, so a 5,000-product catalogue cannot crowd out its own Offers, and within a type the better-connected entity wins. Entities that describe a single page, such as a per-page BreadcrumbList or WebPage, are kept last and capped at a tenth of the copy, since there is one of them per page and a graph hides them by default. Ranking on declaration count alone is what this replaced: on a store that declares its entities per page every entity occurs exactly once, so the copy became whichever type sorted first, either a pile of breadcrumbs when the theme gives its per-page entities no `@id`, or an alphabetical slice of the catalogue when it does. Both left whole types out.
+
+`summary` is never recomputed, so a truncated copy still reports the site's real `nodeCount`, `edgeCount` and `pagesTotal`. Read totals from `summary` rather than from the length of `nodes` — on a large site those are different numbers, which is the whole reason this field exists. For the complete graph, run `squirrel entities -f json` locally.
+
 ### summary
 
 Every field describes the audit, not a sample. From an audit of docs.squirrelscan.com:
@@ -193,6 +212,8 @@ One row per successfully crawled page, including pages that declared nothing. 2x
 
 This array is the authoritative page index, and it is what a comparison uses to tell "this entity is gone" from "that page was not crawled again". A node's own `pages` is a 50-entry sample; this is not.
 
+It is also the largest array in the document, and it is empty on both truncated copies: neither the published map nor the HTML viewer reads it, and on a 5,000-page site it alone is close to 2MB. `summary.pagesTotal` and `summary.pagesWithoutEntities` carry what those copies need. A comparison therefore has a real page index only when both sides come from `squirrel entities -f json`.
+
 `references` is empty in a map the CLI reassembled from its store, because the store does not keep per-page reference lists. Empty here means not recorded, not "nothing matched".
 
 ## The JSON-LD export
@@ -303,7 +324,9 @@ Every numeric summary metric as `{ before, after, delta }`, keyed by the summary
 
 ### pagesOnlyInOlder and pagesOnlyInNewer
 
-The page sets each audit saw and the other did not, sorted. This is the evidence behind `notCrawled`: if you are checking whether a fix landed and `notCrawled` is non-empty, these say which pages to re-audit.
+The pages each audit saw and the other did not, sorted. This is the evidence behind `notCrawled`: if you are checking whether a fix landed and `notCrawled` is non-empty, these say which pages to re-audit.
+
+Both lists are a 25-entry sample, with `morePagesOnlyInOlder` and `morePagesOnlyInNewer` counting the rest. Two audits of a 5,000-page site that happened to cover different pages would otherwise put 10,000 URLs in one document. Add the count to the list length for the real size of the coverage gap; the lists themselves are sorted, so which 25 you get is decided by the URLs and not by the order the audits finished.
 
 ## References
 

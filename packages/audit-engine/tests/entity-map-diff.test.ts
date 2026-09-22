@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import { Value } from "@sinclair/typebox/value";
 
 import {
+  ENTITY_MAP_DIFF_PAGES_CAP,
   ENTITY_MAP_FORMAT,
   ENTITY_MAP_VERSION,
   EntityMapDiffSchema,
@@ -388,6 +389,40 @@ describe("diffEntityMaps", () => {
     const older = map([node(), node({ key: "b", id: null, name: "B" })], [edge()], PAGES);
     const newer = map([node({ occurrences: 9 })], [], ["https://example.com/a"]);
     expect(JSON.stringify(diff(older, newer))).toBe(JSON.stringify(diff(older, newer)));
+  });
+});
+
+// Two 5,000-page crawls that happened to cover different pages would otherwise
+// put 10,000 URLs in one diff document. The cap existed as a constant and was
+// never applied.
+describe("the coverage page lists are capped", () => {
+  const urls = (prefix: string, n: number) =>
+    Array.from({ length: n }, (_, i) => `https://example.com/${prefix}/${String(i).padStart(5, "0")}`);
+
+  test("samples each side and counts the rest", () => {
+    const older = map([], [], urls("old", 5_000));
+    const newer = map([], [], urls("new", 4_000));
+    const result = diff(older, newer);
+
+    expect(result.pagesOnlyInOlder).toHaveLength(ENTITY_MAP_DIFF_PAGES_CAP);
+    expect(result.pagesOnlyInNewer).toHaveLength(ENTITY_MAP_DIFF_PAGES_CAP);
+    // The counts are the TRUE totals, so the real coverage gap is still legible.
+    expect(result.morePagesOnlyInOlder).toBe(5_000 - ENTITY_MAP_DIFF_PAGES_CAP);
+    expect(result.morePagesOnlyInNewer).toBe(4_000 - ENTITY_MAP_DIFF_PAGES_CAP);
+    expect(Value.Check(EntityMapDiffSchema, result)).toBe(true);
+  });
+
+  test("keeps the sample sorted, so which URLs survive is not iteration order", () => {
+    const shuffled = [...urls("old", 200)].reverse();
+    const result = diff(map([], [], shuffled), map([], [], []));
+    expect(result.pagesOnlyInOlder).toEqual(urls("old", 200).slice(0, ENTITY_MAP_DIFF_PAGES_CAP));
+  });
+
+  test("reports zero extra when both sides fit", () => {
+    const result = diff(map([], [], urls("old", 3)), map([], [], urls("new", 2)));
+    expect(result.pagesOnlyInOlder).toHaveLength(3);
+    expect(result.morePagesOnlyInOlder).toBe(0);
+    expect(result.morePagesOnlyInNewer).toBe(0);
   });
 });
 
