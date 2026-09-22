@@ -118,13 +118,20 @@ function compareKeys(a: string, b: string): number {
 
 // ── Sampling ───────────────────────────────────────────────────────
 //
-// Ranking on occurrences alone put the whole budget into one type. On a store
-// that declares its entities per page — Shopify, WooCommerce, most of the CMS
-// world — every Product, Offer, BreadcrumbList and WebPage occurs exactly once,
-// so the ranking degenerated to its tie-break and the published body became an
-// alphabetical slab: a 1,000-page synthetic store published 125 Products, 125
-// BreadcrumbLists, 124 WebPages and zero Offers, and grew no more representative
-// at 5,000 pages. A reader looking at that map cannot tell what the site sells.
+// Ranking on occurrences alone spent the whole budget on whichever type sorted
+// first. On a store that declares its entities per page — Shopify, WooCommerce,
+// most of the CMS world — every Product, Offer, BreadcrumbList and WebPage
+// occurs exactly once, so the ranking degenerated to its tie-break on `key`, and
+// what that did depended on the theme. Both shapes measured on a 1,000-page
+// synthetic store:
+//
+//   - page-local entities with no `@id` take `anon:`/`blank:` keys, which sort
+//     ahead of every `id:` key: 748 BreadcrumbLists, the Organization, the Brand
+//     and ZERO edges. A hosted graph of disconnected crumbs.
+//   - `@id` everywhere: keys group by page URL, so the types interleave and the
+//     body looks like a fair sample while being the alphabetically-first pages:
+//     250 BreadcrumbLists, 249 Products, 249 WebPages, no Offers, two thirds of
+//     it page-local. Neither grew more representative at 5,000 pages.
 //
 // So the budget is allocated in three tiers instead, and stratified by type
 // inside each one.

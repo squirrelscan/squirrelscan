@@ -310,173 +310,219 @@ describe("slimEntityMapForViewer", () => {
 // The shape that broke it is the ordinary one. A Shopify or WooCommerce store
 // declares its entities per page, so Product, Offer, BreadcrumbList and WebPage
 // all occur exactly once and a ranking on occurrences alone falls through to its
-// tie-break. Alphabetical on `key` groups a page's entities together, so the
-// budget walked the catalogue from item-0 and stopped — 125 of each of the three
-// types whose keys sort first, and not one Offer at any crawl size.
-describe("publish sample composition", () => {
-  const SITE = "https://shop.test";
+// tie-break. What the tie-break then did depended on whether the theme gave its
+// per-page entities an `@id`, and BOTH shapes are in the wild:
+//
+//   - no `@id` (many themes): those nodes get `anon:`/`blank:` keys, which sort
+//     ahead of every `id:` key, so they took the whole budget. Measured on the
+//     fixture below at 1,000 pages: 748 BreadcrumbLists, the Organization, the
+//     Brand, and NO edges at all — a hosted graph of 750 disconnected crumbs,
+//     nothing about what the store sells.
+//   - `@id` everywhere (Yoast and friends): keys group by page URL, so the types
+//     interleave evenly and the body reads as a fair sample while being the
+//     alphabetically-first pages — 250 BreadcrumbLists, 249 Products, 249
+//     WebPages, zero Offers, two thirds of it page-local.
+const SITE = "https://shop.test";
 
-  /** One page of a per-page-entity store, the shape the sampler has to survive. */
-  function storePageJsonLd(i: number): string {
-    const url = `${SITE}/products/item-${i}`;
-    return JSON.stringify({
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "Product",
-          "@id": `${url}#product`,
-          name: `Product ${i}`,
+function countsByType(nodes: EntityMapNode[]): Record<string, number> {
+  const counts = new Map<string, number>();
+  for (const n of nodes) counts.set(n.types[0]!, (counts.get(n.types[0]!) ?? 0) + 1);
+  return Object.fromEntries(counts);
+}
+
+/**
+ * One page of a per-page-entity store.
+ *
+ * `blankLocals` drops the `@id` from the two page-local entities, which is the
+ * difference between the two shapes above and nothing else.
+ */
+function storePageJsonLd(i: number, blankLocals: boolean): string {
+  const url = `${SITE}/products/item-${i}`;
+  const crumb: Record<string, unknown> = {
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE },
+      { "@type": "ListItem", position: 2, name: `Item ${i}`, item: url },
+    ],
+  };
+  const webPage: Record<string, unknown> = {
+    "@type": "WebPage",
+    url,
+    name: `Item ${i}`,
+    publisher: { "@id": `${SITE}/#organization` },
+  };
+  if (!blankLocals) {
+    crumb["@id"] = `${url}#breadcrumb`;
+    webPage["@id"] = `${url}#webpage`;
+  }
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Product",
+        "@id": `${url}#product`,
+        name: `Product ${i}`,
+        url,
+        description: `Synthetic product ${i}. `.repeat(3),
+        image: Array.from({ length: 5 }, (_, k) => `${SITE}/cdn/${i}-${k}.jpg`),
+        brand: { "@id": `${SITE}/#brand` },
+        offers: {
+          "@type": "Offer",
+          price: String(10 + (i % 90)),
+          priceCurrency: "USD",
           url,
-          description: `Synthetic product ${i}. `.repeat(3),
-          image: Array.from({ length: 5 }, (_, k) => `${SITE}/cdn/${i}-${k}.jpg`),
-          brand: { "@id": `${SITE}/#brand` },
-          offers: {
-            "@type": "Offer",
-            price: String(10 + (i % 90)),
-            priceCurrency: "USD",
-            url,
-          },
         },
-        {
-          "@type": "Organization",
-          "@id": `${SITE}/#organization`,
-          name: "Shop Co",
-          url: SITE,
-          logo: `${SITE}/cdn/logo.png`,
-          sameAs: ["https://example.com/shopco"],
-        },
-        { "@type": "Brand", "@id": `${SITE}/#brand`, name: "Shop Brand" },
-        {
-          "@type": "BreadcrumbList",
-          "@id": `${url}#breadcrumb`,
-          itemListElement: [
-            { "@type": "ListItem", position: 1, name: "Home", item: SITE },
-            { "@type": "ListItem", position: 2, name: `Item ${i}`, item: url },
-          ],
-        },
-        {
-          "@type": "WebPage",
-          "@id": `${url}#webpage`,
-          url,
-          name: `Item ${i}`,
-          publisher: { "@id": `${SITE}/#organization` },
-        },
-      ],
+      },
+      {
+        "@type": "Organization",
+        "@id": `${SITE}/#organization`,
+        name: "Shop Co",
+        url: SITE,
+        logo: `${SITE}/cdn/logo.png`,
+        sameAs: ["https://example.com/shopco"],
+      },
+      { "@type": "Brand", "@id": `${SITE}/#brand`, name: "Shop Brand" },
+      crumb,
+      webPage,
+    ],
+  });
+}
+
+function storeMap(pages: number, blankLocals: boolean): EntityMap {
+  const builder = createEntityMapBuilder();
+  for (let i = 0; i < pages; i += 1) {
+    builder.addPage(`${SITE}/products/item-${i}`, storePageJsonLd(i, blankLocals));
+  }
+  return builder.finish(SITE, { generatedAt: "2026-01-01T00:00:00.000Z" });
+}
+
+for (const shape of [
+  { name: "page-local entities as blank nodes", blankLocals: true },
+  { name: "every entity carrying an @id", blankLocals: false },
+]) {
+  describe(`publish sample composition: ${shape.name}`, () => {
+    // Built once: 1,000 pages of JSON-LD is the fixture, not the thing measured.
+    const thousand = storeMap(1_000, shape.blankLocals);
+    const published = slimEntityMapForPublish(thousand);
+    const counts = countsByType(published.nodes);
+
+    test("the fixture really is the degenerate case", () => {
+      // Every assertion below is only interesting because these hold: one entity
+      // of each type per page, all of them occurring exactly once.
+      expect(thousand.nodes.length).toBe(4_002);
+      expect(thousand.nodes.filter((n) => n.occurrences === 1).length).toBe(4_000);
+
+      // And the key order really is the one that broke the old ranking. Without
+      // an `@id` the page-local nodes sort ahead of everything; with one, the
+      // catalogue sorts by page and the types interleave.
+      const sorted = [...thousand.nodes].sort((a, b) =>
+        a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+      );
+      if (shape.blankLocals) {
+        expect(sorted.slice(0, 20).every((n) => n.pageLocal)).toBe(true);
+      } else {
+        // Past the two site-wide `@id`s, one page's entities sit together.
+        const head = new Set(sorted.slice(2, 8).map((n) => n.types[0]!));
+        expect([...head].sort()).toEqual(["BreadcrumbList", "Product", "WebPage"]);
+      }
     });
-  }
 
-  function storeMap(pages: number): EntityMap {
-    const builder = createEntityMapBuilder();
-    for (let i = 0; i < pages; i += 1) {
-      builder.addPage(`${SITE}/products/item-${i}`, storePageJsonLd(i));
-    }
-    return builder.finish(SITE, { generatedAt: "2026-01-01T00:00:00.000Z" });
-  }
+    test("publishes every entity type, not the ones whose keys sort first", () => {
+      // Offer is the type both old shapes lost completely: revert the ranking to
+      // `occurrences || key` and this line fails with `undefined`.
+      for (const type of [
+        "Product",
+        "Offer",
+        "Organization",
+        "Brand",
+        "BreadcrumbList",
+        "WebPage",
+      ]) {
+        expect(counts[type]).toBeGreaterThan(0);
+      }
+      expect(Object.keys(counts).length).toBe(6);
+    });
 
-  function countsByType(nodes: EntityMapNode[]): Record<string, number> {
-    const counts = new Map<string, number>();
-    for (const n of nodes) counts.set(n.types[0]!, (counts.get(n.types[0]!) ?? 0) + 1);
-    return Object.fromEntries(counts);
-  }
+    test("no type takes more than its quota of the sample", () => {
+      // Equal shares with redistribution, so no type may hold more than a
+      // round-robin over the types present could have handed it. The tier of
+      // one-off subjects is where the old ranking collapsed: it gave one type a
+      // third of the entire body, or all of it, and another type nothing.
+      const oneOff = published.nodes.filter((n) => !n.pageLocal && n.occurrences === 1);
+      const types = new Set(oneOff.map((n) => n.types[0]!));
+      const quota = Math.ceil(oneOff.length / types.size);
+      expect(types.size).toBe(2);
+      for (const count of Object.values(countsByType(oneOff))) {
+        expect(count).toBeLessThanOrEqual(quota);
+      }
+    });
 
-  // Built once: 1,000 pages of JSON-LD is the fixture, not the thing measured.
-  const thousand = storeMap(1_000);
-  const published = slimEntityMapForPublish(thousand);
-  const counts = countsByType(published.nodes);
+    test("the site-wide subjects always survive", () => {
+      // Declared on all 1,000 pages: whatever else is clipped, these are the
+      // entities the map exists to show.
+      const keys = new Set(published.nodes.map((n) => n.key));
+      expect(keys.has(`id:${SITE}/#organization`)).toBe(true);
+      expect(keys.has(`id:${SITE}/#brand`)).toBe(true);
+    });
 
-  test("the fixture really is the degenerate case", () => {
-    // Every assertion below is only interesting because these hold: one entity
-    // of each type per page, all of them occurring exactly once.
-    expect(thousand.nodes.length).toBe(4_002);
-    const perPage = thousand.nodes.filter((n) => n.occurrences === 1);
-    expect(perPage.length).toBe(4_000);
-  });
+    test("page-local entities are capped, not ranked alongside subjects", () => {
+      const pageLocal = published.nodes.filter((n) => n.pageLocal);
+      expect(pageLocal.length).toBeGreaterThan(0);
+      expect(pageLocal.length).toBeLessThanOrEqual(
+        Math.ceil(published.nodes.length * ENTITY_MAP_PUBLISH_LIMITS.maxPageLocalShare),
+      );
+      // Both page-local types are represented inside that slice.
+      const localTypes = countsByType(pageLocal);
+      expect(localTypes.BreadcrumbList).toBeGreaterThan(0);
+      expect(localTypes.WebPage).toBeGreaterThan(0);
+    });
 
-  test("publishes every entity type, not the ones whose keys sort first", () => {
-    // Offer is the one the alphabetical slab lost completely: revert the ranking
-    // to `occurrences || key` and this line fails with `undefined`.
-    for (const type of ["Product", "Offer", "Organization", "Brand", "BreadcrumbList"]) {
-      expect(counts[type]).toBeGreaterThan(0);
-    }
-    expect(Object.keys(counts).length).toBe(6);
-  });
-
-  test("no type takes more than its quota of the sample", () => {
-    // Equal shares with redistribution, so no type may hold more than a
-    // round-robin over the types present could have handed it. The tier of
-    // one-off subjects is where the old ranking collapsed: it gave one type a
-    // third of the entire body and another type nothing.
-    const oneOff = published.nodes.filter((n) => !n.pageLocal && n.occurrences === 1);
-    const types = new Set(oneOff.map((n) => n.types[0]!));
-    const quota = Math.ceil(oneOff.length / types.size);
-    expect(types.size).toBe(2);
-    for (const count of Object.values(countsByType(oneOff))) {
-      expect(count).toBeLessThanOrEqual(quota);
-    }
-  });
-
-  test("the site-wide subjects always survive", () => {
-    // Declared on all 1,000 pages: whatever else is clipped, these are the
-    // entities the map exists to show.
-    const keys = new Set(published.nodes.map((n) => n.key));
-    expect(keys.has(`id:${SITE}/#organization`)).toBe(true);
-    expect(keys.has(`id:${SITE}/#brand`)).toBe(true);
-  });
-
-  test("page-local entities are capped, not ranked alongside subjects", () => {
-    const pageLocal = published.nodes.filter((n) => n.pageLocal);
-    expect(pageLocal.length).toBeGreaterThan(0);
-    expect(pageLocal.length).toBeLessThanOrEqual(
-      Math.ceil(published.nodes.length * ENTITY_MAP_PUBLISH_LIMITS.maxPageLocalShare),
-    );
-    // Both page-local types are represented inside that slice.
-    const localTypes = countsByType(pageLocal);
-    expect(localTypes.BreadcrumbList).toBeGreaterThan(0);
-    expect(localTypes.WebPage).toBeGreaterThan(0);
-  });
-
-  test("spends the whole node budget on a store this size", () => {
-    // 4,002 entities to choose 750 from, and the clamped sample fits the gate on
-    // the first attempt, so nothing here is decided by the byte loop.
-    expect(published.nodes).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxNodes);
-    expect(JSON.stringify(published).length).toBeLessThanOrEqual(
-      ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
-    );
-  });
-
-  test("keeps the edges self-consistent with the sample", () => {
-    const keys = new Set(published.nodes.map((n) => n.key));
-    for (const e of published.edges) {
-      expect(keys.has(e.source)).toBe(true);
-      if (!e.dangling) expect(keys.has(e.target)).toBe(true);
-    }
-    expect(published.summary.nodeCount).toBe(thousand.nodes.length);
-    expect(published.nodes.length + published.truncated!.nodes).toBe(
-      thousand.nodes.length,
-    );
-  });
-
-  test("does not get less representative as the crawl grows", () => {
-    // The old sampler published the same 375 alphabetical nodes at 500 pages and
-    // at 5,000, so the map stopped describing the store somewhere around 500.
-    const small = slimEntityMapForPublish(storeMap(200));
-    const large = slimEntityMapForPublish(storeMap(2_000));
-    for (const slim of [small, large]) {
-      const types = countsByType(slim.nodes);
-      expect(types.Offer).toBeGreaterThan(0);
-      expect(types.Organization).toBe(1);
-      expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
+    test("spends the whole node budget on a store this size", () => {
+      // 4,002 entities to choose 750 from, and the clamped sample fits the gate
+      // on the first attempt, so nothing here is decided by the byte loop.
+      expect(published.nodes).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxNodes);
+      expect(JSON.stringify(published).length).toBeLessThanOrEqual(
         ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
       );
-    }
-  }, 30_000);
+    });
 
-  test("is deterministic", () => {
-    expect(JSON.stringify(slimEntityMapForPublish(thousand))).toBe(
-      JSON.stringify(published),
-    );
+    test("publishes a connected graph, not a pile of leaves", () => {
+      // The blank-node shape published ZERO edges before this: it kept 748
+      // breadcrumbs, and a breadcrumb points at nothing.
+      expect(published.edges.length).toBeGreaterThan(500);
+      const keys = new Set(published.nodes.map((n) => n.key));
+      for (const e of published.edges) {
+        expect(keys.has(e.source)).toBe(true);
+        if (!e.dangling) expect(keys.has(e.target)).toBe(true);
+      }
+      expect(published.summary.nodeCount).toBe(thousand.nodes.length);
+      expect(published.nodes.length + published.truncated!.nodes).toBe(
+        thousand.nodes.length,
+      );
+    });
+
+    test("does not get less representative as the crawl grows", () => {
+      // The old sampler published the same alphabetical nodes at 500 pages and
+      // at 5,000, so the map stopped describing the store somewhere around 500.
+      for (const pages of [200, 2_000]) {
+        const slim = slimEntityMapForPublish(storeMap(pages, shape.blankLocals));
+        const types = countsByType(slim.nodes);
+        expect(types.Offer).toBeGreaterThan(0);
+        expect(types.Product).toBeGreaterThan(0);
+        expect(types.Organization).toBe(1);
+        expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
+          ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
+        );
+      }
+    }, 30_000);
+
+    test("is deterministic", () => {
+      expect(JSON.stringify(slimEntityMapForPublish(thousand))).toBe(
+        JSON.stringify(published),
+      );
+    });
   });
-});
+}
 
 describe("publish sample tiers", () => {
   test("gives a type-poor map's unused page-local slice back to the subjects", () => {
