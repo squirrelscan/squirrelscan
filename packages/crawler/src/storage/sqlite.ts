@@ -2270,6 +2270,32 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Drop one crawl's rule results, and nothing else (repo#2343).
+   *
+   * {@link clearCrawlData} is the wrong tool at the rules phase: it also deletes
+   * the links, images, sitemaps and robots rows the CRAWL just wrote, which the
+   * rules are about to read.
+   *
+   * Since the rules phase spills its checks as it produces them, a run killed
+   * part way through leaves rows behind where it used to leave none, and running
+   * rules again over the same crawl_id would append a second copy of every
+   * check. No path reaches that today (a resume calls `clearCrawlData` before
+   * re-crawling, and every other path takes a fresh crawl id), and a half-written
+   * crawl is stuck at `crawled`, which the report refuses. This makes the
+   * invariant local to the phase that now depends on it rather than an
+   * inference across three call sites.
+   */
+  clearRuleResults(crawlId: string): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        db.prepare("DELETE FROM rule_results WHERE crawl_id = ?").run(crawlId);
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
   clearCrawlData(crawlId: string): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {

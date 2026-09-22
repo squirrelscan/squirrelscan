@@ -1605,6 +1605,17 @@ export async function runAudit(
       // checks are not smart-audit findings and the sink is the only place the
       // checks still exist. `pageStatuses` comes from the pre-rules walk, which
       // has already run.
+      // Spilling as we go means a run killed mid-phase leaves rows behind where
+      // it used to leave none, so re-running rules over the same crawl would
+      // append a second copy of every check. Unreachable today (see
+      // `clearRuleResults`), and a no-op on every normal run, but it keeps the
+      // invariant next to the code that now depends on it.
+      await Effect.runPromise(
+        sqliteStorage
+          .clearRuleResults(crawlId)
+          .pipe(Effect.catchAll(() => Effect.void))
+      );
+
       const smartAuditsOn = mergedConfig.smart_audits === true;
       const removedPageUrls = new Set(
         pageStatuses
