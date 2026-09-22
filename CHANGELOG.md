@@ -15,6 +15,16 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## v0.0.98 — 2026-09-23
+
+A crawl no longer slows down as your local page cache grows, and the entity map that travels with a report now carries a representative sample of a large site instead of an alphabetical slice of it.
+
+### Fixed
+
+- A crawl's speed no longer tracks the size of your lifetime page cache. Storing a page ended in a count over the whole content store, an aggregate no index can answer without walking every row, so a long crawl got slower as it went and the same audit took longer against a large cache than against an empty one. The store now answers from a running total, and pruning drains to its target in batches instead of stopping short and pruning again on the very next page. A 400-page audit against a roughly 1 GB store now matches the same audit against an empty one, 17.4s against 17.5s; before it was 28.2s against 17.8s on a cold store.
+- The entity map published with a report keeps a sample of the site rather than its alphabetical head. Entities declared on several pages come first, then one-off entities stratified by type so a catalogue of thousands of products cannot crowd out the organisation, website and brand entities the map exists to show, and the per-page entities a graph hides by default are held to a small share. Every type present in the map keeps at least one entry.
+- The copies of the entity map that travel are bounded and say what they dropped. The published copy and the copy inlined into an HTML report each have their own node, edge, string and total-size limits, and both now carry the number of entities, references and pages left out. A clipped map is no longer indistinguishable from a small site. The summary still describes the whole site, not the sample, so the totals you read are the real ones. Your local copy on disk is unchanged and stays complete.
+
 ## v0.0.97 — 2026-09-19
 
 The macOS binaries carry a signature macOS accepts again, the installer stops blaming memory for a binary the system killed, and a `Sitemap:` line in robots.txt written without a scheme is read as the host it names.
