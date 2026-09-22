@@ -94,9 +94,14 @@ export class ContentStore {
    *
    * It is a hint, never an authority: another process can store or prune behind
    * our back, so anything that deletes re-reads first. An over-count only
-   * causes an early check that finds nothing to do, and an under-count only
-   * delays a prune, because the store cannot pass the threshold without this
-   * process adding the bytes that take it there.
+   * causes an early check that finds nothing to do.
+   *
+   * An under-count delays a prune, and with two CLIs writing at once it can
+   * delay it past the cap: neither sees the other's bytes, so the store can
+   * overshoot by whatever a sibling writes while we hold a seeded total. That
+   * is bounded and self-healing rather than permanent — the seed is taken per
+   * process, so the next audit to store anything reads the real total and
+   * prunes the whole overshoot down to target on its first page.
    */
   private totalBytesCache: number | null = null;
 
@@ -207,9 +212,9 @@ export class ContentStore {
       now
     );
 
-    // Check if we need to prune. A conflicting row written by another process
-    // between the SELECT and the UPSERT makes this delta too large, which only
-    // brings the next authoritative check forward.
+    // Check if we need to prune. The delta is measured against what this
+    // process last counted, so a row another process wrote between the SELECT
+    // and the UPSERT is still one row's worth of growth from here.
     this.maybePrune(compressedSize - (existing?.compressed_size ?? 0));
 
     return hash;
@@ -389,7 +394,10 @@ export class ContentStore {
         for (const entry of entries) {
           if (currentBytes <= targetBytes) break;
 
-          deleteOne.run(entry.hash);
+          // A row another process already deleted frees nothing here. Counting
+          // it would walk currentBytes down past the real total and stop the
+          // pass early, leaving the store above target.
+          if (deleteOne.run(entry.hash).changes === 0) continue;
           currentBytes -= entry.compressed_size;
           deleted++;
         }
