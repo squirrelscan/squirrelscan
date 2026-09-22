@@ -54,14 +54,16 @@ CREATE TABLE IF NOT EXISTS content (
 CREATE INDEX IF NOT EXISTS idx_content_last_accessed ON content(last_accessed);
 CREATE INDEX IF NOT EXISTS idx_content_type ON content(content_type);
 
--- Covering index for getStats(). Every put() that stores new content runs the
--- prune check, which aggregates COUNT + SUM(compressed_size) +
--- SUM(original_size) + MIN(last_accessed) over this table. Without an index
+-- Covering index for getStats(), which aggregates COUNT + SUM(compressed_size)
+-- + SUM(original_size) + MIN(last_accessed) over this table. Without an index
 -- holding all four values, SQLite scans the table itself and therefore pages in
 -- every gzipped BLOB just to add up their sizes -- on a filled ~1GB store that
--- is ~300ms per stored page, which made it the single largest cost in a cold
--- audit. Listing the columns in this order lets one covering-index scan answer
--- the whole query without touching the table.
+-- is ~300ms per call. Listing the columns in this order lets one covering-index
+-- scan answer the whole query without touching the table.
+--
+-- The index bounds the cost of a single aggregate; it cannot make it free, and
+-- the scan is still O(rows). put() therefore no longer runs one per stored page
+-- (#1908) -- see maybePrune().
 CREATE INDEX IF NOT EXISTS idx_content_sizes ON content(compressed_size, original_size, last_accessed);
 `;
 
@@ -74,10 +76,29 @@ export function hashContent(content: string | Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+/** Rows one prune pass deletes per batch (and per transaction). */
+const PRUNE_BATCH_ROWS = 1000;
+
+/** Safety stop so a prune can never run away on a pathological store. */
+const PRUNE_MAX_BATCHES = 100;
+
 export class ContentStore {
   private db: Database | null = null;
   private dbPath: string;
   private maxBytes: number;
+  /**
+   * Running total of compressed_size, so the prune check does not aggregate the
+   * whole table on every stored page (#1908). Seeded by one authoritative scan
+   * the first time this process stores something and kept up to date by the
+   * bytes each put adds; null means "unknown, read it again".
+   *
+   * It is a hint, never an authority: another process can store or prune behind
+   * our back, so anything that deletes re-reads first. An over-count only
+   * causes an early check that finds nothing to do, and an under-count only
+   * delays a prune, because the store cannot pass the threshold without this
+   * process adding the bytes that take it there.
+   */
+  private totalBytesCache: number | null = null;
 
   constructor(dbPath?: string, maxBytes?: number) {
     this.dbPath = dbPath ?? getContentStorePath();
@@ -141,10 +162,12 @@ export class ContentStore {
     const db = this.getDb();
     const now = Date.now();
 
-    // Check if already exists
+    // Check if already exists. The size comes back with it so a keyed
+    // replacement can bill the running total for the delta rather than the
+    // whole new row.
     const existing = db
-      .prepare("SELECT hash FROM content WHERE hash = ?")
-      .get(hash) as { hash: string } | undefined;
+      .prepare("SELECT compressed_size FROM content WHERE hash = ?")
+      .get(hash) as { compressed_size: number } | undefined;
 
     if (existing && !replace) {
       // Content-addressed: same hash is the same bytes, just touch it.
@@ -184,8 +207,10 @@ export class ContentStore {
       now
     );
 
-    // Check if we need to prune
-    this.maybePrune();
+    // Check if we need to prune. A conflicting row written by another process
+    // between the SELECT and the UPSERT makes this delta too large, which only
+    // brings the next authoritative check forward.
+    this.maybePrune(compressedSize - (existing?.compressed_size ?? 0));
 
     return hash;
   }
@@ -308,11 +333,30 @@ export class ContentStore {
   /**
    * Prune old entries if over threshold
    * Uses LRU eviction based on last_accessed
+   *
+   * The running total answers this check; the aggregate is only read to seed
+   * that total once and to confirm a prune before anything is deleted (#1908).
+   * Reading it here on every stored page made a crawl's speed a function of the
+   * size of the user's lifetime cache, and quadratic in its own page count.
+   *
+   * @param deltaBytes compressed bytes the caller just added, negative when a
+   *   keyed replacement shrank the row.
    */
-  private maybePrune(): void {
-    const stats = this.getStats();
+  private maybePrune(deltaBytes: number): void {
     const threshold = this.maxBytes * CONTENT_STORE_PRUNE_THRESHOLD;
 
+    if (this.totalBytesCache === null) {
+      this.totalBytesCache = this.getStats().totalBytes;
+    } else {
+      this.totalBytesCache += deltaBytes;
+    }
+
+    if (this.totalBytesCache < threshold) return;
+
+    // At the threshold the hint stops being good enough: eviction is
+    // destructive, so take the authoritative reading before deleting anything.
+    const stats = this.getStats();
+    this.totalBytesCache = stats.totalBytes;
     if (stats.totalBytes < threshold) return;
 
     this.prune(this.maxBytes * 0.8); // Prune to 80% capacity
@@ -328,26 +372,49 @@ export class ContentStore {
     let deleted = 0;
 
     const stats = this.getStats();
-    if (stats.totalBytes <= targetBytes) return 0;
+    if (stats.totalBytes <= targetBytes) {
+      this.totalBytesCache = stats.totalBytes;
+      return 0;
+    }
 
     let currentBytes = stats.totalBytes;
 
     // Get oldest entries ordered by last_accessed
-    const oldestEntries = db
-      .prepare(
-        "SELECT hash, compressed_size FROM content ORDER BY last_accessed ASC LIMIT 1000"
-      )
-      .all() as Array<{ hash: string; compressed_size: number }>;
+    const oldest = db.prepare(
+      "SELECT hash, compressed_size FROM content ORDER BY last_accessed ASC LIMIT ?"
+    );
+    const deleteOne = db.prepare("DELETE FROM content WHERE hash = ?");
+    const deleteBatch = db.transaction(
+      (entries: Array<{ hash: string; compressed_size: number }>) => {
+        for (const entry of entries) {
+          if (currentBytes <= targetBytes) break;
 
-    db.transaction(() => {
-      for (const entry of oldestEntries) {
-        if (currentBytes <= targetBytes) break;
-
-        db.prepare("DELETE FROM content WHERE hash = ?").run(entry.hash);
-        currentBytes -= entry.compressed_size;
-        deleted++;
+          deleteOne.run(entry.hash);
+          currentBytes -= entry.compressed_size;
+          deleted++;
+        }
       }
-    })();
+    );
+
+    // Delete in batches until the target is met. A single batch used to be the
+    // whole pass, so a store whose 1000 oldest entries were not worth the
+    // overage stayed above the threshold and pruned again on the very next
+    // stored page, forever (#1908).
+    for (let batch = 0; batch < PRUNE_MAX_BATCHES; batch++) {
+      if (currentBytes <= targetBytes) break;
+
+      const entries = oldest.all(PRUNE_BATCH_ROWS) as Array<{
+        hash: string;
+        compressed_size: number;
+      }>;
+      if (entries.length === 0) break;
+
+      deleteBatch(entries);
+    }
+
+    // Deleting invalidates the hint; the next check re-reads rather than
+    // trusting a total that counted rows this just removed.
+    this.totalBytesCache = null;
 
     return deleted;
   }
@@ -358,6 +425,8 @@ export class ContentStore {
   delete(hash: string): boolean {
     const db = this.getDb();
     const result = db.prepare("DELETE FROM content WHERE hash = ?").run(hash);
+    // Same reason as prune(): a removed row must not stay in the running total.
+    this.totalBytesCache = null;
     return result.changes > 0;
   }
 
@@ -369,6 +438,8 @@ export class ContentStore {
       this.db.close();
       this.db = null;
     }
+    // Anything may touch the file while this instance is closed.
+    this.totalBytesCache = null;
   }
 }
 
