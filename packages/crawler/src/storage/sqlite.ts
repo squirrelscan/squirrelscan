@@ -3189,8 +3189,12 @@ export class SQLiteStorage implements CrawlStorage {
               check.name,
               check.status,
               check.message,
-              check.value !== undefined ? String(check.value) : null,
-              check.expected !== undefined ? String(check.expected) : null,
+              // `!= null`, not `!== undefined`: `String(null)` is the STRING
+              // "null", and a check whose value is genuinely null then reads
+              // back as a literal "null" in the report (repo#2343). The report
+              // is the only reader, and it renders a missing value as absent.
+              check.value != null ? String(check.value) : null,
+              check.expected != null ? String(check.expected) : null,
               check.items ? JSON.stringify(check.items) : null,
               check.details ? JSON.stringify(check.details) : null,
               check.pages ? JSON.stringify(check.pages) : null,
@@ -3611,8 +3615,9 @@ export class SQLiteStorage implements CrawlStorage {
                   check.name,
                   check.status,
                   check.message,
-                  check.value !== undefined ? String(check.value) : null,
-                  check.expected !== undefined ? String(check.expected) : null,
+                  // See the single-row writer above (repo#2343).
+                  check.value != null ? String(check.value) : null,
+                  check.expected != null ? String(check.expected) : null,
                   check.items ? JSON.stringify(check.items) : null,
                   check.details ? JSON.stringify(check.details) : null,
                   check.pages ? JSON.stringify(check.pages) : null,
