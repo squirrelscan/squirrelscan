@@ -99,7 +99,7 @@ export function run(): void {
  * Skipped for simple commands and self install/update/uninstall (self install
  * resets settings, racing registerInstall; self update IS the updater —
  * including the detached --auto child — and must not spawn further checks or
- * installs), for `mcp` (JSON-RPC on stdout, nothing may pollute the stream),
+ * installs), for the detached `skills update --auto` refresh (same reason), for `mcp` (JSON-RPC on stdout, nothing may pollute the stream),
  * for `self disk` (it MEASURES the logs directory, and the maintenance below
  * compresses and deletes logs — leaving it in lets the command change the
  * number it is about to print, and lets an update land mid-measurement), and
@@ -113,6 +113,11 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
     args[0] === "self" &&
     (args[1] === "install" || args[1] === "update" || args[1] === "uninstall");
   const isSelfDisk = args[0] === "self" && args[1] === "disk";
+  // The detached skills refresh a freshly auto-updated run starts. Like
+  // `self update --auto`, it is part of the updater: it must not apply or
+  // check for updates itself, and must not start another refresh.
+  const isSkillsAutoRefresh =
+    args[0] === "skills" && args[1] === "update" && args.includes("--auto");
   const isSimpleCommand =
     args.length === 0 ||
     args.includes("--version") ||
@@ -121,6 +126,7 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
     args.includes("-h") ||
     isSelfInstallCommand ||
     isSelfDisk ||
+    isSkillsAutoRefresh ||
     args[0] === "mcp";
 
   return !isSimpleCommand && !args.includes("--offline");

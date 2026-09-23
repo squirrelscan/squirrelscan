@@ -39,7 +39,13 @@ Local audits are free and run entirely on your machine. Verify with `squirrel --
 
     That's it, skills and MCP tools are both available. Authenticate the MCP server for cloud features (below).
 
-    Added the older `squirrelscan/squirrelscan` marketplace before? It serves the same skills and keeps working. Both marketplaces are named `squirrelscan`, so to switch, run `/plugin marketplace remove squirrelscan` first.
+    Added the older `squirrelscan/squirrelscan` marketplace before? It now points the plugin at squirrelscan/skills, so it keeps working: run `/plugin marketplace update squirrelscan` then `/plugin update squirrelscan@squirrelscan`. To switch marketplaces instead, remove the old one first (Claude Code won't add a second marketplace named `squirrelscan`, and removing it uninstalls the plugin):
+
+    ```text
+    /plugin marketplace remove squirrelscan
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
   </Tab>
   <Tab title="MCP only">
     Add just the hosted server (dynamic client registration, no client id needed):

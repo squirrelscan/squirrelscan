@@ -141,14 +141,9 @@ async function checkChangelogSection(version: string): Promise<void> {
 
 // Every manifest that carries the release version. server.json is deliberately
 // absent: it tracks its own 1.0.x cadence because the MCP registry rejects a
-// backwards version jump.
-export const SYNCED_MANIFESTS = [
-  PACKAGE_JSON,
-  "npm/package.json",
-  "plugin.json",
-  ".cursor-plugin/plugin.json",
-  ".claude-plugin/plugin.json",
-];
+// backwards version jump. The agent plugin manifests are gone too: they live in
+// squirrelscan/skills now and version by commit, not by CLI release.
+export const SYNCED_MANIFESTS = [PACKAGE_JSON, "npm/package.json"];
 
 // Throws when one of these is missing rather than skipping it. They are all
 // tracked files, so absence means a broken checkout -- and "skip what isn't
@@ -203,7 +198,7 @@ async function ensureVersionLanded(version: string): Promise<void> {
 
   log("Opening the version bump PR:");
   info(`Branch: ${branch}`);
-  info(`Files:  ${SYNCED_MANIFESTS.join(", ")}, skills/ (mirror refresh)`);
+  info(`Files:  ${SYNCED_MANIFESTS.join(", ")}`);
   const answer = await prompt("Create and push it? [y/N] ");
   if (answer.toLowerCase() !== "y") {
     error("Aborted — nothing was pushed.");
@@ -214,17 +209,13 @@ async function ensureVersionLanded(version: string): Promise<void> {
   // Spread keeps `version` in its original position, so the diff stays 1 line.
   await Bun.write(PACKAGE_JSON, JSON.stringify({ ...pkg, version }, null, 2) + "\n");
   await $`bun run scripts/sync-plugin-manifests.ts --version ${version}`;
-  // The plugins ship skills/, a one-way mirror of squirrelscan/skills. Refresh it
-  // here so the bump PR carries upstream main and release.yml's --check passes.
-  await $`bun run scripts/sync-skills.ts`;
 
   const title = `chore(release): v${version}`;
-  await $`git add ${SYNCED_MANIFESTS} skills`;
+  await $`git add ${SYNCED_MANIFESTS}`;
   await $`git commit -s -m ${title}`;
   await $`git push --set-upstream origin ${branch}`;
   await $`gh pr create --base main --head ${branch} --title ${title} --body ${
-    `Stamps the release version into the synced manifests so main matches the tag, ` +
-    `and refreshes the skills/ mirror from squirrelscan/skills.\n\n` +
+    `Stamps the release version into the synced manifests so main matches the tag.\n\n` +
     `server.json is excluded: it tracks its own 1.0.x cadence.\n\n` +
     `Merge this, then re-run \`make release\` to cut v${version}.`
   }`;

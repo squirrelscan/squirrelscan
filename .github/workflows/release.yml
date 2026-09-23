@@ -93,16 +93,9 @@ jobs:
             }
           '
 
-          # Catches drift the version fields alone miss (descriptions fanned out
-          # from plugin.json into the vendor copies).
+          # Also fails if .claude-plugin/marketplace.json stops redirecting the
+          # old marketplace to squirrelscan/skills, where the plugins live now.
           bun run scripts/sync-plugin-manifests.ts --check
-
-          # The Claude Code and Cursor plugins ship skills/, a one-way mirror of
-          # squirrelscan/skills (the canonical skills repo), so the release has to
-          # carry upstream main exactly. Exit 1 = drifted; 2 = could not check, or
-          # upstream has a SKILL.md installers would skip. Either stops the release.
-          # Not in PR CI on purpose: upstream moving would turn unrelated PRs red.
-          bun run scripts/sync-skills.ts --check
 
   quality:
     name: Release quality gate
@@ -163,7 +156,6 @@ jobs:
             }
           '
           bun run scripts/sync-plugin-manifests.ts --check
-          bun run scripts/sync-skills.ts --check
 
       - name: Tag the release commit
         env:
