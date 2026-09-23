@@ -1,10 +1,16 @@
 #!/usr/bin/env bun
 /**
- * Sync the public plugin and npm manifests to one source of truth.
+ * Keep the public manifests that remain here in line.
  *
- * Version  ← apps/cli/package.json. Override with --version for one-offs.
- * Description ← plugin.json (the portable Open Plugin manifest is
- *            the canonical plugin metadata; vendor copies fan out from it).
+ * Version ← apps/cli/package.json, stamped into npm/package.json. Override with
+ * --version for one-offs.
+ *
+ * The agent plugins (Claude Code, Cursor, Agent Plugins) and the skills live in
+ * github.com/squirrelscan/skills now and version by commit there, so nothing
+ * here stamps them. What is left of them is .claude-plugin/marketplace.json: a
+ * redirect that keeps `/plugin marketplace add squirrelscan/squirrelscan` users
+ * on the plugin by pointing its entry at squirrelscan/skills. Both modes fail if
+ * that redirect stops pointing there, or gains a local path or a pinned version.
  *
  * server.json is deliberately NOT synced. It tracks its own 1.0.x cadence
  * because the MCP registry can reject a backwards version jump, so stamping the
@@ -54,6 +60,24 @@ function serialize(obj: unknown): string {
   return collapsed + "\n";
 }
 
+// The old marketplace must keep redirecting. A relative source would point at
+// files that no longer exist here, and a version would pin every existing
+// install to whatever commit it named.
+async function redirectProblems(): Promise<string[]> {
+  const rel = ".claude-plugin/marketplace.json";
+  const marketplace = await readJson<Record<string, any>>(join(PUBLIC, rel));
+  const entry = marketplace.plugins?.find((p: { name?: string }) => p.name === "squirrelscan");
+  const source = entry?.source;
+  const problems: string[] = [];
+  if (source?.source !== "github" || source?.repo !== "squirrelscan/skills") {
+    problems.push(`${rel}: the squirrelscan entry must be {"source": "github", "repo": "squirrelscan/skills"}`);
+  }
+  if (entry && ("version" in entry || "ref" in (source ?? {}) || "sha" in (source ?? {}))) {
+    problems.push(`${rel}: the squirrelscan entry must not pin a version, ref or sha`);
+  }
+  return problems;
+}
+
 async function main() {
   const version = versionOverride ?? (await readJson(CLI_PKG)).version;
   if (typeof version !== "string" || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) {
@@ -70,47 +94,15 @@ async function main() {
     );
   }
 
-  const description = (await readJson(join(PUBLIC, "plugin.json"))).description as string;
-
-  // Canonical MCP transport type lives in mcp.json; .mcp.json must match it.
-  const canonicalMcp = await readJson<Record<string, any>>(join(PUBLIC, "mcp.json"));
-  const canonicalMcpType = canonicalMcp.mcpServers?.squirrelscan?.type as string | undefined;
+  const broken = await redirectProblems();
+  if (broken.length) {
+    console.error(broken.join("\n"));
+    process.exit(1);
+  }
 
   // path → mutator. Each returns true if it changed anything.
   const edits: Array<[string, (o: Record<string, any>) => boolean]> = [
     ["npm/package.json", (o) => setField(o, "version", version)],
-    ["plugin.json", (o) => setField(o, "version", version)],
-    // Evaluate BOTH mutations (avoid || short-circuit) then OR the results.
-    [
-      ".cursor-plugin/plugin.json",
-      (o) =>
-        [setField(o, "version", version), setField(o, "description", description)].some(Boolean),
-    ],
-    [
-      ".claude-plugin/plugin.json",
-      (o) =>
-        [setField(o, "version", version), setField(o, "description", description)].some(Boolean),
-    ],
-    [
-      ".claude-plugin/marketplace.json",
-      (o) => {
-        const p = o.plugins?.[0];
-        if (!p || p.description === description) return false;
-        p.description = description;
-        return true;
-      },
-    ],
-    [
-      ".mcp.json",
-      (o) => {
-        const s = o.mcpServers?.squirrelscan;
-        if (!s || !canonicalMcpType || s.type === canonicalMcpType) return false;
-        // reinsert with type first (canonical value wins) to match mcp.json ordering
-        const { type: _oldType, ...rest } = s;
-        o.mcpServers.squirrelscan = { type: canonicalMcpType, ...rest };
-        return true;
-      },
-    ],
   ];
 
   const drift: string[] = [];
@@ -125,11 +117,11 @@ async function main() {
 
   if (check) {
     if (drift.length) {
-      console.error(`Plugin manifests out of sync (version ${version}):\n  ${drift.join("\n  ")}`);
+      console.error(`Manifests out of sync (version ${version}):\n  ${drift.join("\n  ")}`);
       console.error("Run: bun run scripts/sync-plugin-manifests.ts");
       process.exit(1);
     }
-    console.log(`Plugin manifests in sync (version ${version}).`);
+    console.log(`Manifests in sync (version ${version}); marketplace redirects to squirrelscan/skills.`);
     return;
   }
 

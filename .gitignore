@@ -20,8 +20,9 @@ data/
 *.sqlite-wal
 
 # Coding-agent instructions and memory. These carry internal context from the
-# private monorepo, so they must never land here. The .claude-plugin/ and
-# .cursor-plugin/ manifests are shipped on purpose and are not matched below.
+# private monorepo, so they must never land here. .claude-plugin/ (the old
+# marketplace, redirecting to squirrelscan/skills) is shipped on purpose and is
+# not matched below.
 CLAUDE.md
 **/CLAUDE.md
 AGENTS.md
