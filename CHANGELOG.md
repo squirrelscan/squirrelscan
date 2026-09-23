@@ -15,6 +15,16 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Changed
+
+- The agent skills have one home: [squirrelscan/skills](https://github.com/squirrelscan/skills). `squirrel skills install`, the README and the docs now install from it (`npx skills add squirrelscan/skills`, and `/plugin marketplace add squirrelscan/skills` in Claude Code). This repo's `skills/` directory is a read-only mirror of it for the Claude Code and Cursor plugin manifests, refreshed one way by `scripts/sync-skills.ts`, whose `--check` mode fails on drift. The mirror now carries the `squirrelscan` skill's entity map guidance and its `references/entity-map-fixes.md`, which had only ever existed upstream.
+
+### Fixed
+
+- `squirrel skills update` now updates the skills. It passed a repository to `npx skills update`, which reads its arguments as skill names, so it matched nothing installed and changed nothing. It now names the two skills, covers global and project installs, and each skill updates from wherever it was installed from. When the skills lock file shows an install from `squirrelscan/squirrelscan`, it also prints a one-line hint to run `squirrel skills install` once to switch to squirrelscan/skills.
+
 ## v0.0.98 — 2026-09-23
 
 A crawl no longer slows down as your local page cache grows, and the entity map that travels with a report now carries a representative sample of a large site instead of an alphabetical slice of it.

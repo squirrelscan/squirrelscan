@@ -133,14 +133,14 @@ Click the **Add to Cursor** badge above, or add it manually to `~/.cursor/mcp.js
 }
 ```
 
-Skills: `npx skills add squirrelscan/squirrelscan`
+Skills: `npx skills add squirrelscan/skills`
 
 ### Claude Code
 
 Install the plugin (bundles skills + the MCP server):
 
 ```
-/plugin marketplace add squirrelscan/squirrelscan
+/plugin marketplace add squirrelscan/skills
 /plugin install squirrelscan@squirrelscan
 ```
 
@@ -159,7 +159,7 @@ Add the server to `~/.codex/config.toml`:
 url = "https://mcp.squirrelscan.com/mcp"
 ```
 
-Codex reads Agent Skills from `~/.agents/skills`, so skills work too: `npx skills add squirrelscan/squirrelscan`
+Codex reads Agent Skills from `~/.agents/skills`, so skills work too: `npx skills add squirrelscan/skills`
 
 ### opencode
 
@@ -186,18 +186,18 @@ squirrelscan is in the [MCP Registry](https://registry.modelcontextprotocol.io) 
 https://mcp.squirrelscan.com/mcp
 ```
 
-Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token). Skills follow the [Agent Skills standard](https://agentskills.io): `npx skills add squirrelscan/squirrelscan` lands them in `.agents/skills/`.
+Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token). Skills follow the [Agent Skills standard](https://agentskills.io): `npx skills add squirrelscan/skills` lands them in `.agents/skills/`.
 
 
 ## Skills
 
-Two skills drive agent workflows:
+Two skills drive agent workflows. They live in [squirrelscan/skills](https://github.com/squirrelscan/skills), the canonical skills repo; the [`skills/`](skills/) directory here is a read-only mirror of it for the plugin manifests.
 
-- **`squirrelscan`** - operating the CLI: install, login, keys, credits, running audits, publishing reports, MCP setup, config, troubleshooting.
+- **`squirrelscan`** - operating the CLI: install, login, keys, credits, running audits, publishing reports, the entity map, MCP setup, config, troubleshooting.
 - **`audit-website`** - the full fix loop: audit, map issues to source files, fix in batches, re-audit until the site scores well.
 
 ```bash
-npx skills add squirrelscan/squirrelscan
+npx skills add squirrelscan/skills
 ```
 
 Then, in your agent:
