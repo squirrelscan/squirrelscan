@@ -71,7 +71,7 @@ You usually don't need this command. With `auto_update` enabled (the default), s
 ✓ squirrel auto-updated v0.0.42 → v0.0.43
 ```
 
-The running process is never interrupted - the new version takes effect on the next run. Turn this off with:
+The running process is never interrupted - the new version takes effect on the next run. From v0.0.99, that run also refreshes any squirrelscan agent skills you installed globally with `npx skills` or `squirrel skills install`, in the background (see [skills](/cli/skills#automatic-updates)). Turn this off with:
 
 ```bash
 squirrel self settings set auto_update false

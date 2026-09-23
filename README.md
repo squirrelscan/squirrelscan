@@ -191,7 +191,7 @@ Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer tok
 
 ## Skills
 
-Two skills drive agent workflows. They live in [squirrelscan/skills](https://github.com/squirrelscan/skills), the canonical skills repo; the [`skills/`](skills/) directory here is a read-only mirror of it for the plugin manifests.
+Two skills drive agent workflows. They live in [squirrelscan/skills](https://github.com/squirrelscan/skills), along with the Claude Code, Cursor and Agent Plugins packages that bundle them with the MCP server. Skills installed globally (`squirrel skills install`, or `npx skills add squirrelscan/skills -g`) stay current: from v0.0.99, `squirrel`'s auto-update refreshes them too.
 
 - **`squirrelscan`** - operating the CLI: install, login, keys, credits, running audits, publishing reports, the entity map, MCP setup, config, troubleshooting.
 - **`audit-website`** - the full fix loop: audit, map issues to source files, fix in batches, re-audit until the site scores well.

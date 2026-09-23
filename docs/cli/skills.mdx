@@ -46,7 +46,7 @@ squirrel skills install
 
 ### What it does
 
-The command runs `npx skills add squirrelscan/skills -g` to install all the squirrelscan skills from the [squirrelscan/skills repository](https://github.com/squirrelscan/skills).
+The command runs `npx skills@1 add squirrelscan/skills -g` to install all the squirrelscan skills from the [squirrelscan/skills repository](https://github.com/squirrelscan/skills). The `@1` pins the skills CLI to the major version squirrel's commands were checked against.
 
 Once installed, you can invoke them in your coding agent:
 
@@ -77,7 +77,7 @@ $ squirrel skills install
 npx not found. Install Node.js or run manually:
 
 To run manually:
-  npx skills add squirrelscan/skills -g
+  npx skills@1 add squirrelscan/skills -g
 
 View skills: https://skills.sh/squirrelscan/skills
 ```
@@ -96,12 +96,22 @@ squirrel skills update
 
 ### What it does
 
-The command runs `npx skills update squirrelscan audit-website`, which refreshes both skills, global and project installs alike, from the repository each one was installed from. Installs made with `squirrel skills install` come from [squirrelscan/skills](https://github.com/squirrelscan/skills). Installed the skills from `squirrelscan/squirrelscan` before? Those installs update from a mirror of the same skills and keep working; run `squirrel skills install` once to move them to squirrelscan/skills. `squirrel skills update` reminds you when the skills lock file shows such an install.
+The command reads the skills lock files (global and the current project's) and brings both squirrelscan skills current:
+
+- an install recorded from `squirrelscan/squirrelscan`, where the skills used to ship, is re-added from [squirrelscan/skills](https://github.com/squirrelscan/skills), their only home now
+- every other install is refreshed with `npx skills update`, from the repository it was installed from
+
+It never installs a skill you don't already have; with none installed it says so and points you at `squirrel skills install`. A re-added skill lands in the agents the skills CLI detects on your machine, the same as its own update does.
+
+### Automatic updates
+
+You rarely need to run it. From v0.0.99, when squirrel [auto-updates itself](/cli/self#automatic-updates), the first run on the new version starts the same refresh in the background for your global skill installs, with no prompts and a 60 second limit. It runs once per new version, follows the same opt-outs as auto-update (`auto_update`, `SQUIRREL_NO_UPDATE`, CI), does nothing without `npx`, and never holds up the command you ran. Project installs are left to `squirrel skills update`.
 
 ### Example
 
 ```bash
 $ squirrel skills update
+Moving squirrelscan from squirrelscan/squirrelscan to squirrelscan/skills...
 Updating squirrelscan skills (squirrelscan, audit-website)...
 
 Skills updated!
@@ -117,7 +127,7 @@ $ squirrel skills update
 npx not found. Install Node.js or run manually:
 
 To run manually:
-  npx skills update squirrelscan audit-website
+  npx skills@1 update squirrelscan audit-website -y
 
 View skills: https://skills.sh/squirrelscan/skills
 ```
@@ -133,7 +143,15 @@ Claude Code users can install everything (all skills plus the hosted MCP server)
 /plugin install squirrelscan@squirrelscan
 ```
 
-The plugin updates automatically as new commits land in the skills repository. Both this marketplace and the older `squirrelscan/squirrelscan` one are named `squirrelscan`, so if you added the older one, it keeps serving the same skills; to switch, run `/plugin marketplace remove squirrelscan` first.
+Every commit to the skills repository is a new plugin version. Claude Code doesn't auto-update third-party marketplaces unless you turn it on in `/plugin`, so pick up new versions with `/plugin marketplace update squirrelscan` and `/plugin update squirrelscan@squirrelscan`.
+
+Added the older `squirrelscan/squirrelscan` marketplace before? It now points the plugin at squirrelscan/skills, so it keeps working: run those same two update commands to move over. To switch marketplaces instead, remove the old one first. Claude Code won't add a second marketplace named `squirrelscan`, and removing it uninstalls the plugin, so reinstall:
+
+```text
+/plugin marketplace remove squirrelscan
+/plugin marketplace add squirrelscan/skills
+/plugin install squirrelscan@squirrelscan
+```
 
 ---
 
