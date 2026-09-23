@@ -33,11 +33,13 @@ Local audits are free and run entirely on your machine. Verify with `squirrel --
     The plugin bundles both skills plus the hosted MCP server:
 
     ```text
-    /plugin marketplace add squirrelscan/squirrelscan
+    /plugin marketplace add squirrelscan/skills
     /plugin install squirrelscan@squirrelscan
     ```
 
     That's it, skills and MCP tools are both available. Authenticate the MCP server for cloud features (below).
+
+    Added the older `squirrelscan/squirrelscan` marketplace before? It serves the same skills and keeps working. Both marketplaces are named `squirrelscan`, so to switch, run `/plugin marketplace remove squirrelscan` first.
   </Tab>
   <Tab title="MCP only">
     Add just the hosted server (dynamic client registration, no client id needed):
@@ -52,7 +54,7 @@ Local audits are free and run entirely on your machine. Verify with `squirrel --
     Install the skills without the MCP server:
 
     ```bash
-    npx skills add squirrelscan/squirrelscan
+    npx skills add squirrelscan/skills
     ```
 
     The skills drive the CLI directly, so free local audits work with no auth.

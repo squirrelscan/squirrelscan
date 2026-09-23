@@ -203,7 +203,7 @@ async function ensureVersionLanded(version: string): Promise<void> {
 
   log("Opening the version bump PR:");
   info(`Branch: ${branch}`);
-  info(`Files:  ${SYNCED_MANIFESTS.join(", ")}`);
+  info(`Files:  ${SYNCED_MANIFESTS.join(", ")}, skills/ (mirror refresh)`);
   const answer = await prompt("Create and push it? [y/N] ");
   if (answer.toLowerCase() !== "y") {
     error("Aborted — nothing was pushed.");
@@ -214,13 +214,17 @@ async function ensureVersionLanded(version: string): Promise<void> {
   // Spread keeps `version` in its original position, so the diff stays 1 line.
   await Bun.write(PACKAGE_JSON, JSON.stringify({ ...pkg, version }, null, 2) + "\n");
   await $`bun run scripts/sync-plugin-manifests.ts --version ${version}`;
+  // The plugins ship skills/, a one-way mirror of squirrelscan/skills. Refresh it
+  // here so the bump PR carries upstream main and release.yml's --check passes.
+  await $`bun run scripts/sync-skills.ts`;
 
   const title = `chore(release): v${version}`;
-  await $`git add ${SYNCED_MANIFESTS}`;
+  await $`git add ${SYNCED_MANIFESTS} skills`;
   await $`git commit -s -m ${title}`;
   await $`git push --set-upstream origin ${branch}`;
   await $`gh pr create --base main --head ${branch} --title ${title} --body ${
-    `Stamps the release version into the synced manifests so main matches the tag.\n\n` +
+    `Stamps the release version into the synced manifests so main matches the tag, ` +
+    `and refreshes the skills/ mirror from squirrelscan/skills.\n\n` +
     `server.json is excluded: it tracks its own 1.0.x cadence.\n\n` +
     `Merge this, then re-run \`make release\` to cut v${version}.`
   }`;
