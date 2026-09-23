@@ -14,6 +14,7 @@ import { runMain } from "citty";
 import type { UserSettings } from "@/self/types";
 
 import { printAutoUpdateAppliedNotice } from "@/cli/banner";
+import { maybeSpawnSkillsRefresh } from "@/self/agent-skills";
 import { registerInstall } from "@/self/register-install";
 import { showTelemetryNotice } from "@/self/telemetry";
 import {
@@ -64,6 +65,10 @@ function startCommand<T extends ArgsDef>(
   // ordinary run stays free of the await. printAutoUpdateAppliedNotice itself
   // only prints when this process IS the new version, and clears the marker.
   if (settings?.auto_update_applied) {
+    // The first run on a freshly auto-updated binary also brings the installed
+    // squirrelscan skills current, in a detached child the command never waits
+    // on. It only fires on the new version, the same run that clears the marker.
+    maybeSpawnSkillsRefresh(settings);
     void printAutoUpdateAppliedNotice(settings)
       .catch(() => {})
       .then(() => runCommand(main));

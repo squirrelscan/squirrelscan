@@ -1,70 +1,21 @@
 import { defineCommand } from "citty";
 import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
-import { join } from "node:path";
 
+import {
+  LEGACY_SOURCE,
+  SKILLS_CLI,
+  SKILL_NAMES,
+  SKILL_REPO,
+  planSkillsRefresh,
+  readInstalledSkills,
+  runSkillsAutoRefresh,
+} from "@/self/agent-skills";
 import { safeExit } from "@/self/updater";
 
-// squirrelscan/skills is the canonical skills repo. This repo's skills/ is only
-// a mirror of it for the plugin manifests, so never install from here.
-const SKILL_REPO = "squirrelscan/skills";
-const SKILL_NAMES = ["squirrelscan", "audit-website"] as const;
+// squirrelscan/skills is the only home of the skills; install from nowhere else.
 const SKILLS_URL = "https://skills.sh/squirrelscan/skills";
 
-// `skills update` takes skill NAMES, not a source: given a repo it matches no
-// installed skill and updates nothing. Each skill updates from the source its
-// lock entry recorded at install time. No -g: with names and no scope flag it
-// updates global and project installs without prompting, and the docs' plain
-// `npx skills add squirrelscan/skills` may have made either.
-const ADD_ARGS = ["skills", "add", SKILL_REPO, "-g"];
-const UPDATE_ARGS = ["skills", "update", ...SKILL_NAMES];
-
-// Installs made before squirrelscan/skills was canonical record this repo as
-// their source, and `skills update` keeps pulling each skill from its recorded
-// source: this repo's skills/ mirror.
-const LEGACY_SOURCE = "squirrelscan/squirrelscan";
-
-// Where the skills CLI records each skill's source: the global lock
-// ($XDG_STATE_HOME/skills/.skill-lock.json, else ~/.agents/.skill-lock.json)
-// and the project lock in the working directory.
-function skillLockPaths(): string[] {
-  const xdg = process.env.XDG_STATE_HOME;
-  return [
-    xdg
-      ? join(xdg, "skills", ".skill-lock.json")
-      : join(homedir(), ".agents", ".skill-lock.json"),
-    join(process.cwd(), "skills-lock.json"),
-  ];
-}
-
-const isLegacySource = (value: unknown): boolean =>
-  typeof value === "string" &&
-  /(^|\/)squirrelscan\/squirrelscan$/.test(
-    value.toLowerCase().replace(/\.git$/, "")
-  );
-
-/** True when a lock file says one of our skills came from squirrelscan/squirrelscan. */
-export async function installedFromLegacyRepo(
-  paths = skillLockPaths()
-): Promise<boolean> {
-  for (const path of paths) {
-    let lock: {
-      skills?: Record<string, { source?: unknown; sourceUrl?: unknown }>;
-    } | null;
-    try {
-      lock = await Bun.file(path).json();
-    } catch {
-      continue; // missing or unreadable: nothing to say
-    }
-    for (const name of SKILL_NAMES) {
-      const entry = lock?.skills?.[name];
-      if (isLegacySource(entry?.source) || isLegacySource(entry?.sourceUrl)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
+const ADD_ARGS = [SKILLS_CLI, "add", SKILL_REPO, "-g"];
 
 function isNpxAvailable(): boolean {
   const result = spawnSync("npx", ["--version"], {
@@ -74,11 +25,9 @@ function isNpxAvailable(): boolean {
   return !result.error && result.status === 0;
 }
 
-function showManualInstructions(action: "install" | "update"): void {
-  const cmd = `npx ${(action === "install" ? ADD_ARGS : UPDATE_ARGS).join(" ")}`;
-
+function showManualInstructions(commands: string[][]): void {
   console.log("\nTo run manually:");
-  console.log(`  ${cmd}`);
+  for (const args of commands) console.log(`  npx ${args.join(" ")}`);
   console.log(`\nView skills: ${SKILLS_URL}`);
 }
 
@@ -90,7 +39,7 @@ export const skillsInstall = defineCommand({
   async run() {
     if (!isNpxAvailable()) {
       console.log("npx not found. Install Node.js or run manually:");
-      showManualInstructions("install");
+      showManualInstructions([ADD_ARGS]);
       return safeExit(0);
     }
 
@@ -105,7 +54,7 @@ export const skillsInstall = defineCommand({
 
     if (result.error || result.status !== 0) {
       console.error("\nFailed to install skills.");
-      showManualInstructions("install");
+      showManualInstructions([ADD_ARGS]);
       return safeExit(1);
     }
 
@@ -121,32 +70,64 @@ export const skillsUpdate = defineCommand({
     name: "update",
     description: "Update squirrelscan skills for coding agents",
   },
-  async run() {
+  args: {
+    auto: {
+      type: "boolean",
+      description:
+        "Silent global refresh (used internally after a CLI auto-update)",
+    },
+  },
+  async run({ args }) {
+    if (args.auto) {
+      // Detached child started after a CLI auto-update landed: never prints,
+      // never prompts, never fails the run that started it.
+      await runSkillsAutoRefresh();
+      return;
+    }
+
+    // Installs recorded from squirrelscan/squirrelscan are re-added from
+    // squirrelscan/skills, the rest updated, global and project alike.
+    const installed = await readInstalledSkills();
+    if (!installed.length) {
+      console.log(
+        "No squirrelscan skills are installed here. Install them with: squirrel skills install"
+      );
+      return;
+    }
+    const commands = planSkillsRefresh(installed, ["global", "project"]).map(
+      (args) => [SKILLS_CLI, ...args]
+    );
+
     if (!isNpxAvailable()) {
       console.log("npx not found. Install Node.js or run manually:");
-      showManualInstructions("update");
+      showManualInstructions(commands);
       return safeExit(0);
     }
 
-    console.log(`Updating squirrelscan skills (${SKILL_NAMES.join(", ")})...`);
+    const moving = [
+      ...new Set(installed.filter((s) => s.legacy).map((s) => s.name)),
+    ];
+    if (moving.length) {
+      console.log(
+        `Moving ${moving.join(", ")} from ${LEGACY_SOURCE} to ${SKILL_REPO}...`
+      );
+    }
+    const names = [...new Set(installed.map((s) => s.name))];
+    console.log(`Updating squirrelscan skills (${names.join(", ")})...`);
 
-    const result = spawnSync("npx", UPDATE_ARGS, {
-      stdio: "inherit",
-      shell: true,
-    });
-
-    if (result.error || result.status !== 0) {
-      console.error("\nFailed to update skills.");
-      showManualInstructions("update");
-      return safeExit(1);
+    for (const argv of commands) {
+      const result = spawnSync("npx", argv, {
+        stdio: "inherit",
+        shell: true,
+      });
+      if (result.error || result.status !== 0) {
+        console.error("\nFailed to update skills.");
+        showManualInstructions(commands);
+        return safeExit(1);
+      }
     }
 
     console.log("\nSkills updated!");
-    if (await installedFromLegacyRepo()) {
-      console.log(
-        `Tip: these skills came from ${LEGACY_SOURCE}, now a mirror. Run 'squirrel skills install' once to switch to ${SKILL_REPO}.`
-      );
-    }
     console.log(`View skills: ${SKILLS_URL}`);
   },
 });

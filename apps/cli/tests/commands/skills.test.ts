@@ -1,8 +1,9 @@
 // #783: unit tests for `squirrel skills install/update`. Mocks node:child_process
 // so no real npx/network call happens; asserts the constructed npx args (`skills
-// add <repo> -g` from the canonical squirrelscan/skills repo, `skills update
-// <names>`; no --skill flag after the two-skill split, #781) and the
+// add <repo> -g` from squirrelscan/skills; `skills update <names>`, after
+// re-adding any install recorded from squirrelscan/squirrelscan) and the
 // manual-instructions fallback for both the npx-missing and spawn-failure paths.
+// The skills lock is read from a scratch XDG_STATE_HOME; run with HOME=<scratch>.
 
 import type { ArgsDef, CommandContext } from "citty";
 
@@ -45,13 +46,14 @@ mock.module("node:child_process", () => ({
   },
 }));
 
-const { installedFromLegacyRepo, skillsInstall, skillsUpdate } =
-  await import("@/cli/commands/skills");
+const { skillsInstall, skillsUpdate } = await import("@/cli/commands/skills");
 
 const SKILL_REPO = "squirrelscan/skills";
+// Pinned to the major the argv was checked against.
+const SKILLS = "skills@1";
 // `npx skills update` reads positionals as skill names, so a repo there matched
 // nothing and the update was a silent no-op.
-const UPDATE_CMD = "npx skills update squirrelscan audit-website";
+const UPDATE_CMD = "npx skills@1 update squirrelscan -y";
 
 // process.exit is typed `never` — a plain no-op mock would let execution fall
 // through the (unreachable-per-types, but not per a mocked runtime) code after
@@ -64,13 +66,13 @@ class ProcessExitSignal extends Error {
   }
 }
 
-const EMPTY_CONTEXT = {} as CommandContext<ArgsDef>;
-
 async function runAndCaptureExit(
-  run: ((context: CommandContext<ArgsDef>) => unknown) | undefined
+  // oxlint-disable-next-line typescript/no-explicit-any -- both commands' contexts
+  run: ((context: CommandContext<any>) => unknown) | undefined,
+  args: Record<string, unknown> = {}
 ): Promise<ProcessExitSignal | null> {
   try {
-    await run?.(EMPTY_CONTEXT);
+    await run?.({ args } as unknown as CommandContext<ArgsDef>);
     return null;
   } catch (e) {
     if (e instanceof ProcessExitSignal) return e;
@@ -82,7 +84,26 @@ describe("squirrel skills install/update", () => {
   let logSpy: ReturnType<typeof spyOn<Console, "log">>;
   let errorSpy: ReturnType<typeof spyOn<Console, "error">>;
 
+  let stateDir: string;
+  let savedXdg: string | undefined;
+  let savedNoUpdate: string | undefined;
+
+  // Where the skills CLI keeps its global lock, when XDG_STATE_HOME is set.
+  const globalLock = (skills: Record<string, unknown>) => {
+    mkdirSync(join(stateDir, "skills"), { recursive: true });
+    writeFileSync(
+      join(stateDir, "skills", ".skill-lock.json"),
+      JSON.stringify({ version: 3, skills })
+    );
+  };
+
   beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), "skills-cmd-"));
+    savedXdg = process.env.XDG_STATE_HOME;
+    savedNoUpdate = process.env.SQUIRREL_NO_UPDATE;
+    process.env.XDG_STATE_HOME = stateDir;
+    // The project lock is read from the working directory: never the real one.
+    spyOn(process, "cwd").mockReturnValue(stateDir);
     calls = [];
     npxVersionResult = { status: 0 };
     skillsCommandResult = { status: 0 };
@@ -94,9 +115,15 @@ describe("squirrel skills install/update", () => {
   });
 
   afterEach(() => {
+    rmSync(stateDir, { recursive: true, force: true });
+    if (savedXdg === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = savedXdg;
+    if (savedNoUpdate === undefined) delete process.env.SQUIRREL_NO_UPDATE;
+    else process.env.SQUIRREL_NO_UPDATE = savedNoUpdate;
     logSpy.mockRestore();
     errorSpy.mockRestore();
     (process.exit as unknown as { mockRestore: () => void }).mockRestore();
+    (process.cwd as unknown as { mockRestore: () => void }).mockRestore();
   });
 
   // Defense-in-depth, not a full guarantee: Bun's mock.module patches the
@@ -119,10 +146,10 @@ describe("squirrel skills install/update", () => {
     const exit = await runAndCaptureExit(skillsInstall.run);
     expect(exit).toBeNull();
 
-    const skillsCall = calls.find((c) => c.args[0] === "skills");
+    const skillsCall = calls.find((c) => c.args[0] === SKILLS);
     expect(skillsCall).toBeDefined();
     expect(skillsCall?.cmd).toBe("npx");
-    expect(skillsCall?.args).toEqual(["skills", "add", SKILL_REPO, "-g"]);
+    expect(skillsCall?.args).toEqual([SKILLS, "add", SKILL_REPO, "-g"]);
     expect(skillsCall?.args).not.toContain("--skill");
     expect(loggedText()).toContain("Skills installed!");
   });
@@ -136,19 +163,57 @@ describe("squirrel skills install/update", () => {
   });
 
   test("update: constructs `npx skills update <names>`, never a repo", async () => {
+    globalLock({ squirrelscan: { source: "squirrelscan/skills" } });
+
     const exit = await runAndCaptureExit(skillsUpdate.run);
     expect(exit).toBeNull();
 
-    const skillsCall = calls.find((c) => c.args[0] === "skills");
-    // No -g: names without a scope flag update global and project installs.
-    expect(skillsCall?.args).toEqual([
-      "skills",
-      "update",
-      "squirrelscan",
-      "audit-website",
-    ]);
-    expect(skillsCall?.args).not.toContain("--skill");
+    // No scope flag: global and project installs both update.
+    expect(
+      calls.filter((c) => c.args[0] === SKILLS).map((c) => c.args)
+    ).toEqual([[SKILLS, "update", "squirrelscan", "-y"]]);
     expect(loggedText()).toContain("Skills updated!");
+  });
+
+  test("update: nothing installed -> says so and points at install, never runs npx", async () => {
+    const exit = await runAndCaptureExit(skillsUpdate.run);
+
+    expect(exit).toBeNull();
+    expect(calls).toEqual([]);
+    expect(loggedText()).toContain("squirrel skills install");
+    expect(loggedText()).not.toContain("Skills updated!");
+  });
+
+  test("update: an install recorded from squirrelscan/squirrelscan is re-added from squirrelscan/skills first", async () => {
+    globalLock({
+      squirrelscan: { source: "squirrelscan/squirrelscan" },
+      "audit-website": { source: "squirrelscan/skills" },
+    });
+
+    const exit = await runAndCaptureExit(skillsUpdate.run);
+    expect(exit).toBeNull();
+
+    expect(
+      calls.filter((c) => c.args[0] === SKILLS).map((c) => c.args)
+    ).toEqual([
+      [SKILLS, "add", SKILL_REPO, "--skill", "squirrelscan", "-g", "-y"],
+      [SKILLS, "update", "audit-website", "-y"],
+    ]);
+    expect(loggedText()).toContain(
+      "Moving squirrelscan from squirrelscan/squirrelscan to squirrelscan/skills"
+    );
+    expect(loggedText()).not.toContain("Tip:");
+  });
+
+  test("update --auto: silent, and never spawns when auto-update is suppressed", async () => {
+    globalLock({ squirrelscan: { source: "squirrelscan/squirrelscan" } });
+    process.env.SQUIRREL_NO_UPDATE = "1";
+
+    const exit = await runAndCaptureExit(skillsUpdate.run, { auto: true });
+
+    expect(exit).toBeNull();
+    expect(calls).toEqual([]);
+    expect(loggedText()).toBe("");
   });
 
   test("install: npx missing -> manual instructions, exit(0), never calls `skills add`", async () => {
@@ -157,17 +222,18 @@ describe("squirrel skills install/update", () => {
     const exit = await runAndCaptureExit(skillsInstall.run);
 
     expect(exit?.code).toBe(0);
-    expect(calls.some((c) => c.args[0] === "skills")).toBe(false);
-    expect(loggedText()).toContain(`npx skills add ${SKILL_REPO} -g`);
+    expect(calls.some((c) => c.args[0] === SKILLS)).toBe(false);
+    expect(loggedText()).toContain(`npx skills@1 add ${SKILL_REPO} -g`);
   });
 
   test("update: npx missing -> manual instructions with `update`, exit(0), never calls `skills update`", async () => {
+    globalLock({ squirrelscan: { source: "squirrelscan/skills" } });
     npxVersionResult = { error: new Error("ENOENT"), status: null };
 
     const exit = await runAndCaptureExit(skillsUpdate.run);
 
     expect(exit?.code).toBe(0);
-    expect(calls.some((c) => c.args[0] === "skills")).toBe(false);
+    expect(calls.some((c) => c.args[0] === SKILLS)).toBe(false);
     expect(loggedText()).toContain(UPDATE_CMD);
   });
 
@@ -178,10 +244,11 @@ describe("squirrel skills install/update", () => {
 
     expect(exit?.code).toBe(1);
     expect(loggedText()).toContain("Failed to install skills");
-    expect(loggedText()).toContain(`npx skills add ${SKILL_REPO} -g`);
+    expect(loggedText()).toContain(`npx skills@1 add ${SKILL_REPO} -g`);
   });
 
   test("update: `skills update` spawn fails -> manual instructions fallback, exit(1)", async () => {
+    globalLock({ squirrelscan: { source: "squirrelscan/skills" } });
     skillsCommandResult = { error: new Error("boom"), status: null };
 
     const exit = await runAndCaptureExit(skillsUpdate.run);
@@ -190,83 +257,21 @@ describe("squirrel skills install/update", () => {
     expect(loggedText()).toContain("Failed to update skills");
     expect(loggedText()).toContain(UPDATE_CMD);
   });
-});
 
-// The skills CLI records each skill's source in its lock files. An install from
-// before squirrelscan/skills was canonical points at squirrelscan/squirrelscan.
-describe("installedFromLegacyRepo", () => {
-  let dir: string;
-  const lockAt = (name: string, skills: unknown): string => {
-    const path = join(dir, name);
-    writeFileSync(
-      path,
-      JSON.stringify(skills === undefined ? null : { version: 3, skills })
-    );
-    return path;
-  };
-
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "skills-lock-"));
-  });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
-
-  test("true for an owner/repo or URL source of squirrelscan/squirrelscan", async () => {
-    const byName = lockAt("a.json", {
-      "audit-website": { source: "squirrelscan/squirrelscan" },
-    });
-    const byUrl = lockAt("b.json", {
-      squirrelscan: {
-        source: "x",
-        sourceUrl: "https://github.com/squirrelscan/squirrelscan.git",
-      },
-    });
-    expect(await installedFromLegacyRepo([byName])).toBe(true);
-    expect(await installedFromLegacyRepo([byUrl])).toBe(true);
-  });
-
-  test("false for the canonical repo, other skills, and missing or odd lock files", async () => {
-    const canonical = lockAt("c.json", {
-      squirrelscan: { source: "squirrelscan/skills" },
-      "audit-website": {
-        sourceUrl: "https://github.com/squirrelscan/skills.git",
-      },
-      other: { source: "squirrelscan/squirrelscan" },
-      "not-ours": { source: "evil-squirrelscan/squirrelscan" },
-    });
-    const nullLock = lockAt("d.json", undefined);
-    const garbage = join(dir, "e.json");
-    writeFileSync(garbage, "{not json");
-    expect(
-      await installedFromLegacyRepo([
-        canonical,
-        nullLock,
-        garbage,
-        join(dir, "missing.json"),
-      ])
-    ).toBe(false);
-  });
-
-  test("`squirrel skills update` prints the one-line switch hint for a legacy install", async () => {
-    const saved = process.env.XDG_STATE_HOME;
-    process.env.XDG_STATE_HOME = dir;
-    mkdirSync(join(dir, "skills"));
-    lockAt("skills/.skill-lock.json", {
+  test("update: a failed migration stops before the update and prints both commands", async () => {
+    globalLock({
       squirrelscan: { source: "squirrelscan/squirrelscan" },
+      "audit-website": { source: "squirrelscan/skills" },
     });
-    calls = [];
-    npxVersionResult = { status: 0 };
-    skillsCommandResult = { status: 0 };
-    const logSpy = spyOn(console, "log").mockImplementation(() => {});
-    try {
-      await skillsUpdate.run?.({} as CommandContext<ArgsDef>);
-      const logged = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
-      expect(logged).toContain(
-        "Run 'squirrel skills install' once to switch to squirrelscan/skills"
-      );
-    } finally {
-      logSpy.mockRestore();
-      if (saved === undefined) delete process.env.XDG_STATE_HOME;
-      else process.env.XDG_STATE_HOME = saved;
-    }
+    skillsCommandResult = { status: 1 };
+
+    const exit = await runAndCaptureExit(skillsUpdate.run);
+
+    expect(exit?.code).toBe(1);
+    expect(calls.filter((c) => c.args[0] === SKILLS)).toHaveLength(1);
+    expect(loggedText()).toContain(
+      "npx skills@1 add squirrelscan/skills --skill squirrelscan -g -y"
+    );
+    expect(loggedText()).toContain("npx skills@1 update audit-website -y");
   });
 });
