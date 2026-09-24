@@ -1,29 +1,86 @@
 ---
 title: "feedback"
 icon: "message-square"
-description: "Send feedback to the squirrelscan team"
+description: "Send feedback to the squirrelscan team, from a terminal or from an agent"
 ---
 
-The `feedback` command lets you send feedback, bug reports, and feature requests directly to the squirrelscan team.
+The `feedback` command sends feedback, bug reports, and feature requests straight to the squirrelscan team. Type it at the prompts, or pass it on the command line so an agent or a script can send it with no terminal at all.
 
 ## Usage
 
 ```bash
 squirrel feedback
 squirrel feedback --category bug_report
+squirrel feedback -m "A --urls-file flag would make batch audits easier" --category feature_request
+echo "Batch audits were painless" | squirrel feedback --category what_worked --json
 ```
 
 ## Options
 
 | Option | Description |
 | ------ | ----------- |
-| `--category` | Feedback category: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other` |
+| `-m`, `--message <text>` | The feedback text. Sends without prompting. |
+| `--category <name>` | Feedback category: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other` |
+| `--email <address>` | The address the team can reply to. Defaults to the one you last gave `squirrel feedback`, then the email of the account you signed in with. Saved for next time. |
+| `--run-id <id>` | The audit run the feedback is about. |
+| `--website-id <id>` | The website the feedback is about. |
+| `--json` | Print the result as one JSON object on stdout. Never prompts. |
+
+## From an agent or a script
+
+When the text comes from `--message` or is piped on stdin, `squirrel feedback` never prompts, so it runs fine with no terminal: in CI, in a batch job, or from a coding agent partway through a task.
+
+```bash
+squirrel feedback --category what_worked \
+  -m "The fix and re-audit loop cleared a 40-page site in three passes" \
+  --run-id run_abc123 --json
+```
+
+Piped text works the same way, several lines included:
+
+```bash
+cat notes.txt | squirrel feedback --category tool_ergonomics --json
+```
+
+It still needs an email to send with. Pass `--email`, or it uses the address you last gave `squirrel feedback`, then the email of the account you signed in with (`squirrel auth login`). With none of those it stops and says so, rather than sending feedback nobody can answer.
+
+### JSON output
+
+With `--json`, stdout carries exactly one line and nothing else:
+
+```json
+{"ok":true,"category":"bug_report","truncated":false}
+```
+
+`truncated` is `true` when the text ran past 5,000 characters and was cut to fit. A failure exits 1 and prints:
+
+```json
+{"ok":false,"code":"submit_failed","error":"Failed to submit feedback: the API answered HTTP 503.","status":503,"fallback_url":"https://squirrelscan.com/feedback"}
+```
+
+| `code` | Meaning |
+| ------ | ------- |
+| `message_required` | No text. Pass `--message` or pipe it: `--json` never prompts, even at a terminal. |
+| `message_too_short` | Under 5 characters. |
+| `invalid_category` | Not one of the categories above. |
+| `email_required` | No `--email`, no saved email, and not signed in. |
+| `invalid_email` | `--email` is not an email address. |
+| `invalid_run_id`, `invalid_website_id` | Blank, or longer than 128 characters. |
+| `rate_limited` | Too many submissions in a short time. Wait a few minutes. |
+| `submit_failed` | The API refused it (`status` is the HTTP status) or could not be reached (`status` is `0`). |
+| `unexpected` | Anything else. |
+
+Every failure carries `fallback_url`, the web form, so an agent can hand it to you instead of losing the feedback. Without `--json` the same errors go to stderr and the exit code is the same.
+
+### From the MCP server
+
+The local [`squirrel mcp`](/cli/mcp) server offers the same channel as a `send_feedback` tool, so an agent connected to it can send feedback without leaving the session.
 
 ## Interactive prompts
 
-The command will prompt you for:
+On a terminal, with no `--message` and nothing piped, the command prompts you for:
 
-1. **Email** - Your email address (cached for future use)
+1. **Email** - Your email address (cached for future use; skipped when `--email` is passed)
 2. **Feedback** - Your feedback message (minimum 5 characters)
 3. **Category** - An optional category (skipped when `--category` is passed; press Enter to skip)
 
@@ -44,7 +101,7 @@ Category (optional):
   7) Other
 Category [Enter to skip]: 2
 
-Thank you for your feedback!
+✓ Thank you for your feedback!
 ```
 
 ## Subsequent uses
@@ -56,7 +113,7 @@ $ squirrel feedback
 Email [you@example.com]:
 Feedback: The HTML report looks great!
 
-Thank you for your feedback!
+✓ Thank you for your feedback!
 ```
 
 ## What to send
@@ -97,6 +154,8 @@ Loving the CLI speed! JSON export is perfect for CI/CD
 - Your email is stored locally at `~/.squirrel/settings.json`
 - Feedback is transmitted securely to squirrelscan servers
 - Your install ID is included (anonymous identifier)
+- Without `--email`, the reply address can be the email of the account you signed in with
+- `--run-id` and `--website-id` are sent only when you pass them
 - No crawl data or audit results are transmitted
 
 ## Alternative: GitHub issues
