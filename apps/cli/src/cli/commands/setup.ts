@@ -9,13 +9,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
+import { SKILLS_CLI, SKILL_NAMES, SKILL_REPO } from "@/self/agent-skills";
 import { resolveCredential } from "@/self/credentials";
+import { getUnmanagedUpdateHint, isManagedInstall } from "@/self/paths";
 import { loadUserSettings, updateSettings } from "@/self/settings";
 
 import { version } from "../../../package.json";
 import { type Theme, createTheme } from "../theme";
-
-const SKILL_NAMES = ["squirrelscan", "audit-website"] as const;
 
 /** Where the skills live by default: Claude Code's own directory and the shared ~/.agents one. */
 export function skillTargets(env = process.env, home = homedir()): string[] {
@@ -47,7 +47,7 @@ export interface SkillsInstallResult {
 export async function installAgentSkills(): Promise<SkillsInstallResult> {
   const result = spawnSync(
     "npx",
-    ["--yes", "skills@1", "add", "squirrelscan/skills", "-g", "-y"],
+    ["--yes", SKILLS_CLI, "add", SKILL_REPO, "-g", "-y"],
     {
       stdio: "ignore",
       shell: process.platform === "win32",
@@ -80,6 +80,12 @@ function createAsker(t: Theme, assumeYes: boolean): Asker {
       const rl = createInterface({
         input: process.stdin,
         output: process.stdout,
+      });
+      // Ctrl+C at a prompt stops setup, the way it stops any other command.
+      rl.on("SIGINT", () => {
+        rl.close();
+        process.stdout.write("\n");
+        process.exit(130);
       });
       const answer = await new Promise<string>((resolve) =>
         rl.question(`     ${t.accent("?")} ${question} ${hint} `, resolve)
@@ -167,10 +173,10 @@ export async function runSetup(opts: {
       const result = await installAgentSkills();
       if (result.ok) {
         const where =
-          result.targets.length > 0 ? result.targets : skillTargets();
-        done(
-          `Installed ${SKILL_NAMES.join(" and ")} in ${where.map((d) => tildify(d)).join(" and ")}`
-        );
+          result.targets.length > 0
+            ? ` in ${result.targets.map((d) => tildify(d)).join(" and ")}`
+            : "";
+        done(`Installed ${SKILL_NAMES.join(" and ")}${where}`);
       } else {
         say(
           `${t.warn(t.sym.warn)} Couldn't install the skills (${result.error}). Try ${t.command("squirrel skills install")}.`
@@ -183,11 +189,25 @@ export async function runSetup(opts: {
     );
   }
 
-  // 3. Updates.
+  // 3. Updates. Only a managed install (the installer's) can update itself.
   step(t, 3, "Updates");
-  const autoUpdate = settings.ok ? settings.data.auto_update : true;
-  if (autoUpdate) {
+  const autoUpdate = settings.ok ? settings.data.auto_update : undefined;
+  if (!isManagedInstall()) {
+    skip(
+      `This copy of squirrel was not installed by the squirrelscan installer, so it can't update itself. To update: ${getUnmanagedUpdateHint()}.`
+    );
+  } else if (autoUpdate === true) {
     done("squirrel and its skills update themselves automatically");
+  } else if (autoUpdate === undefined) {
+    say(
+      `${t.warn(t.sym.warn)} Couldn't read your settings. Check them with ${t.command("squirrel self doctor")}.`
+    );
+  } else if (!ask.interactive) {
+    // auto_update defaults to true, so false is always the user's choice:
+    // never flip it back without an explicit yes at a prompt.
+    skip(
+      `Auto-update is off. Turn it on with ${t.command("squirrel self settings set auto_update true")}.`
+    );
   } else if (
     await ask.confirm("Keep squirrel and its skills up to date automatically?")
   ) {

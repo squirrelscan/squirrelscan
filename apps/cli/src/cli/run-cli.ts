@@ -67,40 +67,38 @@ async function printHelp(
   );
 }
 
-export async function runCli<T extends ArgsDef>(
-  command: CommandDef<T>,
-  { version, setupDone, rawArgs = process.argv.slice(2) }: RunCliOptions
-): Promise<void> {
-  const main = command as unknown as AnyCommand;
-  try {
-    if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
-      await printHelp(main, rawArgs, version);
-      process.exit(0);
-    }
+/**
+ * `-c <path>` / `--config-file <path>` as one token, so the path is never
+ * mistaken for a command (`squirrel -c x.toml audit ...`). No subcommand uses
+ * -c for anything else.
+ */
+export function normalizeArgs(rawArgs: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i]!;
+    const next = rawArgs[i + 1];
     if (
-      rawArgs.length === 1 &&
-      (rawArgs[0] === "--version" || rawArgs[0] === "-v")
+      (arg === "-c" || arg === "--config-file") &&
+      next !== undefined &&
+      !next.startsWith("-")
     ) {
-      console.log(version);
-      return;
+      out.push(`--config-file=${next}`);
+      i++;
+    } else {
+      out.push(arg);
     }
-    // No command at all (flags such as -c alone included): the home screen.
-    if (!rawArgs.some((a) => !a.startsWith("-"))) {
-      console.log(
-        renderHome(createTheme(process.stdout), { version, setupDone })
-      );
-      return;
-    }
-    await runCommand(main, { rawArgs });
-  } catch (error) {
-    if (!isCliError(error)) {
-      // Same as citty's runMain: an unexpected error is printed whole and exits 1.
-      console.error(error);
-      process.exit(1);
-    }
-    const err = createTheme(process.stderr);
-    const { cmd, path, rest } = await resolveCommandPath(main, rawArgs);
+  }
+  return out;
+}
 
+async function explainCliError(
+  main: AnyCommand,
+  rawArgs: string[],
+  error: CliErrorLike
+): Promise<never> {
+  const err = createTheme(process.stderr);
+  try {
+    const { cmd, path, rest } = await resolveCommandPath(main, rawArgs);
     if (error.code === "E_NO_COMMAND") {
       console.log(
         await renderCommandHelp(createTheme(process.stdout), cmd, path)
@@ -116,7 +114,48 @@ export async function runCli<T extends ArgsDef>(
       writeErr(await renderMissingArgument(err, cmd, path, error.message));
       process.exit(1);
     }
-    writeErr(`\n${err.error(err.sym.error)} ${error.message}\n`);
-    process.exit(1);
+  } catch {
+    // A help screen that fails to render (a command chunk that won't load)
+    // must still leave the user with the original message.
+  }
+  writeErr(`\n${err.error(err.sym.error)} ${error.message}\n`);
+  process.exit(1);
+}
+
+export async function runCli<T extends ArgsDef>(
+  command: CommandDef<T>,
+  { version, setupDone, rawArgs: argv = process.argv.slice(2) }: RunCliOptions
+): Promise<void> {
+  const main = command as unknown as AnyCommand;
+  const rawArgs = normalizeArgs(argv);
+  const hasCommand = rawArgs.some((a) => !a.startsWith("-"));
+  try {
+    if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+      await printHelp(main, rawArgs, version);
+      process.exit(0);
+    }
+    // `-v` is only the version at the top level: `audit -v` means verbose.
+    if (
+      !hasCommand &&
+      (rawArgs.includes("--version") || rawArgs.includes("-v"))
+    ) {
+      console.log(version);
+      return;
+    }
+    // No command at all (global flags alone included): the home screen.
+    if (!hasCommand) {
+      console.log(
+        renderHome(createTheme(process.stdout), { version, setupDone })
+      );
+      return;
+    }
+    await runCommand(main, { rawArgs });
+  } catch (error) {
+    if (!isCliError(error)) {
+      // Same as citty's runMain: an unexpected error is printed whole and exits 1.
+      console.error(error);
+      process.exit(1);
+    }
+    await explainCliError(main, rawArgs, error);
   }
 }

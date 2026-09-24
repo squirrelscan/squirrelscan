@@ -116,6 +116,7 @@ describe("detectColorLevel", () => {
       true,
       0,
     ],
+    ["FORCE_COLOR=1 is 16 colours", { FORCE_COLOR: "1" }, false, 1],
     ["COLORTERM=truecolor", { COLORTERM: "truecolor" }, true, 3],
     ["xterm-256color", { TERM: "xterm-256color" }, true, 2],
     ["dumb terminal", { TERM: "dumb" }, true, 0],

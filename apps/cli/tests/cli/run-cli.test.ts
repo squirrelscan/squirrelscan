@@ -10,16 +10,36 @@ const entry = join(import.meta.dir, "../../src/cli.ts");
 const home = mkdtempSync(join(tmpdir(), "squirrel-run-cli-"));
 afterAll(() => rmSync(home, { recursive: true, force: true }));
 
+// A clean environment: nothing inherited that points at the real machine
+// (CLAUDE_CONFIG_DIR decides where setup looks for skills; an API key in the
+// env would make setup report "signed in").
+function cleanEnv(extra: Record<string, string> = {}): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (
+      v === undefined ||
+      /^(SQUIRREL|CLAUDE_CONFIG_DIR|FORCE_COLOR|NO_COLOR|COLORTERM)/.test(k)
+    )
+      continue;
+    env[k] = v;
+  }
+  return {
+    ...env,
+    HOME: home,
+    CLAUDE_CONFIG_DIR: join(home, ".claude"),
+    NO_COLOR: "1",
+    LANG: "en_US.UTF-8",
+    ...extra,
+  };
+}
+
 function squirrel(...args: string[]) {
-  const run = Bun.spawnSync(["bun", "run", entry, ...args], {
-    env: {
-      ...process.env,
-      HOME: home,
-      SQUIRREL_NO_UPDATE: "1",
-      NO_TELEMETRY: "1",
-      NO_COLOR: "1",
-      LANG: "en_US.UTF-8",
-    },
+  return squirrelWith({ SQUIRREL_NO_UPDATE: "1", NO_TELEMETRY: "1" }, ...args);
+}
+
+function squirrelWith(extra: Record<string, string>, ...args: string[]) {
+  const run = Bun.spawnSync([process.execPath, "run", entry, ...args], {
+    env: cleanEnv(extra),
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -57,6 +77,24 @@ describe("squirrel (#2367)", () => {
     const r = squirrel("audit");
     expect(r.code).toBe(1);
     expect(r.err).toContain("squirrel audit needs a URL.");
+  });
+
+  test("-c <path> before the command is the config file, not a command", () => {
+    const r = squirrel("-c", join(home, "missing.toml"), "self");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("Usage  squirrel self <command> [options]");
+  });
+
+  test("--version alongside another global flag still prints the version", () => {
+    const r = squirrel("--version", "--debug");
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  test("setup --dry-run skips the startup extras (no telemetry notice, no update check)", () => {
+    const r = squirrelWith({}, "setup", "--dry-run", "--yes");
+    expect(r.code).toBe(0);
+    expect(r.out + r.err).not.toContain("telemetry");
   });
 
   test("--version still prints the bare version", () => {

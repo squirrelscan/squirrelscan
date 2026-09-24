@@ -740,7 +740,7 @@ export const audit = defineCommand({
     "max-pages": {
       type: "string",
       alias: "m",
-      description: `Maximum pages to crawl (default: coverage mode — quick ${COVERAGE_QUICK_MAX_PAGES}, surface ${COVERAGE_SURFACE_MAX_PAGES}, full ${COVERAGE_FULL_MAX_PAGES}; cap ${MAX_PAGES_CAP})`,
+      description: `Maximum pages to crawl (default by coverage mode: quick ${COVERAGE_QUICK_MAX_PAGES}, surface ${COVERAGE_SURFACE_MAX_PAGES}, full ${COVERAGE_FULL_MAX_PAGES}; cap ${MAX_PAGES_CAP})`,
     },
     "max-depth": {
       type: "string",
@@ -877,7 +877,7 @@ export const audit = defineCommand({
     summary: {
       type: "boolean",
       description:
-        "Print only the score, category breakdown, and issue counts — no per-issue detail (console format only)",
+        "Print only the score, category breakdown, and issue counts, with no per-issue detail (console format only)",
     },
   },
   async run({ args }) {

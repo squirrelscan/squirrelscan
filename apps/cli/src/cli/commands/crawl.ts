@@ -47,7 +47,7 @@ export const crawl = defineCommand({
     "max-pages": {
       type: "string",
       alias: "m",
-      description: `Maximum pages to crawl (default: coverage mode — quick ${COVERAGE_QUICK_MAX_PAGES}, surface ${COVERAGE_SURFACE_MAX_PAGES}, full ${COVERAGE_FULL_MAX_PAGES}; cap ${MAX_PAGES_CAP})`,
+      description: `Maximum pages to crawl (default by coverage mode: quick ${COVERAGE_QUICK_MAX_PAGES}, surface ${COVERAGE_SURFACE_MAX_PAGES}, full ${COVERAGE_FULL_MAX_PAGES}; cap ${MAX_PAGES_CAP})`,
     },
     concurrency: {
       type: "string",

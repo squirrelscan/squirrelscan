@@ -32,6 +32,7 @@ How it works:
 ### Fixed
 
 - A mistyped command now says what you probably meant (`squirrel audti` suggests `squirrel audit`, `squirrel skills instal` suggests `squirrel skills install`) and exits 1 without a stack trace. A missing argument shows the command's usage and an example, and a command group run on its own (`squirrel self`) shows its help and exits 0.
+- `squirrel -c <path> <command>` works: the config path given before the command was read as the command name ("Unknown command").
 - `squirrel skills update` now updates the skills. It passed a repository to `npx skills update`, which reads its arguments as skill names, so it matched nothing installed and changed nothing. It now names the two skills and covers global and project installs, and an install recorded from `squirrelscan/squirrelscan` is re-added from squirrelscan/skills rather than updated from a repository that no longer carries it.
 
 ## v0.0.98 — 2026-09-23

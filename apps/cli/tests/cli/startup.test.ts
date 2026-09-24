@@ -32,6 +32,8 @@ describe("shouldRunBackgroundTasks (#170)", () => {
     ["--help", ["--help"]],
     ["-h", ["audit", "-h"]],
     // JSON-RPC on stdout: nothing may pollute the stream.
+    // setup --dry-run promises to change nothing.
+    ["setup --dry-run", ["setup", "--dry-run"]],
     ["mcp", ["mcp"]],
     // self install resets settings; self update IS the updater.
     ["self install", ["self", "install"]],

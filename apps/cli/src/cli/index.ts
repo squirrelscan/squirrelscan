@@ -91,7 +91,7 @@ export function run(): void {
   // Failure-safe: the extras must never break the user's command. The
   // rejection handler covers the LOAD only (a two-argument then, so a throw
   // inside runWithStartupExtras cannot run the command a second time); the
-  // command itself reports its own errors through runMain.
+  // command itself reports its own errors through runCli.
   void import("./startup").then(
     ({ runWithStartupExtras }) =>
       runWithStartupExtras(main, effectiveSettings, cliOptions),
@@ -125,6 +125,9 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
   // check for updates itself, and must not start another refresh.
   const isSkillsAutoRefresh =
     args[0] === "skills" && args[1] === "update" && args.includes("--auto");
+  // `setup --dry-run` promises to change nothing: no telemetry notice write,
+  // no install registration, no update check.
+  const isSetupDryRun = args[0] === "setup" && args.includes("--dry-run");
   const isSimpleCommand =
     args.length === 0 ||
     args.includes("--version") ||
@@ -134,6 +137,7 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
     isSelfInstallCommand ||
     isSelfDisk ||
     isSkillsAutoRefresh ||
+    isSetupDryRun ||
     args[0] === "mcp";
 
   return !isSimpleCommand && !args.includes("--offline");

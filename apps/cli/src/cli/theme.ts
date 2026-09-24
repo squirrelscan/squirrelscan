@@ -22,9 +22,8 @@ export function detectColorLevel(
     if (force === "0" || force === "false") return 0;
     if (force === "2") return 2;
     if (force === "3") return 3;
-    if (force === "1" || force === "" || force === "true") {
-      return /truecolor|24bit/i.test(env.COLORTERM ?? "") ? 3 : 2;
-    }
+    // supports-color convention: 1 (or bare/true) = 16 colours.
+    if (force === "1" || force === "" || force === "true") return 1;
   }
   if (!stream.isTTY || env.TERM === "dumb") return 0;
   if (/truecolor|24bit/i.test(env.COLORTERM ?? "") || env.WT_SESSION) return 3;
