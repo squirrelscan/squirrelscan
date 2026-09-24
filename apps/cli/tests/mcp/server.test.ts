@@ -37,6 +37,8 @@ const EXPECTED_TOOLS = [
   "get_entity_graph",
   "compare_entities",
   "get_entity_findings",
+  // #370: same channel as the hosted server; no auth, no credits.
+  "send_feedback",
 ] as const;
 
 function textOf(result: {

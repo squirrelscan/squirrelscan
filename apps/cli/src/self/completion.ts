@@ -252,8 +252,11 @@ _squirrel_completions() {
           COMPREPLY=( $(compgen -W "${feedbackCategoryValues}" -- "\${cur}") )
           return 0
           ;;
+        --message|-m|--email|--run-id|--website-id)
+          return 0
+          ;;
       esac
-      COMPREPLY=( $(compgen -W "--category --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--message -m --category --email --run-id --website-id --json --help" -- "\${cur}") )
       return 0
       ;;
     *)
@@ -515,7 +518,12 @@ _squirrel() {
           ;;
         feedback)
           _arguments \\
-            '--category[Feedback category]:category:(${feedbackCategoryValues})'
+            '(-m --message)'{-m,--message}'[Feedback text; sends without prompting]:text:' \\
+            '--category[Feedback category]:category:(${feedbackCategoryValues})' \\
+            '--email[Email the team can reply to]:email:' \\
+            '--run-id[Audit run the feedback is about]:run-id:' \\
+            '--website-id[Website the feedback is about]:website-id:' \\
+            '--json[Print the result as JSON]'
           ;;
         setup)
           _arguments \\
@@ -624,10 +632,17 @@ complete -c squirrel -n "__fish_seen_subcommand_from completion" -a "bash zsh fi
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update" -a install -d "Install squirrelscan skills for coding agents"
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update" -a update -d "Update squirrelscan skills for coding agents"
 
-# Feedback options
+# Setup options
 complete -c squirrel -n "__fish_seen_subcommand_from setup" -s y -l yes -d "Accept every default without asking"
 complete -c squirrel -n "__fish_seen_subcommand_from setup" -l dry-run -d "Show what setup would do without changing anything"
+
+# Feedback options
+complete -c squirrel -n "__fish_seen_subcommand_from feedback" -s m -l message -d "Feedback text; sends without prompting" -x
 complete -c squirrel -n "__fish_seen_subcommand_from feedback" -l category -d "Feedback category" -xa "${feedbackCategoryValues}"
+complete -c squirrel -n "__fish_seen_subcommand_from feedback" -l email -d "Email the team can reply to" -x
+complete -c squirrel -n "__fish_seen_subcommand_from feedback" -l run-id -d "Audit run the feedback is about" -x
+complete -c squirrel -n "__fish_seen_subcommand_from feedback" -l website-id -d "Website the feedback is about" -x
+complete -c squirrel -n "__fish_seen_subcommand_from feedback" -l json -d "Print the result as JSON"
 
 # Update options
 complete -c squirrel -n "__fish_seen_subcommand_from update" -l check -d "Only check for updates"

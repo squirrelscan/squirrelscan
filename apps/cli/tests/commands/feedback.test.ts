@@ -1,9 +1,10 @@
 // #1142: unit/integration tests for `squirrel feedback`, which had zero
 // coverage after #1119/#1132 added --category branching, the interactive
 // category picker, the cached-email flow, and the /v1/feedback payload.
+// #370 added the non-interactive paths (--message, piped stdin, --json).
 //
 // The command lives entirely inside a citty `run({ args })`, so we drive it
-// end-to-end (mirroring tests/commands/skills.test.ts) and stub its four seams:
+// end-to-end (mirroring tests/commands/skills.test.ts) and stub its five seams:
 //   - node:readline `createInterface` — spyOn the module namespace (cross-module
 //     live-binding propagation is proven to work in Bun for built-ins here), so
 //     `rl.question` replays a scripted answer queue instead of blocking on real
@@ -18,6 +19,9 @@
 //     network call happens; the request is captured for payload assertions.
 //   - process.exit — throws a ProcessExitSignal so control flow halts exactly
 //     where production would (a no-op mock would fall through past `exit(1)`).
+//   - @/cli/stdin stdinIsTTY/readStdinText — spyOn, so each test says whether
+//     a person is at the terminal and what was piped. The test runner's own
+//     stdin is never read.
 
 import {
   afterAll,
@@ -31,6 +35,7 @@ import {
 import * as readlineModule from "node:readline";
 
 import { feedback } from "@/cli/commands/feedback";
+import * as stdinModule from "@/cli/stdin";
 import { err, ok } from "@/controllers/types";
 import * as settingsModule from "@/self/settings";
 import { DEFAULT_SETTINGS } from "@/self/settings";
@@ -48,6 +53,12 @@ let installIdSetting: string | null = null;
 let settingsReadable = true;
 let loadThrows = false;
 let updatedPatches: Array<Partial<typeof DEFAULT_SETTINGS>> = [];
+let authEmailSetting: string | null = null;
+// A person at a terminal unless a test says otherwise: the interactive tests
+// below predate the piped path and assume one.
+let stdinTTY = true;
+let stdinText = "";
+let stdinReads = 0;
 
 interface CapturedFetch {
   url: string;
@@ -98,8 +109,28 @@ const loadUserSettingsSpy = spyOn(
     ...DEFAULT_SETTINGS,
     user_feedback_email: cachedEmailSetting,
     id: installIdSetting,
+    ...(authEmailSetting
+      ? {
+          auth: {
+            token: "session-token",
+            userId: "user_1",
+            email: authEmailSetting,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+          },
+        }
+      : {}),
   });
 });
+
+const stdinIsTTYSpy = spyOn(stdinModule, "stdinIsTTY").mockImplementation(
+  () => stdinTTY
+);
+const readStdinTextSpy = spyOn(stdinModule, "readStdinText").mockImplementation(
+  async () => {
+    stdinReads++;
+    return stdinText;
+  }
+);
 
 const updateSettingsSpy = spyOn(
   settingsModule,
@@ -113,11 +144,15 @@ afterAll(() => {
   createInterfaceSpy.mockRestore();
   loadUserSettingsSpy.mockRestore();
   updateSettingsSpy.mockRestore();
+  stdinIsTTYSpy.mockRestore();
+  readStdinTextSpy.mockRestore();
 });
 
 const originalFetch = globalThis.fetch;
 let logSpy: ReturnType<typeof spyOn<Console, "log">>;
 let errorSpy: ReturnType<typeof spyOn<Console, "error">>;
+let stderrWrites: string[] = [];
+let stderrSpy: { mockRestore: () => void };
 
 beforeEach(() => {
   rlAnswers = [];
@@ -127,6 +162,12 @@ beforeEach(() => {
   settingsReadable = true;
   loadThrows = false;
   updatedPatches = [];
+  authEmailSetting = null;
+  stdinTTY = true;
+  stdinText = "";
+  stdinReads = 0;
+  stderrWrites = [];
+  createInterfaceSpy.mockClear();
   lastFetch = null;
   fetchResponder = () =>
     new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -146,6 +187,12 @@ beforeEach(() => {
 
   logSpy = spyOn(console, "log").mockImplementation(() => {});
   errorSpy = spyOn(console, "error").mockImplementation(() => {});
+  stderrSpy = spyOn(process.stderr, "write").mockImplementation(((
+    chunk: string | Uint8Array
+  ) => {
+    stderrWrites.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write);
   spyOn(process, "exit").mockImplementation(((code?: number) => {
     throw new ProcessExitSignal(code);
   }) as typeof process.exit);
@@ -155,6 +202,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   logSpy.mockRestore();
   errorSpy.mockRestore();
+  stderrSpy.mockRestore();
   (process.exit as unknown as { mockRestore: () => void }).mockRestore();
 });
 
@@ -162,7 +210,7 @@ afterEach(() => {
 type FeedbackRunCtx = Parameters<NonNullable<typeof feedback.run>>[0];
 
 async function runFeedback(
-  args: { category?: string } = {}
+  args: Record<string, string | boolean | undefined> = {}
 ): Promise<ProcessExitSignal | null> {
   try {
     await feedback.run?.({
@@ -182,7 +230,19 @@ function loggedText(): string {
   return logSpy.mock.calls
     .map((c) => c.join(" "))
     .concat(errorSpy.mock.calls.map((c) => c.join(" ")))
+    .concat(stderrWrites)
     .join("\n");
+}
+
+function stderrText(): string {
+  return stderrWrites.join("");
+}
+
+/** The one JSON object --json printed on stdout. */
+function jsonOutput(): Record<string, unknown> {
+  const lines = logSpy.mock.calls.map((c) => c.join(" "));
+  expect(lines).toHaveLength(1);
+  return JSON.parse(lines[0]!) as Record<string, unknown>;
 }
 
 // ── Happy path + payload shape ───────────────────────────────────────────────
@@ -403,13 +463,10 @@ describe("squirrel feedback — failure handling", () => {
     const exit = await runFeedback();
 
     expect(exit?.code).toBe(1);
-    // The command's exit(1) throws our signal, which its own try/catch re-catches
-    // and re-exits, so a second "Error:" line also fires; assert the meaningful
-    // first console.error line here.
-    expect(errorSpy.mock.calls[0]!.join(" ")).toContain(
-      "Failed to submit feedback"
-    );
-    expect(errorSpy.mock.calls[0]!.join(" ")).toContain(FEEDBACK_FALLBACK_URL);
+    expect(stderrText()).toContain("Failed to submit feedback");
+    expect(stderrText()).toContain("HTTP 500");
+    expect(stderrText()).toContain(FEEDBACK_FALLBACK_URL);
+    expect(loggedText()).not.toContain("Thank you for your feedback!");
   });
 
   test("transport error (fetch rejects) is treated as failure, exits 1", async () => {
@@ -420,8 +477,8 @@ describe("squirrel feedback — failure handling", () => {
     const exit = await runFeedback();
 
     expect(exit?.code).toBe(1);
-    expect(errorSpy.mock.calls[0]!.join(" ")).toContain(
-      "Failed to submit feedback"
+    expect(stderrText()).toContain(
+      "Failed to submit feedback: couldn't reach the squirrelscan API."
     );
     expect(loggedText()).not.toContain("Thank you for your feedback!");
   });
@@ -433,10 +490,397 @@ describe("squirrel feedback — failure handling", () => {
     const exit = await runFeedback();
 
     expect(exit?.code).toBe(1);
-    expect(loggedText()).toContain("Error: settings blew up");
+    expect(loggedText()).toContain("Unexpected error: settings blew up");
     expect(loggedText()).toContain(FEEDBACK_FALLBACK_URL);
     // Never reached the network on a pre-submit throw.
     expect(lastFetch).toBeNull();
     expect(loggedText()).not.toContain("Failed to submit feedback");
+  });
+});
+
+// ── Non-interactive: --message (#370) ────────────────────────────────────────
+describe("squirrel feedback — --message", () => {
+  test("sends without a prompt and exits 0, even with no TTY", async () => {
+    stdinTTY = false;
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({
+      message: "  The sitemap rule misfires on gzip sitemaps  ",
+      category: "bug_report",
+    });
+
+    expect(exit).toBeNull();
+    // No readline interface, so no prompt, and stdin was never read.
+    expect(createInterfaceSpy).not.toHaveBeenCalled();
+    expect(stdinReads).toBe(0);
+    expect(lastFetch!.body).toMatchObject({
+      email: "agent@example.com",
+      feedback: "The sitemap rule misfires on gzip sitemaps",
+      category: "bug_report",
+      source: "cli",
+      client_version: CLI_VERSION,
+      metadata: { platform: process.platform, arch: process.arch },
+    });
+    expect(loggedText()).toContain("Thank you for your feedback!");
+  });
+
+  test("on a TTY too: --message never prompts", async () => {
+    stdinTTY = true;
+    cachedEmailSetting = "human@example.com";
+
+    const exit = await runFeedback({ message: "Quick note from a person" });
+
+    expect(exit).toBeNull();
+    expect(createInterfaceSpy).not.toHaveBeenCalled();
+    expect(lastFetch!.body!.feedback).toBe("Quick note from a person");
+    expect(lastFetch!.body).not.toHaveProperty("category");
+  });
+
+  test("--email wins over the cached email and is saved for next time", async () => {
+    cachedEmailSetting = "old@example.com";
+
+    await runFeedback({
+      message: "Email from the flag",
+      email: "new@example.com",
+    });
+
+    expect(lastFetch!.body!.email).toBe("new@example.com");
+    expect(updatedPatches).toEqual([
+      { user_feedback_email: "new@example.com" },
+    ]);
+  });
+
+  test("with no --email and no cached one, the signed-in account's email is used and not saved", async () => {
+    authEmailSetting = "account@example.com";
+
+    await runFeedback({ message: "Signed in, never typed an email" });
+
+    expect(lastFetch!.body!.email).toBe("account@example.com");
+    expect(updatedPatches).toHaveLength(0);
+  });
+
+  test("the cached email beats the account email", async () => {
+    cachedEmailSetting = "cached@example.com";
+    authEmailSetting = "account@example.com";
+
+    await runFeedback({ message: "Which email wins here" });
+
+    expect(lastFetch!.body!.email).toBe("cached@example.com");
+  });
+
+  test("no email anywhere: exits 1 naming --email, sends nothing", async () => {
+    const exit = await runFeedback({ message: "Nobody to reply to" });
+
+    expect(exit?.code).toBe(1);
+    expect(lastFetch).toBeNull();
+    expect(stderrText()).toContain("Pass --email <address>");
+    expect(stderrText()).toContain(FEEDBACK_FALLBACK_URL);
+  });
+
+  test("an invalid --email exits 1 without prompting", async () => {
+    const exit = await runFeedback({
+      message: "Bad address on the flag",
+      email: "not-an-email",
+    });
+
+    expect(exit?.code).toBe(1);
+    expect(lastFetch).toBeNull();
+    expect(createInterfaceSpy).not.toHaveBeenCalled();
+    expect(stderrText()).toContain(
+      '"not-an-email" is not a valid email address.'
+    );
+  });
+
+  test("an unknown --category exits 1 listing the valid ones (no picker to fall back to)", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({
+      message: "Some feedback",
+      category: "banana",
+    });
+
+    expect(exit?.code).toBe(1);
+    expect(lastFetch).toBeNull();
+    expect(stderrText()).toContain('Unknown category "banana"');
+    expect(stderrText()).toContain("bug_report, feature_request");
+  });
+
+  test("text under 5 characters after trimming exits 1", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ message: "  hi  " });
+
+    expect(exit?.code).toBe(1);
+    expect(lastFetch).toBeNull();
+    expect(stderrText()).toContain("at least 5 characters");
+  });
+
+  test("an empty --message exits 1 as missing text", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ message: "" });
+
+    expect(exit?.code).toBe(1);
+    expect(stderrText()).toContain("No feedback text.");
+  });
+
+  test("text over 5000 characters is cut, sent, and flagged", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ message: "x".repeat(6000), json: true });
+
+    expect(exit).toBeNull();
+    expect((lastFetch!.body!.feedback as string).length).toBe(5000);
+    expect(jsonOutput()).toEqual({ ok: true, category: null, truncated: true });
+  });
+});
+
+// ── Non-interactive: piped stdin (#370) ──────────────────────────────────────
+describe("squirrel feedback — piped stdin", () => {
+  test("no --message and no TTY: the piped text is sent, trimmed", async () => {
+    stdinTTY = false;
+    stdinText = "Piped from an agent\n";
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ category: "bug_report" });
+
+    expect(exit).toBeNull();
+    expect(stdinReads).toBe(1);
+    expect(createInterfaceSpy).not.toHaveBeenCalled();
+    expect(lastFetch!.body).toMatchObject({
+      feedback: "Piped from an agent",
+      category: "bug_report",
+    });
+  });
+
+  test("multi-line piped text keeps its lines", async () => {
+    stdinTTY = false;
+    stdinText = "Line one\nLine two\n";
+    cachedEmailSetting = "agent@example.com";
+
+    await runFeedback();
+
+    expect(lastFetch!.body!.feedback).toBe("Line one\nLine two");
+  });
+
+  test("--message wins over piped stdin, which is left unread", async () => {
+    stdinTTY = false;
+    stdinText = "This should be ignored";
+    cachedEmailSetting = "agent@example.com";
+
+    await runFeedback({ message: "The flag text" });
+
+    expect(stdinReads).toBe(0);
+    expect(lastFetch!.body!.feedback).toBe("The flag text");
+  });
+
+  test("empty stdin exits 1 naming both ways in", async () => {
+    stdinTTY = false;
+    stdinText = "";
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback();
+
+    expect(exit?.code).toBe(1);
+    expect(lastFetch).toBeNull();
+    expect(stderrText()).toContain("--message");
+    expect(stderrText()).toContain("pipe it on stdin");
+  });
+});
+
+// ── --json (#370) ────────────────────────────────────────────────────────────
+describe("squirrel feedback — --json", () => {
+  test("success prints exactly one JSON object and exits 0", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({
+      message: "JSON please",
+      category: "tool_ergonomics",
+      json: true,
+    });
+
+    expect(exit).toBeNull();
+    expect(jsonOutput()).toEqual({
+      ok: true,
+      category: "tool_ergonomics",
+      truncated: false,
+    });
+    expect(stderrText()).toBe("");
+  });
+
+  test("an API failure prints ok:false with the status and fallback URL, exits 1", async () => {
+    cachedEmailSetting = "agent@example.com";
+    fetchResponder = () => new Response("nope", { status: 503 });
+
+    const exit = await runFeedback({ message: "This will 503", json: true });
+
+    expect(exit?.code).toBe(1);
+    expect(jsonOutput()).toEqual({
+      ok: false,
+      code: "submit_failed",
+      error: "Failed to submit feedback: the API answered HTTP 503.",
+      status: 503,
+      fallback_url: FEEDBACK_FALLBACK_URL,
+    });
+    // No themed error block alongside the JSON.
+    expect(stderrText()).toBe("");
+  });
+
+  test("a 429 is reported as rate_limited", async () => {
+    cachedEmailSetting = "agent@example.com";
+    fetchResponder = () => new Response("slow down", { status: 429 });
+
+    const exit = await runFeedback({
+      message: "Too many of these",
+      json: true,
+    });
+
+    expect(exit?.code).toBe(1);
+    expect(jsonOutput()).toMatchObject({
+      ok: false,
+      code: "rate_limited",
+      status: 429,
+    });
+  });
+
+  test("an unreachable API is status 0", async () => {
+    cachedEmailSetting = "agent@example.com";
+    globalThis.fetch = (() =>
+      Promise.reject(new Error("network down"))) as unknown as typeof fetch;
+
+    const exit = await runFeedback({
+      message: "Offline right now",
+      json: true,
+    });
+
+    expect(exit?.code).toBe(1);
+    expect(jsonOutput()).toMatchObject({
+      ok: false,
+      code: "submit_failed",
+      status: 0,
+    });
+  });
+
+  test("validation failures are JSON too, with a code", async () => {
+    const exit = await runFeedback({ message: "No email known", json: true });
+
+    expect(exit?.code).toBe(1);
+    expect(jsonOutput()).toMatchObject({
+      ok: false,
+      code: "email_required",
+      fallback_url: FEEDBACK_FALLBACK_URL,
+    });
+    expect(stderrText()).toBe("");
+  });
+
+  test("an unexpected throw is still one JSON object", async () => {
+    loadThrows = true;
+
+    const exit = await runFeedback({
+      message: "Settings will throw",
+      json: true,
+    });
+
+    expect(exit?.code).toBe(1);
+    expect(jsonOutput()).toMatchObject({
+      ok: false,
+      code: "unexpected",
+      error: "Unexpected error: settings blew up",
+    });
+  });
+
+  test("on a TTY with no --message, --json refuses to prompt", async () => {
+    stdinTTY = true;
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ json: true });
+
+    expect(exit?.code).toBe(1);
+    expect(createInterfaceSpy).not.toHaveBeenCalled();
+    expect(lastFetch).toBeNull();
+    expect(jsonOutput()).toMatchObject({ ok: false, code: "message_required" });
+  });
+});
+
+// ── --run-id / --website-id (#370) ───────────────────────────────────────────
+describe("squirrel feedback — run and website ids", () => {
+  test("both ids travel in the payload metadata", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    await runFeedback({
+      message: "About a specific run",
+      "run-id": "run_abc123",
+      "website-id": "web_xyz789",
+    });
+
+    expect(lastFetch!.body!.metadata).toEqual({
+      platform: process.platform,
+      arch: process.arch,
+      run_id: "run_abc123",
+      website_id: "web_xyz789",
+    });
+  });
+
+  test("the interactive flow forwards them too", async () => {
+    rlAnswers = ["user@example.com", "Typed about a run", ""];
+
+    await runFeedback({ "run-id": "run_typed" });
+
+    expect(lastFetch!.body!.metadata).toMatchObject({ run_id: "run_typed" });
+  });
+
+  test("no ids: metadata carries neither key", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    await runFeedback({ message: "Not about any run" });
+
+    expect(lastFetch!.body!.metadata).not.toHaveProperty("run_id");
+    expect(lastFetch!.body!.metadata).not.toHaveProperty("website_id");
+  });
+
+  test("a blank or oversized id exits 1 before sending", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    const blank = await runFeedback({
+      message: "Blank run id",
+      "run-id": " ",
+      json: true,
+    });
+    expect(blank?.code).toBe(1);
+    expect(jsonOutput()).toMatchObject({ code: "invalid_run_id" });
+
+    logSpy.mockClear();
+    const long = await runFeedback({
+      message: "Huge website id",
+      "website-id": "w".repeat(129),
+      json: true,
+    });
+    expect(long?.code).toBe(1);
+    expect(jsonOutput()).toMatchObject({ code: "invalid_website_id" });
+    expect(lastFetch).toBeNull();
+  });
+});
+
+// ── Interactive flow stays for people (#370) ────────────────────────────────
+describe("squirrel feedback — interactive on a TTY", () => {
+  test("no --message on a TTY prompts and never reads stdin", async () => {
+    stdinTTY = true;
+    rlAnswers = ["user@example.com", "Typed by a person", ""];
+
+    const exit = await runFeedback();
+
+    expect(exit).toBeNull();
+    expect(createInterfaceSpy).toHaveBeenCalled();
+    expect(stdinReads).toBe(0);
+    expect(lastFetch!.body!.feedback).toBe("Typed by a person");
+  });
+
+  test("a valid --email skips only the email prompt", async () => {
+    rlAnswers = ["Feedback after a flag email", ""];
+
+    await runFeedback({ email: "flag@example.com" });
+
+    expect(lastFetch!.body!.email).toBe("flag@example.com");
+    expect(lastFetch!.body!.feedback).toBe("Feedback after a flag email");
   });
 });
