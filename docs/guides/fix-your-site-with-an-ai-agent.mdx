@@ -34,7 +34,7 @@ Then install the squirrelscan skills so your agent knows the audit workflow with
 squirrel skills install
 ```
 
-This adds all the squirrelscan skills, currently `squirrelscan` (operate the CLI: login, publish reports, MCP, credits) and `audit-website` (the audit-and-fix loop). It runs `npx skills add` under the hood. See [`squirrel skills`](/cli/skills) and the [Coding agent integration](/developers/agents) guide for what the skills do.
+This adds all the squirrelscan skills, currently `squirrelscan` (operate the CLI: login, publish reports, MCP, credits) and `audit-website` (the audit-and-fix loop). squirrel downloads and verifies them itself, and its auto-update keeps them current. See [`squirrel skills`](/cli/skills) and the [Coding agent integration](/developers/agents) guide for what the skills do.
 
 <Tip>
 The MCP server and the skills complement each other. The MCP server is how the agent runs cloud audits and reaches the shared issue tracker. The skill is the procedure it follows. Install both.

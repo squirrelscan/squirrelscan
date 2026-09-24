@@ -64,7 +64,7 @@ _squirrel_completions() {
   local settings_commands="show set"
 
   # Settings keys
-  local settings_keys="channel auto_update update_check_interval_hours notifications telemetry tips"
+  local settings_keys="channel auto_update skills_auto_update update_check_interval_hours notifications telemetry tips"
 
   case "\${COMP_WORDS[1]}" in
     self)
@@ -131,10 +131,29 @@ _squirrel_completions() {
     skills)
       case "\${prev}" in
         skills)
-          COMPREPLY=( $(compgen -W "install update" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "install update status uninstall" -- "\${cur}") )
+          return 0
+          ;;
+        --agent)
+          COMPREPLY=( $(compgen -W "claude agents all" -- "\${cur}") )
           return 0
           ;;
       esac
+      case "\${COMP_WORDS[2]}" in
+        install)
+          COMPREPLY=( $(compgen -W "squirrelscan audit-website --agent --project --dry-run" -- "\${cur}") )
+          ;;
+        update)
+          COMPREPLY=( $(compgen -W "squirrelscan audit-website --check --force --dry-run --json" -- "\${cur}") )
+          ;;
+        status)
+          COMPREPLY=( $(compgen -W "--json" -- "\${cur}") )
+          ;;
+        uninstall)
+          COMPREPLY=( $(compgen -W "squirrelscan audit-website --agent --project" -- "\${cur}") )
+          ;;
+      esac
+      return 0
       ;;
     auth)
       case "\${prev}" in
@@ -341,7 +360,9 @@ _squirrel() {
 
   skills_commands=(
     'install:Install squirrelscan skills for coding agents'
-    'update:Update squirrelscan skills for coding agents'
+    'update:Update the installed squirrelscan skills'
+    'status:Show installed skill versions and locations'
+    'uninstall:Remove the skills squirrelscan installed'
   )
 
   _arguments -C \\
@@ -378,7 +399,7 @@ _squirrel() {
                   ;;
                 set)
                   _arguments \\
-                    '1:key:(channel auto_update update_check_interval_hours notifications telemetry tips)' \\
+                    '1:key:(channel auto_update skills_auto_update update_check_interval_hours notifications telemetry tips)' \\
                     '2:value:' \\
                     '--local[Set in local project settings]' \\
                     '--user[Set in user settings]'
@@ -406,7 +427,35 @@ _squirrel() {
           _describe 'config command' config_commands
           ;;
         skills)
-          _describe 'skills command' skills_commands
+          case $words[2] in
+            install)
+              _arguments \\
+                '*--agent[Agent to install for]:agent:(claude agents all)' \\
+                '--project[Install into this repo]' \\
+                '--dry-run[Show what would change]' \\
+                '*:skill:(squirrelscan audit-website)'
+              ;;
+            update)
+              _arguments \\
+                '--check[Only report; exit 1 when an update is available]' \\
+                '--force[Also replace locally edited files]' \\
+                '--dry-run[Show what would change]' \\
+                '--json[Output JSON]' \\
+                '*:skill:(squirrelscan audit-website)'
+              ;;
+            status)
+              _arguments '--json[Output JSON]'
+              ;;
+            uninstall)
+              _arguments \\
+                '*--agent[Agent to remove from]:agent:(claude agents all)' \\
+                '--project[Remove from this repo]' \\
+                '*:skill:(squirrelscan audit-website)'
+              ;;
+            *)
+              _describe 'skills command' skills_commands
+              ;;
+          esac
           ;;
         auth)
           case $words[2] in
@@ -629,8 +678,16 @@ complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_s
 complete -c squirrel -n "__fish_seen_subcommand_from completion" -a "bash zsh fish" -d "Shell type"
 
 # Skills subcommands
-complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update" -a install -d "Install squirrelscan skills for coding agents"
-complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update" -a update -d "Update squirrelscan skills for coding agents"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a install -d "Install squirrelscan skills for coding agents"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a update -d "Update the installed squirrelscan skills"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a status -d "Show installed skill versions and locations"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a uninstall -d "Remove the skills squirrelscan installed"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from install uninstall" -l agent -d "Agent: claude, agents or all" -xa "claude agents all"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from install uninstall" -l project -d "This repo's .claude/skills and .agents/skills"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from install update" -l dry-run -d "Show what would change, write nothing"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from update" -l check -d "Only report; exit 1 when an update is available"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from update" -l force -d "Also replace locally edited files (backed up first)"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from update status" -l json -d "Output JSON"
 
 # Setup options
 complete -c squirrel -n "__fish_seen_subcommand_from setup" -s y -l yes -d "Accept every default without asking"
@@ -661,7 +718,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_s
 complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_subcommand_from show" -l user -d "Show only user settings"
 
 # Settings set options
-complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_subcommand_from set" -a "channel auto_update update_check_interval_hours notifications telemetry tips" -d "Setting key"
+complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_subcommand_from set" -a "channel auto_update skills_auto_update update_check_interval_hours notifications telemetry tips" -d "Setting key"
 complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_subcommand_from set" -l local -d "Set in local project settings"
 complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_subcommand_from set" -l user -d "Set in user settings"
 

@@ -407,12 +407,17 @@ function checkUpdateStatus(): DoctorCheck {
 
   const interval =
     settings.update_check_interval_hours ?? DEFAULT_UPDATE_CHECK_INTERVAL_HOURS;
+  // The agent skills follow auto_update unless opted out on their own.
+  const note =
+    settings.skills_auto_update === false
+      ? `${pendingNote} — agent skills excluded (skills_auto_update is off)`
+      : pendingNote;
 
   if (!settings.last_update_check) {
     return {
       name,
       status: "pass",
-      message: `Enabled (every ${interval}h, not checked yet)${pendingNote}`,
+      message: `Enabled (every ${interval}h, not checked yet)${note}`,
     };
   }
 
@@ -421,7 +426,7 @@ function checkUpdateStatus(): DoctorCheck {
     return {
       name,
       status: "warn",
-      message: `Invalid last-check timestamp — will re-check${pendingNote}`,
+      message: `Invalid last-check timestamp — will re-check${note}`,
     };
   }
 
@@ -433,7 +438,7 @@ function checkUpdateStatus(): DoctorCheck {
     return {
       name,
       status: "warn",
-      message: `Last checked ${formatHoursAgo(hoursAgo)} ago — stale${pendingNote}`,
+      message: `Last checked ${formatHoursAgo(hoursAgo)} ago — stale${note}`,
       fix: "Verify update access: squirrel self update --check",
     };
   }
@@ -441,7 +446,7 @@ function checkUpdateStatus(): DoctorCheck {
   return {
     name,
     status: "pass",
-    message: `Last checked ${formatHoursAgo(hoursAgo)} ago, every ${interval}h${pendingNote}`,
+    message: `Last checked ${formatHoursAgo(hoursAgo)} ago, every ${interval}h${note}`,
   };
 }
 

@@ -13,7 +13,7 @@ squirrel setup
 
 1. **Sign in** (optional). Opens your browser to sign in to squirrelscan, which unlocks cloud audits, publishing and sharing. Local audits are free and never need an account, so you can skip this step. If you are already signed in, setup says who as and moves on.
 2. **Agent skills.** Installs the `squirrelscan` and `audit-website` skills into `~/.claude/skills` and `~/.agents/skills` so Claude Code, Codex, Cursor and other agents know how to run audits and fix what they find. The default answer is yes. If the skills are already there, setup says so and moves on.
-3. **Updates.** Keeps squirrel and its skills up to date automatically. If auto-update is already on, there is nothing to ask. If you turned it off, setup only asks, and never switches it back on by itself. A copy of squirrel not installed by the squirrelscan installer (npm, a package manager, a dev build) cannot update itself, and setup tells you how to update it instead.
+3. **Updates.** Keeps squirrel and its skills up to date automatically. If auto-update is already on, there is nothing to ask. If you turned it off, setup only asks, and never switches it back on by itself. The skills follow auto-update unless you set `skills_auto_update` to `false`, in which case setup says they are left out. A copy of squirrel not installed by the squirrelscan installer (npm, a package manager, a dev build) cannot update itself, and setup tells you how to update it instead.
 
 Setup is safe to run again at any time: every step reports what is already done instead of repeating it.
 
