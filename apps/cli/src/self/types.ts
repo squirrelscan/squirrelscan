@@ -63,6 +63,11 @@ export const UserSettingsSchema = z.object({
     error: "channel must be 'stable' or 'beta'",
   }),
   auto_update: z.boolean({ error: "auto_update must be true or false" }),
+  // The installed agent skills update along with the CLI (#2357). Only takes
+  // effect while auto_update is on; false opts the skills alone out.
+  skills_auto_update: z
+    .boolean({ error: "skills_auto_update must be true or false" })
+    .optional(),
   notifications: z.boolean({ error: "notifications must be true or false" }),
   telemetry: z.boolean({ error: "telemetry must be true or false" }),
   // Random tip shown under the audit preamble (stderr, interactive console
@@ -194,6 +199,7 @@ export type ReleaseChannel = UserSettings["channel"];
 export const WRITABLE_SETTINGS = [
   "channel",
   "auto_update",
+  "skills_auto_update",
   "update_check_interval_hours",
   "notifications",
   "telemetry",

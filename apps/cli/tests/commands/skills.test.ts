@@ -1,277 +1,491 @@
-// #783: unit tests for `squirrel skills install/update`. Mocks node:child_process
-// so no real npx/network call happens; asserts the constructed npx args (`skills
-// add <repo> -g` from squirrelscan/skills; `skills update <names>`, after
-// re-adding any install recorded from squirrelscan/squirrelscan) and the
-// manual-instructions fallback for both the npx-missing and spawn-failure paths.
-// The skills lock is read from a scratch XDG_STATE_HOME; run with HOME=<scratch>.
+// #2357: `squirrel skills [status|install|update|uninstall]`, the command layer
+// over the native manager, against the interface approved in the issue.
+// Scratch home, stubbed fetch: no real ~/.agents, ~/.claude or ~/.squirrel, no
+// network, and no npx anywhere.
 
-import type { ArgsDef, CommandContext } from "citty";
-
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
-import * as realChildProcess from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
-interface SpawnCall {
-  cmd: string;
-  args: string[];
+import type { SkillsEnv } from "@/self/agent-skills";
+
+import { installAgentSkills } from "@/cli/commands/setup";
+import {
+  parseSkillsArgs,
+  printSkillsStatus,
+  runSkillsSync,
+  runSkillsRoot,
+  runSkillsUninstall,
+  skills,
+} from "@/cli/commands/skills";
+import { createTheme } from "@/cli/theme";
+import { installedSkillRoots } from "@/self/agent-skills";
+import { sha256Hex } from "@/self/skills-manifest";
+
+// Plain output with Unicode glyphs, whatever the terminal running the tests.
+const theme = createTheme(
+  { isTTY: false },
+  { LANG: "en_US.UTF-8", TERM_PROGRAM: "test" }
+);
+
+const SHA = "b".repeat(40);
+const enc = (s: string) => new TextEncoder().encode(s);
+const skillMd = (name: string, v: string) =>
+  `---\nname: ${name}\ndescription: d\nmetadata:\n  author: squirrelscan\n  version: "${v}"\n---\nbody\n`;
+
+function remote(
+  options: {
+    offline?: boolean;
+    tamper?: boolean;
+    versions?: Record<string, string>;
+  } = {}
+) {
+  const versions = options.versions ?? {
+    squirrelscan: "1.4.1",
+    "audit-website": "2.1",
+  };
+  const files: Record<string, Record<string, string>> = Object.fromEntries(
+    Object.entries(versions).map(([name, v]) => [
+      name,
+      { "SKILL.md": skillMd(name, v) },
+    ])
+  );
+  const requests: string[] = [];
+  const fetchStub = (async (input: string | URL) => {
+    const url = String(input);
+    requests.push(url);
+    if (options.offline) throw new TypeError("getaddrinfo ENOTFOUND");
+    if (url.includes("/info/refs")) {
+      return new Response(`003f${SHA} refs/heads/main\n`);
+    }
+    const raw = `https://raw.githubusercontent.com/squirrelscan/skills/${SHA}/`;
+    if (url === `${raw}manifest.json`) {
+      return Response.json({
+        schema: 1,
+        repository: "squirrelscan/skills",
+        skills: Object.entries(files).map(([name, f]) => ({
+          name,
+          version: versions[name],
+          files: Object.entries(f).map(([path, c]) => ({
+            path,
+            sha256: sha256Hex(enc(c)),
+            size: enc(c).byteLength,
+          })),
+        })),
+      });
+    }
+    const [skill, ...rest] = url.slice(`${raw}skills/`.length).split("/");
+    const content = files[skill!]?.[rest.join("/")];
+    if (content === undefined) return new Response("", { status: 404 });
+    return new Response(options.tamper ? enc(`${content}!`) : enc(content));
+  }) as unknown as typeof fetch;
+  return { fetch: fetchStub, requests };
 }
 
-let calls: SpawnCall[] = [];
-let npxVersionResult: { error?: Error; status: number | null } = { status: 0 };
-let skillsCommandResult: { error?: Error; status: number | null } = {
-  status: 0,
-};
-
-// Process-wide for the whole `bun test` run (Bun doesn't scope mock.module
-// per file) — spread the real module's other exports (spawn, exec, etc.) so
-// files that import them (e.g. updater.ts/login.ts, transitively) don't hit
-// a missing-export SyntaxError when run in the same process as this file.
-// Only spawnSync is faked.
-mock.module("node:child_process", () => ({
-  ...realChildProcess,
-  spawnSync: (cmd: string, args: string[]) => {
-    calls.push({ cmd, args });
-    return args[0] === "--version" ? npxVersionResult : skillsCommandResult;
-  },
-}));
-
-const { skillsInstall, skillsUpdate } = await import("@/cli/commands/skills");
-
-const SKILL_REPO = "squirrelscan/skills";
-// Pinned to the major the argv was checked against.
-const SKILLS = "skills@1";
-// `npx skills update` reads positionals as skill names, so a repo there matched
-// nothing and the update was a silent no-op.
-const UPDATE_CMD = "npx skills@1 update squirrelscan -y";
-
-// process.exit is typed `never` — a plain no-op mock would let execution fall
-// through the (unreachable-per-types, but not per a mocked runtime) code after
-// each call, since skills.ts relies on real process.exit to halt. Throw
-// instead, matching real "never returns" semantics, so control flow stops
-// exactly where it would in production.
 class ProcessExitSignal extends Error {
   constructor(public code: number | undefined) {
     super(`process.exit(${code})`);
   }
 }
 
-async function runAndCaptureExit(
-  // oxlint-disable-next-line typescript/no-explicit-any -- both commands' contexts
-  run: ((context: CommandContext<any>) => unknown) | undefined,
-  args: Record<string, unknown> = {}
-): Promise<ProcessExitSignal | null> {
+async function captureExit(
+  run: () => Promise<unknown>
+): Promise<number | null> {
   try {
-    await run?.({ args } as unknown as CommandContext<ArgsDef>);
+    await run();
     return null;
-  } catch (e) {
-    if (e instanceof ProcessExitSignal) return e;
-    throw e;
+  } catch (error) {
+    if (error instanceof ProcessExitSignal) return error.code ?? 0;
+    throw error;
   }
 }
 
-describe("squirrel skills install/update", () => {
+describe("squirrel skills", () => {
+  let root: string;
+  let e: SkillsEnv;
   let logSpy: ReturnType<typeof spyOn<Console, "log">>;
   let errorSpy: ReturnType<typeof spyOn<Console, "error">>;
-
-  let stateDir: string;
-  let savedXdg: string | undefined;
-  let savedNoUpdate: string | undefined;
-
-  // Where the skills CLI keeps its global lock, when XDG_STATE_HOME is set.
-  const globalLock = (skills: Record<string, unknown>) => {
-    mkdirSync(join(stateDir, "skills"), { recursive: true });
-    writeFileSync(
-      join(stateDir, "skills", ".skill-lock.json"),
-      JSON.stringify({ version: 3, skills })
-    );
-  };
+  let stderr: string[];
 
   beforeEach(() => {
-    stateDir = mkdtempSync(join(tmpdir(), "skills-cmd-"));
-    savedXdg = process.env.XDG_STATE_HOME;
-    savedNoUpdate = process.env.SQUIRREL_NO_UPDATE;
-    process.env.XDG_STATE_HOME = stateDir;
-    // The project lock is read from the working directory: never the real one.
-    spyOn(process, "cwd").mockReturnValue(stateDir);
-    calls = [];
-    npxVersionResult = { status: 0 };
-    skillsCommandResult = { status: 0 };
+    root = mkdtempSync(join(tmpdir(), "skills-cmd-"));
+    e = {
+      home: join(root, "home"),
+      cwd: join(root, "repo"),
+      env: {},
+      dataDir: join(root, "home", ".squirrel"),
+    };
+    mkdirSync(e.home, { recursive: true });
+    mkdirSync(e.cwd, { recursive: true });
     logSpy = spyOn(console, "log").mockImplementation(() => {});
     errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    stderr = [];
+    spyOn(process.stderr, "write").mockImplementation(((chunk: string) => {
+      stderr.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write);
     spyOn(process, "exit").mockImplementation(((code?: number) => {
       throw new ProcessExitSignal(code);
     }) as typeof process.exit);
   });
 
   afterEach(() => {
-    rmSync(stateDir, { recursive: true, force: true });
-    if (savedXdg === undefined) delete process.env.XDG_STATE_HOME;
-    else process.env.XDG_STATE_HOME = savedXdg;
-    if (savedNoUpdate === undefined) delete process.env.SQUIRREL_NO_UPDATE;
-    else process.env.SQUIRREL_NO_UPDATE = savedNoUpdate;
+    rmSync(root, { recursive: true, force: true });
     logSpy.mockRestore();
     errorSpy.mockRestore();
     (process.exit as unknown as { mockRestore: () => void }).mockRestore();
-    (process.cwd as unknown as { mockRestore: () => void }).mockRestore();
+    (
+      process.stderr.write as unknown as { mockRestore: () => void }
+    ).mockRestore();
   });
 
-  // Defense-in-depth, not a full guarantee: Bun's mock.module patches the
-  // process-wide module registry, and restoring here doesn't reliably
-  // re-establish identity for files ALREADY loaded before this one — but it
-  // stops a spawnSync-touching test added later (in file execution order)
-  // from silently hitting this suite's stale stub state instead of erroring.
-  afterAll(() => {
-    mock.module("node:child_process", () => realChildProcess);
-  });
+  const output = () =>
+    [
+      ...[...logSpy.mock.calls, ...errorSpy.mock.calls].map((c) => c.join(" ")),
+      ...stderr,
+    ].join("\n");
 
-  function loggedText(): string {
-    return logSpy.mock.calls
-      .map((call) => call.join(" "))
-      .concat(errorSpy.mock.calls.map((call) => call.join(" ")))
-      .join("\n");
-  }
-
-  test("install: constructs `npx skills add <repo> -g`, no --skill flag", async () => {
-    const exit = await runAndCaptureExit(skillsInstall.run);
-    expect(exit).toBeNull();
-
-    const skillsCall = calls.find((c) => c.args[0] === SKILLS);
-    expect(skillsCall).toBeDefined();
-    expect(skillsCall?.cmd).toBe("npx");
-    expect(skillsCall?.args).toEqual([SKILLS, "add", SKILL_REPO, "-g"]);
-    expect(skillsCall?.args).not.toContain("--skill");
-    expect(loggedText()).toContain("Skills installed!");
-  });
-
-  test("install: links the canonical repo's skills.sh page", async () => {
-    await runAndCaptureExit(skillsInstall.run);
-
-    expect(loggedText()).toContain(
-      "View skills: https://skills.sh/squirrelscan/skills"
-    );
-  });
-
-  test("update: constructs `npx skills update <names>`, never a repo", async () => {
-    globalLock({ squirrelscan: { source: "squirrelscan/skills" } });
-
-    const exit = await runAndCaptureExit(skillsUpdate.run);
-    expect(exit).toBeNull();
-
-    // No scope flag: global and project installs both update.
-    expect(
-      calls.filter((c) => c.args[0] === SKILLS).map((c) => c.args)
-    ).toEqual([[SKILLS, "update", "squirrelscan", "-y"]]);
-    expect(loggedText()).toContain("Skills updated!");
-  });
-
-  test("update: nothing installed -> says so and points at install, never runs npx", async () => {
-    const exit = await runAndCaptureExit(skillsUpdate.run);
-
-    expect(exit).toBeNull();
-    expect(calls).toEqual([]);
-    expect(loggedText()).toContain("squirrel skills install");
-    expect(loggedText()).not.toContain("Skills updated!");
-  });
-
-  test("update: an install recorded from squirrelscan/squirrelscan is re-added from squirrelscan/skills first", async () => {
-    globalLock({
-      squirrelscan: { source: "squirrelscan/squirrelscan" },
-      "audit-website": { source: "squirrelscan/skills" },
-    });
-
-    const exit = await runAndCaptureExit(skillsUpdate.run);
-    expect(exit).toBeNull();
-
-    expect(
-      calls.filter((c) => c.args[0] === SKILLS).map((c) => c.args)
-    ).toEqual([
-      [SKILLS, "add", SKILL_REPO, "--skill", "squirrelscan", "-g", "-y"],
-      [SKILLS, "update", "audit-website", "-y"],
+  test("has install, update, status and uninstall, and nothing runs npx", () => {
+    expect(Object.keys(skills.subCommands ?? {})).toEqual([
+      "install",
+      "update",
+      "status",
+      "uninstall",
     ]);
-    expect(loggedText()).toContain(
-      "Moving squirrelscan from squirrelscan/squirrelscan to squirrelscan/skills"
+    const src = (file: string) =>
+      readFileSync(join(import.meta.dir, "../../src", file), "utf8");
+    // The command and the fetcher spawn nothing; the manager spawns only
+    // itself (the detached `skills update --auto` child), never npx.
+    expect(src("cli/commands/skills.ts")).not.toMatch(/child_process/);
+    expect(src("self/skills-manifest.ts")).not.toMatch(/child_process/);
+    expect(src("self/agent-skills.ts")).not.toMatch(/["']npx["']/);
+  });
+
+  test("argument parsing: skills, repeatable --agent, --agent all, and unknown flags refused", () => {
+    const parsed = parseSkillsArgs(
+      ["audit-website", "--agent", "claude", "--agent=agents", "--dry-run"],
+      ["--agent", "--dry-run"]
     );
-    expect(loggedText()).not.toContain("Tip:");
+    expect(parsed.skills).toEqual(["audit-website"]);
+    expect(parsed.agents).toEqual(["claude", "agents"]);
+    expect(parsed.flags.has("--dry-run")).toBe(true);
+    expect(parseSkillsArgs(["--agent", "all"], ["--agent"]).agents).toEqual([
+      "claude",
+      "agents",
+    ]);
+    expect(() => parseSkillsArgs(["--dryrun"], ["--dry-run"])).toThrow(
+      /unknown option --dryrun/
+    );
+    expect(() => parseSkillsArgs(["--agent", "cursor"], ["--agent"])).toThrow(
+      /unknown agent cursor/
+    );
+    expect(() => parseSkillsArgs(["--force=false"], ["--force"])).toThrow(
+      /--force takes no value/
+    );
   });
 
-  test("update --auto: silent, and never spawns when auto-update is suppressed", async () => {
-    globalLock({ squirrelscan: { source: "squirrelscan/squirrelscan" } });
-    process.env.SQUIRREL_NO_UPDATE = "1";
-
-    const exit = await runAndCaptureExit(skillsUpdate.run, { auto: true });
-
-    expect(exit).toBeNull();
-    expect(calls).toEqual([]);
-    expect(loggedText()).toBe("");
+  test("a mistyped flag stops the command before it writes anything", async () => {
+    const net = remote();
+    const exit = await captureExit(() =>
+      runSkillsSync("install", ["--dryrun"], { e, theme, fetch: net.fetch })
+    );
+    expect(exit).toBe(1);
+    expect(net.requests).toEqual([]);
+    expect(existsSync(join(e.home, ".agents"))).toBe(false);
   });
 
-  test("install: npx missing -> manual instructions, exit(0), never calls `skills add`", async () => {
-    npxVersionResult = { error: new Error("ENOENT"), status: null };
-
-    const exit = await runAndCaptureExit(skillsInstall.run);
-
-    expect(exit?.code).toBe(0);
-    expect(calls.some((c) => c.args[0] === SKILLS)).toBe(false);
-    expect(loggedText()).toContain(`npx skills@1 add ${SKILL_REPO} -g`);
+  test("install writes both skills into both folders and says so", async () => {
+    expect(
+      await captureExit(() =>
+        runSkillsSync("install", [], { e, theme, fetch: remote().fetch })
+      )
+    ).toBeNull();
+    for (const dir of [".agents", ".claude"]) {
+      expect(
+        existsSync(join(e.home, dir, "skills", "squirrelscan", "SKILL.md"))
+      ).toBe(true);
+    }
+    expect(output()).toMatch(
+      /✓ squirrelscan 1\.4\.1 +→ ~.\.claude.skills, ~.\.agents.skills/
+    );
+    expect(output()).toContain("Restart your agent to load them.");
   });
 
-  test("update: npx missing -> manual instructions with `update`, exit(0), never calls `skills update`", async () => {
-    globalLock({ squirrelscan: { source: "squirrelscan/skills" } });
-    npxVersionResult = { error: new Error("ENOENT"), status: null };
-
-    const exit = await runAndCaptureExit(skillsUpdate.run);
-
-    expect(exit?.code).toBe(0);
-    expect(calls.some((c) => c.args[0] === SKILLS)).toBe(false);
-    expect(loggedText()).toContain(UPDATE_CMD);
+  test("install --project --agent claude --dry-run writes nothing", async () => {
+    await runSkillsSync(
+      "install",
+      ["audit-website", "--project", "--agent", "claude", "--dry-run"],
+      {
+        e,
+        theme,
+        fetch: remote().fetch,
+      }
+    );
+    expect(output()).toContain("Dry run: nothing was written.");
+    expect(output()).toContain("~ would install audit-website 2.1");
+    expect(existsSync(join(e.cwd, ".claude"))).toBe(false);
   });
 
-  test("install: `skills add` spawn fails -> manual instructions fallback, exit(1)", async () => {
-    skillsCommandResult = { status: 1 };
-
-    const exit = await runAndCaptureExit(skillsInstall.run);
-
-    expect(exit?.code).toBe(1);
-    expect(loggedText()).toContain("Failed to install skills");
-    expect(loggedText()).toContain(`npx skills@1 add ${SKILL_REPO} -g`);
+  test("a bad download fails the command and changes nothing", async () => {
+    const exit = await captureExit(() =>
+      runSkillsSync("install", [], {
+        e,
+        theme,
+        fetch: remote({ tamper: true }).fetch,
+      })
+    );
+    expect(exit).toBe(1);
+    expect(existsSync(join(e.home, ".agents", "skills", "squirrelscan"))).toBe(
+      false
+    );
+    expect(output()).toContain("Nothing was changed");
   });
 
-  test("update: `skills update` spawn fails -> manual instructions fallback, exit(1)", async () => {
-    globalLock({ squirrelscan: { source: "squirrelscan/skills" } });
-    skillsCommandResult = { error: new Error("boom"), status: null };
-
-    const exit = await runAndCaptureExit(skillsUpdate.run);
-
-    expect(exit?.code).toBe(1);
-    expect(loggedText()).toContain("Failed to update skills");
-    expect(loggedText()).toContain(UPDATE_CMD);
+  test("update with nothing installed says so and touches no network", async () => {
+    const net = remote();
+    expect(
+      await captureExit(() =>
+        runSkillsSync("update", [], { e, theme, fetch: net.fetch })
+      )
+    ).toBeNull();
+    expect(net.requests).toEqual([]);
+    expect(output()).toContain("squirrel skills install");
   });
 
-  test("update: a failed migration stops before the update and prints both commands", async () => {
-    globalLock({
-      squirrelscan: { source: "squirrelscan/squirrelscan" },
-      "audit-website": { source: "squirrelscan/skills" },
+  test("update --check reports and exits 1 only when an update is available", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    logSpy.mockClear();
+    expect(
+      await captureExit(() =>
+        runSkillsSync("update", ["--check"], {
+          e,
+          theme,
+          fetch: remote().fetch,
+        })
+      )
+    ).toBeNull();
+    expect(output()).toContain("Skills are current.");
+
+    const newer = remote({
+      versions: { squirrelscan: "1.5", "audit-website": "2.1" },
     });
-    skillsCommandResult = { status: 1 };
+    expect(
+      await captureExit(() =>
+        runSkillsSync("update", ["--check"], { e, theme, fetch: newer.fetch })
+      )
+    ).toBe(1);
+    expect(output()).toContain("↑ squirrelscan 1.4.1 → 1.5");
+    // --check never writes.
+    expect(
+      readFileSync(
+        join(e.home, ".agents", "skills", "squirrelscan", "SKILL.md"),
+        "utf8"
+      )
+    ).toContain('"1.4.1"');
+  });
 
-    const exit = await runAndCaptureExit(skillsUpdate.run);
+  test("update --check exits 2, never 1, when the check itself fails", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    expect(
+      await captureExit(() =>
+        runSkillsSync("update", ["--check"], {
+          e,
+          theme,
+          fetch: remote({ offline: true }).fetch,
+        })
+      )
+    ).toBe(2);
+    expect(
+      await captureExit(() =>
+        runSkillsSync("update", ["--check", "--frce"], {
+          e,
+          theme,
+          fetch: remote().fetch,
+        })
+      )
+    ).toBe(2);
 
-    expect(exit?.code).toBe(1);
-    expect(calls.filter((c) => c.args[0] === SKILLS)).toHaveLength(1);
-    expect(loggedText()).toContain(
-      "npx skills@1 add squirrelscan/skills --skill squirrelscan -g -y"
+    // A target that can't be written is reported, not called current.
+    const skill = join(e.home, ".agents", "skills", "squirrelscan");
+    rmSync(join(skill, "SKILL.md"));
+    mkdirSync(join(skill, "SKILL.md"));
+    logSpy.mockClear();
+    expect(
+      await captureExit(() =>
+        runSkillsSync("update", ["--check"], {
+          e,
+          theme,
+          fetch: remote().fetch,
+        })
+      )
+    ).toBe(2);
+    expect(output()).toMatch(/✗ squirrelscan in ~.\.agents.skills: /);
+    expect(output()).not.toContain("Skills are current.");
+  });
+
+  test("update keeps an edited file and says how to replace it; --force does", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    const skillPath = join(
+      e.home,
+      ".claude",
+      "skills",
+      "squirrelscan",
+      "SKILL.md"
     );
-    expect(loggedText()).toContain("npx skills@1 update audit-website -y");
+    writeFileSync(skillPath, "my edit");
+    const newer = () =>
+      remote({ versions: { squirrelscan: "1.5", "audit-website": "2.1" } })
+        .fetch;
+    logSpy.mockClear();
+    await runSkillsSync("update", [], { e, theme, fetch: newer() });
+    expect(output()).toMatch(
+      /! squirrelscan\/SKILL\.md in ~.\.claude.skills was edited locally, kept it\./
+    );
+    expect(output()).toContain(
+      "Use --force to replace it (your copy is backed up first)."
+    );
+    expect(output()).toContain("✓ audit-website 2.1 is current");
+    expect(readFileSync(skillPath, "utf8")).toBe("my edit");
+
+    logSpy.mockClear();
+    await runSkillsSync("update", ["--force"], { e, theme, fetch: newer() });
+    expect(readFileSync(skillPath, "utf8")).toContain('"1.5"');
+    expect(output()).toContain("Backed up 1 file(s)");
+  });
+
+  test("install over an edited copy points at update --force, the command that has it", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    writeFileSync(
+      join(e.home, ".claude", "skills", "squirrelscan", "SKILL.md"),
+      "my edit"
+    );
+    logSpy.mockClear();
+    await runSkillsSync("install", [], {
+      e,
+      theme,
+      fetch: remote({
+        versions: { squirrelscan: "1.5", "audit-website": "2.1" },
+      }).fetch,
+    });
+    expect(output()).toContain(
+      "Run `squirrel skills update --force` to replace it"
+    );
+  });
+
+  test("update --json prints the result", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    logSpy.mockClear();
+    await runSkillsSync("update", ["--json"], {
+      e,
+      theme,
+      fetch: remote().fetch,
+    });
+    const json = JSON.parse(logSpy.mock.calls.at(-1)![0] as string);
+    expect(
+      json.targets.every((t: { outcome: string }) => t.outcome === "current")
+    ).toBe(true);
+  });
+
+  test("status is a table of installed and latest versions, offline too", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    logSpy.mockClear();
+    await printSkillsStatus([], {
+      e,
+      theme,
+      fetch: remote({
+        versions: { squirrelscan: "1.4.1", "audit-website": "2.2" },
+      }).fetch,
+      autoUpdateOn: true,
+    });
+    expect(output()).toContain(
+      "squirrelscan skills  (github.com/squirrelscan/skills @ bbbbbbb)"
+    );
+    expect(output()).toMatch(
+      /audit-website +2\.1 +2\.2 ↑ +~.\.claude.skills, ~.\.agents.skills/
+    );
+    expect(output()).toMatch(/squirrelscan +1\.4\.1 +1\.4\.1 +~/);
+    expect(output()).toContain(
+      "1 update available: run `squirrel skills update`."
+    );
+    expect(output()).toContain(
+      "Auto-update is on: skills update with the CLI."
+    );
+
+    logSpy.mockClear();
+    await printSkillsStatus(["--json"], {
+      e,
+      theme,
+      fetch: remote({ offline: true }).fetch,
+      autoUpdateOn: false,
+    });
+    const json = JSON.parse(logSpy.mock.calls[0]![0] as string);
+    expect(json.autoUpdate).toBe(false);
+    expect(
+      json.skills.find((s: { name: string }) => s.name === "squirrelscan")
+        .targets
+    ).toHaveLength(2);
+  });
+
+  test("bare `squirrel skills` is status; after a subcommand it stays quiet", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    logSpy.mockClear();
+    await runSkillsRoot([], {
+      e,
+      theme,
+      fetch: remote().fetch,
+      autoUpdateOn: true,
+    });
+    expect(output()).toContain(
+      `squirrelscan skills  (github.com/squirrelscan/skills @ ${SHA.slice(0, 7)})`
+    );
+    expect(output()).toContain("Skills are current.");
+
+    logSpy.mockClear();
+    await runSkillsRoot(["install"], { e, theme, fetch: remote().fetch });
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  test("setup's installAgentSkills is the native install: both skills, both default folders", async () => {
+    const net = remote();
+    const result = await installAgentSkills({ e, fetch: net.fetch });
+    const roots = [
+      join(e.home, ".claude", "skills"),
+      join(e.home, ".agents", "skills"),
+    ];
+    expect(result).toEqual({ ok: true, targets: roots });
+    expect(installedSkillRoots(e)).toEqual(roots);
+
+    const offline = await installAgentSkills({
+      e: { ...e, home: join(root, "other-home") },
+      fetch: remote({ offline: true }).fetch,
+    });
+    expect(offline.ok).toBe(false);
+    expect(offline.error).toContain("ENOTFOUND");
+  });
+
+  test("uninstall removes what it installed, for the chosen agent", async () => {
+    await runSkillsSync("install", [], { e, theme, fetch: remote().fetch });
+    const mine = join(e.home, ".claude", "skills", "audit-website", "notes.md");
+    mkdirSync(dirname(mine), { recursive: true });
+    writeFileSync(mine, "mine");
+    await runSkillsUninstall(["--agent", "agents"], { e, theme });
+    expect(existsSync(join(e.home, ".agents", "skills", "squirrelscan"))).toBe(
+      false
+    );
+    expect(existsSync(join(e.home, ".claude", "skills", "squirrelscan"))).toBe(
+      true
+    );
+
+    await runSkillsUninstall([], { e, theme });
+    expect(readFileSync(mine, "utf8")).toBe("mine");
+    expect(output()).toContain("other files there stay");
   });
 });
