@@ -566,6 +566,23 @@ describe("never writes through a link or over a folder", () => {
     expect(read(join(outside, "a.md"))).toBe("outside");
   });
 
+  test("a file that is a link blocks that target and the link's target is never touched", async () => {
+    await install();
+    const outside = join(root, "outside.md");
+    put(outside, "outside");
+    rmSync(join(agents, "squirrelscan", "references", "a.md"));
+    symlinkSync(outside, join(agents, "squirrelscan", "references", "a.md"));
+    const result = await syncSkills({
+      mode: "update",
+      e,
+      fetch: fakeRemote(withA("ref a v2")).fetch,
+    });
+    expect(targetAt(result, join(agents, "squirrelscan"))?.outcome).toBe(
+      "failed"
+    );
+    expect(read(outside)).toBe("outside");
+  });
+
   test("a folder where a file goes blocks that target and loses nothing", async () => {
     await install();
     rmSync(join(agents, "squirrelscan", "references", "a.md"));

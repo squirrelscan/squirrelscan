@@ -30,6 +30,8 @@ import {
   closeSync,
   cpSync,
   existsSync,
+  constants as fsConstants,
+  fstatSync,
   linkSync,
   lstatSync,
   mkdirSync,
@@ -274,20 +276,37 @@ export function inspectTarget(dir: string, e: SkillsEnv): TargetKind {
   return stat.isDirectory() ? { kind: "dir" } : { kind: "foreign" };
 }
 
-/** sha256 of a regular file; "other" for a link, a folder or anything else. */
-function hashFile(path: string): string | undefined {
-  let stat;
+/**
+ * The bytes of a regular file: undefined when nothing is there, "other" for a
+ * link, a folder or anything unreadable. Checked and read through one handle
+ * (O_NOFOLLOW refuses a link), so what is judged is what is read.
+ */
+function readRegularFile(path: string): Buffer | "other" | undefined {
+  let fd: number;
   try {
-    stat = lstatSync(path);
-  } catch {
-    return undefined;
+    fd = openSync(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ENOTDIR" ? undefined : "other";
   }
-  if (!stat.isFile()) return "other";
   try {
-    return sha256Hex(readFileSync(path));
+    if (!fstatSync(fd).isFile()) return "other";
+    // No O_NOFOLLOW on Windows: the open followed a link, so ask the path.
+    if (process.platform === "win32" && lstatSync(path).isSymbolicLink()) {
+      return "other";
+    }
+    return readFileSync(fd);
   } catch {
     return "other";
+  } finally {
+    closeSync(fd);
   }
+}
+
+/** sha256 of a regular file; "other" for a link, a folder or anything else. */
+function hashFile(path: string): string | undefined {
+  const bytes = readRegularFile(path);
+  return bytes === undefined || bytes === "other" ? bytes : sha256Hex(bytes);
 }
 
 /** A folder on the way to `path` (inside `dir`) that is a link or not a folder. */
@@ -1157,15 +1176,13 @@ function recordFor(
 /** A file already on disk with exactly the manifest's bytes, if there is one. */
 function localCopy(file: ManifestFile, dirs: string[]): Uint8Array | undefined {
   for (const dir of dirs) {
-    try {
-      const path = join(dir, file.path);
-      if (!lstatSync(path).isFile()) continue;
-      const local = readFileSync(path);
-      if (local.byteLength === file.size && sha256Hex(local) === file.sha256) {
-        return local;
-      }
-    } catch {
-      // not there
+    const local = readRegularFile(join(dir, file.path));
+    if (
+      local instanceof Uint8Array &&
+      local.byteLength === file.size &&
+      sha256Hex(local) === file.sha256
+    ) {
+      return local;
     }
   }
   return undefined;
