@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import { audit } from "@/cli/commands/audit";
 import { credits } from "@/cli/commands/credits";
+import { feedback } from "@/cli/commands/feedback";
 import { keys } from "@/cli/commands/keys";
 import { report } from "@/cli/commands/report";
 import { skills } from "@/cli/commands/skills";
@@ -44,6 +45,7 @@ function commandFlags(cmd: { args?: unknown }): {
 const auditDef = commandFlags(audit);
 const reportDef = commandFlags(report);
 const creditsDef = commandFlags(credits);
+const feedbackDef = commandFlags(feedback);
 
 // Flags completion may offer beyond the def: citty's built-in --help, and
 // auto-negation of boolean args (--no-incremental).
@@ -52,6 +54,7 @@ const ALLOWED_EXTRAS: Record<string, string[]> = {
   report: ["help"],
   // citty auto-negates booleans, and bash/zsh offer --help.
   credits: ["help", "no-json", "no-upgrade"],
+  feedback: ["help", "no-json"],
 };
 
 const shells: Shell[] = ["bash", "zsh", "fish"];
@@ -72,6 +75,8 @@ const BASH_BLOCK_END: Record<string, string> = {
   audit: "entities)",
   report: "feedback)",
   credits: "analyze)",
+  // The last command arm; the default arm follows it.
+  feedback: "    *)",
 };
 
 /** Slice out the completion block for one command in a shell script. */
@@ -218,6 +223,42 @@ describe.each(shells)("%s completion", (shell) => {
       const allowed = new Set([
         ...creditsDef.flags,
         ...ALLOWED_EXTRAS.credits!,
+      ]);
+      for (const offered of longFlagsIn(shell, block)) {
+        expect(allowed).toContain(offered);
+      }
+    });
+  });
+
+  // #370: the agent flags (--message, --json, ...) are how a headless agent
+  // finds the non-interactive path at all.
+  describe("feedback", () => {
+    const block = commandBlock(shell, text, "feedback");
+
+    test("every citty flag is offered", () => {
+      expect(feedbackDef.flags).toContain("message");
+      for (const flag of feedbackDef.flags) {
+        expectOffersFlag(shell, block, flag);
+      }
+    });
+
+    test("every citty alias is offered", () => {
+      expect(feedbackDef.aliases).toEqual([{ short: "m", long: "message" }]);
+      for (const { short, long } of feedbackDef.aliases) {
+        if (shell === "fish") {
+          expect(block).toContain(`-s ${short} -l ${long}`);
+        } else if (shell === "zsh") {
+          expect(block).toContain(`{-${short},--${long}}`);
+        } else {
+          expect(block).toContain(` -${short} `);
+        }
+      }
+    });
+
+    test("every offered flag exists on the citty def", () => {
+      const allowed = new Set([
+        ...feedbackDef.flags,
+        ...ALLOWED_EXTRAS.feedback!,
       ]);
       for (const offered of longFlagsIn(shell, block)) {
         expect(allowed).toContain(offered);

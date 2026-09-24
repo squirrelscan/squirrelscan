@@ -77,7 +77,11 @@ export const EXAMPLES: Readonly<Record<string, readonly string[]>> = {
   setup: ["squirrel setup", "squirrel setup --yes"],
   "skills install": ["squirrel skills install"],
   "self completion": ["squirrel self completion zsh"],
-  feedback: ['squirrel feedback "the audit missed my sitemap"'],
+  feedback: [
+    "squirrel feedback",
+    'squirrel feedback -m "the audit missed my sitemap" --category bug_report',
+    'echo "the llm report format is great" | squirrel feedback --json',
+  ],
 };
 
 const DOCS_URL = "https://docs.squirrelscan.com";
