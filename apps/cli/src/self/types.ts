@@ -137,6 +137,10 @@ export const UserSettingsSchema = z.object({
   // Authentication state
   auth: AuthSchema.optional(),
 
+  // Set when `squirrel setup` finishes (ISO date). Bare `squirrel` nudges
+  // toward setup until it is set.
+  setup_completed_at: z.string().nullable().optional(),
+
   // One-time consent for default cloud browser rendering (authed users).
   // null/undefined ⇒ never asked (prompt on the next auto-render opportunity);
   // "accepted" ⇒ render by default; "declined" ⇒ stay on plain HTTP. Explicit

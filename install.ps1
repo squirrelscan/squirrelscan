@@ -155,24 +155,35 @@ function Send-ErrorReport {
 }
 
 # --- Banner ------------------------------------------------------------
-# Blocky lowercase "squirrelscan" wordmark, matching the CLI's own banner
-# (apps/cli/src/cli/banner.ts) instead of the old camel-case ASCII art.
-# $BannerArtColor is a precomputed copy of that file's gradient-string
-# output for the autumn palette (#CD853F -> #D2691E -> #8B4513 -> #A0522D) --
-# this installer has no Node/gradient-string available at iwr|iex time.
-$BannerArtPlain = @'
- ▄█▀ ▄▀█ █ █ █ █▀▄ █▀▄ █▀▀ █   ▄█▀ ▄▀▀ ▄▀█ █▄ █
- ▀▄  █ █ █ █ █ ██▀ ██▀ █▀  █   ▀▄  █   █▀█ █ ▀█
- █▄▀ ▀▀█ ▀▄▀ █ █ █ █ █ █▄▄ █▄▄ █▄▀ ▀▄▄ █ █ █  █
-'@
+# The pixel squirrel + wordmark the CLI prints (apps/cli/src/cli/brand.ts),
+# pre-rendered because nothing but PowerShell exists at iwr|iex time.
 
+# BEGIN GENERATED HEADER (scripts/sync-install-header.ts, from apps/cli/src/cli/brand.ts; do not edit)
 $BannerArtColor = @'
- [38;2;205;133;63m▄[39m[38;2;205;132;62m█[39m[38;2;205;131;61m▀[39m [38;2;206;130;60m▄[39m[38;2;206;129;58m▀[39m[38;2;206;128;57m█[39m [38;2;206;127;56m█[39m [38;2;206;126;55m█[39m [38;2;206;125;54m█[39m [38;2;207;124;53m█[39m[38;2;207;123;52m▀[39m[38;2;207;122;50m▄[39m [38;2;207;121;49m█[39m[38;2;207;120;48m▀[39m[38;2;207;119;47m▄[39m [38;2;208;119;46m█[39m[38;2;208;118;45m▀[39m[38;2;208;117;44m▀[39m [38;2;208;116;43m█[39m   [38;2;208;115;41m▄[39m[38;2;208;114;40m█[39m[38;2;209;113;39m▀[39m [38;2;209;112;38m▄[39m[38;2;209;111;37m▀[39m[38;2;209;110;36m▀[39m [38;2;209;109;35m▄[39m[38;2;209;108;33m▀[39m[38;2;210;107;32m█[39m [38;2;210;106;31m█[39m[38;2;210;105;30m▄[39m [38;2;207;104;30m█[39m
- [38;2;205;102;29m▀[39m[38;2;202;101;29m▄[39m  [38;2;200;100;28m█[39m [38;2;197;99;28m█[39m [38;2;195;97;28m█[39m [38;2;192;96;27m█[39m [38;2;190;95;27m█[39m [38;2;187;93;26m█[39m[38;2;185;92;26m█[39m[38;2;182;91;26m▀[39m [38;2;180;90;25m█[39m[38;2;177;88;25m█[39m[38;2;175;87;25m▀[39m [38;2;172;86;24m█[39m[38;2;169;84;24m▀[39m  [38;2;167;83;23m█[39m   [38;2;164;82;23m▀[39m[38;2;162;81;23m▄[39m  [38;2;159;79;22m█[39m   [38;2;157;78;22m█[39m[38;2;154;77;21m▀[39m[38;2;152;75;21m█[39m [38;2;149;74;21m█[39m [38;2;147;73;20m▀[39m[38;2;144;72;20m█[39m
- [38;2;142;70;19m█[39m[38;2;139;69;19m▄[39m[38;2;140;69;20m▀[39m [38;2;141;70;21m▀[39m[38;2;141;70;22m▀[39m[38;2;142;71;23m█[39m [38;2;143;71;24m▀[39m[38;2;144;72;25m▄[39m[38;2;144;72;26m▀[39m [38;2;145;73;26m█[39m [38;2;146;73;27m█[39m [38;2;147;74;28m█[39m [38;2;147;74;29m█[39m [38;2;148;75;30m█[39m [38;2;149;75;31m█[39m[38;2;150;76;32m▄[39m[38;2;150;76;33m▄[39m [38;2;151;76;34m█[39m[38;2;152;77;35m▄[39m[38;2;153;77;36m▄[39m [38;2;153;78;37m█[39m[38;2;154;78;38m▄[39m[38;2;155;79;39m▀[39m [38;2;156;79;39m▀[39m[38;2;156;80;40m▄[39m[38;2;157;80;41m▄[39m [38;2;158;81;42m█[39m [38;2;159;81;43m█[39m [38;2;159;82;44m█[39m  [38;2;160;82;45m█[39m
+  [38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m
+  [38;2;139;69;19;48;2;139;69;19m▀[0m[38;2;139;69;19;48;2;139;69;19m▀[0m       [38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;222;184;135m▄[0m
+  [38;2;139;69;19;48;2;139;69;19m▀[0m[38;2;139;69;19;48;2;139;69;19m▀[0m      [38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;0;0;0m▀[0m     [1;38;2;205;133;63msquirrelscan[0m
+   [38;2;139;69;19;48;2;139;69;19m▀[0m[38;2;139;69;19;48;2;139;69;19m▀[0m [38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m   [2mThe website QA tool for your coding agent[0m
+    [38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m[38;2;160;82;45;48;2;160;82;45m▀[0m  [38;2;139;69;19m▄[0m[38;2;34;139;34;48;2;139;69;19m▀[0m
+      [38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;222;184;135;48;2;222;184;135m▀[0m[38;2;222;184;135;48;2;222;184;135m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m[38;2;205;133;63;48;2;205;133;63m▀[0m  [38;2;139;69;19m▀[0m[38;2;139;69;19m▀[0m
+      [38;2;139;69;19;48;2;139;69;19m▀[0m[38;2;139;69;19;48;2;139;69;19m▀[0m  [38;2;139;69;19;48;2;139;69;19m▀[0m[38;2;139;69;19;48;2;139;69;19m▀[0m
 '@
 
-$BannerTextFallback = 'squirrelscan'
+$BannerArtPlain = @'
+  ██
+  ██       ██▄
+  ██      ███▀     squirrelscan
+   ██ ██████████   The website QA tool for your coding agent
+    ████████  ▄█
+      ██████  ▀▀
+      ██  ██
+'@
+
+$BannerTextFallback = @'
+  squirrelscan
+  The website QA tool for your coding agent
+'@
+# END GENERATED HEADER
 
 # Half-block glyphs need a UTF-8 console to render correctly; the classic
 # Windows console defaults to codepage 437/850 unless configured otherwise.
@@ -203,7 +214,7 @@ function Test-ColorSupported {
 function Show-Banner {
     Write-Host ""
     if (-not (Test-Utf8Console)) {
-        Write-Host "  $BannerTextFallback"
+        Write-Host $BannerTextFallback
     } elseif (Test-ColorSupported) {
         Write-Host $BannerArtColor
     } else {
@@ -541,22 +552,19 @@ function Install-Squirrel {
 }
 
 function Show-Epilogue {
-    # Get-started epilogue: one scannable next-steps block instead of the old
-    # "Installation complete!" + skill-hint tail (#1029). "squirrel skills
-    # install" is the canonical path (installs both skills, no --skill
-    # filter); the npx fallback line stays copy-paste-able for docs/agents.
+    # Get-started epilogue: one next step. `squirrel setup` walks sign-in, the
+    # agent skills and defaults, then points at the first audit (#2367).
     param([string]$Version)
 
     Write-Host ""
     Write-Host "squirrel $Version installed" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Get started:"
-    Write-Host "  1. Run your first audit:   squirrel audit https://your-site.com"
-    Write-Host "  2. Add agent skills:       squirrel skills install   (Claude Code, Cursor, Codex, ...)"
-    Write-Host "                             or: npx skills add squirrelscan/skills -y -g"
-    Write-Host "  3. Unlock cloud audits:    squirrel auth login       -> https://squirrelscan.com/login"
-    Write-Host "  Shell completions:         squirrel self completion <bash|zsh|fish>"
-    Write-Host "  Docs: https://docs.squirrelscan.com"
+    Write-Host "Next, set it up (sign in, agent skills, defaults):"
+    Write-Host ""
+    Write-Host "  squirrel setup"
+    Write-Host ""
+    Write-Host "Or jump straight to an audit:  squirrel audit https://your-site.com"
+    Write-Host "Docs: https://docs.squirrelscan.com"
     Write-Host ""
 }
 
