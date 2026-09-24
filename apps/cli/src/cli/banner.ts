@@ -44,8 +44,12 @@ export function consoleBanner(opts: { version?: string } = {}) {
 
 export function printHeader(channel: ReleaseChannel = "stable") {
   const t = createTheme(process.stderr);
-  consoleBanner({ version: `v${version}${channel === "beta" ? " (beta)" : ""}` });
-  process.stderr.write(`  ${t.dim("https://squirrelscan.com")}\n${t.dim(t.sym.rule.repeat(44))}\n`);
+  consoleBanner({
+    version: `v${version}${channel === "beta" ? " (beta)" : ""}`,
+  });
+  process.stderr.write(
+    `  ${t.dim("https://squirrelscan.com")}\n${t.dim(t.sym.rule.repeat(44))}\n`
+  );
 }
 
 /**

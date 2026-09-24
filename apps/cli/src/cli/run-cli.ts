@@ -43,13 +43,28 @@ interface CliErrorLike {
 }
 
 function isCliError(error: unknown): error is CliErrorLike {
-  return error instanceof Error && error.name === "CLIError" && typeof (error as { code?: unknown }).code === "string";
+  return (
+    error instanceof Error &&
+    error.name === "CLIError" &&
+    typeof (error as { code?: unknown }).code === "string"
+  );
 }
 
-async function printHelp(main: AnyCommand, rawArgs: string[], version: string): Promise<void> {
+async function printHelp(
+  main: AnyCommand,
+  rawArgs: string[],
+  version: string
+): Promise<void> {
   const out = createTheme(process.stdout);
-  const { cmd, path } = await resolveCommandPath(main, rawArgs.filter((a) => a !== "--help" && a !== "-h"));
-  console.log(path.length === 0 ? renderRootHelp(out, version) : await renderCommandHelp(out, cmd, path));
+  const { cmd, path } = await resolveCommandPath(
+    main,
+    rawArgs.filter((a) => a !== "--help" && a !== "-h")
+  );
+  console.log(
+    path.length === 0
+      ? renderRootHelp(out, version)
+      : await renderCommandHelp(out, cmd, path)
+  );
 }
 
 export async function runCli<T extends ArgsDef>(
@@ -62,13 +77,18 @@ export async function runCli<T extends ArgsDef>(
       await printHelp(main, rawArgs, version);
       process.exit(0);
     }
-    if (rawArgs.length === 1 && (rawArgs[0] === "--version" || rawArgs[0] === "-v")) {
+    if (
+      rawArgs.length === 1 &&
+      (rawArgs[0] === "--version" || rawArgs[0] === "-v")
+    ) {
       console.log(version);
       return;
     }
     // No command at all (flags such as -c alone included): the home screen.
     if (!rawArgs.some((a) => !a.startsWith("-"))) {
-      console.log(renderHome(createTheme(process.stdout), { version, setupDone }));
+      console.log(
+        renderHome(createTheme(process.stdout), { version, setupDone })
+      );
       return;
     }
     await runCommand(main, { rawArgs });
@@ -82,7 +102,9 @@ export async function runCli<T extends ArgsDef>(
     const { cmd, path, rest } = await resolveCommandPath(main, rawArgs);
 
     if (error.code === "E_NO_COMMAND") {
-      console.log(await renderCommandHelp(createTheme(process.stdout), cmd, path));
+      console.log(
+        await renderCommandHelp(createTheme(process.stdout), cmd, path)
+      );
       process.exit(0);
     }
     if (error.code === "E_UNKNOWN_COMMAND") {

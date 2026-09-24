@@ -9,7 +9,6 @@
 
 import type { ArgsDef, CommandDef } from "citty";
 
-
 import type { UserSettings } from "@/self/types";
 
 import { printAutoUpdateAppliedNotice } from "@/cli/banner";
@@ -79,7 +78,10 @@ function startCommand<T extends ArgsDef>(
   runCommand(main, cliOptions);
 }
 
-function runCommand<T extends ArgsDef>(main: CommandDef<T>, cliOptions: RunCliOptions): void {
+function runCommand<T extends ArgsDef>(
+  main: CommandDef<T>,
+  cliOptions: RunCliOptions
+): void {
   // After the command settles, bound any in-process (Windows) auto-update so
   // a still-downloading binary can't hold the CLI open indefinitely (#1074).
   void runCli(main, cliOptions).finally(() => void finishInlineAutoUpdate());

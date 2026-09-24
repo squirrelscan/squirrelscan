@@ -3,11 +3,15 @@
 // directly; install.sh and install.ps1 carry generated copies written by
 // scripts/sync-install-header.ts, whose --check mode fails CI when they drift.
 //
-// Pure: no imports, no I/O, no environment reads. Callers pass the colour level,
+// Pure: no I/O, no environment reads. Callers pass the colour level,
 // so the installer generator can render every variant from the same data.
 
+import { stripVTControlCharacters } from "node:util";
+
 /** The hero mascot from the website (packages/ui brand.tsx `SquirrelPixels`, viewBox 32x32). */
-const SQUIRREL_RECTS: ReadonlyArray<readonly [x: number, y: number, w: number, h: number, fill: string]> = [
+const SQUIRREL_RECTS: ReadonlyArray<
+  readonly [x: number, y: number, w: number, h: number, fill: string]
+> = [
   [2, 4, 4, 4, "#8B4513"],
   [2, 8, 4, 4, "#8B4513"],
   [4, 12, 4, 4, "#8B4513"],
@@ -57,13 +61,17 @@ type Pixel = string | null;
 /** The squirrel as a pixel grid at the art's native 2-unit resolution, cropped to its bounding box. */
 function squirrelGrid(): Pixel[][] {
   const size = 16;
-  const grid: Pixel[][] = Array.from({ length: size }, () => Array<Pixel>(size).fill(null));
+  const grid: Pixel[][] = Array.from({ length: size }, () =>
+    Array<Pixel>(size).fill(null)
+  );
   for (const [x, y, w, h, fill] of SQUIRREL_RECTS) {
     for (let row = y / 2; row < (y + h) / 2; row++) {
       for (let col = x / 2; col < (x + w) / 2; col++) grid[row]![col] = fill;
     }
   }
-  const rows = grid.map((r, i) => (r.some(Boolean) ? i : -1)).filter((i) => i >= 0);
+  const rows = grid
+    .map((r, i) => (r.some(Boolean) ? i : -1))
+    .filter((i) => i >= 0);
   const cols = [...Array(size).keys()].filter((c) => grid.some((r) => r[c]));
   const top = rows[0]!;
   const bottom = rows.at(-1)!;
@@ -90,14 +98,22 @@ export function rgbTo256([r, g, b]: [number, number, number]): number {
   const [ri, gi, bi] = [nearest(r), nearest(g), nearest(b)];
   const cube = 16 + 36 * ri + 6 * gi + bi;
   const cubeRgb = [levels[ri]!, levels[gi]!, levels[bi]!];
-  const grey = Math.min(23, Math.max(0, Math.round(((r + g + b) / 3 - 8) / 10)));
+  const grey = Math.min(
+    23,
+    Math.max(0, Math.round(((r + g + b) / 3 - 8) / 10))
+  );
   const greyV = 8 + grey * 10;
-  const dist = (c: number[]) => (c[0]! - r) ** 2 + (c[1]! - g) ** 2 + (c[2]! - b) ** 2;
+  const dist = (c: number[]) =>
+    (c[0]! - r) ** 2 + (c[1]! - g) ** 2 + (c[2]! - b) ** 2;
   return dist([greyV, greyV, greyV]) < dist(cubeRgb) ? 232 + grey : cube;
 }
 
 /** SGR parameters for a foreground (38) or background (48) colour at a level. */
-export function sgrColor(hex: string, level: ColorLevel, layer: 38 | 48 = 38): string {
+export function sgrColor(
+  hex: string,
+  level: ColorLevel,
+  layer: 38 | 48 = 38
+): string {
   const rgb = hexToRgb(hex);
   if (level >= 3) return `${layer};2;${rgb.join(";")}`;
   return `${layer};5;${rgbTo256(rgb)}`;
@@ -159,16 +175,24 @@ export interface HeaderOptions {
  * The header: the squirrel on the left, the wordmark and tagline beside it.
  * Without unicode it degrades to the text lines alone.
  */
-export function renderHeader({ level, unicode, version, subtitle }: HeaderOptions): string {
+export function renderHeader({
+  level,
+  unicode,
+  version,
+  subtitle,
+}: HeaderOptions): string {
   const paint = (hex: string, text: string, bold = false) =>
     level === 0
       ? text
       : level === 1
         ? `${ESC}${bold ? "1;" : ""}33m${text}${RESET}`
         : `${ESC}${bold ? "1;" : ""}${sgrColor(hex, level)}m${text}${RESET}`;
-  const dim = (text: string) => (level === 0 ? text : `${ESC}2m${text}${RESET}`);
+  const dim = (text: string) =>
+    level === 0 ? text : `${ESC}2m${text}${RESET}`;
 
-  const wordmark = paint(BRAND.mascot, "squirrelscan", true) + (version ? `  ${dim(version)}` : "");
+  const wordmark =
+    paint(BRAND.mascot, "squirrelscan", true) +
+    (version ? `  ${dim(version)}` : "");
   const text = [wordmark, dim(subtitle ?? TAGLINE)];
   if (!unicode) return text.map((l) => `  ${l}`).join("\n");
 
@@ -180,7 +204,7 @@ export function renderHeader({ level, unicode, version, subtitle }: HeaderOption
     .map((line, i) => {
       const t = text[i - start];
       if (t === undefined) return `  ${line}`;
-      const visible = line.replace(/\u001b\[[0-9;]*m/g, "").length;
+      const visible = stripVTControlCharacters(line).length;
       return `  ${line}${" ".repeat(width - visible)}   ${t}`;
     })
     .join("\n");

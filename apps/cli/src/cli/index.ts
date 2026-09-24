@@ -18,11 +18,10 @@ import type { UserSettings } from "@/self/types";
 import { loadSettings } from "@/self/settings";
 import { setLogLevel } from "@/utils/logger";
 
+import { version } from "../../package.json";
 import { runCli } from "./run-cli";
 
-import { version } from "../../package.json";
-
-const main = defineCommand({
+export const main = defineCommand({
   meta: {
     name: "squirrel",
     version,
@@ -94,7 +93,8 @@ export function run(): void {
   // inside runWithStartupExtras cannot run the command a second time); the
   // command itself reports its own errors through runMain.
   void import("./startup").then(
-    ({ runWithStartupExtras }) => runWithStartupExtras(main, effectiveSettings, cliOptions),
+    ({ runWithStartupExtras }) =>
+      runWithStartupExtras(main, effectiveSettings, cliOptions),
     () => void runCli(main, cliOptions)
   );
 }

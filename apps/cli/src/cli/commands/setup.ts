@@ -29,7 +29,9 @@ function tildify(path: string, home = homedir()): string {
 
 /** Targets that already hold both skills. */
 function installedTargets(): string[] {
-  return skillTargets().filter((dir) => SKILL_NAMES.every((name) => existsSync(join(dir, name, "SKILL.md"))));
+  return skillTargets().filter((dir) =>
+    SKILL_NAMES.every((name) => existsSync(join(dir, name, "SKILL.md")))
+  );
 }
 
 export interface SkillsInstallResult {
@@ -43,13 +45,21 @@ export interface SkillsInstallResult {
  * `squirrel skills install`; #2357 replaces the body with the native manager.
  */
 export async function installAgentSkills(): Promise<SkillsInstallResult> {
-  const result = spawnSync("npx", ["--yes", "skills@1", "add", "squirrelscan/skills", "-g", "-y"], {
-    stdio: "ignore",
-    shell: process.platform === "win32",
-    timeout: 180_000,
-  });
+  const result = spawnSync(
+    "npx",
+    ["--yes", "skills@1", "add", "squirrelscan/skills", "-g", "-y"],
+    {
+      stdio: "ignore",
+      shell: process.platform === "win32",
+      timeout: 180_000,
+    }
+  );
   if (result.error || result.status !== 0) {
-    return { ok: false, targets: [], error: result.error?.message ?? `exit ${result.status}` };
+    return {
+      ok: false,
+      targets: [],
+      error: result.error?.message ?? `exit ${result.status}`,
+    };
   }
   return { ok: true, targets: installedTargets() };
 }
@@ -60,14 +70,20 @@ interface Asker {
 }
 
 function createAsker(t: Theme, assumeYes: boolean): Asker {
-  const interactive = !assumeYes && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const interactive =
+    !assumeYes && Boolean(process.stdin.isTTY && process.stdout.isTTY);
   return {
     interactive,
     async confirm(question, defaultYes = true) {
       if (!interactive) return defaultYes;
       const hint = t.dim(defaultYes ? "[Y/n]" : "[y/N]");
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-      const answer = await new Promise<string>((resolve) => rl.question(`     ${t.accent("?")} ${question} ${hint} `, resolve));
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      const answer = await new Promise<string>((resolve) =>
+        rl.question(`     ${t.accent("?")} ${question} ${hint} `, resolve)
+      );
       rl.close();
       const a = answer.trim().toLowerCase();
       return a === "" ? defaultYes : a === "y" || a === "yes";
@@ -76,25 +92,39 @@ function createAsker(t: Theme, assumeYes: boolean): Asker {
 }
 
 function step(t: Theme, n: number, title: string, note?: string): void {
-  console.log(`\n  ${t.heading(String(n))}  ${t.bold(title)}${note ? `  ${t.dim(note)}` : ""}`);
+  console.log(
+    `\n  ${t.heading(String(n))}  ${t.bold(title)}${note ? `  ${t.dim(note)}` : ""}`
+  );
 }
 
 const say = (line: string) => console.log(`     ${line}`);
 
-export async function runSetup(opts: { yes: boolean; dryRun: boolean }): Promise<void> {
+export async function runSetup(opts: {
+  yes: boolean;
+  dryRun: boolean;
+}): Promise<void> {
   const t = createTheme(process.stdout);
   const ask = createAsker(t, opts.yes);
   const done = (msg: string) => say(`${t.ok(t.sym.ok)} ${msg}`);
   const skip = (msg: string) => say(`${t.dim(t.sym.bullet)} ${t.dim(msg)}`);
-  const would = (msg: string) => say(`${t.dim(t.sym.arrow)} ${t.dim(`Would ${msg} (dry run)`)}`);
+  const would = (msg: string) =>
+    say(`${t.dim(t.sym.arrow)} ${t.dim(`Would ${msg} (dry run)`)}`);
 
-  console.log(`\n${t.header({ version: `v${version}`, subtitle: "Let's get you set up. It takes about a minute." })}`);
+  console.log(
+    `\n${t.header({ version: `v${version}`, subtitle: "Let's get you set up. It takes about a minute." })}`
+  );
 
   // 1. Sign in. Optional: local audits never need an account.
   step(t, 1, "Sign in", "optional");
-  say(t.dim("Unlocks cloud audits, publishing and sharing. Local audits are free without it."));
+  say(
+    t.dim(
+      "Unlocks cloud audits, publishing and sharing. Local audits are free without it."
+    )
+  );
   const settings = loadUserSettings();
-  const signedInAs = resolveCredential() ? (settings.ok ? settings.data.auth?.email : undefined) ?? "your API key" : undefined;
+  const signedInAs = resolveCredential()
+    ? ((settings.ok ? settings.data.auth?.email : undefined) ?? "your API key")
+    : undefined;
   if (signedInAs) {
     done(`Signed in as ${t.bold(signedInAs)}`);
   } else if (!ask.interactive) {
@@ -106,7 +136,10 @@ export async function runSetup(opts: { yes: boolean; dryRun: boolean }): Promise
       const { runAuthLogin } = await import("@/controllers/auth/login");
       const result = await runAuthLogin({ version });
       if (result.ok) done(`Signed in as ${t.bold(result.data.email)}`);
-      else say(`${t.warn(t.sym.warn)} Sign-in didn't finish: ${result.error.message}. Try again with ${t.command("squirrel auth login")}.`);
+      else
+        say(
+          `${t.warn(t.sym.warn)} Sign-in didn't finish: ${result.error.message}. Try again with ${t.command("squirrel auth login")}.`
+        );
     }
   } else {
     skip(`Skipped. Sign in any time with ${t.command("squirrel auth login")}.`);
@@ -114,25 +147,40 @@ export async function runSetup(opts: { yes: boolean; dryRun: boolean }): Promise
 
   // 2. Agent skills. Default yes: this is what makes squirrel useful to an agent.
   step(t, 2, "Agent skills");
-  say(t.dim("Teaches Claude Code, Codex, Cursor and other agents to run audits and fix what they find."));
+  say(
+    t.dim(
+      "Teaches Claude Code, Codex, Cursor and other agents to run audits and fix what they find."
+    )
+  );
   const already = installedTargets();
   if (already.length > 0) {
     done(`Installed in ${already.map((d) => tildify(d)).join(" and ")}`);
   } else if (await ask.confirm("Install the squirrelscan skills?")) {
     if (opts.dryRun) {
-      would(`install ${SKILL_NAMES.join(" and ")} to ${skillTargets().map((d) => tildify(d)).join(" and ")}`);
+      would(
+        `install ${SKILL_NAMES.join(" and ")} to ${skillTargets()
+          .map((d) => tildify(d))
+          .join(" and ")}`
+      );
     } else {
       say(t.dim("Installing..."));
       const result = await installAgentSkills();
       if (result.ok) {
-        const where = result.targets.length > 0 ? result.targets : skillTargets();
-        done(`Installed ${SKILL_NAMES.join(" and ")} in ${where.map((d) => tildify(d)).join(" and ")}`);
+        const where =
+          result.targets.length > 0 ? result.targets : skillTargets();
+        done(
+          `Installed ${SKILL_NAMES.join(" and ")} in ${where.map((d) => tildify(d)).join(" and ")}`
+        );
       } else {
-        say(`${t.warn(t.sym.warn)} Couldn't install the skills (${result.error}). Try ${t.command("squirrel skills install")}.`);
+        say(
+          `${t.warn(t.sym.warn)} Couldn't install the skills (${result.error}). Try ${t.command("squirrel skills install")}.`
+        );
       }
     }
   } else {
-    skip(`Skipped. Add them later with ${t.command("squirrel skills install")}.`);
+    skip(
+      `Skipped. Add them later with ${t.command("squirrel skills install")}.`
+    );
   }
 
   // 3. Updates.
@@ -140,18 +188,28 @@ export async function runSetup(opts: { yes: boolean; dryRun: boolean }): Promise
   const autoUpdate = settings.ok ? settings.data.auto_update : true;
   if (autoUpdate) {
     done("squirrel and its skills update themselves automatically");
-  } else if (await ask.confirm("Keep squirrel and its skills up to date automatically?")) {
+  } else if (
+    await ask.confirm("Keep squirrel and its skills up to date automatically?")
+  ) {
     if (opts.dryRun) would("turn on auto-update");
-    else if (updateSettings({ auto_update: true }).ok) done("Auto-update is on");
+    else if (updateSettings({ auto_update: true }).ok)
+      done("Auto-update is on");
   } else {
-    skip(`Auto-update stays off. Update with ${t.command("squirrel self update")}.`);
+    skip(
+      `Auto-update stays off. Update with ${t.command("squirrel self update")}.`
+    );
   }
 
-  if (!opts.dryRun) updateSettings({ setup_completed_at: new Date().toISOString() });
+  if (!opts.dryRun)
+    updateSettings({ setup_completed_at: new Date().toISOString() });
 
-  console.log(`\n  ${t.ok(t.sym.ok)} ${t.bold("You're ready.")} Run your first audit:\n`);
+  console.log(
+    `\n  ${t.ok(t.sym.ok)} ${t.bold("You're ready.")} Run your first audit:\n`
+  );
   console.log(`     ${t.command("squirrel audit https://your-site.com")}\n`);
-  console.log(`  ${t.dim(`Or ask your agent: "audit my site with squirrelscan and fix what you find"`)}\n`);
+  console.log(
+    `  ${t.dim(`Or ask your agent: "audit my site with squirrelscan and fix what you find"`)}\n`
+  );
 }
 
 export const setup = defineCommand({
@@ -171,6 +229,9 @@ export const setup = defineCommand({
     },
   },
   async run({ args }) {
-    await runSetup({ yes: Boolean(args.yes), dryRun: Boolean(args["dry-run"]) });
+    await runSetup({
+      yes: Boolean(args.yes),
+      dryRun: Boolean(args["dry-run"]),
+    });
   },
 });
