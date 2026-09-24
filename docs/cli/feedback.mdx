@@ -11,24 +11,26 @@ The `feedback` command sends feedback, bug reports, and feature requests straigh
 ```bash
 squirrel feedback
 squirrel feedback --category bug_report
-squirrel feedback -m "A --urls-file flag would make batch audits easier" --category feature_request
-echo "Batch audits were painless" | squirrel feedback --category what_worked --json
+squirrel feedback -m "Please add a flag that audits a list of URLs" --category feature_request
+squirrel feedback The HTML report looks great
+echo "The llm report format fits my agent's context nicely" | squirrel feedback --category what_worked --json
 ```
 
 ## Options
 
 | Option | Description |
 | ------ | ----------- |
-| `-m`, `--message <text>` | The feedback text. Sends without prompting. |
+| `[text]` | The feedback text as plain words, the same as `--message`. |
+| `-m`, `--message <text>` | The feedback text. Sends without prompting. Given twice, each one is a paragraph. |
 | `--category <name>` | Feedback category: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other` |
-| `--email <address>` | The address the team can reply to. Defaults to the one you last gave `squirrel feedback`, then the email of the account you signed in with. Saved for next time. |
+| `--email <address>` | The address the team can reply to. Without it, the saved address is used, then the email of the account you signed in with. |
 | `--run-id <id>` | The audit run the feedback is about. |
 | `--website-id <id>` | The website the feedback is about. |
 | `--json` | Print the result as one JSON object on stdout. Never prompts. |
 
 ## From an agent or a script
 
-When the text comes from `--message` or is piped on stdin, `squirrel feedback` never prompts, so it runs fine with no terminal: in CI, in a batch job, or from a coding agent partway through a task.
+When the text is on the command line (`--message` or plain words) or piped on stdin, `squirrel feedback` never prompts, so it runs fine with no terminal: in CI, in a batch job, or from a coding agent partway through a task.
 
 ```bash
 squirrel feedback --category what_worked \
@@ -42,7 +44,9 @@ Piped text works the same way, several lines included:
 cat notes.txt | squirrel feedback --category tool_ergonomics --json
 ```
 
-It still needs an email to send with. Pass `--email`, or it uses the address you last gave `squirrel feedback`, then the email of the account you signed in with (`squirrel auth login`). With none of those it stops and says so, rather than sending feedback nobody can answer.
+A pipe that goes quiet for 5 seconds counts as finished, so a harness that leaves stdin open can't hang the command. Text that starts with a dash needs the `=` form: `--message="--format llm saves my agent a lot of tokens"`.
+
+It still needs an email to send with. Pass `--email`, or it uses the address you last gave `squirrel feedback`, then the email of the account you signed in with (`squirrel auth login`). With none of those it stops and says so, rather than sending feedback nobody can answer. An address passed with `--email` here is not saved, so an agent's address never becomes your default.
 
 ### JSON output
 
@@ -80,7 +84,7 @@ The local [`squirrel mcp`](/cli/mcp) server offers the same channel as a `send_f
 
 On a terminal, with no `--message` and nothing piped, the command prompts you for:
 
-1. **Email** - Your email address (cached for future use; skipped when `--email` is passed)
+1. **Email** - Your email address, cached for future use. Enter reuses the saved address, or your signed-in account's the first time. Skipped when `--email` is passed.
 2. **Feedback** - Your feedback message (minimum 5 characters)
 3. **Category** - An optional category (skipped when `--category` is passed; press Enter to skip)
 

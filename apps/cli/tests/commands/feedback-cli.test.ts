@@ -64,18 +64,35 @@ function cleanEnv(home: string): Record<string, string> {
   };
 }
 
-/** Run `squirrel feedback` in a fresh HOME; `stdin` is piped when given, else /dev/null. */
-async function feedback(args: string[], stdin?: string) {
+/**
+ * Run `squirrel feedback` in a fresh HOME. `stdin` is piped and closed when a
+ * string, left open with `openStdin` written to it (never closed) when that is
+ * given, else /dev/null.
+ */
+async function feedback(
+  args: string[],
+  stdin?: string,
+  { openStdin }: { openStdin?: string } = {}
+) {
   const home = join(scratch, `home-${homes++}`);
   const proc = Bun.spawn(
     [process.execPath, "run", entry, "feedback", ...args],
     {
       env: cleanEnv(home),
-      stdin: stdin === undefined ? "ignore" : new Blob([stdin]),
+      stdin:
+        openStdin !== undefined
+          ? "pipe"
+          : stdin === undefined
+            ? "ignore"
+            : new Blob([stdin]),
       stdout: "pipe",
       stderr: "pipe",
     }
   );
+  if (openStdin !== undefined && typeof proc.stdin === "object") {
+    if (openStdin) proc.stdin.write(openStdin);
+    await proc.stdin.flush();
+  }
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -176,6 +193,64 @@ describe("squirrel feedback, headless (#370)", () => {
     });
     expect(received).toHaveLength(0);
   });
+
+  test("bare words are the text", async () => {
+    const r = await feedback([
+      "the",
+      "sitemap",
+      "was",
+      "missed",
+      "--email",
+      "agent@example.com",
+      "--json",
+    ]);
+
+    expect(r.code).toBe(0);
+    expect(received[0]!.body.feedback).toBe("the sitemap was missed");
+  });
+
+  test("a pipe far past the cap is cut to 5000 characters and flagged", async () => {
+    const r = await feedback(
+      ["--email", "agent@example.com", "--json"],
+      "x".repeat(200_000)
+    );
+
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.out)).toMatchObject({ ok: true, truncated: true });
+    expect((received[0]!.body.feedback as string).length).toBe(5000);
+  });
+
+  test("an open pipe that never sends anything: gives up after 5s, never hangs", async () => {
+    const r = await feedback(
+      ["--email", "agent@example.com", "--json"],
+      undefined,
+      {
+        openStdin: "",
+      }
+    );
+
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.out)).toMatchObject({
+      ok: false,
+      code: "message_required",
+    });
+    expect(received).toHaveLength(0);
+  }, 20_000);
+
+  test("an open pipe with text on it: sends the text and exits 0 with the pipe still open", async () => {
+    const r = await feedback(
+      ["--email", "agent@example.com", "--json"],
+      undefined,
+      {
+        openStdin: "Written by a harness that never closes stdin\n",
+      }
+    );
+
+    expect(r.code).toBe(0);
+    expect(received[0]!.body.feedback).toBe(
+      "Written by a harness that never closes stdin"
+    );
+  }, 20_000);
 
   test("no email in a fresh HOME: exits 1 naming --email, sends nothing", async () => {
     const r = await feedback(["-m", "Who do I reply to?"]);

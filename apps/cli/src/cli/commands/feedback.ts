@@ -1,9 +1,9 @@
 // squirrelscan feedback - submit feedback to the team
 //
-// With the text on --message or piped on stdin it sends without a single
-// prompt, for agents and scripts (#370). On a terminal with neither it asks
-// for email, feedback and category, as it always has. --json prints one JSON
-// object on stdout, never prompts, and every failure exits 1.
+// With the text on the command line or piped on stdin it sends without a
+// single prompt, for agents and scripts (#370). On a terminal with neither it
+// asks for email, feedback and category, as it always has. --json prints one
+// JSON object on stdout, never prompts, and every failure exits 1.
 
 import {
   FEEDBACK_CATEGORIES,
@@ -35,6 +35,9 @@ import { safeExit } from "@/self/updater";
 
 /** Past this, piped input is certainly over FEEDBACK_MAX_LENGTH; stop reading. */
 const STDIN_MAX_BYTES = 64 * 1024;
+
+/** A pipe silent this long is treated as done, so an open, empty stdin can't hang an agent. */
+const STDIN_IDLE_MS = 5000;
 
 const CATEGORY_LABELS: Record<FeedbackCategory, string> = {
   bug_report: "Bug report",
@@ -85,20 +88,49 @@ function fail(
   };
 }
 
-interface FeedbackArgs {
-  message?: string;
+/** The flags, with citty's shapes (a repeated flag is an array) flattened. */
+interface FeedbackOptions {
+  /** From --message and any bare words; undefined when neither was given. */
+  text?: string;
   category?: string;
   email?: string;
   "run-id"?: string;
   "website-id"?: string;
-  json?: boolean;
+  json: boolean;
+}
+
+/** The last value of a flag given more than once. */
+function lastValue(raw: unknown): string | undefined {
+  const value = Array.isArray(raw) ? raw.at(-1) : raw;
+  return value === undefined ? undefined : String(value);
+}
+
+function readOptions(args: Record<string, unknown>): FeedbackOptions {
+  // Repeated -m flags are paragraphs, as in `git commit`. Bare words are text
+  // too: `squirrel feedback the sitemap was missed`, or an unquoted
+  // `-m the sitemap was missed`, which gives -m only its first word.
+  const messages =
+    args.message === undefined ? [] : [args.message].flat().map(String);
+  const words = Array.isArray(args._) ? args._.map(String) : [];
+  const text =
+    messages.length > 0 || words.length > 0
+      ? [messages.join("\n\n"), words.join(" ")].filter(Boolean).join(" ")
+      : undefined;
+  return {
+    text,
+    category: lastValue(args.category),
+    email: lastValue(args.email),
+    "run-id": lastValue(args["run-id"]),
+    "website-id": lastValue(args["website-id"]),
+    json: Boolean(args.json),
+  };
 }
 
 type Settings = Result<UserSettings>;
 
 /** --run-id and --website-id: optional, never blank or oversized. */
 function readIds(
-  args: FeedbackArgs
+  args: FeedbackOptions
 ): { ok: true; runId?: string; websiteId?: string } | Failure {
   const ids: { runId?: string; websiteId?: string } = {};
   for (const [flag, key, code] of [
@@ -107,7 +139,7 @@ function readIds(
   ] as const) {
     const raw = args[flag];
     if (raw === undefined) continue;
-    const value = String(raw).trim();
+    const value = raw.trim();
     if (!value || value.length > FEEDBACK_ID_MAX_LENGTH) {
       return fail(
         code,
@@ -143,17 +175,23 @@ async function submit(
   );
 }
 
-/** --message or piped text: validate everything up front, then send. Never prompts. */
+const HOW_TO_PASS_TEXT =
+  'Pass it with --message "...", or pipe it on stdin. Text that starts with "-" needs --message="...".';
+
+/** Text from the command line or a pipe: validate everything up front, then send. Never prompts. */
 async function sendWithoutPrompts(
-  args: FeedbackArgs,
+  args: FeedbackOptions,
   raw: string,
-  settings: Settings
+  settings: Settings,
+  stdinTimedOut = false
 ): Promise<Outcome> {
   const message = clampFeedbackMessage(raw);
   if (!message.text) {
     return fail(
       "message_required",
-      'No feedback text. Pass it with --message "...", or pipe it on stdin.'
+      stdinTimedOut
+        ? `Nothing arrived on stdin for ${STDIN_IDLE_MS / 1000} seconds. ${HOW_TO_PASS_TEXT}`
+        : `No feedback text. ${HOW_TO_PASS_TEXT}`
     );
   }
   if (message.text.length < FEEDBACK_MIN_LENGTH) {
@@ -183,9 +221,8 @@ async function sendWithoutPrompts(
     if (!emailSchema.safeParse(email).success) {
       return fail("invalid_email", `"${email}" is not a valid email address.`);
     }
-    // Saved like a typed one, so the next run can leave --email off.
-    const cachedEmail = settings.ok ? settings.data.user_feedback_email : null;
-    if (email !== cachedEmail) updateSettings({ user_feedback_email: email });
+    // Not saved: an agent's address must not become the default a person
+    // sees at their next prompt.
   } else {
     const fallback = defaultFeedbackEmail(settings);
     if (!fallback) {
@@ -246,13 +283,15 @@ async function promptCategory(
 
 /** A person at a terminal: prompt for whatever the flags didn't give. */
 async function sendInteractive(
-  args: FeedbackArgs,
+  args: FeedbackOptions,
   settings: Settings
 ): Promise<Outcome> {
   const ids = readIds(args);
   if (!ids.ok) return ids;
 
   const cachedEmail = settings.ok ? settings.data.user_feedback_email : null;
+  // Enter takes the saved address, or the signed-in account's.
+  const defaultEmail = defaultFeedbackEmail(settings);
 
   // An unknown --category (or --email) falls through to its prompt rather
   // than erroring; the server clamps categories anyway.
@@ -281,9 +320,10 @@ async function sendInteractive(
   });
   let feedbackText: string;
   try {
-    const emailPrompt = cachedEmail ? `Email [${cachedEmail}]: ` : "Email: ";
+    const emailPrompt = defaultEmail ? `Email [${defaultEmail}]: ` : "Email: ";
     while (!email) {
-      const input = (await prompt(rl, emailPrompt)).trim() || cachedEmail || "";
+      const input =
+        (await prompt(rl, emailPrompt)).trim() || defaultEmail || "";
 
       if (!input) {
         console.log("Email is required.");
@@ -330,24 +370,24 @@ async function sendInteractive(
   );
 }
 
-async function collectAndSend(args: FeedbackArgs): Promise<Outcome> {
+async function collectAndSend(args: FeedbackOptions): Promise<Outcome> {
   const settings = loadUserSettings();
   warnIfSessionUnreadable(settings);
 
-  if (args.message !== undefined) {
-    return sendWithoutPrompts(args, String(args.message), settings);
+  if (args.text !== undefined) {
+    return sendWithoutPrompts(args, args.text, settings);
   }
   if (!stdinIsTTY()) {
-    return sendWithoutPrompts(
-      args,
-      await readStdinText(STDIN_MAX_BYTES),
-      settings
-    );
+    const piped = await readStdinText({
+      maxBytes: STDIN_MAX_BYTES,
+      idleMs: STDIN_IDLE_MS,
+    });
+    return sendWithoutPrompts(args, piped.text, settings, piped.timedOut);
   }
   if (args.json) {
     return fail(
       "message_required",
-      '--json never prompts. Pass the feedback with --message "...", or pipe it on stdin.'
+      `--json never prompts. ${HOW_TO_PASS_TEXT}`
     );
   }
   return sendInteractive(args, settings);
@@ -392,6 +432,11 @@ export const feedback = defineCommand({
     description: "Send feedback to the squirrelscan team",
   },
   args: {
+    text: {
+      type: "positional",
+      required: false,
+      description: "Feedback text, the same as --message",
+    },
     message: {
       type: "string",
       alias: "m",
@@ -408,7 +453,7 @@ export const feedback = defineCommand({
       type: "string",
       valueHint: "address",
       description:
-        "Email the team can reply to (default: the last one you gave, then your signed-in account's)",
+        "Email the team can reply to (default: the saved one, then your signed-in account's)",
     },
     "run-id": {
       type: "string",
@@ -426,17 +471,17 @@ export const feedback = defineCommand({
     },
   },
   async run({ args }) {
-    const json = Boolean(args.json);
+    const options = readOptions(args);
     let outcome: Outcome;
     try {
-      outcome = await collectAndSend(args);
+      outcome = await collectAndSend(options);
     } catch (error) {
       outcome = fail(
         "unexpected",
         `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-    printOutcome(outcome, json);
+    printOutcome(outcome, options.json);
     if (!outcome.ok) return safeExit(1);
   },
 });

@@ -47,12 +47,14 @@ export function registerFeedbackTools(server: McpServer): void {
           ),
         run_id: z
           .string()
+          .trim()
           .min(1)
           .max(FEEDBACK_ID_MAX_LENGTH)
           .optional()
           .describe("Audit run id this feedback relates to, if any."),
         website_id: z
           .string()
+          .trim()
           .min(1)
           .max(FEEDBACK_ID_MAX_LENGTH)
           .optional()

@@ -58,6 +58,7 @@ let authEmailSetting: string | null = null;
 // below predate the piped path and assume one.
 let stdinTTY = true;
 let stdinText = "";
+let stdinTimedOut = false;
 let stdinReads = 0;
 
 interface CapturedFetch {
@@ -128,7 +129,7 @@ const stdinIsTTYSpy = spyOn(stdinModule, "stdinIsTTY").mockImplementation(
 const readStdinTextSpy = spyOn(stdinModule, "readStdinText").mockImplementation(
   async () => {
     stdinReads++;
-    return stdinText;
+    return { text: stdinText, timedOut: stdinTimedOut };
   }
 );
 
@@ -165,6 +166,7 @@ beforeEach(() => {
   authEmailSetting = null;
   stdinTTY = true;
   stdinText = "";
+  stdinTimedOut = false;
   stdinReads = 0;
   stderrWrites = [];
   createInterfaceSpy.mockClear();
@@ -210,7 +212,7 @@ afterEach(() => {
 type FeedbackRunCtx = Parameters<NonNullable<typeof feedback.run>>[0];
 
 async function runFeedback(
-  args: Record<string, string | boolean | undefined> = {}
+  args: Record<string, string | string[] | boolean | undefined> = {}
 ): Promise<ProcessExitSignal | null> {
   try {
     await feedback.run?.({
@@ -536,7 +538,7 @@ describe("squirrel feedback — --message", () => {
     expect(lastFetch!.body).not.toHaveProperty("category");
   });
 
-  test("--email wins over the cached email and is saved for next time", async () => {
+  test("--email wins over the cached email and is NOT saved (an agent's address must not become a person's default)", async () => {
     cachedEmailSetting = "old@example.com";
 
     await runFeedback({
@@ -545,9 +547,7 @@ describe("squirrel feedback — --message", () => {
     });
 
     expect(lastFetch!.body!.email).toBe("new@example.com");
-    expect(updatedPatches).toEqual([
-      { user_feedback_email: "new@example.com" },
-    ]);
+    expect(updatedPatches).toHaveLength(0);
   });
 
   test("with no --email and no cached one, the signed-in account's email is used and not saved", async () => {
@@ -882,5 +882,101 @@ describe("squirrel feedback — interactive on a TTY", () => {
 
     expect(lastFetch!.body!.email).toBe("flag@example.com");
     expect(lastFetch!.body!.feedback).toBe("Feedback after a flag email");
+  });
+});
+
+// ── Text from bare words and repeated flags (#370 review) ────────────────────
+describe("squirrel feedback — text on the command line", () => {
+  test("bare words are the text: `squirrel feedback the sitemap was missed`", async () => {
+    stdinTTY = true;
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ _: ["the", "sitemap", "was", "missed"] });
+
+    expect(exit).toBeNull();
+    expect(createInterfaceSpy).not.toHaveBeenCalled();
+    expect(lastFetch!.body!.feedback).toBe("the sitemap was missed");
+  });
+
+  test("an unquoted -m keeps the words after its first", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    await runFeedback({ message: "the", _: ["sitemap", "was", "missed"] });
+
+    expect(lastFetch!.body!.feedback).toBe("the sitemap was missed");
+  });
+
+  test("repeated -m flags are paragraphs", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    await runFeedback({ message: ["First paragraph", "Second paragraph"] });
+
+    expect(lastFetch!.body!.feedback).toBe(
+      "First paragraph\n\nSecond paragraph"
+    );
+  });
+
+  test("a repeated --email or --category takes the last value", async () => {
+    await runFeedback({
+      message: "Flags given twice",
+      email: ["first@example.com", "second@example.com"],
+      category: ["other", "bug_report"],
+    });
+
+    expect(lastFetch!.body!.email).toBe("second@example.com");
+    expect(lastFetch!.body!.category).toBe("bug_report");
+  });
+
+  test("the no-text error says how to pass text that starts with a dash", async () => {
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ message: "", json: true });
+
+    expect(exit?.code).toBe(1);
+    expect(jsonOutput().error).toContain('--message="..."');
+  });
+});
+
+describe("squirrel feedback — stdin that never closes", () => {
+  test("silence on an open pipe ends in message_required, naming the wait", async () => {
+    stdinTTY = false;
+    stdinText = "";
+    stdinTimedOut = true;
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback({ json: true });
+
+    expect(exit?.code).toBe(1);
+    expect(lastFetch).toBeNull();
+    expect(jsonOutput()).toMatchObject({ ok: false, code: "message_required" });
+    expect(jsonOutput().error).toContain(
+      "Nothing arrived on stdin for 5 seconds"
+    );
+  });
+
+  test("text that arrived before the pipe went quiet is sent", async () => {
+    stdinTTY = false;
+    stdinText = "Written but never closed";
+    stdinTimedOut = true;
+    cachedEmailSetting = "agent@example.com";
+
+    const exit = await runFeedback();
+
+    expect(exit).toBeNull();
+    expect(lastFetch!.body!.feedback).toBe("Written but never closed");
+  });
+});
+
+describe("squirrel feedback — interactive email default", () => {
+  test("signed in with nothing saved: Enter takes the account email, which is then saved", async () => {
+    authEmailSetting = "account@example.com";
+    rlAnswers = ["", "Signed in and pressed Enter", ""];
+
+    await runFeedback();
+
+    expect(lastFetch!.body!.email).toBe("account@example.com");
+    expect(updatedPatches).toEqual([
+      { user_feedback_email: "account@example.com" },
+    ]);
   });
 });
