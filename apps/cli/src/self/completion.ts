@@ -46,7 +46,7 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="audit auth crawl credits analyze entities init config report feedback keys mcp self skills"
+  local commands="setup audit auth crawl credits analyze entities init config report feedback keys mcp self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
@@ -216,6 +216,10 @@ _squirrel_completions() {
       COMPREPLY=( $(compgen -W "--id --help" -- "\${cur}") )
       return 0
       ;;
+    setup)
+      COMPREPLY=( $(compgen -W "--yes -y --dry-run --help" -- "\${cur}") )
+      return 0
+      ;;
     init)
       COMPREPLY=( $(compgen -W "--force --project-name -n --help" -- "\${cur}") )
       return 0
@@ -280,6 +284,7 @@ _squirrel() {
   )
 
   commands=(
+    'setup:Sign in, install the agent skills and pick your defaults'
     'audit:Run audit on a URL'
     'auth:Authentication commands'
     'crawl:Crawl a website (no analysis)'
@@ -512,6 +517,11 @@ _squirrel() {
           _arguments \\
             '--category[Feedback category]:category:(${feedbackCategoryValues})'
           ;;
+        setup)
+          _arguments \\
+            '(-y --yes)'{-y,--yes}'[Accept every default without asking]' \\
+            '--dry-run[Show what setup would do without changing anything]'
+          ;;
         init)
           _arguments \\
             '--force[Overwrite existing config]' \\
@@ -553,6 +563,7 @@ complete -c squirrel -f
 complete -c squirrel -s c -l config-file -d "Path to config file" -r
 
 # Top-level commands
+complete -c squirrel -n "__fish_use_subcommand" -a setup -d "Sign in, install the agent skills and pick your defaults"
 complete -c squirrel -n "__fish_use_subcommand" -a audit -d "Run audit on a URL"
 complete -c squirrel -n "__fish_use_subcommand" -a auth -d "Authentication commands"
 complete -c squirrel -n "__fish_use_subcommand" -a crawl -d "Crawl a website (no analysis)"
@@ -614,6 +625,8 @@ complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update" -a update -d "Update squirrelscan skills for coding agents"
 
 # Feedback options
+complete -c squirrel -n "__fish_seen_subcommand_from setup" -s y -l yes -d "Accept every default without asking"
+complete -c squirrel -n "__fish_seen_subcommand_from setup" -l dry-run -d "Show what setup would do without changing anything"
 complete -c squirrel -n "__fish_seen_subcommand_from feedback" -l category -d "Feedback category" -xa "${feedbackCategoryValues}"
 
 # Update options

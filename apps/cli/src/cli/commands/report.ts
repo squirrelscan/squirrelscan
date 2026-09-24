@@ -214,7 +214,7 @@ export const report = defineCommand({
     summary: {
       type: "boolean",
       description:
-        "Print only the score, category breakdown, and issue counts — no per-issue detail (console format only)",
+        "Print only the score, category breakdown, and issue counts, with no per-issue detail (console format only)",
     },
   },
   async run({ args }) {

@@ -21,7 +21,13 @@ description: "Install squirrelscan and run your first audit"
 
 This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
 
-<Tip>After installation, run `squirrel self doctor` to verify everything is set up correctly.</Tip>
+Then run setup once. It signs you in (optional), installs the agent skills for Claude Code, Codex, Cursor and more, and turns on auto-update:
+
+```bash
+squirrel setup
+```
+
+<Tip>Run `squirrel` on its own any time to see every command and a quick start. If something looks wrong, `squirrel self doctor` checks the install.</Tip>
 
 <Note>
 **Alpine / musl Linux:** the binary needs the `libstdc++` runtime library. The installer adds it automatically when run as root; otherwise install it first with `apk add libstdc++` (or `sudo apk add libstdc++`).

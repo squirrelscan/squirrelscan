@@ -79,6 +79,10 @@ jobs:
       # Checked on every PR because nothing else notices until an install breaks.
       - name: Check manifests are in sync
         run: bun run scripts/sync-plugin-manifests.ts --check
+      # install.sh / install.ps1 carry pre-rendered copies of the CLI header
+      # (apps/cli/src/cli/brand.ts); this fails when they drift from it.
+      - name: Check installer header is in sync
+        run: bun run scripts/sync-install-header.ts --check
 
   # ---------------------------------------------------------------------------
   # Which test suites run where (#1670):

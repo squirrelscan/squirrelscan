@@ -17,6 +17,12 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `squirrel setup`: one guided first run. It signs you in (optional, local audits never need an account), installs the agent skills for Claude Code, Codex, Cursor and more (default yes), and turns on auto-update, then hands you the command for your first audit. Run it again any time: each step says when it is already done. `--yes` takes every default, `--dry-run` shows what it would do. The installers now end with one next step, `squirrel setup`.
+- Running `squirrel` on its own shows a quick start and every command grouped by what it is for (audits, agents, cloud, settings), in place of a flat list that ended in `ERROR No command specified`. `squirrel --help`, group help such as `squirrel self`, and each command's `--help` use the same layout, with examples.
+- The CLI, `install.sh` and `install.ps1` share one header: the pixel squirrel from squirrelscan.com, in the site's colours. It uses truecolor or 256 colours depending on what the terminal supports, a plain silhouette with `NO_COLOR` or piped output, and text alone without UTF-8.
+
 ### Changed
 
 - The agent skills and agent plugins have one home: [squirrelscan/skills](https://github.com/squirrelscan/skills). `squirrel skills install`, the README and the docs now install from it (`npx skills add squirrelscan/skills`, and `/plugin marketplace add squirrelscan/skills` in Claude Code), and this repo no longer carries copies: its `skills/` directory and the Claude Code, Cursor and Agent Plugins manifests are gone. The Claude Code plugin, the Cursor plugin and the Agent Plugins package each bundle both skills with the hosted MCP server there. None carries a version, so Claude Code versions its plugin by commit and every change to the skills reaches plugin users without a CLI release.
@@ -25,6 +31,8 @@ How it works:
 
 ### Fixed
 
+- A mistyped command now says what you probably meant (`squirrel audti` suggests `squirrel audit`, `squirrel skills instal` suggests `squirrel skills install`) and exits 1 without a stack trace. A missing argument shows the command's usage and an example, and a command group run on its own (`squirrel self`) shows its help and exits 0.
+- `squirrel -c <path> <command>` works: the config path given before the command was read as the command name ("Unknown command").
 - `squirrel skills update` now updates the skills. It passed a repository to `npx skills update`, which reads its arguments as skill names, so it matched nothing installed and changed nothing. It now names the two skills and covers global and project installs, and an install recorded from `squirrelscan/squirrelscan` is re-added from squirrelscan/skills rather than updated from a repository that no longer carries it.
 
 ## v0.0.98 — 2026-09-23

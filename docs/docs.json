@@ -641,6 +641,7 @@
             "group": "CLI Reference",
             "pages": [
               "cli/index",
+              "cli/setup",
               "cli/audit",
               "cli/crawl",
               "cli/analyze",

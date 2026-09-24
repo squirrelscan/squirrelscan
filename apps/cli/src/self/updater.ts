@@ -836,7 +836,7 @@ export async function finishInlineAutoUpdate(
 /**
  * Exit the process after settling any in-flight inline (Windows) auto-update.
  * Command handlers that call process.exit() directly bypass
- * runMain(main).finally(finishInlineAutoUpdate) in cli/index.ts, which would
+ * runCli(main).finally(finishInlineAutoUpdate) in cli/startup.ts, which would
  * kill a mid-download inline updater — a rarer repro of #1074. Route those hard
  * exits through here so the update settles (or aborts within the grace) first,
  * then exits with the same code (#1089).

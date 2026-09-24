@@ -10,7 +10,6 @@ import {
   lockedRulesMessage,
   type LockedRulesReportShape,
 } from "@squirrelscan/report";
-import gradient from "gradient-string";
 import { createInterface } from "node:readline";
 import pc from "picocolors";
 
@@ -30,42 +29,27 @@ import {
 } from "@/self/updater";
 
 import { version } from "../../package.json";
+import { createTheme } from "./theme";
 
 // Respect NO_COLOR environment variable (https://no-color.org/)
 const useColor = !process.env.NO_COLOR;
 
-// Big blocky "squirrelscan" text
-const BANNER_ART = `
- ▄█▀ ▄▀█ █ █ █ █▀▄ █▀▄ █▀▀ █   ▄█▀ ▄▀▀ ▄▀█ █▄ █
- ▀▄  █ █ █ █ █ ██▀ ██▀ █▀  █   ▀▄  █   █▀█ █ ▀█
- █▄▀ ▀▀█ ▀▄▀ █ █ █ █ █ █▄▄ █▄▄ █▄▀ ▀▄▄ █ █ █  █
-`;
-
-// Autumn/squirrel-themed gradient (orange/brown tones)
-// Pre-compute the gradient banner at module load to avoid runtime overhead
-const squirrelGradient = gradient(["#CD853F", "#D2691E", "#8B4513", "#A0522D"]);
-const GRADIENT_BANNER = useColor ? squirrelGradient(BANNER_ART) : BANNER_ART;
-
 /**
- * Print the fancy colorful banner
+ * Print the squirrelscan header (pixel squirrel + wordmark, see ./brand) to
+ * stderr, so piped command output stays clean.
  */
-export function consoleBanner() {
-  console.error(GRADIENT_BANNER);
+export function consoleBanner(opts: { version?: string } = {}) {
+  process.stderr.write(`\n${createTheme(process.stderr).header(opts)}\n\n`);
 }
 
 export function printHeader(channel: ReleaseChannel = "stable") {
-  consoleBanner();
-
-  const channelSuffix =
-    channel === "beta" ? (useColor ? pc.yellow(" (beta)") : " (beta)") : "";
-  const versionText =
-    (useColor ? pc.dim(`v${version}`) : `v${version}`) + channelSuffix;
-  const urlText = useColor
-    ? pc.cyan("https://squirrelscan.com")
-    : "https://squirrelscan.com";
-
-  console.error(`  ${versionText}  •  ${urlText}`);
-  console.error(useColor ? pc.dim("─".repeat(44)) : "─".repeat(44));
+  const t = createTheme(process.stderr);
+  consoleBanner({
+    version: `v${version}${channel === "beta" ? " (beta)" : ""}`,
+  });
+  process.stderr.write(
+    `  ${t.dim("https://squirrelscan.com")}\n${t.dim(t.sym.rule.repeat(44))}\n`
+  );
 }
 
 /**

@@ -1,0 +1,46 @@
+---
+title: "setup"
+description: "Sign in, install the agent skills and pick your defaults in one guided step"
+---
+
+`squirrel setup` is the first thing to run after installing. It walks through three steps and ends with the command for your first audit.
+
+```bash
+squirrel setup
+```
+
+## What it does
+
+1. **Sign in** (optional). Opens your browser to sign in to squirrelscan, which unlocks cloud audits, publishing and sharing. Local audits are free and never need an account, so you can skip this step. If you are already signed in, setup says who as and moves on.
+2. **Agent skills.** Installs the `squirrelscan` and `audit-website` skills into `~/.claude/skills` and `~/.agents/skills` so Claude Code, Codex, Cursor and other agents know how to run audits and fix what they find. The default answer is yes. If the skills are already there, setup says so and moves on.
+3. **Updates.** Keeps squirrel and its skills up to date automatically. If auto-update is already on, there is nothing to ask. If you turned it off, setup only asks, and never switches it back on by itself. A copy of squirrel not installed by the squirrelscan installer (npm, a package manager, a dev build) cannot update itself, and setup tells you how to update it instead.
+
+Setup is safe to run again at any time: every step reports what is already done instead of repeating it.
+
+## Options
+
+| Option | Description |
+| --- | --- |
+| `-y`, `--yes` | Accept every default without asking. Sign-in is skipped, since it needs a browser; run `squirrel auth login` later. |
+| `--dry-run` | Show what setup would do without changing anything. |
+
+Without an interactive terminal (CI, a script, an agent's shell), setup behaves as if `--yes` was passed. Press Ctrl+C at any question to stop.
+
+## Examples
+
+```bash
+# The guided first run
+squirrel setup
+
+# Unattended: install the skills and keep defaults, no prompts
+squirrel setup --yes
+
+# See what it would do first
+squirrel setup --dry-run
+```
+
+## Related
+
+- [`auth`](/cli/auth): sign in and out on its own
+- [`skills`](/cli/skills): install and update the agent skills directly
+- [`self settings`](/cli/self#settings): change `auto_update` and other settings later
