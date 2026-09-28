@@ -299,7 +299,7 @@ describe.each(shells)("%s completion", (shell) => {
       { meta?: { description?: string } }
     >;
     const names = Object.keys(subCommands);
-    expect(names).toEqual(["install", "update"]);
+    expect(names).toEqual(["install", "update", "status", "uninstall"]);
     const expectedPairs = names.map((name) => {
       const description = subCommands[name]!.meta?.description;
       expect(description).toBeTruthy();

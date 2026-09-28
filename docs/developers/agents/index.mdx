@@ -48,7 +48,7 @@ Every agent uses one or more of these. The per-agent pages above show the exact 
     The deepest integration. The hosted server at `mcp.squirrelscan.com` exposes audits, rules, issues, and reports as native tools, no shell piping. See [Hosted MCP](/developers/mcp).
   </Card>
   <Card title="Skills" icon="sparkles">
-    Autonomous audit + fix workflows the agent discovers and runs on its own. Install once: `npx skills add squirrelscan/skills`.
+    Autonomous audit + fix workflows the agent discovers and runs on its own. Install once: `squirrel skills install`.
   </Card>
   <Card title="Piping" icon="arrow-right">
     No integration needed: `squirrel audit example.com --format llm | <agent>`. Works with anything that reads stdin.
@@ -57,7 +57,7 @@ Every agent uses one or more of these. The per-agent pages above show the exact 
 
 ## The skills
 
-The [Agent Skills](https://agentskills.io) standard ships two squirrelscan skills. They install the same way for every agent (`npx skills add squirrelscan/skills`, landing in `.agents/skills/`); Claude Code can also get them bundled in the [plugin](/developers/agents/claude-code).
+The [Agent Skills](https://agentskills.io) standard ships two squirrelscan skills. They install the same way for every agent (`squirrel skills install`, landing in `~/.agents/skills/` and `~/.claude/skills/`); Claude Code can also get them bundled in the [plugin](/developers/agents/claude-code).
 
 | Skill | What it does |
 |-------|--------------|

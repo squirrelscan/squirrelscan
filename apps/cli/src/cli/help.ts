@@ -75,7 +75,13 @@ export const EXAMPLES: Readonly<Record<string, readonly string[]>> = {
   report: ["squirrel report", "squirrel report --format markdown"],
   entities: ["squirrel entities --problem no-id"],
   setup: ["squirrel setup", "squirrel setup --yes"],
-  "skills install": ["squirrel skills install"],
+  "skills install": [
+    "squirrel skills install",
+    "squirrel skills install audit-website --agent claude --project",
+  ],
+  "skills update": ["squirrel skills update", "squirrel skills update --check"],
+  "skills status": ["squirrel skills status", "squirrel skills status --json"],
+  "skills uninstall": ["squirrel skills uninstall --agent claude"],
   "self completion": ["squirrel self completion zsh"],
   feedback: [
     "squirrel feedback",

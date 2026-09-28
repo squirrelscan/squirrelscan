@@ -58,7 +58,7 @@ Local audits need nothing. For hosted crawling, publishing, and credits, open **
 The MCP server exposes tools; the skills add autonomous audit-and-fix workflows. Cursor supports the Agent Skills standard natively, and also loads skills from Claude Code's directories.
 
 ```bash
-npx skills add squirrelscan/skills
+squirrel skills install
 ```
 
 Prefer one package with the skills and the MCP server? [squirrelscan/skills](https://github.com/squirrelscan/skills) is also a Cursor plugin: teams can import that repository as a team marketplace (**Dashboard**, **Plugins & MCPs**, **Add Marketplace**, **Import from Repo**), or clone it into `~/.cursor/plugins/local/squirrelscan` and reload the window. The plugin used to live in the squirrelscan/squirrelscan repo; a copy imported from there doesn't follow the move, so import squirrelscan/skills instead.

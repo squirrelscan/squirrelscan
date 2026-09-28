@@ -34,21 +34,69 @@ squirrelscan ships these skills from the [squirrelscan/skills repository](https:
 
 ---
 
-## install
-
-Install the squirrelscan skills for your coding agent.
-
-### Usage
+## Usage
 
 ```bash
-squirrel skills install
+squirrel skills                         # same as squirrel skills status
+squirrel skills status [--json]
+squirrel skills install [skill...] [--agent <name>...] [--project] [--dry-run]
+squirrel skills update  [skill...] [--check] [--force] [--dry-run] [--json]
+squirrel skills uninstall [skill...] [--agent <name>...] [--project]
 ```
 
-### What it does
+`skill...` defaults to both skills (`squirrelscan` and `audit-website`).
 
-The command runs `npx skills@1 add squirrelscan/skills -g` to install all the squirrelscan skills from the [squirrelscan/skills repository](https://github.com/squirrelscan/skills). The `@1` pins the skills CLI to the major version squirrel's commands were checked against.
+`--agent` picks where the skills go, and can be repeated:
 
-Once installed, you can invoke them in your coding agent:
+| Agent | Folder | Read by |
+|-------|--------|---------|
+| `claude` | `~/.claude/skills` (`$CLAUDE_CONFIG_DIR/skills` when set) | Claude Code |
+| `agents` | `~/.agents/skills` | Codex, Cursor, Gemini CLI and other Agent Skills tools |
+| `all` | both | |
+
+The default is both. `--project` uses the current repo's `.claude/skills` and `.agents/skills` instead of the ones in your home directory. The repo is the nearest folder up from where you run it that holds a `.git`, or the current folder when there is none.
+
+squirrel downloads the skills itself: no Node, no `npx`, no other tool. It reads the published `manifest.json` in [squirrelscan/skills](https://github.com/squirrelscan/skills), downloads the files it needs, checks each one against its sha256, and only then writes. The skills are real copies, so this works the same on macOS, Linux and Windows. A download that fails or doesn't match its hash writes nothing, so the previous install stays exactly as it was.
+
+---
+
+## status
+
+Show which skills are installed, where, and whether a newer version is published.
+
+```bash
+$ squirrel skills
+squirrelscan skills  (github.com/squirrelscan/skills @ e23765f)
+
+  skill           installed   latest   where
+  squirrelscan    1.4.1       1.4.1    ~/.claude/skills, ~/.agents/skills
+  audit-website   2.1         2.2 ↑    ~/.claude/skills, ~/.agents/skills
+
+1 update available: run `squirrel skills update`.
+Auto-update is on: skills update with the CLI.
+```
+
+It also lists files you have edited, skills that `npx skills` still manages, folders that belong to something else, and any install an update can't write to (a link or a folder where a file should be). Offline, it shows what is installed and says the latest version is unknown. `--json` gives the same as JSON.
+
+---
+
+## install
+
+```bash
+$ squirrel skills install
+✓ squirrelscan 1.4.1   → ~/.claude/skills, ~/.agents/skills
+✓ audit-website 2.2    → ~/.claude/skills, ~/.agents/skills
+Adopted 2 skills installed by `npx skills` (removed them from its lock file, backup at ~/.agents/.skill-lock.json.bak).
+Restart your agent to load them.
+```
+
+Skills you installed earlier with `npx skills add` are taken over: squirrel updates them in place, replaces the symlinks `npx skills` made with copies, and removes them from its lock file (after copying the lock to `.skill-lock.json.bak`), so the two tools stop updating the same folders. A file that differs from the published version with no record of who wrote it is backed up first.
+
+squirrel leaves alone a skill folder that links somewhere else (such as your own checkout) and a folder holding another author's skill of the same name.
+
+`--dry-run` shows what would change without writing anything. [`squirrel setup`](/cli/setup) runs the same install as part of the first run.
+
+Once installed, invoke them in your coding agent:
 
 ```text
 /audit-website
@@ -58,79 +106,49 @@ Once installed, you can invoke them in your coding agent:
 /squirrelscan
 ```
 
-### Example
-
-```bash
-$ squirrel skills install
-Installing squirrelscan skills (squirrelscan, audit-website)...
-
-Skills installed! Use /audit-website or /squirrelscan in your agent.
-View skills: https://skills.sh/squirrelscan/skills
-```
-
-### Without npm/npx
-
-If npm/npx is not available, the command displays manual installation instructions:
-
-```bash
-$ squirrel skills install
-npx not found. Install Node.js or run manually:
-
-To run manually:
-  npx skills@1 add squirrelscan/skills -g
-
-View skills: https://skills.sh/squirrelscan/skills
-```
-
 ---
 
 ## update
 
-Update the squirrelscan skills to the latest version.
-
-### Usage
-
 ```bash
-squirrel skills update
+$ squirrel skills update
+✓ audit-website 2.1 → 2.2  (~/.claude/skills, ~/.agents/skills)
+! audit-website/SKILL.md in ~/.claude/skills was edited locally, kept it.
+  Use --force to replace it (your copy is backed up first).
+✓ squirrelscan 1.4.1 is current
 ```
 
-### What it does
+`update` changes only what is already installed, and downloads only the files that changed. It never installs a skill or a location you don't have. It updates the skills in your home directory and, run inside a repo, that repo's `--project` copies; other repos' copies are updated from inside those repos.
 
-The command reads the skills lock files (global and the current project's) and brings both squirrelscan skills current:
+squirrel records the hash of every file it writes (in `~/.squirrel/skills.json`; `~/.squirrel` is `%LOCALAPPDATA%\squirrel` on Windows), so it knows when you have edited one, and it never overwrites an edit silently. An edited file is kept and reported; `--force` replaces it too, after backing your copy up to `~/.squirrel/skills/backups/<timestamp>/`, one folder per location (`global-claude`, `project-agents` and so on). Files of your own in a skill folder always stay.
 
-- an install recorded from `squirrelscan/squirrelscan`, where the skills used to ship, is re-added from [squirrelscan/skills](https://github.com/squirrelscan/skills), their only home now
-- every other install is refreshed with `npx skills update`, from the repository it was installed from
-
-It never installs a skill you don't already have; with none installed it says so and points you at `squirrel skills install`. A re-added skill lands in the agents the skills CLI detects on your machine, the same as its own update does.
+| Option | What it does |
+|--------|--------------|
+| `--check` | Only report. Exits 1 when an update is available and 0 when everything is current, for scripts and agents. Exits 2 when the check itself fails or an install can't be updated |
+| `--force` | Also replace locally edited files, after backing them up |
+| `--dry-run` | Show what would change without writing anything |
+| `--json` | Output JSON |
 
 ### Automatic updates
 
-You rarely need to run it. From v0.0.99, when squirrel [auto-updates itself](/cli/self#automatic-updates), the first run on the new version starts the same refresh in the background for your global skill installs, with no prompts and a 60 second limit. It runs once per new version, follows the same opt-outs as auto-update (`auto_update`, `SQUIRREL_NO_UPDATE`, CI), does nothing without `npx`, and never holds up the command you ran. Project installs are left to `squirrel skills update`.
-
-### Example
+You rarely need to run it. From v0.0.99, when squirrel [auto-updates itself](/cli/self#automatic-updates), the first run on the new version updates the installed skills in the background: no prompts, a 60 second limit, once per new version, edits kept, and no network at all when no skills are installed. It leaves project installs (`--project`) to you. It follows `auto_update`; turn off just the skills with:
 
 ```bash
-$ squirrel skills update
-Moving squirrelscan from squirrelscan/squirrelscan to squirrelscan/skills...
-Updating squirrelscan skills (squirrelscan, audit-website)...
-
-Skills updated!
-View skills: https://skills.sh/squirrelscan/skills
+squirrel self settings set skills_auto_update false
 ```
 
-### Without npm/npx
+It never holds up the command you ran, and is off in CI and with `SQUIRREL_NO_UPDATE` set.
 
-If npm/npx is not available, the command displays manual update instructions:
+---
+
+## uninstall
 
 ```bash
-$ squirrel skills update
-npx not found. Install Node.js or run manually:
-
-To run manually:
-  npx skills@1 update squirrelscan audit-website -y
-
-View skills: https://skills.sh/squirrelscan/skills
+squirrel skills uninstall
+squirrel skills uninstall audit-website --agent claude
 ```
+
+Removes only the files squirrel wrote and you haven't changed. Files you edited, and files of your own, stay where they are, and the command lists what it kept. A folder left behind that way is yours: updates leave it alone, and `squirrel skills install` takes it back.
 
 ---
 

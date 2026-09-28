@@ -133,7 +133,7 @@ Click the **Add to Cursor** badge above, or add it manually to `~/.cursor/mcp.js
 }
 ```
 
-Skills: `npx skills add squirrelscan/skills`
+Skills: `squirrel skills install`
 
 ### Claude Code
 
@@ -159,7 +159,7 @@ Add the server to `~/.codex/config.toml`:
 url = "https://mcp.squirrelscan.com/mcp"
 ```
 
-Codex reads Agent Skills from `~/.agents/skills`, so skills work too: `npx skills add squirrelscan/skills`
+Codex reads Agent Skills from `~/.agents/skills`, so skills work too: `squirrel skills install`
 
 ### opencode
 
@@ -186,18 +186,18 @@ squirrelscan is in the [MCP Registry](https://registry.modelcontextprotocol.io) 
 https://mcp.squirrelscan.com/mcp
 ```
 
-Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token). Skills follow the [Agent Skills standard](https://agentskills.io): `npx skills add squirrelscan/skills` lands them in `.agents/skills/`.
+Authentication is per-user OAuth (or pass a squirrelscan API key as a Bearer token). Skills follow the [Agent Skills standard](https://agentskills.io): `squirrel skills install` puts them in `~/.agents/skills/` and `~/.claude/skills/`.
 
 
 ## Skills
 
-Two skills drive agent workflows. They live in [squirrelscan/skills](https://github.com/squirrelscan/skills), along with the Claude Code, Cursor and Agent Plugins packages that bundle them with the MCP server. Skills installed globally (`squirrel skills install`, or `npx skills add squirrelscan/skills -g`) stay current: from v0.0.99, `squirrel`'s auto-update refreshes them too.
+Two skills drive agent workflows. They live in [squirrelscan/skills](https://github.com/squirrelscan/skills), along with the Claude Code, Cursor and Agent Plugins packages that bundle them with the MCP server. `squirrel skills install` downloads and verifies them itself, and from v0.0.99 `squirrel`'s auto-update keeps them current. Installs made earlier with `npx skills` are taken over.
 
 - **`squirrelscan`** - operating the CLI: install, login, keys, credits, running audits, publishing reports, the entity map, MCP setup, config, troubleshooting.
 - **`audit-website`** - the full fix loop: audit, map issues to source files, fix in batches, re-audit until the site scores well.
 
 ```bash
-npx skills add squirrelscan/skills
+squirrel skills install
 ```
 
 Then, in your agent:

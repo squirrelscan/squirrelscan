@@ -71,7 +71,7 @@ You usually don't need this command. With `auto_update` enabled (the default), s
 ✓ squirrel auto-updated v0.0.42 → v0.0.43
 ```
 
-The running process is never interrupted - the new version takes effect on the next run. From v0.0.99, that run also refreshes any squirrelscan agent skills you installed globally with `npx skills` or `squirrel skills install`, in the background (see [skills](/cli/skills#automatic-updates)). Turn this off with:
+The running process is never interrupted - the new version takes effect on the next run. From v0.0.99, that run also refreshes the squirrelscan agent skills you have installed, in the background (see [skills](/cli/skills#automatic-updates); turn just that off with `squirrel self settings set skills_auto_update false`). Turn this off with:
 
 ```bash
 squirrel self settings set auto_update false
@@ -562,6 +562,7 @@ squirrel self settings set <key> <value> [options]
 |-----|------|-------------|--------|
 | `channel` | string | Update channel | `stable`, `beta` |
 | `auto_update` | boolean | Automatic background updates | `true`, `false` |
+| `skills_auto_update` | boolean | Update the installed agent skills along with the CLI (needs `auto_update`) | `true`, `false` |
 | `update_check_interval_hours` | number | How often the background update check may run (hours) | `>= 0.05` (default `1`) |
 | `notifications` | boolean | Show update notifications | `true`, `false` |
 | `telemetry` | boolean | Send minimal pseudonymous CLI telemetry | `true`, `false` |

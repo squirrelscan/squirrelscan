@@ -740,7 +740,8 @@ const selfSettingsSet = defineCommand({
   args: {
     key: {
       type: "positional",
-      description: "Setting key (channel, auto_update, notifications, tips)",
+      description:
+        "Setting key (channel, auto_update, skills_auto_update, notifications, tips)",
       required: true,
     },
     value: {

@@ -3,13 +3,18 @@
 // audit. Safe to re-run: every step says when it is already done.
 
 import { defineCommand } from "citty";
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 
-import { SKILLS_CLI, SKILL_NAMES, SKILL_REPO } from "@/self/agent-skills";
+import {
+  type InstallSkillsOptions,
+  SKILL_NAMES,
+  defaultSkillRoots,
+  defaultSkillsEnv,
+  installSkills,
+  installedSkillRoots,
+  tildify as tildifyIn,
+} from "@/self/agent-skills";
 import { resolveCredential } from "@/self/credentials";
 import { getUnmanagedUpdateHint, isManagedInstall } from "@/self/paths";
 import { loadUserSettings, updateSettings } from "@/self/settings";
@@ -17,22 +22,7 @@ import { loadUserSettings, updateSettings } from "@/self/settings";
 import { version } from "../../../package.json";
 import { type Theme, createTheme } from "../theme";
 
-/** Where the skills live by default: Claude Code's own directory and the shared ~/.agents one. */
-export function skillTargets(env = process.env, home = homedir()): string[] {
-  const claudeHome = env.CLAUDE_CONFIG_DIR || join(home, ".claude");
-  return [join(claudeHome, "skills"), join(home, ".agents", "skills")];
-}
-
-function tildify(path: string, home = homedir()): string {
-  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
-}
-
-/** Targets that already hold both skills. */
-function installedTargets(): string[] {
-  return skillTargets().filter((dir) =>
-    SKILL_NAMES.every((name) => existsSync(join(dir, name, "SKILL.md")))
-  );
-}
+const tildify = (path: string) => tildifyIn(path, defaultSkillsEnv());
 
 export interface SkillsInstallResult {
   ok: boolean;
@@ -41,27 +31,42 @@ export interface SkillsInstallResult {
 }
 
 /**
- * The one place setup installs skills. For now it runs the same install as
- * `squirrel skills install`; #2357 replaces the body with the native manager.
+ * The one place setup installs skills: the native manager, the same install
+ * as `squirrel skills install` (both skills, both default folders).
  */
-export async function installAgentSkills(): Promise<SkillsInstallResult> {
-  const result = spawnSync(
-    "npx",
-    ["--yes", SKILLS_CLI, "add", SKILL_REPO, "-g", "-y"],
-    {
-      stdio: "ignore",
-      shell: process.platform === "win32",
-      timeout: 180_000,
+export async function installAgentSkills(
+  options: InstallSkillsOptions = {}
+): Promise<SkillsInstallResult> {
+  try {
+    const result = await installSkills(options);
+    const roots = (outcomes: string[]) => [
+      ...new Set(
+        result.targets
+          .filter((t) => outcomes.includes(t.outcome))
+          .map((t) => dirname(t.dir))
+      ),
+    ];
+    const failed = result.targets.filter((t) => t.outcome === "failed");
+    if (failed.length) {
+      return {
+        ok: false,
+        targets: roots(["installed", "updated", "adopted", "current"]),
+        error: failed
+          .map((t) => `${t.skill} in ${tildify(dirname(t.dir))}: ${t.detail}`)
+          .join("; "),
+      };
     }
-  );
-  if (result.error || result.status !== 0) {
+    return {
+      ok: true,
+      targets: roots(["installed", "updated", "adopted", "current"]),
+    };
+  } catch (error) {
     return {
       ok: false,
       targets: [],
-      error: result.error?.message ?? `exit ${result.status}`,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
-  return { ok: true, targets: installedTargets() };
 }
 
 interface Asker {
@@ -158,13 +163,13 @@ export async function runSetup(opts: {
       "Teaches Claude Code, Codex, Cursor and other agents to run audits and fix what they find."
     )
   );
-  const already = installedTargets();
+  const already = installedSkillRoots();
   if (already.length > 0) {
     done(`Installed in ${already.map((d) => tildify(d)).join(" and ")}`);
   } else if (await ask.confirm("Install the squirrelscan skills?")) {
     if (opts.dryRun) {
       would(
-        `install ${SKILL_NAMES.join(" and ")} to ${skillTargets()
+        `install ${SKILL_NAMES.join(" and ")} to ${defaultSkillRoots()
           .map((d) => tildify(d))
           .join(" and ")}`
       );
@@ -197,7 +202,12 @@ export async function runSetup(opts: {
       `This copy of squirrel was not installed by the squirrelscan installer, so it can't update itself. To update: ${getUnmanagedUpdateHint()}.`
     );
   } else if (autoUpdate === true) {
-    done("squirrel and its skills update themselves automatically");
+    if (settings.ok && settings.data.skills_auto_update === false) {
+      done("squirrel updates itself automatically");
+      skip(
+        `Skills are excluded (skills_auto_update is off). Update them with ${t.command("squirrel skills update")}.`
+      );
+    } else done("squirrel and its skills update themselves automatically");
   } else if (autoUpdate === undefined) {
     say(
       `${t.warn(t.sym.warn)} Couldn't read your settings. Check them with ${t.command("squirrel self doctor")}.`
