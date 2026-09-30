@@ -1,7 +1,7 @@
 // #409 — the pre-crawl discovery probes follow the rule selection. A probe is
 // sent only while an enabled rule reads it, so `--rule-exclude ax` (or
 // `[rules] disable`) keeps /swagger.json and the rest off the wire with no
-// other setting, and `[crawler] discovery_probes = false` turns them all off.
+// other setting, and `[crawler] disable_discovery_probes = true` turns them all off.
 
 import { describe, expect, test } from "bun:test";
 
@@ -29,7 +29,7 @@ describe("selectDiscoveryProbes (#409)", () => {
     expect(selectDiscoveryProbes({ enabled: true, rules: ALL })).toEqual([...DISCOVERY_PROBES]);
   });
 
-  test("discovery_probes = false sends none, whatever the rules", () => {
+  test("disable_discovery_probes = true sends none, whatever the rules", () => {
     expect(selectDiscoveryProbes({ enabled: false, rules: ALL })).toEqual([]);
   });
 

@@ -246,8 +246,9 @@ export async function runCrawl(
             followRedirects: config.crawler.follow_redirects,
             respectRobots: config.crawler.respect_robots,
             // A crawl does not know which rules will read it later, so every
-            // probe goes out unless [crawler] discovery_probes = false (#409).
-            ...(config.crawler.discovery_probes === false
+            // probe goes out unless [crawler] disable_discovery_probes = true
+            // (#409).
+            ...(config.crawler.disable_discovery_probes === true
               ? { discoveryProbes: [] }
               : {}),
             incremental: !options.refresh, // default true unless --refresh

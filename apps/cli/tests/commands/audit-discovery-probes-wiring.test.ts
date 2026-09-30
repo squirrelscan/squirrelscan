@@ -1,9 +1,8 @@
 import { WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
 // #409: `squirrel audit` sends no discovery probe when told not to, driven
-// through citty's real parser (`runCommand` with raw argv). citty delivers
-// `--no-discovery-probes` as `discovery-probes: false` and never sets the
-// declared `no-discovery-probes` arg, so a hand-built args object would prove
-// nothing (#404 is that exact bug for --no-publish).
+// through citty's real parser (`runCommand` with raw argv) rather than a
+// hand-built args object: #404 was a flag that parsed fine in a unit test and
+// never reached the command.
 //
 // The site is a stubbed fetch, and the assertions are on what reached it: on a
 // host whose firewall bans a client for asking for /swagger.json, a request
@@ -18,23 +17,35 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { runCommand } from "citty";
+import { parseArgs, runCommand } from "citty";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { audit } from "@/cli/commands/audit";
+import { audit, lastFlagValue } from "@/cli/commands/audit";
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
+import { closeGlobalContentStore } from "@/crawler/storage/content-store";
+import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 import * as pathsModule from "@/self/paths";
 
 // homedir() is fixed at process start in Bun, so $HOME set here cannot keep a
 // full audit out of the real ~/.squirrel. Point every store it writes at a
 // scratch dir through the paths module instead.
+//
+// The content store and link cache are process-wide singletons that open at
+// whatever path is current on first use. Close them on the way in and out: an
+// earlier file's handle points into ITS deleted scratch dir (every offline audit
+// then fails with "No pages were crawled"), and ours must not outlive ours.
+function closeGlobalStores(): void {
+  closeGlobalContentStore();
+  closeGlobalLinkCache();
+}
 const scratch = mkdtempSync(join(tmpdir(), "squirrel-discovery-probes-"));
 const configPath = join(scratch, "squirrel.toml");
 const restores: (() => void)[] = [];
 
 beforeAll(() => {
+  closeGlobalStores();
   const previousConfig = getGlobalConfigPath();
   setGlobalConfigPath(configPath);
   restores.push(() => setGlobalConfigPath(previousConfig));
@@ -56,6 +67,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  closeGlobalStores();
   for (const restore of restores) restore();
   rmSync(scratch, { recursive: true, force: true });
 });
@@ -185,26 +197,36 @@ describe("squirrel audit discovery probes (#409)", () => {
     expect(count("/swagger.json")).toBe(1);
   });
 
-  test("--no-discovery-probes sends none; robots.txt and sitemaps still run", async () => {
-    await runAudit(["--no-discovery-probes"]);
+  test("--disable-discovery-probes sends none; robots.txt and sitemaps still run", async () => {
+    await runAudit(["--disable-discovery-probes"]);
     expect(probesSent()).toEqual([]);
     expect(count("/robots.txt")).toBe(1);
     expect(count("/sitemap.xml")).toBeGreaterThan(0);
     expect(count("/")).toBeGreaterThan(0);
   });
 
-  test("[crawler] discovery_probes = false sends none", async () => {
-    await runAudit([], "[crawler]\ndiscovery_probes = false\n");
+  test("[crawler] disable_discovery_probes = true sends none", async () => {
+    await runAudit([], "[crawler]\ndisable_discovery_probes = true\n");
     expect(probesSent()).toEqual([]);
     expect(count("/robots.txt")).toBe(1);
   });
 
-  test("--no-discovery-probes overrides discovery_probes = true", async () => {
+  test("--disable-discovery-probes overrides disable_discovery_probes = false", async () => {
     await runAudit(
-      ["--no-discovery-probes"],
-      "[crawler]\ndiscovery_probes = true\n"
+      ["--disable-discovery-probes"],
+      "[crawler]\ndisable_discovery_probes = false\n"
     );
     expect(probesSent()).toEqual([]);
+  });
+
+  // The flag wins in both directions: `=false` sends the probes for one run
+  // even though the project's config turns them off.
+  test("--disable-discovery-probes=false overrides disable_discovery_probes = true", async () => {
+    await runAudit(
+      ["--disable-discovery-probes=false"],
+      "[crawler]\ndisable_discovery_probes = true\n"
+    );
+    expect(probesSent()).toHaveLength(PROBE_PATHS.length + 3);
   });
 
   test("--rule-exclude ax sends none, with no other setting", async () => {
@@ -217,5 +239,49 @@ describe("squirrel audit discovery probes (#409)", () => {
     for (const path of API_PATHS) expect(count(path)).toBe(0);
     expect(count("/AGENTS.md")).toBe(1);
     expect(count("/llms.txt")).toBe(1);
+  });
+});
+
+// What citty's own parser makes of the flag, so the command's reading of it
+// rests on citty's behaviour rather than on an assumption about it.
+describe("--disable-discovery-probes through citty's parser", () => {
+  async function parse(argv: string[]): Promise<unknown> {
+    const def = await (typeof audit.args === "function"
+      ? audit.args()
+      : audit.args);
+    const args = parseArgs(argv, def as never) as Record<string, unknown>;
+    return lastFlagValue(
+      args["disable-discovery-probes"] as boolean | boolean[] | undefined
+    );
+  }
+
+  test("absent, set, =false and =true", async () => {
+    const url = "https://example.com/";
+    expect(await parse([url])).toBeUndefined();
+    expect(await parse([url, "--disable-discovery-probes"])).toBe(true);
+    expect(await parse([url, "--disable-discovery-probes=false"])).toBe(false);
+    expect(await parse([url, "--disable-discovery-probes=true"])).toBe(true);
+  });
+
+  test("before the URL it does not swallow it", async () => {
+    const def = await (typeof audit.args === "function"
+      ? audit.args()
+      : audit.args);
+    const args = parseArgs(
+      ["--disable-discovery-probes", "https://example.com/"],
+      def as never
+    ) as Record<string, unknown>;
+    expect(args["disable-discovery-probes"]).toBe(true);
+    expect(args.url).toBe("https://example.com/");
+  });
+
+  test("repeated, the last one wins", async () => {
+    expect(
+      await parse([
+        "https://example.com/",
+        "--disable-discovery-probes",
+        "--disable-discovery-probes=false",
+      ])
+    ).toBe(false);
   });
 });

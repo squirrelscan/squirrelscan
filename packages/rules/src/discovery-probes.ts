@@ -11,7 +11,7 @@ import { filterRules } from "./filter";
 import { loadAllRules } from "./loader";
 
 export interface DiscoveryProbeSelectionInput {
-  /** `[crawler] discovery_probes`, after `--[no-]discovery-probes`. */
+  /** False when `[crawler] disable_discovery_probes` or `--disable-discovery-probes` says so. */
   enabled: boolean;
   /** The run's resolved rule selection (config merged with --rule-include/--rule-exclude). */
   rules: { enable?: string[]; disable?: string[] };

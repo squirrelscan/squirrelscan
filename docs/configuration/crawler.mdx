@@ -22,7 +22,7 @@ exclude = []
 allow_query_params = []
 drop_query_prefixes = ["utm_", "gclid", "fbclid"]
 respect_robots = false
-discovery_probes = true
+disable_discovery_probes = false
 incremental = true
 breadth_first = true
 max_prefix_budget = 0.25
@@ -834,31 +834,51 @@ whether AI crawlers get the same homepage a browser does.
 That is 28 requests on most sites. `robots.txt`, sitemap discovery and the page
 you asked to audit are not probes: the crawl needs them, so they always run.
 
-### `discovery_probes`
+### `disable_discovery_probes`
 
 **Type:** `boolean`
-**Default:** `true`
+**Default:** `false`
 
-Set to `false` to send no discovery probes at all.
+Set to `true` to send no discovery probes at all.
 
 ```toml
 [crawler]
-discovery_probes = false
+disable_discovery_probes = true
 ```
 
 **CLI override:**
 ```bash
-squirrel audit https://example.com --no-discovery-probes
+squirrel audit https://example.com --disable-discovery-probes
 ```
 
-`--no-discovery-probes` turns the probes off for one run, whatever
-`discovery_probes` says.
+The flag wins over the config for one run, in both directions:
+`--disable-discovery-probes` turns the probes off, and
+`--disable-discovery-probes=false` sends them even when the config says `true`.
 
 Some servers ban a client for asking for these paths. A common fail2ban
 "sensitive files" jail reads a request for `/swagger.json` or `/openapi.json`
 as an attack and bans the auditing IP, so every request after it gets
 connection refused and the audit fails right after it starts. Turn the probes
 off for that site and the crawl goes through.
+
+### Or let squirrelscan through
+
+To keep the checks, make an exception for the audit instead.
+[Firewall and WAF exceptions](/cloud/firewall) covers the options for cloud
+audits. A CLI audit comes from your own machine, so for one of those:
+
+- **fail2ban or another log-based jail:** add your own IP to the jail's
+  `ignoreip`.
+- **A WAF or bot protection:** send a secret header with the audit and skip
+  the rule when it matches:
+
+  ```bash
+  squirrel audit https://example.com -H "X-Squirrelscan-Auth: <long random value>"
+  ```
+
+  Or set it under [`headers`](#headers). The probes, `robots.txt`, sitemaps
+  and every page carry it. The checks that resolve your start URL before the
+  crawl begins do not.
 
 ### Probes follow your rules
 
@@ -877,10 +897,9 @@ squirrel audit https://example.com --rule-exclude ax/api-discovery
 
 ### What the report says
 
-When a rule's probe was not sent, the rule reports **not checked**. It never
-says the file is missing, it never counts as a failure, and it does not move the
-score. Those checks carry the value `not-checked`, so an agent reading the JSON
-or LLM report can tell "not checked" from "not there".
+When a rule's probe was not sent, the rule reports **not checked**, with the
+value `not-checked`. It never says the file is missing, it never counts as a
+failure, and it does not move the score.
 
 ### Pacing
 
@@ -955,8 +974,9 @@ the rate-limit and robots controls documented above:
 - `per_host_concurrency`: cap simultaneous requests per host.
 - `delay_ms` / `concurrency`: global pacing.
 - `incremental`: skip re-downloading unchanged pages on repeat audits.
-- `discovery_probes`: turn off the pre-crawl requests for agent files when the
-  site's firewall objects to them (see [Discovery probes](#discovery-probes)).
+- `disable_discovery_probes`: turn off the pre-crawl requests for agent files
+  when the site's firewall objects to them (see
+  [Discovery probes](#discovery-probes)).
 
 A `Crawl-delay` directive in the target's `robots.txt` overrides
 `per_host_delay_ms` only when `respect_robots = true`, and is capped at 2

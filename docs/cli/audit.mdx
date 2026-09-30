@@ -50,7 +50,7 @@ squirrel audit <url> [options]
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
 | `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
-| `--no-discovery-probes` | | Skip the pre-crawl discovery probes (`llms.txt`, `/.well-known/*`, `/swagger.json` and the rest) for this run. Overrides `[crawler] discovery_probes`. See [Discovery probes](/configuration/crawler#discovery-probes) | `false` |
+| `--disable-discovery-probes` | | Skip the pre-crawl discovery probes (`llms.txt`, `/.well-known/*`, `/swagger.json` and the rest) for this run. Overrides `[crawler] disable_discovery_probes`; `=false` sends them even when the config turns them off. See [Discovery probes](/configuration/crawler#discovery-probes) | `false` |
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 
 ### Coverage modes

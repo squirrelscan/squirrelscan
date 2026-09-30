@@ -911,7 +911,7 @@ export async function runAudit(
         // them off: a firewall can ban the audit for asking for /swagger.json
         // (#409).
         discoveryProbes: selectDiscoveryProbes({
-          enabled: mergedConfig.crawler.discovery_probes !== false,
+          enabled: mergedConfig.crawler.disable_discovery_probes !== true,
           rules: mergedConfig.rules,
           ruleOptions: mergedConfig.rule_options as Record<
             string,
@@ -2141,9 +2141,10 @@ export function mergeOptionsToConfig(
       ...(options.headers && Object.keys(options.headers).length > 0
         ? { headers: { ...config.crawler.headers, ...options.headers } }
         : {}),
-      // --no-discovery-probes overrides [crawler] discovery_probes (#409).
-      ...(typeof options.discoveryProbes === "boolean"
-        ? { discovery_probes: options.discoveryProbes }
+      // --disable-discovery-probes[=false] overrides [crawler]
+      // disable_discovery_probes (#409), in both directions.
+      ...(typeof options.disableDiscoveryProbes === "boolean"
+        ? { disable_discovery_probes: options.disableDiscoveryProbes }
         : {}),
     },
     // --offline promises no network beyond the audited site itself, so
