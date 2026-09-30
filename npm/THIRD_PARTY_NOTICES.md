@@ -83,7 +83,7 @@ runtime dependency closure of `apps/cli`.
 | `http-errors@2.0.1` | MIT | [source](https://github.com/jshttp/http-errors) |
 | `iconv-lite@0.7.3` | MIT | [source](https://github.com/pillarjs/iconv-lite) |
 | `inherits@2.0.4` | ISC | [source](https://github.com/isaacs/inherits) |
-| `ip-address@10.2.0` | MIT | [source](https://github.com/beaugunderson/ip-address) |
+| `ip-address@10.7.2` | MIT | [source](https://github.com/beaugunderson/ip-address) |
 | `ipaddr.js@1.9.1` | MIT | [source](https://github.com/whitequark/ipaddr.js) |
 | `is-promise@4.0.0` | MIT | [source](https://github.com/then/is-promise) |
 | `is-unsafe@2.0.0` | MIT | [source](https://github.com/NaturalIntelligence/is-unsafe) |
@@ -188,7 +188,7 @@ Packages: `get-intrinsic@1.3.0`
 
 ### LICENSE (02d42589c644)
 
-Packages: `ip-address@10.2.0`
+Packages: `ip-address@10.7.2`
 
     Copyright (C) 2011 by Beau Gunderson
 
