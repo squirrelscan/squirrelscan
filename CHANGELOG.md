@@ -15,7 +15,9 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
-## [Unreleased]
+## v0.0.99 — 2026-09-30
+
+`squirrel setup` gets you from install to your first audit in about a minute, the CLI installs and updates the agent skills itself, `--no-publish` really does skip the publish, and `--disable-discovery-probes` turns off the pre-crawl requests that got some audits banned by server firewalls.
 
 ### Added
 
@@ -42,6 +44,7 @@ How it works:
 
 ### Fixed
 
+- `squirrel skills install` works again. In v0.0.98 it stopped with "No valid skills found" once the skills moved to their own repository; it now installs them from [squirrelscan/skills](https://github.com/squirrelscan/skills) directly.
 - A mistyped command now says what you probably meant (`squirrel audti` suggests `squirrel audit`, `squirrel skills instal` suggests `squirrel skills install`) and exits 1 without a stack trace. A missing argument shows the command's usage and an example, and a command group run on its own (`squirrel self`) shows its help and exits 0.
 - `squirrel -c <path> <command>` works: the config path given before the command was read as the command name ("Unknown command").
 - `squirrel skills update` updates the skills. It used to pass a repository to `npx skills update`, which reads its arguments as skill names, so it matched nothing installed and changed nothing.
