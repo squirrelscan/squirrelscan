@@ -132,6 +132,7 @@ import {
   normalizeCoverageMode,
 } from "../coverage";
 import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
+import { hasFlag, hasNegatedFlag } from "../flags";
 import { fmt, pageLimitHint } from "../format";
 import { createProgress } from "../progress";
 import { promptForProjectName } from "../prompt";
@@ -641,7 +642,7 @@ export function resolvePublishDecision(opts: {
   signedIn: boolean;
   offline: boolean;
   explicitPublish: boolean; // args.publish
-  noPublish: boolean; // args["no-publish"]
+  noPublish: boolean; // --no-publish, read from argv (see cli/flags.ts)
   configPublish: boolean; // config.cloud.publish
   // #1066: a --rule-include/--rule-exclude run produces a partial report
   // (fewer categories, no partial marker on the publish payload yet — #1082
@@ -674,19 +675,17 @@ export function resolvePublishDecision(opts: {
 export function validateAuditFlags(args: {
   offline?: boolean;
   publish?: boolean;
-  no_publish?: boolean;
   noPublish?: boolean;
   render?: boolean;
   http?: boolean;
 }): string | null {
-  const noPublish = args.no_publish || args.noPublish;
   // --offline conflicts with flags that require the cloud API.
   if (args.offline && (args.publish || args.render)) {
     const conflicting = args.publish ? "--publish" : "--render";
     return `--offline cannot be combined with ${conflicting} (requires login and cloud access)`;
   }
   // --no-publish (skip publishing) contradicts --publish (force publishing).
-  if (noPublish && args.publish) {
+  if (args.noPublish && args.publish) {
     return "--no-publish cannot be combined with --publish";
   }
   // --render and --http are opposite overrides; refuse the contradiction
@@ -817,6 +816,8 @@ export const audit = defineCommand({
       description:
         "Publish report to reports.squirrelscan.com (now the default when signed in)",
     },
+    // Declared for help and completions only: citty delivers --no-publish as
+    // publish: false and never sets this arg, so run() reads it from rawArgs.
     "no-publish": {
       type: "boolean",
       description:
@@ -880,7 +881,7 @@ export const audit = defineCommand({
         "Print only the score, category breakdown, and issue counts, with no per-issue detail (console format only)",
     },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     // Configure logging before any output
     configureLogger({ debug: args.debug, trace: args.trace });
 
@@ -901,9 +902,15 @@ export const audit = defineCommand({
       arch: process.arch,
     });
 
+    // From argv, not args: citty never sets args["no-publish"], and once
+    // --no-publish is passed its publish value depends on argv order, so any
+    // --publish/-p token alongside it counts as the conflict.
+    const noPublish = hasNegatedFlag(rawArgs, "publish");
     const flagError = validateAuditFlags({
       ...args,
-      no_publish: args["no-publish"],
+      publish:
+        !!args.publish || (noPublish && hasFlag(rawArgs, "publish", ["p"])),
+      noPublish,
     });
     if (flagError) {
       console.error(flagError);
@@ -2112,7 +2119,7 @@ export const audit = defineCommand({
         signedIn,
         offline: !!args.offline,
         explicitPublish: !!args.publish,
-        noPublish: !!args["no-publish"],
+        noPublish,
         configPublish: config.cloud.publish,
         ruleFilterActive,
         nonPublicHost: !!nonPublicHost,
@@ -2137,7 +2144,7 @@ export const audit = defineCommand({
           signedIn,
           offline: !!args.offline,
           explicitPublish: !!args.publish,
-          noPublish: !!args["no-publish"],
+          noPublish,
           configPublish: config.cloud.publish,
           ruleFilterActive,
           nonPublicHost: false,
@@ -2151,7 +2158,7 @@ export const audit = defineCommand({
         signedIn,
         offline: !!args.offline,
         explicitPublish: !!args.publish,
-        noPublish: !!args["no-publish"],
+        noPublish,
         configPublish: config.cloud.publish,
         ruleFilterActive: false,
         nonPublicHost: !!nonPublicHost,

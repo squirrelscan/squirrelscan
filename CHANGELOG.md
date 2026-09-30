@@ -41,6 +41,7 @@ How it works:
 - A mistyped command now says what you probably meant (`squirrel audti` suggests `squirrel audit`, `squirrel skills instal` suggests `squirrel skills install`) and exits 1 without a stack trace. A missing argument shows the command's usage and an example, and a command group run on its own (`squirrel self`) shows its help and exits 0.
 - `squirrel -c <path> <command>` works: the config path given before the command was read as the command name ("Unknown command").
 - `squirrel skills update` updates the skills. It used to pass a repository to `npx skills update`, which reads its arguments as skill names, so it matched nothing installed and changed nothing.
+- `squirrel audit --no-publish` skips the publish. The flag never reached the command, so a signed-in run published anyway, or ended in "Could not auto-publish" when the connection failed. `--no-publish` together with `--publish` (or `-p`) now stops with an error before the audit starts, whatever the order. Before, the pair was accepted and `--no-publish` ignored.
 
 ## v0.0.98 — 2026-09-23
 
