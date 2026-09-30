@@ -77,6 +77,14 @@ export const CrawlerConfigSchema = z.object({
   // Default false (#790): audits are site-owner initiated, so directives
   // aimed at uninvited crawlers don't apply unless explicitly opted in.
   respect_robots: z.boolean().default(false),
+  // Pre-crawl discovery probes (#409): llms.txt, markdown negotiation, the
+  // well-known sweep (/.well-known/*, /openapi.json, /swagger.json, AGENTS.md,
+  // …), the homepage as GPTBot/Claude-User, and RSL. false sends none of them,
+  // for hosts whose firewall bans a client that asks for /swagger.json.
+  // robots.txt, sitemaps and the seed page still run. Optional, and unset means
+  // on: a config without the key (every cloud run) behaves exactly as before,
+  // and code that builds a Config by hand does not have to learn a new field.
+  discovery_probes: z.boolean().optional(),
   // Incremental re-scan: send conditional GETs (ETag/Last-Modified) so unchanged pages return 304; --refresh forces a full fetch. (#125)
   incremental: z.boolean().default(true),
   breadth_first: z.boolean().default(true),

@@ -48,7 +48,7 @@ export const config = defineCommand({
         console.log(
           "  crawler.include, crawler.exclude, crawler.allow_query_params"
         );
-        console.log("  crawler.respect_robots");
+        console.log("  crawler.respect_robots, crawler.discovery_probes");
       },
     }),
     set: defineCommand({

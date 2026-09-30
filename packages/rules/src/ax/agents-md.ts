@@ -1,11 +1,13 @@
 // ax/agents-md - detect /AGENTS.md and its conventional variants
 
-import type { WellKnownProbe } from "@squirrelscan/core-contracts";
+import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-// Probed in this order (mirrors packages/crawler/src/well-known.ts WELL_KNOWN_PATHS).
-const AGENTS_MD_PATHS: readonly string[] = [
+import { includesPath, notCheckedCheck, sentWellKnown } from "./discovery-probe-state";
+
+// Probed in this order (mirrors core-contracts WELL_KNOWN_PATHS).
+const AGENTS_MD_PATHS: readonly WellKnownPath[] = [
   "/AGENTS.md",
   "/agents.md",
   "/.well-known/agents.md",
@@ -30,6 +32,8 @@ export const agentsMdRule: Rule = {
     scope: "site",
     severity: "info",
     weight: 1,
+    // llms-txt: publishing llms.txt is what earns a missing AGENTS.md a warning.
+    discoveryProbes: [...AGENTS_MD_PATHS, "llms-txt"],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -37,11 +41,11 @@ export const agentsMdRule: Rule = {
     const wk = ctx.site?.wellKnown;
 
     if (!wk) {
-      checks.push({ name: "agents-md", status: "info", message: "well-known probe data not available" });
+      checks.push(notCheckedCheck("agents-md", "AGENTS.md"));
       return { checks };
     }
 
-    const probes = wk.probes.filter((p) => AGENTS_MD_PATHS.includes(p.path));
+    const probes = wk.probes.filter((p) => includesPath(AGENTS_MD_PATHS, p.path));
     const hit = probes.find(isRealHit);
 
     if (hit) {
@@ -66,6 +70,13 @@ export const agentsMdRule: Rule = {
         value: "spa-fallback",
         details: { path: spaFallback.path },
       });
+      return { checks };
+    }
+
+    // Absence is only established for paths that were actually requested.
+    const { unsent } = sentWellKnown(wk, AGENTS_MD_PATHS);
+    if (unsent.length > 0) {
+      checks.push(notCheckedCheck("agents-md-present", "AGENTS.md", { notChecked: unsent }));
       return { checks };
     }
 

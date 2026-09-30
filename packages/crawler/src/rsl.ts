@@ -3,9 +3,9 @@ import { truncateToBytes } from "@squirrelscan/utils/bytes";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
 
-import type { PhaseBudget } from "./deadline";
+import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { RslData, RslLicenseDoc } from "@squirrelscan/core-contracts";
 
 const PROBE_TIMEOUT_MS = 15_000;
@@ -102,40 +102,47 @@ async function fetchLicenseDoc(
 
 // Fetch robots.txt, extract RSL `License:` directives + `Link: rel=license`
 // header, then fetch each referenced license doc. Self-contained so it runs
-// unconditionally alongside the other prefetches (independent of respectRobots).
+// independently of respectRobots. null when the budget ran out before the
+// robots.txt read went out: no licensing signal was looked for, so the rule
+// reports "not checked" rather than "none declared" (#409).
 export function fetchRslLicensing(
   baseUrl: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-): Effect.Effect<RslData, never, never> {
+  gate: ProbeGate = ungated,
+): Effect.Effect<RslData | null, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
   return Effect.promise(async () => {
     let robotsBody = "";
     let linkHeader: string | null = null;
-    // A skipped robots read leaves robotsBody empty, which is the same "no
-    // licensing signal" state an unreachable robots.txt produces below.
-    const robotsTimeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
-    try {
-      if (robotsTimeoutMs !== null) {
-        await safeFetchWithDeadline(
-          robotsUrl,
-          { headers: { "User-Agent": userAgent, Accept: "text/plain, */*", ...customHeaders } },
-          robotsTimeoutMs,
-          async (response) => {
-            if (response.ok) {
-              const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
-              robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
-              linkHeader = response.headers.get("link");
-            } else {
-              await response.body?.cancel().catch(() => {});
-            }
-          },
-        );
+    let robotsSkipped = false;
+    await gate(robotsUrl, async () => {
+      const robotsTimeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
+      if (robotsTimeoutMs === null) robotsSkipped = true;
+      try {
+        if (robotsTimeoutMs !== null) {
+          await safeFetchWithDeadline(
+            robotsUrl,
+            { headers: { "User-Agent": userAgent, Accept: "text/plain, */*", ...customHeaders } },
+            robotsTimeoutMs,
+            async (response) => {
+              if (response.ok) {
+                const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
+                robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
+                linkHeader = response.headers.get("link");
+              } else {
+                await response.body?.cancel().catch(() => {});
+              }
+            },
+          );
+        }
+      } catch {
+        // robots unreachable → no licensing signal; return empty below.
       }
-    } catch {
-      // robots unreachable → no licensing signal; return empty below.
-    }
+    });
+
+    if (robotsSkipped) return null;
 
     const directiveUrls = extractRobotsLicenseUrls(robotsBody);
     const headerUrls = extractLinkHeaderLicenseUrls(linkHeader);
@@ -160,7 +167,9 @@ export function fetchRslLicensing(
     const documents = await Promise.all(
       licenseUrls.map((url) => {
         const sameOrigin = new URL(url).host === baseHost;
-        return fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined, budget);
+        return gate(url, () =>
+          fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined, budget),
+        );
       }),
     );
 

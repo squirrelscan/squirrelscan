@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 
-import { budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
+import { budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
 
-import type { PhaseBudget } from "./deadline";
+import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
 
 const PROBE_TIMEOUT_MS = 30_000;
@@ -48,15 +48,16 @@ const unreachableProbe = (): ProbeResult => ({
 });
 
 // Probe one URL for its status + headers only; never downloads the body.
+// null when the budget was spent before the request went out.
 async function probeOne(
   url: string,
   userAgent: string,
   accept: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-): Promise<ProbeResult> {
+): Promise<ProbeResult | null> {
   const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
-  if (timeoutMs === null) return unreachableProbe();
+  if (timeoutMs === null) return null;
   try {
     return await safeFetchWithDeadline(
       url,
@@ -82,20 +83,29 @@ async function probeOne(
 }
 
 // Probe homepage markdown negotiation + a /index.md variant, once per audit.
+// null when the budget cut a request and the rest found no Markdown: that is
+// no finding, so the rule reports "not checked" rather than "no Markdown" (#409).
 export function probeMarkdownResponse(
   baseUrl: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-): Effect.Effect<MarkdownProbeData, never, never> {
+  gate: ProbeGate = ungated,
+): Effect.Effect<MarkdownProbeData | null, never, never> {
   const homeUrl = new URL("/", baseUrl).toString();
   const mdUrl = new URL("/index.md", baseUrl).toString();
   return Effect.promise(async () => {
-    const [neg, md] = await Promise.all([
-      probeOne(homeUrl, userAgent, "text/markdown, text/x-markdown, */*", customHeaders, budget),
-      probeOne(mdUrl, userAgent, "text/markdown, text/plain, */*", customHeaders, budget),
+    const [negSent, mdSent] = await Promise.all([
+      gate(homeUrl, () =>
+        probeOne(homeUrl, userAgent, "text/markdown, text/x-markdown, */*", customHeaders, budget),
+      ),
+      gate(mdUrl, () =>
+        probeOne(mdUrl, userAgent, "text/markdown, text/plain, */*", customHeaders, budget),
+      ),
     ]);
-    return {
+    const neg = negSent ?? unreachableProbe();
+    const md = mdSent ?? unreachableProbe();
+    const data: MarkdownProbeData = {
       negotiatedUrl: homeUrl,
       negotiatedContentType: neg.contentType,
       servesMarkdown: isMarkdown(neg.contentType),
@@ -107,5 +117,8 @@ export function probeMarkdownResponse(
       originalTokensHeader: neg.originalTokens,
       alternateMarkdownUrl: neg.alternateMarkdownUrl,
     };
+    const found = data.servesMarkdown || data.mdVariantExists || data.alternateMarkdownUrl !== null;
+    if ((!negSent || !mdSent) && !found) return null;
+    return data;
   });
 }

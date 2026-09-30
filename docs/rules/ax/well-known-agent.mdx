@@ -17,11 +17,13 @@ One older path is worth removing rather than adding. `/.well-known/ai-plugin.jso
 
 The rule runs once per crawl against probed well-known paths. A probe counts as a hit when it returned 200, the body parsed as JSON, and it did not sniff as HTML. It emits one or more checks:
 
-- `well-known-agent`: reports at info status with the message `well-known probe data not available` when the probes did not run. With probes but no hits it reports at info status with `No MCP server card, A2A agent card, or agent-skills manifest found` and the value `absent`.
+- `well-known-agent`: reports at info status with the message `Agent manifests not checked: the discovery probe was not sent` and the value `not-checked` when no well-known probe ran, or when there is no hit and at least one manifest path was never requested (listed in `details.notChecked`). With every path requested and no hits it reports at info status with `No MCP server card, A2A agent card, or agent-skills manifest found` and the value `absent`.
 - `well-known-agent-present`: one check per manifest kind, at info status, with the message `<kind> found at <path>`. Only the first hit for each kind is reported. When the JSON carries none of the keys `url`, `name`, `transport`, `endpoint` or `version`, matched case-insensitively, the message gains the suffix ` (JSON present, but no plausible manifest fields recognized)`.
 - `well-known-agent-deprecated`: emitted only when `/ai-plugin.json` or `/.well-known/ai-plugin.json` is a hit. It warns with the message `Found deprecated OpenAI plugin manifest at <path> — this format was retired; remove it to avoid confusing modern agents`.
 
 The MCP card is probed at four paths: `/.well-known/mcp/server-card.json`, `/.well-known/mcp.json`, `/.well-known/mcp` and `/.well-known/mcp-server`. Absence of every manifest is a single quiet info result and never a warning, because adoption is still rare. The one thing this rule warns about is the stale file.
+
+A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. None of those says anything about the site, so the result is `not-checked`, never absent.
 
 ## How to fix it
 

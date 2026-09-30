@@ -50,6 +50,7 @@ squirrel audit <url> [options]
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
 | `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
+| `--no-discovery-probes` | | Skip the pre-crawl discovery probes (`llms.txt`, `/.well-known/*`, `/swagger.json` and the rest) for this run. Overrides `[crawler] discovery_probes`. See [Discovery probes](/configuration/crawler#discovery-probes) | `false` |
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 
 ### Coverage modes
@@ -253,6 +254,10 @@ squirrel audit https://example.com --rule-include ax --rule-include perf
 ```
 
 `--rule-include` replaces the categories that run for this audit;
+Excluding rules also skips the pre-crawl requests that only those rules read:
+`--rule-exclude ax` sends none of the
+[discovery probes](/configuration/crawler#discovery-probes).
+
 `--rule-exclude` skips categories on top of whatever would normally run. When
 either flag is set, the report is **partial**: the health score is recomputed
 from only the included categories and the console output prints a

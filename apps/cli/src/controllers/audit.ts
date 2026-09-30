@@ -24,6 +24,7 @@ import {
   createConditionalRenderDocumentFetcher,
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
+import { selectDiscoveryProbes } from "@squirrelscan/rules";
 
 import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
@@ -906,6 +907,17 @@ export async function runAudit(
         headers: mergedConfig.crawler.headers,
         followRedirects: mergedConfig.crawler.follow_redirects,
         respectRobots: mergedConfig.crawler.respect_robots,
+        // Only the probes an enabled rule reads, and none when the user turned
+        // them off: a firewall can ban the audit for asking for /swagger.json
+        // (#409).
+        discoveryProbes: selectDiscoveryProbes({
+          enabled: mergedConfig.crawler.discovery_probes !== false,
+          rules: mergedConfig.rules,
+          ruleOptions: mergedConfig.rule_options as Record<
+            string,
+            { enabled?: boolean }
+          >,
+        }),
         incremental: incrementalEnabled,
         // Browser-like freshness: skip re-requesting fresh pages (max-age /
         // Expires) across audits. Honored only when incremental; --refresh
@@ -2128,6 +2140,10 @@ export function mergeOptionsToConfig(
       // CLI --header values override matching [crawler] headers from TOML (#494).
       ...(options.headers && Object.keys(options.headers).length > 0
         ? { headers: { ...config.crawler.headers, ...options.headers } }
+        : {}),
+      // --no-discovery-probes overrides [crawler] discovery_probes (#409).
+      ...(typeof options.discoveryProbes === "boolean"
+        ? { discovery_probes: options.discoveryProbes }
         : {}),
     },
     // --offline promises no network beyond the audited site itself, so

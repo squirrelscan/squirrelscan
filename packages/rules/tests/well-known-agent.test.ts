@@ -2,6 +2,8 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { PROBE_NOT_ATTEMPTED_ERROR, WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
+
 import type { CheckResult, WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
 
 import { wellKnownAgentRule } from "../src/ax/well-known-agent";
@@ -26,8 +28,18 @@ function probe(over: Partial<WellKnownProbe> = {}): WellKnownProbe {
   };
 }
 
-function ctx(probes: WellKnownProbe[] | null | undefined): RuleContext {
-  const wk: WellKnownProbeData | null = probes ? { probes } : null;
+// The crawler's default sweep stores one row per well-known path, so a path the
+// test does not set is one that was requested and answered 404.
+function sweep(probes: WellKnownProbe[]): WellKnownProbe[] {
+  return WELL_KNOWN_PATHS.map(
+    (path) =>
+      probes.find((p) => p.path === path) ??
+      probe({ path, url: `https://example.com${path}`, status: 404 }),
+  );
+}
+
+function ctx(probes: WellKnownProbe[] | null | undefined, raw = false): RuleContext {
+  const wk: WellKnownProbeData | null = probes ? { probes: raw ? probes : sweep(probes) } : null;
   return {
     page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
@@ -36,15 +48,34 @@ function ctx(probes: WellKnownProbe[] | null | undefined): RuleContext {
   };
 }
 
-function run(probes: WellKnownProbe[] | null | undefined): CheckResult[] {
-  return wellKnownAgentRule.run(ctx(probes)).checks;
+function run(probes: WellKnownProbe[] | null | undefined, raw = false): CheckResult[] {
+  return wellKnownAgentRule.run(ctx(probes, raw)).checks;
 }
 
 describe("ax/well-known-agent", () => {
-  test("data unavailable → info, no crash", () => {
+  test("data unavailable → not checked info, no crash", () => {
     const checks = run(undefined);
     expect(checks[0]?.status).toBe("info");
-    expect(checks[0]?.message).toContain("not available");
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("not checked");
+  });
+
+  // #409: a path the sweep never requested says nothing about the site.
+  test("manifest paths missing from the sweep → not checked, never absent", () => {
+    const checks = run([probe({ path: "/AGENTS.md", status: 404 })], true);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).not.toContain("No MCP");
+  });
+
+  test("manifest paths skipped by the preamble budget → not checked", () => {
+    const skipped = sweep([]).map((p) =>
+      p.path === "/.well-known/mcp.json" ? { ...p, status: 0, error: PROBE_NOT_ATTEMPTED_ERROR } : p,
+    );
+    const checks = run(skipped, true);
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.details?.notChecked).toEqual(["/.well-known/mcp.json"]);
   });
 
   test("nothing found → single quiet absent info (never warn)", () => {

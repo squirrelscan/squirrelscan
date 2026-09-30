@@ -6,11 +6,13 @@ import { Effect, Stream, PubSub, Duration, Deferred, Either } from "effect";
 import type {
   AuditFailureDetail,
   AuditFailureSource,
+  DiscoveryProbe,
   FrontierSource,
   LinkData,
   SitemapData,
 } from "@squirrelscan/core-contracts";
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
+import { WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
@@ -22,7 +24,7 @@ import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
-import type { PhaseBudget } from "../deadline";
+import type { PhaseBudget, ProbeGate } from "../deadline";
 import {
   computeSitemapUrlCap,
   discoverSitemaps,
@@ -230,9 +232,10 @@ const PARSED_PAGE_CACHE_MAX_PAGES = COVERAGE_PAGE_LIMITS.quick;
 // perfectly well once the preamble is past.
 //
 // One budget spans those stages. Each request takes min(its own deadline, what
-// the budget has left); once it is spent the rest are skipped and store the same
-// "unreachable" shape a network failure gives them, so no probe's row goes
-// missing and every consumer keeps a reason to report.
+// the budget has left); once it is spent the rest are skipped. A skipped
+// well-known or agent-access probe stores the "unreachable" shape with the
+// budget reason; llms, markdown and RSL store no row (#409). Either way every
+// consumer keeps a reason to report, and it is "not checked", never missing.
 //
 // What this budget deliberately does NOT cover is sitemap discovery, which runs
 // after it on a progress window of its own (see SITEMAP_WALK_WINDOW_MS). The
@@ -354,7 +357,7 @@ function createHostScheduler(limitFor: HostConcurrencyLimit): HostScheduler {
     acquire,
     release,
 
-    waitForDelay: (host: string, delayMs: number) =>
+    waitForDelay: (host: string, delayMs: number, notAfter?: number) =>
       Effect.gen(function* () {
         // delayMs <= 0 disables staggering (e.g. cloud render path) — pure concurrency limit.
         if (delayMs <= 0) return;
@@ -362,6 +365,12 @@ function createHostScheduler(limitFor: HostConcurrencyLimit): HostScheduler {
         const state = getState(host);
         const now = Date.now();
         const scheduledStart = Math.max(now, state.nextFetchAt);
+        if (notAfter !== undefined && scheduledStart >= notAfter) {
+          // Past the caller's deadline: wait it out, reserve nothing (#409).
+          // The extra millisecond lands the caller past it, not on it.
+          yield* Effect.sleep(Duration.millis(Math.max(0, notAfter - now) + 1));
+          return;
+        }
         setState(host, { ...state, nextFetchAt: scheduledStart + delayMs });
         const waitMs = scheduledStart - now;
         if (waitMs > 0) {
@@ -544,6 +553,50 @@ export function createCrawler(
           yield* Effect.sleep(Duration.millis(Math.min(waitMs, HOST_BACKOFF_POLL_MS)));
         }
       });
+
+    /**
+     * Discovery probes queue behind the same per-host scheduler as page fetches
+     * (#409). They used to go out in one unthrottled burst of 20, so
+     * `per_host_concurrency = 1` and `per_host_delay_ms`, the settings for
+     * crawling a sensitive host politely, did nothing for the requests most
+     * likely to trip its firewall.
+     *
+     * `per_host_delay_ms` only, not a robots.txt Crawl-delay: at the 2s cap,
+     * 28 probes would outlast the preamble budget and turn the later ones into
+     * "not checked" on every respect_robots audit of such a site.
+     *
+     * Queueing never outlasts the budget: a slot that would start past it is
+     * not taken, so the probes still waiting skip at the deadline instead of
+     * each sitting out its delay first. And the queue runs on its own fibers
+     * (the probe modules are promise-based), which `stop` cannot reach, so
+     * `interrupted` aborts them: nothing still queued goes out after the crawl
+     * was stopped.
+     */
+    const probeGate =
+      (budget: PhaseBudget, interrupted: AbortSignal): ProbeGate =>
+      (url, send) => {
+        // Budget already spent: `send` records a skip without a request, so
+        // there is nothing to throttle and no reason to queue for a slot.
+        if (budgetRemainingMs(budget) <= 0) return send();
+        const host = urlHostKey(url);
+        return Effect.runPromise(
+          Effect.zipRight(
+            hostScheduler.acquire(host),
+            Effect.gen(function* () {
+              // Spent while queued: skip at once, without taking a start slot.
+              if (budgetRemainingMs(budget) > 0) {
+                yield* hostScheduler.waitForDelay(
+                  host,
+                  hostBackoff.delayFor(host, config.perHostDelayMs),
+                  budget.deadlineAt,
+                );
+              }
+              return yield* Effect.promise(send);
+            }).pipe(Effect.ensuring(hostScheduler.release(host))),
+          ),
+          { signal: interrupted },
+        );
+      };
 
     // Shared cache seam (#147): same lookup logic runs local + cloud. Injectable
     // since #1899 so a caller whose previous crawl lives somewhere other than
@@ -2299,6 +2352,107 @@ export function createCrawler(
         }
       });
 
+    /**
+     * The discovery probes (#409): every root request the preamble sends besides
+     * robots.txt, the seed and sitemap discovery. `config.discoveryProbes` picks
+     * which go out (unset = all), and each goes through the per-host throttle. A
+     * probe that is not sent stores nothing, so the rules that read it report
+     * "not checked" rather than a missing file.
+     */
+    const sendDiscoveryProbes = (
+      crawlId: string,
+      preamble: PhaseBudget,
+    ): Effect.Effect<void, StorageError, never> => {
+      const interrupted = new AbortController();
+      return Effect.gen(function* () {
+        const selected = config.discoveryProbes;
+        const wants = (probe: DiscoveryProbe): boolean => !selected || selected.includes(probe);
+        const gate = probeGate(preamble, interrupted.signal);
+        if (selected && selected.length === 0) {
+          logger.debug("discovery probes off", "no llms, markdown, well-known, agent or RSL requests");
+        }
+
+        // llms.txt + llms-full.txt at the root once, independent of robots.
+        if (wants("llms-txt")) {
+          const llms = yield* fetchLlmsTxt(
+            baseUrl,
+            config.userAgent,
+            config.headers,
+            preamble,
+            gate,
+          );
+          // null: the budget ran out first. No row, so the rule says "not checked".
+          if (llms) {
+            yield* storage.setLlmsTxt(crawlId, {
+              llmsTxt: {
+                url: llms.llmsTxt.url,
+                exists: llms.llmsTxt.exists,
+                content: llms.llmsTxt.content,
+                sizeBytes: llms.llmsTxt.sizeBytes,
+              },
+              llmsFullTxt: {
+                url: llms.llmsFullTxt.url,
+                exists: llms.llmsFullTxt.exists,
+                content: llms.llmsFullTxt.content,
+                sizeBytes: llms.llmsFullTxt.sizeBytes,
+              },
+              fetchedAt: Date.now(),
+            });
+          }
+        }
+
+        // Homepage markdown content-negotiation + .md variant once.
+        if (wants("markdown")) {
+          const markdown = yield* probeMarkdownResponse(
+            baseUrl,
+            config.userAgent,
+            config.headers,
+            preamble,
+            gate,
+          );
+          if (markdown) {
+            yield* storage.setMarkdownProbe(crawlId, { ...markdown, fetchedAt: Date.now() });
+          }
+        }
+
+        // AX prefetches: well-known/agent files, homepage access under AI-crawler
+        // UAs, and RSL licensing.
+        const wellKnownPaths = WELL_KNOWN_PATHS.filter(wants);
+        if (wellKnownPaths.length > 0) {
+          const wellKnown = yield* probeWellKnown(
+            baseUrl,
+            config.userAgent,
+            config.headers,
+            preamble,
+            { paths: wellKnownPaths, gate },
+          );
+          yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
+        }
+
+        if (wants("agent-access")) {
+          const agentAccess = yield* probeAgentAccess(
+            baseUrl,
+            config.userAgent,
+            config.headers,
+            preamble,
+            gate,
+          );
+          yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
+        }
+
+        if (wants("rsl")) {
+          const rsl = yield* fetchRslLicensing(
+            baseUrl,
+            config.userAgent,
+            config.headers,
+            preamble,
+            gate,
+          );
+          if (rsl) yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
+        }
+      }).pipe(Effect.onInterrupt(() => Effect.sync(() => interrupted.abort())));
+    };
+
     const start = (
       targetUrl: string,
       originalUrl?: string,
@@ -2457,56 +2611,10 @@ export function createCrawler(
           });
         }
 
-        // Fetch llms.txt + llms-full.txt at the root once, independent of robots.
-        const llms = yield* fetchLlmsTxt(baseUrl, config.userAgent, config.headers, preamble);
-        yield* storage.setLlmsTxt(crawlId, {
-          llmsTxt: {
-            url: llms.llmsTxt.url,
-            exists: llms.llmsTxt.exists,
-            content: llms.llmsTxt.content,
-            sizeBytes: llms.llmsTxt.sizeBytes,
-          },
-          llmsFullTxt: {
-            url: llms.llmsFullTxt.url,
-            exists: llms.llmsFullTxt.exists,
-            content: llms.llmsFullTxt.content,
-            sizeBytes: llms.llmsFullTxt.sizeBytes,
-          },
-          fetchedAt: Date.now(),
-        });
-
-        // Probe homepage markdown content-negotiation + .md variant once.
-        const markdown = yield* probeMarkdownResponse(
-          baseUrl,
-          config.userAgent,
-          config.headers,
-          preamble,
-        );
-        yield* storage.setMarkdownProbe(crawlId, { ...markdown, fetchedAt: Date.now() });
-
-        // AX prefetches: well-known/agent files, homepage access under AI-crawler
-        // UAs, and RSL licensing — fetched unconditionally like llms/markdown.
-        const wellKnown = yield* probeWellKnown(
-          baseUrl,
-          config.userAgent,
-          config.headers,
-          preamble,
-        );
-        yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
-
-        const agentAccess = yield* probeAgentAccess(
-          baseUrl,
-          config.userAgent,
-          config.headers,
-          preamble,
-        );
-        yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
-
-        const rsl = yield* fetchRslLicensing(baseUrl, config.userAgent, config.headers, preamble);
-        yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
+        yield* sendDiscoveryProbes(crawlId, preamble);
 
         // The budget running out is not a failure of the crawl — every probe
-        // above degrades to its not-attempted shape and the crawl goes on —
+        // above degrades to "not checked" and the crawl goes on —
         // but it is the one fact that explains a report whose AX probes are
         // all "unknown", so say it once, here, where it is knowable (#1699).
         if (budgetRemainingMs(preamble) <= 0) {
@@ -2911,53 +3019,7 @@ export function createCrawler(
           }
         }
 
-        // Fetch llms.txt + llms-full.txt at the root once, independent of robots.
-        const llms = yield* fetchLlmsTxt(baseUrl, config.userAgent, config.headers, preamble);
-        yield* storage.setLlmsTxt(crawlId, {
-          llmsTxt: {
-            url: llms.llmsTxt.url,
-            exists: llms.llmsTxt.exists,
-            content: llms.llmsTxt.content,
-            sizeBytes: llms.llmsTxt.sizeBytes,
-          },
-          llmsFullTxt: {
-            url: llms.llmsFullTxt.url,
-            exists: llms.llmsFullTxt.exists,
-            content: llms.llmsFullTxt.content,
-            sizeBytes: llms.llmsFullTxt.sizeBytes,
-          },
-          fetchedAt: Date.now(),
-        });
-
-        // Probe homepage markdown content-negotiation + .md variant once.
-        const markdown = yield* probeMarkdownResponse(
-          baseUrl,
-          config.userAgent,
-          config.headers,
-          preamble,
-        );
-        yield* storage.setMarkdownProbe(crawlId, { ...markdown, fetchedAt: Date.now() });
-
-        // AX prefetches: well-known/agent files, homepage access under AI-crawler
-        // UAs, and RSL licensing — fetched unconditionally like llms/markdown.
-        const wellKnown = yield* probeWellKnown(
-          baseUrl,
-          config.userAgent,
-          config.headers,
-          preamble,
-        );
-        yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
-
-        const agentAccess = yield* probeAgentAccess(
-          baseUrl,
-          config.userAgent,
-          config.headers,
-          preamble,
-        );
-        yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
-
-        const rsl = yield* fetchRslLicensing(baseUrl, config.userAgent, config.headers, preamble);
-        yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
+        yield* sendDiscoveryProbes(crawlId, preamble);
 
         // Seed the crawl queue with root URL
         yield* enqueueUrl(crawlId, baseUrl, 0, undefined, "seed");

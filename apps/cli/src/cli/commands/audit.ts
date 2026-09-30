@@ -875,6 +875,14 @@ export const audit = defineCommand({
       description:
         "Skip these rule categories or rules (repeatable or comma-separated), e.g. images,social. Adds to [rules] disable for this run",
     },
+    // Declared for help and completions only: citty delivers
+    // --no-discovery-probes as discovery-probes: false and never sets this
+    // arg, so run() reads it from rawArgs (see cli/flags.ts).
+    "no-discovery-probes": {
+      type: "boolean",
+      description:
+        "Skip the pre-crawl discovery probes (llms.txt, /.well-known/*, /swagger.json, ...) for this run; overrides [crawler] discovery_probes",
+    },
     summary: {
       type: "boolean",
       description:
@@ -1347,6 +1355,9 @@ export const audit = defineCommand({
           : {}),
         ...(ruleFilter.disable.length > 0
           ? { ruleExclude: ruleFilter.disable }
+          : {}),
+        ...(hasNegatedFlag(rawArgs, "discovery-probes")
+          ? { discoveryProbes: false }
           : {}),
       };
 

@@ -11,10 +11,11 @@ SquirrelScan uses a smart crawling system that balances thoroughness with effici
 When you run `squirrel audit https://example.com`, the crawler:
 
 1. **Fetches robots.txt** to discover sitemaps (enforcing its rules is opt-in, see below)
-2. **Seeds the frontier** with your starting URL
-3. **Discovers links** by parsing each page's HTML
-4. **Crawls breadth-first** to prioritize important pages
-5. **Stores everything** in a local SQLite database
+2. **Sends discovery probes** for the files agents look for, such as `llms.txt` and `/.well-known/mcp.json` (see [Discovery probes](/configuration/crawler#discovery-probes); `--no-discovery-probes` turns them off)
+3. **Seeds the frontier** with your starting URL
+4. **Discovers links** by parsing each page's HTML
+5. **Crawls breadth-first** to prioritize important pages
+6. **Stores everything** in a local SQLite database
 
 ```bash
 squirrel audit https://example.com

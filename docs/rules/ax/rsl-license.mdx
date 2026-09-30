@@ -13,11 +13,13 @@ It answers a question robots.txt cannot. A `Disallow` says a crawler may not fet
 
 The rule runs once per crawl. It looks for a `License:` directive in robots.txt, a `Link: rel=license` header, and any licence URLs those produce, then reads the result of fetching each URL. It emits one or two checks:
 
-- `rsl-license`: reports at info status with the message `RSL licensing data not available` when the probe did not run.
+- `rsl-license`: reports at info status with the message `RSL licensing not checked: the discovery probe was not sent` and the value `not-checked` when the probe did not run.
 - `rsl-license-present`: reports at info status with `No machine-readable licensing declared (no robots.txt License: directive or Link: rel=license)` and the value `absent` when there is no signal at all. No further checks run. Otherwise it reports at info status with `License reference declared`, appending ` via robots.txt License:` and ` via Link: rel=license` for whichever source was present, then ` (N URL)` or ` (N URLs)` for the count it found.
 - `rsl-license-valid`: reports at info status with `Valid RSL document found at <url>` when a referenced document returned 200, parsed as XML and read as RSL, adding ` (+N more)` when several did. When nothing resolved, nothing was broken, and at least one document is recorded as never requested, it reports at info status with `License declared but the referenced document was not checked (N URLs)` and the value `unknown`. Otherwise it warns with `License declared but the referenced document didn't resolve as valid RSL (<url>: <error or status N>)`, listing each broken URL with its error or its status.
 
 The distinction in the last bullet is deliberate. A URL the crawl tried and could not fetch is a broken reference and warns. A URL the crawl never requested proves nothing, and the check says it does not know rather than reporting a defect the audit did not establish. Both look like a status of 0, so the recorded reason is the only thing separating them. A declared licence with no recorded documents at all falls through to the warning.
+
+A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. None of those says anything about the site, so the result is `not-checked`, never absent.
 
 ## How to fix it
 

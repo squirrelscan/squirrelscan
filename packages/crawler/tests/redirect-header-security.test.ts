@@ -371,9 +371,9 @@ describe("robots.txt directive scheme refusal (#1393/#1394)", () => {
 
       expect(requested.some((u) => u.startsWith("file:"))).toBe(false);
       // The directive was present, but its file:// target was dropped pre-fetch.
-      expect(result.robotsHasLicense).toBe(true);
-      expect(result.licenseUrls.length).toBe(0);
-      expect(result.documents.length).toBe(0);
+      expect(result!.robotsHasLicense).toBe(true);
+      expect(result!.licenseUrls.length).toBe(0);
+      expect(result!.documents.length).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;
     }

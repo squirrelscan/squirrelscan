@@ -1,12 +1,14 @@
 // ax/llms-txt - detect /llms.txt (+ /llms-full.txt) and validate basic format
 
-import type { WellKnownProbe } from "@squirrelscan/core-contracts";
+import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { includesPath, notCheckedCheck } from "./discovery-probe-state";
+
 // Alt paths some sites use instead of the root — probed by the crawler's
-// fixed well-known list (packages/crawler/src/well-known.ts WELL_KNOWN_PATHS).
-const LLMS_TXT_ALT_PATHS: readonly string[] = ["/.well-known/llms.txt", "/docs/llms.txt"];
+// fixed well-known list (core-contracts WELL_KNOWN_PATHS).
+const LLMS_TXT_ALT_PATHS: readonly WellKnownPath[] = ["/.well-known/llms.txt", "/docs/llms.txt"];
 
 // The #1 false positive: an SPA serving the same index.html for every path,
 // including /llms.txt — a 200 that is actually a fallback page, not real content.
@@ -59,6 +61,7 @@ export const llmsTxtRule: Rule = {
     scope: "site",
     severity: "info",
     weight: 1,
+    discoveryProbes: ["llms-txt", ...LLMS_TXT_ALT_PATHS],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -66,7 +69,7 @@ export const llmsTxtRule: Rule = {
     const llms = ctx.site?.llmsTxt;
 
     if (!llms) {
-      checks.push({ name: "llms-txt", status: "info", message: "llms.txt data not available" });
+      checks.push(notCheckedCheck("llms-txt", "/llms.txt"));
       return { checks };
     }
 
@@ -84,7 +87,7 @@ export const llmsTxtRule: Rule = {
 
     if (!llms.llmsTxt.exists) {
       const altHit = ctx.site?.wellKnown?.probes.find(
-        (p) => LLMS_TXT_ALT_PATHS.includes(p.path) && isRealAltHit(p),
+        (p) => includesPath(LLMS_TXT_ALT_PATHS, p.path) && isRealAltHit(p),
       );
       if (altHit) {
         checks.push({

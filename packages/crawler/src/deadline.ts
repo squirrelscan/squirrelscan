@@ -51,6 +51,20 @@ export function safeFetchWithDeadline<T>(
 }
 
 /**
+ * Admission for one discovery probe request (#409): resolves once `send` may
+ * run, runs it, and releases whatever it held when `send` settles. The crawl
+ * passes its per-host scheduler here, so the probes queue behind
+ * `per_host_concurrency` and `per_host_delay_ms` like every page fetch does.
+ *
+ * `send` must do its own budget check: time spent queued here is preamble time
+ * too, so a request that waited past the budget has to be skipped, not sent.
+ */
+export type ProbeGate = <T>(url: string, send: () => Promise<T>) => Promise<T>;
+
+/** No throttle: `send` runs at once. The default for callers outside a crawl. */
+export const ungated: ProbeGate = (_url, send) => send();
+
+/**
  * A wall-clock budget shared by every request in one crawl phase.
  *
  * Per-request deadlines bound one request each; they say nothing about a
