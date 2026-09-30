@@ -10,6 +10,6 @@
   },
   "devDependencies": {
     "tangly": "0.5.0",
-    "wrangler": "^4.20.0"
+    "wrangler": "^4.144.0"
   }
 }
