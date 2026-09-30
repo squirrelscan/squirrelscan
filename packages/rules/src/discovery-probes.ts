@@ -8,7 +8,7 @@ import { DISCOVERY_PROBES } from "@squirrelscan/core-contracts/storage";
 import type { DiscoveryProbe } from "@squirrelscan/core-contracts";
 
 import { filterRules } from "./filter";
-import { loadAllRules } from "./loader";
+import { loadAllRules, type RuleNamespace } from "./loader";
 
 export interface DiscoveryProbeSelectionInput {
   /** False when `[crawler] disable_discovery_probes` or `--disable-discovery-probes` says so. */
@@ -17,6 +17,12 @@ export interface DiscoveryProbeSelectionInput {
   rules: { enable?: string[]; disable?: string[] };
   /** Per-rule config; only its `enabled` key matters here. */
   ruleOptions?: Record<string, { enabled?: boolean }>;
+  /**
+   * Rule namespaces beyond the built-ins (plugins), the same ones the runner
+   * gets. A plugin rule that reads a probe must declare it in its own
+   * `meta.discoveryProbes` for the probe to be sent.
+   */
+  additionalNamespaces?: RuleNamespace[];
 }
 
 /**
@@ -25,7 +31,7 @@ export interface DiscoveryProbeSelectionInput {
  */
 export function selectDiscoveryProbes(input: DiscoveryProbeSelectionInput): DiscoveryProbe[] {
   if (!input.enabled) return [];
-  const rules = loadAllRules();
+  const rules = loadAllRules({ additionalNamespaces: input.additionalNamespaces });
   const wanted = new Set<DiscoveryProbe>();
   for (const id of filterRules(
     [...rules.keys()],

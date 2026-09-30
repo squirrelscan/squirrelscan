@@ -12,6 +12,9 @@ import { Effect, Fiber } from "effect";
 import { PROBE_NOT_ATTEMPTED_ERROR, WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
 
 import { createCrawler, preambleBudgetMs } from "../src/core/crawler";
+import { fetchLlmsTxt } from "../src/llms";
+import { probeMarkdownResponse } from "../src/markdown";
+import { fetchRslLicensing } from "../src/rsl";
 import type { CrawlerConfig } from "../src/core/types";
 
 const PAGE = `<!doctype html><html><head><title>t</title></head><body>
@@ -200,6 +203,30 @@ describe("discovery probes (#409)", () => {
     expect(peak).toBe(3);
   }, 30_000);
 
+  // A cloud-rendered crawl clamps the page limit to the plan's render
+  // concurrency (1 on free) with no delay. The probes are plain HTTP and keep
+  // their own limit, so they do not queue behind that clamp.
+  test("discoveryProbePerHost sizes the probe slots apart from the page limit", async () => {
+    const origin = serve(30);
+    await crawl(origin.url, {
+      perHostConcurrency: 1,
+      perHostDelayMs: 0,
+      discoveryProbePerHost: { concurrency: 4, delayMs: 0 },
+    });
+
+    const wellKnown = origin.hits.filter((h) =>
+      (WELL_KNOWN_PATHS as readonly string[]).includes(h.path),
+    );
+    let peak = 0;
+    for (const h of wellKnown) {
+      const overlapping = wellKnown.filter(
+        (o) => o.startedAt <= h.startedAt && o.endedAt > h.startedAt,
+      ).length;
+      peak = Math.max(peak, overlapping);
+    }
+    expect(peak).toBe(4);
+  }, 30_000);
+
   test("probes still queued when the budget runs out skip at the deadline, not after", async () => {
     // A 100ms request timeout makes a 300ms preamble budget, and 100ms spacing
     // fits about three probes into it. The rest must skip when the budget ends
@@ -243,5 +270,18 @@ describe("discovery probes (#409)", () => {
     // A request already on the wire may land a moment later; nothing new starts.
     const late = origin.hits.filter((h) => h.startedAt > interruptedAt + 50);
     expect(late).toEqual([]);
+  }, 30_000);
+
+  // A refused connection is what a firewall ban looks like from here. No
+  // answer means no finding, so these store nothing and their rules say "not
+  // checked" instead of "No /llms.txt found".
+  test("llms, markdown and RSL keep no result when the host does not answer", async () => {
+    const closed = Bun.serve({ port: 0, fetch: () => new Response("") });
+    const origin = `http://localhost:${closed.port}`;
+    closed.stop(true);
+
+    expect(await Effect.runPromise(fetchLlmsTxt(origin, "squirrel-test"))).toBeNull();
+    expect(await Effect.runPromise(probeMarkdownResponse(origin, "squirrel-test"))).toBeNull();
+    expect(await Effect.runPromise(fetchRslLicensing(origin, "squirrel-test"))).toBeNull();
   }, 30_000);
 });

@@ -69,6 +69,15 @@ describe("ax/well-known-agent", () => {
     expect(checks[0]?.message).not.toContain("No MCP");
   });
 
+  test("a manifest path that got no answer → not checked, not absent", () => {
+    const refused = sweep([]).map((p) =>
+      p.path === "/.well-known/agent-card.json" ? { ...p, status: 0, error: "The operation timed out" } : p,
+    );
+    const checks = run(refused, true);
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("got no answer");
+  });
+
   test("manifest paths skipped by the preamble budget → not checked", () => {
     const skipped = sweep([]).map((p) =>
       p.path === "/.well-known/mcp.json" ? { ...p, status: 0, error: PROBE_NOT_ATTEMPTED_ERROR } : p,

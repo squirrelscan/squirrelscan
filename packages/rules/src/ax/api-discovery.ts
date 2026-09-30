@@ -4,7 +4,7 @@ import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { includesPath, notCheckedCheck, sentWellKnown } from "./discovery-probe-state";
+import { answeredWellKnown, includesPath, notCheckedCheck } from "./discovery-probe-state";
 
 const API_CATALOG_PATH: WellKnownPath = "/.well-known/api-catalog";
 const OPENAPI_PATHS: readonly WellKnownPath[] = [
@@ -56,11 +56,16 @@ export const apiDiscoveryRule: Rule = {
       (p) => includesPath(OPENAPI_PATHS, p.path) && isRealHit(p) && looksLikeOpenApiDoc(p),
     );
 
-    const apiDocsUnsent = sentWellKnown(wk, API_DOC_PATHS).unsent;
-    if (!apiCatalogHit && !openapiHit && apiDocsUnsent.length > 0) {
-      // Absence is only established for paths that were actually requested.
+    const apiDocs = answeredWellKnown(wk, API_DOC_PATHS);
+    if (!apiCatalogHit && !openapiHit && apiDocs.unchecked.length > 0) {
+      // Absence is only established for paths that got an answer.
       checks.push(
-        notCheckedCheck("api-discovery", "API discovery documents", { notChecked: apiDocsUnsent }),
+        notCheckedCheck(
+          "api-discovery",
+          "API discovery documents",
+          { notChecked: apiDocs.unchecked },
+          apiDocs.reason,
+        ),
       );
     } else if (!apiCatalogHit && !openapiHit) {
       checks.push({
@@ -89,12 +94,15 @@ export const apiDiscoveryRule: Rule = {
     const asHit = wk.probes.find((p) => p.path === OAUTH_AS_PATH && isRealHit(p));
     const prmHit = wk.probes.find((p) => p.path === OAUTH_PRM_PATH && isRealHit(p));
 
-    const oauthUnsent = sentWellKnown(wk, OAUTH_PATHS).unsent;
-    if (!asHit && !prmHit && oauthUnsent.length > 0) {
+    const oauth = answeredWellKnown(wk, OAUTH_PATHS);
+    if (!asHit && !prmHit && oauth.unchecked.length > 0) {
       checks.push(
-        notCheckedCheck("api-discovery-oauth", "OAuth discovery documents", {
-          notChecked: oauthUnsent,
-        }),
+        notCheckedCheck(
+          "api-discovery-oauth",
+          "OAuth discovery documents",
+          { notChecked: oauth.unchecked },
+          oauth.reason,
+        ),
       );
       return { checks };
     }

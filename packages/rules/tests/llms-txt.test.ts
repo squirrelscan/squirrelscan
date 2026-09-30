@@ -130,6 +130,24 @@ describe("ax/llms-txt", () => {
     expect(checks[0]?.status).toBe("fail");
   });
 
+  // #409: no answer from the root is not "missing", but a real file at an
+  // alternate path that did answer is still a finding.
+  test("root got no answer but /.well-known/llms.txt is real → present via alt path", () => {
+    const checks = run(undefined, {
+      probes: [wkProbe({ path: "/.well-known/llms.txt", status: 200, bodySize: 40, markdownLike: true })],
+    });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.value).toBe("present");
+    expect(checks[0]?.message).toContain("/.well-known/llms.txt");
+    expect(checks[0]?.message).toContain("not checked");
+  });
+
+  test("root got no answer and no alt hit → not checked", () => {
+    const checks = run(undefined, { probes: [wkProbe({ path: "/docs/llms.txt", status: 404 })] });
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("was not sent or got no answer");
+  });
+
   test("root absent but /.well-known/llms.txt hits a real file → present via alt path", () => {
     const checks = run(
       llms(),

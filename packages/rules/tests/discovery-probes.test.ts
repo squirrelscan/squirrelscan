@@ -9,6 +9,7 @@ import { DISCOVERY_PROBES } from "@squirrelscan/core-contracts/storage";
 
 import { selectDiscoveryProbes } from "../src/discovery-probes";
 import { loadAllRules } from "../src/loader";
+import type { Rule } from "../src/types";
 
 const ALL = { enable: ["*"], disable: [] };
 const API_PATHS = [
@@ -72,6 +73,29 @@ describe("selectDiscoveryProbes (#409)", () => {
       ruleOptions: { "ax/agent-blocking": { enabled: false }, "ax/pay-per-crawl": { enabled: false } },
     });
     expect(both).not.toContain("agent-access");
+  });
+
+  test("a plugin rule's declared probes count when its namespace is passed", () => {
+    const pluginRule: Rule = {
+      meta: {
+        id: "acme/openapi-owner",
+        name: "OpenAPI owner",
+        description: "Reads the OpenAPI probe.",
+        category: "ax",
+        scope: "site",
+        severity: "info",
+        weight: 1,
+        discoveryProbes: ["/openapi.json"],
+      },
+      run: () => ({ checks: [] }),
+    };
+    expect(
+      selectDiscoveryProbes({
+        enabled: true,
+        rules: { enable: ["*"], disable: ["ax/*"] },
+        additionalNamespaces: [{ name: "acme", rules: [pluginRule] }],
+      }),
+    ).toEqual(["/openapi.json"]);
   });
 
   test("a single rule gets exactly its own probes", () => {

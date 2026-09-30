@@ -4,7 +4,7 @@ import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { includesPath, notCheckedCheck, sentWellKnown } from "./discovery-probe-state";
+import { answeredWellKnown, includesPath, notCheckedCheck } from "./discovery-probe-state";
 
 const MCP_PATHS: readonly WellKnownPath[] = [
   "/.well-known/mcp/server-card.json",
@@ -71,10 +71,12 @@ export const wellKnownAgentRule: Rule = {
       ...(skillsHit ? [{ kind: "agent-skills manifest", probe: skillsHit }] : []),
     ];
 
-    const { unsent } = sentWellKnown(wk, MANIFEST_PATHS);
-    if (hits.length === 0 && unsent.length > 0) {
-      // Absence is only established for paths that were actually requested.
-      checks.push(notCheckedCheck("well-known-agent", "Agent manifests", { notChecked: unsent }));
+    const { unchecked, reason } = answeredWellKnown(wk, MANIFEST_PATHS);
+    if (hits.length === 0 && unchecked.length > 0) {
+      // Absence is only established for paths that got an answer.
+      checks.push(
+        notCheckedCheck("well-known-agent", "Agent manifests", { notChecked: unchecked }, reason),
+      );
     } else if (hits.length === 0) {
       // Detect-and-inform only — absence stays a single quiet info, never a warning.
       checks.push({

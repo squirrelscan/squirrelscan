@@ -554,12 +554,21 @@ export function createCrawler(
         }
       });
 
+    // The discovery probes' slots come from a scheduler of their own, sized by
+    // `discoveryProbePerHost` when the caller set one: a cloud-rendered crawl
+    // clamps the page limit to the plan's render concurrency (1 on free), and
+    // plain-HTTP probes queued behind that would run in series (#409).
+    const probeSlots = createHostScheduler(
+      (host) => config.discoveryProbePerHost?.concurrency ?? hostConcurrencyLimit(host),
+    );
+
     /**
-     * Discovery probes queue behind the same per-host scheduler as page fetches
-     * (#409). They used to go out in one unthrottled burst of 20, so
+     * Discovery probes queue behind per-host limits like page fetches (#409).
+     * They used to go out in one unthrottled burst of 20, so
      * `per_host_concurrency = 1` and `per_host_delay_ms`, the settings for
      * crawling a sensitive host politely, did nothing for the requests most
-     * likely to trip its firewall.
+     * likely to trip its firewall. Start spacing goes through the shared page
+     * scheduler, so the first page keeps its gap after the last probe.
      *
      * `per_host_delay_ms` only, not a robots.txt Crawl-delay: at the 2s cap,
      * 28 probes would outlast the preamble budget and turn the later ones into
@@ -579,20 +588,25 @@ export function createCrawler(
         // there is nothing to throttle and no reason to queue for a slot.
         if (budgetRemainingMs(budget) <= 0) return send();
         const host = urlHostKey(url);
+        const delayMs = config.discoveryProbePerHost?.delayMs ?? config.perHostDelayMs;
         return Effect.runPromise(
-          Effect.zipRight(
-            hostScheduler.acquire(host),
-            Effect.gen(function* () {
-              // Spent while queued: skip at once, without taking a start slot.
-              if (budgetRemainingMs(budget) > 0) {
-                yield* hostScheduler.waitForDelay(
-                  host,
-                  hostBackoff.delayFor(host, config.perHostDelayMs),
-                  budget.deadlineAt,
-                );
-              }
-              return yield* Effect.promise(send);
-            }).pipe(Effect.ensuring(hostScheduler.release(host))),
+          Effect.acquireUseRelease(
+            // Interruptible while queued, so a stop drains the queue at once;
+            // acquire's own onInterrupt hands on a slot granted mid-interrupt.
+            Effect.interruptible(probeSlots.acquire(host)),
+            () =>
+              Effect.gen(function* () {
+                // Spent while queued: skip at once, without taking a start slot.
+                if (budgetRemainingMs(budget) > 0) {
+                  yield* hostScheduler.waitForDelay(
+                    host,
+                    hostBackoff.delayFor(host, delayMs),
+                    budget.deadlineAt,
+                  );
+                }
+                return yield* Effect.promise(send);
+              }),
+            () => probeSlots.release(host),
           ),
           { signal: interrupted },
         );
@@ -2415,8 +2429,21 @@ export function createCrawler(
           }
         }
 
-        // AX prefetches: well-known/agent files, homepage access under AI-crawler
-        // UAs, and RSL licensing.
+        // Homepage access under AI-crawler UAs, ahead of the 20-path sweep:
+        // ax/agent-blocking is the heaviest probe reader (weight 3), so on a
+        // slow host it should be the last to lose its budget, not the first.
+        if (wants("agent-access")) {
+          const agentAccess = yield* probeAgentAccess(
+            baseUrl,
+            config.userAgent,
+            config.headers,
+            preamble,
+            gate,
+          );
+          yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
+        }
+
+        // Well-known and agent files, then RSL licensing.
         const wellKnownPaths = WELL_KNOWN_PATHS.filter(wants);
         if (wellKnownPaths.length > 0) {
           const wellKnown = yield* probeWellKnown(
@@ -2427,17 +2454,6 @@ export function createCrawler(
             { paths: wellKnownPaths, gate },
           );
           yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
-        }
-
-        if (wants("agent-access")) {
-          const agentAccess = yield* probeAgentAccess(
-            baseUrl,
-            config.userAgent,
-            config.headers,
-            preamble,
-            gate,
-          );
-          yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
         }
 
         if (wants("rsl")) {

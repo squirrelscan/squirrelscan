@@ -67,9 +67,28 @@ export const llmsTxtRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
     const llms = ctx.site?.llmsTxt;
+    const altHit = ctx.site?.wellKnown?.probes.find(
+      (p) => includesPath(LLMS_TXT_ALT_PATHS, p.path) && isRealAltHit(p),
+    );
+    const altHitCheck = (hit: WellKnownProbe): CheckResult => ({
+      name: "llms-txt-present",
+      status: "info",
+      message: `No /llms.txt at the root, but found one at ${hit.path}`,
+      value: "present",
+      details: { path: hit.path, bodySize: hit.bodySize },
+    });
 
     if (!llms) {
-      checks.push(notCheckedCheck("llms-txt", "/llms.txt"));
+      // The root got no answer, but a real file at an alternate location that
+      // did answer is still a finding (#409).
+      if (altHit) {
+        checks.push({
+          ...altHitCheck(altHit),
+          message: `Found llms.txt at ${altHit.path} (/llms.txt at the root was not checked)`,
+        });
+      } else {
+        checks.push(notCheckedCheck("llms-txt", "/llms.txt", undefined, "no-result"));
+      }
       return { checks };
     }
 
@@ -86,17 +105,8 @@ export const llmsTxtRule: Rule = {
     }
 
     if (!llms.llmsTxt.exists) {
-      const altHit = ctx.site?.wellKnown?.probes.find(
-        (p) => includesPath(LLMS_TXT_ALT_PATHS, p.path) && isRealAltHit(p),
-      );
       if (altHit) {
-        checks.push({
-          name: "llms-txt-present",
-          status: "info",
-          message: `No /llms.txt at the root, but found one at ${altHit.path}`,
-          value: "present",
-          details: { path: altHit.path, bodySize: altHit.bodySize },
-        });
+        checks.push(altHitCheck(altHit));
         return { checks };
       }
       // warn-status in an info-severity rule surfaces as a Recommendation in

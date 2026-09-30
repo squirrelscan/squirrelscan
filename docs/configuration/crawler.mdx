@@ -824,11 +824,11 @@ whether AI crawlers get the same homepage a browser does.
 |---|---|---|
 | llms.txt | `/llms.txt`, `/llms-full.txt` | `ax/llms-txt`, `ax/agents-md` |
 | Markdown | `/` with `Accept: text/markdown`, `/index.md` | `ax/markdown-response` |
+| Agent access | `/` fetched as a browser, as GPTBot and as Claude-User | `ax/agent-blocking`, `ax/pay-per-crawl` |
 | Agent manifests | `/.well-known/mcp/server-card.json`, `/.well-known/mcp.json`, `/.well-known/mcp`, `/.well-known/mcp-server`, `/.well-known/agent-card.json`, `/.well-known/agent-skills/index.json`, `/ai-plugin.json`, `/.well-known/ai-plugin.json` | `ax/well-known-agent` |
 | API and OAuth discovery | `/.well-known/api-catalog`, `/openapi.json`, `/swagger.json`, `/api/openapi.json`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource` | `ax/api-discovery` |
 | AGENTS.md | `/AGENTS.md`, `/agents.md`, `/.well-known/agents.md`, `/docs/AGENTS.md` | `ax/agents-md` |
 | llms.txt elsewhere | `/.well-known/llms.txt`, `/docs/llms.txt` | `ax/llms-txt` |
-| Agent access | `/` fetched as a browser, as GPTBot and as Claude-User | `ax/agent-blocking`, `ax/pay-per-crawl` |
 | RSL licensing | `/robots.txt` again, for its `License:` lines, plus each license document it names | `ax/rsl-license` |
 
 That is 28 requests on most sites. `robots.txt`, sitemap discovery and the page
@@ -897,21 +897,30 @@ squirrel audit https://example.com --rule-exclude ax/api-discovery
 
 ### What the report says
 
-When a rule's probe was not sent, the rule reports **not checked**, with the
-value `not-checked`. It never says the file is missing, it never counts as a
-failure, and it does not move the score.
+When a rule's probe was not sent, or a probe for a file went out and got no
+answer (a refused connection or a timeout), the rule reports **not checked**,
+with the value `not-checked`: no answer is not evidence the file is missing.
+Those results never count as a failure and are not scored. Two rules keep their
+own reading of an unanswered request: `ax/agent-blocking` calls an AI-crawler
+fetch with no answer inconclusive, and `ax/rsl-license` still reports a license
+document your robots.txt names, but that could not be fetched, as a broken
+reference.
 
 ### Pacing
 
 Discovery probes wait their turn behind the same per-host limits as pages: at
 most [`per_host_concurrency`](#per_host_concurrency) at once, with starts at
-least [`per_host_delay_ms`](#per_host_delay_ms) apart. A robots.txt
-`Crawl-delay` applies to pages only.
+least [`per_host_delay_ms`](#per_host_delay_ms) apart. When cloud rendering
+limits how many pages load at once, the probes still use these two settings,
+since they are plain requests. A robots.txt `Crawl-delay` applies to pages
+only. For a slow or touchy site, `per_host_concurrency = 1` sends them one at a
+time, which is usually gentler than a longer delay alone.
 
 The probes share one time budget with the start page and `robots.txt` reads: 45
-seconds, or three times `timeout_ms` when that is shorter. With a long `per_host_delay_ms`
-the last probes may not fit. The ones that don't are skipped and reported as not
-checked, and the crawl carries on.
+seconds, or three times `timeout_ms` when that is shorter. They go out in the
+order of the table above, so with a long `per_host_delay_ms` the last ones in it
+may not fit. Those are skipped and reported as not checked, and the crawl carries
+on.
 
 ---
 

@@ -15,8 +15,9 @@ function emptyFile(url: string): LlmsTxtFile {
   return { url, exists: false, content: null, sizeBytes: 0 };
 }
 
-// Fetch one well-known file; a 404/error/oversize file is "absent", never a throw.
-// null when the budget was spent before the request went out: nothing learned.
+// Fetch one well-known file; a 404/error-status/oversize file is "absent", never
+// a throw. null when there was no answer at all: the budget was spent before the
+// request went out, or it failed or timed out in flight. Nothing learned (#409).
 async function fetchOne(
   url: string,
   userAgent: string,
@@ -54,13 +55,14 @@ async function fetchOne(
       },
     );
   } catch {
-    return emptyFile(url);
+    return null;
   }
 }
 
 // Fetch /llms.txt + /llms-full.txt from the domain root once per audit. null
-// when the budget ran out before /llms.txt went out: there is no finding to
-// store, and the rule reports "not checked" rather than a missing file (#409).
+// when /llms.txt got no answer (skipped by the budget, refused, timed out):
+// there is no finding to store, and the rule reports "not checked" rather than
+// a missing file (#409).
 export function fetchLlmsTxt(
   baseUrl: string,
   userAgent: string,

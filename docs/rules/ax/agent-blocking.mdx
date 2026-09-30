@@ -20,7 +20,7 @@ The rule runs once per crawl. It uses three homepage fetches made during the pre
 
 The soft-block threshold is a fifth of the browser body size. That is the shape of an interstitial: a 2xx with a fraction of the content. The rule's severity is error so that a blocked user-action fetcher badges as an error; a training-crawler block emits a warn check, which the report downgrades to a warning on its own.
 
-A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. None of those says anything about the site, so the result is `not-checked`, never absent.
+A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection or a timeout, counts the same. None of those says anything about the site, so the result is `not-checked`, never absent.
 
 ## How to fix it
 

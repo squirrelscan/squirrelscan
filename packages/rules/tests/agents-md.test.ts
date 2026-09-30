@@ -73,6 +73,17 @@ describe("ax/agents-md", () => {
     expect(checks[0]?.value).toBe("not-checked");
   });
 
+  // A refused connection (a firewall that just banned the audit) or a timeout
+  // is no answer, and no answer is not "missing".
+  test("an AGENTS.md path that got no answer → not checked, not absent", () => {
+    const wk = wellKnown([probe({ path: "/AGENTS.md", status: 0, error: "connect ECONNREFUSED" })]);
+    const checks = run(wk, true);
+    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("got no answer");
+    expect(checks[0]?.details?.notChecked).toEqual(["/AGENTS.md"]);
+  });
+
   test("an AGENTS.md path skipped by the preamble budget → not checked", () => {
     const wk = wellKnown([probe({ path: "/docs/AGENTS.md", error: PROBE_NOT_ATTEMPTED_ERROR })]);
     const checks = run(wk, true);
@@ -81,13 +92,15 @@ describe("ax/agents-md", () => {
   });
 
   test("no hit anywhere → absent (quiet info without llms.txt)", () => {
-    const checks = run(wellKnown([probe({ path: "/AGENTS.md" }), probe({ path: "/agents.md" })]));
+    const checks = run(
+      wellKnown([probe({ path: "/AGENTS.md", status: 404 }), probe({ path: "/agents.md", status: 404 })]),
+    );
     expect(checks[0]?.value).toBe("absent");
     expect(checks[0]?.status).toBe("info");
   });
 
   test("absent on a site publishing llms.txt → warn-status recommendation", () => {
-    const checks = run(wellKnown([probe({ path: "/AGENTS.md" })]), true);
+    const checks = run(wellKnown([probe({ path: "/AGENTS.md", status: 404 })]), true);
     expect(checks[0]?.value).toBe("absent");
     expect(checks[0]?.status).toBe("warn");
     expect(checks[0]?.message).toContain("llms.txt");

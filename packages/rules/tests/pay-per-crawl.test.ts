@@ -45,6 +45,14 @@ describe("ax/pay-per-crawl", () => {
     expect(checks[0]?.message).toContain("not checked");
   });
 
+  test("a probe that got no answer → not checked, not absent", () => {
+    const checks = run({
+      probes: [probe({ userAgent: "browser" }), probe({ userAgent: "gptbot", status: 0, error: "ECONNREFUSED" })],
+    });
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("got no answer");
+  });
+
   test("probes skipped by the preamble budget → not checked, not absent", () => {
     const skipped = { status: 0, error: PROBE_NOT_ATTEMPTED_ERROR };
     const checks = run({

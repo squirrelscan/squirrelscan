@@ -906,13 +906,13 @@ export type WellKnownPath = (typeof WELL_KNOWN_PATHS)[number];
  *
  * - `llms-txt`: /llms.txt and /llms-full.txt
  * - `markdown`: / with `Accept: text/markdown`, and /index.md
- * - a {@link WellKnownPath}: that one path of the well-known sweep
  * - `agent-access`: / as a browser, GPTBot and Claude-User
+ * - a {@link WellKnownPath}: that one path of the well-known sweep
  * - `rsl`: robots.txt re-read for `License:`, plus the documents it names
  *
  * Rules declare the probes they read (`RuleMeta.discoveryProbes`), and a probe
- * no enabled rule reads is never sent. A probe that was not sent leaves no
- * result behind, which its readers report as "not checked".
+ * no enabled rule reads is never sent. A probe that was not sent, or got no
+ * answer, is reported "not checked" by its readers, never as a missing file.
  */
 export type DiscoveryProbe = "llms-txt" | "markdown" | "agent-access" | "rsl" | WellKnownPath;
 
@@ -920,8 +920,8 @@ export type DiscoveryProbe = "llms-txt" | "markdown" | "agent-access" | "rsl" | 
 export const DISCOVERY_PROBES: readonly DiscoveryProbe[] = [
   "llms-txt",
   "markdown",
-  ...WELL_KNOWN_PATHS,
   "agent-access",
+  ...WELL_KNOWN_PATHS,
   "rsl",
 ];
 

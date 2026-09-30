@@ -546,6 +546,12 @@ export interface CrawlConcurrencySettings {
   concurrency: number;
   perHostConcurrency: number;
   perHostDelayMs: number;
+  /**
+   * Per-host limits for the discovery probes, set only when they differ from
+   * the page limits above (#409): the probes are plain HTTP even when the
+   * pages are cloud renders.
+   */
+  discoveryProbePerHost?: { concurrency: number; delayMs: number };
 }
 
 /**
@@ -661,6 +667,14 @@ export function resolveCrawlConcurrency(
     // No artificial delay between job submissions; robots.txt crawl-delay
     // still applies (the crawler prefers robots.crawlDelayMs when present).
     perHostDelayMs: 0,
+    // The discovery probes are plain HTTP to the site, not render jobs, so
+    // they keep the configured per-host limits. Clamped with the pages they ran
+    // one at a time on the free plan (render concurrency 1), and on a slow host
+    // the later ones fell past the preamble budget (#409).
+    discoveryProbePerHost: {
+      concurrency: base.perHostConcurrency,
+      delayMs: base.perHostDelayMs,
+    },
   };
 }
 
@@ -907,6 +921,7 @@ export async function runAudit(
         headers: mergedConfig.crawler.headers,
         followRedirects: mergedConfig.crawler.follow_redirects,
         respectRobots: mergedConfig.crawler.respect_robots,
+        discoveryProbePerHost: crawlConcurrency.discoveryProbePerHost,
         // Only the probes an enabled rule reads, and none when the user turned
         // them off: a firewall can ban the audit for asking for /swagger.json
         // (#409).

@@ -28,7 +28,7 @@ export const rslLicenseRule: Rule = {
     const rsl = ctx.site?.rsl;
 
     if (!rsl) {
-      checks.push(notCheckedCheck("rsl-license", "RSL licensing"));
+      checks.push(notCheckedCheck("rsl-license", "RSL licensing", undefined, "no-result"));
       return { checks };
     }
 

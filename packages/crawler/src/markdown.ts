@@ -48,7 +48,7 @@ const unreachableProbe = (): ProbeResult => ({
 });
 
 // Probe one URL for its status + headers only; never downloads the body.
-// null when the budget was spent before the request went out.
+// null when there was no answer: skipped by the budget, or failed in flight.
 async function probeOne(
   url: string,
   userAgent: string,
@@ -78,13 +78,13 @@ async function probeOne(
       },
     );
   } catch {
-    return unreachableProbe();
+    return null;
   }
 }
 
 // Probe homepage markdown negotiation + a /index.md variant, once per audit.
-// null when the budget cut a request and the rest found no Markdown: that is
-// no finding, so the rule reports "not checked" rather than "no Markdown" (#409).
+// null when a request got no answer and the rest found no Markdown: that is no
+// finding, so the rule reports "not checked" rather than "no Markdown" (#409).
 export function probeMarkdownResponse(
   baseUrl: string,
   userAgent: string,
@@ -95,7 +95,7 @@ export function probeMarkdownResponse(
   const homeUrl = new URL("/", baseUrl).toString();
   const mdUrl = new URL("/index.md", baseUrl).toString();
   return Effect.promise(async () => {
-    const [negSent, mdSent] = await Promise.all([
+    const [negAnswer, mdAnswer] = await Promise.all([
       gate(homeUrl, () =>
         probeOne(homeUrl, userAgent, "text/markdown, text/x-markdown, */*", customHeaders, budget),
       ),
@@ -103,8 +103,8 @@ export function probeMarkdownResponse(
         probeOne(mdUrl, userAgent, "text/markdown, text/plain, */*", customHeaders, budget),
       ),
     ]);
-    const neg = negSent ?? unreachableProbe();
-    const md = mdSent ?? unreachableProbe();
+    const neg = negAnswer ?? unreachableProbe();
+    const md = mdAnswer ?? unreachableProbe();
     const data: MarkdownProbeData = {
       negotiatedUrl: homeUrl,
       negotiatedContentType: neg.contentType,
@@ -118,7 +118,7 @@ export function probeMarkdownResponse(
       alternateMarkdownUrl: neg.alternateMarkdownUrl,
     };
     const found = data.servesMarkdown || data.mdVariantExists || data.alternateMarkdownUrl !== null;
-    if ((!negSent || !mdSent) && !found) return null;
+    if ((!negAnswer || !mdAnswer) && !found) return null;
     return data;
   });
 }

@@ -4,7 +4,7 @@ import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { includesPath, notCheckedCheck, sentWellKnown } from "./discovery-probe-state";
+import { answeredWellKnown, includesPath, notCheckedCheck } from "./discovery-probe-state";
 
 // Probed in this order (mirrors core-contracts WELL_KNOWN_PATHS).
 const AGENTS_MD_PATHS: readonly WellKnownPath[] = [
@@ -74,9 +74,11 @@ export const agentsMdRule: Rule = {
     }
 
     // Absence is only established for paths that were actually requested.
-    const { unsent } = sentWellKnown(wk, AGENTS_MD_PATHS);
-    if (unsent.length > 0) {
-      checks.push(notCheckedCheck("agents-md-present", "AGENTS.md", { notChecked: unsent }));
+    const { unchecked, reason } = answeredWellKnown(wk, AGENTS_MD_PATHS);
+    if (unchecked.length > 0) {
+      checks.push(
+        notCheckedCheck("agents-md-present", "AGENTS.md", { notChecked: unchecked }, reason),
+      );
       return { checks };
     }
 

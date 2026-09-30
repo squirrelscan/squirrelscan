@@ -24,7 +24,7 @@ export const markdownResponseRule: Rule = {
     const md = ctx.site?.markdownResponse;
 
     if (!md) {
-      checks.push(notCheckedCheck("markdown-response", "Markdown response"));
+      checks.push(notCheckedCheck("markdown-response", "Markdown response", undefined, "no-result"));
       return { checks };
     }
 

@@ -102,9 +102,10 @@ async function fetchLicenseDoc(
 
 // Fetch robots.txt, extract RSL `License:` directives + `Link: rel=license`
 // header, then fetch each referenced license doc. Self-contained so it runs
-// independently of respectRobots. null when the budget ran out before the
-// robots.txt read went out: no licensing signal was looked for, so the rule
-// reports "not checked" rather than "none declared" (#409).
+// independently of respectRobots. null when the robots.txt read got no answer
+// (skipped by the budget, refused, timed out): no licensing signal was seen
+// either way, so the rule reports "not checked" rather than "none declared"
+// (#409).
 export function fetchRslLicensing(
   baseUrl: string,
   userAgent: string,
@@ -116,10 +117,10 @@ export function fetchRslLicensing(
   return Effect.promise(async () => {
     let robotsBody = "";
     let linkHeader: string | null = null;
-    let robotsSkipped = false;
+    let robotsUnanswered = false;
     await gate(robotsUrl, async () => {
       const robotsTimeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
-      if (robotsTimeoutMs === null) robotsSkipped = true;
+      if (robotsTimeoutMs === null) robotsUnanswered = true;
       try {
         if (robotsTimeoutMs !== null) {
           await safeFetchWithDeadline(
@@ -138,11 +139,11 @@ export function fetchRslLicensing(
           );
         }
       } catch {
-        // robots unreachable → no licensing signal; return empty below.
+        robotsUnanswered = true;
       }
     });
 
-    if (robotsSkipped) return null;
+    if (robotsUnanswered) return null;
 
     const directiveUrls = extractRobotsLicenseUrls(robotsBody);
     const headerUrls = extractLinkHeaderLicenseUrls(linkHeader);

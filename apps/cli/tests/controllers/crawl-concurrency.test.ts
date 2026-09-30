@@ -145,6 +145,34 @@ describe("resolveCrawlConcurrency", () => {
     expect(result.concurrency).toBe(1);
   });
 
+  // #409: the discovery probes are plain HTTP, not render jobs. Clamped with
+  // the pages, a free plan sent all 28 one at a time and the later ones fell
+  // past the preamble budget on a slow host.
+  test("discovery probes keep the configured per-host limits on a free-plan render crawl", () => {
+    const config = getDefaultConfig();
+    config.crawler.per_host_concurrency = 4;
+    config.crawler.per_host_delay_ms = 120;
+
+    const result = resolveCrawlConcurrency(
+      config,
+      fetcherWithId("cloud-render"),
+      1
+    );
+    expect(result.perHostConcurrency).toBe(1);
+    expect(result.perHostDelayMs).toBe(0);
+    expect(result.discoveryProbePerHost).toEqual({
+      concurrency: 4,
+      delayMs: 120,
+    });
+  });
+
+  test("plain HTTP crawls leave the probes on the page limits", () => {
+    const config = getDefaultConfig();
+    expect(
+      resolveCrawlConcurrency(config, undefined).discoveryProbePerHost
+    ).toBeUndefined();
+  });
+
   test("plan limit above configured value is a no-op", () => {
     const config = getDefaultConfig();
     config.cloud.render_concurrency = 5;
