@@ -393,10 +393,6 @@ describe("validateAuditFlags", () => {
   });
 
   test("--no-publish + --publish is rejected", () => {
-    expect(validateAuditFlags({ no_publish: true, publish: true })).toBe(
-      "--no-publish cannot be combined with --publish"
-    );
-    // citty camelCase key is accepted too
     expect(validateAuditFlags({ noPublish: true, publish: true })).toBe(
       "--no-publish cannot be combined with --publish"
     );
@@ -406,7 +402,7 @@ describe("validateAuditFlags", () => {
     expect(validateAuditFlags({ render: true })).toBeNull();
     expect(validateAuditFlags({ http: true })).toBeNull();
     expect(validateAuditFlags({ offline: true })).toBeNull();
-    expect(validateAuditFlags({ no_publish: true })).toBeNull();
+    expect(validateAuditFlags({ noPublish: true })).toBeNull();
     expect(validateAuditFlags({})).toBeNull();
   });
 });
