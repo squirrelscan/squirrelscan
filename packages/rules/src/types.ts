@@ -17,6 +17,7 @@ import type {
   CloakingProbeData,
   ContactLinkData,
   ContentAnalysis,
+  DiscoveryProbe,
   EntityMap,
   EntityMapEdge,
   EntityMapNode,
@@ -158,6 +159,13 @@ export interface RuleMeta {
   cloud?: RuleCloudSpec;
   // Context-aware rules declare when they apply; gated by the Stage-0 metadata.
   appliesWhen?: RuleApplicability;
+  /**
+   * The pre-crawl discovery probes whose results this rule reads (#409). The
+   * crawler sends a probe only while an enabled rule declares it, so excluding
+   * every reader (`--rule-exclude ax`) skips the request. A rule whose probe was
+   * not sent must report "not checked", never a missing file.
+   */
+  discoveryProbes?: readonly DiscoveryProbe[];
   /**
    * Page-scope content/mechanism rules set this so the runner emits a visible
    * `skipped` check (reason "soft-404") instead of running them on a soft-404

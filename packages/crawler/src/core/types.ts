@@ -3,7 +3,11 @@
 import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import type { Stream, Effect } from "effect";
 
-import type { CrawlWarningCode, RedirectChain } from "@squirrelscan/core-contracts";
+import type {
+  CrawlWarningCode,
+  DiscoveryProbe,
+  RedirectChain,
+} from "@squirrelscan/core-contracts";
 
 import type { CrawlStorage, CrawlStats, StorageError } from "../storage/types";
 import type { TlsEvent } from "../fetcher";
@@ -55,6 +59,24 @@ export interface CrawlerConfig {
    * initiated, so robots directives aren't enforced unless opted in.
    */
   respectRobots: boolean;
+  /**
+   * The pre-crawl discovery probes to send (#409): llms.txt, markdown
+   * negotiation, the well-known sweep, the AI-crawler homepage fetches and RSL.
+   * Unset sends every probe. An empty list sends none, for sites whose firewall
+   * bans a client for asking for /swagger.json. robots.txt, sitemap discovery
+   * and the seed page are not probes and always run. A probe left out stores
+   * no result, which the rules that read it report as "not checked".
+   */
+  discoveryProbes?: readonly DiscoveryProbe[];
+  /**
+   * Per-host limits for the discovery probes when they differ from the page
+   * fetches' (#409). A cloud-rendered crawl clamps per-host concurrency to the
+   * plan's render concurrency (1 on free) with no delay, but the probes are
+   * plain HTTP and keep the configured per_host_concurrency and
+   * per_host_delay_ms. Unset: the probes use perHostConcurrency and
+   * perHostDelayMs.
+   */
+  discoveryProbePerHost?: { concurrency: number; delayMs: number };
   /** Enable incremental crawling (conditional GET) */
   incremental: boolean;
   /**
@@ -515,5 +537,11 @@ export type HostConcurrencyLimit = (host: string) => number;
 export interface HostScheduler {
   acquire(host: string): Effect.Effect<void, never, never>;
   release(host: string): Effect.Effect<void, never, never>;
-  waitForDelay(host: string, delayMs: number): Effect.Effect<void, never, never>;
+  /**
+   * Wait for this host's next start slot. With `notAfter` (epoch ms), a slot
+   * at or past it is not reserved: the wait ends at `notAfter` instead, so a
+   * caller on a deadline gives up on time and leaves no reservation behind to
+   * hold back the requests after it (#409).
+   */
+  waitForDelay(host: string, delayMs: number, notAfter?: number): Effect.Effect<void, never, never>;
 }

@@ -11,6 +11,7 @@ export * from "./resolution";
 export * from "./loader";
 export * from "./plugins";
 export * from "./cloud";
+export * from "./discovery-probes";
 export {
   APPLICABILITY_MIN_CONFIDENCE,
   type ApplicabilityVerdict,

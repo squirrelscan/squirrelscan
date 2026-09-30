@@ -2,9 +2,9 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
 
-import type { PhaseBudget } from "./deadline";
+import type { PhaseBudget, ProbeGate } from "./deadline";
 import type {
   AgentAccessData,
   AgentAccessProbe,
@@ -117,6 +117,7 @@ export function probeAgentAccess(
   browserUserAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
+  gate: ProbeGate = ungated,
 ): Effect.Effect<AgentAccessData, never, never> {
   const homeUrl = new URL("/", baseUrl).toString();
   const identities: ProbeIdentity[] = [
@@ -126,7 +127,7 @@ export function probeAgentAccess(
   ];
   return Effect.promise(async () => {
     const probes = await Promise.all(
-      identities.map((id) => probeOne(homeUrl, id, customHeaders, budget)),
+      identities.map((id) => gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget))),
     );
     return { probes };
   });

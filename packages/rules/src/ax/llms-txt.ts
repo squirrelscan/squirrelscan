@@ -1,12 +1,14 @@
 // ax/llms-txt - detect /llms.txt (+ /llms-full.txt) and validate basic format
 
-import type { WellKnownProbe } from "@squirrelscan/core-contracts";
+import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { includesPath, notCheckedCheck } from "./discovery-probe-state";
+
 // Alt paths some sites use instead of the root — probed by the crawler's
-// fixed well-known list (packages/crawler/src/well-known.ts WELL_KNOWN_PATHS).
-const LLMS_TXT_ALT_PATHS: readonly string[] = ["/.well-known/llms.txt", "/docs/llms.txt"];
+// fixed well-known list (core-contracts WELL_KNOWN_PATHS).
+const LLMS_TXT_ALT_PATHS: readonly WellKnownPath[] = ["/.well-known/llms.txt", "/docs/llms.txt"];
 
 // The #1 false positive: an SPA serving the same index.html for every path,
 // including /llms.txt — a 200 that is actually a fallback page, not real content.
@@ -59,14 +61,34 @@ export const llmsTxtRule: Rule = {
     scope: "site",
     severity: "info",
     weight: 1,
+    discoveryProbes: ["llms-txt", ...LLMS_TXT_ALT_PATHS],
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
     const llms = ctx.site?.llmsTxt;
+    const altHit = ctx.site?.wellKnown?.probes.find(
+      (p) => includesPath(LLMS_TXT_ALT_PATHS, p.path) && isRealAltHit(p),
+    );
+    const altHitCheck = (hit: WellKnownProbe): CheckResult => ({
+      name: "llms-txt-present",
+      status: "info",
+      message: `No /llms.txt at the root, but found one at ${hit.path}`,
+      value: "present",
+      details: { path: hit.path, bodySize: hit.bodySize },
+    });
 
     if (!llms) {
-      checks.push({ name: "llms-txt", status: "info", message: "llms.txt data not available" });
+      // The root got no answer, but a real file at an alternate location that
+      // did answer is still a finding (#409).
+      if (altHit) {
+        checks.push({
+          ...altHitCheck(altHit),
+          message: `Found llms.txt at ${altHit.path} (/llms.txt at the root was not checked)`,
+        });
+      } else {
+        checks.push(notCheckedCheck("llms-txt", "/llms.txt", undefined, "no-result"));
+      }
       return { checks };
     }
 
@@ -83,17 +105,8 @@ export const llmsTxtRule: Rule = {
     }
 
     if (!llms.llmsTxt.exists) {
-      const altHit = ctx.site?.wellKnown?.probes.find(
-        (p) => LLMS_TXT_ALT_PATHS.includes(p.path) && isRealAltHit(p),
-      );
       if (altHit) {
-        checks.push({
-          name: "llms-txt-present",
-          status: "info",
-          message: `No /llms.txt at the root, but found one at ${altHit.path}`,
-          value: "present",
-          details: { path: altHit.path, bodySize: altHit.bodySize },
-        });
+        checks.push(altHitCheck(altHit));
         return { checks };
       }
       // warn-status in an info-severity rule surfaces as a Recommendation in

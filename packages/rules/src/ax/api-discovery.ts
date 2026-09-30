@@ -1,13 +1,21 @@
 // ax/api-discovery - detect api-catalog, OpenAPI, and OAuth discovery documents
 
-import type { WellKnownProbe } from "@squirrelscan/core-contracts";
+import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-const API_CATALOG_PATH = "/.well-known/api-catalog";
-const OPENAPI_PATHS: readonly string[] = ["/openapi.json", "/swagger.json", "/api/openapi.json"];
-const OAUTH_AS_PATH = "/.well-known/oauth-authorization-server";
-const OAUTH_PRM_PATH = "/.well-known/oauth-protected-resource";
+import { answeredWellKnown, includesPath, notCheckedCheck } from "./discovery-probe-state";
+
+const API_CATALOG_PATH: WellKnownPath = "/.well-known/api-catalog";
+const OPENAPI_PATHS: readonly WellKnownPath[] = [
+  "/openapi.json",
+  "/swagger.json",
+  "/api/openapi.json",
+];
+const OAUTH_AS_PATH: WellKnownPath = "/.well-known/oauth-authorization-server";
+const OAUTH_PRM_PATH: WellKnownPath = "/.well-known/oauth-protected-resource";
+const API_DOC_PATHS: readonly WellKnownPath[] = [API_CATALOG_PATH, ...OPENAPI_PATHS];
+const OAUTH_PATHS: readonly WellKnownPath[] = [OAUTH_AS_PATH, OAUTH_PRM_PATH];
 
 function isRealHit(p: WellKnownProbe): boolean {
   return p.status === 200 && p.jsonValid && !p.looksHtml;
@@ -31,6 +39,7 @@ export const apiDiscoveryRule: Rule = {
     scope: "site",
     severity: "info",
     weight: 1,
+    discoveryProbes: [...API_DOC_PATHS, ...OAUTH_PATHS],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -38,16 +47,27 @@ export const apiDiscoveryRule: Rule = {
     const wk = ctx.site?.wellKnown;
 
     if (!wk) {
-      checks.push({ name: "api-discovery", status: "info", message: "well-known probe data not available" });
+      checks.push(notCheckedCheck("api-discovery", "API and OAuth discovery documents"));
       return { checks };
     }
 
     const apiCatalogHit = wk.probes.find((p) => p.path === API_CATALOG_PATH && isRealHit(p));
     const openapiHit = wk.probes.find(
-      (p) => OPENAPI_PATHS.includes(p.path) && isRealHit(p) && looksLikeOpenApiDoc(p),
+      (p) => includesPath(OPENAPI_PATHS, p.path) && isRealHit(p) && looksLikeOpenApiDoc(p),
     );
 
-    if (!apiCatalogHit && !openapiHit) {
+    const apiDocs = answeredWellKnown(wk, API_DOC_PATHS);
+    if (!apiCatalogHit && !openapiHit && apiDocs.unchecked.length > 0) {
+      // Absence is only established for paths that got an answer.
+      checks.push(
+        notCheckedCheck(
+          "api-discovery",
+          "API discovery documents",
+          { notChecked: apiDocs.unchecked },
+          apiDocs.reason,
+        ),
+      );
+    } else if (!apiCatalogHit && !openapiHit) {
       checks.push({
         name: "api-discovery",
         status: "info",
@@ -73,6 +93,19 @@ export const apiDiscoveryRule: Rule = {
 
     const asHit = wk.probes.find((p) => p.path === OAUTH_AS_PATH && isRealHit(p));
     const prmHit = wk.probes.find((p) => p.path === OAUTH_PRM_PATH && isRealHit(p));
+
+    const oauth = answeredWellKnown(wk, OAUTH_PATHS);
+    if (!asHit && !prmHit && oauth.unchecked.length > 0) {
+      checks.push(
+        notCheckedCheck(
+          "api-discovery-oauth",
+          "OAuth discovery documents",
+          { notChecked: oauth.unchecked },
+          oauth.reason,
+        ),
+      );
+      return { checks };
+    }
 
     if (!asHit && !prmHit) {
       checks.push({

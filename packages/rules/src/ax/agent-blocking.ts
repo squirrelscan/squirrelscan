@@ -6,6 +6,8 @@ import type { AgentAccessData, AgentAccessProbe } from "@squirrelscan/core-contr
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { NOT_CHECKED, wasSent } from "./discovery-probe-state";
+
 /** Fraction of the browser body below which a same-status AI response reads as a
  * soft-block / interstitial rather than the real page. */
 const SOFT_BLOCK_BODY_RATIO = 0.2;
@@ -20,9 +22,11 @@ type Verdict =
   | { kind: "payment"; signal: string | null }
   | { kind: "blocked"; reason: string }
   | { kind: "soft-block"; ratioPct: number }
-  | { kind: "inconclusive"; reason: string };
+  | { kind: "inconclusive"; reason: string }
+  | { kind: "not-checked" };
 
 function classifyProbe(probe: AgentAccessProbe, browserBodySize: number): Verdict {
+  if (!wasSent(probe)) return { kind: "not-checked" };
   // Pay-per-crawl is a deliberate wall, not access-blocking — leave it to ax/pay-per-crawl.
   if (probe.paymentRequired || probe.status === 402) {
     return { kind: "payment", signal: probe.paymentSignal };
@@ -69,6 +73,7 @@ export const agentBlockingRule: Rule = {
     // report's effective severity automatically downgrades to a warning.
     severity: "error",
     weight: 3,
+    discoveryProbes: ["agent-access"],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -80,7 +85,8 @@ export const agentBlockingRule: Rule = {
       checks.push({
         name: "agent-blocking",
         status: "skipped",
-        message: "Agent-access probe data not available",
+        message: "Agent access not checked: the discovery probe was not sent",
+        value: NOT_CHECKED,
         skipReason: "No agentAccess prefetch for this crawl",
       });
       return { checks };
@@ -88,6 +94,17 @@ export const agentBlockingRule: Rule = {
 
     const browser = agentAccess.probes.find((p) => p.userAgent === "browser");
     const aiProbes = agentAccess.probes.filter((p) => p.userAgent !== "browser");
+
+    if (browser && !wasSent(browser)) {
+      checks.push({
+        name: "agent-blocking",
+        status: "skipped",
+        message: "Agent access not checked: the discovery probe was not sent",
+        value: NOT_CHECKED,
+        skipReason: "Browser baseline probe was not sent",
+      });
+      return { checks };
+    }
 
     // Without a healthy browser baseline the comparison is meaningless (the site
     // may be down for everyone) — skip rather than blame the agents.
@@ -110,6 +127,15 @@ export const agentBlockingRule: Rule = {
       switch (verdict.kind) {
         case "ok":
           cleanCount++;
+          break;
+        case "not-checked":
+          checks.push({
+            name: "agent-access",
+            status: "info",
+            message: `${label} not checked: the discovery probe was not sent`,
+            value: NOT_CHECKED,
+            details: { userAgent: probe.userAgent },
+          });
           break;
         case "payment":
           checks.push({

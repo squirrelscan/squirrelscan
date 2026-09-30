@@ -43,10 +43,11 @@ function run(m: MarkdownProbeData | null | undefined): CheckResult[] {
 }
 
 describe("ax/markdown-response", () => {
-  test("data unavailable → info, no crash", () => {
+  test("data unavailable → not checked info, no crash", () => {
     const c = run(undefined);
     expect(c[0]?.status).toBe("info");
-    expect(c[0]?.message).toContain("not available");
+    expect(c[0]?.value).toBe("not-checked");
+    expect(c[0]?.message).toContain("not checked");
   });
 
   test("no markdown signal → absent surfaces as warn-status recommendation", () => {

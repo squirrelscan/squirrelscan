@@ -9,6 +9,8 @@ import type {
   CheckResult,
 } from "@squirrelscan/core-contracts";
 
+import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+
 import { agentBlockingRule } from "../src/ax/agent-blocking";
 import type { ParsedPage, RuleContext } from "../src/types";
 
@@ -48,6 +50,32 @@ describe("ax/agent-blocking", () => {
   test("skips cleanly when the prefetch did not run", () => {
     const checks = run(null);
     expect(checks[0]?.status).toBe("skipped");
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("not checked");
+  });
+
+  // #409: a probe the budget skipped is not a network failure to report.
+  test("a browser baseline that was never sent → skipped as not checked", () => {
+    const checks = run({
+      probes: [
+        probe("browser", { status: 0, error: PROBE_NOT_ATTEMPTED_ERROR }),
+        probe("gptbot"),
+        probe("claude-user"),
+      ],
+    });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.status).toBe("skipped");
+    expect(checks[0]?.message).toContain("not checked");
+  });
+
+  test("an agent probe that was never sent → not checked info, no pass", () => {
+    const checks = run(both({}, { status: 0, error: PROBE_NOT_ATTEMPTED_ERROR }));
+    const claude = checks.find(
+      (c) => c.name === "agent-access" && c.details?.userAgent === "claude-user",
+    );
+    expect(claude?.status).toBe("info");
+    expect(claude?.value).toBe("not-checked");
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
   });
 
   test("skips when the browser baseline is not 2xx", () => {

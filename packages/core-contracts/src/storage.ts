@@ -873,6 +873,58 @@ export interface MarkdownProbeRecord {
 // AGENT EXPERIENCE (AX) PREFETCHES
 // ============================================
 
+// Fixed well-known/agent-file probe list, one request per path before the first
+// page. Rules decide what each hit/miss means and declare the paths they read.
+export const WELL_KNOWN_PATHS = [
+  "/.well-known/mcp/server-card.json",
+  "/.well-known/mcp.json",
+  "/.well-known/mcp",
+  "/.well-known/mcp-server",
+  "/.well-known/agent-card.json",
+  "/.well-known/agent-skills/index.json",
+  "/.well-known/api-catalog",
+  "/openapi.json",
+  "/swagger.json",
+  "/api/openapi.json",
+  "/.well-known/oauth-authorization-server",
+  "/.well-known/oauth-protected-resource",
+  "/AGENTS.md",
+  "/agents.md",
+  "/.well-known/agents.md",
+  "/docs/AGENTS.md",
+  "/ai-plugin.json",
+  "/.well-known/ai-plugin.json",
+  "/.well-known/llms.txt",
+  "/docs/llms.txt",
+] as const;
+
+export type WellKnownPath = (typeof WELL_KNOWN_PATHS)[number];
+
+/**
+ * One pre-crawl discovery probe (#409): the requests the crawler sends to the
+ * site root before the first page, beyond robots.txt, sitemaps and the seed.
+ *
+ * - `llms-txt`: /llms.txt and /llms-full.txt
+ * - `markdown`: / with `Accept: text/markdown`, and /index.md
+ * - `agent-access`: / as a browser, GPTBot and Claude-User
+ * - a {@link WellKnownPath}: that one path of the well-known sweep
+ * - `rsl`: robots.txt re-read for `License:`, plus the documents it names
+ *
+ * Rules declare the probes they read (`RuleMeta.discoveryProbes`), and a probe
+ * no enabled rule reads is never sent. A probe that was not sent, or got no
+ * answer, is reported "not checked" by its readers, never as a missing file.
+ */
+export type DiscoveryProbe = "llms-txt" | "markdown" | "agent-access" | "rsl" | WellKnownPath;
+
+/** Every discovery probe, in the order the crawl preamble sends them. */
+export const DISCOVERY_PROBES: readonly DiscoveryProbe[] = [
+  "llms-txt",
+  "markdown",
+  "agent-access",
+  ...WELL_KNOWN_PATHS,
+  "rsl",
+];
+
 // One probed well-known/agent-file path. Rules decide meaning; the crawler only
 // records validation hints so SPA-fallback 200s (HTML for every path) are rejectable.
 export interface WellKnownProbe {

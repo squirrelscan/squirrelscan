@@ -2,10 +2,17 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
+import { WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
 
-import type { PhaseBudget } from "./deadline";
+import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
+
+import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
+
+// Fixed probe list, owned by core-contracts so rules can declare the paths they
+// read (#409). Rules decide what each hit/miss means; the crawler only fetches +
+// records validation hints so rules can reject SPA-fallback 200s.
+export { WELL_KNOWN_PATHS };
 
 const PROBE_TIMEOUT_MS = 15_000;
 // Small cap: agent/manifest files are tiny; an SPA-fallback HTML page can be big.
@@ -20,31 +27,6 @@ export const OAUTH_EXCERPT_MAX_BYTES = 64 * 1024;
 export function isOAuthMetadataPath(path: string): boolean {
   return path.includes("oauth-authorization-server") || path.includes("oauth-protected-resource");
 }
-
-// Fixed probe list. Rules decide what each hit/miss means; the crawler only
-// fetches + records validation hints so rules can reject SPA-fallback 200s.
-export const WELL_KNOWN_PATHS: readonly string[] = [
-  "/.well-known/mcp/server-card.json",
-  "/.well-known/mcp.json",
-  "/.well-known/mcp",
-  "/.well-known/mcp-server",
-  "/.well-known/agent-card.json",
-  "/.well-known/agent-skills/index.json",
-  "/.well-known/api-catalog",
-  "/openapi.json",
-  "/swagger.json",
-  "/api/openapi.json",
-  "/.well-known/oauth-authorization-server",
-  "/.well-known/oauth-protected-resource",
-  "/AGENTS.md",
-  "/agents.md",
-  "/.well-known/agents.md",
-  "/docs/AGENTS.md",
-  "/ai-plugin.json",
-  "/.well-known/ai-plugin.json",
-  "/.well-known/llms.txt",
-  "/docs/llms.txt",
-];
 
 // Body sniff for an HTML document — the #1 false positive is a site returning
 // 200 + SPA index.html for every path, including /.well-known/mcp.json.
@@ -187,16 +169,24 @@ async function probeOne(
   }
 }
 
-// Probe the fixed well-known/agent-file list concurrently, once per audit.
+// Probe the well-known/agent-file list once per audit: every path by default,
+// or only `paths` (the ones an enabled rule reads, #409). Requests go out
+// through `gate`, which is how the crawl applies its per-host throttle.
 export function probeWellKnown(
   baseUrl: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
+  options: { paths?: readonly string[]; gate?: ProbeGate } = {},
 ): Effect.Effect<WellKnownProbeData, never, never> {
+  const { paths = WELL_KNOWN_PATHS, gate = ungated } = options;
   return Effect.promise(async () => {
     const probes = await Promise.all(
-      WELL_KNOWN_PATHS.map((path) => probeOne(baseUrl, path, userAgent, customHeaders, budget)),
+      paths.map((path) =>
+        gate(new URL(path, baseUrl).toString(), () =>
+          probeOne(baseUrl, path, userAgent, customHeaders, budget),
+        ),
+      ),
     );
     return { probes };
   });

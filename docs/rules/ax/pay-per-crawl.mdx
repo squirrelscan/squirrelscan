@@ -13,10 +13,12 @@ Charging for crawler access is a business decision, not a defect, and this rule 
 
 The rule runs once per crawl and reads the three homepage probes made during prefetch: one with a browser user-agent, one as `GPTBot` and one as `Claude-User`. It emits one or two checks:
 
-- `pay-per-crawl`: reports at info status with the message `agent access probe data not available` when the probes did not run. With no probe requiring payment it reports at info status with `No monetized agent access (pay-per-crawl / x402) detected` and the value `absent`. Otherwise it reports at info status with `Monetized agent access configured via <mechanisms> for <user-agents>`, joining the distinct mechanisms with ` and ` and the charged user-agent names with `, `. A `crawler-price` or `crawler-charged` signal reads as Cloudflare Pay Per Crawl, an x402 body reads as x402, and anything else reads as `an unnamed HTTP 402 payment wall`.
+- `pay-per-crawl`: reports at info status with the message `Monetized agent access not checked: the discovery probe was not sent` and the value `not-checked` when the probes did not run, or when no probe required payment and at least one was never sent or got no answer (named in `details.notChecked`; the message then ends `got no answer` if any of them went out). With no probe requiring payment it otherwise reports at info status with `No monetized agent access (pay-per-crawl / x402) detected` and the value `absent`. Otherwise it reports at info status with `Monetized agent access configured via <mechanisms> for <user-agents>`, joining the distinct mechanisms with ` and ` and the charged user-agent names with `, `. A `crawler-price` or `crawler-charged` signal reads as Cloudflare Pay Per Crawl, an x402 body reads as x402, and anything else reads as `an unnamed HTTP 402 payment wall`.
 - `pay-per-crawl-user-action`: emitted only when `Claude-User` is charged while the browser probe returned a 2xx. It warns with the message `Claude-User (a live user-action fetch) is charged HTTP 402 while browsers get a normal 2xx response — this bills a real person's in-the-moment question, not a background crawl`.
 
 Detection is a report, not a judgement. Only the second check can affect anything, and it fires on one specific asymmetry: a person's live request being billed while an ordinary browser is not.
+
+A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection or a timeout, counts the same. None of those says anything about the site, so the result is `not-checked`, never absent.
 
 ## How to fix it
 

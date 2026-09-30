@@ -194,8 +194,11 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
     const read = <T>(effect: Effect.Effect<T, unknown, never>) =>
       Effect.runPromise(effect as Effect.Effect<T, never, never>);
 
-    // Every probe's row is still written. A budget that dropped rows instead of
-    // storing an "unreachable" shape would silently blank AX data in reports.
+    // Every probe keeps a reason to report. Well-known and agent-access rows are
+    // written with the budget reason on each skipped probe; llms, markdown and
+    // RSL, which have no per-request marker, write no row at all, which their
+    // rules read as "not checked" (#409). Storing their empty shape instead
+    // made the rules report "No /llms.txt found" for a file never requested.
     const [robots, llms, markdown, wellKnown, agentAccess, rsl] = await Promise.all([
       read(out.crawler.storage.getRobotsTxt(out.crawlId)),
       read(out.crawler.storage.getLlmsTxt(out.crawlId)),
@@ -210,12 +213,9 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
     // …and WHY, so crawl/robots-txt can tell this apart from a confirmed 404
     // instead of reporting "No robots.txt found" for a file it never reached.
     expect(robots!.error).toBeTruthy();
-    expect(llms).not.toBeNull();
-    expect(llms!.llmsTxt.exists).toBe(false);
-    expect(markdown).not.toBeNull();
-    expect(markdown!.servesMarkdown).toBe(false);
-    expect(rsl).not.toBeNull();
-    expect(rsl!.licenseUrls).toEqual([]);
+    expect(llms).toBeNull();
+    expect(markdown).toBeNull();
+    expect(rsl).toBeNull();
 
     // The skipped probes carry the full path/identity list with the budget
     // reason recorded, the same shape an unreachable host produces.

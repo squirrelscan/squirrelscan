@@ -657,6 +657,10 @@ export interface AuditOptions {
   // to config.rules.disable.
   ruleInclude?: string[];
   ruleExclude?: string[];
+  // --disable-discovery-probes (#409): overrides [crawler]
+  // disable_discovery_probes for this run, either way (`=false` turns the
+  // probes back on). Undefined → config decides.
+  disableDiscoveryProbes?: boolean;
 }
 
 // ============================================

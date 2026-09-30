@@ -23,6 +23,8 @@ import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
+import { closeGlobalContentStore } from "@/crawler/storage/content-store";
+import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 import * as pathsModule from "@/self/paths";
 
 // homedir() is fixed at process start in Bun, so $HOME set here cannot keep a
@@ -57,6 +59,10 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  // The content store and link cache are process-wide singletons opened under
+  // this scratch dir; left open they break every later file's audits.
+  closeGlobalContentStore();
+  closeGlobalLinkCache();
   for (const restore of restores) restore();
   rmSync(scratch, { recursive: true, force: true });
 });

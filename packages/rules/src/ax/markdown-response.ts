@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { notCheckedCheck } from "./discovery-probe-state";
+
 export const markdownResponseRule: Rule = {
   meta: {
     id: "ax/markdown-response",
@@ -14,6 +16,7 @@ export const markdownResponseRule: Rule = {
     scope: "site",
     severity: "info",
     weight: 1,
+    discoveryProbes: ["markdown"],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -21,7 +24,7 @@ export const markdownResponseRule: Rule = {
     const md = ctx.site?.markdownResponse;
 
     if (!md) {
-      checks.push({ name: "markdown-response", status: "info", message: "markdown probe data not available" });
+      checks.push(notCheckedCheck("markdown-response", "Markdown response", undefined, "no-result"));
       return { checks };
     }
 

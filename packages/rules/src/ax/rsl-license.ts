@@ -4,6 +4,8 @@ import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage"
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { notCheckedCheck } from "./discovery-probe-state";
+
 export const rslLicenseRule: Rule = {
   meta: {
     id: "ax/rsl-license",
@@ -18,6 +20,7 @@ export const rslLicenseRule: Rule = {
     // produces only info checks, which never enter the issues list.
     severity: "warning",
     weight: 1,
+    discoveryProbes: ["rsl"],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -25,7 +28,7 @@ export const rslLicenseRule: Rule = {
     const rsl = ctx.site?.rsl;
 
     if (!rsl) {
-      checks.push({ name: "rsl-license", status: "info", message: "RSL licensing data not available" });
+      checks.push(notCheckedCheck("rsl-license", "RSL licensing", undefined, "no-result"));
       return { checks };
     }
 

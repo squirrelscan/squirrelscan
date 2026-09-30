@@ -2,6 +2,8 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { PROBE_NOT_ATTEMPTED_ERROR, WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
+
 import type { CheckResult, LlmsTxtData, WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
 
 import { agentsMdRule } from "../src/ax/agents-md";
@@ -26,10 +28,16 @@ function probe(over: Partial<WellKnownProbe> = {}): WellKnownProbe {
   };
 }
 
-// The fixed probe list always includes all 18 well-known paths, one entry
-// each (even on error) — build a minimal set including the ones this rule cares about.
+// The crawler's default sweep stores one row per well-known path (even on
+// error), so a path the test does not set is one that was requested and 404'd.
 function wellKnown(probes: WellKnownProbe[]): WellKnownProbeData {
-  return { probes };
+  return {
+    probes: WELL_KNOWN_PATHS.map(
+      (path) =>
+        probes.find((p) => p.path === path) ??
+        probe({ path, url: `https://example.com${path}`, status: 404 }),
+    ),
+  };
 }
 
 function ctx(wk: WellKnownProbeData | null | undefined, publishesLlmsTxt = false): RuleContext {
@@ -49,20 +57,50 @@ function run(wk: WellKnownProbeData | null | undefined, publishesLlmsTxt = false
 }
 
 describe("ax/agents-md", () => {
-  test("data unavailable → info, no crash", () => {
+  test("data unavailable → not checked info, no crash", () => {
     const checks = run(undefined);
     expect(checks[0]?.status).toBe("info");
-    expect(checks[0]?.message).toContain("not available");
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("not checked");
+  });
+
+  // #409: never "No AGENTS.md found" for a path that was not requested, even on
+  // a site publishing llms.txt, where absence would otherwise warn.
+  test("AGENTS.md paths missing from the sweep → not checked, not a warning", () => {
+    const checks = run({ probes: [probe({ path: "/swagger.json", status: 404 })] }, true);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.value).toBe("not-checked");
+  });
+
+  // A refused connection (a firewall that just banned the audit) or a timeout
+  // is no answer, and no answer is not "missing".
+  test("an AGENTS.md path that got no answer → not checked, not absent", () => {
+    const wk = wellKnown([probe({ path: "/AGENTS.md", status: 0, error: "connect ECONNREFUSED" })]);
+    const checks = run(wk, true);
+    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("got no answer");
+    expect(checks[0]?.details?.notChecked).toEqual(["/AGENTS.md"]);
+  });
+
+  test("an AGENTS.md path skipped by the preamble budget → not checked", () => {
+    const wk = wellKnown([probe({ path: "/docs/AGENTS.md", error: PROBE_NOT_ATTEMPTED_ERROR })]);
+    const checks = run(wk, true);
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.details?.notChecked).toEqual(["/docs/AGENTS.md"]);
   });
 
   test("no hit anywhere → absent (quiet info without llms.txt)", () => {
-    const checks = run(wellKnown([probe({ path: "/AGENTS.md" }), probe({ path: "/agents.md" })]));
+    const checks = run(
+      wellKnown([probe({ path: "/AGENTS.md", status: 404 }), probe({ path: "/agents.md", status: 404 })]),
+    );
     expect(checks[0]?.value).toBe("absent");
     expect(checks[0]?.status).toBe("info");
   });
 
   test("absent on a site publishing llms.txt → warn-status recommendation", () => {
-    const checks = run(wellKnown([probe({ path: "/AGENTS.md" })]), true);
+    const checks = run(wellKnown([probe({ path: "/AGENTS.md", status: 404 })]), true);
     expect(checks[0]?.value).toBe("absent");
     expect(checks[0]?.status).toBe("warn");
     expect(checks[0]?.message).toContain("llms.txt");

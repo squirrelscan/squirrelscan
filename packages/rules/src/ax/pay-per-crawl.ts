@@ -4,6 +4,8 @@ import type { AgentAccessProbe } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { answered, notCheckedCheck, notCheckedReason } from "./discovery-probe-state";
+
 function mechanismFor(signal: string | null): string {
   switch (signal) {
     case "crawler-price":
@@ -30,6 +32,7 @@ export const payPerCrawlRule: Rule = {
     // monetization detection emits only info checks and never becomes an issue.
     severity: "warning",
     weight: 1,
+    discoveryProbes: ["agent-access"],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -37,13 +40,27 @@ export const payPerCrawlRule: Rule = {
     const aa = ctx.site?.agentAccess;
 
     if (!aa) {
-      checks.push({ name: "pay-per-crawl", status: "info", message: "agent access probe data not available" });
+      checks.push(notCheckedCheck("pay-per-crawl", "Monetized agent access"));
       return { checks };
     }
 
     const browser = aa.probes.find((p) => p.userAgent === "browser");
     const claudeUser = aa.probes.find((p) => p.userAgent === "claude-user");
     const charged = aa.probes.filter((p) => p.paymentRequired);
+
+    // No answer means no evidence either way, so "none detected" would overclaim.
+    const silent = aa.probes.filter((p) => !answered(p));
+    if (charged.length === 0 && silent.length > 0) {
+      checks.push(
+        notCheckedCheck(
+          "pay-per-crawl",
+          "Monetized agent access",
+          { notChecked: silent.map((p) => p.userAgent) },
+          notCheckedReason(silent),
+        ),
+      );
+      return { checks };
+    }
 
     if (charged.length === 0) {
       // Absent = the normal case; stay quiet, no noise.

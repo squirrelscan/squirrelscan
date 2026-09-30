@@ -669,6 +669,16 @@ export function resolvePublishDecision(opts: {
 }
 
 /**
+ * A boolean flag's value as citty delivers it: undefined when absent, and an
+ * array when the flag is repeated, in which case the last one wins.
+ */
+export function lastFlagValue(
+  value: boolean | boolean[] | undefined
+): boolean | undefined {
+  return Array.isArray(value) ? value.at(-1) : value;
+}
+
+/**
  * Validate mutually-exclusive audit flags. Returns a human-readable error to
  * print (then exit 1), or null when the combination is valid.
  */
@@ -875,6 +885,11 @@ export const audit = defineCommand({
       description:
         "Skip these rule categories or rules (repeatable or comma-separated), e.g. images,social. Adds to [rules] disable for this run",
     },
+    "disable-discovery-probes": {
+      type: "boolean",
+      description:
+        "Skip the pre-crawl discovery probes (llms.txt, /.well-known/*, /swagger.json, ...) for this run; overrides [crawler] disable_discovery_probes (=false sends them)",
+    },
     summary: {
       type: "boolean",
       description:
@@ -955,6 +970,13 @@ export const audit = defineCommand({
     }
     const ruleFilterActive =
       ruleFilter.enable.length > 0 || ruleFilter.disable.length > 0;
+
+    // --disable-discovery-probes (#409): a plain boolean, so citty delivers
+    // true, or false for `=false` (which turns the probes back on over a config
+    // that disables them). A repeated flag arrives as an array; the last wins.
+    const disableDiscoveryProbes = lastFlagValue(
+      args["disable-discovery-probes"] as boolean | boolean[] | undefined
+    );
 
     // --summary is console-only (#1067) — a machine format has no per-issue
     // detail to trim, so a non-console format + --summary is a user error.
@@ -1347,6 +1369,9 @@ export const audit = defineCommand({
           : {}),
         ...(ruleFilter.disable.length > 0
           ? { ruleExclude: ruleFilter.disable }
+          : {}),
+        ...(disableDiscoveryProbes !== undefined
+          ? { disableDiscoveryProbes }
           : {}),
       };
 
