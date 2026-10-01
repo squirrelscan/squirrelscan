@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { telMailtoRule } from "../src/links/tel-mailto";
+import { looksLikeEmail, telMailtoRule } from "../src/links/tel-mailto";
 import type { RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
@@ -76,5 +76,51 @@ describe("links/tel-mailto — phone number matching", () => {
     const html = page(`<a href="tel:+15551234567">0555 123 4567</a>`);
     const { checks } = telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)?.status).toBe("warn");
+  });
+});
+
+describe("links/tel-mailto — mailto display text", () => {
+  const LEGACY_EMAIL_RE = /.+@.+\..+/;
+
+  test("looksLikeEmail agrees with the regex it replaced", () => {
+    const cases = [
+      "a@b.co", "hello@example.com", "Email hello@example.com today", "@example.com",
+      "a@.c", "a@b.", "a@bc", "a@b.c", "a@@b.c", "a@..c", "a.b@c", "a@b\n.c",
+      "line one\nx@y.zz", "a@b\r\n.cd", "a@b\u2028c.d", "", "@", ".", "Contact us",
+    ];
+    for (const text of cases) expect(looksLikeEmail(text)).toBe(LEGACY_EMAIL_RE.test(text));
+
+    const alphabet = ["a", "@", ".", " ", "\n", "\r", "\u2028", "\u2029", "x.y", "b@c.d"];
+    let s = 694;
+    for (let i = 0; i < 20_000; i++) {
+      let text = "";
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+      const len = (s >>> 8) % 14;
+      for (let j = 0; j < len; j++) {
+        s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+        text += alphabet[(s >>> 8) % alphabet.length];
+      }
+      expect(looksLikeEmail(text)).toBe(LEGACY_EMAIL_RE.test(text));
+    }
+  });
+
+  test("a different address in the link text is still flagged", () => {
+    const html = page(`<a href="mailto:sales@example.com">support@example.com</a>`);
+    const { checks } = telMailtoRule.run(ctx(html));
+    expect(checks.find((c) => c.name === "mailto-mismatch")?.status).toBe("warn");
+  });
+
+  test("a mailto link wrapping a 500KB unbroken run finishes well under a second", () => {
+    // The shape of inline base64 (a font, an image) inside the link.
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const run = Array.from({ length: 500 * 1024 }, (_, i) => alphabet[(i * 7919) % 64]).join("");
+    const html = page(`<a href="mailto:hello@example.com">${run}</a>`);
+    const context = ctx(html);
+
+    const start = performance.now();
+    const { checks } = telMailtoRule.run(context);
+    // A few ms in practice; generous so a loaded CI runner cannot flake it.
+    expect(performance.now() - start).toBeLessThan(500);
+    expect(checks.find((c) => c.name === "mailto-mismatch")).toBeUndefined();
   });
 });
