@@ -30,6 +30,7 @@ import {
   type OutputFormat,
 } from "@/constants";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
+import { warnEvictedPages } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { reconstructReport } from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
@@ -436,6 +437,7 @@ export async function getStoredAudit(
           return yield* reconstructReport(storage, auditId);
         })
       );
+      await warnEvictedPages(storage, auditId, "report");
 
       const validated = validateReportData(report, auditId);
       if (!validated.ok) {
@@ -540,6 +542,7 @@ export async function getStoredAuditByPrefix(
         return yield* reconstructReport(storage, match.crawl.id);
       })
     );
+    await warnEvictedPages(storage, match.crawl.id, "report");
     return validateReportData(report, match.crawl.id);
   } catch (error) {
     return err(
@@ -684,6 +687,7 @@ export async function getLatestAudit(
           return reconstructed;
         })
       );
+      await warnEvictedPages(storage, latest.crawl.id, "report");
 
       return validateReportData(report, latest.crawl.id);
     } finally {

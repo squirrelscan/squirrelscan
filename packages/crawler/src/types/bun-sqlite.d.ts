@@ -25,7 +25,13 @@ declare module "bun:sqlite" {
     query(sql: string): SQLiteStatement;
     /** Compile a NEW statement every call. Use `query` in hot paths. */
     prepare(sql: string): SQLiteStatement;
-    transaction<T extends (...args: any[]) => any>(fn: T): T;
+    /**
+     * The returned function runs `fn` in a deferred transaction; `.immediate`
+     * takes the write lock before the first statement (BEGIN IMMEDIATE).
+     */
+    transaction<T extends (...args: any[]) => any>(
+      fn: T
+    ): T & { deferred: T; immediate: T; exclusive: T };
     close(): void;
   }
 }
