@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import {
   accessSync,
   constants,
@@ -10,13 +11,20 @@ import { platform } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 import { type Result, ok } from "@/controllers/types";
+import {
+  CONTENT_STORE_MAX_BYTES_ENV,
+  resolveContentStoreCap,
+  type EvictionRecord,
+} from "@/crawler/storage/content-store";
 
 import type { DoctorCheck, DoctorReport } from "./types";
 
 import { version } from "../../package.json";
+import { formatBytes } from "./disk";
 import { updateSuppressedReason } from "./install-meta";
 import {
   findLocalSettingsPath,
+  getContentStorePath,
   getSquirrelPaths,
   getSymlinkPath,
   getBinaryPath,
@@ -46,6 +54,7 @@ export function runDoctorChecks(): Result<DoctorReport> {
   checks.push(checkReleasesDir());
   checks.push(checkUpdateStatus());
   checks.push(checkLogging());
+  checks.push(checkContentStore());
 
   const passed = checks.filter((c) => c.status === "pass").length;
   const warnings = checks.filter((c) => c.status === "warn").length;
@@ -509,4 +518,80 @@ function checkLogging(): DoctorCheck {
     status: "pass",
     message: `Level: ${levelInfo}, path: ${logDir}`,
   };
+}
+
+/**
+ * The content store's size against its cap, and when it last evicted (#2342).
+ * Eviction is how the cap works, so a past eviction is not a problem in itself;
+ * a store above its cap is worth a warning, because the next audit will evict
+ * down to 80% of the cap before it stores anything.
+ *
+ * Read-only: opening the store through ContentStore would create its tables,
+ * and a diagnostic should not write.
+ */
+export function checkContentStore(
+  deps: { path?: string; now?: number } = {}
+): DoctorCheck {
+  const name = "Content store";
+  const path = deps.path ?? getContentStorePath();
+  const cap = resolveContentStoreCap();
+  const capNote = `cap ${formatBytes(cap.bytes)}${
+    cap.source === "env" ? ` (${CONTENT_STORE_MAX_BYTES_ENV})` : ""
+  }`;
+
+  if (!existsSync(path)) {
+    return {
+      name,
+      status: "pass",
+      message: `Empty (created by the first audit); ${capNote}`,
+    };
+  }
+
+  let totalBytes = 0;
+  let entries = 0;
+  let lastEviction: EvictionRecord | null = null;
+  try {
+    const db = new Database(path, { readonly: true });
+    try {
+      const row = db
+        .prepare(
+          "SELECT COUNT(*) AS n, COALESCE(SUM(compressed_size), 0) AS bytes FROM content"
+        )
+        .get() as { n: number; bytes: number };
+      entries = row.n;
+      totalBytes = row.bytes;
+      try {
+        const meta = db
+          .prepare("SELECT value FROM store_meta WHERE key = 'last_eviction'")
+          .get() as { value: string } | undefined;
+        lastEviction = meta ? (JSON.parse(meta.value) as EvictionRecord) : null;
+      } catch {
+        // A store written before eviction was recorded has no store_meta.
+      }
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    return {
+      name,
+      status: "warn",
+      message: `Cannot read ${path}: ${(error as Error).message}`,
+    };
+  }
+
+  const now = deps.now ?? Date.now();
+  const evictionNote = lastEviction
+    ? `last eviction ${formatHoursAgo((now - lastEviction.at) / 3_600_000)} ago (${lastEviction.entries.toLocaleString("en-US")} entries, ${formatBytes(lastEviction.bytes)})`
+    : "no eviction recorded";
+  const message = `${formatBytes(totalBytes)} in ${entries.toLocaleString("en-US")} entries, ${capNote}; ${evictionNote}`;
+
+  if (totalBytes > cap.bytes) {
+    return {
+      name,
+      status: "warn",
+      message: `${message}. Over the cap: the next audit evicts the least recently used pages first`,
+      fix: `Raise [storage] content_store_max_bytes or ${CONTENT_STORE_MAX_BYTES_ENV}`,
+    };
+  }
+  return { name, status: "pass", message };
 }
