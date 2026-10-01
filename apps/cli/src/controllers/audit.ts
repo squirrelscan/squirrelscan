@@ -1776,7 +1776,7 @@ export async function runAudit(
         phaseTimer.enter("smart_merge");
         logger.debug("step 2.7: smart audits merge", crawlId);
         try {
-          smartMerge = await Effect.runPromise(
+          const merged = await Effect.runPromise(
             runSmartAudits({
               storage,
               crawlId,
@@ -1793,6 +1793,12 @@ export async function runAudit(
               pages: pageStatuses,
             })
           );
+          // The site checks as produced, so the report's union keeps each
+          // one's own pageUrl (see SmartMergeOverride.freshSiteChecks).
+          smartMerge = {
+            ...merged,
+            freshSiteChecks: ruleResults.siteRuleResults,
+          };
         } catch (error) {
           // Never fail the audit on a merge error — degrade to the normal path.
           smartMerge = undefined;

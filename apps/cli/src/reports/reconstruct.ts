@@ -59,6 +59,16 @@ export interface SmartMergeOverride {
   carriedRuleResults: Map<string, RuleRunResult>;
   /** Normalized URLs that returned 404/410; their fresh checks are not scored. */
   removedUrls: Set<string>;
+  /**
+   * This run's SITE-scope checks, per rule, as the rules produced them. Bounded
+   * by the rule count, unlike the page checks. Needed because `rule_results`
+   * files every site check under `page_url = ''`, so a site check that names a
+   * page of its own (integrity/known-malicious-url emits one per URL) reads back
+   * with no `pageUrl`: it would escape the 404/410 filter below and collapse
+   * distinct scoring buckets into one. The in-memory union never lost it.
+   * Absent = take the site checks from `rule_results` as read.
+   */
+  freshSiteChecks?: ReadonlyMap<string, CheckResult[]>;
   coverage: {
     auditedPages: number;
     knownPages: number;
@@ -93,14 +103,24 @@ export function joinSmartUnion(
   fresh: Map<string, CheckResult[]>,
   smartMerge: SmartMergeOverride
 ): Array<[string, CheckResult[]]> {
-  const { carriedRuleResults, removedUrls } = smartMerge;
+  const { carriedRuleResults, removedUrls, freshSiteChecks } = smartMerge;
+  // Checks naming a removed page are not scored; ones with no page pass.
+  const notRemoved = (checks: CheckResult[]) =>
+    removedUrls.size === 0
+      ? checks
+      : checks.filter((c) => !(c.pageUrl && removedUrls.has(c.pageUrl)));
   const out: Array<[string, CheckResult[]]> = [];
-  for (const [ruleId, checks] of fresh) {
-    // Only page-scope checks carry a pageUrl; site-scope checks pass through.
-    const kept =
-      removedUrls.size === 0
-        ? checks
-        : checks.filter((c) => !(c.pageUrl && removedUrls.has(c.pageUrl)));
+  for (const [ruleId, stored] of fresh) {
+    // Page rows first, in the order they were written (crawl order), then the
+    // site checks, which the rules phase wrote after every page: the order the
+    // in-memory union merged them in. A stored row with no pageUrl is a site
+    // check; the in-memory copy replaces it so it keeps its own pageUrl.
+    const site = freshSiteChecks?.get(ruleId);
+    const kept = notRemoved(
+      site
+        ? [...stored.filter((c) => c.pageUrl !== undefined), ...site]
+        : stored
+    );
     const carried = carriedRuleResults.get(ruleId)?.checks as
       | CheckResult[]
       | undefined;
@@ -110,8 +130,12 @@ export function joinSmartUnion(
     if (fresh.has(ruleId)) continue;
     // A rule with neither fresh nor carried checks still belongs in the report
     // when the union had an entry for it: its `syntheticPassCount` is what keeps
-    // clean carried pages in the pass-ratio denominator.
-    out.push([ruleId, r.checks as CheckResult[]]);
+    // clean carried pages in the pass-ratio denominator. Site checks with no
+    // stored rows cannot happen on the CLI path (they are written before the
+    // merge), but they would belong to the fresh half, so they lead here too.
+    const site = notRemoved(freshSiteChecks?.get(ruleId) ?? []);
+    const carried = r.checks as CheckResult[];
+    out.push([ruleId, site.length ? [...site, ...carried] : carried]);
   }
   return out;
 }
