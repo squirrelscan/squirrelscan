@@ -526,12 +526,51 @@ export function createCloudDocumentFetcher(
   }
 
   async function processBatch(waiters: Waiter[]): Promise<void> {
+    // Resolve the run id FIRST (#1134 / #2290). A CLI resolver waits for the
+    // async register to settle, which can take as long as register's own
+    // timeout, so every decision below is made about the waiters as they are
+    // AFTER that wait, not before it: a waiter whose headroom fallback finished
+    // meanwhile must not be submitted for a render nobody will read (and, with
+    // no run to attribute it to, pay for). A resolver that throws reads as "no
+    // run": the render is then a standalone one, as it always was.
+    let runId: string | undefined;
+    if (typeof opts.runId === "function") {
+      // Cancellation must not wait on register: a waiter aborted during the
+      // wait is rejected NOW, not when register finally answers, or a stopped
+      // crawl holds its slot for the whole register timeout. Temporary — the
+      // batch wiring below installs the listeners that last.
+      const unhook = waiters.map((w) => {
+        const onAbort = () => rejectWaiter(w, abortError());
+        // Aborted while it sat in the batch buffer: that event has already
+        // fired, so a listener alone would never hear it.
+        if (w.req.signal?.aborted) {
+          onAbort();
+          return () => {};
+        }
+        w.req.signal?.addEventListener("abort", onAbort, { once: true });
+        return () => w.req.signal?.removeEventListener("abort", onAbort);
+      });
+      try {
+        runId = await opts.runId();
+      } catch {
+        runId = undefined;
+      } finally {
+        for (const off of unhook) off();
+      }
+    } else {
+      runId = opts.runId;
+    }
+
     // Drop requests already aborted before submit — reject (unwind), never
-    // charge, never fall back.
+    // charge, never fall back — and requests already retired by their own
+    // fallback while the run id was resolving. A RACING waiter stays: its
+    // fallback is in flight but the render can still win it (#2026).
     const active: Waiter[] = [];
     for (const w of waiters) {
       if (w.req.signal?.aborted) {
         rejectWaiter(w, abortError());
+      } else if (w.settled || (w.dispatched && !w.racing)) {
+        continue;
       } else {
         active.push(w);
       }
@@ -617,9 +656,6 @@ export function createCloudDocumentFetcher(
 
     let job: RenderJobResponse;
     try {
-      // Resolve the run id at submit time (a CLI resolver waits for the
-      // async-registered id, #1134 / #2290).
-      const runId = typeof opts.runId === "function" ? await opts.runId() : opts.runId;
       // The submit is bounded by the batch budget, NOT by the callers' aborts:
       // the server debits on submit, so cancelling it mid-flight would leave a
       // debit nobody records (#2026). Aborted waiters are already rejected and

@@ -471,6 +471,31 @@ export function phaseTimingsFromError(
 }
 
 /**
+ * The balance to print after a signed-in audit (#2290), from the freshest read
+ * the run made. The controller's post-services read (`prefetchRead`) already
+ * reflects the crawl's render charges, so only the end-of-run page settlement
+ * comes off it. Without one (quick coverage skips the prefetch), the register
+ * response's balance is all there is, and it predates EVERYTHING but the base:
+ * every later charge comes off it. An unmetered balance is frozen, so nothing
+ * comes off at all. Exported for tests.
+ */
+export function estimateBalanceAfter(opts: {
+  prefetchRead: number | null;
+  afterBase: number | null;
+  baseCharged: number;
+  totalSpent: number;
+  settled: number;
+  unlimited?: boolean;
+}): number | null {
+  if (opts.unlimited) return opts.prefetchRead ?? opts.afterBase;
+  if (opts.prefetchRead != null)
+    return Math.max(0, opts.prefetchRead - opts.settled);
+  if (opts.afterBase != null)
+    return Math.max(0, opts.afterBase - (opts.totalSpent - opts.baseCharged));
+  return null;
+}
+
+/**
  * The post-audit cloud-spend disclosure line: total + per-service breakdown +
  * remaining balance. The breakdown reflects the ACTUAL server charges (pricing
  * v11: audit base + 2 per audited page; folded services charge nothing), and
@@ -2072,17 +2097,17 @@ export const audit = defineCommand({
         // The settlement lands after every balance read this run made.
         const settled =
           totalSpent - withBase.reduce((sum, l) => sum + l.credits, 0);
-        // Prefer the controller's post-services balance read; the register
-        // response balance only covers the base debit.
-        const balanceRead =
-          prior?.balanceAfter ?? registeredRun.balanceAfterBase;
         report.cloudSpend = {
           lines,
           totalSpent,
-          balanceAfter:
-            balanceRead == null || unlimitedCredits
-              ? balanceRead
-              : Math.max(0, balanceRead - settled),
+          balanceAfter: estimateBalanceAfter({
+            prefetchRead: prior?.balanceAfter ?? null,
+            afterBase: registeredRun.balanceAfterBase,
+            baseCharged: registeredRun.baseCharged,
+            totalSpent,
+            settled,
+            unlimited: unlimitedCredits,
+          }),
         };
       }
       // #368: stamp the account tier so the published report's locked-rules
