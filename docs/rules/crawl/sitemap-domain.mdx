@@ -15,7 +15,7 @@ The rule is site-wide. It takes the hostname of the site's base URL, then compar
 
 - Skipped when no sitemap was discovered. Message: `No sitemap to validate`.
 - Skipped when the base URL has no parseable hostname. Message: `Could not determine expected domain`.
-- Fail when any entry's hostname differs. Message: `14 URL(s) point to different domain(s)`, listing each URL with the host it resolved to. Severity error, weight 8.
+- Fail when any entry's hostname differs. Message: `N URL(s) point to different domain(s)`, where `N` is the exact count. It lists the first 50 URLs with the host each resolved to, and `details.total` holds the count. Past 50, `additional` and `pagesTruncated` record the rest, so the report still shows the full number of affected URLs. `foundHosts` lists up to 50 hosts, with `hostCount` when there are more. Severity error, weight 8.
 - Pass otherwise. Message: `All sitemap URLs match site domain`.
 
 A hostname matches when it equals the expected host, equals `www.` plus the expected host, or when `www.` plus itself equals the expected host. Entries whose `<loc>` has no parseable hostname are skipped rather than flagged.

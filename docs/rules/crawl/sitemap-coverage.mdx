@@ -16,8 +16,10 @@ The rule is site-wide. It uses the sitemap processor's precomputed missing and o
 - Skipped when no sitemap was discovered. Message: `No sitemap to compare`.
 - Skipped when no pages were crawled. Message: `No pages to compare`.
 - `sitemap-coverage` warns when indexable pages are missing. Message: `23 indexable page(s) not in sitemap (18%)`, where the percentage is of all crawled pages. It passes otherwise with `All indexable pages are in sitemap`. Severity warning, weight 5.
-- `sitemap-orphans` warns for sitemap URLs the crawl did not reach. Message: `31 sitemap URL(s) were not crawled`.
-- `sitemap-orphans` reports info instead when the crawl hit its page cap and the sitemap holds more URLs than that cap. Message: `31 sitemap URL(s) not audited this run (crawl capped at 25 pages)`.
+- `sitemap-orphans` warns for sitemap URLs the crawl did not reach. Message: `N sitemap URL(s) were not crawled`.
+- `sitemap-orphans` reports info instead when the crawl hit its page cap and the sitemap holds more URLs than that cap. Message: `N sitemap URL(s) not audited this run (crawl capped at M pages)`.
+
+`N` is the exact count, even past the 10,000-URL list the audit engine hands the rule. The check lists the first 50 URLs; `details.total` holds the count, and past 50, `additional` and `pagesTruncated` record the rest.
 
 The capped case matters because a shallow crawl profile against a large sitemap would otherwise report a crawl-budget artefact as a coverage defect.
 

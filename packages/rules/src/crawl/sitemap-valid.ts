@@ -4,6 +4,8 @@ import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage"
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sampleUrlItems } from "../shared/sample-items";
+
 const MAX_URLS_PER_SITEMAP = 50000;
 // The protocol limit for an index file counts CHILD SITEMAPS, not URLs.
 const MAX_CHILDREN_PER_INDEX = 50000;
@@ -134,13 +136,20 @@ export const sitemapValidRule: Rule = {
       });
     }
 
-    // Check for orphan pages (in sitemap but not crawled)
+    // Check for orphan pages (in sitemap but not crawled). Count plus sample,
+    // with the exact count from before the engine's array cap (repo#2320).
     if (sitemaps.orphanPages.length > 0) {
+      const total = Math.max(sitemaps.orphanPagesTotal ?? 0, sitemaps.orphanPages.length);
+      const { items, truncation } = sampleUrlItems(
+        sitemaps.orphanPages.map((url) => ({ id: url })),
+        total
+      );
       checks.push({
         name: "sitemap-orphans",
         status: "info",
-        message: `${sitemaps.orphanPages.length} URL(s) in sitemap not found during crawl`,
-        items: sitemaps.orphanPages.map((url) => ({ id: url })),
+        message: `${total} URL(s) in sitemap not found during crawl`,
+        items,
+        details: { ...truncation, total },
       });
     }
 

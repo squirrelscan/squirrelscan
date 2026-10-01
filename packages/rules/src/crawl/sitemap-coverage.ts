@@ -4,6 +4,8 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { normalizeUrl } from "@squirrelscan/utils";
 
+import { sampleUrlItems } from "../shared/sample-items";
+
 export const sitemapCoverageRule: Rule = {
   meta: {
     id: "crawl/sitemap-coverage",
@@ -123,6 +125,9 @@ export const sitemapCoverageRule: Rule = {
       });
     }
 
+    // The engine cuts orphanPages to the report's array cap; the total is the
+    // count before that cut, so the message stays exact past it (repo#2320).
+    const orphanTotal = Math.max(sitemaps.orphanPagesTotal ?? 0, precomputedOrphans.length);
     if (precomputedOrphans.length > 0) {
       // #697: a crawl truncated by the coverage profile's page cap (e.g. the
       // "quick" profile stopping at 25 pages against a 54-URL sitemap) isn't
@@ -136,16 +141,22 @@ export const sitemapCoverageRule: Rule = {
       const wasCapped =
         !!limits && limits.pagesCrawled >= limits.maxPages && sitemaps.totalUrls > limits.maxPages;
 
+      // Count plus sample: one entry per un-crawled sitemap URL ran to
+      // thousands of items on a large sitemap (repo#2320).
+      const { items, truncation } = sampleUrlItems(
+        precomputedOrphans.map((url) => ({ id: url })),
+        orphanTotal
+      );
       checks.push({
         name: "sitemap-orphans",
         status: wasCapped ? "info" : "warn",
         message: wasCapped
-          ? `${precomputedOrphans.length} sitemap URL(s) not audited this run (crawl capped at ${limits.maxPages} pages)`
-          : `${precomputedOrphans.length} sitemap URL(s) were not crawled`,
-        items: precomputedOrphans.map((url) => ({ id: url })),
+          ? `${orphanTotal} sitemap URL(s) not audited this run (crawl capped at ${limits.maxPages} pages)`
+          : `${orphanTotal} sitemap URL(s) were not crawled`,
+        items,
         details: wasCapped
-          ? { total: precomputedOrphans.length, cappedAt: limits.maxPages }
-          : { total: precomputedOrphans.length },
+          ? { ...truncation, total: orphanTotal, cappedAt: limits.maxPages }
+          : { ...truncation, total: orphanTotal },
       });
     }
 

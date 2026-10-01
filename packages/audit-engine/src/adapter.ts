@@ -728,6 +728,7 @@ export function fetchAssetsFromOccurrences(
       totalUrls: sitemaps.reduce((sum, s) => sum + s.urlCount, 0),
       orphanPages: [] as string[],
       missingPages: [] as string[],
+      orphanPagesTotal: 0,
       failed: [],
       // Rules run against THIS object, not the report built later, so the
       // truncation flag has to be here or crawl/sitemap-exists still reports
@@ -749,6 +750,7 @@ export function fetchAssetsFromOccurrences(
       // The arrays that TRAVEL stay capped at the schema's array limit.
       sitemapDiscovery.orphanPages = coverage.orphanPages.slice(0, REPORT_LIMITS.maxPages);
       sitemapDiscovery.missingPages = coverage.missingPages.slice(0, REPORT_LIMITS.maxPages);
+      sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
     const resourceOccurrences = occurrences;
@@ -1285,6 +1287,7 @@ export function runRulesOnStorage(
       totalUrls: sitemaps.reduce((sum, s) => sum + s.urlCount, 0),
       orphanPages: [] as string[],
       missingPages: [] as string[],
+      orphanPagesTotal: 0,
       failed: [], // Not persisted to storage, only available during live audit
       // Rules run against THIS object, not the report built later, so the
       // truncation flag has to be here or crawl/sitemap-exists still reports
@@ -1307,6 +1310,7 @@ export function runRulesOnStorage(
       );
       sitemapDiscovery.orphanPages = coverage.orphanPages.slice(0, SITEMAP_ARRAY_CAP);
       sitemapDiscovery.missingPages = coverage.missingPages.slice(0, SITEMAP_ARRAY_CAP);
+      sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
     // Use pre-fetched resource data (no HTTP calls during rules phase)
@@ -2002,6 +2006,7 @@ function buildStreamingSiteData(
       totalUrls: sitemaps.reduce((sum, s) => sum + s.urlCount, 0),
       orphanPages: [] as string[],
       missingPages: [] as string[],
+      orphanPagesTotal: 0,
       failed: [],
       // Rules run against THIS object, not the report built later, so the
       // truncation flag has to be here or crawl/sitemap-exists still reports
@@ -2021,6 +2026,7 @@ function buildStreamingSiteData(
       );
       sitemapDiscovery.orphanPages = coverage.orphanPages.slice(0, SITEMAP_ARRAY_CAP);
       sitemapDiscovery.missingPages = coverage.missingPages.slice(0, SITEMAP_ARRAY_CAP);
+      sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
     const { resourceSizes, scripts, pdfSizes, sitemapUrlStatuses } = assets;
