@@ -12,7 +12,7 @@ import type {
   SitemapData,
 } from "@squirrelscan/core-contracts";
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
-import { WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
+import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
@@ -193,6 +193,19 @@ function entryRetryFailure(
 function failureHostOf(url: string): string | undefined {
   const host = urlHostKey(url);
   return host === "unknown" ? undefined : host;
+}
+
+/**
+ * The cause of a page the local store refused, short enough for the reason
+ * detail's 120 characters (#403). A StorageError's message carries the
+ * operation and, when the store is locked, a whole sentence of advice; this
+ * keeps only what names the cause.
+ */
+function storageFailureSummary(error: StorageError): string {
+  if (/database is locked|database table is locked|sqlite_busy|busy \(locked\)/i.test(error.message)) {
+    return "it was locked by another squirrel process";
+  }
+  return error.cause instanceof Error ? error.cause.message : error.message;
 }
 
 /**
@@ -469,6 +482,14 @@ export function createCrawler(
      * the order the workers interleave in. Seeded from storage on resume.
      */
     let rootFailure: AuditFailureDetail | undefined;
+    /**
+     * The first page this run lost to something other than its fetch: the
+     * local store refusing it, or processing throwing (#403). Written as the
+     * root failure only when the crawl stored nothing and saw no fetch failure,
+     * which is exactly when the audit would otherwise say only "No pages were
+     * crawled" while every page had in fact been fetched.
+     */
+    let processFailure: AuditFailureDetail | undefined;
 
     // Breadth-first tracking
     const prefixStats = new Map<string, { crawled: number; queued: number }>();
@@ -1891,6 +1912,7 @@ export function createCrawler(
         // Resume-safe for the same reason (#1822): a crawl continuing from
         // persisted stats keeps whatever root failure the earlier pass recorded.
         rootFailure = priorStats?.rootFailure;
+        processFailure = undefined;
         // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
         // a run (an exhausted host is skipped before any request, so it can never
         // earn the successes that recover it), and carrying it forward would make
@@ -2029,7 +2051,7 @@ export function createCrawler(
 
         // Per-URL watchdog interrupts a wedged fetch and marks it failed so
         // the frontier keeps draining and the crawl ends.
-        const processEntry = (entry: FrontierRecord): Effect.Effect<void, never, never> =>
+        const processEntry = (entry: FrontierRecord): Effect.Effect<void, StorageError, never> =>
           processUrl(crawlId, entry).pipe(
             Effect.timeout(Duration.millis(urlTimeoutMs)),
             Effect.catchTag("TimeoutException", () =>
@@ -2067,7 +2089,24 @@ export function createCrawler(
               }),
             ),
             Effect.catchAll((error) => {
+              // #403: a store that cannot be written (read-only, not a
+              // database, disk full) fails every page the same way. Dropping
+              // them one by one ended the audit as "No pages were crawled";
+              // end the crawl with the store's own error instead.
+              if (error._tag === "StorageError" && isPermanentStorageError(error)) {
+                logger.warn("local store failed", error.message);
+                return Effect.fail(error);
+              }
               logger.debug("process error", entry.normalizedUrl, error.message);
+              processFailure ??= auditFailureDetail({
+                code: "unknown",
+                host: failureHostOf(entry.normalizedUrl),
+                detail:
+                  error._tag === "StorageError"
+                    ? `a page could not be saved to the local store (${storageFailureSummary(error)})`
+                    : `a page could not be processed (${error.message})`,
+                source: failureSourceFor(entry.source),
+              });
               return storage
                 .updateFrontierStatus(crawlId, entry.normalizedUrl, "failed", error.message)
                 .pipe(Effect.catchAll(() => Effect.void));
@@ -2169,6 +2208,12 @@ export function createCrawler(
         // overwrite this from their own crawlPhaseStopped flag right after
         // start() returns, so their behavior is unchanged.
         const wasStopped = !isRunning;
+        // Every page was fetched and then lost locally: give the empty audit
+        // that cause instead of none (#403). A fetch failure, when there was
+        // one, already names the better reason and is kept.
+        if (pagesCommitted === 0 && !rootFailure && processFailure) {
+          yield* updateStats(crawlId, { rootFailure: processFailure });
+        }
         const stats = yield* storage.getStats(crawlId);
         const durationMs = Date.now() - startTime;
 

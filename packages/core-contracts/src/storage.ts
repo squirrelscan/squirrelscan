@@ -111,6 +111,28 @@ export class StorageError extends Error {
   }
 }
 
+// SQLite failures that no retry fixes: the file is read-only for this process,
+// cannot be opened, is not a database, or the disk is full. A crawl that hits
+// one on a page hits it on every page, so it must end the run rather than be
+// counted as one failed page (#403). "database is locked" is deliberately not
+// here: another process can release it.
+const PERMANENT_STORAGE_FAILURE =
+  /readonly database|unable to open database|file is not a database|database disk image is malformed|database or disk is full|disk I\/O error/i;
+
+/**
+ * True when `error` is a {@link StorageError} caused by one of the failures
+ * above. Read off the message, which every StorageError starts the same way,
+ * so it also recognizes one that `Effect.runPromise` rethrew wrapped in a
+ * FiberFailure (same message, no `_tag`).
+ */
+export function isPermanentStorageError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith("Storage error during ") &&
+    PERMANENT_STORAGE_FAILURE.test(error.message)
+  );
+}
+
 // ============================================
 // CRAWL METADATA
 // ============================================
