@@ -469,7 +469,7 @@ HTML and JavaScript content is stored in a global content cache (`~/.squirrel/co
 
 - **Gzip compression** - Typically 80-90% space savings
 - **Content deduplication** - Identical content stored once
-- **LRU eviction** - Old entries pruned when cache is full
+- **LRU eviction** - Least recently used entries are pruned above a size cap (1 GB by default, see [`[storage] content_store_max_bytes`](/configuration/storage#content-store-max-bytes)); pages an audit is still using are never evicted while it runs
 
 This means:
 - Repeated crawls of unchanged pages are instant
