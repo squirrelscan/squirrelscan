@@ -64,7 +64,7 @@ runtime dependency closure of `apps/cli`.
 | `express@5.2.1` | MIT | [source](https://github.com/expressjs/express) |
 | `fast-check@3.23.2` | MIT | [source](https://github.com/dubzzz/fast-check) |
 | `fast-deep-equal@3.1.3` | MIT | [source](https://github.com/epoberezkin/fast-deep-equal) |
-| `fast-uri@3.1.7` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
+| `fast-uri@3.1.8` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
 | `fast-xml-builder@1.3.0` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-builder) |
 | `fast-xml-parser@5.10.1` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-parser) |
 | `finalhandler@2.1.1` | MIT | [source](https://github.com/pillarjs/finalhandler) |
@@ -2272,7 +2272,7 @@ Packages: `ipaddr.js@1.9.1`
 
 ### LICENSE (b010b0dfdfdb)
 
-Packages: `fast-uri@3.1.7`
+Packages: `fast-uri@3.1.8`
 
     Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
     Copyright (c) 2021-present The Fastify team <https://github.com/fastify/fastify#team>
