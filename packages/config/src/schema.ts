@@ -5,6 +5,8 @@
 import { isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
+import { parseByteSize } from "./byte-size";
+
 // ============================================
 // SUB-SCHEMAS
 // ============================================
@@ -170,6 +172,31 @@ export const StorageConfigSchema = z.object({
       typeof value === "boolean" ? (value ? DEFAULT_KEEP_AUDITS : 0) : value,
     )
     .default(DEFAULT_KEEP_AUDITS),
+  /**
+   * Size cap for the local content store (`~/.squirrel/content-store.db`, the
+   * gzipped page bodies every audit reads back), in bytes or as a size string
+   * such as `"4GB"` (#2342). Unset = the CLI's default, 1 GB.
+   * `SQUIRREL_CONTENT_STORE_MAX_BYTES` overrides it for one run.
+   *
+   * The store is shared by every project on the machine, so this is the cap in
+   * force while THIS project audits; set it in `~/squirrel.toml` or the env var
+   * to apply it everywhere.
+   */
+  content_store_max_bytes: z
+    .union([z.number(), z.string()])
+    .transform((value, ctx) => {
+      const bytes = parseByteSize(value);
+      if (bytes === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'content_store_max_bytes must be a positive size, such as 4294967296 or "4GB"',
+        });
+        return z.NEVER;
+      }
+      return bytes;
+    })
+    .optional(),
 });
 
 export const CloudConfigSchema = z.object({
