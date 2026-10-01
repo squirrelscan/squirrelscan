@@ -46,6 +46,8 @@ let upgradePayload: Offer | undefined;
 
 const PRICING = {
   audit_base: { cost: AUDIT_BASE_CREDITS, per: 1, unit: "audit" },
+  audit_page: { cost: 2, per: 1, unit: "page" },
+  external_link: { cost: 1, per: 1, unit: "url" },
   render: { cost: 2, per: 1, unit: "page" },
 };
 
@@ -171,8 +173,22 @@ describe("`squirrel credits` on a metered account (control)", () => {
     const text = output();
     expect(text).toContain("Balance: 10 credits");
     expect(text).toContain("Pro:");
-    // 10 credits cannot buy the 50-credit base, so the warning must fire.
-    expect(text).toContain("audit base");
+    // 10 credits cannot buy the base plus one page, so the warning must fire.
+    expect(text).toContain("cloud audits can't start");
+  });
+
+  test("the pricing table states v11: per audited page, and cloud external links (#2290, #2291)", async () => {
+    balancePayload = { monthly: 3000, pack: 0, total: 3000, periodEnd: null };
+    planPayload = { id: "starter", name: "Pro", monthlyCredits: 3000 };
+    await runCredits();
+    const text = output();
+    expect(text).toContain("base + 2 per audited page");
+    expect(text).toContain("per link a cloud audit checks");
+    expect(text).toContain("internal links and the CLI's own checks are free");
+    expect(text).not.toContain("per rendered page");
+    // Neither per-page feature is itemized again below the headline.
+    expect(text).not.toMatch(/^\s+audit_page\s/m);
+    expect(text).not.toMatch(/^\s+external_link\s/m);
   });
 
   test("a paid account still gets the top-up link", async () => {
@@ -190,7 +206,7 @@ describe("`squirrel credits` on a metered account (control)", () => {
     await runCredits();
     const text = output();
     expect(text).toContain("Balance: 0 credits");
-    expect(text).toContain("audit base");
+    expect(text).toContain("cloud audits can't start");
     expect(text).not.toContain("Balance: unlimited");
   });
 });
@@ -254,7 +270,7 @@ describe("`squirrel credits` and the server's offer", () => {
     // Control: the offer is additive, not a replacement for what was there.
     await runCredits();
     expect(output()).toContain("2026-10-01");
-    expect(output()).toContain("audit base");
+    expect(output()).toContain("cloud audits can't start");
   });
 
   test("an unmetered account gets no link at all, even if one is sent", async () => {

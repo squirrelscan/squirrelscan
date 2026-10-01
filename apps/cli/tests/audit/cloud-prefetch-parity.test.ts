@@ -189,13 +189,14 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
   test("estimateAuditCap ≥ actual worst-case across the auto-charged set", () => {
     const maxPages = 50;
     const sampled = 10; // ai-parse/authority sampling cap
-    const cap = estimateAuditCap({ maxPages, render: true });
-    // Pricing v10: base + renders are the only auto-charges; every folded
-    // service must stay 0 for the flat price to hold. Opt-in gaps confirm and
-    // charge separately, so they are deliberately OUTSIDE the cap.
+    const cap = estimateAuditCap({ maxPages });
+    // Pricing v11: base + audited pages are the only auto-charges for a CLI
+    // audit (its link checks are free); every folded service must stay 0 for
+    // the flat price to hold. Opt-in gaps confirm and charge separately, so
+    // they are deliberately OUTSIDE the cap.
     const worstCase =
       computeCost("audit_base", 1) +
-      computeCost("render", maxPages) +
+      computeCost("audit_page", maxPages) +
       computeCost("ai_parse", sampled) +
       computeCost("authority_signals", sampled) +
       computeCost("site_metadata", 1) +
@@ -208,7 +209,11 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
     // truncates a full-parity audit (estimate ≥ actual).
     expect(cap).toBeGreaterThanOrEqual(worstCase);
     expect(cap).toBe(
-      computeCost("audit_base", 1) + computeCost("render", maxPages)
+      computeCost("audit_base", 1) + computeCost("audit_page", maxPages)
+    );
+    // A cloud audit that checks external links also reserves one per page.
+    expect(estimateAuditCap({ maxPages, cloudExternalLinks: true })).toBe(
+      cap + computeCost("external_link", maxPages)
     );
   });
 

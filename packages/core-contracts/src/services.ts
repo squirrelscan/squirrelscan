@@ -106,6 +106,12 @@ export interface DeadLinkResult {
 
 export interface DeadLinksResponse {
   results: DeadLinkResult[];
+  /**
+   * Credits this call debited (#2291): 1 per external destination a CLOUD AUDIT
+   * had not already paid for. Absent or 0 for a signed-in CLI's checks, which
+   * are free, and on older servers.
+   */
+  charged?: number;
 }
 
 // --- blocklist-check --------------------------------------------------------
@@ -436,9 +442,13 @@ export interface RenderRequest {
   sourceHashes?: Record<string, string>;
 }
 
-/** One per-feature debit line for a render batch (render misses vs render_cached hits). #279 */
+/**
+ * One per-feature debit line for a render batch. #279. Inside an audit run every
+ * billed url is an `audit_page` (#2290); `render`/`render_cached` (misses vs
+ * cache hits) are standalone renders that belong to no run, or an older server.
+ */
 export interface RenderChargeLine {
-  feature: "render" | "render_cached";
+  feature: "render" | "render_cached" | "audit_page";
   units: number;
   credits: number;
 }

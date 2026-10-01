@@ -8,7 +8,11 @@ import {
 } from "@squirrelscan/cloud-client";
 import {
   auditStatusToLifecycle,
+  clampAuditPages,
   computeCost,
+  CREDIT_PRICING_VERSION,
+  estimateAuditCap,
+  minimumAuditCredits,
 } from "@squirrelscan/core-contracts";
 import { fullScanHint } from "@squirrelscan/report";
 import { defineCommand } from "citty";
@@ -57,7 +61,11 @@ import {
   COVERAGE_FULL_MAX_PAGES,
   STATUS_REQUEST_TIMEOUT_MS,
 } from "@/constants";
-import { runAudit } from "@/controllers/audit";
+import {
+  auditedPageCount,
+  runAudit,
+  withAuditPageSettlement,
+} from "@/controllers/audit";
 import {
   publishReport,
   savePublishedReportInfo,
@@ -92,7 +100,9 @@ import { scheduleSummaryLine } from "@/lib/schedule-notice";
 import { syncTechnologies } from "@/lib/technology-sync";
 import {
   AUDIT_BASE_CREDITS,
+  AUDIT_PAGE_CREDITS,
   AUDIT_PRICING_LINE,
+  MIN_AUDIT_CREDITS,
   offerPitchLines,
   proPitchLines,
   resetDateLabel,
@@ -167,12 +177,12 @@ export interface CloudConsentEstimate {
   unlimited?: boolean;
 }
 
-/** The single up-front spend disclosure (pricing v10): flat audit base + render
- * rate × page ceiling, everything else included. Accepting it skips the later
- * post-crawl prompt. */
+/** The single up-front spend disclosure (pricing v11, #2290): flat audit base
+ * + 2 per audited page up to the page ceiling, everything else included.
+ * Accepting it skips the later post-crawl prompt. */
 export function consentEstimateLine(est: CloudConsentEstimate): string {
   const base = computeCost("audit_base", 1);
-  const renderEst = computeCost("render", est.maxPages);
+  const pagesEst = computeCost("audit_page", est.maxPages);
   const cap =
     est.maxCredits > 0 ? `, up to ${est.maxCredits} credits/audit` : "";
   const bal = est.unlimited
@@ -181,71 +191,95 @@ export function consentEstimateLine(est: CloudConsentEstimate): string {
       ? ` Balance: ${est.balance.toLocaleString("en-US")} credits.`
       : "";
   const pages = est.maxPages === 1 ? "page" : "pages";
-  return `About ${base + renderEst} credits: ${base} audit base + ${renderEst} to render up to ${est.maxPages} ${pages}, all analysis included${cap}.${bal}`;
+  return `About ${estimateAuditCap({ maxPages: est.maxPages })} credits: ${base} audit base + ${pagesEst} for up to ${est.maxPages} audited ${pages} (${AUDIT_PAGE_CREDITS} each, however the page is fetched), all analysis included${cap}.${bal}`;
 }
 
-/** #1169 preflight affordability estimate + warning copy. */
+/** #1169 / #2290 preflight: what the audit will cost and the page cap its credits can pay for. */
 export interface PreflightAffordability {
-  /** Flat audit base (pricing v10). */
+  /** Flat audit base. */
   base: number;
-  /** Up-to-maxPages render cost — 0 when cloud rendering is off. */
-  renderCost: number;
-  /** base + renderCost — an UPPER bound (the crawl may find fewer pages). */
+  /** 2 credits per page of the (possibly clamped) page cap. */
+  pagesCost: number;
+  /** base + pagesCost — an UPPER bound (the crawl may find fewer pages). */
   estimate: number;
-  /** balance < estimate → the org can't cover the planned audit. */
-  shortfall: boolean;
-  /** Two-line (uncoloured) warning when `shortfall`, else empty. */
-  warningLines: string[];
+  /** The page cap to crawl with. 0 ⇒ not even one page is affordable. */
+  maxPages: number;
+  /** The cap came down from what was asked for. */
+  clamped: boolean;
+  /** What bound it, when clamped: the balance, or `[cloud] max_credits_per_audit`. */
+  limitedBy?: "balance" | "cap";
+  /** Two-line (uncoloured) notice when `clamped`, else empty. */
+  noticeLines: string[];
 }
 
 /**
- * #1169: predict a signed-in audit's up-front cost and whether the balance falls
- * short. A signed-in audit debits the flat base at register + a per-rendered-page
- * charge as pages render (render charge only when cloud rendering is on), so the
- * cost is trivially predictable: `base + min(maxPages) × render`. Pricing comes
- * from the shared v10 source, never hardcoded. Extracted from the command body so
- * the estimate math + message copy are unit-testable (mirrors consentEstimateLine).
+ * #1169 / #2290: fit a signed-in audit's page cap to what it can pay for.
+ *
+ * Pricing v11 charges every audited page, however it was fetched, so the cost
+ * is trivially predictable: `base + 2 × pages`. An audit priced past the balance
+ * (or past the user's own `[cloud] max_credits_per_audit`) used to run anyway
+ * and stop paying part-way; now the page cap comes DOWN to what the credits
+ * cover, and the run says so, rather than refusing an audit a smaller crawl
+ * could afford. The caller drops to local-only only when not even one page is
+ * affordable (`maxPages === 0`). Pricing comes from the shared source, never
+ * hardcoded. Extracted from the command body so the math + copy are
+ * unit-testable (mirrors consentEstimateLine).
  */
 export function computePreflightAffordability(opts: {
   balance: number;
   maxPages: number;
-  cloudRendering: "http" | "browser";
+  /** `[cloud] max_credits_per_audit`; 0 = no cap. */
+  maxCreditsPerAudit: number;
   topUpUrl: string;
   /**
-   * The plan is not metered against `balance` (enterprise). There is nothing to
-   * fall short of, so the estimate is still computed but never warned about.
-   * Absent = metered.
+   * The plan is not metered against `balance` (enterprise). The balance bounds
+   * nothing, so only the user's own credit cap can clamp. Absent = metered.
    */
   unlimited?: boolean;
   /**
    * #2183: when the monthly grant comes back (`balance.periodEnd`). Waiting is
-   * a real answer to a shortfall — an audit that would degrade halfway is often
-   * worth postponing — but only once it has a date on it.
+   * a real answer to a clamped audit, but only once it has a date on it.
    */
   resetAt?: string | null;
 }): PreflightAffordability {
   const base = computeCost("audit_base", 1);
-  const renderCost =
-    opts.cloudRendering === "browser"
-      ? computeCost("render", opts.maxPages)
-      : 0;
-  const estimate = base + renderCost;
-  const shortfall = !opts.unlimited && opts.balance < estimate;
+  const budget = clampAuditPages({
+    maxPages: opts.maxPages,
+    balance: opts.balance,
+    unlimited: opts.unlimited,
+    cap: opts.maxCreditsPerAudit,
+  });
+  const pagesCost = computeCost("audit_page", budget.maxPages);
+  const estimate = base + pagesCost;
+  const pricing = `${base} base + ${AUDIT_PAGE_CREDITS} per audited page`;
+  const requested = budget.requestedMaxPages.toLocaleString("en-US");
+  const covered = budget.maxPages.toLocaleString("en-US");
   const resetOn = resetDateLabel(opts.resetAt);
-  const warningLines = shortfall
-    ? [
-        `⚠ This audit may cost up to ${estimate.toLocaleString("en-US")} credits ` +
-          `(${base} base + up to ${renderCost.toLocaleString("en-US")} to render ${opts.maxPages} pages), ` +
-          `but your balance is ${opts.balance.toLocaleString("en-US")}.`,
-        // #2183: the same four facts the other CLI walls carry. `topUpUrl` is
-        // the server's org-scoped link when there is one, so one click lands on
-        // checkout for the org that is short rather than the last-used one.
-        `  Charging stops when credits run out — later pages won't render.` +
-          (resetOn ? ` Credits reset ${resetOn}.` : "") +
-          ` Top up: ${opts.topUpUrl}`,
-      ]
-    : [];
-  return { base, renderCost, estimate, shortfall, warningLines };
+  let noticeLines: string[] = [];
+  if (budget.clamped && budget.limitedBy === "cap") {
+    noticeLines = [
+      `⚠ [cloud] max_credits_per_audit = ${opts.maxCreditsPerAudit.toLocaleString("en-US")} covers ${covered} of the ${requested} pages requested (${pricing}), so this audit stops at ${covered} pages.`,
+      "  Raise max_credits_per_audit (0 = no cap) to audit more.",
+    ];
+  } else if (budget.clamped) {
+    noticeLines = [
+      `⚠ Your balance of ${opts.balance.toLocaleString("en-US")} credits covers ${covered} of the ${requested} pages requested (${pricing}), so this audit stops at ${covered} pages.`,
+      // #2183: the same facts the other CLI walls carry. `topUpUrl` is the
+      // server's org-scoped link when there is one, so one click lands on
+      // checkout for the org that is short rather than the last-used one.
+      (resetOn ? `  Credits reset ${resetOn}.` : " ") +
+        ` Top up for a full audit: ${opts.topUpUrl}`,
+    ];
+  }
+  return {
+    base,
+    pagesCost,
+    estimate,
+    maxPages: budget.maxPages,
+    clamped: budget.clamped,
+    ...(budget.limitedBy ? { limitedBy: budget.limitedBy } : {}),
+    noticeLines,
+  };
 }
 
 /**
@@ -315,10 +349,12 @@ export function registerFailureLines(
 /**
  * Can this signed-in account start a CLOUD audit, given its balance preflight?
  *
- * Pricing v10 (#391): every cloud audit debits a flat base at registration, so a
- * balance below it cannot start one and the run drops to local-only (no
- * register, no cloud calls, no publish) rather than letting the server 402 the
- * register mid-crawl.
+ * Pricing v11 (#2290): every signed-in audit debits a flat base at registration
+ * plus 2 per audited page, so a balance below the base plus ONE page cannot
+ * start one and the run drops to local-only (no register, no cloud calls, no
+ * publish) rather than letting the server 402 the register mid-crawl. Anything
+ * above that runs, with its page cap fitted to the balance by
+ * computePreflightAffordability.
  *
  * An unmetered plan is EXEMPT. Its stored total is frozen and usually 0, and the
  * server records the debit rather than deducting it, so comparing the number
@@ -335,7 +371,7 @@ export function canStartCloudAudit(balance: {
   unlimited?: boolean;
 }): boolean {
   if (isUnlimitedBalance(balance)) return true;
-  return balance.total >= computeCost("audit_base", 1);
+  return balance.total >= minimumAuditCredits();
 }
 
 /** Warn once the balance drops below this share of the plan's monthly grant. */
@@ -347,7 +383,7 @@ const LOW_BALANCE_FRACTION = 0.2;
  *
  * Fires at 20% of the plan's monthly grant — while there are still credits to
  * spend and a decision to make — and again, more sharply, once the balance is
- * under the flat base and can buy nothing. Free plans get the Pro offer; paid
+ * under the smallest audit (base + one page) and can buy nothing. Free plans get the Pro offer; paid
  * plans get a top-up link, not a pitch for the plan they're already on.
  *
  * Exported for tests.
@@ -375,19 +411,19 @@ export function lowBalanceFooterLines(opts: {
   if (opts.unlimited) return [];
   if (balance == null || plan === "anonymous") return [];
 
-  const base = computeCost("audit_base", 1);
-  const spent = balance < base;
+  const minimum = MIN_AUDIT_CREDITS;
+  const spent = balance < minimum;
   // A plan with no monthly grant (Team pools per seat) has no share to measure
   // against, so it only warns once the balance can't buy an audit.
   const threshold =
     monthlyCredits > 0
       ? Math.floor(monthlyCredits * LOW_BALANCE_FRACTION)
-      : base;
+      : minimum;
   if (!spent && balance >= threshold) return [];
 
   const headline = spent
     ? fmt.yellow(
-        `${balance.toLocaleString("en-US")} credits left, below the ${base}-credit audit base: the next cloud audit can't start.`
+        `${balance.toLocaleString("en-US")} credits left, below the ${minimum} credits the smallest audit needs (${AUDIT_BASE_CREDITS} base + ${AUDIT_PAGE_CREDITS} for one page): the next cloud audit can't start.`
       )
     : fmt.yellow(
         `${balance.toLocaleString("en-US")} credits left. ${AUDIT_PRICING_LINE}`
@@ -409,22 +445,6 @@ export function lowBalanceFooterLines(opts: {
     ...resetLine,
     `  Top up: ${fmt.cyan(opts.upgrade?.url ?? upgradeUrl("cli-audit"))}`,
   ];
-}
-
-/**
- * #1169: whether to interactively prompt on a preflight shortfall. Requires BOTH
- * stdin AND stdout to be TTYs (a piped/redirected stdin makes readline hit EOF →
- * resolve false → a silent abort, so a non-interactive stdin must fall through to
- * warn-and-continue), and no `--yes`. Mirrors the coverage-mode / cloud-outage
- * prompts in this file (the older confirmCloudSpend checks stdout only — that
- * drift is tracked in #1171).
- */
-export function preflightPromptEligible(opts: {
-  stdinIsTTY: boolean;
-  stdoutIsTTY: boolean;
-  yes: boolean;
-}): boolean {
-  return opts.stdinIsTTY && opts.stdoutIsTTY && !opts.yes;
 }
 
 /**
@@ -453,16 +473,26 @@ export function phaseTimingsFromError(
 /**
  * The post-audit cloud-spend disclosure line: total + per-service breakdown +
  * remaining balance. The breakdown reflects the ACTUAL server charges (pricing
- * v10: audit base + renders; folded services charge nothing). Exported for
- * tests. #279
+ * v11: audit base + 2 per audited page; folded services charge nothing), and
+ * names the page count so the arithmetic is checkable at a glance. Exported for
+ * tests. #279 #2290
  */
 export function formatCloudSpendSummary(spend: {
-  lines: Array<{ service: string; credits: number }>;
+  lines: Array<{
+    service: string;
+    credits: number;
+    feature?: string;
+    units?: number;
+  }>;
   totalSpent: number;
   balanceAfter: number | null;
 }): string {
   const byService = spend.lines
-    .map((l) => `${l.service} ${l.credits}`)
+    .map((l) =>
+      l.feature === "audit_page" && l.units != null
+        ? `${l.units} audited ${l.units === 1 ? "page" : "pages"} ${l.credits}`
+        : `${l.service} ${l.credits}`
+    )
     .join(", ");
   const balance =
     spend.balanceAfter != null ? ` · balance ~${spend.balanceAfter}` : "";
@@ -602,7 +632,10 @@ export async function resolveCloudRendering(opts: {
     log(
       fmt.dim(
         `Cloud audits are on for your account. ${consentEstimateLine(estimate)}${
-          capped ? ` Disable with --http or [cloud] rendering = "http".` : ""
+          // #2290: --http skips the browser, not the page charge.
+          capped
+            ? ` Skip the cloud browser with --http, or audit locally for free with --offline.`
+            : ""
         }`
       )
     );
@@ -1144,23 +1177,23 @@ export const audit = defineCommand({
           reportBranding = branding;
           upgradeOffer = upgrade ?? null;
           creditsResetAt = balance.periodEnd ?? null;
-          // Pricing v10 (#391): every cloud audit debits a flat base at
-          // registration. A balance below it can't start one — run local-only
-          // (no register, no cloud calls, no publish) instead of letting the
-          // server 402 the register mid-crawl.
+          // Pricing v11 (#2290): every signed-in audit debits a flat base at
+          // registration plus 2 per audited page. A balance below the base plus
+          // one page can't start one — run local-only (no register, no cloud
+          // calls, no publish) instead of letting the server 402 the register
+          // mid-crawl. Above that, the page cap is fitted to the balance below.
           //
           // An unmetered plan is exempt: its stored total is frozen (often 0)
           // and the server never refuses the debit, so comparing it here would
           // silently drop an enterprise org to local-only every run (#1588 is
           // the same failure mode with a real empty balance).
-          const auditBase = computeCost("audit_base", 1);
           if (!canStartCloudAudit(balance)) {
             // #2183: the org-targeted link when the server sent one. This is
             // the CLI's most-seen credit wall — the run never registers, so it
             // never collects the 402 that carries the same offer.
             kv(
               "Account",
-              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${auditBase}-credit audit base, running local-only`)} · upgrade: ${fmt.cyan(upgrade?.url ?? upgradeUrl("cli-audit"))}`
+              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${MIN_AUDIT_CREDITS} a one-page audit needs, running local-only`)} · upgrade: ${fmt.cyan(upgrade?.url ?? upgradeUrl("cli-audit"))}`
             );
           } else {
             signedIn = true;
@@ -1281,7 +1314,8 @@ export const audit = defineCommand({
       // notice in cli/format.ts only fires when a crawl reaches the cap — so a
       // 10,000-page request against a 4,000-page site was never mentioned.
       const pageLimit = resolvePageLimit(requestedMaxPages);
-      const maxPages = pageLimit.effective;
+      // `let`: the credit preflight below may fit it to the balance (#2290).
+      let maxPages = pageLimit.effective;
       const clampNotice = pageLimitNotice(pageLimit);
       if (clampNotice) console.error(fmt.yellow(clampNotice));
 
@@ -1491,6 +1525,67 @@ export const audit = defineCommand({
       // charge and a failure they cannot fix.
       const nonPublicHost = nonPublicHostLabel(args.url);
 
+      // #1169 / #2290: fit the page cap to what this audit can pay for. Pricing
+      // v11 charges 2 credits for EVERY audited page, however it was fetched,
+      // so an audit priced past the balance (or past the user's own
+      // `[cloud] max_credits_per_audit`) would run out part-way. The cap comes
+      // down to what the credits cover and the run says so, rather than
+      // refusing an audit a smaller crawl could afford. Decided before the
+      // consent line below so the estimate it quotes is the clamped one.
+      //
+      // Only when the run will actually register (and so be charged). #1841:
+      // never for a local/private host, which does not register — left in, a
+      // low-balance user auditing localhost got a top-up warning for money
+      // nothing was going to take.
+      let creditClamp:
+        | {
+            requestedMaxPages: number;
+            effectiveMaxPages: number;
+            limitedBy: "balance" | "cap";
+          }
+        | undefined;
+      if (
+        startingBalance != null &&
+        resolveRegisterDecision({
+          signedIn,
+          offline: !!args.offline,
+          nonPublicHost: !!nonPublicHost,
+        })
+      ) {
+        const preflight = computePreflightAffordability({
+          balance: startingBalance,
+          maxPages,
+          maxCreditsPerAudit: config.cloud.max_credits_per_audit,
+          // #2183: the server's org-scoped link when the preflight read one.
+          topUpUrl: upgradeOffer?.url ?? upgradeUrl("cli-audit"),
+          unlimited: unlimitedCredits,
+          resetAt: creditsResetAt,
+        });
+        if (preflight.maxPages === 0) {
+          // Only the user's own cap can get here: canStartCloudAudit already
+          // guaranteed the balance covers one page. Their cap forbids any
+          // charged audit at all, so run the free local audit instead.
+          log("");
+          log(
+            fmt.yellow(
+              `⚠ [cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit} is below the ${MIN_AUDIT_CREDITS} credits a one-page audit needs, running local-only.`
+            )
+          );
+          signedIn = false;
+        } else if (preflight.clamped && preflight.limitedBy) {
+          creditClamp = {
+            requestedMaxPages: maxPages,
+            effectiveMaxPages: preflight.maxPages,
+            limitedBy: preflight.limitedBy,
+          };
+          maxPages = preflight.maxPages;
+          options.maxPages = maxPages;
+          log("");
+          log(fmt.yellow(preflight.noticeLines[0]!));
+          log(fmt.dim(preflight.noticeLines[1]!));
+        }
+      }
+
       // Resolve the render strategy (#294). `off`/`auto`/`all` is funneled into
       // the existing http/browser consent decision (off→http, auto|all→browser)
       // so the spend-consent flow is unchanged; the auto-vs-all *strategy* is
@@ -1560,61 +1655,6 @@ export const audit = defineCommand({
           },
         });
 
-      // #1169: preflight affordability check. A signed-in audit debits the flat
-      // base at register + a per-rendered-page charge as pages render, so an org
-      // whose balance can't cover the planned audit would otherwise only find out
-      // mid-run (charging stops / coverage degrades). Predict it up front:
-      // estimate = base + up-to-maxPages renders (render charge only when cloud
-      // rendering is on). plannedPages is an UPPER bound (the crawl may find fewer),
-      // so it's worded "up to". TTY → prompt continue/abort; non-TTY/--yes → warn +
-      // continue (never block CI). Pricing comes from the shared source, not hardcoded.
-      //
-      // #1841: never for a local/private host. That run does not register, so
-      // there is no base debit, and it does not render in the cloud, so there
-      // are no page charges — the whole estimate is zero. Left in, a
-      // low-balance user auditing localhost got a top-up warning and a
-      // default-No prompt for money nothing was going to take, and pressing
-      // Enter abandoned a free audit.
-      if (signedIn && startingBalance != null && !nonPublicHost) {
-        const preflight = computePreflightAffordability({
-          balance: startingBalance,
-          maxPages,
-          cloudRendering,
-          // #2183: the server's org-scoped link when the preflight read one.
-          topUpUrl: upgradeOffer?.url ?? upgradeUrl("cli-audit"),
-          unlimited: unlimitedCredits,
-          resetAt: creditsResetAt,
-        });
-        if (preflight.shortfall) {
-          log("");
-          log(fmt.yellow(preflight.warningLines[0]!));
-          log(fmt.dim(preflight.warningLines[1]!));
-          const canPrompt = preflightPromptEligible({
-            stdinIsTTY: !!process.stdin.isTTY,
-            stdoutIsTTY: !!process.stdout.isTTY,
-            yes: !!args.yes,
-          });
-          if (canPrompt) {
-            const { createInterface } = await import("node:readline");
-            const rl = createInterface({
-              input: process.stdin,
-              output: process.stdout,
-            });
-            const proceed = await new Promise<boolean>((resolve) => {
-              rl.on("close", () => resolve(false));
-              rl.on("error", () => resolve(false));
-              rl.question("Continue anyway? [y/N] ", (answer) => {
-                resolve(/^y(es)?$/i.test(answer.trim()));
-              });
-            }).finally(() => rl.close());
-            if (!proceed) {
-              log("Aborted. No credits were charged.");
-              return;
-            }
-          }
-        }
-      }
-
       const startTime = Date.now();
       // #271 phase 6: capture the runner context once (env reads) and reuse it for
       // both the register config and the end-of-run CI echo.
@@ -1651,6 +1691,12 @@ export const audit = defineCommand({
                   coverageMode,
                   cliVersion: packageVersion,
                   runner: runnerInfo,
+                  // #2290: the pricing this binary quotes and settles under, so
+                  // the server can tell a v11 client from an older one.
+                  pricingVersion: CREDIT_PRICING_VERSION,
+                  // #2290: the page cap came down to fit the credits; recorded
+                  // so the dashboard can say why this audit is smaller.
+                  ...(creditClamp ? { creditClamp } : {}),
                 },
               },
               (failure) => {
@@ -1817,8 +1863,15 @@ export const audit = defineCommand({
           ...options,
           confirmCloudSpend,
           // #1134: resolver so render debits during the crawl are tagged with the
-          // async-registered run id (null until register resolves a beat in).
-          getRunId: () => trackedRunId ?? undefined,
+          // async-registered run id. #2290: it WAITS for register to settle
+          // (bounded by register's own timeout): under pricing v11 a render
+          // that went out untagged is billed as a standalone render AND its
+          // page again when the run settles. No register (signed out, offline,
+          // local host) resolves null at once, so those runs wait for nothing.
+          getRunId: async () =>
+            trackedRunId ??
+            (await registerPromise.catch(() => null))?.runId ??
+            undefined,
           // Skips ONLY the capped, pre-disclosed prefetch confirm; the controller
           // keeps confirmCloudSpend for uncapped dead-links. The cap check is
           // already baked into `cloudConsented` (resolveCloudRendering).
@@ -1993,22 +2046,43 @@ export const audit = defineCommand({
       // Pricing v10 (#391): the audit base was debited at register, outside the
       // controller's spend accounting — fold it into the disclosed spend so the
       // summary/footer match the ledger (#876).
+      //
+      // Pricing v11 (#2290): and so is the page settlement the server charges
+      // when this run completes — every audited page the crawl did NOT already
+      // pay for through a render. Mirrored here so the printed total, the
+      // published report and the ledger agree. Not for an invalid audit
+      // (down/403/0-page): that run finalizes failed, which settles nothing and
+      // refunds the base.
       if (registeredRun?.baseCharged) {
         const prior = report.cloudSpend;
+        const withBase = [
+          {
+            service: "audit-base",
+            feature: "audit_base",
+            units: 1,
+            credits: registeredRun.baseCharged,
+          },
+          ...(prior?.lines ?? []),
+        ];
+        const lines =
+          auditStatusToLifecycle(report.status) === "failed"
+            ? withBase
+            : withAuditPageSettlement(withBase, auditedPageCount(report));
+        const totalSpent = lines.reduce((sum, l) => sum + l.credits, 0);
+        // The settlement lands after every balance read this run made.
+        const settled =
+          totalSpent - withBase.reduce((sum, l) => sum + l.credits, 0);
+        // Prefer the controller's post-services balance read; the register
+        // response balance only covers the base debit.
+        const balanceRead =
+          prior?.balanceAfter ?? registeredRun.balanceAfterBase;
         report.cloudSpend = {
-          lines: [
-            {
-              service: "audit-base",
-              feature: "audit_base",
-              units: 1,
-              credits: registeredRun.baseCharged,
-            },
-            ...(prior?.lines ?? []),
-          ],
-          totalSpent: (prior?.totalSpent ?? 0) + registeredRun.baseCharged,
-          // Prefer the controller's post-services balance read; the register
-          // response balance only covers the base debit.
-          balanceAfter: prior?.balanceAfter ?? registeredRun.balanceAfterBase,
+          lines,
+          totalSpent,
+          balanceAfter:
+            balanceRead == null || unlimitedCredits
+              ? balanceRead
+              : Math.max(0, balanceRead - settled),
         };
       }
       // #368: stamp the account tier so the published report's locked-rules
@@ -2078,6 +2152,8 @@ export const audit = defineCommand({
           // without prod-DB forensics; includes `publish` (timed below) since
           // that phase runs in this file, after runAudit() returns.
           phaseTimingsMs: report.phaseTimingsMs,
+          // #2290: what the server settles the page charge on.
+          pagesAudited: auditedPageCount(report),
         });
       };
       const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);

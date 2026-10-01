@@ -57,7 +57,7 @@ These are not gated on any per-website toggle.
 Sent when a website's schedule stops on its own. There are two reasons, and the email says which:
 
 - Three scheduled runs in a row failed. The usual causes are an unreachable site, a firewall or WAF blocking our crawler, or a URL that has moved. Those failed runs were refunded, so the pause costs you nothing.
-- The account balance fell below the 50-credit audit base. The run was skipped without a charge, and the schedule paused rather than skipping again every cycle.
+- The account balance fell too low to pay for even a one-page audit (the 50-credit base plus 2 for the page). The run was skipped without a charge, and the schedule paused rather than skipping again every cycle. A balance that covers some pages but not the site's whole page limit still runs, with the page limit lowered to what the balance covers.
 
 It goes to your account address, because a recurring service that spends credits switching itself off is account news. The email is throttled to roughly one per organization in any rolling 24 hours: if several sites pause around the same time, the rest still pause and still appear in the dashboard bell without each sending mail.
 

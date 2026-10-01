@@ -101,6 +101,13 @@ export interface CloudPrefetchInput {
   /** Unique per audit run — scopes server idempotency keys. */
   auditId: string;
   /**
+   * Cloud run this audit is registered as (#2290). Sent with the raw-vs-rendered
+   * `render` batches so the server bills each page once, as an audited page,
+   * instead of as a standalone render on top of the page's audit charge. A
+   * container run is attributed through its auth context and leaves this unset.
+   */
+  runId?: string;
+  /**
    * True only when the crawl rendered EVERY page (render strategy "all"). The
    * `render` service diffs raw vs rendered content (ax/content-without-js), which
    * is wholly self-identical when every page was rendered — so render is skipped
@@ -466,6 +473,7 @@ async function fetchPageBatch(
   service: CloudServiceId,
   batch: CloudPagePayload[],
   auditId: string,
+  runId?: string,
 ): Promise<Map<string, unknown>> {
   if (service === "render") {
     // Charge-on-submit + non-idempotent (client pins maxAttempts:1 → no double-charge on retry). A submit
@@ -473,7 +481,10 @@ async function fetchPageBatch(
     // which is correct for those cases. The one unrecoverable gap is a submit the server debited but whose
     // 202/jobId was lost: client-side spend then under-reports. That's inherent to a non-idempotent charge
     // and matches the single-call services' best-effort estimate — the server ledger stays authoritative.
-    const job = await client.render({ urls: batch.map((p) => p.url) });
+    const job = await client.render({
+      urls: batch.map((p) => p.url),
+      ...(runId ? { runId } : {}),
+    });
     const results = await pollRenderResults(client, job.jobId);
     // A render that came back a bot-wall/challenge (401/403/429/503 or an interstitial served as HTML) is
     // NOT usable content — drop it so the page maps to a skip rather than feeding a challenge page into the
@@ -844,7 +855,13 @@ export async function prefetchCloudData(input: CloudPrefetchInput): Promise<Clou
       }
       input.onProgress?.(`cloud: ${plan.service} ${i + 1}/${batches.length}`);
       try {
-        const byUrl = await fetchPageBatch(client, plan.service, batch, input.auditId);
+        const byUrl = await fetchPageBatch(
+          client,
+          plan.service,
+          batch,
+          input.auditId,
+          input.runId,
+        );
         // Pages the server omitted from results are a partial provider failure — skipped, not refunded.
         // (For render, charge-on-submit already billed the batch, so a missing page is skipped-not-refunded
         // exactly like the single-call services — the batch credits below still cover every submitted url.)

@@ -119,12 +119,15 @@ export interface CloudFetcherOptions {
    * Cloud run id this crawl's renders belong to (#1134). Threaded onto every
    * render submit so the server tags the render debit with `metadata.runId` +
    * `ref_id`, making rendered-page spend attributable per audit in the ledger.
-   * Accepts a resolver (read at each submit) for the CLI, whose run registration
-   * is async and may land after the fetcher is built — early renders that fire
-   * before it resolves stay untagged, the rest are attributed. Optional: absent
-   * ⇒ debits land untagged (pre-#1134 behaviour).
+   * Accepts a resolver (awaited at each submit) for the CLI, whose run
+   * registration is async and may land after the fetcher is built. Pricing v11
+   * (#2290) needs EVERY render of an audit attributed: an untagged render is a
+   * standalone `render` charge, and its page is billed again as an audited page
+   * when the run settles. So the CLI's resolver waits for register to settle
+   * (bounded by register's own timeout) rather than answering "not yet".
+   * Optional: absent ⇒ debits land untagged (pre-#1134 behaviour).
    */
-  runId?: string | (() => string | undefined);
+  runId?: string | (() => string | undefined | Promise<string | undefined>);
 }
 
 /** A buffered per-page render request awaiting its batch. */
@@ -614,9 +617,9 @@ export function createCloudDocumentFetcher(
 
     let job: RenderJobResponse;
     try {
-      // Resolve the run id at submit time (a CLI resolver may only now have the
-      // async-registered id). #1134
-      const runId = typeof opts.runId === "function" ? opts.runId() : opts.runId;
+      // Resolve the run id at submit time (a CLI resolver waits for the
+      // async-registered id, #1134 / #2290).
+      const runId = typeof opts.runId === "function" ? await opts.runId() : opts.runId;
       // The submit is bounded by the batch budget, NOT by the callers' aborts:
       // the server debits on submit, so cancelling it mid-flight would leave a
       // debit nobody records (#2026). Aborted waiters are already rejected and

@@ -15,7 +15,10 @@
 
 import type { UpgradeOffer } from "@squirrelscan/cloud-client";
 
-import { computeCost } from "@squirrelscan/core-contracts/credits";
+import {
+  computeCost,
+  minimumAuditCredits,
+} from "@squirrelscan/core-contracts/credits";
 import { getPlan } from "@squirrelscan/core-contracts/plans";
 
 import { fmt } from "@/cli/format";
@@ -23,9 +26,14 @@ import { fmt } from "@/cli/format";
 /** planId stays "starter" in the DB and Stripe; users only ever see "Pro". */
 const PRO = getPlan("starter");
 
-/** Cheapest possible audit: a balance under this can buy no cloud audit at all. */
+/** The flat per-audit charge. */
 export const AUDIT_BASE_CREDITS = computeCost("audit_base", 1);
-export const RENDER_PAGE_CREDITS = computeCost("render", 1);
+/** What every audited page costs, however it was fetched (#2290). */
+export const AUDIT_PAGE_CREDITS = computeCost("audit_page", 1);
+/** What one external link checked by a cloud audit costs (#2291). */
+export const EXTERNAL_LINK_CREDITS = computeCost("external_link", 1);
+/** Cheapest possible audit (base + one page): a balance under this can buy no cloud audit at all. */
+export const MIN_AUDIT_CREDITS = minimumAuditCredits();
 
 const UPGRADE_BASE = "https://squirrelscan.com/upgrade";
 
@@ -57,7 +65,7 @@ export function proPitchLines(
 }
 
 /** What an audit costs, stated in the same words everywhere. */
-export const AUDIT_PRICING_LINE = `Every cloud audit costs ${AUDIT_BASE_CREDITS} credits base plus ${RENDER_PAGE_CREDITS} per rendered page.`;
+export const AUDIT_PRICING_LINE = `A signed-in audit costs ${AUDIT_BASE_CREDITS} credits base plus ${AUDIT_PAGE_CREDITS} per audited page; a cloud audit also pays ${EXTERNAL_LINK_CREDITS} per external link it checks.`;
 
 /**
  * The upgrade pitch built from the SERVER's offer (#2183).

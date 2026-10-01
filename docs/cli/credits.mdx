@@ -42,8 +42,10 @@ Balance: 2340 credits (2000 monthly + 340 purchased)
          monthly credits reset 2026-07-08
 
 Pricing:
-  audit                 50 base + 2 per rendered page
+  audit                 50 base + 2 per audited page
                            (analysis, tech detection, publishing included)
+  external links         1 per link a cloud audit checks
+                           (internal links and the CLI's own checks are free)
   content_gaps          25 per run
   issue_enrich           3 per issue
   keyword_gaps          25 per run
@@ -60,9 +62,11 @@ On the free plan the output ends with the Pro offer instead:
   Or run `squirrel credits --upgrade`.
 ```
 
-A balance below 50 credits cannot start any cloud audit, since every audit
-charges a flat 50 credit base before a page renders. `squirrel credits` calls
-that out rather than showing a positive number you cannot spend.
+A balance below 52 credits cannot start any signed-in audit, since the
+smallest one is the flat 50 credit base plus 2 for its first page.
+`squirrel credits` calls that out rather than showing a positive number you
+cannot spend. Above that, a balance too small for a full audit shrinks the
+audit's page limit instead of refusing it. See [Credits and pricing](/cloud/credits).
 
 JSON output:
 

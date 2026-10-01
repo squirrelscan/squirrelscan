@@ -1,122 +1,122 @@
-// #1169: preflight credit-affordability estimate + prompt-eligibility helpers.
-// Estimate math comes from the shared v10 pricing source (base + maxPages ×
-// render), and the prompt requires BOTH stdin and stdout to be TTYs so a piped
-// stdin can't silently abort via readline EOF.
+// #1169 / #2290: preflight credit affordability. Pricing v11 charges 2 credits
+// for every audited page (however it was fetched), so a signed-in audit's page
+// cap is FITTED to what its credits cover instead of running out part-way or
+// being refused. Math comes from the shared pricing source.
 
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { describe, expect, test } from "bun:test";
 
-import {
-  computePreflightAffordability,
-  preflightPromptEligible,
-} from "../../src/cli/commands/audit";
+import { computePreflightAffordability } from "../../src/cli/commands/audit";
 
 const TOP_UP = "https://squirrelscan.com/dashboard";
+const BASE = computeCost("audit_base", 1);
+const PAGE = computeCost("audit_page", 1);
 
-describe("computePreflightAffordability (#1169)", () => {
-  test("estimate = base + maxPages renders from the shared pricing source", () => {
+describe("computePreflightAffordability (#1169, #2290)", () => {
+  test("estimate = base + 2 per page from the shared pricing source, rendering or not", () => {
     const maxPages = 500;
     const r = computePreflightAffordability({
-      balance: 0,
+      balance: 1_000_000,
       maxPages,
-      cloudRendering: "browser",
+      maxCreditsPerAudit: 0,
       topUpUrl: TOP_UP,
     });
-    expect(r.base).toBe(computeCost("audit_base", 1));
-    expect(r.renderCost).toBe(computeCost("render", maxPages));
-    expect(r.estimate).toBe(
-      computeCost("audit_base", 1) + computeCost("render", maxPages)
-    );
+    expect(r.base).toBe(BASE);
+    expect(r.pagesCost).toBe(computeCost("audit_page", maxPages));
+    expect(r.estimate).toBe(BASE + PAGE * maxPages);
+    expect(r.maxPages).toBe(maxPages);
+    expect(r.clamped).toBe(false);
+    expect(r.noticeLines).toEqual([]);
   });
 
-  test("render cost is 0 when cloud rendering is off (http)", () => {
+  test("a 19-page audit is quoted at 88 credits (50 base + 19 × 2)", () => {
     const r = computePreflightAffordability({
-      balance: 0,
-      maxPages: 500,
-      cloudRendering: "http",
+      balance: 500,
+      maxPages: 19,
+      maxCreditsPerAudit: 1000,
       topUpUrl: TOP_UP,
     });
-    expect(r.renderCost).toBe(0);
-    expect(r.estimate).toBe(computeCost("audit_base", 1));
+    expect(r.estimate).toBe(88);
+    expect(r.clamped).toBe(false);
   });
 
-  test("shortfall true when balance can't cover the estimate", () => {
-    const maxPages = 500;
-    const estimate =
-      computeCost("audit_base", 1) + computeCost("render", maxPages);
-    const short = computePreflightAffordability({
-      balance: estimate - 1,
-      maxPages,
-      cloudRendering: "browser",
+  test("a balance below the full cap clamps the page cap instead of refusing", () => {
+    // 100 credits: (100 − 50) / 2 = 25 pages of the 100 requested.
+    const r = computePreflightAffordability({
+      balance: 100,
+      maxPages: 100,
+      maxCreditsPerAudit: 1000,
       topUpUrl: TOP_UP,
+      resetAt: "2026-11-01T00:00:00.000Z",
     });
-    expect(short.shortfall).toBe(true);
-    expect(short.warningLines).toHaveLength(2);
-    // Message surfaces the cost, the base, the page count, the balance, top-up.
-    expect(short.warningLines[0]).toContain(estimate.toLocaleString("en-US"));
-    expect(short.warningLines[0]).toContain(`${short.base} base`);
-    expect(short.warningLines[0]).toContain(`${maxPages} pages`);
-    expect(short.warningLines[0]).toContain(
-      (estimate - 1).toLocaleString("en-US")
+    expect(r.maxPages).toBe(25);
+    expect(r.clamped).toBe(true);
+    expect(r.limitedBy).toBe("balance");
+    expect(r.estimate).toBe(100);
+    expect(r.noticeLines).toHaveLength(2);
+    expect(r.noticeLines[0]).toContain("100 credits");
+    expect(r.noticeLines[0]).toContain("25 of the 100 pages");
+    expect(r.noticeLines[0]).toContain(
+      `${BASE} base + ${PAGE} per audited page`
     );
-    expect(short.warningLines[1]).toContain(TOP_UP);
+    expect(r.noticeLines[1]).toContain("2026-11-01");
+    expect(r.noticeLines[1]).toContain(TOP_UP);
   });
 
-  test("no shortfall when balance covers the estimate → no warning", () => {
-    const maxPages = 500;
-    const estimate =
-      computeCost("audit_base", 1) + computeCost("render", maxPages);
-    const ok = computePreflightAffordability({
-      balance: estimate,
-      maxPages,
-      cloudRendering: "browser",
+  test("an odd balance rounds the page cap down, never past the balance", () => {
+    const r = computePreflightAffordability({
+      balance: 101,
+      maxPages: 100,
+      maxCreditsPerAudit: 0,
       topUpUrl: TOP_UP,
     });
-    expect(ok.shortfall).toBe(false);
-    expect(ok.warningLines).toEqual([]);
-  });
-});
-
-describe("preflightPromptEligible (#1169)", () => {
-  test("prompts only when BOTH stdin and stdout are TTYs and not --yes", () => {
-    expect(
-      preflightPromptEligible({
-        stdinIsTTY: true,
-        stdoutIsTTY: true,
-        yes: false,
-      })
-    ).toBe(true);
+    expect(r.maxPages).toBe(25);
+    expect(r.estimate).toBeLessThanOrEqual(101);
   });
 
-  test("piped stdin (stdout TTY) does NOT prompt — falls through to warn+continue", () => {
-    // The bug this guards: readline over a non-TTY stdin hits EOF → resolves false
-    // → a silent abort. Non-interactive stdin must warn-and-continue instead.
-    expect(
-      preflightPromptEligible({
-        stdinIsTTY: false,
-        stdoutIsTTY: true,
-        yes: false,
-      })
-    ).toBe(false);
+  test("exactly the full cap does not clamp", () => {
+    const r = computePreflightAffordability({
+      balance: BASE + PAGE * 40,
+      maxPages: 40,
+      maxCreditsPerAudit: 0,
+      topUpUrl: TOP_UP,
+    });
+    expect(r.maxPages).toBe(40);
+    expect(r.clamped).toBe(false);
   });
 
-  test("--yes never prompts", () => {
-    expect(
-      preflightPromptEligible({
-        stdinIsTTY: true,
-        stdoutIsTTY: true,
-        yes: true,
-      })
-    ).toBe(false);
+  test("[cloud] max_credits_per_audit clamps too, and says which limit bound", () => {
+    // Default cap 1000 → (1000 − 50) / 2 = 475 pages.
+    const r = computePreflightAffordability({
+      balance: 1_000_000,
+      maxPages: 1000,
+      maxCreditsPerAudit: 1000,
+      topUpUrl: TOP_UP,
+    });
+    expect(r.maxPages).toBe(475);
+    expect(r.limitedBy).toBe("cap");
+    expect(r.noticeLines[0]).toContain("max_credits_per_audit = 1,000");
+    expect(r.noticeLines[0]).toContain("475 of the 1,000 pages");
+    expect(r.noticeLines[1]).not.toContain(TOP_UP);
   });
 
-  test("non-TTY stdout does not prompt", () => {
-    expect(
-      preflightPromptEligible({
-        stdinIsTTY: true,
-        stdoutIsTTY: false,
-        yes: false,
-      })
-    ).toBe(false);
+  test("max_credits_per_audit = 0 means no cap", () => {
+    const r = computePreflightAffordability({
+      balance: 1_000_000,
+      maxPages: 5000,
+      maxCreditsPerAudit: 0,
+      topUpUrl: TOP_UP,
+    });
+    expect(r.maxPages).toBe(5000);
+  });
+
+  test("a cap below one page leaves 0 pages, which the caller runs local-only", () => {
+    const r = computePreflightAffordability({
+      balance: 1_000_000,
+      maxPages: 10,
+      maxCreditsPerAudit: BASE + PAGE - 1,
+      topUpUrl: TOP_UP,
+    });
+    expect(r.maxPages).toBe(0);
   });
 });

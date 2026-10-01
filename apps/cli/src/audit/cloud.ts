@@ -379,6 +379,12 @@ export interface RunCloudPrefetchOptions {
   siteContext: SiteContextPage[];
   baseUrl: string;
   auditId: string;
+  /**
+   * The registered cloud run (#2290): the raw-vs-rendered `render` batches carry
+   * it so their pages are billed once, as audited pages, not as standalone
+   * renders on top. Absent when the run is not registered.
+   */
+  runId?: string;
   /** Stage-1 gating policy (CLI-owned) threaded into the engine's prefetch. */
   gate?: (meta: SiteMetadata, service: CloudServiceId) => boolean;
   confirm?: (
@@ -442,6 +448,7 @@ export async function runCloudPrefetch(
     metadataPages,
     gate: opts.gate,
     auditId: opts.auditId,
+    ...(opts.runId ? { runId: opts.runId } : {}),
     confirm: opts.confirm,
     onProgress: opts.onProgress,
     // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page (#673). "auto" is
@@ -654,6 +661,7 @@ export async function runCloudPrefetchFromPayloads(
     metadataPages: payloads.metadataPages,
     gate: opts.gate,
     auditId: opts.auditId,
+    ...(opts.runId ? { runId: opts.runId } : {}),
     confirm: opts.confirm,
     onProgress: opts.onProgress,
     crawlRendered: opts.crawlRendered ?? false,
@@ -671,9 +679,11 @@ export async function runCloudPrefetchFromPayloads(
 /**
  * Build the cloud dead-links bulk checker for the external-links phase, or
  * null when cloud is off / logged out / the `links/dead-links` rule is not
- * enabled (its meta.cloud is the enable gate). Each call submits ≤200 urls;
- * the server charges `dead_links` per 100 urls. Throwing (402/auth/network)
- * is safe — the adapter falls back to local per-link checks.
+ * enabled (its meta.cloud is the enable gate). Each call submits ≤200 urls.
+ * A signed-in CLI's link checks are free (#2291: only a cloud audit pays per
+ * external link); the server reports whatever it did charge as `charged`.
+ * Throwing (402/auth/network) is safe — the adapter falls back to local
+ * per-link checks.
  */
 function buildDeadLinksBulkChecker(
   client: CloudServicesClient,
@@ -682,10 +692,13 @@ function buildDeadLinksBulkChecker(
 ): ExternalBulkChecker {
   return async (urls) => {
     const res = await client.deadLinks({ auditId, urls });
-    // Only successful calls are charged client-side: the server debits per
-    // call (ceil(urls/100) credits) and refunds on total provider failure —
-    // a failure throws above and is never counted here.
-    onSpend?.(urls.length, computeCost("dead_links", urls.length));
+    // Only successful calls are counted client-side: the server refunds a
+    // total provider failure, which throws above and is never counted here.
+    // Prefer the server's own figure; an older server omits it.
+    onSpend?.(
+      urls.length,
+      res.charged ?? computeCost("dead_links", urls.length)
+    );
     return new Map(
       res.results.map((r) => [
         r.url,

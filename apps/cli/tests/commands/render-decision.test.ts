@@ -327,16 +327,17 @@ describe("login implies cloud consent (#368)", () => {
 });
 
 describe("consentEstimateLine (#191 up-front cost)", () => {
-  test("shows base + render cost, page ceiling, cap, and balance", () => {
+  test("shows base + per-page cost, page ceiling, cap, and balance", () => {
     const line = consentEstimateLine({
       maxPages: 25,
       balance: 17000,
       maxCredits: 1000,
     });
-    // Pricing v10: 50 audit base + computeCost("render", 25) = 2 × 25.
+    // Pricing v11 (#2290): 50 audit base + computeCost("audit_page", 25) = 2 × 25.
     expect(line).toContain("100 credits");
     expect(line).toContain("50 audit base");
-    expect(line).toContain("up to 25 pages");
+    expect(line).toContain("up to 25 audited pages");
+    expect(line).toContain("however the page is fetched");
     expect(line).toContain("up to 1000 credits/audit");
     expect(line).toContain("17,000"); // locale-formatted balance
   });
@@ -368,8 +369,8 @@ describe("consentEstimateLine (#191 up-front cost)", () => {
       balance: null,
       maxCredits: 0,
     });
-    expect(line).toContain("up to 1 page,");
-    expect(line).not.toContain("1 pages");
+    expect(line).toContain("up to 1 audited page (");
+    expect(line).not.toContain("1 audited pages");
   });
 });
 

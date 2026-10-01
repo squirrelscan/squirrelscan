@@ -119,6 +119,14 @@ export interface FinalizeRunInput {
    * maxPages/coverageMode/runner fields already stored there.
    */
   phaseTimingsMs?: Record<string, number>;
+  /**
+   * Pages this audit audited (#2290): the report.pages basis
+   * (`scanScope.pagesCrawled`). A completed run is billed 2 credits for each,
+   * less the pages its renders already paid for; the server settles it once,
+   * idempotently, so a retried finalize never charges twice. Older servers
+   * ignore the field.
+   */
+  pagesAudited?: number;
 }
 
 /**
@@ -502,6 +510,9 @@ export async function finalizeRun(
   if (input.completionReason) body.completionReason = input.completionReason;
   if (input.error) body.error = input.error.slice(0, 500);
   if (input.errorCode) body.errorCode = input.errorCode.slice(0, 100);
+  if (typeof input.pagesAudited === "number" && input.pagesAudited >= 0) {
+    body.pagesAudited = Math.floor(input.pagesAudited);
+  }
   if (input.phaseTimingsMs && Object.keys(input.phaseTimingsMs).length > 0) {
     body.config = { phaseTimingsMs: input.phaseTimingsMs };
   }

@@ -88,6 +88,27 @@ describe("render runId threading (#1134)", () => {
     expect(captured[0]?.runId).toBeUndefined();
   });
 
+  test("waits for an async resolver, so a render that beats register is still attributed (#2290)", async () => {
+    // Pricing v11: an untagged render is a standalone charge AND its page is
+    // billed again at settlement. The CLI's resolver awaits register instead.
+    const captured: RenderRequest[] = [];
+    let release: (id: string) => void = () => {};
+    const registered = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    const fetcher = createCloudDocumentFetcher(recordingClient(captured), {
+      ...fastOpts,
+      runId: () => registered,
+    });
+    const pending = fetcher.fetch({ url: "https://example.com/" } as FetchRequest);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).toHaveLength(0);
+    release("run-late");
+    await pending;
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.runId).toBe("run-late");
+  });
+
   test("omits runId when the resolver returns undefined (async register not yet resolved)", async () => {
     const captured: RenderRequest[] = [];
     const fetcher = createCloudDocumentFetcher(recordingClient(captured), {

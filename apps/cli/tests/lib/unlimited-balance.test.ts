@@ -76,41 +76,57 @@ describe("preflightBalanceOf", () => {
   });
 });
 
-describe("computePreflightAffordability (#1169) on an unmetered plan", () => {
-  // A frozen 0 balance against a 500-page render estimate is the worst case:
-  // metered, that is a guaranteed shortfall warning + abort prompt.
-  test("never reports a shortfall, however low the frozen balance", () => {
+describe("computePreflightAffordability (#1169, #2290) on an unmetered plan", () => {
+  // A frozen 0 balance against a 500-page estimate is the worst case: metered,
+  // that is a page cap clamped to nothing.
+  test("never clamps by the frozen balance, however low", () => {
     const metered = computePreflightAffordability({
       balance: 0,
       maxPages: 500,
-      cloudRendering: "browser",
+      maxCreditsPerAudit: 0,
       topUpUrl: TOP_UP,
     });
-    expect(metered.shortfall).toBe(true);
-    expect(metered.warningLines.length).toBeGreaterThan(0);
+    expect(metered.maxPages).toBe(0);
 
     const unmetered = computePreflightAffordability({
       balance: 0,
       maxPages: 500,
-      cloudRendering: "browser",
+      maxCreditsPerAudit: 0,
       topUpUrl: TOP_UP,
       unlimited: true,
     });
-    expect(unmetered.shortfall).toBe(false);
-    expect(unmetered.warningLines).toEqual([]);
+    expect(unmetered.clamped).toBe(false);
+    expect(unmetered.maxPages).toBe(500);
+    expect(unmetered.noticeLines).toEqual([]);
     // The estimate itself is still computed — spend is accounted, just not gated.
-    expect(unmetered.estimate).toBe(metered.estimate);
+    expect(unmetered.estimate).toBe(
+      AUDIT_BASE + computeCost("audit_page", 500)
+    );
   });
 
-  test("unlimited: false is exactly today's behaviour", () => {
+  test("an unmetered org's own per-audit cap still applies", () => {
+    // The cap is the customer's ceiling on spend that lands on an invoice, not
+    // a balance gate, so being unmetered does not lift it.
+    const r = computePreflightAffordability({
+      balance: 0,
+      maxPages: 500,
+      maxCreditsPerAudit: 1000,
+      topUpUrl: TOP_UP,
+      unlimited: true,
+    });
+    expect(r.maxPages).toBe(475);
+    expect(r.limitedBy).toBe("cap");
+  });
+
+  test("unlimited: false is exactly the metered behaviour", () => {
     const r = computePreflightAffordability({
       balance: 0,
       maxPages: 10,
-      cloudRendering: "browser",
+      maxCreditsPerAudit: 0,
       topUpUrl: TOP_UP,
       unlimited: false,
     });
-    expect(r.shortfall).toBe(true);
+    expect(r.maxPages).toBe(0);
   });
 });
 
@@ -185,9 +201,11 @@ describe("canStartCloudAudit — the local-only degrade gate", () => {
     }
   });
 
-  test("a metered account still needs the full audit base (control)", () => {
-    expect(canStartCloudAudit({ total: AUDIT_BASE })).toBe(true);
-    expect(canStartCloudAudit({ total: AUDIT_BASE - 1 })).toBe(false);
+  test("a metered account needs the base plus one page (control, #2290)", () => {
+    const onePage = AUDIT_BASE + computeCost("audit_page", 1);
+    expect(canStartCloudAudit({ total: onePage })).toBe(true);
+    expect(canStartCloudAudit({ total: onePage - 1 })).toBe(false);
+    expect(canStartCloudAudit({ total: AUDIT_BASE })).toBe(false);
     expect(canStartCloudAudit({ total: 0 })).toBe(false);
   });
 
