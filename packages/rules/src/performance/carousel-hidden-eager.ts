@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 // Strong carousel/slider evidence: a known framework, or a "carousel"/"slideshow"
 // container class. Deliberately NOT bare "slide"/"slider" tokens — those match
 // unrelated UI (e.g. `slide-in` animations, off-canvas sliders) and over-flag.
@@ -38,7 +40,7 @@ export const carouselHiddenEagerRule: Rule = {
 
     const flagged: string[] = [];
 
-    for (const img of doc.querySelectorAll("img")) {
+    for (const img of querySelectorAllOutsideNoscript(doc, "img")) {
       // Inverse of the lazy-above-fold rules: only EAGER (non-lazy) images.
       if (img.getAttribute("loading") === "lazy") continue;
       const src = img.getAttribute("src");

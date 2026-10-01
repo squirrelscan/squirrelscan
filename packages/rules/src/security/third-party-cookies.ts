@@ -2,7 +2,7 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { getHostname } from "@squirrelscan/utils";
+import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 // Known third-party tracking domains
 const trackingDomains = new Set([
@@ -90,7 +90,7 @@ export const thirdPartyCookiesRule: Rule = {
     >();
 
     // Check scripts
-    const scripts = doc.querySelectorAll("script[src]");
+    const scripts = querySelectorAllOutsideNoscript(doc, "script[src]");
     for (const script of scripts) {
       const src = script.getAttribute("src") || "";
       const hostname = getHostname(src).toLowerCase();
@@ -110,7 +110,7 @@ export const thirdPartyCookiesRule: Rule = {
     }
 
     // Check iframes
-    const iframes = doc.querySelectorAll("iframe[src]");
+    const iframes = querySelectorAllOutsideNoscript(doc, "iframe[src]");
     for (const iframe of iframes) {
       const src = iframe.getAttribute("src") || "";
       const hostname = getHostname(src).toLowerCase();
@@ -132,7 +132,7 @@ export const thirdPartyCookiesRule: Rule = {
     }
 
     // Check images (tracking pixels)
-    const images = doc.querySelectorAll("img[src]");
+    const images = querySelectorAllOutsideNoscript(doc, "img[src]");
     for (const img of images) {
       const src = img.getAttribute("src") || "";
       const hostname = getHostname(src).toLowerCase();

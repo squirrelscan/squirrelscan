@@ -26,7 +26,15 @@ export {
   type ProjectNameContext,
 } from "./url";
 
-export { getAttrCI, hasAttrCI, querySelectorAllByAttrCI, querySelectorByAttrValueCI } from "./dom";
+export {
+  getAttrCI,
+  hasAttrCI,
+  isInsideNoscript,
+  querySelectorAllByAttrCI,
+  querySelectorAllOutsideNoscript,
+  querySelectorByAttrValueCI,
+  stripNoscriptMarkup,
+} from "./dom";
 
 export { isUUID, isShortId } from "./validation";
 

@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const pictureElementRule: Rule = {
   meta: {
     id: "images/picture-element",
@@ -33,7 +35,7 @@ The <img> provides fallback for:
     const checks: CheckResult[] = [];
     if (!document) return { checks: [] };
 
-    const pictureElements = document.querySelectorAll("picture");
+    const pictureElements = querySelectorAllOutsideNoscript(document, "picture");
 
     if (pictureElements.length === 0) {
       checks.push({
@@ -49,11 +51,12 @@ The <img> provides fallback for:
     const invalidPictures: string[] = [];
 
     for (const picture of Array.from(pictureElements)) {
-      const imgChild = picture.querySelector("img");
+      // A fallback <img> inside <noscript> is no fallback with scripting on.
+      const imgChild = querySelectorAllOutsideNoscript(picture, "img")[0];
 
       if (!imgChild) {
         // Try to identify the picture for debugging
-        const sources = picture.querySelectorAll("source");
+        const sources = querySelectorAllOutsideNoscript(picture, "source");
         const firstSrcset =
           sources[0]?.getAttribute("srcset") || "unknown source";
         invalidPictures.push(firstSrcset);

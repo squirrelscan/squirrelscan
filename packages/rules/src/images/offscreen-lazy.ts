@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const optionsSchema = z.object({
   above_fold_count: z
     .number()
@@ -33,7 +35,7 @@ export const offscreenLazyRule: Rule = {
 
     const checks: CheckResult[] = [];
 
-    const images = doc.querySelectorAll("img[src]");
+    const images = querySelectorAllOutsideNoscript(doc, "img[src]");
 
     if (images.length === 0) {
       checks.push({

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { scanCssComments } from "../shared/comment-scan";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const optionsSchema = z.object({
   min_size_bytes: z
     .number()
@@ -119,7 +121,7 @@ export const unminifiedCssRule: Rule = {
     }> = [];
 
     // Check inline styles
-    const styleElements = doc.querySelectorAll("style");
+    const styleElements = querySelectorAllOutsideNoscript(doc, "style");
     for (const style of styleElements) {
       const content = style.textContent || "";
       if (content.length < opts.min_size_bytes) continue;
@@ -182,7 +184,7 @@ export const unminifiedCssRule: Rule = {
     }
 
     // ALWAYS check DOM for external stylesheets not in site data (CDN/external resources)
-    const linkElements = doc.querySelectorAll('link[rel="stylesheet"]');
+    const linkElements = querySelectorAllOutsideNoscript(doc, 'link[rel="stylesheet"]');
     for (const link of linkElements) {
       const href = link.getAttribute("href") || "";
       if (!href) continue;

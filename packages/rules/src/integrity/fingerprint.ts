@@ -7,6 +7,8 @@
 
 import type { ParsedPage } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export interface PageFingerprint {
   /** Distinct external asset hosts referenced by <link>/<script>/<img>. */
   assetHosts: Set<string>;
@@ -95,17 +97,22 @@ export function fingerprintPage(
     if (kind === "code") codeHosts.add(host);
   };
 
-  for (const link of doc.querySelectorAll("link[href]")) {
+  // The asset graph is what the page loads, so <noscript> content is not in
+  // it (#434). It also keeps this key sound for the template-scoped rules that
+  // read the same elements, security/sri and security/third-party-cookies:
+  // they skip <noscript> content now, so a key that still counted it could
+  // cluster a page whose tracker only sits in a fallback with one that loads it.
+  for (const link of querySelectorAllOutsideNoscript(doc, "link[href]")) {
     const rel = (link.getAttribute("rel") ?? "").toLowerCase();
     const href = link.getAttribute("href");
     const isStylesheet = rel.includes("stylesheet");
     addHost(href, isStylesheet ? "code" : "link");
     if (isStylesheet && href) stylesheetHrefs.add(href);
   }
-  for (const s of doc.querySelectorAll("script[src]")) {
+  for (const s of querySelectorAllOutsideNoscript(doc, "script[src]")) {
     addHost(s.getAttribute("src"), "code");
   }
-  for (const img of doc.querySelectorAll("img[src]")) {
+  for (const img of querySelectorAllOutsideNoscript(doc, "img[src]")) {
     addHost(img.getAttribute("src"), "resource");
   }
 
@@ -118,7 +125,7 @@ export function fingerprintPage(
   }
 
   const cssVars = new Set<string>();
-  for (const style of doc.querySelectorAll("style")) {
+  for (const style of querySelectorAllOutsideNoscript(doc, "style")) {
     const css = style.textContent ?? "";
     for (const m of css.matchAll(CSS_VAR_RE)) {
       cssVars.add(m[0].replace(/\s*:$/, "").toLowerCase());

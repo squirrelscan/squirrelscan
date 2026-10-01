@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const modernFormatRule: Rule = {
   meta: {
     id: "images/modern-format",
@@ -21,8 +23,8 @@ export const modernFormatRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const images = doc.querySelectorAll("img[src]");
-    const sources = doc.querySelectorAll("source[srcset]");
+    const images = querySelectorAllOutsideNoscript(doc, "img[src]");
+    const sources = querySelectorAllOutsideNoscript(doc, "source[srcset]");
 
     if (images.length === 0) {
       checks.push({

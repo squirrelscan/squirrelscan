@@ -3,6 +3,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript, stripNoscriptMarkup } from "@squirrelscan/utils";
+
 import {
   buildGramIndex,
   mandatoryLiterals,
@@ -358,7 +360,7 @@ export const jsLibrariesRule: Rule = {
     const scriptSources: string[] = [];
     const inlineScripts: string[] = [];
 
-    const scripts = doc.querySelectorAll("script");
+    const scripts = querySelectorAllOutsideNoscript(doc, "script");
     for (const script of scripts) {
       const src = script.getAttribute("src");
       if (src) {
@@ -382,8 +384,9 @@ export const jsLibrariesRule: Rule = {
       }
     }
 
-    // Check HTML for runtime markers (framework signatures in DOM)
-    const htmlContent = html;
+    // Check HTML for runtime markers (framework signatures in DOM). <noscript>
+    // content never runs, so its scripts are not markers either (#434).
+    const htmlContent = stripNoscriptMarkup(html);
 
     // One pass per distinct body of text, reused by every library below. Short
     // scripts index to null and are simply scanned, as before.

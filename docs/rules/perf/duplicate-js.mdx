@@ -21,6 +21,8 @@ Names are matched from four URL shapes, in order: an unpkg path, a jsDelivr npm 
 
 A page with no parsed document emits nothing at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Load each library once, from one place. Where a bundler is in use, that usually means marking the library external and providing it yourself rather than letting two chunks each include it:

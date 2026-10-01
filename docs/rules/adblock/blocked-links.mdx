@@ -19,6 +19,8 @@ The rule is site-wide and reads a result the cloud blocklist service produced be
 
 The three blocking rules share one blocklist check per audit.
 
+Images and scripts inside `<noscript>` are not sent for matching: a browser with scripting enabled never fetches them, so no blocker sees them either. Links inside `<noscript>` still are. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Move anything the page needs off a blocked host. For measurement, a first-party or server-side collector may reduce blocking, though it is not a guarantee: filters can match a first-party endpoint too, and server-side forwarding cannot recover an event whose browser request never left. For advertising, the finding is a description of your audience rather than a defect.

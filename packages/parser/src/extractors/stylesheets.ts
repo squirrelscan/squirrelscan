@@ -1,5 +1,7 @@
 import type { Document } from "linkedom";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export interface StylesheetRef {
   href: string;
 }
@@ -19,7 +21,8 @@ export function extractStylesheets(
   baseUrl: string
 ): StylesheetRef[] {
   const results: StylesheetRef[] = [];
-  const links = doc.querySelectorAll("link[href]");
+  // A <noscript> fallback stylesheet never loads with scripting on (#434).
+  const links = querySelectorAllOutsideNoscript(doc, "link[href]");
 
   for (const link of links) {
     const rel = link.getAttribute("rel") || "";

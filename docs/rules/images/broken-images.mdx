@@ -19,6 +19,8 @@ The rule is site-wide. It walks the images of every crawled page, deduplicating 
 
 No HTTP request is made for image URLs, so a well-formed URL that 404s passes this rule. `images/image-file-size` reports on the images the crawl did fetch.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

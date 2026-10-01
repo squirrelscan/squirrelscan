@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 // Known image CDN domains that typically serve optimized images
 const imageCdnDomains = [
   "cloudinary.com",
@@ -54,7 +56,7 @@ export const optimizedRule: Rule = {
 
     const checks: CheckResult[] = [];
 
-    const images = doc.querySelectorAll("img[src]");
+    const images = querySelectorAllOutsideNoscript(doc, "img[src]");
 
     if (images.length === 0) {
       checks.push({
@@ -146,7 +148,7 @@ export const optimizedRule: Rule = {
     }
 
     // Picture element check (responsive images)
-    const pictureElements = doc.querySelectorAll("picture");
+    const pictureElements = querySelectorAllOutsideNoscript(doc, "picture");
     if (pictureElements.length > 0) {
       checks.push({
         name: "picture-elements",

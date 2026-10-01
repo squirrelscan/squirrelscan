@@ -22,6 +22,8 @@ The rule runs on every crawled page over every `img[src]`, skipping `data:` sour
 
 Modern means a `.webp` or `.avif` extension, or a URL containing `format=webp`, `fm=webp`, `f_webp` or `format=avif`. SVG and ICO are counted as modern, since neither needs converting. Legacy means `.jpg`, `.jpeg`, `.png` or `.gif`. The CDN list covers around twenty hostnames including Cloudinary, imgix, ImageKit, Shopify, Sanity, Contentful and Cloudflare Images, matched as a substring of the hostname. Severity info, weight 4.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

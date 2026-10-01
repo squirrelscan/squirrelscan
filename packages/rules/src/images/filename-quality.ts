@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const filenameQualityRule: Rule = {
   meta: {
     id: "images/filename-quality",
@@ -21,7 +23,7 @@ export const filenameQualityRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const images = doc.querySelectorAll("img[src]");
+    const images = querySelectorAllOutsideNoscript(doc, "img[src]");
 
     if (images.length === 0) {
       checks.push({

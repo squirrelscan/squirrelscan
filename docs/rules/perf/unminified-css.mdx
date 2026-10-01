@@ -21,6 +21,8 @@ Inline `<style>` content of 2,048 characters or more is analysed directly. A blo
 
 Linked stylesheets are judged by filename only, because the rule does not fetch them. A file is suspected when its name contains none of `.min.`, `-min.` or `.prod.`, has no dot-or-hyphen followed by eight or more hex characters and another dot, and does not look like a framework, meaning the name contains `bootstrap`, `tailwind` or `normalize`. Files from the crawl's own resource list are skipped below 2,048 bytes. Stylesheets found only in the markup are judged the same way, with `cdn` added to the framework list and a required `.css` ending. A page with no parsed document emits nothing at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Run the production build. In Vite that minifies CSS by default; esbuild needs `--minify` and webpack needs a CSS minimiser configured, so check the config as well as the mode.

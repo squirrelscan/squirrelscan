@@ -19,6 +19,8 @@ One check, `frame-title`, at severity error. It covers every `<iframe>` and `<fr
 
 Findings are labelled `iframe` even when the element is a legacy `<frame>`.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

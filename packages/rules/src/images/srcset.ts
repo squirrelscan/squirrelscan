@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const srcsetRule: Rule = {
   meta: {
     id: "images/srcset",
@@ -21,7 +23,7 @@ export const srcsetRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const images = doc.querySelectorAll("img[src]");
+    const images = querySelectorAllOutsideNoscript(doc, "img[src]");
 
     if (images.length === 0) {
       checks.push({
@@ -44,7 +46,7 @@ export const srcsetRule: Rule = {
     }
 
     // Also check for picture elements
-    const pictureElements = doc.querySelectorAll("picture");
+    const pictureElements = querySelectorAllOutsideNoscript(doc, "picture");
     const pictureCount = pictureElements.length;
 
     if (withSrcset > 0 || pictureCount > 0) {

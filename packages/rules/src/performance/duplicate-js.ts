@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 // Extract library name and version from script URL
 function extractLibraryInfo(
   src: string
@@ -67,7 +69,7 @@ export const duplicateJsRule: Rule = {
     >();
 
     // Check external scripts
-    const scripts = doc.querySelectorAll("script[src]");
+    const scripts = querySelectorAllOutsideNoscript(doc, "script[src]");
 
     for (const script of scripts) {
       const src = script.getAttribute("src") || "";

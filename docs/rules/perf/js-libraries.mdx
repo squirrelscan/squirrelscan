@@ -21,6 +21,8 @@ Detection is tried in three passes and stops once a library is both detected and
 
 Only five of the twenty-two carry advisory data: jQuery, Bootstrap, Lodash, Prototype.js and YUI. A version is flagged when it is at or below the advisory's maximum affected version. A page with no parsed document, or no HTML, emits nothing at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Update the dependency. For a library loaded from a CDN that is one URL:

@@ -21,6 +21,8 @@ Content is analysed when the rule has it: inline `<script>` blocks of 2,048 char
 
 A script the rule has no content for is judged by filename. It is suspected when the name contains none of `.min.`, `-min.` or `.prod.`, has no dot-or-hyphen followed by eight or more hex characters and another dot, does not contain `chunk`, `bundle` or `vendor`, does not come from a URL containing `cdn`, `unpkg` or `jsdelivr`, and ends in `.js` or `.mjs`. The `cloudflare` exclusion applies only to scripts from the crawl's own list, not to those found in the markup alone. A page with no parsed document emits nothing at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Run the production build, and check that minification is turned on:

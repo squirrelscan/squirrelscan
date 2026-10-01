@@ -20,6 +20,8 @@ The `@font-face` scan is a regular expression over the page's raw HTML, so it se
 
 The Google Fonts usage test matches any `<link href>` resolving to `fonts.googleapis.com`, whatever its `rel`, so a preconnect to that host on a page with no Google Fonts stylesheet counts as usage. Fonts pulled in with `@import` are not detected as usage at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```css

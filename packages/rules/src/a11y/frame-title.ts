@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const frameTitleRule: Rule = {
   meta: {
     id: "a11y/frame-title",
@@ -21,7 +23,7 @@ export const frameTitleRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const frames = doc.querySelectorAll("iframe, frame");
+    const frames = querySelectorAllOutsideNoscript(doc, "iframe, frame");
     const missingTitles: string[] = [];
 
     for (const frame of frames) {

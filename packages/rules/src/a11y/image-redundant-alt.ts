@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 // Common redundant alt text patterns
 // Expanded based on Lighthouse and common usage
 const redundantPatterns = [
@@ -73,7 +75,7 @@ export const imageRedundantAltRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const images = doc.querySelectorAll("img[alt]");
+    const images = querySelectorAllOutsideNoscript(doc, "img[alt]");
     const redundantAlts: string[] = [];
 
     for (const img of images) {
@@ -133,7 +135,7 @@ export const imageRedundantAltRule: Rule = {
             ? parent
             : parent.closest?.("figure");
         if (figure) {
-          const figcaption = figure.querySelector("figcaption");
+          const figcaption = querySelectorAllOutsideNoscript(figure, "figcaption")[0];
           if (figcaption) {
             const captionText =
               figcaption.textContent?.trim().toLowerCase() || "";

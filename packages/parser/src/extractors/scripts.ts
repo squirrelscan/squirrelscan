@@ -2,7 +2,7 @@
 
 import type { Document } from "linkedom";
 
-import { getHostname } from "@squirrelscan/utils";
+import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 export interface ScriptRef {
   src: string;
@@ -17,7 +17,8 @@ export interface ScriptRef {
  */
 export function extractScripts(doc: Document, baseUrl: string): ScriptRef[] {
   const results: ScriptRef[] = [];
-  const scripts = doc.querySelectorAll("script[src]");
+  // A <script> inside <noscript> never runs or loads (#434).
+  const scripts = querySelectorAllOutsideNoscript(doc, "script[src]");
 
   for (const script of scripts) {
     const src = script.getAttribute("src");

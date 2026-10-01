@@ -7,7 +7,7 @@ import { getDomain } from "tldts";
 
 import type { BlocklistCheckResponse, BlocklistMatch } from "@squirrelscan/core-contracts";
 
-import { getHostname } from "@squirrelscan/utils";
+import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../types";
 
@@ -168,11 +168,12 @@ export function findSourcePages(ctx: RuleContext, url: string): string[] {
 }
 
 /** Raw `<script src>` attribute values on ONE page's live DOM — shared by the
- *  page-time collector (#1021 E-E2) and the legacy `documentReferencesScript`. */
+ *  page-time collector (#1021 E-E2) and the legacy `documentReferencesScript`.
+ *  A `<script>` inside `<noscript>` never loads, so it is not one (#434). */
 export function pageScriptSrcs(doc: NonNullable<ParsedPage["document"]>): string[] {
   const srcs: string[] = [];
   try {
-    for (const script of doc.querySelectorAll("script[src]")) {
+    for (const script of querySelectorAllOutsideNoscript(doc, "script[src]")) {
       const src = script.getAttribute("src");
       if (src !== null) srcs.push(src);
     }
@@ -198,10 +199,10 @@ function scriptSrcsByUrl(ctx: RuleContext): Map<string, string[]> | null {
 
 /** Whether a parsed document loads `<script src="url">` (absolute match). */
 function documentReferencesScript(doc: unknown, url: string): boolean {
-  const document = doc as { querySelectorAll?: (sel: string) => Iterable<Element> } | null;
-  if (!document?.querySelectorAll) return false;
+  const document = doc as { querySelectorAll(sel: string): Iterable<Element> } | null;
+  if (typeof document?.querySelectorAll !== "function") return false;
   try {
-    for (const script of document.querySelectorAll("script[src]")) {
+    for (const script of querySelectorAllOutsideNoscript(document, "script[src]")) {
       if (script.getAttribute("src") === url) return true;
     }
   } catch {

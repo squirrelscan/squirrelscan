@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 /**
  * Per-page byte-weight signal read off a live DOM (#1021 E-E2). Shared by the
  * page-time collector (buildCollectedPageSignal) and this rule's legacy
@@ -20,12 +22,12 @@ export function extractPageByteSignal(doc: NonNullable<ParsedPage["document"]>):
   imageCount: number;
 } {
   let inlineCssLen = 0;
-  for (const style of doc.querySelectorAll("style")) {
+  for (const style of querySelectorAllOutsideNoscript(doc, "style")) {
     inlineCssLen += (style.textContent || "").length;
   }
 
   let inlineJsLen = 0;
-  for (const script of doc.querySelectorAll("script:not([src])")) {
+  for (const script of querySelectorAllOutsideNoscript(doc, "script:not([src])")) {
     // Skip JSON-LD and other data scripts
     const type = script.getAttribute("type") || "";
     if (!type.includes("json") && !type.includes("template")) {
@@ -36,9 +38,9 @@ export function extractPageByteSignal(doc: NonNullable<ParsedPage["document"]>):
   return {
     inlineCssLen,
     inlineJsLen,
-    externalCssCount: doc.querySelectorAll('link[rel="stylesheet"]').length,
-    externalJsCount: doc.querySelectorAll("script[src]").length,
-    imageCount: doc.querySelectorAll("img[src]").length,
+    externalCssCount: querySelectorAllOutsideNoscript(doc, 'link[rel="stylesheet"]').length,
+    externalJsCount: querySelectorAllOutsideNoscript(doc, "script[src]").length,
+    imageCount: querySelectorAllOutsideNoscript(doc, "img[src]").length,
   };
 }
 

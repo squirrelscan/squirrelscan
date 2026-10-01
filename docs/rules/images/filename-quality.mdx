@@ -19,6 +19,8 @@ The rule runs on every crawled page over every `img[src]`, taking the last path 
 
 The patterns catch camera and device names such as `IMG_001`, `DSC1234`, `DCIM001` and `P20231015`, generic names such as `image1`, `photo1`, `pic1`, `screenshot`, `screen-shot` and `untitled`, and machine identifiers: a name starting with eight or more digits, one starting with 32 or more hexadecimal characters, or one starting with 36 or more hexadecimal characters and hyphens. The last two are prefix tests rather than exact hash or UUID validation. Severity info, weight 2.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```

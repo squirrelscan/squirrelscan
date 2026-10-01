@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 // Skip obvious non-LCP raster candidates (tracking pixels, spacers).
 const NON_CONTENT_SRC = /pixel|spacer|blank|1x1|tracking/i;
 
@@ -63,7 +65,7 @@ export const lcpFetchpriorityRule: Rule = {
 
     // Collect image preloads (href + responsive imagesrcset) to match against the candidate.
     const preloadImageUrls = new Set<string>();
-    for (const link of doc.querySelectorAll('link[rel~="preload"][as="image"]')) {
+    for (const link of querySelectorAllOutsideNoscript(doc, 'link[rel~="preload"][as="image"]')) {
       const href = link.getAttribute("href");
       if (href) {
         const abs = absUrl(href, ctx.page.url);
@@ -77,7 +79,7 @@ export const lcpFetchpriorityRule: Rule = {
     // Find the LCP candidate: first eager (non-lazy) content image, excluding
     // site chrome (header/nav logos), icons, SVGs, data URIs and small images.
     let candidate: Element | null = null;
-    for (const img of doc.querySelectorAll("img")) {
+    for (const img of querySelectorAllOutsideNoscript(doc, "img")) {
       const src = img.getAttribute("src");
       if (!src || src.startsWith("data:")) continue;
       if (NON_CONTENT_SRC.test(src)) continue;
