@@ -15,6 +15,12 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Fixed
+
+- Pages that embed fonts as base64 in a `<style>` block no longer stall the audit. `a11y/color-contrast` read that CSS in quadratic time, so a chat widget's 428KB of `@font-face` data held one page for over a minute; the same page now takes milliseconds, with the same findings. `links/tel-mailto` had the same flaw on a mailto link wrapped around a long unbroken run of text.
+
 ## v0.0.99 — 2026-09-30
 
 `squirrel setup` gets you from install to your first audit in about a minute, the CLI installs and updates the agent skills itself, `--no-publish` really does skip the publish, and `--disable-discovery-probes` turns off the pre-crawl requests that got some audits banned by server firewalls.
