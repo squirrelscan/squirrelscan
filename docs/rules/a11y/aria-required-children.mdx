@@ -13,11 +13,24 @@ When the children are missing, assistive technology gets a container that promis
 
 One check, `aria-required-children`, at severity error. It covers thirteen container roles: `feed`, `grid`, `list`, `listbox`, `menu`, `menubar`, `radiogroup`, `row`, `rowgroup`, `tablist`, `table`, `tree` and `treegrid`.
 
-For each element with one of those explicit roles it looks for a satisfying descendant at any depth. A descendant satisfies the container when it carries one of the required roles explicitly, or when a native equivalent is present: `<li>` for `listitem`, `<tr>` for `row`, `<td>` or `<th>` for `cell`, `<option>` for `option`, `<article>` for `article`. A container that is itself the native element also counts, so `<ul role="list">` with `<li>` children passes, as do `<table role="table">` with `<tr>` and `<select role="listbox">` with `<option>`.
+For each element with one of those explicit roles it looks for a satisfying descendant at any depth, and follows `aria-owns` from the container, its descendants and the elements they own. A descendant satisfies the container when its role is one of the required roles. That role is the first valid token of an explicit `role` attribute, or else the implicit role a native element carries under HTML-AAM:
+
+- `<input type="radio">` is `radio`, so native radios inside `role="radiogroup"` pass, wrappers and all.
+- `<li>` is `listitem` and `<tr>` is `row`.
+- `<thead>`, `<tbody>` and `<tfoot>` are `rowgroup`.
+- `<td>` is `cell`, or `gridcell` inside a table with `role="grid"` or `role="treegrid"`. `<th>` is `columnheader`, or `rowheader` with `scope="row"`.
+- `<option>` is `option`.
+- `<article>` is `article`.
+
+A native wrapper such as `<fieldset>`, `<details>`, `<optgroup>` or `<tbody>` holds the required items rather than being one, so it satisfies the container only through the items inside it. An explicit `role="group"` or `role="rowgroup"` counts on its own.
+
+An explicit role replaces the implicit one, so `<li role="none">` is not a list item and `<input type="radio" role="menuitemradio">` is not a radio. The exception is `none` or `presentation` on an element that is focusable or carries a global ARIA attribute: browsers ignore that role, and so does the check.
+
+Elements inside `<noscript>` are skipped, as containers and as children: a browser with scripting enabled reads `<noscript>` content as plain text. See [content inside noscript](/rules#content-inside-noscript).
 
 An empty container is skipped, on the assumption it is populated later. A finding needs the element to have at least one child element or some text.
 
-- Fail with `N element(s) missing required child roles`. Items read `div[role="tablist"]: needs child with role=tab`, up to ten with a count of the rest.
+- Fail with `N element(s) missing required child roles`. Items read `<tag>[role="<role>"]: needs child with role=<roles>`, where `<roles>` joins the accepted child roles with `|`, up to ten with a count of the rest.
 - Pass with `All elements have required child roles`, which is also what a page using none of these roles reports.
 
 ## How to fix it
@@ -31,7 +44,7 @@ An empty container is skipped, on the assumption it is populated later. A findin
 
 Give the container the children its role demands, or drop the role and let the native elements speak for themselves.
 
-squirrel searches at any depth, so an intermediate wrapper does not trip the check. Nor does it check the other half of the relationship: an element can be a DOM descendant and still not be owned by the container in the way the role expects, and `aria-owns` can pull in elements from elsewhere in the document. A widget that passes here can still be wrong in a browser.
+squirrel searches at any depth, so an intermediate wrapper does not trip the check, and it follows `aria-owns` to elements elsewhere in the document. It does not check the other half of the relationship: an element can be a DOM descendant and still not be owned by the container in the way the role expects. A widget that passes here can still be wrong in a browser.
 
 | | |
 |---|---|
