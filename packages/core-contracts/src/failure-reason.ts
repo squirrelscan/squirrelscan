@@ -396,7 +396,11 @@ export function classifyAuditFailureReasonText(
     r.includes("getaddrinfo") ||
     r.includes("nxdomain") ||
     r.includes("could not resolve host") ||
-    /dns (lookup|resolution) failed/.test(r)
+    /dns (lookup|resolution) failed/.test(r) ||
+    // The CLI's reachability probe (`Cannot reach <url>: Host not found`,
+    // apps/cli/src/utils/reachability.ts). Anchored on its "cannot reach"
+    // lead-in so an internal "host not found" stays unknown.
+    (r.startsWith("cannot reach ") && r.includes(": host not found"))
   ) {
     return "dns";
   }
@@ -411,7 +415,10 @@ export function classifyAuditFailureReasonText(
     r.includes("self-signed certificate") ||
     r.includes("self signed certificate") ||
     r.includes("unable to verify the first certificate") ||
-    r.includes("hostname/ip does not match")
+    r.includes("hostname/ip does not match") ||
+    // The same probe folds every certificate problem into one sentence:
+    // `Cannot reach <url>: SSL/TLS error - certificate issue`.
+    r.includes("ssl/tls error - certificate issue")
   ) {
     return "tls";
   }
