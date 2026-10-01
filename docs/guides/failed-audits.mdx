@@ -65,3 +65,23 @@ squirrel audit https://example.com --max-pages 1
 ```
 
 If the local run succeeds and the cloud run fails with `connection` or `http_4xx`, your origin or its CDN is treating our requests differently from yours.
+
+## When the CLI cannot write its local store
+
+A CLI audit keeps what it crawls in SQLite files under `~/.squirrel`: the project database, the content store and the link cache. Before it registers the run or sends a single request, `squirrel audit` checks that it can write to each of them. When it cannot, it stops with the file, the cause and the fix:
+
+```text
+✗ Cannot write to ~/.squirrel/content-store.db: it is owned by another user (uid 0), usually because squirrel once ran with sudo. Fix: sudo chown -R "$(id -un)" ~/.squirrel
+```
+
+A run that stops here is never registered, so it costs nothing. The causes it names:
+
+| Cause | Fix |
+|---|---|
+| Owned by another user, usually after running `squirrel` with `sudo` | `sudo chown -R "$(id -un)" ~/.squirrel` |
+| Read-only | `chmod -R u+w ~/.squirrel` |
+| Blocked by a sandbox, often a coding agent's sandbox that only allows writes inside the project | Allow writes to `~/.squirrel` in the agent's sandbox settings, or run the audit outside the sandbox |
+| A directory, because `SQUIRREL_CONTENT_STORE_PATH` points at a folder | Set it to a file path, such as `/path/to/content-store.db` |
+| Not a readable SQLite database | Move the file aside and squirrel creates a new one |
+
+If a store breaks partway through the crawl, the audit fails with its error instead of finishing with fewer pages. A store that another squirrel process has locked is not an error: the audit waits for it. If no page could be saved even so, the failure reason says that, under the `unknown` code, rather than only "No pages were crawled".

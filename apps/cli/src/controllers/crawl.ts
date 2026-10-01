@@ -24,6 +24,10 @@ import {
 } from "@/controllers/types";
 import { createCrawler } from "@/crawler/core";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
+import {
+  checkAuditStores,
+  formatStoreProblems,
+} from "@/crawler/storage/store-check";
 import { resolvePageLimit } from "@/lib/page-limit";
 import { initRequestTool } from "@/tools/request";
 import { configureLogger, logger } from "@/utils/logger";
@@ -211,6 +215,17 @@ export async function runCrawl(
 
     // Create storage with project name (use provided name or derive from domain)
     const projectName = options.projectName ?? domainToProjectName(url);
+    // #403: name a store this process cannot write before the crawl starts
+    // (see store-check.ts), rather than failing at the first page.
+    const storeProblems = checkAuditStores(projectName, { linkCache: false });
+    if (storeProblems.length > 0) {
+      return err(
+        commandError(
+          ErrorCodes.FILE_WRITE_ERROR,
+          formatStoreProblems(storeProblems)
+        )
+      );
+    }
     logger.debug("creating storage", projectName);
 
     const storage = await Effect.runPromise(createStorage({ projectName }));

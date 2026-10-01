@@ -63,6 +63,12 @@ import {
   savePublishedReportInfo,
   type ReportVisibility,
 } from "@/controllers/report/publish";
+import { ErrorCodes } from "@/controllers/types";
+import { domainToProjectName } from "@/crawler/storage";
+import {
+  checkAuditStores,
+  formatStoreProblems,
+} from "@/crawler/storage/store-check";
 import { formatBalance, isUnlimitedBalance } from "@/lib/balance";
 import {
   cloudRenderSkippedLines,
@@ -1394,6 +1400,25 @@ export const audit = defineCommand({
       }
       log("");
 
+      // #403: a local store this process cannot write (owned by root after a
+      // sudo run, blocked by an agent's sandbox, a directory, a damaged file)
+      // otherwise fails at the first page, or drops every page and ends "No
+      // pages were crawled". Checked before the run is registered, so a broken
+      // store charges nothing and leaves no failed run behind.
+      const storeUrl = parseUserUrl(args.url);
+      const storeProblems = storeUrl.ok
+        ? checkAuditStores(
+            options.projectName ?? domainToProjectName(storeUrl.url),
+            { linkCache: !args.offline && config.external_links.enabled }
+          )
+        : [];
+      if (storeProblems.length > 0) {
+        commandResult = "error";
+        log(`✗ ${formatStoreProblems(storeProblems)}`);
+        process.exitCode = 1;
+        return;
+      }
+
       // Chrome for a human watching, so always stderr regardless of format —
       // never `log`, which follows stdout for console runs (#819). Merged
       // (user + local) settings, unlike `effectiveSettings` above, so a
@@ -1929,7 +1954,12 @@ export const audit = defineCommand({
           status: "failed",
           completedAt: new Date().toISOString(),
           completionReason: "error",
-          error: result.error.message,
+          // #403: a store-check failure names local paths; the run's error
+          // gets the class, the terminal above gets the paths.
+          error:
+            result.error.code === ErrorCodes.FILE_WRITE_ERROR
+              ? "Audit failed: a local store could not be written"
+              : result.error.message,
           // #871: a failed run has no `report` (the success path's carrier
           // for phaseTimingsMs, see finalizeCompleted below) — runAudit's
           // error path plumbs the same partial breakdown through

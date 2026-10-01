@@ -87,6 +87,11 @@ import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { getGlobalLinkCache } from "@/crawler/storage/link-cache";
+import {
+  checkAuditStores,
+  formatStoreProblems,
+} from "@/crawler/storage/store-check";
+import { isPermanentStorageError } from "@/crawler/storage/types";
 import { preflightBalanceOf } from "@/lib/balance";
 import { resolvePageLimit } from "@/lib/page-limit";
 import { reconstructReport } from "@/reports/reconstruct";
@@ -766,9 +771,27 @@ export async function runAudit(
   // phases completed — or was in flight — before a failure.
   const phaseTimer = new PhaseTimer<(typeof AUDIT_PHASES)[number]>();
 
+  // Project name: the one provided, or derived from the domain
+  const projectName = options.projectName ?? domainToProjectName(url);
+
   try {
     configureLogger({ debug: options.debug ?? false });
     logger.debug("starting audit", url);
+
+    // #403: a store this process cannot write opens read-only without saying
+    // so, then fails at the first write or drops every page. Say which file
+    // and why before any request goes out.
+    const storeProblems = checkAuditStores(projectName, {
+      linkCache: mergedConfig.external_links.enabled,
+    });
+    if (storeProblems.length > 0) {
+      return err(
+        commandError(
+          ErrorCodes.FILE_WRITE_ERROR,
+          formatStoreProblems(storeProblems)
+        )
+      );
+    }
 
     // Initialize request tool with config
     initRequestTool({
@@ -795,8 +818,6 @@ export async function runAudit(
       );
     }
 
-    // Create storage with project name (use provided name or derive from domain)
-    const projectName = options.projectName ?? domainToProjectName(url);
     logger.debug("creating storage", projectName);
 
     const storage = await Effect.runPromise(createStorage({ projectName }));
@@ -2065,6 +2086,18 @@ export async function runAudit(
     phaseTimer.attributeInFlight();
     logger.debug("phase timings", formatPhaseTimings(phaseTimer.timingsMs));
     logger.debug("audit error", error);
+    // #403: a store that broke after the check above fails here as a raw
+    // SQLite error. Say which file and the fix, here on the user's terminal:
+    // the returned message also becomes the registered run's error, and local
+    // paths do not belong in it.
+    if (isPermanentStorageError(error)) {
+      const storeProblems = checkAuditStores(projectName, {
+        linkCache: mergedConfig.external_links.enabled,
+      });
+      if (storeProblems.length > 0) {
+        logger.error(formatStoreProblems(storeProblems));
+      }
+    }
     return err(
       commandError(
         ErrorCodes.CRAWL_ERROR,
