@@ -186,12 +186,19 @@ export interface PublishDegradeLimits extends PublishSampleLimits {
  * crawled. Keying on provenance keeps each aggregate homogeneous, so the label is
  * always available and the consumer can tell replay from evidence.
  *
+ * A check may also carry a string `details.foldKey` when one rule emits several
+ * distinct findings under one name and status, and folding them together would
+ * erase the distinction: perf/source-maps keys each shared-bundle group on it
+ * (repo#2341). Checks fold only with checks carrying the same key, and the
+ * aggregate keeps it, so a re-fold stays apart too.
+ *
  * NUL cannot appear in a check name or status, so the parts can't collide.
  */
 export function foldGroupKey(check: CheckResult): string {
   const provenance =
     check.provenance === "carried" || check.provenance === "unrendered" ? check.provenance : "";
-  return `${check.name}\u0000${check.status}\u0000${provenance}`;
+  const foldKey = typeof check.details?.foldKey === "string" ? check.details.foldKey : "";
+  return `${check.name}\u0000${check.status}\u0000${provenance}\u0000${foldKey}`;
 }
 
 /** Default publish sample: the primary caps applied on every publish (#1167). */
@@ -920,6 +927,8 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   }
 
   const details: Record<string, unknown> = { aggregated: true, occurrences };
+  // Every constituent shares it: it is part of the group key.
+  if (typeof first.details?.foldKey === "string") details.foldKey = first.details.foldKey;
   if (additional + droppedIds.size > 0) details.additional = additional + droppedIds.size;
   if (pagesTotal > pages.length) details.pagesTruncated = pagesTotal;
 

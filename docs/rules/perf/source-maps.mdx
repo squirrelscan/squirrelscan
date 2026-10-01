@@ -11,13 +11,16 @@ There are three positions to take. Ship no maps, which makes production errors h
 
 ## What squirrel checks
 
-The rule runs on every crawled page and emits one or two checks:
+The rule runs on every crawled page and emits these checks:
 
-- `source-maps-exposed`: warns with the message `N potential source map(s) detected`, listing up to ten resolved URLs, each labelled `from <source>`.
+- `source-maps-exposed` for the maps only this page is known to expose: an inline script or style, the page's own header, or an external script no other crawled page loads. It warns with the message `N potential source map(s) detected`, listing up to ten resolved URLs, each labelled `from <source>`.
+- `source-maps-exposed` once per group of shared bundles. A map that comes from an external script more than one crawled page loads is grouped with every other map whose scripts are loaded by exactly the same pages. It warns with the message `N source map(s) exposed by bundles shared across pages: <map>, <map>, <map>`, naming up to three maps by path, or by full URL when they are not on the site's own origin, and ending `, and M more` when there are others. It lists up to 50 map URLs, each labelled `from <script>` with every script on the site that exposes it, counts the rest in `additional`, and records in `sharedPages` how many crawled pages load the bundles.
 - `source-maps-inline`: warns with the message `N inline source map(s) found`, listing up to three sources.
 - `source-maps`: passes with the message `No exposed source maps detected` when neither list has anything in it.
 
 Four places are read. Inline `<script>` content is searched for `//# sourceMappingURL=` or the `//@` form. Inline `<style>` content is searched for the `/*# ... */` or `/*@ ... */` form. The response headers `SourceMap` and `X-SourceMap` are read on the page itself. For an external script the crawl fetched, its own `SourceMap` header and its body are searched too, and a hit is labelled with the script URL. A reference to a `data:` URI inside a script or style body is counted as inline; anything else, including a header value, is resolved against the page URL and counted as exposed. External URLs are deduplicated.
+
+Every page in a shared group emits the identical check, so the report shows one finding per group with its pages listed, rather than one per page. A bundle every page loads is one finding; a bundle only one section loads is a second, with that section's page count. The report's warning total counts checks, so a page whose maps come from two groups adds two.
 
 External stylesheets are not read, because the crawl does not fetch their bodies, so a map referenced only from a linked CSS file is missed. The rule does not fetch the map itself either, so a URL that returns 404 is still reported as potential.
 
