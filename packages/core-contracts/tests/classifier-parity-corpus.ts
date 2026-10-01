@@ -67,6 +67,16 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
   ["Request blocked by server", "http_4xx"],
   ["WAF challenge detected", "http_4xx"],
 
+  // The CLI's reachability probe sentences (apps/cli/src/utils/reachability.ts),
+  // written when it cannot reach the site before the crawl starts.
+  ["Cannot reach https://example.com/: SSL/TLS error - certificate issue", "tls"],
+  ["Cannot reach https://example.com/: Host not found", "dns"],
+  // The near-misses: "host not found" without the probe's "Cannot reach"
+  // lead-in, and "certificate" without its whole sentence, are not the site's
+  // to fix.
+  ["upstream host not found in pool", "unknown"],
+  ["certificate store unavailable", "unknown"],
+
   // Ours, not the site's. Every one of these must stay `unknown`, or a failure
   // email tells a site owner to fix something that was never theirs.
   ["Callback 'mark-completed' failed after 3 attempts (HTTP 500: internal error)", "unknown"],

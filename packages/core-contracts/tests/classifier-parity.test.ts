@@ -59,6 +59,19 @@ describe("classifier parity corpus (#1822)", () => {
     }
   });
 
+  test("the CLI's reachability sentences classify on the probe's own wording", () => {
+    // DNS needs the "Cannot reach" lead-in AND the ": Host not found" tail, so
+    // neither half alone claims an internal message.
+    expect(classifyAuditFailureReasonText("Cannot reach http://a.test/: Host not found")).toBe(
+      "dns",
+    );
+    expect(classifyAuditFailureReasonText("Host not found")).toBe("unknown");
+    expect(classifyAuditFailureReasonText("Cannot reach the billing service")).toBe("unknown");
+    // TLS keys on the probe's whole certificate sentence, with or without the lead-in.
+    expect(classifyAuditFailureReasonText("SSL/TLS error - certificate issue")).toBe("tls");
+    expect(classifyAuditFailureReasonText("certificate rotation failed")).toBe("unknown");
+  });
+
   test("our own internal failures never read as the audited site's", () => {
     // The half of the corpus that matters most: every one of these would
     // otherwise tell a site owner to fix something that was never theirs.
