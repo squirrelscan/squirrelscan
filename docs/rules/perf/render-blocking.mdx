@@ -15,7 +15,7 @@ The rule runs on every crawled page and emits one check:
 
 - `render-blocking`: warns with the message `N render-blocking resources` above three, reports at info status with `N render-blocking resource(s)` from one to three, and passes with `No significant render-blocking resources` at zero. Each URL is listed as an item.
 
-Only `<head>` is scanned. A stylesheet counts when it is a `link[rel="stylesheet"]` with a non-empty `href` and no `media` attribute at all: any `media` value, including `media="all"`, excludes it. A script counts when it is a `<script src>` with a non-empty `src` and neither `async` nor `defer`. Inline `<style>` blocks and inline scripts are not counted, and neither is anything in `<body>`.
+Only `<head>` is scanned. A stylesheet counts when it is a `link[rel="stylesheet"]` with a non-empty `href` and no `media` attribute at all: any `media` value, including `media="all"`, excludes it. A script counts when it is a classic `<script src>` with a non-empty `src` and neither `async` nor `defer`. A `type="module"` script is deferred by default and does not count, and neither does a classic script with `nomodule` or a script whose `type` is not JavaScript, since a modern browser never runs it. Inline `<style>` blocks and inline scripts are not counted, and neither is anything in `<body>`.
 
 The signals come from a shared analysis of the page that six performance rules read, computed once per page.
 

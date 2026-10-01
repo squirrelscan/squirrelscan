@@ -14,7 +14,9 @@ Third-party scripts are the usual source, because they are written for a differe
 The rule runs on every crawled page and emits one or two checks:
 
 - `inp-third-party`: warns with the message `N third-party scripts may impact INP` above five, reports at info status with `N third-party script(s) detected` from one to five, and passes with `No third-party scripts detected` at zero. Each script URL is listed as an item in the first two cases.
-- `inp-blocking-scripts`: warns with the message `N blocking scripts (consider async/defer)` when more than three `<script src>` elements have neither `async` nor `defer`. With three or fewer and at least one `<script src>` on the page it passes with `Script loading patterns look good`. A page with no external scripts emits nothing for this check, and a `src` that is present but empty is not counted as blocking.
+- `inp-blocking-scripts`: warns with the message `N blocking scripts (consider async/defer)` when more than three classic `<script src>` elements have neither `async` nor `defer`. With three or fewer and at least one `<script src>` on the page it passes with `Script loading patterns look good`. A page with no external scripts emits nothing for this check, and a `src` that is present but empty is not counted as blocking.
+
+A `type="module"` script counts as deferred, or as async when it has `async`. A classic script with `nomodule`, or a script whose `type` is not JavaScript (such as `text/plain` behind a consent banner), is never blocking, because a modern browser does not run it. Such a script still counts toward the third-party number, since a consent banner usually turns it into a running script later.
 
 A script counts as third-party only when its host differs from the page host and matches one of about twenty-five known analytics, advertising, support and monitoring domains, either exactly or as a subdomain. A script from an unlisted third-party host is not counted, so the number is a floor rather than a total.
 

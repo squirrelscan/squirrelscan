@@ -1,6 +1,6 @@
 // Core Web Vitals static hints checker
 // Analyzes HTML for performance indicators without runtime measurement
-import type { Document } from "linkedom";
+import type { Document, Element } from "linkedom";
 
 import { parseHTML } from "@squirrelscan/parser/dom";
 
@@ -54,6 +54,60 @@ const THIRD_PARTY_DOMAINS = [
   "nr-data.net",
   "datadoghq.com",
 ];
+
+// JavaScript MIME type essences (WHATWG MIME Sniffing). A `type` matching one of
+// these, or an absent/empty `type`, makes a classic script.
+const JS_MIME_TYPES = new Set([
+  "application/ecmascript",
+  "application/javascript",
+  "application/x-ecmascript",
+  "application/x-javascript",
+  "text/ecmascript",
+  "text/javascript",
+  "text/javascript1.0",
+  "text/javascript1.1",
+  "text/javascript1.2",
+  "text/javascript1.3",
+  "text/javascript1.4",
+  "text/javascript1.5",
+  "text/jscript",
+  "text/livescript",
+  "text/x-ecmascript",
+  "text/x-javascript",
+]);
+
+export type ScriptLoading = "blocking" | "async" | "defer" | "inert";
+
+// How a browser loads an external <script src>, following the HTML Standard's
+// "prepare the script element" steps. Module scripts defer by default (`async`
+// makes them async; `defer` does nothing). `nomodule` classic scripts and
+// scripts with any other type (text/plain consent gates, text/partytown,
+// data blocks) are never run by a modern browser, so they block nothing (#424).
+export function scriptLoading(script: Element): ScriptLoading {
+  const typeAttr = script.getAttribute("type");
+  const languageAttr = script.getAttribute("language");
+  let typeString: string;
+  if (typeAttr === "" || (typeAttr === null && !languageAttr)) {
+    typeString = "text/javascript";
+  } else if (typeAttr !== null) {
+    // Only `type` is stripped, and only of ASCII whitespace; `language` is not.
+    typeString = typeAttr.replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, "");
+  } else {
+    typeString = `text/${languageAttr}`;
+  }
+  typeString = typeString.toLowerCase();
+
+  if (JS_MIME_TYPES.has(typeString)) {
+    if (script.hasAttribute("nomodule")) return "inert";
+    if (script.hasAttribute("async")) return "async";
+    if (script.hasAttribute("defer")) return "defer";
+    return "blocking";
+  }
+  if (typeString === "module") {
+    return script.hasAttribute("async") ? "async" : "defer";
+  }
+  return "inert";
+}
 
 function emptyCWVHints(): CWVHints {
   return {
@@ -127,15 +181,11 @@ function analyzeCWVHints(
       }
     }
 
-    // Render-blocking scripts (no async/defer)
+    // Render-blocking scripts (classic, no async/defer)
     const scripts = headElement.querySelectorAll("script[src]");
     for (const script of scripts) {
       const src = script.getAttribute("src");
-      if (
-        src &&
-        !script.hasAttribute("async") &&
-        !script.hasAttribute("defer")
-      ) {
+      if (src && scriptLoading(script) === "blocking") {
         hints.renderBlockingResources.push(src);
       }
     }
@@ -149,11 +199,12 @@ function analyzeCWVHints(
     const src = script.getAttribute("src");
     if (!src) continue;
 
-    if (script.hasAttribute("async")) {
+    const loading = scriptLoading(script);
+    if (loading === "async") {
       hints.asyncScripts++;
-    } else if (script.hasAttribute("defer")) {
+    } else if (loading === "defer") {
       hints.deferScripts++;
-    } else {
+    } else if (loading === "blocking") {
       hints.blockingScripts++;
     }
 

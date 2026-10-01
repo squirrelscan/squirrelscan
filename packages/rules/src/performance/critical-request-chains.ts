@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { scriptLoading } from "./cwv";
+
 export const criticalRequestChainsRule: Rule = {
   meta: {
     id: "perf/critical-request-chains",
@@ -37,9 +39,10 @@ export const criticalRequestChainsRule: Rule = {
       'link[rel="stylesheet"]:not([media="print"]):not([disabled])'
     );
 
-    // Find render-blocking JS (script without async/defer/type=module in head)
-    const blockingJs = head.querySelectorAll(
-      "script[src]:not([async]):not([defer]):not([type='module'])"
+    // Find render-blocking JS (classic script without async/defer in head)
+    const blockingJs = [...head.querySelectorAll("script[src]")].filter(
+      (script) =>
+        script.getAttribute("src") && scriptLoading(script) === "blocking"
     );
 
     // Count CSS @import statements from inline styles
