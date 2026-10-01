@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const mixedContentRule: Rule = {
   meta: {
     id: "security/mixed-content",
@@ -47,7 +49,7 @@ export const mixedContentRule: Rule = {
     ];
 
     for (const selector of selectors) {
-      const elements = doc.querySelectorAll(selector);
+      const elements = querySelectorAllOutsideNoscript(doc, selector);
       for (const el of elements) {
         const url =
           el.getAttribute("src") ||

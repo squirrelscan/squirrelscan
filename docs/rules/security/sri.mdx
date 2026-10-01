@@ -19,6 +19,8 @@ The rule runs on every crawled page. It looks at every `<script src>` and every 
 
 Relative and protocol-relative URLs are resolved against the page URL before the origin comparison, so `//cdn.example.com/x.js` counts as cross-origin and `/local.js` does not. Eleven hostnames are exempt because their vendors document SRI as unsupported: `js.stripe.com`, `checkout.stripe.com`, `www.paypal.com`, `www.paypalobjects.com`, `www.google.com`, `www.gstatic.com`, `js.hcaptcha.com`, `www.googletagmanager.com`, `www.google-analytics.com`, `ssl.google-analytics.com` and `connect.facebook.net`.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

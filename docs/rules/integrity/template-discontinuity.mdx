@@ -27,6 +27,8 @@ The baseline is not a cluster. Each marker is tallied across every fingerprint a
 
 Severity is warning, weight 6.
 
+Stylesheets, scripts, images and `<style>` elements inside `<noscript>` are left out of the fingerprint, because a browser with scripting enabled never loads them. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Open the listed pages and compare them with a normal page from the same site. Most of the time the answer is that you published it: a campaign landing page, a signed-out or empty state, a checkout step. If a page is yours, load the shared stylesheet and the site chrome on it, which also fixes the inconsistency a visitor would notice and stops the page being reported. Only if you did not publish it does the compromise reading apply, and then remove it, audit recently modified files and read the access logs.

@@ -6,7 +6,11 @@ import { parseHTML } from "@squirrelscan/parser/dom";
 
 import type { CheckResult, CWVHints } from "@squirrelscan/core-contracts";
 
-import { getHostname } from "@squirrelscan/utils";
+import {
+  getHostname,
+  querySelectorAllOutsideNoscript,
+  stripNoscriptMarkup,
+} from "@squirrelscan/utils";
 
 // Known CDN domains that should have preconnect
 const COMMON_CDNS = [
@@ -142,26 +146,29 @@ function analyzeCWVHints(
 
   const hints: CWVHints = emptyCWVHints();
 
+  // Every resource below skips <noscript> content: a browser with scripting on
+  // never loads what sits in it (#434).
+
   // Collect resource hints
-  const preloadLinks = doc.querySelectorAll('link[rel="preload"]');
+  const preloadLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="preload"]');
   for (const link of preloadLinks) {
     const href = link.getAttribute("href");
     if (href) hints.preloadTags.push(href);
   }
 
-  const prefetchLinks = doc.querySelectorAll('link[rel="prefetch"]');
+  const prefetchLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="prefetch"]');
   for (const link of prefetchLinks) {
     const href = link.getAttribute("href");
     if (href) hints.prefetchTags.push(href);
   }
 
-  const preconnectLinks = doc.querySelectorAll('link[rel="preconnect"]');
+  const preconnectLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="preconnect"]');
   for (const link of preconnectLinks) {
     const href = link.getAttribute("href");
     if (href) hints.preconnectTags.push(href);
   }
 
-  const dnsPrefetchLinks = doc.querySelectorAll('link[rel="dns-prefetch"]');
+  const dnsPrefetchLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="dns-prefetch"]');
   for (const link of dnsPrefetchLinks) {
     const href = link.getAttribute("href");
     if (href) hints.dnsPrefetchTags.push(href);
@@ -171,7 +178,8 @@ function analyzeCWVHints(
   const headElement = doc.head;
   if (headElement) {
     // Render-blocking stylesheets
-    const stylesheets = headElement.querySelectorAll(
+    const stylesheets = querySelectorAllOutsideNoscript(
+      headElement,
       'link[rel="stylesheet"]:not([media="print"])'
     );
     for (const link of stylesheets) {
@@ -182,7 +190,7 @@ function analyzeCWVHints(
     }
 
     // Render-blocking scripts (classic, no async/defer)
-    const scripts = headElement.querySelectorAll("script[src]");
+    const scripts = querySelectorAllOutsideNoscript(headElement, "script[src]");
     for (const script of scripts) {
       const src = script.getAttribute("src");
       if (src && scriptLoading(script) === "blocking") {
@@ -192,7 +200,7 @@ function analyzeCWVHints(
   }
 
   // Analyze all scripts
-  const allScripts = doc.querySelectorAll("script[src]");
+  const allScripts = querySelectorAllOutsideNoscript(doc, "script[src]");
   hints.totalScripts = allScripts.length;
 
   for (const script of allScripts) {
@@ -231,7 +239,7 @@ function analyzeCWVHints(
   }
 
   // Check for fonts without font-display: swap
-  const fontFaces = html.match(/@font-face\s*\{[^}]+\}/g) || [];
+  const fontFaces = stripNoscriptMarkup(html).match(/@font-face\s*\{[^}]+\}/g) || [];
   for (const fontFace of fontFaces) {
     if (!fontFace.includes("font-display")) {
       // Extract font family name
@@ -244,7 +252,8 @@ function analyzeCWVHints(
   const externalDomains = new Set<string>();
 
   // Collect all external domains from resources
-  const allResources = doc.querySelectorAll(
+  const allResources = querySelectorAllOutsideNoscript(
+    doc,
     "script[src], link[href], img[src]"
   );
   for (const resource of allResources) {
@@ -273,7 +282,7 @@ function analyzeCWVHints(
   }
 
   // Check images without dimensions (CLS)
-  const images = doc.querySelectorAll("img");
+  const images = querySelectorAllOutsideNoscript(doc, "img");
   for (const img of images) {
     const src = img.getAttribute("src");
     const width = img.getAttribute("width");
@@ -292,7 +301,7 @@ function analyzeCWVHints(
   }
 
   // Check iframes without dimensions (CLS)
-  const iframes = doc.querySelectorAll("iframe");
+  const iframes = querySelectorAllOutsideNoscript(doc, "iframe");
   for (const iframe of iframes) {
     const src = iframe.getAttribute("src");
     const width = iframe.getAttribute("width");
@@ -304,7 +313,8 @@ function analyzeCWVHints(
   }
 
   // Check for large images that might be LCP candidates without preload
-  const largeImages = doc.querySelectorAll(
+  const largeImages = querySelectorAllOutsideNoscript(
+    doc,
     'img:not([loading="lazy"]), img[fetchpriority="high"]'
   );
   const preloadedImages = new Set(

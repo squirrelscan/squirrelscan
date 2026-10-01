@@ -20,6 +20,8 @@ One check, `image-redundant-alt`, at severity warning. It reads every `img[alt]`
 
 Findings are deduplicated, then reported as `N image(s) with redundant alt text`, up to ten with a count of the rest. With nothing found the check passes as `No redundant image alt text found`, and a page with no `alt` at all returns info with `No images with alt text found`.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

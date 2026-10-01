@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 // Ancestor is hidden from all users/AT — never an LCP candidate (#699).
 const HIDDEN_ANCESTOR_SELECTOR = '[aria-hidden="true"], [hidden], [inert]';
 
@@ -94,7 +96,7 @@ export const lazyAboveFoldRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Get first few images - likely above fold candidates
-    const allImages = doc.querySelectorAll("img");
+    const allImages = querySelectorAllOutsideNoscript(doc, "img");
     const aboveFoldLazy: string[] = [];
 
     let imageIndex = 0;

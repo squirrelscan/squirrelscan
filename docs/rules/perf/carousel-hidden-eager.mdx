@@ -19,6 +19,8 @@ An image is flagged only when all of this holds: it is not `loading="lazy"`, it 
 
 Hidden means `aria-hidden="true"`, a `hidden` attribute, or an inline style containing `display:none` or `visibility:hidden`. A class that hides an element through an external stylesheet is not detected, so the rule only sees the inline case. A page with no parsed document emits nothing at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

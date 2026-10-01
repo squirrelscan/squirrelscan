@@ -20,6 +20,8 @@ An `<img>` counts as dimensioned when it has a non-empty `width` attribute other
 
 The candidates come from a shared analysis of the page that six performance rules read, computed once per page.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

@@ -22,6 +22,8 @@ The rule runs on every crawled page. It takes every `img[src]` in document order
 
 Document order is a proxy for position, not a measurement. An image that appears late in the markup but is positioned at the top of the viewport by CSS is treated as below the fold.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

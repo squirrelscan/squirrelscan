@@ -2,7 +2,7 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { getAttrCI } from "@squirrelscan/utils";
+import { getAttrCI, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 export const metaRefreshRule: Rule = {
   meta: {
@@ -24,7 +24,7 @@ export const metaRefreshRule: Rule = {
     const checks: CheckResult[] = [];
 
     // http-equiv value varies in case across sites ("refresh", "Refresh", etc.)
-    const metas = doc.querySelectorAll("meta");
+    const metas = querySelectorAllOutsideNoscript(doc, "meta");
     let metaRefresh: Element | null = null;
     for (const meta of metas) {
       if (getAttrCI(meta, "http-equiv")?.toLowerCase() === "refresh") {

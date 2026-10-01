@@ -23,6 +23,8 @@ Every finding carries the raw `content` string as its value. The 20 second bound
 
 Two gaps are worth knowing. Only the first matching `<meta>` is examined, and a `content="0"` with no url matches none of the branches, so it produces no finding at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 For a redirect, do it on the server:

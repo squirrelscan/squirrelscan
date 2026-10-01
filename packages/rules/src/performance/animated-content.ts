@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const optionsSchema = z.object({
   gif_size_threshold_kb: z
     .number()
@@ -36,7 +38,7 @@ export const animatedContentRule: Rule = {
     const gifImages: string[] = [];
 
     // Check for GIF images
-    const images = doc.querySelectorAll("img");
+    const images = querySelectorAllOutsideNoscript(doc, "img");
 
     for (const img of images) {
       const src = img.getAttribute("src") || "";
@@ -53,7 +55,7 @@ export const animatedContentRule: Rule = {
     // These are harder to detect without fetching the file
 
     // Check picture elements for GIF sources
-    const pictureElements = doc.querySelectorAll("picture source");
+    const pictureElements = querySelectorAllOutsideNoscript(doc, "picture source");
     for (const source of pictureElements) {
       const srcset = source.getAttribute("srcset") || "";
       const type = source.getAttribute("type") || "";
@@ -88,11 +90,11 @@ export const animatedContentRule: Rule = {
     }
 
     // Also check for video elements that might be too large or missing modern codecs
-    const videos = doc.querySelectorAll("video");
+    const videos = querySelectorAllOutsideNoscript(doc, "video");
     const videosWithoutModernCodec: string[] = [];
 
     for (const video of videos) {
-      const sources = video.querySelectorAll("source");
+      const sources = querySelectorAllOutsideNoscript(video, "source");
       let hasModernCodec = false;
 
       for (const source of sources) {

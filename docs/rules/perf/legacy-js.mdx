@@ -21,6 +21,8 @@ The rule runs on every crawled page and looks at three things. It emits one to t
 
 Every result here is a warning at most, and the rule's severity is info. A page with no parsed document emits nothing at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Set the build target to the browsers the site supports:

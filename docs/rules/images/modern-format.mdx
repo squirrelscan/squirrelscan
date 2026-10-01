@@ -20,6 +20,8 @@ The rule runs on every crawled page. It reads the `src` of every `img[src]` and 
 
 Modern means the URL contains `.webp` or `.avif`, or a `<source>` whose `type` contains `webp` or `avif`. Legacy means `.jpg`, `.jpeg`, `.png` or `.gif`. The match includes the leading dot, so `?format=webp` does not count and `?format=.webp` does. Legacy extensions are only counted on `<img src>`, never on a `<source srcset>`. An image served as WebP through content negotiation, with a `.jpg` URL, is counted as legacy. Severity info, weight 3.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

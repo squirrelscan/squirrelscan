@@ -18,6 +18,8 @@ The rule runs on every crawled page over every `img[style]`, so an image with no
 
 An image is skipped when its inline style sets `object-fit` to `cover`, `contain`, `scale-down` or `none`, or when its `class` attribute contains one of `object-cover`, `object-contain`, `object-scale-down` or `object-none`. External stylesheets cannot be read, so a utility class is the only signal available for class-based `object-fit`.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

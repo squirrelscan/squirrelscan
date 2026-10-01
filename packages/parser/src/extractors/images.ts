@@ -5,7 +5,7 @@ import type { Document, Element } from "linkedom";
 
 import { Effect } from "effect";
 
-import { getAttrCI } from "@squirrelscan/utils";
+import { getAttrCI, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 import type { ExtractedImage } from "./types";
 
@@ -90,7 +90,8 @@ export function extractImages(
   doc: Document,
   baseUrl: string
 ): ExtractedImage[] {
-  const imgs = doc.querySelectorAll("img");
+  // A <noscript> fallback image never loads with scripting on (#434).
+  const imgs = querySelectorAllOutsideNoscript(doc, "img");
   const images: ExtractedImage[] = [];
 
   for (const img of imgs) {
@@ -113,7 +114,7 @@ export function extractImages(
   }
 
   // Also check for picture > source elements
-  const pictures = doc.querySelectorAll("picture source[srcset]");
+  const pictures = querySelectorAllOutsideNoscript(doc, "picture source[srcset]");
   for (const source of pictures) {
     const element = source as Element;
     const srcset = element.getAttribute("srcset");

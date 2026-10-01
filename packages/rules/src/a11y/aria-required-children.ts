@@ -2,7 +2,55 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { isInsideNoscript, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 import { requiredChildrenByRole } from "./aria-data";
+import { effectiveRole, explicitRole } from "./implicit-role";
+
+/** Roles that only wrap the required items: `group` > treeitem, `rowgroup` > row. */
+const WRAPPER_ROLES = new Set(["group", "rowgroup"]);
+
+function hasRequiredRole(el: Element, required: Set<string>): boolean {
+  const role = effectiveRole(el);
+  if (role === null || !required.has(role)) return false;
+  // A native wrapper (<fieldset>, <details>, <optgroup>, <tbody>) satisfies the
+  // container only through the items inside it, which ownsRequiredChild
+  // reaches anyway. An explicit role="group" still counts by itself, as it
+  // always has.
+  return !WRAPPER_ROLES.has(role) || explicitRole(el) === role;
+}
+
+/** The elements `el` claims through aria-owns, in id order. */
+function ownedElements(el: Element, doc: Document): Element[] {
+  const ids = (el.getAttribute("aria-owns") ?? "").trim().split(/\s+/).filter(Boolean);
+  return ids.flatMap((id) => {
+    const owned = doc.getElementById(id);
+    return owned && !isInsideNoscript(owned) ? [owned] : [];
+  });
+}
+
+/**
+ * Whether `container` owns an element with one of the required roles: any
+ * descendant at any depth, or anything an aria-owns inside it points at, and
+ * so on through those elements' own descendants and aria-owns. <noscript>
+ * content is inert text to a browser with scripting on, so it owns nothing
+ * and is nothing (#434).
+ */
+function ownsRequiredChild(container: Element, doc: Document, required: Set<string>): boolean {
+  const visited = new Set<Element>([container]);
+  const roots: Element[] = [container];
+  for (let next = roots.pop(); next; next = roots.pop()) {
+    for (const el of [next, ...querySelectorAllOutsideNoscript(next, "*")]) {
+      if (el !== container && hasRequiredRole(el, required)) return true;
+      for (const owned of ownedElements(el, doc)) {
+        if (visited.has(owned)) continue;
+        visited.add(owned);
+        roots.push(owned);
+      }
+    }
+  }
+  return false;
+}
 
 export const ariaRequiredChildrenRule: Rule = {
   meta: {
@@ -29,51 +77,16 @@ export const ariaRequiredChildrenRule: Rule = {
     for (const [parentRole, childRoles] of Object.entries(
       requiredChildrenByRole
     )) {
-      const elements = doc.querySelectorAll(`[role="${parentRole}"]`);
+      const required = new Set(childRoles);
+      // <noscript> content is inert text to a browser with scripting on, so
+      // it neither needs nor supplies children (#434).
+      const elements = querySelectorAllOutsideNoscript(doc, `[role="${parentRole}"]`);
 
       for (const el of elements) {
-        // Check if any child (at any depth) has one of the required roles
-        let hasValidChild = false;
-
-        // Check explicit roles
-        for (const childRole of childRoles) {
-          if (el.querySelector(`[role="${childRole}"]`)) {
-            hasValidChild = true;
-            break;
-          }
-        }
-
-        // Check implicit roles from elements if not found
-        if (!hasValidChild) {
-          const tagName = el.tagName.toLowerCase();
-
-          // Native semantic elements satisfy role requirements
-          if (
-            (childRoles.includes("listitem") && el.querySelector("li")) ||
-            (childRoles.includes("row") && el.querySelector("tr")) ||
-            (childRoles.includes("cell") && el.querySelector("td, th")) ||
-            (childRoles.includes("option") && el.querySelector("option")) ||
-            (childRoles.includes("article") && el.querySelector("article"))
-          ) {
-            hasValidChild = true;
-          }
-
-          // Check if the element itself is the implicit role
-          // (e.g., ul has implicit role=list and li children have implicit role=listitem)
-          if (
-            (parentRole === "list" &&
-              (tagName === "ul" || tagName === "ol") &&
-              el.querySelector("li")) ||
-            (parentRole === "table" &&
-              tagName === "table" &&
-              el.querySelector("tr")) ||
-            (parentRole === "listbox" &&
-              tagName === "select" &&
-              el.querySelector("option"))
-          ) {
-            hasValidChild = true;
-          }
-        }
+        // The role is the explicit one or, failing that, the implicit role of
+        // the native element, so an <input type="radio"> is a radio and a <tr>
+        // a row (#435).
+        const hasValidChild = ownsRequiredChild(el, doc, required);
 
         // Skip if element is empty (might be dynamically populated)
         const hasContent = el.children.length > 0 || el.textContent?.trim();

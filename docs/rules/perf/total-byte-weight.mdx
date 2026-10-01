@@ -23,6 +23,8 @@ When the crawl produced no resource-size record and no script record at all, the
 
 The details carry the breakdown: CSS, JavaScript and image totals, the inline against external split where both are present, and the number of distinct files in each pool. Inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. The HTML and font buckets exist in the sum but nothing ever writes to them, so the documents themselves and every font file are missing from the total.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 Start with images, since they are usually most of the number:

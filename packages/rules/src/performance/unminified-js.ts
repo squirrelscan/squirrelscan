@@ -6,6 +6,8 @@ import { z } from "zod";
 import { scanJsComments } from "../shared/comment-scan";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const optionsSchema = z.object({
   min_size_bytes: z
     .number()
@@ -177,7 +179,7 @@ export const unminifiedJsRule: Rule = {
     }> = [];
 
     // Check inline scripts
-    const scripts = doc.querySelectorAll("script:not([src])");
+    const scripts = querySelectorAllOutsideNoscript(doc, "script:not([src])");
     for (const script of scripts) {
       const content = script.textContent || "";
       if (content.length < opts.min_size_bytes) continue;
@@ -262,7 +264,7 @@ export const unminifiedJsRule: Rule = {
     }
 
     // ALWAYS check DOM for external scripts not in site data (CDN/external resources)
-    const externalScripts = doc.querySelectorAll("script[src]");
+    const externalScripts = querySelectorAllOutsideNoscript(doc, "script[src]");
     for (const script of externalScripts) {
       const src = script.getAttribute("src") || "";
       if (!src) continue;

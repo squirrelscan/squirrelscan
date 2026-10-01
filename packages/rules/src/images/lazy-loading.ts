@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const lazyLoadingRule: Rule = {
   meta: {
     id: "images/lazy-loading",
@@ -21,7 +23,7 @@ export const lazyLoadingRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const images = doc.querySelectorAll("img");
+    const images = querySelectorAllOutsideNoscript(doc, "img");
 
     if (images.length === 0) {
       checks.push({
@@ -45,7 +47,7 @@ export const lazyLoadingRule: Rule = {
     }
 
     // Iframes can also be lazy loaded
-    const iframes = doc.querySelectorAll("iframe");
+    const iframes = querySelectorAllOutsideNoscript(doc, "iframe");
     let lazyIframes = 0;
     for (const iframe of iframes) {
       if (iframe.getAttribute("loading") === "lazy") {

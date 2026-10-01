@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 // A handful of widely-deployed third-party SDKs that explicitly document SRI
 // as unsupported: their script content changes server-side (fraud detection,
 // A/B tests, PCI-relevant patches) without a corresponding URL change, so a
@@ -81,7 +83,7 @@ export const sriRule: Rule = {
     const flagged: FlaggedResource[] = [];
     let crossOriginTotal = 0;
 
-    const scripts = doc.querySelectorAll("script[src]");
+    const scripts = querySelectorAllOutsideNoscript(doc, "script[src]");
     for (const script of scripts) {
       const src = script.getAttribute("src");
       if (!src) continue;
@@ -97,7 +99,7 @@ export const sriRule: Rule = {
     // `rel~=` (token-list match) so `rel="preload stylesheet"` and
     // `rel="alternate stylesheet"` are caught too, not just an exact
     // `rel="stylesheet"` — matches the convention in performance/font-delivery.ts.
-    const stylesheets = doc.querySelectorAll('link[rel~="stylesheet"][href]');
+    const stylesheets = querySelectorAllOutsideNoscript(doc, 'link[rel~="stylesheet"][href]');
     for (const link of stylesheets) {
       const href = link.getAttribute("href");
       if (!href) continue;

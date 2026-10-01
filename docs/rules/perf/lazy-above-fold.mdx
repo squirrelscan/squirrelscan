@@ -19,6 +19,8 @@ Three kinds of image are skipped without using up one of the three slots, so a g
 
 A slide counts as inactive when its group has at least two slides and it is not the active one. Active is read from an explicit marker where one exists, meaning `.active`, `.is-active`, `.swiper-slide-active`, `.slick-active`, `.splide__slide--active`, `aria-current="true"` or `aria-hidden="false"`, and falls back to the first slide in DOM order only when no slide in the group is marked. Images whose `src` is a `data:` URI or contains `pixel` or `spacer` are skipped too, also without using a slot. A page with no parsed document emits nothing at all.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

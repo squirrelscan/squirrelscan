@@ -1,6 +1,6 @@
 // perf/font-delivery - Render-blocking third-party font CSS in the critical path
 
-import { getHostname } from "@squirrelscan/utils";
+import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -61,7 +61,7 @@ export const fontDeliveryRule: Rule = {
     // Render-blocking font stylesheets: <link rel=stylesheet> to a font host that
     // is not deferred via media=print (the async-load trick) or rel=preload.
     // rel~= matches a whitespace-token list (e.g. rel="stylesheet preload").
-    for (const link of head.querySelectorAll('link[rel~="stylesheet"]')) {
+    for (const link of querySelectorAllOutsideNoscript(head, 'link[rel~="stylesheet"]')) {
       const href = link.getAttribute("href");
       if (!href || !isFontCssHost(href, ctx.page.url)) continue;
       const media = link.getAttribute("media")?.toLowerCase();
@@ -72,7 +72,7 @@ export const fontDeliveryRule: Rule = {
 
     // @import of a font provider inside inline <style> — blocking + extra round-trip.
     // Capture the URL and the trailing media condition (e.g. `... print;`).
-    for (const style of doc.querySelectorAll("style")) {
+    for (const style of querySelectorAllOutsideNoscript(doc, "style")) {
       const content = style.textContent || "";
       const importRe = /@import\s+(?:url\()?\s*['"]?([^'")\s]+)['"]?\)?([^;]*);?/gi;
       let match: RegExpExecArray | null;

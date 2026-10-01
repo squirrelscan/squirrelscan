@@ -21,6 +21,8 @@ Scripts and iframes are collected from every `script[src]` and `iframe[src]`. Im
 
 No cookies are actually observed. The rule reads markup, so it reports domains that commonly set cookies rather than cookies that were set.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

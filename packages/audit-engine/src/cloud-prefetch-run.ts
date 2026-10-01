@@ -22,6 +22,7 @@ import type { Config } from "@squirrelscan/config";
 import { buildEditorSummaryRequest, toEditorSummary } from "@squirrelscan/report/editor-summary";
 import { filterRules, loadAllRules, type RuleCloudSpec } from "@squirrelscan/rules";
 import { getHostname, getOrigin, getPathname, hasUnsafeUrlScheme } from "@squirrelscan/utils/url";
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils/dom";
 
 import {
   prefetchCloudData,
@@ -255,7 +256,9 @@ function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]):
     }
     const doc = parsed.document;
     if (!doc) continue;
-    for (const script of doc.querySelectorAll("script[src]")) {
+    // A <noscript> script never loads, so no blocker ever sees it (#434);
+    // parsed.images already leaves <noscript> images out.
+    for (const script of querySelectorAllOutsideNoscript(doc, "script[src]")) {
       if (urls.size >= BL_MAX_URLS) return;
       const src = (script as Element).getAttribute("src");
       if (src && isHttpUrl(src) && getHostname(src) !== pageHost && !urls.has(src))

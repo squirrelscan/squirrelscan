@@ -21,6 +21,8 @@ Three things are counted, all from `<head>` except the imports. A blocking style
 
 The count is a count of blocking resources rather than a measured chain depth, since a static read of the HTML cannot see what a stylesheet fetches once parsed.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

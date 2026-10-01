@@ -20,6 +20,8 @@ The rule runs on every crawled page. It counts every `img[src]` with and without
 
 Severity info, weight 3. The responsive count adds the `srcset` images and the `<picture>` elements together, so an `<img srcset>` inside a `<picture>` contributes to both halves of that sum.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

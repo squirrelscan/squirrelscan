@@ -20,6 +20,8 @@ A GIF is found by URL rather than by content: an `<img src>` whose lowercased va
 
 A `<video>` is reported only when it has at least one `<source>` child and none of them declares a `type` containing `webm`, `av1` or `hevc`, and the element's own `src` contains neither `.webm` nor `.av1`. A video with a `src` and no `<source>` children is never reported.
 
+Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
+
 ## How to fix it
 
 ```html

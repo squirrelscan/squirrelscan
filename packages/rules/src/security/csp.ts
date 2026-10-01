@@ -11,7 +11,10 @@ const _RECOMMENDED_DIRECTIVES = [
   "object-src",
 ];
 
-// Overly permissive values that weaken CSP
+// Overly permissive source expressions that weaken CSP. Matched against whole
+// source tokens, never substrings (#427). `*` stands for every source whose
+// host is a bare `*` (see isAnyHostSource); `https://*.example.com` scopes a
+// host to one domain's subdomains and is not one of them.
 const WEAK_VALUES = ["*", "data:", "blob:", "'unsafe-inline'", "'unsafe-eval'"];
 
 export const cspRule: Rule = {
@@ -99,7 +102,10 @@ export const cspRule: Rule = {
     // Check for unsafe values in script-src
     const scriptSrc =
       directives.get("script-src") || directives.get("default-src") || "";
-    const weakValues = WEAK_VALUES.filter((v) => scriptSrc.includes(v));
+    const sources = sourceTokens(scriptSrc);
+    const weakValues = WEAK_VALUES.filter((v) =>
+      v === "*" ? [...sources].some(isAnyHostSource) : sources.has(v)
+    );
 
     if (weakValues.length > 0) {
       // unsafe-inline and unsafe-eval are critical weaknesses
@@ -154,6 +160,32 @@ export const cspRule: Rule = {
     return { checks };
   },
 };
+
+/**
+ * The source expressions of one directive value, lowercased. Keywords,
+ * schemes and hosts all match case-insensitively in CSP, so `'UNSAFE-INLINE'`
+ * is `'unsafe-inline'`. Commas split too: a header holding several policies
+ * arrives comma-joined, and no source expression contains one.
+ */
+function sourceTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[\t\n\f\r ,]+/)
+      .filter(Boolean)
+  );
+}
+
+/**
+ * A host-source whose host is a bare `*`, such as `*`, `https://*` or
+ * `*:443`, with or without a path. Each one matches any host. A wildcard that
+ * is only the first label, `*.example.com`, stays inside one domain.
+ */
+function isAnyHostSource(token: string): boolean {
+  const afterScheme = token.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+  const host = afterScheme.split(/[:/]/, 1)[0];
+  return host === "*";
+}
 
 /**
  * Parse CSP header into directive map

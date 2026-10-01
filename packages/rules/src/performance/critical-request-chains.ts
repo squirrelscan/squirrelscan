@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 import { scriptLoading } from "./cwv";
 
 export const criticalRequestChainsRule: Rule = {
@@ -35,19 +37,20 @@ export const criticalRequestChainsRule: Rule = {
     }
 
     // Find render-blocking CSS (link[rel=stylesheet] without media=print/disabled)
-    const blockingCss = head.querySelectorAll(
+    const blockingCss = querySelectorAllOutsideNoscript(
+      head,
       'link[rel="stylesheet"]:not([media="print"]):not([disabled])'
     );
 
     // Find render-blocking JS (classic script without async/defer in head)
-    const blockingJs = [...head.querySelectorAll("script[src]")].filter(
+    const blockingJs = querySelectorAllOutsideNoscript(head, "script[src]").filter(
       (script) =>
         script.getAttribute("src") && scriptLoading(script) === "blocking"
     );
 
     // Count CSS @import statements from inline styles
     let importCount = 0;
-    const styleElements = doc.querySelectorAll("style");
+    const styleElements = querySelectorAllOutsideNoscript(doc, "style");
     for (const style of styleElements) {
       const content = style.textContent || "";
       const imports = content.match(/@import\b/g);
@@ -57,7 +60,7 @@ export const criticalRequestChainsRule: Rule = {
     }
 
     // Check for preload hints
-    const preloads = head.querySelectorAll('link[rel="preload"]');
+    const preloads = querySelectorAllOutsideNoscript(head, 'link[rel="preload"]');
 
     const chainMembers: string[] = [];
 

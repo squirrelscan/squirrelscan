@@ -103,6 +103,20 @@ Agent Experience (AX): whether AI agents can read, reach, discover, and act on y
   </Card>
 </CardGroup>
 
+## Content inside noscript
+
+A browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads, renders or reaches the accessibility tree. Sites put tracking pixels, Google Tag Manager iframes, lazy-load fallback images and fallback stylesheets there for visitors without JavaScript, so reporting them flags markup that never runs.
+
+The rules that describe what a browser loads or renders skip elements inside `<noscript>`, so a page with a `<noscript>` fallback gets the same result as the same page without it:
+
+- Accessibility: [aria-required-children](/rules/a11y/aria-required-children), [frame-title](/rules/a11y/frame-title), [image-redundant-alt](/rules/a11y/image-redundant-alt), [meta-refresh](/rules/a11y/meta-refresh)
+- Images: [alt-text](/rules/images/alt-text), [aspect-mismatch](/rules/images/aspect-mismatch), [broken-images](/rules/images/broken-images), [dimensions](/rules/images/dimensions), [filename-quality](/rules/images/filename-quality), [lazy-loading](/rules/images/lazy-loading), [modern-format](/rules/images/modern-format), [offscreen-lazy](/rules/images/offscreen-lazy), [optimized](/rules/images/optimized), [picture-element](/rules/images/picture-element), [responsive-size](/rules/images/responsive-size), [srcset](/rules/images/srcset)
+- Performance: [animated-content](/rules/perf/animated-content), [carousel-hidden-eager](/rules/perf/carousel-hidden-eager), [cls-hints](/rules/perf/cls-hints), [critical-request-chains](/rules/perf/critical-request-chains), [duplicate-js](/rules/perf/duplicate-js), [font-delivery](/rules/perf/font-delivery), [font-loading](/rules/perf/font-loading), [inp-hints](/rules/perf/inp-hints), [js-libraries](/rules/perf/js-libraries), [lazy-above-fold](/rules/perf/lazy-above-fold), [lcp-fetchpriority](/rules/perf/lcp-fetchpriority), [lcp-hints](/rules/perf/lcp-hints), [legacy-js](/rules/perf/legacy-js), [preconnect](/rules/perf/preconnect), [render-blocking](/rules/perf/render-blocking), [total-byte-weight](/rules/perf/total-byte-weight), [unminified-css](/rules/perf/unminified-css), [unminified-js](/rules/perf/unminified-js)
+- Security: [mixed-content](/rules/security/mixed-content), [sri](/rules/security/sri), [third-party-cookies](/rules/security/third-party-cookies)
+- Blocking and integrity: [blocked-links](/rules/adblock/blocked-links), [template-discontinuity](/rules/integrity/template-discontinuity)
+
+Same-domain scripts, stylesheets and images that appear only inside `<noscript>` are not fetched for the file-size and compression rules either. Links inside `<noscript>` are still collected for crawling, and the remaining rules read the page as before.
+
 ## Configuration
 
 ### Enable/Disable rules

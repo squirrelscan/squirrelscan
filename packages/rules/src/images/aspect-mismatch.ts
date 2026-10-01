@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 export const optionsSchema = z.object({
   tolerance: z
     .number()
@@ -92,7 +94,7 @@ export const aspectMismatchRule: Rule = {
 
     const mismatched: CheckResult["items"] = [];
 
-    for (const img of doc.querySelectorAll("img[style]")) {
+    for (const img of querySelectorAllOutsideNoscript(doc, "img[style]")) {
       const w = parseIntAttr(img.getAttribute("width"));
       const h = parseIntAttr(img.getAttribute("height"));
       if (Number.isNaN(w) || Number.isNaN(h) || w === 0 || h === 0) continue;

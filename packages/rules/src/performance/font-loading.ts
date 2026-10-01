@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 import { getCWVHints } from "./cwv";
 
 function hasHostname(rawUrl: string, baseUrl: string, hostnames: readonly string[]): boolean {
@@ -50,8 +52,9 @@ export const fontLoadingRule: Rule = {
     const hasGoogleFontsPreconnect = hints.preconnectTags.some((url) =>
       hasHostname(url, ctx.page.url, ["fonts.googleapis.com", "fonts.gstatic.com"]),
     );
-    const usesGoogleFonts = Array.from(
-      ctx.parsed.document?.querySelectorAll("link[href]") ?? [],
+    const usesGoogleFonts = (ctx.parsed.document
+      ? querySelectorAllOutsideNoscript(ctx.parsed.document, "link[href]")
+      : []
     ).some((link) =>
       hasHostname(link.getAttribute("href") ?? "", ctx.page.url, ["fonts.googleapis.com"]),
     );

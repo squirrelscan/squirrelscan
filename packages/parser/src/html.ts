@@ -4,7 +4,12 @@
 
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { coerceSchemelessUrl, getAttrCI, shouldSkipUrl } from "@squirrelscan/utils";
+import {
+  coerceSchemelessUrl,
+  getAttrCI,
+  querySelectorAllOutsideNoscript,
+  shouldSkipUrl,
+} from "@squirrelscan/utils";
 import type { Document, Element } from "linkedom";
 
 import { parseHTML } from "./dom";
@@ -185,7 +190,11 @@ export function extractContactLinks(doc: Document): ContactLinkData[] {
 
 // Extract images from parsed document
 export function extractImages(doc: Document, baseUrl: string): ImageData[] {
-  const imgs = doc.querySelectorAll("img");
+  // A <noscript> fallback image (tracking pixel, lazy-load fallback) never
+  // loads in a browser with scripting on, so it is not one of the page's
+  // images (#434). extractLinks still reads <noscript> anchors: link discovery
+  // is a crawl question, not a rendering one.
+  const imgs = querySelectorAllOutsideNoscript(doc, "img");
   const images: ImageData[] = [];
 
   for (const img of imgs) {
