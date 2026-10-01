@@ -1664,30 +1664,44 @@ export const audit = defineCommand({
       let trackedRunId: string | null = null;
       // Base path resolved once at register; reused so the lifecycle stays consistent.
       let trackedBase: string | undefined;
-      void registerPromise.then((run) => {
-        if (run) {
+      // Kept, not fired and forgotten: the terminal PATCH waits for this one
+      // (see createRunFinalizer), or an audit that fails before it lands is
+      // flipped back to running and reaped as stalled an hour later.
+      const runningPromise = registerPromise
+        .then(async (run) => {
+          if (!run) return;
           trackedRunId = run.runId;
           trackedBase = run.lifecycleBase;
-          void markRunning(
+          await markRunning(
             run.runId,
             new Date(startTime).toISOString(),
             run.lifecycleBase
           );
-        }
-      });
+        })
+        .catch(() => {});
 
       // #332: one guarded finalizer for every exit path (--no-publish, error, Ctrl-C, crash) so none leaves the run pending to be reaped.
-      finalizeTracked = createRunFinalizer(registerPromise);
+      finalizeTracked = createRunFinalizer(registerPromise, runningPromise);
 
       // #332: on interrupt, await a "cancelled" PATCH before re-raising so it lands instead of being reaped as a failure.
       const onSignal = (signal: NodeJS.Signals): void => {
+        // SIGHUP means the terminal is gone: a write to it fails with EIO,
+        // and an unhandled stream error (the progress spinner keeps writing)
+        // would take the process down before the PATCH lands. Say nothing,
+        // and let the streams fail quietly until the signal is re-raised.
+        const canWrite = signal !== "SIGHUP";
+        if (!canWrite) {
+          process.stdout.on("error", () => {});
+          process.stderr.on("error", () => {});
+        }
         // Note the cancel so the user isn't left wondering during the PATCH (stderr keeps piped stdout clean).
-        if (trackedRunId) process.stderr.write("\nCancelling run…\n");
+        if (canWrite && trackedRunId)
+          process.stderr.write("\nCancelling run…\n");
         // #1583: the crawl is checkpointed in the project's SQLite store, so the
         // pages fetched so far survive this exit — but nothing ever said so, and
         // a user who has just lost a 450-page crawl reasonably assumes it is gone
         // and starts over. Name the exact command while the context is on screen.
-        if (lastPagesFetched > 0) {
+        if (canWrite && lastPagesFetched > 0) {
           process.stderr.write(
             `${lastPagesFetched} pages are saved. Resume with:\n  squirrel audit ${args.url} --resume\n`
           );
@@ -1709,9 +1723,13 @@ export const audit = defineCommand({
         const emitter = process as NodeJS.EventEmitter;
         emitter.off("SIGINT", onSignal);
         emitter.off("SIGTERM", onSignal);
+        emitter.off("SIGHUP", onSignal);
       };
       process.once("SIGINT", onSignal);
       process.once("SIGTERM", onSignal);
+      // Closing the terminal (or its window on Windows) aborts the audit as
+      // surely as Ctrl-C does; without this the run was left to be reaped.
+      process.once("SIGHUP", onSignal);
 
       // #271 phase 5: coarse page-progress, throttled to ≤1/s. `crawlPagesFailed`
       // is tallied from the raw crawler events (onEvent) since onProgress only

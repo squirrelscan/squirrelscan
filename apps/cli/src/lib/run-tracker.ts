@@ -544,20 +544,34 @@ export async function finalizeRun(
  * timeout bounds the wait), so a finalize racing an in-flight register still
  * lands — every exit path (success, error, interrupt, crash) shares one guard.
  * No registered run (promise resolves null) → silently no-ops.
+ *
+ * `running` is the caller's in-flight markRunning, when it sent one, and the
+ * terminal PATCH waits for it to settle. The API applies whichever status lands
+ * LAST, and both go out the moment register resolves: an audit that fails in
+ * milliseconds (an unreachable site, a local store it cannot write) had its
+ * `failed` overwritten by `running` and was reaped an hour later as "CLI audit
+ * stopped reporting progress before it finished". markRunning never throws and
+ * is bounded by its own timeout, so the wait is too.
  */
 export function createRunFinalizer(
-  registerPromise: Promise<RegisteredRun | null>
+  registerPromise: Promise<RegisteredRun | null>,
+  running?: Promise<unknown>
 ): (input: FinalizeRunInput) => Promise<void> {
-  let finalized = false;
-  return async (input: FinalizeRunInput): Promise<void> => {
-    if (finalized) return;
-    finalized = true;
-    // #1583: the finalizer is the one guarded path every exit funnels through
-    // (success, error, publish failure, Ctrl-C), so stopping the heartbeat here
-    // covers them all — and stopping BEFORE the terminal PATCH means a beat can
-    // never race in behind it and re-stamp activity on a finished run.
-    stopRunHeartbeat();
-    const run = await registerPromise.catch(() => null);
-    if (run) await finalizeRun(run.runId, input, run.lifecycleBase);
+  // The first call's PATCH, which every later call waits on rather than
+  // returning at once: a Ctrl-C arriving while an error path's fire-and-forget
+  // finalize is still in flight must not exit before that PATCH lands.
+  let inFlight: Promise<void> | null = null;
+  return (input: FinalizeRunInput): Promise<void> => {
+    inFlight ??= (async () => {
+      // #1583: the finalizer is the one guarded path every exit funnels through
+      // (success, error, publish failure, Ctrl-C), so stopping the heartbeat here
+      // covers them all — and stopping BEFORE the terminal PATCH means a beat can
+      // never race in behind it and re-stamp activity on a finished run.
+      stopRunHeartbeat();
+      const run = await registerPromise.catch(() => null);
+      await running?.catch(() => {});
+      if (run) await finalizeRun(run.runId, input, run.lifecycleBase);
+    })();
+    return inFlight;
   };
 }
