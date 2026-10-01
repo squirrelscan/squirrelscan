@@ -2,6 +2,7 @@
 
 import type { DocumentFetcher } from "@squirrelscan/fetchers";
 
+import { heapStats } from "bun:jsc";
 import { Duration, Effect, Fiber, Stream } from "effect";
 
 import type { Config } from "@/config";
@@ -442,8 +443,11 @@ export function streamPhaseMemoryLogger():
   return (phase, boundary) => {
     Bun.gc(true);
     const m = process.memoryUsage();
+    // `heapUsed` lags or misses JS string memory on Bun; `heapSize` from
+    // bun:jsc tracks it, and retained page strings are what this is for.
+    const { heapSize } = heapStats();
     console.error(
-      `[stream] ${phase} ${boundary} heapUsed=${mb(m.heapUsed)} external=${mb(m.external)} rss=${mb(m.rss)}`
+      `[stream] ${phase} ${boundary} heapSize=${mb(heapSize)} heapUsed=${mb(m.heapUsed)} external=${mb(m.external)} rss=${mb(m.rss)}`
     );
   };
 }
