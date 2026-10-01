@@ -656,15 +656,6 @@ export interface SitePageRecord {
 // written, v1 behaviour is byte-identical.
 
 /**
- * One accumulated page-features row (keyed by crawlId + normalizedUrl in the
- * table; `crawlId` is a method parameter, mirroring {@link PageRecord}). Hashes
- * are the same content hashes the crawler already computes, so duplicate scans
- * are `GROUP BY <hash>` rather than O(pages²) JS comparisons. The three
- * boolean-presence fields (`robotsNoindex`, `visibleAuthor`, `visibleDate`) are
- * stored as 0/1 INTEGER — the eeat/legal per-URL rules only need presence, not
- * the underlying string.
- */
-/**
  * The per-page scalars the REPORT needs and no rule reads (#2343).
  *
  * `reconstructReport` used to recover these by re-parsing every stored page —
@@ -694,6 +685,15 @@ export interface PageReportScalars {
   thinContent: boolean;
 }
 
+/**
+ * One accumulated page-features row (keyed by crawlId + normalizedUrl in the
+ * table; `crawlId` is a method parameter, mirroring {@link PageRecord}). Hashes
+ * are the same content hashes the crawler already computes, so duplicate scans
+ * are `GROUP BY <hash>` rather than O(pages²) JS comparisons. The three
+ * boolean-presence fields (`robotsNoindex`, `visibleAuthor`, `visibleDate`) are
+ * stored as 0/1 INTEGER — the eeat/legal per-URL rules only need presence, not
+ * the underlying string.
+ */
 export interface PageFeatureRow {
   normalizedUrl: string;
   status: number;
