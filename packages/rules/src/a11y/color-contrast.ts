@@ -326,6 +326,112 @@ function calculateContrastRatio(
 }
 
 /**
+ * The rule blocks in `css` that declare a color: exactly the matches of
+ * `/[^{}]+\{[^{}]*color\s*:[^;]+;[^{}]*\}/gi`, in order, found in linear time.
+ *
+ * The regex itself is quadratic in the length of a brace-free run: from every
+ * start inside one, `[^{}]+` scans to the end of the run before failing. A
+ * 428KB `<style>` of base64 `@font-face` data took 76s for zero matches. The
+ * matches are reproduced quirks included: `[^;]+` can run past the closing
+ * brace, so `a{color:#ccc}b{margin:0;}` is one match whose selector is `a`.
+ */
+export function extractColorRules(css: string): string[] {
+  const rules: string[] = [];
+  const nextBrace = forwardScan(css, /[{}]/g);
+  const nextSemicolonPastBody = forwardScan(css, /;/g);
+  const nextBracePastBody = forwardScan(css, /[{}]/g);
+
+  let pos = 0;
+  while (pos < css.length) {
+    const open = nextBrace(pos);
+    if (open < 0) break;
+    // `[^{}]+\{` takes the whole brace-free run before a "{" as the selector,
+    // so a run that is empty or ends at "}" fails from every start inside it.
+    if (open === pos || css[open] === "}") {
+      pos = open + 1;
+      continue;
+    }
+
+    const bodyEnd = nextBrace(open + 1);
+    if (bodyEnd < 0) break; // no brace left for the final `\}`
+    const close = colorRuleClose(
+      css,
+      open,
+      bodyEnd,
+      nextSemicolonPastBody,
+      nextBracePastBody
+    );
+    if (close < 0) {
+      pos = open + 1;
+      continue;
+    }
+    rules.push(css.slice(pos, close + 1));
+    pos = close + 1;
+  }
+
+  return rules;
+}
+
+/**
+ * Where the match whose selector ends at the "{" at `open` closes, or -1.
+ * `bodyEnd` is the next brace after `open`.
+ */
+function colorRuleClose(
+  css: string,
+  open: number,
+  bodyEnd: number,
+  nextSemicolonPastBody: (from: number) => number,
+  nextBracePastBody: (from: number) => number
+): number {
+  const body = css.slice(open + 1, bodyEnd);
+
+  // End of each `color\s*:` in the body that `[^;]+` can follow (one non-";").
+  const valueStarts: number[] = [];
+  for (const m of body.matchAll(/color\s*:/gi)) {
+    const start = open + 1 + m.index + m[0].length;
+    if (css[start] !== ";") valueStarts.push(start);
+  }
+  if (valueStarts.length === 0) return -1;
+
+  const semicolon = body.lastIndexOf(";");
+  const lastSemicolon = semicolon < 0 ? -1 : open + 1 + semicolon;
+  const closesAtBodyEnd = css[bodyEnd] === "}";
+
+  // The regex tries the LAST declaration first. With a ";" after it in the
+  // body, `[^;]+;[^{}]*\}` can only close at bodyEnd, and so can every
+  // earlier declaration: same answer for all of them.
+  if (valueStarts[valueStarts.length - 1]! < lastSemicolon) {
+    return closesAtBodyEnd ? bodyEnd : -1;
+  }
+  // Otherwise `[^;]+` runs past bodyEnd to the next ";" and the match closes
+  // at the first brace after it, if that brace is "}".
+  const farSemicolon = nextSemicolonPastBody(bodyEnd);
+  if (farSemicolon >= 0) {
+    const farClose = nextBracePastBody(farSemicolon + 1);
+    if (farClose >= 0 && css[farClose] === "}") return farClose;
+  }
+  // Failing that, an earlier declaration with a ";" after it in the body.
+  return valueStarts[0]! < lastSemicolon && closesAtBodyEnd ? bodyEnd : -1;
+}
+
+/**
+ * `(from) => index of the first match of the single-character global pattern
+ * at or after from, or -1`. It remembers its last answer, so calls with
+ * non-decreasing `from` scan each character at most once.
+ */
+function forwardScan(text: string, pattern: RegExp): (from: number) => number {
+  let scannedFrom = Number.POSITIVE_INFINITY;
+  let found = -1;
+  return (from) => {
+    if (from >= scannedFrom && (found < 0 || from <= found)) return found;
+    pattern.lastIndex = from;
+    found = pattern.exec(text)?.index ?? -1;
+    scannedFrom = from;
+    return found;
+  };
+}
+
+/**
  * Analyze <style> blocks for potential low-contrast color combinations
  */
 function analyzeCssColorDeclarations(
@@ -345,7 +451,7 @@ function analyzeCssColorDeclarations(
     const css = style.textContent || "";
 
     // Simple rule extraction (not a full CSS parser)
-    const rules = css.match(/[^{}]+\{[^{}]*color\s*:[^;]+;[^{}]*\}/gi) || [];
+    const rules = extractColorRules(css);
 
     for (const rule of rules) {
       // Extract selector
