@@ -167,6 +167,7 @@ export function extractPageFeatures(
       ogUrl: parsed.og?.url ?? null,
       ogType: parsed.og?.type ?? null,
       ogSiteName: parsed.og?.siteName ?? null,
+      ogImage: parsed.og?.image ?? null,
       twitterCard: parsed.twitter?.card ?? null,
       h1Count: parsed.h1?.count ?? 0,
       thinContent: parsed.content?.isThinContent ?? false,

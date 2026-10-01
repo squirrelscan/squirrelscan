@@ -453,7 +453,7 @@ export function reconstructReport(
               title: features?.title ?? null,
               description: features?.description ?? null,
               ogTitle: scalars.ogTitle,
-              ogImage: features?.ogImage ?? null,
+              ogImage: scalars.ogImage,
               twitterCard: scalars.twitterCard,
               schemaTypeCount: features?.schemaTypes.length ?? 0,
               h1Count: scalars.h1Count,
@@ -539,7 +539,7 @@ export function reconstructReport(
                 description: scalars.ogDescription,
                 url: scalars.ogUrl,
                 type: scalars.ogType,
-                image: features?.ogImage ?? null,
+                image: scalars.ogImage,
                 siteName: scalars.ogSiteName,
               },
             }

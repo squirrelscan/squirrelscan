@@ -664,9 +664,11 @@ export interface SitePageRecord {
  * page-rule loop) and stored alongside the rest of the page's features.
  *
  * Everything the report needs that is ALREADY a feature column (title,
- * description, canonical, schemaTypes, ogImage, wordCount) stays there; this
- * carries only what had no other home. Bounded by construction: eight short
- * strings and a count, never a slice of the page body.
+ * description, canonical, schemaTypes) stays there; this carries only what had
+ * no other home. `ogImage` is the one exception: the column of that name is the
+ * site-chrome signal, resolved to an absolute URL and cut at 200 characters,
+ * and the report shows the page's own value. Bounded by construction: short
+ * strings, a count and a flag, never a slice of the page body.
  */
 export interface PageReportScalars {
   /** Raw `<meta name="robots">` content. */
@@ -676,6 +678,8 @@ export interface PageReportScalars {
   ogUrl: string | null;
   ogType: string | null;
   ogSiteName: string | null;
+  /** Raw `og:image`, as the report shows it (not the normalized feature column). */
+  ogImage: string | null;
   /** Raw `<meta name="twitter:card">` content. */
   twitterCard: string | null;
   /** `parsed.h1.count` — drives the report's multiple-H1 summary. */

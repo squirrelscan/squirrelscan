@@ -48,8 +48,10 @@ const PAGES: Array<{ path: string; html: string }> = [
     html: `<html><head></head><body><h1>A</h1><h1>B</h1><p>short</p></body></html>`,
   },
   {
+    // A RELATIVE og:image, which the site-chrome feature column resolves to an
+    // absolute URL: the report must show the page's own value.
     path: "/og-image-only",
-    html: `<html><head><title>Only image</title><meta property="og:image" content="${SITE}/o.jpg">
+    html: `<html><head><title>Only image</title><meta property="og:image" content="/o.jpg">
       </head><body><h1>x</h1><p>${words(400)}</p></body></html>`,
   },
   {
@@ -195,6 +197,9 @@ describe("reconstructReport reads stored report scalars (#2343)", () => {
     expect(fromParse.summary.missingOgTags).not.toContain(
       `${SITE}/og-title-only`
     );
+    expect(
+      fromParse.pages.find((p) => p.url.endsWith("/og-image-only"))!.og.image
+    ).toBe("/o.jpg");
     expect(fromParse.pages.find((p) => p.url.endsWith("/full"))!.og).toEqual({
       title: "OG full",
       description: "OG desc",
