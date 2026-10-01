@@ -801,6 +801,73 @@ describe("createRunFinalizer (#332)", () => {
     expect(paths[0]).toContain("/v1/agent-runs/run_1");
   });
 
+  // The API applies whichever status lands last. An audit that fails before
+  // markRunning has landed used to have its `failed` overwritten by `running`,
+  // and the run was reaped an hour later as "stopped reporting progress".
+  test("the terminal PATCH waits for an in-flight markRunning", async () => {
+    const order: string[] = [];
+    let releaseRunning!: () => void;
+    const runningHeld = new Promise<void>((resolve) => {
+      releaseRunning = resolve;
+    });
+    globalThis.fetch = (async (
+      _input: string | URL | Request,
+      init?: RequestInit
+    ) => {
+      const { status } = JSON.parse(String(init?.body ?? "{}")) as {
+        status: string;
+      };
+      order.push(`sent ${status}`);
+      if (status === "running") await runningHeld;
+      order.push(`landed ${status}`);
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const registerPromise = Promise.resolve(run);
+    const running = registerPromise.then((r) =>
+      markRunning(r.runId, "t", r.lifecycleBase)
+    );
+    const finalize = createRunFinalizer(registerPromise, running);
+    const finalized = finalize({ status: "failed", completedAt: "t" });
+
+    await Bun.sleep(20);
+    expect(order).toEqual(["sent running"]);
+    releaseRunning();
+    await finalized;
+    expect(order).toEqual([
+      "sent running",
+      "landed running",
+      "sent failed",
+      "landed failed",
+    ]);
+  });
+
+  test("a second call waits for the first call's PATCH instead of returning", async () => {
+    const order: string[] = [];
+    globalThis.fetch = (async () => {
+      await Bun.sleep(30);
+      order.push("patched");
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const finalize = createRunFinalizer(Promise.resolve(run));
+
+    void finalize({ status: "failed", completedAt: "t" });
+    await finalize({ status: "cancelled", completedAt: "t" });
+    order.push("second returned");
+
+    expect(order).toEqual(["patched", "second returned"]);
+  });
+
+  test("a failed markRunning does not hold back the terminal PATCH", async () => {
+    const { paths } = trackPatches();
+    const finalize = createRunFinalizer(
+      Promise.resolve(run),
+      Promise.reject(new Error("running PATCH died"))
+    );
+    await finalize({ status: "failed", completedAt: "t" });
+    expect(paths).toHaveLength(1);
+  });
+
   test("no registered run: silently no-ops", async () => {
     const { paths } = trackPatches();
     const finalize = createRunFinalizer(Promise.resolve(null));
