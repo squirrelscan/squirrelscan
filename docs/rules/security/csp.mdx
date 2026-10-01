@@ -18,12 +18,12 @@ The rule reads the response headers of the first crawled page and can emit sever
 - `csp-report-only` warns when only the report-only header is set. Message: `CSP in report-only mode (not enforced)`.
 - `csp-present` passes when the enforcing header is set. Message: `CSP header present and enforced`, with the first 100 characters of the policy as the value.
 - `csp-no-script-control` warns when the policy declares neither `script-src` nor `default-src`. Message: `CSP has no script-src or default-src directive`.
-- `csp-unsafe-scripts` warns when the effective script source contains `'unsafe-inline'` or `'unsafe-eval'`. Message: `CSP allows 'unsafe-inline' and 'unsafe-eval'`, naming whichever of the two it found.
-- `csp-wildcard` warns when that same source list contains `*`. Message: `CSP script-src allows wildcard (*)`.
+- `csp-unsafe-scripts` warns when the effective script source lists `'unsafe-inline'` or `'unsafe-eval'`. Message: `CSP allows <keywords>`, where `<keywords>` is `'unsafe-inline'`, `'unsafe-eval'` or both joined with `and`.
+- `csp-wildcard` warns when that same source list contains a source whose host is a bare `*`, such as `*`, `https://*` or `*:443`, which lets scripts load from any host. A host wildcard such as `https://*.example.com` is scoped to one domain's subdomains and does not trigger it. Message: `CSP script-src allows wildcard (*)`.
 - `csp-no-frame-ancestors` reports info when `frame-ancestors` is absent and no `X-Frame-Options` header is set either. Message: `CSP missing frame-ancestors directive`.
 - `csp-no-object-src` reports info when neither `object-src` nor `default-src` is declared. Message: `CSP missing object-src directive`.
 
-The effective script source is `script-src` when it is present and non-empty, otherwise `default-src`. Severity is warning and the scope is site-wide.
+The effective script source is `script-src` when it is present and non-empty, otherwise `default-src`. Its sources are compared as whole tokens, ignoring case, the way browsers read them: `'UNSAFE-INLINE'` is `'unsafe-inline'`, and a host that merely contains one of these strings is not a match. A header that carries several comma-separated policies is read as one list. Severity is warning and the scope is site-wide.
 
 ## How to fix it
 
