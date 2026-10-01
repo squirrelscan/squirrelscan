@@ -21,7 +21,7 @@ Both of those branches only run when there was no reportable robots.txt fetch fa
 
 - `sitemap-syntax` fails when any discovered sitemap recorded parse errors. Message: `3 error(s) in 1 sitemap(s)`, listing each sitemap with its first error. It passes otherwise with `Sitemap XML syntax is valid`.
 - `sitemap-size` warns when a URL set holds more than 50,000 URLs, or an index holds more than 50,000 child sitemaps. Message: `1 sitemap(s) exceed the 50,000-entry protocol limit`. It passes otherwise with `All sitemaps within URL limits`.
-- `sitemap-orphans` reports info for sitemap URLs the crawl did not reach. Message: `12 URL(s) in sitemap not found during crawl`.
+- `sitemap-orphans` reports info for sitemap URLs the crawl did not reach. Message: `N URL(s) in sitemap not found during crawl`, with `N` exact even past the 10,000-URL list the audit engine hands the rule. It lists the first 50 URLs, and past 50, `additional` and `pagesTruncated` record the rest.
 - `sitemap-missing` reports info for crawled pages the sitemap does not list. Message: `7 crawled page(s) not in sitemap`.
 
 The URL count stored on a top-level index is the aggregated total across its children, which is why an index is measured against its child count rather than that total. Severity error, weight 8.

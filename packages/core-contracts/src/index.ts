@@ -1360,6 +1360,13 @@ export interface SitemapDiscovery {
   totalUrls: number;
   orphanPages: string[];
   missingPages: string[];
+  /**
+   * How many orphan pages there were before `orphanPages` was cut to the
+   * report's array cap, so a rule can still state the exact count
+   * (repo#2320). Absent reads as the array's length. `missingPages` needs no
+   * twin: it lists crawled pages, which the crawl's own page cap bounds.
+   */
+  orphanPagesTotal?: number;
   failed: SitemapFetchFailure[];
   /**
    * Discovery stopped before visiting every candidate location, so an empty
