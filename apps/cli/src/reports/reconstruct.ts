@@ -370,7 +370,11 @@ export function reconstructReport(
       // Fails rather than degrading: the whole-crawl read this replaced
       // propagated its StorageError too, and ending a BATCHED walk early would
       // publish a confident report over a truncated page set instead.
-      const batch = yield* storage.getPages(crawlId, {
+      //
+      // Without bodies (#2343): the stored scalars below are what the walk
+      // reads, and a body is fetched only for a page that has none. Reading
+      // every body regardless made this walk the audit's memory peak.
+      const batch = yield* storage.getPagesWithoutBodies(crawlId, {
         limit: batchSize,
         offset,
       });
@@ -416,7 +420,10 @@ export function reconstructReport(
         // schema v30, so an audit stored by an older binary still reports the
         // same way, at the same cost.
         const scalars = features?.reportScalars ?? null;
-        const parsed = scalars || !page.html ? null : parsePageRecord(page);
+        const withBody = scalars
+          ? null
+          : yield* storage.getPage(crawlId, page.normalizedUrl);
+        const parsed = withBody?.html ? parsePageRecord(withBody) : null;
         const summarySignal = scalars
           ? {
               title: features?.title ?? null,

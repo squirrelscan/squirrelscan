@@ -466,6 +466,37 @@ const MIGRATIONS: Record<number, string[]> = {
   30: [`ALTER TABLE page_features ADD COLUMN report_scalars TEXT`],
 };
 
+// Every `pages` column but the two that hold a page's body, for
+// getPagesWithoutBodies (repo#2343). Listed rather than derived so a new body
+// column cannot slip into the projection unnoticed; a new scalar column has to
+// be added here too, or that read returns it undefined.
+const PAGE_COLUMNS_WITHOUT_BODIES = [
+  "crawl_id",
+  "url",
+  "normalized_url",
+  "final_url",
+  "depth",
+  "parent_url",
+  "redirect_chain",
+  "status",
+  "content_type",
+  "size_bytes",
+  "load_time_ms",
+  "ttfb",
+  "download_time",
+  "fetched_at",
+  "etag",
+  "last_modified",
+  "content_hash",
+  "headers",
+  "security_headers",
+  "request_headers",
+  "fetcher_id",
+  "fallback_reason",
+  "source_hash",
+  "html_hash",
+].join(", ");
+
 // Nullable columns added to `pages` via ALTER migrations over time, with the
 // types they were added with. `reconcilePagesColumns` re-adds any that are
 // missing on open, INDEPENDENT of the schema_version counter — because a
@@ -1678,6 +1709,49 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
+   * `getPages` without the two body columns: every PageRecord field except
+   * `html` and `parsedData`, which come back null (repo#2343).
+   *
+   * For the report's page walk, which since report scalars are stored needs a
+   * page's body only when it has none (a page outside the rule universe, or one
+   * stored before schema v30). `getPages` read every body anyway, out of the
+   * content store and gunzipped: 1.5 GB of transient strings over 1,000
+   * 1.5 MB pages, which the allocator grew for and kept, and which made the
+   * report phase the audit's peak (~1.8 GB footprint at 1,000 pages, ~4.5 GB
+   * at 4,000). Same ordering and pagination as `getPages`.
+   */
+  getPagesWithoutBodies(
+    crawlId: string,
+    options?: PaginationOptions
+  ): Effect.Effect<PageRecord[], StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        let query = `SELECT ${PAGE_COLUMNS_WITHOUT_BODIES} FROM pages WHERE crawl_id = ? ORDER BY normalized_url ASC`;
+        const params: unknown[] = [crawlId];
+
+        if (options?.limit) {
+          query += " LIMIT ?";
+          params.push(options.limit);
+        }
+        if (options?.offset) {
+          query += " OFFSET ?";
+          params.push(options.offset);
+        }
+
+        const rows = db
+          .prepare(query)
+          .all(...(params as (string | number | null)[])) as Record<
+          string,
+          unknown
+        >[];
+        return rows.map((row) => this.rowToPageRecord(row, { body: false }));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
    * Just `normalized_url` + `parsed_data`, for the audit's incoming-link scan
    * (#1860).
    *
@@ -1925,7 +1999,10 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  private rowToPageRecord(row: Record<string, unknown>): PageRecord {
+  private rowToPageRecord(
+    row: Record<string, unknown>,
+    opts?: { body?: boolean }
+  ): PageRecord {
     const defaultHeaders: ResponseHeaders = {
       contentType: null,
       contentEncoding: null,
@@ -1953,10 +2030,11 @@ export class SQLiteStorage implements CrawlStorage {
       xRobotsTag: null,
     };
 
-    // Try to retrieve HTML from content-store if not in local DB
-    let html = row.html as string | null;
+    // Try to retrieve HTML from content-store if not in local DB. A caller that
+    // asked for no body (getPagesWithoutBodies) gets null, not a store read.
+    let html = (row.html as string | null | undefined) ?? null;
     const contentHash = row.content_hash as string;
-    if (!html && contentHash && this.contentStore) {
+    if (opts?.body !== false && !html && contentHash && this.contentStore) {
       html = this.contentStore.getString(contentHash);
     }
 
@@ -1980,7 +2058,7 @@ export class SQLiteStorage implements CrawlStorage {
       lastModified: row.last_modified as string | null,
       contentHash,
       html, // Retrieved from content-store if not in local DB
-      parsedData: row.parsed_data as string | null,
+      parsedData: (row.parsed_data as string | null | undefined) ?? null,
       headers: this.safeJsonParse(row.headers as string, defaultHeaders),
       securityHeaders: this.safeJsonParse(
         row.security_headers as string,
