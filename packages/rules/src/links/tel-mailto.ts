@@ -49,6 +49,21 @@ function phoneNumbersMatch(hrefPhone: string, text: string): boolean {
   return false;
 }
 
+/**
+ * `/.+@.+\..+/.test(text)` in linear time: some line has an "@" after its
+ * first character, and a "." at least two characters later that is not the
+ * line's last. The regex rescans to the end of the line from every start, so
+ * a link wrapping one long unbroken run (inline base64, a minified blob) took
+ * seconds per 50KB.
+ */
+export function looksLikeEmail(text: string): boolean {
+  for (const line of text.split(/[\n\r\u2028\u2029]/)) {
+    const at = line.indexOf("@", 1);
+    if (at >= 0 && line.lastIndexOf(".", line.length - 2) >= at + 2) return true;
+  }
+  return false;
+}
+
 export const telMailtoRule: Rule = {
   meta: {
     id: "links/tel-mailto",
@@ -113,7 +128,7 @@ export const telMailtoRule: Rule = {
 
         // Check for href/text email mismatch
         const text = link.textContent?.trim() || "";
-        if (/.+@.+\..+/.test(text) && text.toLowerCase() !== email.toLowerCase()) {
+        if (looksLikeEmail(text) && text.toLowerCase() !== email.toLowerCase()) {
           mailtoMismatches.push({
             id: href,
             label: `href "${email}" ≠ text "${text}"`,
