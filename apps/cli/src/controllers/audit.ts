@@ -408,15 +408,15 @@ export function foldRenderSpendLines(
  *
  * Pricing v11 bills 2 credits for every audited page. Pages rendered inside the
  * run were billed when their render was submitted (the `audit_page` lines the
- * crawl and the raw-vs-rendered prefetch already carry); the server bills the
- * REST when the run completes, as one settlement charge for
- * `pagesAudited − pages already billed`. This mirrors that arithmetic so the
- * printed total and the published `cloudSpend` match the ledger, and merges
- * everything into ONE `audit_page` line: the customer bought N audited pages,
- * not "some renders and some other pages".
+ * crawl and the raw-vs-rendered prefetch already carry); when the run
+ * completes the server settles the difference to `pagesAudited` either way:
+ * it charges the pages not yet billed and refunds prepaid pages that never
+ * became audited pages (a 404, a 500; #2399). This mirrors that arithmetic so
+ * the printed total and the published `cloudSpend` match the ledger, and
+ * merges everything into ONE `audit_page` line of exactly `pagesAudited`
+ * pages: the customer bought N audited pages, not "some renders and some other
+ * pages".
  *
- * A page rendered for a url that never became an audited page stays billed, so
- * the line can exceed `pagesAudited` but never falls below what was charged.
  * Pure; exported for tests. Call it only for a registered run: an unregistered
  * one has no settlement, and its renders were standalone.
  */
@@ -424,19 +424,15 @@ export function withAuditPageSettlement(
   lines: CloudSpendLine[],
   pagesAudited: number
 ): CloudSpendLine[] {
-  const prepaid = lines.filter((l) => l.feature === "audit_page");
-  const prepaidUnits = prepaid.reduce((sum, l) => sum + l.units, 0);
-  const prepaidCredits = prepaid.reduce((sum, l) => sum + l.credits, 0);
-  const settledUnits = Math.max(0, Math.floor(pagesAudited) - prepaidUnits);
-  const units = prepaidUnits + settledUnits;
-  if (units === 0) return lines;
+  const units = Math.max(0, Math.floor(pagesAudited));
+  const rest = lines.filter((l) => l.feature !== "audit_page");
+  if (units === 0) return rest;
   const merged: CloudSpendLine = {
     service: "audit-pages",
     feature: "audit_page",
     units,
-    credits: prepaidCredits + computeCost("audit_page", settledUnits),
+    credits: computeCost("audit_page", units),
   };
-  const rest = lines.filter((l) => l.feature !== "audit_page");
   // Right after the base (when present), so the two lines that make up the
   // headline price read first.
   const baseAt = rest.findIndex((l) => l.feature === "audit_base");
@@ -445,12 +441,25 @@ export function withAuditPageSettlement(
     : [...rest.slice(0, baseAt + 1), merged, ...rest.slice(baseAt + 1)];
 }
 
-/** Pages this run audited: the report.pages basis, which is what settles (#2290). */
+/**
+ * Pages this run audited, as its report SHOWS them, which is what the server
+ * settles the page charge on (#2290, #2399): the coverage line's audited count
+ * ("Coverage: audited N of M known pages"), else the "N pages" header. Not the
+ * crawl count (`scanScope.pagesCrawled`), which also counts error pages (a 404
+ * kept for its broken-link finding) that were crawled and never audited.
+ */
 export function auditedPageCount(report: {
   pages: readonly unknown[];
+  totalPages?: number;
+  coverage?: { auditedPages: number } | null;
   scanScope?: { pagesCrawled: number };
 }): number {
-  return report.scanScope?.pagesCrawled ?? report.pages.length;
+  return (
+    report.coverage?.auditedPages ??
+    report.totalPages ??
+    report.scanScope?.pagesCrawled ??
+    report.pages.length
+  );
 }
 
 /**

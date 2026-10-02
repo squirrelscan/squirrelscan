@@ -123,35 +123,73 @@ describe("withAuditPageSettlement (#2290)", () => {
     ]);
   });
 
-  test("renders for urls that never became audited pages stay billed", () => {
+  test("renders for urls that never became audited pages are refunded at settlement (#2399)", () => {
+    // Run 01M3XT03CZ: 13 rendered, 2 audited (2 were 404s, 9 were 500s).
     const lines = withAuditPageSettlement(
       [
         base,
         {
           service: "audit-pages",
           feature: "audit_page",
-          units: 6,
-          credits: 12,
+          units: 13,
+          credits: 26,
         },
       ],
-      5
+      2
     );
-    expect(lines[1]).toEqual({
-      service: "audit-pages",
-      feature: "audit_page",
-      units: 6,
-      credits: 12,
-    });
+    expect(lines).toEqual([
+      base,
+      { service: "audit-pages", feature: "audit_page", units: 2, credits: 4 },
+    ]);
   });
 
   test("a zero-page audit with no renders adds nothing", () => {
     expect(withAuditPageSettlement([base], 0)).toEqual([base]);
   });
 
-  test("the page count is the report.pages basis", () => {
+  test("a zero-page audit refunds every prepaid render", () => {
     expect(
-      auditedPageCount({ pages: [1, 2, 3], scanScope: { pagesCrawled: 19 } })
-    ).toBe(19);
+      withAuditPageSettlement(
+        [
+          base,
+          {
+            service: "audit-pages",
+            feature: "audit_page",
+            units: 3,
+            credits: 6,
+          },
+        ],
+        0
+      )
+    ).toEqual([base]);
+  });
+
+  test("the page count is the one the report shows as audited (#2399)", () => {
+    // "Coverage: audited 2 of 2 known pages", not "Scan: 4 pages crawled".
+    expect(
+      auditedPageCount({
+        pages: [1, 2, 3, 4],
+        totalPages: 2,
+        coverage: { auditedPages: 2 },
+        scanScope: { pagesCrawled: 4 },
+      })
+    ).toBe(2);
+    // A smart-audit union: this run's pages, not every known page.
+    expect(
+      auditedPageCount({
+        pages: [1, 2, 3],
+        totalPages: 40,
+        coverage: { auditedPages: 12 },
+      })
+    ).toBe(12);
+    // No coverage: the "N pages" header.
+    expect(
+      auditedPageCount({
+        pages: [1, 2, 3],
+        totalPages: 3,
+        scanScope: { pagesCrawled: 3 },
+      })
+    ).toBe(3);
     expect(auditedPageCount({ pages: [1, 2, 3] })).toBe(3);
   });
 });
