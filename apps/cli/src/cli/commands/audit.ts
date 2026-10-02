@@ -254,16 +254,17 @@ export function computePreflightAffordability(opts: {
   const pricing = `${base} base + ${AUDIT_PAGE_CREDITS} per audited page`;
   const requested = budget.requestedMaxPages.toLocaleString("en-US");
   const covered = budget.maxPages.toLocaleString("en-US");
+  const stopsAt = budget.maxPages === 1 ? "1 page" : `${covered} pages`;
   const resetOn = resetDateLabel(opts.resetAt);
   let noticeLines: string[] = [];
   if (budget.clamped && budget.limitedBy === "cap") {
     noticeLines = [
-      `⚠ [cloud] max_credits_per_audit = ${opts.maxCreditsPerAudit.toLocaleString("en-US")} covers ${covered} of the ${requested} pages requested (${pricing}), so this audit stops at ${covered} pages.`,
+      `⚠ [cloud] max_credits_per_audit = ${opts.maxCreditsPerAudit.toLocaleString("en-US")} covers ${covered} of the ${requested} pages requested (${pricing}), so this audit stops at ${stopsAt}.`,
       "  Raise max_credits_per_audit (0 = no cap) to audit more.",
     ];
   } else if (budget.clamped) {
     noticeLines = [
-      `⚠ Your balance of ${opts.balance.toLocaleString("en-US")} credits covers ${covered} of the ${requested} pages requested (${pricing}), so this audit stops at ${covered} pages.`,
+      `⚠ Your balance of ${opts.balance.toLocaleString("en-US")} credits covers ${covered} of the ${requested} pages requested (${pricing}), so this audit stops at ${stopsAt}.`,
       // #2183: the same facts the other CLI walls carry. `topUpUrl` is the
       // server's org-scoped link when there is one, so one click lands on
       // checkout for the org that is short rather than the last-used one.

@@ -63,6 +63,25 @@ describe("computePreflightAffordability (#1169, #2290)", () => {
     expect(r.noticeLines[1]).toContain(TOP_UP);
   });
 
+  test("a one-page clamp says page, not pages", () => {
+    const r = computePreflightAffordability({
+      balance: 52,
+      maxPages: 19,
+      maxCreditsPerAudit: 0,
+      topUpUrl: TOP_UP,
+    });
+    expect(r.maxPages).toBe(1);
+    expect(r.noticeLines[0]).toContain("so this audit stops at 1 page.");
+    expect(
+      computePreflightAffordability({
+        balance: 60,
+        maxPages: 19,
+        maxCreditsPerAudit: 0,
+        topUpUrl: TOP_UP,
+      }).noticeLines[0]
+    ).toContain("so this audit stops at 5 pages.");
+  });
+
   test("an odd balance rounds the page cap down, never past the balance", () => {
     const r = computePreflightAffordability({
       balance: 101,
