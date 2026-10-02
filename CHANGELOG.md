@@ -15,6 +15,18 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## v0.0.101 — 2026-10-02
+
+The CLI's credit estimates and spend line now match how signed-in audits are billed, and a balance that can't cover the page limit lowers the limit instead of running out part-way.
+
+### Changed
+
+- Signed-in audits are estimated and billed at 50 credits plus 2 per audited page, however the page was fetched: plain HTTP, a cloud browser render, the render cache, a `304 Not Modified`, or a plain fetch after a render failed. Each page is charged once per audit, and rendering does not change the price, so choose `--http` or rendering for accuracy, not to save credits. A 19-page audit costs 88 credits.
+- A cloud audit pays 1 credit per distinct external link it checks, and the same link on twenty pages is one check. Link checks the CLI runs for `squirrel audit`, and all internal links, stay free.
+- A balance that can't cover the page limit now lowers the limit, with a notice saying how many pages it covers, instead of running out part-way. `[cloud] max_credits_per_audit` works the same way: its default of 1,000 covers 475 pages. Below 52 credits (the base plus one page) the audit runs local-only.
+- `squirrel credits`, the out-of-credits messages and the consent prompt state the same price, and the cloud spend line after an audit matches what your balance was charged, for example `Cloud credits used: 88 (audit-base 50, 19 audited pages 38)`. Earlier versions are billed the same way, but their estimate and spend line can show less than was charged.
+- The [failed audits guide](https://docs.squirrelscan.com/guides/failed-audits#troubleshooting) has a section for each cause a cloud audit can fail with, saying what it means, how to check it and what to do.
+
 ## v0.0.100 — 2026-10-02
 
 Large audits use about half the memory and keep every page they crawl, an audit that cannot write its local store says so before it starts, and a round of rule fixes stops flagging module scripts, `<noscript>` fallbacks and CSP host wildcards that were never a problem.
