@@ -15,11 +15,27 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
-## [Unreleased]
+## v0.0.100 — 2026-10-02
+
+Large audits use about half the memory and keep every page they crawl, an audit that cannot write its local store says so before it starts, and a round of rule fixes stops flagging module scripts, `<noscript>` fallbacks and CSP host wildcards that were never a problem.
+
+### Changed
+
+- Large audits use about half the memory. The rules phase no longer holds every page's findings until the report, and the report no longer reads every page body back out of the local store. A 4,000-page audit of 1.5 MB pages peaked at about 3 GB, down from about 5.8 GB, and the report step is several times faster. Findings and scores are unchanged.
+- The local content store's 1 GB cap is configurable: `[storage] content_store_max_bytes` in `squirrel.toml` takes a byte count or a size such as `"4GB"`, and `SQUIRREL_CONTENT_STORE_MAX_BYTES` sets it for one run. The default is still 1 GB. `squirrel self doctor` shows the store's size, the cap and the last eviction, and warns when the store is over the cap.
 
 ### Fixed
 
+- An audit never evicts its own pages from the local content store. Once a crawl outgrew the cap, the store pruned the audit's earliest pages before the rules read them back, and those pages quietly dropped out of the audit. An audit now keeps every page it stored until it finishes, even past the cap, and the next one prunes the store back down. When pages were evicted earlier, a re-audit requests them again in full and says how many, and `squirrel report` and a resumed audit say how many are missing.
+- An audit whose local store it cannot write now stops before it starts, with one line naming the file, why (owned by root after a `sudo` run, blocked by a coding agent's sandbox, read-only, a directory, damaged, disk full) and the command that fixes it. Before, it failed partway with `attempt to write a readonly database`, or fetched every page, saved none and ended with a bare "No pages were crawled". Nothing is charged when the check fails (#403).
+- A signed-in audit that fails within its first second, or whose terminal is closed, now shows as failed or cancelled in your dashboard. Before, it could be flipped back to running and an hour later marked "stopped reporting progress". Closing the terminal now cancels the run, the same as Ctrl-C.
 - Pages that embed fonts as base64 in a `<style>` block no longer stall the audit. `a11y/color-contrast` read that CSS in quadratic time, so a chat widget's 428KB of `@font-face` data held one page for over a minute; the same page now takes milliseconds, with the same findings. `links/tel-mailto` had the same flaw on a mailto link wrapped around a long unbroken run of text.
+- `perf/inp-hints`, `perf/render-blocking` and `perf/critical-request-chains` no longer count `<script type="module">` as render-blocking. Module scripts are deferred by default, `nomodule` scripts never run in a modern browser, and scripts with a non-JavaScript type (consent-gated `text/plain`, Partytown) never block either. The three rules now agree on which scripts block. Thanks to @deniskern for the report (#424).
+- Rules no longer report content inside `<noscript>` as if it loads or renders. Tracking pixels, GTM iframes, and fallback images and stylesheets placed there for visitors without JavaScript stopped showing up as missing alt text, untitled frames, missing SRI and the like, on roughly 30 rules. Thanks to @deniskern for the report (#434).
+- `a11y/aria-required-children` accepts the implicit roles of native elements, so `<input type="radio">` inside `role="radiogroup"` counts as a radio, and the same goes for options, list items, rows and cells. Thanks to @deniskern for the report (#435).
+- `security/csp` no longer calls a host wildcard like `https://*.example.com` a bare `*`; a bare `*` host still warns (#427).
+- `perf/source-maps` reports a source map from a shared bundle once, listing every page that loads it, with a separate finding per section bundle, instead of one finding per page.
+- `crawl/sitemap-domain` and the `sitemap-orphans` checks list a 50-URL sample with the exact count. A 100,000-URL sitemap used to make a 12 MB JSON report on its own; it is now about 50 KB, and the orphan count no longer stops at 10,000.
 
 ## v0.0.99 — 2026-09-30
 
