@@ -130,12 +130,14 @@ To see where memory goes, set `SQUIRREL_STREAM_PHASE_MEM=1`. Each sub-phase of
 the rules pass then prints its heap after a forced collection:
 
 ```text
-[stream] universe end heapUsed=285MB external=51MB rss=915MB
-[stream] page-rules end heapUsed=287MB external=56MB rss=798MB
+[stream] universe end heapSize=373MB heapUsed=151MB external=190MB rss=707MB
+[stream] page-rules end heapSize=333MB heapUsed=451MB external=146MB rss=1029MB
 ```
 
-Read `heapUsed`, not `rss`. Under memory pressure macOS compresses pages and the
-resident figure stops tracking what the process actually holds.
+Read `heapSize`, not `rss`. Under memory pressure macOS compresses pages and the
+resident figure stops tracking what the process actually holds. `heapUsed` is
+printed too, but on Bun it lags or misses string memory, and retained page text
+is usually what you are looking for.
 
 ## Rules that run once per template
 

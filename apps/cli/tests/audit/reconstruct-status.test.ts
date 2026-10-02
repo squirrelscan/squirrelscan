@@ -118,7 +118,8 @@ function smartMerge(
   coverage: SmartMergeOverride["coverage"]
 ): SmartMergeOverride {
   return {
-    unionRuleResults: new Map<string, RuleRunResult>(),
+    carriedRuleResults: new Map<string, RuleRunResult>(),
+    removedUrls: new Set<string>(),
     coverage,
     carriedLastSeen: new Map<string, number>(),
   };

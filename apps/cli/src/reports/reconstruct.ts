@@ -1,6 +1,8 @@
 // Reconstruct AuditReport from SQLite storage
 // Rebuilds full report structure from crawl data
 
+import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+
 import { detachFromPage } from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
@@ -48,7 +50,25 @@ function rateLimitedHosts(baseUrl: string, rateLimitedCount: number): string[] {
 }
 
 export interface SmartMergeOverride {
-  unionRuleResults: Map<string, RuleRunResult>;
+  /**
+   * The CARRIED half of the smart-audit union, per rule (#2343). The fresh half
+   * is joined in below from this crawl's own `rule_results` rows, which this
+   * function reads anyway — keeping a second copy of them alive from the rules
+   * phase to here was the audit's largest retained term.
+   */
+  carriedRuleResults: Map<string, RuleRunResult>;
+  /** Normalized URLs that returned 404/410; their fresh checks are not scored. */
+  removedUrls: Set<string>;
+  /**
+   * This run's SITE-scope checks, per rule, as the rules produced them. Bounded
+   * by the rule count, unlike the page checks. Needed because `rule_results`
+   * files every site check under `page_url = ''`, so a site check that names a
+   * page of its own (integrity/known-malicious-url emits one per URL) reads back
+   * with no `pageUrl`: it would escape the 404/410 filter below and collapse
+   * distinct scoring buckets into one. The in-memory union never lost it.
+   * Absent = take the site checks from `rule_results` as read.
+   */
+  freshSiteChecks?: ReadonlyMap<string, CheckResult[]>;
   coverage: {
     auditedPages: number;
     knownPages: number;
@@ -60,6 +80,64 @@ export interface SmartMergeOverride {
     unrenderedFindings?: number;
   };
   carriedLastSeen: Map<string, number>;
+}
+
+/**
+ * Rebuild the smart-audit UNION per rule: this crawl's own checks (read back from
+ * `rule_results`, minus the ones on pages that returned 404/410) followed by the
+ * carried checks the merge replayed (#2343).
+ *
+ * This is the join that lets the rules phase stop holding its output. It is the
+ * same content, in the same order, the old in-memory union had: the fresh half
+ * was `ruleResultsMap`, which is what those rows were written from, and
+ * `buildScoringResultsFromMerged` appended the carried half after it. What DOES
+ * change is the rule ORDER — `rule_results` comes back `ORDER BY rule_id`, where
+ * the union was in first-seen-rule order — so a smart-audit report's `ruleResults`
+ * keys are now in the same (alphabetical) order as a non-smart one's, which is
+ * the order every other reader of this function already sees.
+ *
+ * Rules that only carried (nothing fresh this run) are appended after the fresh
+ * ones, which is where the union put them too.
+ */
+export function joinSmartUnion(
+  fresh: Map<string, CheckResult[]>,
+  smartMerge: SmartMergeOverride
+): Array<[string, CheckResult[]]> {
+  const { carriedRuleResults, removedUrls, freshSiteChecks } = smartMerge;
+  // Checks naming a removed page are not scored; ones with no page pass.
+  const notRemoved = (checks: CheckResult[]) =>
+    removedUrls.size === 0
+      ? checks
+      : checks.filter((c) => !(c.pageUrl && removedUrls.has(c.pageUrl)));
+  const out: Array<[string, CheckResult[]]> = [];
+  for (const [ruleId, stored] of fresh) {
+    // Page rows first, in the order they were written (crawl order), then the
+    // site checks, which the rules phase wrote after every page: the order the
+    // in-memory union merged them in. A stored row with no pageUrl is a site
+    // check; the in-memory copy replaces it so it keeps its own pageUrl.
+    const site = freshSiteChecks?.get(ruleId);
+    const kept = notRemoved(
+      site
+        ? [...stored.filter((c) => c.pageUrl !== undefined), ...site]
+        : stored
+    );
+    const carried = carriedRuleResults.get(ruleId)?.checks as
+      | CheckResult[]
+      | undefined;
+    out.push([ruleId, carried?.length ? [...kept, ...carried] : kept]);
+  }
+  for (const [ruleId, r] of carriedRuleResults) {
+    if (fresh.has(ruleId)) continue;
+    // A rule with neither fresh nor carried checks still belongs in the report
+    // when the union had an entry for it: its `syntheticPassCount` is what keeps
+    // clean carried pages in the pass-ratio denominator. Site checks with no
+    // stored rows cannot happen on the CLI path (they are written before the
+    // merge), but they would belong to the fresh half, so they lead here too.
+    const site = notRemoved(freshSiteChecks?.get(ruleId) ?? []);
+    const carried = r.checks as CheckResult[];
+    out.push([ruleId, site.length ? [...site, ...carried] : carried]);
+  }
+  return out;
 }
 
 function computeSitemapCoverage(
@@ -295,25 +373,104 @@ export function reconstructReport(
     }> = [];
     const pageStatuses: Array<{ status: number }> = [];
 
+    // #2343: every scalar this walk wants off a parsed page was already computed
+    // while the DOM was live, and now lands in `page_features`, so the second
+    // full parse per page is gone.
+    //
+    // `getPageFeaturesPage` is keyset-ordered by normalized_url ASC and
+    // `getPages` orders the same way, so the two walks advance together and the
+    // buffer never holds more than one read's worth. They are NOT the same set:
+    // a page outside the rule universe (a WAF interstitial, a non-HTML body) has
+    // no features row, and neither does any page stored before schema v30 — so
+    // this is a lookup with a fallback, not a zip. A miss re-parses exactly as
+    // before, which is also what makes an ordering disagreement between SQLite's
+    // BINARY collation and JS string `<` (possible only outside the BMP) cost
+    // nothing but the parse it was avoiding.
+    const featureBuf = new Map<string, PageFeatureRow>();
+    let featureCursor: string | undefined;
+    let featuresExhausted = false;
+
     for (let offset = 0; ; offset += batchSize) {
       // Fails rather than degrading: the whole-crawl read this replaced
       // propagated its StorageError too, and ending a BATCHED walk early would
       // publish a confident report over a truncated page set instead.
-      const batch = yield* storage.getPages(crawlId, {
+      //
+      // Without bodies (#2343): the stored scalars below are what the walk
+      // reads, and a body is fetched only for a page that has none. Reading
+      // every body regardless made this walk the audit's memory peak.
+      const batch = yield* storage.getPagesWithoutBodies(crawlId, {
         limit: batchSize,
         offset,
       });
       if (batch.length === 0) break;
 
       for (const page of batch) {
+        // Advance the features walk to (at least) this page. Degrades to "no
+        // row" rather than failing the report: the fallback parse produces the
+        // same answer, just slower.
+        while (
+          !featuresExhausted &&
+          (featureCursor === undefined || featureCursor < page.normalizedUrl)
+        ) {
+          const rows = yield* storage
+            .getPageFeaturesPage(crawlId, {
+              after: featureCursor,
+              limit: batchSize,
+            })
+            .pipe(
+              Effect.catchAll(() => Effect.succeed([] as PageFeatureRow[]))
+            );
+          if (rows.length === 0) {
+            featuresExhausted = true;
+            break;
+          }
+          for (const row of rows) featureBuf.set(row.normalizedUrl, row);
+          featureCursor = rows[rows.length - 1]!.normalizedUrl;
+          if (rows.length < batchSize) featuresExhausted = true;
+        }
+        const features = featureBuf.get(page.normalizedUrl) ?? null;
+        // Consume it: every features row's URL is a stored page's URL, so the
+        // buffer drains in step with the page walk instead of accumulating.
+        if (features) featureBuf.delete(page.normalizedUrl);
+
         coverageInputs.push({
           url: page.normalizedUrl,
           finalUrl: page.finalUrl,
           statusCode: page.status,
         });
         pageStatuses.push({ status: page.status });
-        // Parse page HTML if available
-        const parsed = page.html ? parsePageRecord(page) : null;
+        // The stored scalars, or — only when this page has none — the parse they
+        // replaced (#2343). `reportScalars` is null on a row written before
+        // schema v30, so an audit stored by an older binary still reports the
+        // same way, at the same cost.
+        const scalars = features?.reportScalars ?? null;
+        const withBody = scalars
+          ? null
+          : yield* storage.getPage(crawlId, page.normalizedUrl);
+        const parsed = withBody?.html ? parsePageRecord(withBody) : null;
+        const summarySignal = scalars
+          ? {
+              title: features?.title ?? null,
+              description: features?.description ?? null,
+              ogTitle: scalars.ogTitle,
+              ogImage: scalars.ogImage,
+              twitterCard: scalars.twitterCard,
+              schemaTypeCount: features?.schemaTypes.length ?? 0,
+              h1Count: scalars.h1Count,
+              thinContent: scalars.thinContent,
+            }
+          : parsed
+            ? {
+                title: parsed.meta.title,
+                description: parsed.meta.description,
+                ogTitle: parsed.og.title,
+                ogImage: parsed.og.image,
+                twitterCard: parsed.twitter.card,
+                schemaTypeCount: parsed.schema.types.length,
+                h1Count: parsed.h1.count,
+                thinContent: parsed.content.isThinContent,
+              }
+            : null;
 
         // Image appearances still drive `summary.missingAltText`, which IS
         // emitted. The per-page LINK query that used to sit here, and the
@@ -329,19 +486,20 @@ export function reconstructReport(
         const pageChecks = ruleResultsByPage.get(page.normalizedUrl) ?? [];
 
         // Build summary data
-        if (parsed) {
-          if (!parsed.meta.title)
+        if (summarySignal) {
+          if (!summarySignal.title)
             summary.missingTitles.push(page.normalizedUrl);
-          if (!parsed.meta.description)
+          if (!summarySignal.description)
             summary.missingDescriptions.push(page.normalizedUrl);
-          if (!parsed.og.title && !parsed.og.image)
+          if (!summarySignal.ogTitle && !summarySignal.ogImage)
             summary.missingOgTags.push(page.normalizedUrl);
-          if (!parsed.twitter.card)
+          if (!summarySignal.twitterCard)
             summary.missingTwitterCards.push(page.normalizedUrl);
-          if (!parsed.schema.types.length)
+          if (!summarySignal.schemaTypeCount)
             summary.missingSchemas.push(page.normalizedUrl);
-          if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
-          if (parsed.content.isThinContent)
+          if (summarySignal.h1Count > 1)
+            summary.multipleH1s.push(page.normalizedUrl);
+          if (summarySignal.thinContent)
             summary.thinContentPages.push(page.normalizedUrl);
         }
 
@@ -361,14 +519,36 @@ export function reconstructReport(
         // description (`pickHomepageSummary`). Everything else the parse
         // produced had no reader and is no longer carried (#1938).
         //
-        // Detached because each of those strings is a SLICE of this page's html,
-        // and in JSC a retained slice pins the whole buffer it was cut from
-        // (#240). The batch is dropped a few lines later, so an attached title
-        // would hold its page's megabyte. Measured on ~1 MB pages: 77.5 MB
-        // retained across 80 pages attached, 2.1 MB detached.
-        const kept = parsed
-          ? detachFromPage({ meta: parsed.meta, og: parsed.og }, "report-page")
-          : null;
+        // From the stored scalars when there are any (#2343) — those came out of
+        // SQLite, so they are already standalone strings and there is nothing to
+        // detach from. The parse branch still detaches: each of those strings is
+        // a SLICE of this page's html, and in JSC a retained slice pins the whole
+        // buffer it was cut from (#240). The batch is dropped a few lines later,
+        // so an attached title would hold its page's megabyte. Measured on ~1 MB
+        // pages: 77.5 MB retained across 80 pages attached, 2.1 MB detached.
+        const kept = scalars
+          ? {
+              meta: {
+                title: features?.title ?? null,
+                description: features?.description ?? null,
+                canonical: features?.canonical ?? null,
+                robots: scalars.metaRobots,
+              },
+              og: {
+                title: scalars.ogTitle,
+                description: scalars.ogDescription,
+                url: scalars.ogUrl,
+                type: scalars.ogType,
+                image: scalars.ogImage,
+                siteName: scalars.ogSiteName,
+              },
+            }
+          : parsed
+            ? detachFromPage(
+                { meta: parsed.meta, og: parsed.og },
+                "report-page"
+              )
+            : null;
 
         const pageAudit: PageAudit = {
           url: page.url,
@@ -446,13 +626,11 @@ export function reconstructReport(
     // synthetic "pass" rows to drop here.
     const ruleResults: Record<string, ReportRuleResult> = {};
     const ruleResultsMap = new Map<string, ReportRuleResult>();
+    // Scoring needs `syntheticPassCount`, which `ReportRuleResult` has no room
+    // for; only the smart path populates it.
+    const scoringResults = new Map<string, RuleRunResult>();
     const ruleSource: Iterable<[string, CheckResult[]]> = smartMerge
-      ? Array.from(smartMerge.unionRuleResults).map(
-          ([ruleId, r]): [string, CheckResult[]] => [
-            ruleId,
-            r.checks as CheckResult[],
-          ]
-        )
+      ? joinSmartUnion(ruleResultsByRuleId, smartMerge)
       : ruleResultsByRuleId;
 
     for (const [ruleId, checks] of ruleSource) {
@@ -503,13 +681,33 @@ export function reconstructReport(
 
       ruleResults[ruleId] = result;
       ruleResultsMap.set(ruleId, result);
+      if (smartMerge) {
+        // Meta from the union (or the registry), NOT from `result.meta` — the
+        // report's meta is the trimmed display copy, and scoring reads the real
+        // rule meta. A rule in neither is one the old union had no entry for
+        // either, so it is skipped rather than scored on a fabricated meta.
+        const carried = smartMerge.carriedRuleResults.get(ruleId);
+        const scoringMeta = carried?.meta ?? rule?.meta;
+        if (scoringMeta) {
+          scoringResults.set(ruleId, {
+            meta: scoringMeta,
+            checks,
+            ...(carried?.syntheticPassCount !== undefined
+              ? { syntheticPassCount: carried.syntheticPassCount }
+              : {}),
+          });
+        }
+      }
     }
 
     // 13. Calculate health score.
-    // Smart audits: score over the UNION map (includes carried fails + synthetic
-    // passes for clean carried pages) so a partial re-audit does not inflate.
+    // Smart audits: score over the UNION (this run's checks minus removed pages,
+    // plus carried fails, plus the synthetic-pass counts for clean carried pages)
+    // so a partial re-audit does not inflate. `scoringResults` is the same rule
+    // set and the same checks as `ruleResultsMap`; it exists only because the
+    // synthetic-pass count has nowhere to live on a `ReportRuleResult`.
     const healthScore = smartMerge
-      ? calculateHealthScore({ results: smartMerge.unionRuleResults })
+      ? calculateHealthScore({ results: scoringResults })
       : calculateHealthScore({ results: ruleResultsMap });
 
     const resourceSizes = {

@@ -181,11 +181,14 @@ describe("a reclaimed audit refuses to render (#1912)", () => {
     // confident empty report built from pre-retirement metadata.
     const { store, old } = await twoAudits();
 
+    // The report's page walk reads through getPagesWithoutBodies (#2343).
     let retired = false;
-    const realGetPages = store.getPages.bind(store);
-    (store as unknown as { getPages: typeof store.getPages }).getPages = ((
-      ...args: Parameters<typeof realGetPages>
-    ) => {
+    const realGetPages = store.getPagesWithoutBodies.bind(store);
+    (
+      store as unknown as {
+        getPagesWithoutBodies: typeof store.getPagesWithoutBodies;
+      }
+    ).getPagesWithoutBodies = ((...args: Parameters<typeof realGetPages>) => {
       if (!retired) {
         retired = true;
         Effect.runSync(
@@ -193,7 +196,7 @@ describe("a reclaimed audit refuses to render (#1912)", () => {
         );
       }
       return realGetPages(...args);
-    }) as typeof store.getPages;
+    }) as typeof store.getPagesWithoutBodies;
 
     const result = await Effect.runPromise(
       Effect.either(reconstructReport(store, old, undefined))
