@@ -86,6 +86,11 @@ import {
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
+import { retainGlobalContentStore } from "@/crawler/storage/content-store";
+import {
+  warnEvictedPages,
+  warnRefetchedPages,
+} from "@/crawler/storage/eviction-notice";
 import { getGlobalLinkCache } from "@/crawler/storage/link-cache";
 import {
   checkAuditStores,
@@ -845,6 +850,13 @@ export async function runAudit(
     // Domain stats: a flat-charged, credited, report-only cloud call (STEP 3.2).
     let domainStatsCredits = 0;
 
+    // #2342: this project's content-store cap, and a lease that stops the
+    // store's LRU evicting this audit's own pages before the rules phase reads
+    // them back. Released in the finally below.
+    const releaseContentStore = retainGlobalContentStore({
+      configMaxBytes: mergedConfig.storage.content_store_max_bytes,
+    });
+
     try {
       // ============================================
       // STEP 1: CRAWL
@@ -1147,6 +1159,7 @@ export async function runAudit(
         if (shouldResume) {
           // Resume interrupted crawl
           logger.info(`resuming interrupted crawl ${existingCrawl.id}`);
+          await warnEvictedPages(storage, existingCrawl.id, "resume");
           await Effect.runPromise(crawler.resumeFromStorage(existingCrawl.id));
           crawlId = existingCrawl.id;
         } else {
@@ -1216,6 +1229,8 @@ export async function runAudit(
       await Effect.runPromise(
         storage.updateCrawl(crawlId, { status: "crawled" })
       );
+
+      warnRefetchedPages(storage);
 
       // ============================================
       // POST-CRAWL: STREAMED PIPELINE (#1913)
@@ -2075,6 +2090,7 @@ export async function runAudit(
       if (eventsFiber) {
         await Effect.runPromise(Fiber.interrupt(eventsFiber));
       }
+      releaseContentStore();
       await Effect.runPromise(storage.close());
     }
   } catch (error) {

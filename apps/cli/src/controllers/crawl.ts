@@ -24,6 +24,11 @@ import {
 } from "@/controllers/types";
 import { createCrawler } from "@/crawler/core";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
+import { retainGlobalContentStore } from "@/crawler/storage/content-store";
+import {
+  warnEvictedPages,
+  warnRefetchedPages,
+} from "@/crawler/storage/eviction-notice";
 import {
   checkAuditStores,
   formatStoreProblems,
@@ -229,6 +234,11 @@ export async function runCrawl(
     logger.debug("creating storage", projectName);
 
     const storage = await Effect.runPromise(createStorage({ projectName }));
+    // #2342: the project's cap, and a lease so the crawl's own pages are not
+    // evicted while it runs. Released in the finally below.
+    const releaseContentStore = retainGlobalContentStore({
+      configMaxBytes: config.storage.content_store_max_bytes,
+    });
 
     try {
       // Resolve user-agent: empty string = random browser UA, pinned per
@@ -363,6 +373,7 @@ export async function runCrawl(
       if (shouldResume) {
         // Resume interrupted crawl
         logger.info(`resuming interrupted crawl ${existingCrawl.id}`);
+        await warnEvictedPages(storage, existingCrawl.id, "resume");
         await Effect.runPromise(crawler.resumeFromStorage(existingCrawl.id));
         crawlId = existingCrawl.id;
       } else {
@@ -411,6 +422,7 @@ export async function runCrawl(
       await Effect.runPromise(
         storage.updateCrawl(crawlId, { status: "crawled" })
       );
+      warnRefetchedPages(storage);
 
       // Get final stats
       const stats = await Effect.runPromise(storage.getStats(crawlId));
@@ -441,6 +453,7 @@ export async function runCrawl(
         limitReached,
       });
     } finally {
+      releaseContentStore();
       await Effect.runPromise(storage.close());
     }
   } catch (error) {

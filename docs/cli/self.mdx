@@ -253,6 +253,20 @@ Passed: 5 | Warnings: 1 | Failed: 0
 - Settings file validity
 - Cache size and location
 - Update status
+- Content store size, its cap and the last eviction
+
+The content store line reads like this:
+
+```text
+[OK] Content store: 812.4 MB in 5,210 entries, cap 1.0 GB; last eviction 3h ago (1,204 entries, 205.3 MB)
+```
+
+It warns when the store is over its cap, which happens after an audit larger
+than the cap (an audit never evicts its own pages): the next audit evicts the
+least recently used pages first. Change the cap with
+[`[storage] content_store_max_bytes`](/configuration/storage#content-store-max-bytes)
+or `SQUIRREL_CONTENT_STORE_MAX_BYTES`. The cap shown is the default or the
+environment variable; a project's `squirrel.toml` applies during its own audits.
 
 ### Exit codes
 

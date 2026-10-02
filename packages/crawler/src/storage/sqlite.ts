@@ -55,6 +55,17 @@ import { StorageError } from "./types";
 export interface ContentStoreAdapter {
   put(content: string, contentType: string): string;
   getString(hash: string): string | null;
+  /**
+   * Presence check that neither reads nor touches the body. Optional: the
+   * eviction census falls back to `getString` without it (#2342).
+   */
+  has?(hash: string): boolean;
+  /**
+   * Mark these bodies recently used without reading them, so a size cap's LRU
+   * keeps them while the caller still needs them (#2342). Optional: a store with
+   * no eviction has nothing to protect.
+   */
+  touch?(hashes: readonly string[]): number;
 }
 
 // Schema version - increment when schema changes.
@@ -1096,6 +1107,11 @@ export class SQLiteStorage implements CrawlStorage {
   private db: Database | null = null;
   private readonly path: string;
   private readonly contentStore: ContentStoreAdapter | null;
+  /**
+   * URLs whose cached entry was skipped because the content store had evicted
+   * its body (#2342). See {@link getCachedPage}.
+   */
+  private readonly evictedCacheEntries = new Set<string>();
 
   constructor(path: string = ":memory:", contentStore?: ContentStoreAdapter) {
     this.path = path;
@@ -1791,7 +1807,100 @@ export class SQLiteStorage implements CrawlStorage {
           | Record<string, unknown>
           | undefined;
         if (!row) return null;
-        return this.rowToPageRecord(row);
+        const page = this.rowToPageRecord(row);
+        // The body went to the content store and the store's size cap has
+        // since evicted it (#2342). Reusing the entry would answer a 304 with a
+        // page that has no HTML, which then drops out of every rule without a
+        // word. A miss makes the crawler fetch it in full instead.
+        if (this.isBodyEvicted(page)) {
+          this.evictedCacheEntries.add(normalizedUrl);
+          return null;
+        }
+        // A row from before `html_hash` existed (schema < 28) cannot say
+        // whether its body went to the store. An HTML page with a content hash
+        // and no body either lost it or never had one, and fetching it in full
+        // is right both ways. Not counted as an eviction: it may not be one.
+        if (
+          this.contentStore !== null &&
+          page.html === null &&
+          !page.htmlHash &&
+          !!page.contentHash &&
+          // No content type counts: the crawler sniffs headerless HTML too.
+          (!page.contentType || /html/i.test(page.contentType))
+        ) {
+          return null;
+        }
+        return page;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * True when a page's body was written to the content store and is no longer
+   * there. `htmlHash` is set only on the content-store path, so an inline or
+   * bodiless page (a redirect, a non-HTML response) never reads as evicted.
+   */
+  private isBodyEvicted(page: PageRecord): boolean {
+    return this.contentStore !== null && page.html === null && !!page.htmlHash;
+  }
+
+  /**
+   * How many cached entries this instance skipped because their body had been
+   * evicted, and so fetched again in full (#2342).
+   */
+  evictedCacheEntryCount(): number {
+    return this.evictedCacheEntries.size;
+  }
+
+  /**
+   * Mark every body this crawl stored as recently used, without reading any
+   * (#2342). A resumed crawl calls it under its retention lease: the pages
+   * stored before the interruption are skipped as done and read again only in
+   * the rules phase, so without this the resumed crawl's own puts could evict
+   * them first. Returns how many bodies were still there.
+   */
+  retainPageBodies(crawlId: string): Effect.Effect<number, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const store = this.contentStore;
+        if (!store?.touch) return 0;
+        const rows = this.getDb()
+          .prepare(
+            "SELECT content_hash FROM pages WHERE crawl_id = ? AND html IS NULL AND content_hash IS NOT NULL"
+          )
+          .all(crawlId) as Array<{ content_hash: string }>;
+        return store.touch(rows.map((r) => r.content_hash));
+      },
+      catch: (e) => StorageError.write(e),
+    });
+  }
+
+  /**
+   * Of a crawl's pages whose body lives in the content store, how many are no
+   * longer there (#2342). A presence check per page, no body reads, and it
+   * does not refresh anything's place in the store's eviction order.
+   */
+  countEvictedPageBodies(
+    crawlId: string
+  ): Effect.Effect<{ evicted: number; stored: number }, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const store = this.contentStore;
+        if (!store) return { evicted: 0, stored: 0 };
+        const rows = this.getDb()
+          .prepare(
+            "SELECT content_hash FROM pages WHERE crawl_id = ? AND html IS NULL AND html_hash IS NOT NULL AND content_hash IS NOT NULL"
+          )
+          .all(crawlId) as Array<{ content_hash: string }>;
+        let evicted = 0;
+        for (const { content_hash: hash } of rows) {
+          const present = store.has
+            ? store.has(hash)
+            : store.getString(hash) !== null;
+          if (!present) evicted++;
+        }
+        return { evicted, stored: rows.length };
       },
       catch: (e) => StorageError.read(e),
     });

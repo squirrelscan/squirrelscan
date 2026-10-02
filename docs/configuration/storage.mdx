@@ -1,17 +1,18 @@
 ---
 title: "Storage Configuration"
 icon: "hard-drive"
-description: "Control how many audits a project keeps on disk"
+description: "Control how many audits a project keeps on disk, and how large the shared content store can grow"
 ---
 
 The `[storage]` section controls how much of a project's audit history squirrelscan
-keeps locally.
+keeps locally, and how large the content store that holds crawled pages can grow.
 
 ## Configuration
 
 ```toml
 [storage]
 keep_audits = 3
+content_store_max_bytes = "4GB"
 ```
 
 ## Options
@@ -55,6 +56,60 @@ Retired 1 older audit and freed 95.2 MB inside project.db for the next audit
 ```
 
 The notice never goes to stdout, so it cannot get into `-f json` output.
+
+### `content_store_max_bytes`
+
+**Type:** `number` (bytes) or a size string such as `"4GB"`
+**Default:** `1GB`
+**Environment variable:** `SQUIRREL_CONTENT_STORE_MAX_BYTES` (overrides the config for one run)
+
+The size cap for the content store, `~/.squirrel/content-store.db`. Every page an
+audit crawls is stored there gzipped, and the rules and reports read it back from
+there. When the store grows past 90% of the cap, the least recently used pages
+are evicted until it is back at 80%.
+
+```toml
+[storage]
+content_store_max_bytes = "8GB"        # a size string: KB, MB, GB, TB (binary, 1 GB = 1024³ bytes)
+content_store_max_bytes = 8589934592   # or a whole number of bytes
+```
+
+```bash
+SQUIRREL_CONTENT_STORE_MAX_BYTES=8GB squirrel audit https://example.com
+```
+
+The cap counts compressed bytes. HTML usually compresses five to ten times, so
+the default holds roughly 5 to 10 GB of pages, a few thousand pages of a heavy
+storefront.
+
+**An audit never evicts its own pages.** While an audit or crawl runs, every page
+it stores or reads is protected from eviction, including by another audit
+running at the same time. A crawl larger than the cap therefore finishes with all
+of its pages, and the store can sit above the cap until the next audit, which
+evicts the least recently used pages back down to it before it stores anything.
+
+**The store is shared.** It belongs to the machine, not to a project, so the cap
+in force is the one set by whatever is auditing. To use one cap everywhere, set
+it in `~/squirrel.toml` or export the environment variable rather than setting it
+per project.
+
+**Eviction is reported, not silent.** Evicting an audit's pages after it finished
+does not change its findings, which are stored separately, but anything rebuilt
+from page HTML is missing for those pages. When that happens squirrelscan says
+how many pages are affected:
+
+- `squirrel report` on an audit whose pages were evicted since it ran.
+- A re-audit, which requests evicted pages again in full instead of reusing
+  them as unchanged, and says how many.
+- `squirrel audit --resume` and `squirrel crawl --resume`, when pages the
+  interrupted crawl stored are gone. Run without `--resume` to fetch them again.
+
+```text
+Content store: 812 of 4,000 pages stored for this audit are no longer in the local content store, most likely evicted by its size cap (now 1.0 GB). Findings are unaffected; anything rebuilt from page HTML is missing for them. Raise [storage] content_store_max_bytes or SQUIRREL_CONTENT_STORE_MAX_BYTES to keep more.
+```
+
+[`squirrel self doctor`](/cli/self#doctor) shows the store's size, the cap and
+the last eviction.
 
 ## What retiring an audit does and does not take
 
