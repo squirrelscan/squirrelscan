@@ -6,13 +6,13 @@ description: "Why an audit fetched nothing, and what to do about each cause"
 
 An audit fails when the crawl finishes without a single auditable page. There is no score and no issue list, because nothing was read.
 
-Every failed audit names the cause. The reason appears in the report, in the failure email, in `squirrel audit` output, and on the `get_audit_status` MCP tool as a short sentence plus a machine-readable code.
+Every failed audit names the cause. The reason appears in the report, in the failure email, in `squirrel audit` output, and on the `get_audit_status` MCP tool as a short sentence plus a machine-readable code. For a cloud audit, [troubleshooting by cause](#troubleshooting) below has a section for each one.
 
 <Note>Failed audits are refunded automatically. A run that fetched nothing does not cost you credits.</Note>
 
 ## Blocked is not failed
 
-If your site actively refused the crawler with a 403 or 429, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: allowlist the squirrelscan crawler in your WAF or bot protection (see [Firewall and WAF exceptions](/cloud/firewall)), turn off bot fight mode for the audit, or run the CLI from a trusted network.
+If your site actively refused the crawler with a 403 or 429, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: let the squirrelscan crawler through your WAF or bot protection without switching the protection off (see [bot protection or WAF challenge](#waf-challenge) and [Firewall and WAF exceptions](/cloud/firewall)), or run the CLI from a trusted network.
 
 ## The failure reasons
 
@@ -65,6 +65,220 @@ squirrel audit https://example.com --max-pages 1
 ```
 
 If the local run succeeds and the cloud run fails with `connection` or `http_4xx`, your origin or its CDN is treating our requests differently from yours.
+
+## Troubleshooting by cause \{#troubleshooting\}
+
+A failed cloud audit keeps a record of what it tried: each request, how long it waited, what came back, and whether our own rendering service was working at the time. The failure email and the audit's run page in the dashboard turn that record into three answers: what failed, which side the evidence points at, and what to try next. Each cause below has its own link, and the email and run page link to the one that applies.
+
+### Whose side it was on \{#attribution\}
+
+The run page says which side the evidence points at, and it only goes as far as the evidence does.
+
+| It says | What that means |
+|---|---|
+| **The site** | The requests we recorded failed at your site or its DNS, and nothing of ours was recorded failing. |
+| **squirrelscan** | Something of ours failed: the rendering service, a step of the audit, or the time we gave it. Your site was not the cause. |
+| **Both** | Our rendering service was failing during the run, and the site also failed, for example by not answering in time. We cannot say which one stopped the audit, so we tell you about both. |
+| **Unknown** | The record does not settle it. We say so rather than guess, and we never tell you your server is at fault on a guess. |
+
+Audits that failed before we started keeping these records only have the short reason, and the run page says that its details are limited.
+
+To check a result from your side, the run page has a **Technical details** section listing each attempt: the browser render, the direct fetch and the crawler's verdict, with the status or error, how long it waited against its time limit, and where a redirect pointed. When your site sits behind Cloudflare, an attempt also carries the `cf-ray` id of the response, which you can search for in your Cloudflare security events.
+
+### Refunds and retries \{#refunds-and-retries\}
+
+Failed audits are refunded automatically. The email and the run page show what our credit records hold for that run: refunded, not charged at all, or charged with the refund still to land. A refund normally lands within minutes. If a charge is still there later, send us the support reference from the run page.
+
+Once an audit has failed, nothing runs it again for you unless the site has recurring audits on:
+
+- **Recurring audits on.** The next scheduled audit runs at its usual time. If the cause is still there, it fails the same way.
+- **Recurring audits paused.** A schedule pauses itself after three failed audits in a row, or when the balance cannot cover a run (see [when a schedule pauses itself](/cloud/scheduled-audits#when-a-schedule-pauses-itself)). Nothing runs until you turn it back on under **Settings → Schedule**.
+- **No schedule.** The audit runs again only when you start it.
+
+Either way, once you have fixed the cause, **Run New Audit** on the run page starts a new one straight away.
+
+### DNS lookup failed \{#dns\}
+
+**What it means.** The site's hostname did not resolve to an address, so there was nothing to connect to. When our own lookup a moment later did not confirm it, the result reads as unknown: it may have been a passing resolver problem, on either side.
+
+**How to check.**
+
+- Look the name up from outside your network: `dig +short example.com` and `dig +short www.example.com`, or any online DNS lookup tool.
+- Check that the exact hostname you audited, bare or `www`, has an `A`, `AAAA` or `CNAME` record.
+- Check that the domain has not expired and that its nameservers are the ones your DNS host expects.
+
+**What to do.** Add or fix the record for the hostname you audit, or audit the hostname that does resolve: **Run New Audit** lets you change the address for one run, and adding it as a website makes it stick. After a nameserver or host move, wait for the change to propagate, then run the audit again.
+
+### TLS handshake failed \{#tls\}
+
+**What it means.** The server answered, but the secure connection could not be set up: the certificate expired, does not cover this hostname, is self-signed, or is missing part of its chain.
+
+**How to check.**
+
+- Open the site in a private browser window and look for a certificate warning.
+- From a terminal: `openssl s_client -connect example.com:443 -servername example.com` shows the chain the server sends and any verification error.
+- An online TLS checker reports the same problems with more explanation.
+
+**What to do.** Renew or reissue the certificate so it covers the exact hostname, bare and `www` if you use both, and serve the full chain including intermediates. Then run the audit again.
+
+### Connection refused or reset \{#connection\}
+
+**What it means.** We could not hold a connection to the server: it was refused, reset, or closed before any response arrived. A server that is down does this, and so does a firewall that drops requests from networks it does not recognise.
+
+**How to check.**
+
+- Load the site from a network you do not normally use, such as a phone on mobile data.
+- Check that the server listens on port 443 (or 80 for `http://`) on its public address.
+- Look in your firewall, host or CDN logs for refused connections at the time of the audit. Cloud audits come from Cloudflare's network, not from a fixed squirrelscan address (see [Firewall and WAF exceptions](/cloud/firewall)).
+
+**What to do.** Bring the server back up, or let squirrelscan through the firewall with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended) rather than an IP rule. Then run the audit again.
+
+### No response in time \{#timeout\}
+
+**What it means.** Our requests to the site got no response before their time limit ran out. On its own that does not tell us whether the server accepted the connection and then stalled, or never answered at all, so we do not claim either.
+
+**How to check.**
+
+- Time the page from outside your network: `curl -s -o /dev/null -w '%{time_starttransfer}\n' https://example.com/`. A first byte that takes many seconds is the problem.
+- Check server load, slow database queries and cold starts at the time of the audit.
+- Some firewalls hold unknown clients open without answering instead of refusing them. Check for a rule like that.
+- If the run page also says our rendering service failed, see [both sides failed](#rendering-service).
+
+**What to do.** Fix whatever makes the first response slow, or let the crawler past the firewall rule that holds it, then run the audit again. If the site is fast for you and the audit still times out, contact support with the reference from the run page.
+
+### Bot protection or WAF challenge \{#waf-challenge\}
+
+**What it means.** The site's bot protection answered our request with a challenge, such as a Cloudflare "Just a moment" page, instead of the page itself. We only say this when the failed response itself proved it: a challenge header or a challenge page in the response, not just a CDN name in a header. The run page names the protection when the response did.
+
+**How to check.**
+
+- Open your WAF or bot protection event log and filter to the time of the audit. On Cloudflare that is **Security → Events**, where you can also search for the `cf-ray` id listed in the run page's technical details.
+- Look for the rule or product that issued the challenge: bot fight mode, a managed challenge rule, or a custom rule.
+
+**What to do.** Keep the protection on and add a narrow exception for squirrelscan:
+
+1. In the dashboard, open the website's **Settings → Crawl** and add a custom request header with a long random value only you know, for example `X-Squirrelscan-Auth`. Custom request headers are a Pro plan feature.
+2. Add a WAF rule that skips the challenge only for requests carrying that header with that exact value. [Firewall and WAF exceptions](/cloud/firewall) has the rule for Cloudflare, nginx and other WAFs.
+3. Run the audit again.
+
+Avoid switching bot protection off for the whole site, and avoid allowlisting IP ranges: cloud audits leave from Cloudflare's shared addresses, so an IP rule opens your site to far more than squirrelscan. If your platform verifies crawlers with signed requests, [Web Bot Auth](/guides/web-bot-auth) is another way in.
+
+### Access denied (403) \{#access-denied\}
+
+**What it means.** The site answered `403 Forbidden`. The response did not say what refused us: it could be a WAF rule, a geographic or IP block, hotlink or referrer protection, or a page that really is private. Unlike a [challenge](#waf-challenge), a plain 403 does not prove bot protection, so we do not name one.
+
+**How to check.**
+
+- Fetch the page with an ordinary request: `curl -sI https://example.com/`. A 403 there too points at the server's own rules.
+- Look in your WAF, CDN and server logs for the 403 at the time of the audit and the rule that produced it.
+- Check for country or IP blocks. Cloud audits come from Cloudflare's network.
+
+**What to do.** Find the rule that returns the 403 and add an exception for squirrelscan keyed on a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended), the same way as for a [challenge](#waf-challenge). If the page is meant to be private, audit a public page instead.
+
+### Login required (401) \{#login-required\}
+
+**What it means.** The site answered `401 Unauthorized`: it wants credentials before it serves the page. Staging sites behind a password often do this. A cloud audit cannot sign in.
+
+**How to check.** Open the address in a private browser window. A login prompt or a password page confirms it.
+
+**What to do.**
+
+- Audit the public address of the site instead.
+- For a staging site you control, let requests that carry a secret header past the password check, and add that header under **Settings → Crawl**.
+- Or run the audit with the CLI from somewhere that can reach the site: `squirrel audit https://staging.example.com`.
+
+### Rate limited (429) \{#rate-limited\}
+
+**What it means.** The site answered `429 Too Many Requests`: a rate limit decided we were sending too much, often from a rule that counts requests per network rather than per visitor.
+
+**How to check.** Look for the rate limit rule in your CDN or WAF, and for 429s in its log at the time of the audit. See [rate-limited hosts](/guides/rate-limited-hosts) for how the crawler paces itself and backs off.
+
+**What to do.** Exempt squirrelscan from the rate limit with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended). That also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), and an authorised crawl still slows down when your server asks it to. Then run the audit again, or wait for the limit to reset first.
+
+### Page not found (404 or 410) \{#not-found\}
+
+**What it means.** The address we were asked to audit answered `404 Not Found` or `410 Gone`. The server is up, but there is no page at that address.
+
+**How to check.** Open the exact address from the run page in a browser. Check the hostname (bare or `www`), the path and any trailing slash.
+
+**What to do.** Publish the page, or audit the right address: **Run New Audit** lets you change it for one run, and adding the site's real home page as a website makes it stick. A site that moved to a new domain usually shows up as a [redirect to another site](#offsite-redirect) instead.
+
+### Other 4xx responses \{#client-error\}
+
+**What it means.** The site answered with a 4xx status other than 401, 403, 404, 410 or 429. The status is on the run page.
+
+**How to check.** Fetch the address yourself with `curl -sI https://example.com/` and compare the status. Look in your server logs for the request at the time of the audit.
+
+**What to do.** Fix the rule or route that returns that status for the address, then run the audit again.
+
+### Server error (5xx) \{#server-error\}
+
+**What it means.** The site answered with a server error of its own, such as `500` or `503`, for the pages we asked for.
+
+**How to check.** Look in your error logs and your hosting status page for the time of the audit. A `503` from a CDN while the origin is healthy can also be a protection rule. If the response was a challenge, the run page says so and [bot protection or WAF challenge](#waf-challenge) applies instead.
+
+**What to do.** Fix the error, then run the audit again once the site serves normally.
+
+### Redirected to another site \{#offsite-redirect\}
+
+**What it means.** The address redirected to a different site, and an audit does not follow a redirect off the address it was given. The run page and the email name the destination. Two common cases: the site moved to its own new domain, or it sends visitors to a sign-in page because it is password protected.
+
+**How to check.** Open the audited address in a private window and watch where it ends up, or run `curl -sIL https://example.com/ | grep -i '^location'`.
+
+**What to do.** Audit the canonical address, the one the site actually serves: add the destination as a website in the dashboard and audit it there. Audits of the old address keep failing while the redirect is in place. If the destination is a sign-in page, see [login required](#login-required).
+
+### Localhost or private address \{#private-address\}
+
+**What it means.** The hostname resolves to an address that only exists on your machine or your private network, such as `127.0.0.1`, `::1` or `192.168.x.x`. Local development hostnames often do this. A cloud audit runs on the internet and cannot reach it.
+
+**How to check.** Run `dig +short your-site.test` and look at the address it returns.
+
+**What to do.**
+
+- Audit it locally with the CLI, which runs on your machine and can reach it: `squirrel audit http://localhost:3000`. See [local audits](/guides/local-audits-cli).
+- Or deploy to a publicly reachable staging address and audit that. If the staging site should stay private, protect it with a secret header and add the header under **Settings → Crawl**.
+
+### Disallowed by robots.txt \{#robots\}
+
+**What it means.** The site's `robots.txt` tells crawlers not to fetch the address, and the audit respects it.
+
+**How to check.** Open `https://example.com/robots.txt` and look for a `Disallow` rule covering the audited path.
+
+**What to do.** Allow the path in `robots.txt`, or, for a site you own, turn off **Respect robots.txt** under **Settings → Crawl** (see [crawl settings](/dashboard/crawl-settings#respect-robotstxt)). Or point the audit at a path robots.txt permits.
+
+### Our rendering service failed \{#rendering-service\}
+
+**What it means.** Our headless browser service, which renders pages when rendering is on, failed or stopped answering during the run. That one is ours. The crawl falls back to fetching pages directly when the browser fails, so this alone rarely fails an audit.
+
+**Both sides failed.** When the site also failed during the same run, for example by not answering in time, the run page and the email say both. A busy or failing renderer and a slow site can each make the other look worse, so we do not pick one.
+
+**What to do.** Run the audit again. If it fails the same way while the run page shows our side working, the cause is the site's, and its own section above applies. If our side keeps failing, contact support with the reference from the run page.
+
+### Something failed on our side \{#our-side\}
+
+**What it means.** A step of ours failed after the site was reached, such as publishing the report. Your site was not the cause.
+
+**What to do.** Run the audit again. If it fails again, contact support with the reference from the run page.
+
+### The audit ran out of time \{#audit-timeout\}
+
+**What it means.** The site answered fine, but the audit did not finish within its time limit. Large crawls, slow pages and a `Crawl-delay` in `robots.txt` all make an audit take longer.
+
+**What to do.** Audit fewer pages, or narrow the crawl to the sections you care about with include patterns under **Settings → Crawl** (see [crawl settings](/dashboard/crawl-settings)). Then run it again.
+
+### The audit stalled \{#stalled\}
+
+**What it means.** The audit stopped making progress part way through, and we ended it. Your site is not the problem, and there is nothing for you to change.
+
+**What to do.** Run the audit again. If it stops in the same place twice, contact support with the reference from the run page, because that one is ours to fix.
+
+### Unknown cause \{#unknown\}
+
+**What it means.** We could not tell what made the audit fail, or whose side it was on.
+
+**How to check.** Load the site from outside your network, then run the same audit with the CLI from your machine: `squirrel audit https://example.com --max-pages 1`. A local run that works while the cloud run fails points at how your site treats requests from our network.
+
+**What to do.** Run the audit again. If it keeps failing, contact support with the reference from the run page: the run id and the audit id.
 
 ## When the CLI cannot write its local store
 
