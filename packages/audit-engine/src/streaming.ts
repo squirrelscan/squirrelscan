@@ -643,7 +643,20 @@ export function streamPageRules(
         batchMs: Date.now() - batchStart,
       });
 
-      if (batch.length < batchSize) break;
+      // Empty this batch's containers before the next read. The generator's
+      // frame keeps its last values after it finishes, so anything that keeps a
+      // finished pass reachable keeps its last batch too. In a long-lived
+      // process a stale conservative stack root does exactly that: measured
+      // 21.9 MB held at 10 x 384 KB pages (HTML, stored parse, parsed text),
+      // 2.4 MB once these are emptied (the last page's own locals).
+      const lastBatchSize = batch.length;
+      batch.length = 0;
+      toParse.length = 0;
+      parsedBatch.length = 0;
+      parsedByUrl.clear();
+      replayByUrl.clear();
+      keyByUrl.clear();
+      if (lastBatchSize < batchSize) break;
     }
 
     // Final marker when the last page didn't land on a heartbeat boundary —
