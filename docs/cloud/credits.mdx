@@ -74,7 +74,7 @@ Every signed-in audit has one flat price:
 
 A page is charged once per audit. Rendering it, serving it from a cache, or retrying a request never adds a second charge, and the same external link on twenty pages is one check. Run the audit again and it is charged again: it is a new audit.
 
-The page count is the one in the report's coverage line ("Coverage: audited 12 of 12 known pages"), or its page count when there is no coverage line. A URL the crawl fetched but could not audit, such as a `404` kept for its broken-link finding or a `500`, is not an audited page. A cloud render paid for one while the audit ran is refunded when the audit completes, so an audit's page charge always matches the pages its report shows.
+The page count is the one in the report's coverage line ("Coverage: audited 12 of 12 known pages"), or its page count when there is no coverage line. A URL the crawl fetched but could not audit, such as a `404` kept for its broken-link finding or a `500`, is not an audited page. A cloud render paid for one while the audit ran is refunded when the audit completes, so an audit's page charge always matches the pages its report shows. A re-audit is only charged for the pages it fetched itself: pages a [smart audit](/configuration#smart-audits) carries forward from an earlier audit are not charged again.
 
 Link checks are free in two cases: internal links (on the site you are auditing) always, and every link the CLI checks for an audit you run with `squirrel audit`. The external-link charge applies to [cloud audits](/guides/cloud-audits) with external link checking turned on, which is off by default.
 

@@ -444,9 +444,13 @@ export function withAuditPageSettlement(
 /**
  * Pages this run audited, as its report SHOWS them, which is what the server
  * settles the page charge on (#2290, #2399): the coverage line's audited count
- * ("Coverage: audited N of M known pages"), else the "N pages" header. Not the
- * crawl count (`scanScope.pagesCrawled`), which also counts error pages (a 404
- * kept for its broken-link finding) that were crawled and never audited.
+ * ("Coverage: audited N of M known pages"), else the "N pages" header.
+ *
+ * Never more than the pages this run fetched (`scanScope.pagesCrawled`, else
+ * `pages.length`): a smart re-audit's report also covers pages carried from
+ * earlier audits, and a carried page is never billed again. The crawl count is
+ * only that bound: it also counts error pages (a 404 kept for its broken-link
+ * finding) that were crawled and never audited.
  */
 export function auditedPageCount(report: {
   pages: readonly unknown[];
@@ -454,12 +458,9 @@ export function auditedPageCount(report: {
   coverage?: { auditedPages: number } | null;
   scanScope?: { pagesCrawled: number };
 }): number {
-  return (
-    report.coverage?.auditedPages ??
-    report.totalPages ??
-    report.scanScope?.pagesCrawled ??
-    report.pages.length
-  );
+  const fetched = report.scanScope?.pagesCrawled ?? report.pages.length;
+  const shown = report.coverage?.auditedPages ?? report.totalPages ?? fetched;
+  return Math.min(shown, fetched);
 }
 
 /**

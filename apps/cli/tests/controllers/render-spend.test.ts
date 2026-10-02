@@ -177,11 +177,20 @@ describe("withAuditPageSettlement (#2290)", () => {
     // A smart-audit union: this run's pages, not every known page.
     expect(
       auditedPageCount({
-        pages: [1, 2, 3],
+        pages: Array.from({ length: 12 }, (_, i) => i),
         totalPages: 40,
         coverage: { auditedPages: 12 },
       })
     ).toBe(12);
+    // Never more than this run fetched: coverage says 50, the crawl fetched 10.
+    expect(
+      auditedPageCount({
+        pages: [],
+        totalPages: 60,
+        coverage: { auditedPages: 50 },
+        scanScope: { pagesCrawled: 10 },
+      })
+    ).toBe(10);
     // No coverage: the "N pages" header.
     expect(
       auditedPageCount({
