@@ -140,7 +140,7 @@ Partial fixes are visible too. Each issue carries an occurrence count, the numbe
 Not every finding should be fixed. A structured-data rule might ask a local business for a physical street address, but a service-area business that visits customers should not invent a storefront address just to satisfy a rule. The right move is to decide, then record the decision so your team and the next audit have the context. Ask the agent to call `comment_on_issue` with the reasoning, for example: "this is a service-area business with no public storefront, so we are intentionally not adding a `PostalAddress`." The comment shows up in the dashboard thread against that issue.
 
 <Tip>
-Actual credit spend usually lands under the estimate. The number the agent shows you at the confirm step is an upper bound; an audit is billed as it runs (50 credits base plus 2 per rendered page), so a crawl that finds fewer pages costs less. See [Credits](/cloud/credits) for the pricing behind the estimate.
+Actual credit spend usually lands under the estimate. The number the agent shows you at the confirm step is an upper bound; an audit is billed as it runs (50 credits base plus 2 per audited page, plus 1 per external link the cloud checks), so a crawl that finds fewer pages costs less. See [Credits](/cloud/credits) for the pricing behind the estimate.
 </Tip>
 
 ## Sample prompts that worked

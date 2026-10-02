@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   consentEstimateLine,
+  estimateBalanceAfter,
   formatCloudSpendSummary,
   phaseTimingsFromError,
   resolveCloudRendering,
@@ -62,7 +63,87 @@ describe("phaseTimingsFromError (#871)", () => {
   });
 });
 
+describe("estimateBalanceAfter (#2290)", () => {
+  test("a post-services read only loses the end-of-run settlement", () => {
+    // Read after the crawl's renders: 100 − 50 base − 2 prepaid = 48, then 36
+    // settled for 18 more pages.
+    expect(
+      estimateBalanceAfter({
+        prefetchRead: 48,
+        afterBase: 50,
+        baseCharged: 50,
+        totalSpent: 88,
+        settled: 36,
+      })
+    ).toBe(12);
+  });
+
+  test("with only the register read, every charge after the base comes off", () => {
+    // Quick coverage skips the prefetch read: 100 → 50 after base, then 2
+    // prepaid and 36 settled.
+    expect(
+      estimateBalanceAfter({
+        prefetchRead: null,
+        afterBase: 50,
+        baseCharged: 50,
+        totalSpent: 88,
+        settled: 36,
+      })
+    ).toBe(12);
+  });
+
+  test("never negative, null when nothing was read, frozen when unmetered", () => {
+    expect(
+      estimateBalanceAfter({
+        prefetchRead: 10,
+        afterBase: null,
+        baseCharged: 50,
+        totalSpent: 100,
+        settled: 40,
+      })
+    ).toBe(0);
+    expect(
+      estimateBalanceAfter({
+        prefetchRead: null,
+        afterBase: null,
+        baseCharged: 50,
+        totalSpent: 88,
+        settled: 38,
+      })
+    ).toBeNull();
+    expect(
+      estimateBalanceAfter({
+        prefetchRead: null,
+        afterBase: 0,
+        baseCharged: 50,
+        totalSpent: 88,
+        settled: 38,
+        unlimited: true,
+      })
+    ).toBe(0);
+  });
+});
+
 describe("formatCloudSpendSummary", () => {
+  test("names the audited page count so the arithmetic is checkable (#2290)", () => {
+    const line = formatCloudSpendSummary({
+      lines: [
+        { service: "audit-base", feature: "audit_base", units: 1, credits: 50 },
+        {
+          service: "audit-pages",
+          feature: "audit_page",
+          units: 19,
+          credits: 38,
+        },
+      ],
+      totalSpent: 88,
+      balanceAfter: 412,
+    });
+    expect(line).toBe(
+      "☁ Cloud credits used: 88 (audit-base 50, 19 audited pages 38) · balance ~412"
+    );
+  });
+
   test("a render cache hit shows the render_cached (1cr) line, matching the ledger #279", () => {
     const line = formatCloudSpendSummary({
       lines: [{ service: "render_cached", credits: 1 }],
@@ -327,16 +408,17 @@ describe("login implies cloud consent (#368)", () => {
 });
 
 describe("consentEstimateLine (#191 up-front cost)", () => {
-  test("shows base + render cost, page ceiling, cap, and balance", () => {
+  test("shows base + per-page cost, page ceiling, cap, and balance", () => {
     const line = consentEstimateLine({
       maxPages: 25,
       balance: 17000,
       maxCredits: 1000,
     });
-    // Pricing v10: 50 audit base + computeCost("render", 25) = 2 × 25.
+    // Pricing v11 (#2290): 50 audit base + computeCost("audit_page", 25) = 2 × 25.
     expect(line).toContain("100 credits");
     expect(line).toContain("50 audit base");
-    expect(line).toContain("up to 25 pages");
+    expect(line).toContain("up to 25 audited pages");
+    expect(line).toContain("however the page is fetched");
     expect(line).toContain("up to 1000 credits/audit");
     expect(line).toContain("17,000"); // locale-formatted balance
   });
@@ -368,8 +450,8 @@ describe("consentEstimateLine (#191 up-front cost)", () => {
       balance: null,
       maxCredits: 0,
     });
-    expect(line).toContain("up to 1 page,");
-    expect(line).not.toContain("1 pages");
+    expect(line).toContain("up to 1 audited page (");
+    expect(line).not.toContain("1 audited pages");
   });
 });
 

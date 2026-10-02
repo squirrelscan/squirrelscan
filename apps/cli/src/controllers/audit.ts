@@ -25,6 +25,7 @@ import {
   type PageResultSink,
 } from "@squirrelscan/audit-engine";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
+import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
   createConditionalRenderDocumentFetcher,
@@ -214,9 +215,11 @@ export interface RunAuditOptions extends AuditOptions {
    * Resolver for this run's cloud run id (#1134), threaded onto render submits so
    * the render debit is attributed to the audit in the ledger. A resolver (not a
    * value) because CLI run registration is async and may resolve after the crawl
-   * starts — renders before it lands stay untagged, the rest are attributed.
+   * starts. Pricing v11 (#2290) bills an attributed render as the page's audit
+   * charge and an untagged one as a separate standalone render, so the resolver
+   * may return a promise that waits for register to settle.
    */
-  getRunId?: () => string | undefined;
+  getRunId?: () => string | undefined | Promise<string | undefined>;
   /**
    * Render strategy when rendering is on (#294): "auto" = HTTP-first hybrid
    * (render only client-side-rendered pages), "all" = render every HTML page.
@@ -304,7 +307,7 @@ export function resolveDocumentFetcher(
       ),
     onRenderCharged,
     // #1134: attribute render debits to the run. Resolver (not value) — CLI run
-    // registration is async, so it's read at each submit once the id lands.
+    // registration is async, so it's awaited at each submit (#2290).
     ...(options.getRunId ? { runId: options.getRunId } : {}),
   });
 
@@ -356,46 +359,98 @@ export interface CloudSpendLine {
 }
 
 /**
- * Fold the per-batch render charge splits into at most two spend lines —
- * render misses (`render`) and render_cached hits (`render_cached`) —
- * preserving the ACTUAL server debit. A cache hit then surfaces as its own
- * `render_cached` line (1cr) so the savings are visible, instead of being
- * lumped under `render` at the 2cr estimate. Exported for tests. #279
+ * Fold the per-batch render charge splits into spend lines, preserving the
+ * ACTUAL server debit. Inside a registered run (#2290) every billed url comes
+ * back as an `audit_page` line: the render IS the page's audit charge. A render
+ * that belonged to no run (or an older server) keeps the standalone split:
+ * render misses (`render`) and cache hits (`render_cached`), so a hit still
+ * surfaces as its own line. Exported for tests. #279
  */
 export function foldRenderSpendLines(
   breakdown: RenderChargeLine[]
 ): CloudSpendLine[] {
-  let renderUnits = 0;
-  let renderCredits = 0;
-  let cachedUnits = 0;
-  let cachedCredits = 0;
+  const totals = {
+    audit_page: { units: 0, credits: 0 },
+    render: { units: 0, credits: 0 },
+    render_cached: { units: 0, credits: 0 },
+  };
   for (const line of breakdown) {
-    if (line.feature === "render_cached") {
-      cachedUnits += line.units;
-      cachedCredits += line.credits;
-    } else {
-      renderUnits += line.units;
-      renderCredits += line.credits;
-    }
+    const bucket =
+      line.feature === "audit_page" || line.feature === "render_cached"
+        ? totals[line.feature]
+        : totals.render;
+    bucket.units += line.units;
+    bucket.credits += line.credits;
   }
   const lines: CloudSpendLine[] = [];
-  if (renderUnits > 0) {
+  if (totals.audit_page.units > 0) {
     lines.push({
-      service: "render",
-      feature: "render",
-      units: renderUnits,
-      credits: renderCredits,
+      service: "audit-pages",
+      feature: "audit_page",
+      ...totals.audit_page,
     });
   }
-  if (cachedUnits > 0) {
+  if (totals.render.units > 0) {
+    lines.push({ service: "render", feature: "render", ...totals.render });
+  }
+  if (totals.render_cached.units > 0) {
     lines.push({
       service: "render_cached",
       feature: "render_cached",
-      units: cachedUnits,
-      credits: cachedCredits,
+      ...totals.render_cached,
     });
   }
   return lines;
+}
+
+/**
+ * Add the run's end-of-audit page settlement to its spend lines (#2290).
+ *
+ * Pricing v11 bills 2 credits for every audited page. Pages rendered inside the
+ * run were billed when their render was submitted (the `audit_page` lines the
+ * crawl and the raw-vs-rendered prefetch already carry); the server bills the
+ * REST when the run completes, as one settlement charge for
+ * `pagesAudited − pages already billed`. This mirrors that arithmetic so the
+ * printed total and the published `cloudSpend` match the ledger, and merges
+ * everything into ONE `audit_page` line: the customer bought N audited pages,
+ * not "some renders and some other pages".
+ *
+ * A page rendered for a url that never became an audited page stays billed, so
+ * the line can exceed `pagesAudited` but never falls below what was charged.
+ * Pure; exported for tests. Call it only for a registered run: an unregistered
+ * one has no settlement, and its renders were standalone.
+ */
+export function withAuditPageSettlement(
+  lines: CloudSpendLine[],
+  pagesAudited: number
+): CloudSpendLine[] {
+  const prepaid = lines.filter((l) => l.feature === "audit_page");
+  const prepaidUnits = prepaid.reduce((sum, l) => sum + l.units, 0);
+  const prepaidCredits = prepaid.reduce((sum, l) => sum + l.credits, 0);
+  const settledUnits = Math.max(0, Math.floor(pagesAudited) - prepaidUnits);
+  const units = prepaidUnits + settledUnits;
+  if (units === 0) return lines;
+  const merged: CloudSpendLine = {
+    service: "audit-pages",
+    feature: "audit_page",
+    units,
+    credits: prepaidCredits + computeCost("audit_page", settledUnits),
+  };
+  const rest = lines.filter((l) => l.feature !== "audit_page");
+  // Right after the base (when present), so the two lines that make up the
+  // headline price read first.
+  const baseAt = rest.findIndex((l) => l.feature === "audit_base");
+  return baseAt === -1
+    ? [merged, ...rest]
+    : [...rest.slice(0, baseAt + 1), merged, ...rest.slice(baseAt + 1)];
+}
+
+/** Pages this run audited: the report.pages basis, which is what settles (#2290). */
+export function auditedPageCount(report: {
+  pages: readonly unknown[];
+  scanScope?: { pagesCrawled: number };
+}): number {
+  return report.scanScope?.pagesCrawled ?? report.pages.length;
 }
 
 /**
@@ -1490,6 +1545,9 @@ export async function runAudit(
               config: mergedConfig,
               baseUrl: url,
               auditId: crawlId,
+              // #2290: the registered run, so the raw-vs-rendered renders bill
+              // as this audit's pages rather than as standalone renders.
+              runId: (await options.getRunId?.()) ?? undefined,
               // Stage-1 gating policy (CLI-owned): Stage-0 metadata gates which
               // downstream cloud features run before the per-audit cap.
               gate: gateStage1,

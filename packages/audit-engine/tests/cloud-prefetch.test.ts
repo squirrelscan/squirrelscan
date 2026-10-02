@@ -1084,6 +1084,22 @@ function renderClient(overrides: Partial<CloudServicesClient> = {}): CloudServic
 }
 
 describe("prefetchCloudData — render service (#673)", () => {
+  test("a registered run's id rides on the render submit, so the page bills once (#2290)", async () => {
+    const seen: Array<string | undefined> = [];
+    const client = renderClient({
+      render: async (req) => {
+        seen.push(req.runId);
+        return { jobId: "job-1", status: "queued" };
+      },
+    });
+    await prefetchCloudData(input({ client, rules: RENDER_RULES, runId: "run-1" }));
+    expect(seen).toEqual(["run-1"]);
+
+    seen.length = 0;
+    await prefetchCloudData(input({ client, rules: RENDER_RULES }));
+    expect(seen).toEqual([undefined]);
+  });
+
   test("wired path: submits + polls, stamps an ok render envelope per page", async () => {
     let renderCalls = 0;
     const client = renderClient({

@@ -128,7 +128,7 @@ Cloud audits are pay-as-you-go: credits are spent while the audit runs, and noth
 3. You approve; the agent calls `run_audit` again with `confirm: true`. The audit starts and returns a `run_id`.
 4. The agent polls `get_audit_status` every 15-30 seconds, then pulls the results with `get_report`.
 
-An audit costs 50 credits base plus 2 per rendered page. Check your balance with `get_credit_balance`, audit where the credits went with `list_credit_transactions` (or a single audit's per-feature breakdown via `get_report`'s `cost` field), or top up at [app.squirrelscan.com/billing](https://app.squirrelscan.com/billing).
+An audit costs 50 credits base plus 2 per audited page, however the page was fetched, plus 1 per distinct external link the cloud checks when external link checking is on. If your balance can't cover the page limit, the audit runs with a lower limit and the response's `notice` says so; it is refused only when even one page is unaffordable. Check your balance with `get_credit_balance`, audit where the credits went with `list_credit_transactions` (or a single audit's per-feature breakdown via `get_report`'s `cost` field), or top up at [app.squirrelscan.com/billing](https://app.squirrelscan.com/billing).
 
 ## Sample prompts
 

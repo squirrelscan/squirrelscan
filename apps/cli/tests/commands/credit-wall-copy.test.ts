@@ -17,6 +17,9 @@ import {
 } from "../../src/cli/commands/audit";
 import {
   AUDIT_BASE_CREDITS,
+  AUDIT_PAGE_CREDITS,
+  AUDIT_PRICING_LINE,
+  MIN_AUDIT_CREDITS,
   offerPitchLines,
   PRO_HEADLINE,
   proPitchLines,
@@ -50,6 +53,16 @@ describe("the upgrade offer", () => {
 
   test("the audit base tracks the shared pricing source", () => {
     expect(AUDIT_BASE_CREDITS).toBe(computeCost("audit_base", 1));
+  });
+
+  test("pricing v11 (#2290): 2 per audited page, and the smallest audit is base + one page", () => {
+    expect(AUDIT_PAGE_CREDITS).toBe(computeCost("audit_page", 1));
+    expect(MIN_AUDIT_CREDITS).toBe(AUDIT_BASE_CREDITS + AUDIT_PAGE_CREDITS);
+    expect(AUDIT_PRICING_LINE).toContain(
+      `${AUDIT_BASE_CREDITS} credits base plus ${AUDIT_PAGE_CREDITS} per audited page`
+    );
+    expect(AUDIT_PRICING_LINE).toContain("per external link");
+    expect(AUDIT_PRICING_LINE).not.toContain("rendered");
   });
 });
 
@@ -137,7 +150,9 @@ describe("lowBalanceFooterLines", () => {
     const out = text(
       lowBalanceFooterLines({ balance: 12, monthlyCredits: free, plan: "free" })
     );
-    expect(out).toContain(`below the ${AUDIT_BASE_CREDITS}-credit audit base`);
+    expect(out).toContain(
+      `below the ${MIN_AUDIT_CREDITS} credits the smallest audit needs`
+    );
     expect(out).toContain(UPGRADE);
   });
 
@@ -168,9 +183,10 @@ describe("lowBalanceFooterLines", () => {
 
   test("a plan with no monthly grant warns only once it can't buy an audit", () => {
     // Team pools credits per seat, so there is no share to measure against.
+    // #2290: the smallest audit is the base plus one page.
     expect(
       lowBalanceFooterLines({
-        balance: AUDIT_BASE_CREDITS,
+        balance: MIN_AUDIT_CREDITS,
         monthlyCredits: 0,
         plan: "paid",
       })
@@ -345,65 +361,64 @@ describe("lowBalanceFooterLines with a server offer (#2183)", () => {
   });
 });
 
-// #2183 F6a. The preflight shortfall warning fires when the balance covers the
-// 50-credit base but not the pages — an audit that will start and then quietly
-// stop rendering. It is the one CLI wall that was left on the org-less
-// marketing URL, and it carried no reset date.
+// #2183 F6a / #2290. When the balance covers the base but not every page of
+// the cap, the page cap is clamped to what it covers and the run says so. That
+// notice is a CLI wall too, and it must carry the org-scoped link and the reset
+// date like the others.
 describe("computePreflightAffordability with a server offer", () => {
   const OFFER_URL =
     "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01TEST0000000000000000000A&src=cli";
   const opts = {
     balance: 120,
     maxPages: 100,
-    cloudRendering: "browser" as const,
+    maxCreditsPerAudit: 1000,
     topUpUrl: OFFER_URL,
   };
 
-  test("warns with the org-scoped link rather than the marketing URL", () => {
-    const out = text(computePreflightAffordability(opts).warningLines);
+  test("the clamp notice carries the org-scoped link rather than the marketing URL", () => {
+    const out = text(computePreflightAffordability(opts).noticeLines);
     expect(out).toContain(OFFER_URL);
     expect(out).not.toContain(UPGRADE);
   });
 
-  test("names the cost, the balance and the reset date", () => {
+  test("names the balance, the pages it covers and the reset date", () => {
     const out = text(
       computePreflightAffordability({
         ...opts,
         resetAt: "2026-10-01T00:00:00.000Z",
-      }).warningLines
+      }).noticeLines
     );
-    // 50 base + 2 x 100 rendered pages.
-    expect(out).toContain("250");
+    // (120 − 50) / 2 = 35 of the 100 pages.
     expect(out).toContain("120");
+    expect(out).toContain("35 of the 100 pages");
     expect(out).toContain("2026-10-01");
   });
 
   test("drops the reset clause rather than inventing a date", () => {
-    const out = text(computePreflightAffordability(opts).warningLines);
+    const out = text(computePreflightAffordability(opts).noticeLines);
     expect(out).not.toContain("Credits reset");
     expect(out).toContain(OFFER_URL);
   });
 
   test("stays silent when the balance covers the whole estimate", () => {
     expect(
-      computePreflightAffordability({ ...opts, balance: 5000 }).warningLines
+      computePreflightAffordability({ ...opts, balance: 5000 }).noticeLines
     ).toEqual([]);
   });
 
-  test("an unmetered account is never warned, offer or no offer", () => {
-    expect(
-      computePreflightAffordability({ ...opts, balance: 0, unlimited: true })
-        .warningLines
-    ).toEqual([]);
+  test("an unmetered account is never clamped by its balance", () => {
+    const r = computePreflightAffordability({
+      ...opts,
+      balance: 0,
+      unlimited: true,
+    });
+    expect(r.noticeLines).toEqual([]);
+    expect(r.maxPages).toBe(100);
   });
 
-  test("http-only rendering has no page charge, so no shortfall to warn about", () => {
-    // The base alone is 50 and the balance is 120, so only the render estimate
-    // can push this over — proving the warning is about the pages, not the base.
-    expect(
-      computePreflightAffordability({ ...opts, cloudRendering: "http" })
-        .warningLines
-    ).toEqual([]);
+  test("http-only rendering is charged per page too, so it clamps the same", () => {
+    // Pricing v11 (#2290): the page charge no longer depends on rendering.
+    expect(computePreflightAffordability(opts).maxPages).toBe(35);
   });
 });
 
@@ -434,7 +449,7 @@ describe("the audit command wires the server offer into its walls", () => {
     return source.slice(at, at + 800);
   }
 
-  test("the preflight shortfall warning prefers the offer link", () => {
+  test("the preflight clamp notice prefers the offer link", () => {
     const args = callArgs("computePreflightAffordability({");
     expect(args).toContain("upgradeOffer?.url");
     expect(args).toContain("resetAt: creditsResetAt");

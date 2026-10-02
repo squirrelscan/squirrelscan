@@ -19,7 +19,7 @@ Annual billing is 12 months for the price of 10. Your monthly credits still arri
 
 Monthly credits are spent before purchased top-up credits. Subscribe and top up from the **Billing & Credits** page in the [dashboard](/dashboard).
 
-Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, dead-link checking, report publishing) on every plan. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, custom headers, and higher render concurrency - Team adds pooled credits, invites, and roles on top.
+Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, report publishing) on every plan. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, custom headers, and higher render concurrency - Team adds pooled credits, invites, and roles on top.
 
 ### Max pages per cloud audit
 
@@ -49,8 +49,10 @@ Balance: 2340 credits (2000 monthly + 340 purchased)
          monthly credits reset 2026-07-08
 
 Pricing:
-  audit                 50 base + 2 per rendered page
+  audit                 50 base + 2 per audited page
                            (analysis, tech detection, publishing included)
+  external links         1 per link a cloud audit checks
+                           (internal links and the CLI's own checks are free)
   content_gaps          25 per run
   issue_enrich           3 per issue
   keyword_gaps          25 per run
@@ -62,16 +64,21 @@ Top up: https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01J0ORG
 
 ## Pricing
 
-Every authed audit has one flat price:
+Every signed-in audit has one flat price:
 
 | Item | Cost | Notes |
 |------|------|-------|
 | Audit base | 50 per audit | covers every included service below |
-| Browser rendering | 2 per rendered page | [Cloud rendering](/cloud/rendering); charged whether or not the page hits the render cache |
+| Audited page | 2 per page | every page in the report, however it was fetched: plain HTTP, a [cloud browser render](/cloud/rendering), the local or cloud render cache, a `304 Not Modified`, or a plain fetch after a render failed |
+| External link check | 1 per link | cloud audits only: each distinct external destination the cloud checks, whatever status it returns |
 
-The base includes everything: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), [dead-link checking](/rules/links/dead-links), and publishing the report. None of these are charged separately.
+A page is charged once per audit. Rendering it, serving it from a cache, or retrying a request never adds a second charge, and the same external link on twenty pages is one check. Run the audit again and it is charged again: it is a new audit.
 
-HTTP-only (non-rendered) page fetches are free, so a `--no-render` audit costs just the 50-credit base.
+Link checks are free in two cases: internal links (on the site you are auditing) always, and every link the CLI checks for an audit you run with `squirrel audit`. The external-link charge applies to [cloud audits](/guides/cloud-audits) with external link checking turned on, which is off by default.
+
+The base includes everything else: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), and publishing the report. None of these are charged separately.
+
+Rendering does not change the price. An HTTP-only (`--http`) audit costs the same per page as a rendered one, so pick the render mode for accuracy, not to save credits.
 
 Opt-in add-ons are the only extra charges:
 
@@ -80,9 +87,9 @@ Opt-in add-ons are the only extra charges:
 | Keyword gaps | 25 per audit | [`gaps/keywords`](/rules/gaps/keywords) (opt-in) |
 | Content gaps | 25 per audit | [`gaps/content`](/rules/gaps/content) (opt-in) |
 | Issue enrichment | 3 per issue | AI recommendations in the dashboard |
-| Dead-link render escalation | 2 per link | WAF-blocked links retried via a rendered fetch, billed as rendered requests |
+| Link render escalation | 2 per link | a WAF-blocked external link the CLI's [dead-link check](/rules/links/dead-links) retries in a cloud browser |
 
-A typical 25-page rendered audit costs **100 credits**: 50 base + 50 for rendering. A 100-page audit costs 250 credits.
+A 19-page audit costs **88 credits**: 50 base + 38 for its pages. A 100-page audit costs 250. A cloud audit of the same 19 pages that checks 7 distinct external links costs 95.
 
 ## Spend controls
 
@@ -95,7 +102,7 @@ confirm_threshold = 50        # estimates above this prompt before spending
 enabled = true                # master switch for all cloud features
 ```
 
-- **Per-audit cap** - if the estimate exceeds `max_credits_per_audit`, work is truncated deterministically at the cap and remaining rules report `skipped` with reason `credit-cap-reached`.
+- **Per-audit cap** - if a full audit would cost more than `max_credits_per_audit`, the page limit comes down to what the cap covers (475 pages at the default of 1000) and the run tells you. Cloud enrichment past the cap is truncated deterministically and the remaining rules report `skipped` with reason `credit-cap-reached`.
 - **Confirmation prompt** - in a terminal, an estimate above `confirm_threshold` asks before proceeding. Use `--yes` to skip prompts (e.g. in CI or agent workflows). Non-interactive runs proceed without prompting, bounded by the cap.
 - **Master switch** - `enabled = false` turns off all cloud calls for the project.
 
@@ -103,9 +110,9 @@ See the [cloud configuration reference](/configuration/cloud) for all options.
 
 ## When credits run out
 
-Nothing breaks. A cloud audit needs a balance of at least 50 credits (the base) to start: below that, the CLI runs the audit locally instead and tells you so. If credits run out mid-audit, cloud rules report `skipped` with reason `insufficient-credits`, the audit completes with all local rules, and you see a single warning with a top-up link. If an audit fails after you were charged, the charge is automatically refunded.
+Nothing breaks. A signed-in audit needs at least 52 credits (the base plus one page) to start: below that, the CLI runs the audit locally instead and tells you so. Above that, an audit your balance can't fully cover is not refused and does not stop part-way: its page limit comes down to what the balance pays for (50 base + 2 per page, or 3 per page for a cloud audit that checks external links), and the run says how many pages it kept. Cloud audits started from the dashboard, the API, the MCP server, or a schedule work the same way. If credits still run out mid-audit, cloud rules report `skipped` with reason `insufficient-credits`, the audit completes with all local rules, and you see a single warning with a top-up link. If an audit fails after you were charged, the charge is automatically refunded.
 
-Every credit warning the CLI prints states what the run would have cost, the credits you have left, the date your monthly credits reset, and an upgrade link: the shortfall warning before a render-heavy audit, the out-of-credits notice when a run cannot be tracked, and the low-balance footer after one. `squirrel credits` shows the same balance, reset date and link.
+Every credit warning the CLI prints states what the run would have cost, the credits you have left, the date your monthly credits reset, and an upgrade link: the notice when a low balance shrinks an audit's page limit, the out-of-credits notice when a run cannot be tracked, and the low-balance footer after one. `squirrel credits` shows the same balance, reset date and link.
 
 That link is scoped to the organization that ran out, so it opens checkout for that organization rather than whichever one your browser used last. Credits are not shared between organizations, so the distinction matters: topping up the wrong one leaves the blocked audit blocked. The link works signed out, and carries the organization through the login. The MCP server returns the same facts as fields on its `run_audit` response, so an agent can relay them without a second call.
 

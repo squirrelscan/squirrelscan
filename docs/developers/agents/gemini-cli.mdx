@@ -97,7 +97,7 @@ Keep runs fast on a large site by capping the crawl up front:
 Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
 ```
 
-<Tip>Cloud audits cost credits (50 per audit plus 2 per rendered page), and `run_audit` returns a cost estimate before anything runs. Local `squirrel audit` runs are free and unlimited, so use those for quick iteration and the cloud for browser-rendered checks.</Tip>
+<Tip>Cloud audits cost credits (50 per audit plus 2 per audited page, and 1 per external link checked), and `run_audit` returns a cost estimate before anything runs. Local `squirrel audit` runs are free and unlimited, so use those for quick iteration and the cloud for browser-rendered checks.</Tip>
 
 ## Headless and CI
 

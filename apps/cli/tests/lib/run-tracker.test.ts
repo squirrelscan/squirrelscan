@@ -583,6 +583,30 @@ describe("markRunning / finalizeRun", () => {
     expect(body.config).toEqual({ phaseTimingsMs: { crawl: 240_000 } });
   });
 
+  test("finalizeRun sends pagesAudited, the count the server settles on (#2290)", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (
+      _input: string | URL | Request,
+      init?: RequestInit
+    ) => {
+      bodies.push(
+        JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+      );
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await finalizeRun("run_1", {
+      status: "completed",
+      completedAt: "t",
+      pagesAudited: 19,
+    });
+    expect(bodies[0]?.pagesAudited).toBe(19);
+
+    // Absent stays absent: an older caller sends nothing new.
+    await finalizeRun("run_1", { status: "completed", completedAt: "t" });
+    expect("pagesAudited" in (bodies[1] ?? {})).toBe(false);
+  });
+
   test("finalizeRun includes reportId + error when present", async () => {
     let body: Record<string, unknown> = {};
     globalThis.fetch = (async (

@@ -204,10 +204,11 @@ export const CloudConfigSchema = z.object({
   enabled: z.boolean().default(true),
   /**
    * Per-audit credit cap; prefetch truncates deterministically at the cap.
-   * 0 = unlimited. Default 1000 (was 200): cloud browser rendering is now the
-   * authed default (~2 credits/page), so the cap needs headroom to render a
-   * normal crawl plus the other cloud rules. TTY runs above `confirm_threshold`
-   * still prompt; `--yes`/non-TTY runs proceed unattended up to this cap.
+   * 0 = unlimited. Default 1000 (was 200). Every audited page costs 2 credits
+   * on top of the 50-credit base (pricing v11, #2290), so a signed-in audit's
+   * page cap is clamped to what this cap covers: (cap − 50) / 2 pages, 475 at
+   * the default. TTY runs above `confirm_threshold` still prompt; `--yes`/
+   * non-TTY runs proceed unattended up to this cap.
    */
   max_credits_per_audit: z.number().int().min(0).default(1000),
   /** Estimated spend above this prompts for TTY confirmation. 0 = always confirm. */

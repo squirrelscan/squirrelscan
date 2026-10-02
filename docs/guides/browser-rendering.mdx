@@ -8,7 +8,7 @@ Some sites build their content with JavaScript - single-page apps, client-render
 
 Browser rendering solves this: pages are loaded in a real headless browser in the cloud, and the audit runs against the fully rendered HTML.
 
-<Note>Browser rendering is a [cloud feature](/cloud) - it requires login and costs **2 credits per page**. See [how it works under the hood](/cloud/rendering).</Note>
+<Note>Browser rendering is a [cloud feature](/cloud) - it requires login, and costs nothing beyond the audit's normal price of 50 credits plus **2 per audited page**, rendered or not. See [how it works under the hood](/cloud/rendering).</Note>
 
 ## It's automatic when you're logged in
 
@@ -27,7 +27,7 @@ Logged-out runs (and `--offline`) always use plain HTTP and cost nothing.
 
 ## Turn it off for one run
 
-If a site is server-rendered and you don't want to spend render credits:
+If a site is server-rendered and you don't need a browser for it (it is not cheaper: every audited page costs the same 2 credits either way, it is just faster):
 
 ```bash
 squirrel audit https://example.com --http
@@ -39,13 +39,13 @@ squirrel audit https://example.com --http
 
 Rendering isn't all-or-nothing. The `render` setting takes a scale:
 
-| Strategy | What it does | Render credits |
+| Strategy | What it does | Pages rendered |
 | --- | --- | --- |
 | `off` | Plain HTTP only, never render | none |
 | `auto` | **HTTP-first**: render *only* pages that are client-side-rendered (empty SPA shells); fast HTTP for static / server-rendered pages | only the pages that need it |
-| `all` | Render every HTML page | 2 / page |
+| `all` | Render every HTML page | every HTML page |
 
-`auto` is usually what you want: a static or server-rendered site costs **zero** render credits and runs at HTTP speed, while a JS app still gets a real rendered DOM where it matters. `robots.txt`, sitemaps, and assets are always plain HTTP. Even with `all`, only crawled HTML pages are ever rendered.
+The price is the same for all three: 2 credits per audited page plus the 50-credit base. `auto` is usually what you want: a static or server-rendered site runs at HTTP speed, while a JS app still gets a real rendered DOM where it matters. `robots.txt`, sitemaps, and assets are always plain HTTP. Even with `all`, only crawled HTML pages are ever rendered.
 
 Run a single audit with a strategy:
 
@@ -66,10 +66,10 @@ Setting `render` explicitly overrides the auto default - no prompt, every audit 
 
 ## Watch your page count
 
-At 2 credits per rendered page (on top of the audit's 50-credit base), rendering is the only part of an audit that scales with page count. Two settings to keep in mind:
+Every audited page costs 2 credits on top of the audit's 50-credit base, rendered or not, so page count is the part of an audit that scales. Two settings to keep in mind:
 
 - `--max-pages` / `[crawler] max_pages` - fewer pages, fewer credits.
-- `[cloud] max_credits_per_audit` (default **1000**) - the hard cap. It covers rendering for about 475 pages; raise it or cap your pages for larger rendered crawls.
+- `[cloud] max_credits_per_audit` (default **1000**) - the hard cap. It covers about 475 pages; a larger page limit is lowered to fit it, with a notice. Raise the cap (or set it to `0`) for bigger crawls.
 
 ```toml squirrel.toml
 [cloud]

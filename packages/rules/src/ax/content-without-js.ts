@@ -30,7 +30,9 @@ export const contentWithoutJsRule: Rule = {
     // On a soft-404, raw and rendered are both the error shell — the raw-vs-JS
     // content diff is meaningless, so skip (#1174).
     skipOnSoft404: true,
-    cloud: { service: "render", unit: "page", creditFeature: "render" },
+    // `audit_page` (#2290): the render runs inside the audit and is billed as
+    // the page's own audit charge, never as a render on top of it.
+    cloud: { service: "render", unit: "page", creditFeature: "audit_page" },
   },
 
   run(ctx: RuleContext): RuleResult {

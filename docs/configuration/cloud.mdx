@@ -33,7 +33,7 @@ Master switch. Set to `false` to disable all cloud calls for this project - clou
 
 **Default:** `1000`
 
-Hard cap on credits a single audit may spend. When the estimate exceeds the cap, cloud work is truncated deterministically and the rules that didn't run report `skipped` with reason `credit-cap-reached`. Set to `0` for unlimited.
+Hard cap on credits a single audit may spend. Every audited page costs 2 credits on top of the 50-credit base, so a page limit the cap can't cover is lowered to fit it, with a notice: the default of 1000 covers 475 pages. Cloud enrichment past the cap is truncated deterministically and the rules that didn't run report `skipped` with reason `credit-cap-reached`. Set to `0` for unlimited.
 
 ### `confirm_threshold`
 
@@ -59,9 +59,11 @@ Auto-generate an [editor's summary](/cloud/editor-summary) - an exec-email-style
 
 Render strategy: the canonical control (supersedes `rendering`). Leave it unset and the strategy is decided per coverage: **quick** crawls HTTP-first and renders only what needs it; **surface/full** render every page (logged-in only, after a one-time consent prompt). Set it explicitly to pin behavior:
 
-- `"off"` - plain HTTP only; never render, never spend render credits
-- `"auto"` - **HTTP-first**: render *only* pages detected as client-side-rendered shells; static / server-rendered pages cost zero render credits
-- `"all"` - render every HTML page at **2 credits per page**
+- `"off"` - plain HTTP only; never render in the cloud
+- `"auto"` - **HTTP-first**: render *only* pages detected as client-side-rendered shells; static / server-rendered pages use fast plain HTTP
+- `"all"` - render every HTML page
+
+The mode does not change the price: a signed-in audit costs 2 credits per audited page however the page is fetched, plus the 50-credit base. See [Credits and pricing](/cloud/credits).
 
 `robots.txt`, XML sitemaps, and non-HTML assets are never rendered at any level; `"all"` means every crawled **HTML page**.
 

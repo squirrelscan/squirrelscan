@@ -56,7 +56,7 @@ describe("ax/content-without-js", () => {
     expect(contentWithoutJsRule.meta.cloud).toEqual({
       service: "render",
       unit: "page",
-      creditFeature: "render",
+      creditFeature: "audit_page",
     });
     expect(contentWithoutJsRule.meta.severity).toBe("info");
     expect(contentWithoutJsRule.meta.category).toBe("ax");

@@ -44,7 +44,7 @@ squirrel audit <url> [options]
 | `--yes` | `-y` | Skip confirmation prompts (e.g. cloud credit spend) | `false` |
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | auto |
-| `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render, never spend render credits) | auto |
+| `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
 | `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry | `false` |
 | `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
@@ -173,9 +173,9 @@ An audit of a host no squirrelscan server can reach never publishes, never regis
 
 ### Browser rendering
 
-When you're **logged in, audits render every page in a cloud browser by default** (2 credits/page) - so JavaScript-heavy sites are audited against their fully rendered HTML. The first time this would spend credits the CLI asks once and remembers your answer.
+When you're **logged in, audits render every page in a cloud browser by default**, so JavaScript-heavy sites are audited against their fully rendered HTML. A signed-in audit costs 50 credits plus 2 per audited page whether a page is rendered or fetched over plain HTTP, so rendering never changes the bill. The first time an audit would spend credits the CLI asks once and remembers your answer, and if your balance can't cover the page limit the CLI lowers the limit to what it covers and tells you. See [Credits and pricing](/cloud/credits).
 
-Force plain HTTP for a run (no rendering, no render credits):
+Force plain HTTP for a run (no cloud browser):
 
 ```bash
 squirrel audit https://example.com --http
