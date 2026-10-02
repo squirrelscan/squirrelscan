@@ -68,7 +68,7 @@ If the local run succeeds and the cloud run fails with `connection` or `http_4xx
 
 ## Troubleshooting by cause \{#troubleshooting\}
 
-A failed cloud audit keeps a record of what it tried: each request, how long it waited, what came back, and whether our own rendering service was working at the time. The failure email and the audit's run page in the dashboard turn that record into three answers: what failed, which side the evidence points at, and what to try next. Each cause below has its own link, and the email and run page link to the one that applies.
+A failed cloud audit keeps a record of what it tried: the first attempts at the site, how long each waited, what came back, and whether our own rendering service was working at the time. The failure email and the audit's run page in the dashboard turn that record into three answers: what failed, which side the evidence points at, and what to try next. Each cause below has its own link, and the email and run page link to the one that applies.
 
 ### Whose side it was on \{#attribution\}
 
@@ -83,7 +83,7 @@ The run page says which side the evidence points at, and it only goes as far as 
 
 Audits that failed before we started keeping these records only have the short reason, and the run page says that its details are limited.
 
-To check a result from your side, the run page has a **Technical details** section listing each attempt: the browser render, the direct fetch and the crawler's verdict, with the status or error, how long it waited against its time limit, and where a redirect pointed. When your site sits behind Cloudflare, an attempt also carries the `cf-ray` id of the response, which you can search for in your Cloudflare security events.
+To check a result from your side, the run page has a **Technical details** section listing the attempts we recorded, up to a dozen: the browser render, the direct fetch and the crawler's verdict, with the status or error, how long it waited against its time limit, and where a redirect pointed. When there were more, it says how many were left out. When your site sits behind Cloudflare, an attempt also carries the `cf-ray` id of the response, which you can search for in your Cloudflare security events.
 
 ### Refunds and retries \{#refunds-and-retries\}
 
@@ -157,7 +157,7 @@ Either way, once you have fixed the cause, **Run New Audit** on the run page sta
 
 **What to do.** Keep the protection on and add a narrow exception for squirrelscan:
 
-1. In the dashboard, open the website's **Settings → Crawl** and add a custom request header with a long random value only you know, for example `X-Squirrelscan-Auth`. Custom request headers are a Pro plan feature.
+1. In the dashboard, open the website's **Settings → Crawl** and add a custom request header with a long random value only you know, for example `X-Squirrelscan-Auth`.
 2. Add a WAF rule that skips the challenge only for requests carrying that header with that exact value. [Firewall and WAF exceptions](/cloud/firewall) has the rule for Cloudflare, nginx and other WAFs.
 3. Run the audit again.
 
@@ -177,7 +177,7 @@ Avoid switching bot protection off for the whole site, and avoid allowlisting IP
 
 ### Login required (401) \{#login-required\}
 
-**What it means.** The site answered `401 Unauthorized`: it wants credentials before it serves the page. Staging sites behind a password often do this. A cloud audit cannot sign in.
+**What it means.** The site answered `401 Unauthorized` (or `407` from a proxy): it wants credentials before it serves the page. Staging sites behind a password often do this. A cloud audit cannot sign in.
 
 **How to check.** Open the address in a private browser window. A login prompt or a password page confirms it.
 
@@ -189,11 +189,11 @@ Avoid switching bot protection off for the whole site, and avoid allowlisting IP
 
 ### Rate limited (429) \{#rate-limited\}
 
-**What it means.** The site answered `429 Too Many Requests`: a rate limit decided we were sending too much, often from a rule that counts requests per network rather than per visitor.
+**What it means.** The site answered `429 Too Many Requests` (or the `430` some platforms use): a rate limit decided we were sending too much, often from a rule that counts requests per network rather than per visitor.
 
 **How to check.** Look for the rate limit rule in your CDN or WAF, and for 429s in its log at the time of the audit. See [rate-limited hosts](/guides/rate-limited-hosts) for how the crawler paces itself and backs off.
 
-**What to do.** Exempt squirrelscan from the rate limit with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended). That also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), and an authorised crawl still slows down when your server asks it to. Then run the audit again, or wait for the limit to reset first.
+**What to do.** If you control the rate limit rule, exempt squirrelscan from it with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended). That also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), and an authorised crawl still slows down when your server asks it to. On a platform whose limits you cannot change, such as a Shopify storefront, audit fewer pages instead: [rate-limited hosts](/guides/rate-limited-hosts) covers what works there. Then run the audit again, or wait for the limit to reset first.
 
 ### Page not found (404 or 410) \{#not-found\}
 
@@ -205,7 +205,7 @@ Avoid switching bot protection off for the whole site, and avoid allowlisting IP
 
 ### Other 4xx responses \{#client-error\}
 
-**What it means.** The site answered with a 4xx status other than 401, 403, 404, 410 or 429. The status is on the run page.
+**What it means.** The site answered with a 4xx status not covered above, such as `400` or `451`. The status is on the run page.
 
 **How to check.** Fetch the address yourself with `curl -sI https://example.com/` and compare the status. Look in your server logs for the request at the time of the audit.
 
@@ -262,7 +262,7 @@ Avoid switching bot protection off for the whole site, and avoid allowlisting IP
 
 ### The audit ran out of time \{#audit-timeout\}
 
-**What it means.** The site answered fine, but the audit did not finish within its time limit. Large crawls, slow pages and a `Crawl-delay` in `robots.txt` all make an audit take longer.
+**What it means.** The audit did not finish within its overall time limit. That usually comes from the size or the pace of the crawl, not from a site that is down: large crawls, slow pages and a `Crawl-delay` in `robots.txt` all make an audit take longer.
 
 **What to do.** Audit fewer pages, or narrow the crawl to the sections you care about with include patterns under **Settings → Crawl** (see [crawl settings](/dashboard/crawl-settings)). Then run it again.
 
