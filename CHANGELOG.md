@@ -15,6 +15,14 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## v0.0.102 — 2026-10-03
+
+The spend line after a signed-in audit now counts the same pages your report shows as audited.
+
+### Fixed
+
+- The cloud credits line after a signed-in audit counts the pages the report shows as audited: its coverage line ("Coverage: audited 12 of 12 known pages"), or its page count when there is no coverage line. Before, it used the crawl count, which also includes error pages such as a `404` kept for its broken-link finding, so the line could show more pages than the report did. A cloud render paid for a page that turned out to be an error is refunded when the audit completes, and pages a smart audit carries forward from an earlier audit are not charged again. The server settles the charge for every CLI version, so this changes what the CLI prints, not what you pay. The [credits page](https://docs.squirrelscan.com/cloud/credits) explains the count.
+
 ## v0.0.101 — 2026-10-02
 
 The CLI's credit estimates and spend line now match how signed-in audits are billed, and a balance that can't cover the page limit lowers the limit instead of running out part-way.
