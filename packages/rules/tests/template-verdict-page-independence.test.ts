@@ -33,6 +33,9 @@
 // real verdict fanned onto a page that serves 404 content. The runner orders the
 // gates so this cannot happen, but a rule declaring both is a classification
 // mistake and should be a named failure rather than a silently degraded path.
+//
+// `skipOnNoindex` (pub#457) is per page in the same way and is held to the same
+// rule below.
 
 import { describe, expect, test } from "bun:test";
 
@@ -209,6 +212,18 @@ describe("a template-scoped rule is never also soft-404 gated", () => {
       // fanned verdict only AFTER this gate, so the live behaviour is safe either
       // way — this keeps the contradiction from being introduced silently.
       expect(meta.skipOnSoft404).toBeUndefined();
+    },
+  );
+});
+
+describe("a template-scoped rule is never also noindex gated", () => {
+  test.each(fannable.map((r) => [r.meta.id, r.meta] as const))(
+    "%s does not declare skipOnNoindex",
+    (_id, meta) => {
+      // Same contradiction as skipOnSoft404 (pub#457): whether a page is noindex
+      // is per page, and a noindex representative would otherwise cache its skip
+      // for indexable members. createTemplateFanout drops such a rule at runtime.
+      expect(meta.skipOnNoindex).toBeUndefined();
     },
   );
 });

@@ -28,6 +28,7 @@ import type { CollectedSiteSignals } from "./collected-signals";
 import { ruleApplies } from "./applicability";
 import { filterRules } from "./filter";
 import { loadAllRules, type RuleNamespace } from "./loader";
+import { noindexSource, skipsNoindexPages } from "./shared/noindex";
 
 // Minimal config interface — CLI's full Config satisfies this
 export interface RulesConfig {
@@ -246,10 +247,11 @@ export class RuleRunner {
    * (#521). Callers must handle either shape.
    *
    * `fanned` substitutes a template sibling's checks for `run()` (#1951). It is
-   * consulted AFTER both gates, because both are decided per PAGE and a
+   * consulted AFTER the gates, because they are decided per PAGE and a
    * representative's verdict says nothing about them: applicability happens to be
-   * run-constant, but the soft-404 gate is not, so a member that serves 404
-   * content must take its own skip rather than a sibling's real verdict.
+   * run-constant, but the soft-404 and noindex gates are not, so a member that
+   * serves 404 content or is noindex must take its own skip rather than a
+   * sibling's real verdict.
    */
   private runOneRule(
     rule: Rule,
@@ -281,6 +283,30 @@ export class RuleRunner {
           },
         ],
       };
+    }
+
+    // Noindex gate (pub#457): skip search-presentation rules on a page its owner
+    // keeps out of the index, on a site known to be indexed (not a staging or
+    // preview host, where these rules are the point). Decided per page like the
+    // soft-404 gate, so it also comes before a fanned verdict.
+    if (rule.meta.scope === "page" && rule.meta.skipOnNoindex && skipsNoindexPages(ctx.site)) {
+      const source = noindexSource(ctx.parsed, ctx.page.headers);
+      if (source) {
+        return {
+          meta: rule.meta,
+          checks: [
+            {
+              name: rule.meta.id,
+              status: "skipped",
+              message: `Skipped: page is set to noindex via ${source}`,
+              skipReason: "noindex",
+              // Folds apart from any other skip of the same rule, so a folded
+              // aggregate is all-noindex: the resolution signal relies on it.
+              details: { foldKey: "noindex" },
+            },
+          ],
+        };
+      }
     }
 
     // #1951: this rule already ran on a page sharing this one's template cluster

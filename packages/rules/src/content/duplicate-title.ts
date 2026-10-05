@@ -3,6 +3,8 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
 
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+
 const SKIP_CHECK: CheckResult = {
   name: "duplicate-title",
   status: "skipped",
@@ -56,8 +58,9 @@ function buildCheck(duplicates: { title: string; urls: string[] }[]): CheckResul
 // Streaming path (#1022): build the title→urls map from page_features scalars via
 // the async cursor, in normalized_url order (== the legacy site.pages order),
 // re-deriving the lowercase/trim key exactly as the legacy path does. Keeps only
-// bounded scalars resident — no parsed pages.
-async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
+// bounded scalars resident — no parsed pages. Noindex pages are left out of both
+// paths (pub#457): a title that never appears in search cannot compete there.
+async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
   const checks: CheckResult[] = [];
   if (siteQuery.pageCount() < 2) {
     checks.push(SKIP_CHECK);
@@ -66,6 +69,7 @@ async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
 
   const titleToUrls = new Map<string, string[]>();
   for await (const row of siteQuery.pagesMatching(() => true)) {
+    if (skipNoindex && row.robotsNoindex) continue;
     const title = row.title?.trim().toLowerCase();
     if (!title) continue;
 
@@ -93,7 +97,7 @@ export const duplicateTitleRule: Rule = {
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     if (ctx.siteQuery) {
-      return runViaSiteQuery(ctx.siteQuery);
+      return runViaSiteQuery(ctx.siteQuery, skipsNoindexPages(ctx.site));
     }
 
     const checks: CheckResult[] = [];
@@ -108,6 +112,7 @@ export const duplicateTitleRule: Rule = {
     const titleToUrls = new Map<string, string[]>();
 
     for (const page of pages) {
+      if (excludesNoindexPage(ctx.site, page.parsed, page.headers)) continue;
       const title = page.parsed.meta.title?.trim().toLowerCase();
       if (!title) continue;
 

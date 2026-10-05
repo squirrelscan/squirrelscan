@@ -4,9 +4,12 @@ import { logger } from "../logger";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import type { SiteQuery } from "@squirrelscan/core-contracts";
 
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
+
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
 const SKIP_CHECK: CheckResult = {
   name: "orphan-pages",
@@ -46,11 +49,15 @@ function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
 // pages that are neither the homepage nor excluded and sit below the threshold.
 // The `url` is the page's stored (normalized) identity — the same value the
 // legacy path reads as `page.url` — so homepage/exclude/output all match.
+// `noindexUrls` holds stored urls of noindex pages to leave out (pub#457): a page
+// kept out of the index needs no links to be found by search engines. Their own
+// outgoing links still count toward other pages.
 function collectOrphans(
   entries: Iterable<[string, number]>,
   minLinks: number,
   excludePatterns: string[],
-  baseUrl: string
+  baseUrl: string,
+  noindexUrls: ReadonlySet<string>
 ): string[] {
   const normalizedBase = normalizeUrl(baseUrl);
   const orphans: string[] = [];
@@ -61,7 +68,7 @@ function collectOrphans(
     const isHomepage = normalizedUrl === normalizedBase || getPathname(url) === "/";
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
-    if (isHomepage || isExcluded) {
+    if (isHomepage || isExcluded || noindexUrls.has(url)) {
       continue;
     }
 
@@ -70,6 +77,15 @@ function collectOrphans(
     }
   }
   return orphans;
+}
+
+// Stored urls of the noindex pages, from the page_features rows (streaming path).
+async function noindexUrlsViaSiteQuery(siteQuery: SiteQuery): Promise<Set<string>> {
+  const urls = new Set<string>();
+  for await (const row of siteQuery.pagesMatching((r) => r.robotsNoindex)) {
+    urls.add(row.normalizedUrl);
+  }
+  return urls;
 }
 
 export const orphanPagesRule: Rule = {
@@ -99,7 +115,7 @@ export const orphanPagesRule: Rule = {
     }),
   },
 
-  run(ctx: RuleContext): RuleResult {
+  run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     const checks: CheckResult[] = [];
     const options = ctx.options;
     const minLinks = options.minInboundLinks as number;
@@ -116,14 +132,19 @@ export const orphanPagesRule: Rule = {
         checks.push(SKIP_CHECK);
         return { checks };
       }
-      const orphans = collectOrphans(
-        counts,
-        minLinks,
-        excludePatterns,
-        ctx.site?.baseUrl || ""
-      );
-      checks.push(buildOrphanCheck(orphans, minLinks));
-      return { checks };
+      const finish = (noindexUrls: ReadonlySet<string>): RuleResult => {
+        const orphans = collectOrphans(
+          counts,
+          minLinks,
+          excludePatterns,
+          ctx.site?.baseUrl || "",
+          noindexUrls
+        );
+        checks.push(buildOrphanCheck(orphans, minLinks));
+        return { checks };
+      };
+      if (!skipsNoindexPages(ctx.site)) return finish(new Set());
+      return noindexUrlsViaSiteQuery(ctx.siteQuery).then(finish);
     }
 
     // Legacy path — rebuild incoming counts from every page's parsed links.
@@ -179,6 +200,11 @@ export const orphanPagesRule: Rule = {
     }
 
     // Phase 3: Find orphan pages (use cached normalized URLs)
+    const noindexUrls = new Set(
+      pages
+        .filter((page) => excludesNoindexPage(ctx.site, page.parsed, page.headers))
+        .map((page) => page.url)
+    );
     const orphans = collectOrphans(
       pages.map(
         (page) =>
@@ -189,7 +215,8 @@ export const orphanPagesRule: Rule = {
       ),
       minLinks,
       excludePatterns,
-      ctx.site?.baseUrl || ""
+      ctx.site?.baseUrl || "",
+      noindexUrls
     );
 
     // Report results

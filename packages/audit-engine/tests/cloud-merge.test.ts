@@ -15,6 +15,7 @@ import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 import { normalizeUrl } from "@squirrelscan/utils/url";
 
 import { foldOverflowChecks, type FoldLimits } from "@squirrelscan/rules/fold";
+import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
@@ -770,5 +771,77 @@ describe("first-run findings on never-rendered pages (#1652)", () => {
     });
     expect(third.coverage.carriedFindings).toBe(1);
     expect(third.coverage.unrenderedFindings).toBeUndefined();
+  });
+});
+
+// pub#457: core/h1 now skips a noindex page with a `skipped` check (reason
+// "noindex"). The publish signal must turn that into "evaluated clean" for the
+// rule's keys on THAT page, so the server merge resolves the page's prior "No H1"
+// instead of carrying it forever, while every other page's finding for the same
+// rule is untouched. A soft-404 skip is a gap, not a verdict, and still carries.
+describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub#457)", () => {
+  const h1Meta = { ...pageMeta, id: "core/h1", name: "H1 Tag" };
+  const fail = (url: string) => ({
+    name: "h1",
+    status: "fail" as const,
+    message: "No H1 tag found",
+    pageUrl: url,
+  });
+  const pass = (url: string) => ({
+    name: "h1",
+    status: "pass" as const,
+    message: "ok",
+    pageUrl: url,
+  });
+  const skip = (url: string, reason: "noindex" | "soft-404") => ({
+    name: "core/h1",
+    status: "skipped" as const,
+    message: `Skipped (${reason})`,
+    skipReason: reason,
+    pageUrl: url,
+    ...(reason === "noindex" ? { details: { foldKey: "noindex" } } : {}),
+  });
+
+  async function rerunWith(reason: "noindex" | "soft-404") {
+    const store = new MemStore();
+    // Run 1: P2 and P3 both lack an H1.
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: { "core/h1": { meta: h1Meta, checks: [pass(P1), fail(P2), fail(P3)] } },
+      pageStatuses: [P1, P2, P3].map((url) => ({ url, status: 200 })),
+    });
+    expect((await store.getFindings("web_1", ["open"])).length).toBe(2);
+
+    // Run 2: P2 is skipped by a gate, P3 still fails. The signal is built the
+    // way both publish producers build it.
+    const ruleResults = {
+      "core/h1": { meta: h1Meta, checks: [pass(P1), skip(P2, reason), fail(P3)] },
+    };
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_2",
+      ruleResults,
+      pageStatuses: [P1, P2, P3].map((url) => ({ url, status: 200 })),
+      resolutionSignal: buildResolutionSignal(ruleResults, [P1, P2, P3]),
+    });
+    return {
+      open: (await store.getFindings("web_1", ["open"])).map((f) => f.normalizedUrl).sort(),
+      resolved: (await store.getFindings("web_1", ["resolved"])).map((f) => f.normalizedUrl),
+    };
+  }
+
+  test("noindex skip: the skipped page's finding resolves, the other page's stays open", async () => {
+    const { open, resolved } = await rerunWith("noindex");
+    expect(open).toEqual([normalizeUrl(P3)]);
+    expect(resolved).toEqual([normalizeUrl(P2)]);
+  });
+
+  test("soft-404 skip (the control): the skipped page's finding is carried", async () => {
+    const { open, resolved } = await rerunWith("soft-404");
+    expect(open).toEqual([normalizeUrl(P2), normalizeUrl(P3)].sort());
+    expect(resolved).toEqual([]);
   });
 });

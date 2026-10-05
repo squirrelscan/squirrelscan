@@ -176,6 +176,17 @@ export interface RuleMeta {
    */
   skipOnSoft404?: boolean;
   /**
+   * Page-scope rules whose only purpose is how a page appears in search results
+   * (title, description, H1) set this so the runner emits a visible `skipped`
+   * check (reason "noindex") instead of running them on a page its owner keeps out
+   * of the index with a robots meta or X-Robots-Tag noindex (pub#457). Applied
+   * only when the site itself is known to be indexed (`SiteData.siteIndexable`):
+   * a whole host out of search is a staging or preview deployment, where these
+   * rules are the point of the audit. Keep the list conservative: accessibility,
+   * security, performance and link rules must never set it.
+   */
+  skipOnNoindex?: boolean;
+  /**
    * Page rules only: see {@link VerdictScope}. REQUIRED on every page rule, and
    * enforced by `rule-verdict-scope.test.ts` rather than by the type, so that a
    * rule added without it fails a named test instead of turning every rule file
@@ -334,6 +345,16 @@ export interface SiteData {
   // from "the crawler genuinely could not reach these pages". Undefined for
   // callers that haven't threaded it through (treat as not-capped).
   crawlLimits?: { pagesCrawled: number; maxPages: number };
+  /**
+   * Whether the audited site is itself being indexed (pub#457, see
+   * `shared/noindex.ts` `isSiteIndexable`): its homepage, or the audit's entry
+   * page when the homepage was not fetched, is indexable. Only `true` lets the
+   * runner's `skipOnNoindex` gate and the site rules leave noindex pages out;
+   * false (a staging or preview host) and undefined (neither page fetched, or a
+   * caller that never set it) skip nothing. Part of the page-rule cache's run
+   * context.
+   */
+  siteIndexable?: boolean;
 }
 
 // Context provided to rules when they run

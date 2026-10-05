@@ -26,6 +26,7 @@ import {
 import {
   buildCollectedPageSignal,
   createRunner,
+  isSiteIndexable,
   mergeRuleRunResult,
   type RunnerScope,
 } from "@squirrelscan/rules";
@@ -1382,6 +1383,12 @@ export function runRulesOnStorage(
     const siteDataForPageRules: SiteData = {
       baseUrl: crawl?.baseUrl ?? "",
       pages: parsedPages,
+      // pub#457: noindex pages are skipped only on a site known to be indexed
+      // (homepage, else the entry page). Decided once for both passes.
+      siteIndexable: isSiteIndexable(parsedPages, crawl?.baseUrl ?? "", [
+        crawl?.seedUrl,
+        crawl?.originalUrl,
+      ]),
       robotsTxt: robotsData,
       llmsTxt: llmsData,
       markdownResponse: markdownData,
@@ -2078,6 +2085,11 @@ function buildStreamingSiteData(
     const siteDataForPageRules: SiteData = {
       baseUrl: crawl?.baseUrl ?? "",
       pages: parsedPages,
+      // pub#457: see runRulesOnStorage — same decision, same input.
+      siteIndexable: isSiteIndexable(parsedPages, crawl?.baseUrl ?? "", [
+        crawl?.seedUrl,
+        crawl?.originalUrl,
+      ]),
       robotsTxt: robotsData,
       llmsTxt: llmsData,
       markdownResponse: markdownData,

@@ -20,6 +20,8 @@ The rule runs on every crawled page against the parsed heading data. It emits on
 
 The four outcomes are exclusive and the rule stops at the first that applies, so a page with two H1s is reported for the count and never checked for emptiness. Severity is error and weight is 7, behind only the title and description checks in this category.
 
+Pages kept out of the search index are skipped. A page whose `<meta name="robots">` tag or `X-Robots-Tag` header contains `noindex` (a header scoped to one crawler, such as `googlebot: noindex`, counts too) gets one skipped check named `core/h1` with the message `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`) instead, because the page never appears in search results. Skipped checks do not count toward the score. Pages are skipped only on a site that is itself being indexed, judged by its homepage, or by the page the audit started from when the homepage was not fetched. When that page is noindex, as on a staging site or a preview deployment (Vercel, Netlify and Cloudflare Pages previews all send `X-Robots-Tag: noindex`), nothing is skipped: the whole host is out of search and the audit is most likely checking it before launch. When neither page was fetched, nothing is skipped either.
+
 ## How to fix it
 
 ```html

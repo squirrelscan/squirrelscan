@@ -235,6 +235,19 @@ describe("run context", () => {
     ).not.toBe(await hashOf({}));
   });
 
+  // pub#457: a homepage (or entry page) that turns noindex switches the noindex
+  // gate on every other page without any of them changing, so their cached
+  // results must not replay. All three states are distinct.
+  test("moves with whether the site is indexable", async () => {
+    const siteData = (siteIndexable?: boolean) =>
+      ({ ...(base.siteData as object), siteIndexable }) as never;
+    const unknown = await hashOf({});
+    const yes = await hashOf({ siteData: siteData(true) });
+    const no = await hashOf({ siteData: siteData(false) });
+    expect(new Set([unknown, yes, no]).size).toBe(3);
+    expect(await hashOf({ siteData: siteData(undefined) })).toBe(unknown);
+  });
+
   // Fail CLOSED: a run context holding something that is not plain data must not
   // hash to a value it shares with a different one.
   test("refuses to hash a live handle", async () => {
