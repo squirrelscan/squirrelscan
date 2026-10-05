@@ -1,5 +1,7 @@
 ---
 title: "The entity map for agents"
+sidebarTitle: "For agents"
+icon: "bot"
 description: "Five MCP tools that let an agent ask what a site declares, find what is wrong with it, fix it, and prove the fix landed."
 ---
 
@@ -8,7 +10,7 @@ description: "Five MCP tools that let an agent ask what a site declares, find wh
 Structured data identity is unusually well suited to an agent, because the whole task is a loop with a verifiable end:
 
 1. **Find the problem.** `list_entities` with `problem: "no-id"` returns the entities a site declares on several pages with nothing to tie them together.
-2. **Fix it.** Give each one an absolute `@id` and reference it everywhere else. [Fixing structured data identity](/entity-map/fixing) has the change for each generator.
+2. **Fix it.** Give each one an absolute `@id` and reference it everywhere else. [Fixing structured data identity](/guides/entity-map/fixing) has the change for each generator.
 3. **Re-audit.** `run_audit`, or `squirrel audit` locally.
 4. **Prove it landed.** `compare_entities` and check that `gainedId` contains the keys you fixed, each with `coverage: "proven"`.
 
@@ -37,7 +39,7 @@ Every tool description states this loop, so an agent that calls one of the five 
 
 Available on both the local `squirrel mcp` server, reading your project store, and the [hosted server](/developers/mcp), reading the API. Same names, same inputs, same outputs. On the local server all five are free and need no account.
 
-### list_entities
+### `list_entities`
 
 The entities a site declares, collapsed across every crawled page into one graph, so an Organization declared identically on 60 pages is one row rather than 60.
 
@@ -59,7 +61,7 @@ Returns a summary, a page of nodes, and `total` and `hasMore`. Those last two ma
 
 Page-local entities are hidden by default because they usually outnumber everything else. On squirrelscan.com they are 233 of 363 entities.
 
-### get_entity
+### `get_entity`
 
 One entity as the map recorded it, by key, `@id` or name: the properties the map keeps, the pages that declare it, the properties whose values disagree between those pages, and the references in and out.
 
@@ -69,7 +71,7 @@ The lookup resolves in order of certainty: an exact `@id`, then an exact key, th
 
 Use it after `list_entities` to see **why** an entity was flagged before deciding what to change. Edges and declaring pages are capped, and `truncation` says when.
 
-### get_entity_graph
+### `get_entity_graph`
 
 The whole graph, or a filtered part of it, in one of six formats.
 
@@ -92,7 +94,7 @@ Not every server implements every format. One that does not says so rather than 
 The `jsonld` rendering gives every entity an `@id`, inventing one for each entity the site left anonymous, because a `@graph` member without an identifier is not much use in a validator. JSON-LD has nowhere to mark an identifier as a placeholder, so `generatedIds` lists them: the entity key and the `@id` this export made up for it. Those identifiers are not on the site. Read that list before concluding from the export that a site's entities are identified, which is the exact question that usually sends you here.
 </Note>
 
-### compare_entities
+### `compare_entities`
 
 The change set between two audits: entities added and removed, entities that gained or lost an `@id`, occurrence changes, new and resolved conflicts and dangling references, summary deltas, and the pages each audit saw that the other did not.
 
@@ -106,7 +108,7 @@ An entity is only reported as `removed` when every page that declared it was cra
 
 The default declines when the older audit stored no entities at all, because zero entities cannot be distinguished from an audit that predates the entity map, and guessing would report a site's entire graph as brand new. Name both runs when you know which it was.
 
-### get_entity_findings
+### `get_entity_findings`
 
 The `schema/entity-*` rule verdicts for an audit: what is wrong with the entity graph, which entity keys and pages each finding affects, and the fix text for each.
 
@@ -177,9 +179,9 @@ They also will not tell you a site is clean when they have not looked. A tool th
 
 ## References
 
-- [The entity map](/entity-map) — what it is and how to read it
-- [The entity map on your machine](/entity-map/cli) — the same queries from the command line
-- [The entity map in the cloud](/entity-map/cloud) — the dashboard and the API
-- [The entity map format](/entity-map/format) — the documents these tools return
-- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator
-- [MCP server guide](/developers/mcp) — connecting an agent
+- [The entity map](/guides/entity-map): what it is and how to read it
+- [The entity map on your machine](/guides/entity-map/cli): the same queries from the command line
+- [The entity map in the cloud](/guides/entity-map/cloud): the dashboard and the API
+- [The entity map format](/guides/entity-map/format): the documents these tools return
+- [Fixing structured data identity](/guides/entity-map/fixing): the change to make in each generator
+- [MCP server guide](/developers/mcp): connecting an agent

@@ -101,7 +101,7 @@ Three tools deserve a closer look:
 
 The five entity tools exist to be used in order. `list_entities` with `problem: "no-id"` returns the entities a site declares on several pages with nothing tying them together, you fix the site's JSON-LD, `run_audit` re-audits, and `compare_entities` confirms the keys you fixed come back under `gainedId`. That last step is the one worth insisting on: an entity that gains an `@id` changes key, so a naive before-and-after comparison reports the fix as one removal plus one addition and it reads as damage.
 
-[The entity map over MCP](/entity-map/mcp) covers the loop in full, including what the `coverage` field on each change is claiming.
+[The entity map over MCP](/guides/entity-map/mcp) covers the loop in full, including what the `coverage` field on each change is claiming.
 
 ### Which number to compare
 

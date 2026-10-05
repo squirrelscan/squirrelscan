@@ -15,7 +15,7 @@ This matters most on exactly the sites where it is most often missing: health, f
 
 ## What squirrel checks
 
-The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-authors`.
+The rule runs once per crawl, reads the [entity map](/guides/entity-map) rather than the pages, and emits a single check named `entity-authors`.
 
 - Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
 - Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
@@ -48,7 +48,7 @@ Declare each author once, with everything that identifies them:
 }
 ```
 
-Then reference it from every article by `"author": { "@id": "https://example.com/authors/ada#person" }` rather than repeating the name. An author page on your own site is the easiest `url` to provide and is worth having regardless. See [fixing structured data identity](/entity-map/fixing).
+Then reference it from every article by `"author": { "@id": "https://example.com/authors/ada#person" }` rather than repeating the name. An author page on your own site is the easiest `url` to provide and is worth having regardless. See [fixing structured data identity](/guides/entity-map/fixing).
 
 | | |
 |---|---|

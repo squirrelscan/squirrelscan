@@ -162,7 +162,7 @@ describe("every entity rule", () => {
     "%s links its fix text to the entity-map guide",
     (_id, rule) => {
       expect(rule.meta.solution).toContain(
-        "https://docs.squirrelscan.com/entity-map/fixing"
+        "https://docs.squirrelscan.com/guides/entity-map/fixing"
       );
     }
   );

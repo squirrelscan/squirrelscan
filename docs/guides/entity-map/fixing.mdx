@@ -1,5 +1,7 @@
 ---
 title: "Fixing structured data identity"
+sidebarTitle: "Fixing identity"
+icon: "wrench"
 description: "Every schema/entity-* finding, what causes it, and the exact change to make in Yoast, Rank Math, WordLift, Next.js, Astro and tangly."
 ---
 
@@ -178,7 +180,9 @@ Set `site` in `astro.config.mjs` so `Astro.site` is defined. Without it the iden
 
 ### tangly
 
-tangly emits the `@graph` shape from the site config. Set `site.url`, `organization` and `social` in the config and the `WebSite`, `Organization` and per-page nodes are generated with stable identifiers.
+tangly emits the `@graph` shape on every page from `docs.json`. Set `siteUrl`, then `seo.organization` (name, url, logo, `sameAs`) or a root `sameAs` list, and every page's `@graph` carries the same `Organization` and `WebSite` nodes under the same absolute `@id`s, with the per-page nodes referencing them by `@id`.
+
+Without a resolvable site URL tangly emits no JSON-LD at all, which is better than a graph of relative identifiers but leaves the map empty.
 
 ## Checking your work
 
@@ -201,11 +205,11 @@ The diff reports entities that gained an `@id` separately from additions and rem
 
 ## References
 
-- [The entity map](/entity-map) — what it is and how to read it
-- [The entity map on your machine](/entity-map/cli) — finding these problems locally
-- [The entity map in the cloud](/entity-map/cloud) — the dashboard and the API
-- [The entity map for agents](/entity-map/mcp) — the five MCP tools
-- [The entity map format](/entity-map/format) — the documents these produce
+- [The entity map](/guides/entity-map): what it is and how to read it
+- [The entity map on your machine](/guides/entity-map/cli): finding these problems locally
+- [The entity map in the cloud](/guides/entity-map/cloud): the dashboard and the API
+- [The entity map for agents](/guides/entity-map/mcp): the five MCP tools
+- [The entity map format](/guides/entity-map/format): the documents these produce
 - [Structured data general guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
 - [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
 - [Organization structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/organization)

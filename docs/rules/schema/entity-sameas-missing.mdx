@@ -13,7 +13,7 @@ It costs one array. It is the highest-value line in most organization blocks and
 
 ## What squirrel checks
 
-The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-sameas-missing`.
+The rule runs once per crawl, reads the [entity map](/guides/entity-map) rather than the pages, and emits a single check named `entity-sameas-missing`.
 
 - Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
 - Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
@@ -44,7 +44,7 @@ Add every profile you control, using the canonical URL of each rather than a red
 }
 ```
 
-List profiles that are genuinely about this organization. `sameAs` asserts identity rather than ownership, so a Wikipedia article or a Wikidata entity you do not control is exactly the kind of corroboration it is for. What it must not name is a different organization. See [fixing structured data identity](/entity-map/fixing).
+List profiles that are genuinely about this organization. `sameAs` asserts identity rather than ownership, so a Wikipedia article or a Wikidata entity you do not control is exactly the kind of corroboration it is for. What it must not name is a different organization. See [fixing structured data identity](/guides/entity-map/fixing).
 
 | | |
 |---|---|

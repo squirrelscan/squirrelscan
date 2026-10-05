@@ -1,2 +1,7 @@
 /agents /developers/agents 301
 /agents/* /developers/agents/:splat 301
+/entity-map /guides/entity-map 301
+/entity-map.md /guides/entity-map.md 301
+/entity-map/* /guides/entity-map/:splat 301
+/og/entity-map.png /og/guides/entity-map.png 301
+/og/entity-map/* /og/guides/entity-map/:splat 301

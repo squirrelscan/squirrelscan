@@ -1,15 +1,38 @@
 ---
 title: "The entity map"
+sidebarTitle: "Overview"
+icon: "map"
 description: "Every audit collapses your site's JSON-LD into one graph, so you can see whether your site declares one identity for itself or a new one on every page."
 ---
 
-## What it is
+The entity map is the structured data on your whole site, collapsed into one graph. Every squirrelscan audit builds it, on your machine and in the cloud, with nothing to turn on. It answers a question no per-page validator can: does your site declare one organization, one website and one author, or a fresh copy of each on every page?
+
+## Why it matters
 
 Structured data validators check one page at a time. That is the wrong unit for most of what goes wrong with it.
 
 A page can carry a perfectly valid `Organization` block, and so can the fifty-nine other pages, and if none of them says they are the same organization then a search engine has sixty organizations and no reason to connect them. Nothing accumulates: not the reviews, not the profile links, not the authority of the articles.
 
-The entity map is what every audit builds to make that visible. It reads the JSON-LD from every crawled page, resolves the references between nodes, and collapses the result into one graph of the entities your site declares rather than a list of the blocks it emits.
+The entity map makes that visible. It reads the JSON-LD from every crawled page, resolves the references between nodes, and collapses the result into one graph of the entities your site declares rather than a list of the blocks it emits.
+
+## See yours in one command
+
+```bash
+squirrel audit https://example.com
+```
+
+The terminal report has an Entities block just above the issues: how many entities the site declares, how many references join them, the share with a stable `@id`, any conflicting or dangling ones, and up to three of the entities declared most often. Page furniture, like each page's own `WebPage` and `BreadcrumbList`, only fills that list when the site declares nothing else.
+
+To dig in, query the stored map without crawling again:
+
+```bash
+squirrel entities                         # the most-declared entities and anything to fix
+squirrel entities --problem no-id         # entities on several pages with no @id
+squirrel entities --diff                  # what changed since the last audit
+squirrel report -f html -o report.html    # the interactive graph
+```
+
+Every report format carries the map. The HTML report draws it as a graph you can pan, zoom and filter, Markdown gives you tables, and JSON has the complete document under an `entities` key. Hosted audits get the same map on the website's Entities page in the dashboard.
 
 ## What it shows
 
@@ -19,19 +42,6 @@ Four questions, none of which a per-page validator can answer:
 - **Does anything tie the declarations together?** The share of entities carrying a stable `@id` is the single most useful number in the map.
 - **Do the declarations agree?** The same organization with two logos, two phone numbers or two names is a question with no answer.
 - **Do the references resolve?** A `publisher` pointing at an `@id` that nothing in the crawl declares is a reference to nothing, and only a view of the whole site can tell that from a reference the home page satisfies.
-
-## Reading the graph
-
-Every audit report carries an Entities section. In the HTML report it is an interactive graph you can pan, zoom and filter; in Markdown and the terminal it is a table; in JSON it is the complete document under an `entities` key.
-
-From the command line, [`squirrel entities`](/cli/entities) queries the map of a stored audit without re-crawling:
-
-```bash
-squirrel entities                       # a summary of the latest audit
-squirrel entities "https://example.com/#organization"
-squirrel entities --problem no-id       # only the entities worth fixing
-squirrel entities --diff                # what changed since the last audit
-```
 
 ## The summary metrics
 
@@ -45,31 +55,35 @@ squirrel entities --diff                # what changed since the last audit
 
 A high entity count with a low stable-`@id` share is the classic shape of a site that emits structured data everywhere and gets nothing from it.
 
+The map itself is informational and never changes the health score. What is wrong with it is reported by the rules below.
+
 ## The rules
 
-Thirteen site-wide rules read the map and report what is wrong with it, from identity failures down to tidiness. They are listed under [Structured Data](/rules/schema), and every one of them links back to [fixing structured data identity](/entity-map/fixing), which has the change to make in each generator.
+Thirteen site-wide rules read the map and report what is wrong with it, from identity failures down to tidiness. They are listed under [Structured Data](/rules/schema), and every one of them links back to [fixing structured data identity](/guides/entity-map/fixing), which has the change to make in each generator.
+
+## Where to next
 
 <CardGroup cols={2}>
-  <Card title="Fix identity problems" icon="wrench" href="/entity-map/fixing">
+  <Card title="Fixing identity" icon="wrench" href="/guides/entity-map/fixing">
     Every finding, with the exact change in Yoast, Rank Math, WordLift, Next.js, Astro and tangly.
   </Card>
-  <Card title="On your machine" icon="terminal" href="/entity-map/cli">
+  <Card title="On your machine" icon="terminal" href="/guides/entity-map/cli">
     Where the map appears in every report format, `squirrel entities`, and the store.
   </Card>
-  <Card title="In the cloud" icon="cloud" href="/entity-map/cloud">
+  <Card title="In the cloud" icon="cloud" href="/guides/entity-map/cloud">
     The dashboard Entities page, its filters and exports, and the API.
   </Card>
-  <Card title="For agents" icon="robot" href="/entity-map/mcp">
+  <Card title="For agents" icon="bot" href="/guides/entity-map/mcp">
     Five MCP tools, and the loop that proves a fix landed.
   </Card>
-  <Card title="The format" icon="brackets-curly" href="/entity-map/format">
+  <Card title="Format reference" icon="braces" href="/guides/entity-map/format">
     The version 1 document, the JSON-LD export and the change set.
   </Card>
 </CardGroup>
 
 ## References
 
-- [The entity map on your machine](/entity-map/cli), [in the cloud](/entity-map/cloud), [for agents](/entity-map/mcp), and [its format](/entity-map/format)
+- [The entity map on your machine](/guides/entity-map/cli), [in the cloud](/guides/entity-map/cloud), [for agents](/guides/entity-map/mcp), and [its format](/guides/entity-map/format)
 - [Introduction to structured data markup, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data)
 - [JSON-LD 1.1, W3C](https://www.w3.org/TR/json-ld11/)
 - [Getting started with schema.org, schema.org](https://schema.org/docs/gs.html)

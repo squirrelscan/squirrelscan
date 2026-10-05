@@ -76,6 +76,18 @@
             ]
           },
           {
+            "group": "Entity map",
+            "icon": "network",
+            "pages": [
+              "guides/entity-map/index",
+              "guides/entity-map/cli",
+              "guides/entity-map/cloud",
+              "guides/entity-map/mcp",
+              "guides/entity-map/format",
+              "guides/entity-map/fixing"
+            ]
+          },
+          {
             "group": "Concepts",
             "pages": [
               "projects",
@@ -627,17 +639,6 @@
         "icon": "terminal",
         "groups": [
           {
-            "group": "Entity map",
-            "pages": [
-              "entity-map/index",
-              "entity-map/cli",
-              "entity-map/cloud",
-              "entity-map/mcp",
-              "entity-map/format",
-              "entity-map/fixing"
-            ]
-          },
-          {
             "group": "CLI Reference",
             "pages": [
               "cli/index",
@@ -765,6 +766,16 @@
     {
       "source": "/agents",
       "destination": "/developers/agents",
+      "permanent": true
+    },
+    {
+      "source": "/entity-map",
+      "destination": "/guides/entity-map",
+      "permanent": true
+    },
+    {
+      "source": "/entity-map/:slug*",
+      "destination": "/guides/entity-map/:slug*",
       "permanent": true
     }
   ]
