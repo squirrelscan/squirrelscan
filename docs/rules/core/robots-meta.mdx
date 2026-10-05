@@ -1,27 +1,32 @@
 ---
-title: "noindex in a robots meta tag: what squirrel reports per page"
-description: "A page declaring noindex or nofollow in its robots meta. squirrel reads the tag on every crawled page and names which directive it found."
+title: "noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page"
+description: "A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set."
 ---
 
 ## What the robots meta tag does
 
 `<meta name="robots">` controls how a search engine treats one page. Absent, the default is `index, follow`: index the page and follow its links. `noindex` keeps the page out of the index. `nofollow` asks a search engine not to follow the page's links or pass signals through them. Google documents it as a hint rather than a directive.
 
-Both have legitimate uses. A thank-you page after a form submission should be `noindex`. A page of user-submitted links might be `nofollow`. What matters is whether the directive is on the pages you meant, which is the question a crawl answers and a single page view does not.
+The `X-Robots-Tag` response header carries the same directives without touching the HTML, so it also works for PDFs and other files, and it can address one crawler by name (`X-Robots-Tag: googlebot: noindex`). It is often set by a server, CDN or framework rather than the page template.
+
+Both directives have legitimate uses. A thank-you page after a form submission should be `noindex`. A page of user-submitted links might be `nofollow`. What matters is whether the directive is on the pages you meant, which is the question a crawl answers and a single page view does not.
 
 ## What squirrel checks
 
-The rule runs on every crawled page against the parsed robots meta value, lowercased. It emits one check named `robots-meta`:
+The rule runs on every crawled page and reads two sources: the parsed robots meta value and the `X-Robots-Tag` response header. Both are lowercased before matching. It emits one check named `robots-meta`:
 
-- Passing with the message `No robots meta tag (defaults to index, follow)` and a null value when there is no tag.
-- Warning with the message `Page is set to noindex and nofollow` when both appear.
-- Warning with the message `Page is set to noindex` when only that appears.
-- At info status with the message `Page is set to nofollow (links won't pass equity)` when only that appears. The wording is the report's; Google treats the directive as a hint.
-- Passing with the message `Robots meta tag allows indexing` when the tag is present and carries neither.
+- Passing with the message `No robots meta tag (defaults to index, follow)` and a null value when there is neither a tag nor a header.
+- Warning with the message `Page is set to noindex and nofollow via <source>` when both appear, or `Page is set to noindex via <source>` when only `noindex` does.
+- At info status with the message `Page is set to nofollow via <source> (links won't pass equity)` when only `nofollow` appears. The wording is the report's; Google treats the directive as a hint.
+- Passing with the message `Robots meta tag allows indexing`, `X-Robots-Tag header allows indexing` or `Robots meta tag and X-Robots-Tag header allow indexing` when the sources are present and carry neither.
 
-The value is always reported alongside the message, so the full directive list is visible in the report.
+The source is `robots meta tag`, `X-Robots-Tag header`, or both joined with `and`. When `noindex` and `nofollow` come from different sources, each gets its own clause, as in `Page is set to noindex via X-Robots-Tag header, nofollow via robots meta tag`.
 
-The match is a substring test on the lowercased value, so `nofollow` is also found inside `nofollow-something` and, more importantly, `noindex` is found inside any token containing it. This rule reads the meta element only; an `X-Robots-Tag` header saying the same thing is checked by [crawl/indexability](/rules/crawl/indexability).
+A header can scope its directives to one crawler, as in `X-Robots-Tag: googlebot: noindex`. The prefix applies to the directives after it until the next prefix, and the source then names the crawler: `Page is set to noindex via X-Robots-Tag header for googlebot`. Up to five crawlers are named, with a count of the rest. An unscoped directive in the same header covers every crawler, so the scoped ones are not listed. Prefixes such as `max-snippet:` and `unavailable_after:` are directive values, not crawler names.
+
+The value is reported alongside the message. With no header it is the meta tag's content, as before. A header-only page reports `X-Robots-Tag: <header value>`, and a page with both reports `robots meta: <content>; X-Robots-Tag: <header value>`.
+
+The match is a substring test on the directives, so `nofollow` is also found inside `nofollow-something` and `noindex` is found inside any directive containing it. Crawler names in a header are not searched: `X-Robots-Tag: noindexbot: index` is not a `noindex`. [crawl/indexability](/rules/crawl/indexability) searches the whole header value instead, so it would count that one. Only `<meta name="robots">` is read; a crawler-specific meta tag such as `<meta name="googlebot">` is not. When a server sends `X-Robots-Tag` more than once, the values arrive joined with commas, so an unscoped header that follows a scoped one is read as part of the scoped group.
 
 ## How to fix it
 
@@ -32,6 +37,8 @@ Remove the directive from pages that should be indexed:
 ```
 
 Omitting the tag entirely does the same thing and is one less place for a template to go wrong. Where the page really should stay out of the index, leaving it is correct, and the finding is a report rather than a defect.
+
+When the report names the `X-Robots-Tag` header, the directive is in your server, CDN or framework configuration, not in the page source. Check the response headers with `curl -I https://example.com/page` and remove it where it is set.
 
 The common false positive is a staging environment audited by mistake, where a site-wide `noindex` is exactly what should be there.
 
@@ -69,7 +76,7 @@ disable = ["*"]
 
 ## Related rules
 
-- [crawl/indexability](/rules/crawl/indexability): the same question including the X-Robots-Tag header and robots.txt.
+- [crawl/indexability](/rules/crawl/indexability): a noindex test over the meta tag and the whole header value, reported at info status.
 - [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): a robots meta that contradicts another signal on the page.
 - [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap): a noindex page listed in the sitemap.
 - [core/nosnippet](/rules/core/nosnippet): the snippet directives in the same tag.

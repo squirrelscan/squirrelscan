@@ -43,8 +43,8 @@ See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-
   <Card title="Missing og:image: the Open Graph tags squirrel checks" icon="triangle-exclamation" href="/rules/core/og-tags">
     A page missing og:title, og:description or og:image, so shares render without a preview. squirrel checks four tags per page.
   </Card>
-  <Card title="noindex in a robots meta tag: what squirrel reports per page" icon="triangle-exclamation" href="/rules/core/robots-meta">
-    A page declaring noindex or nofollow in its robots meta. squirrel reads the tag on every crawled page and names which directive it found.
+  <Card title="noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page" icon="triangle-exclamation" href="/rules/core/robots-meta">
+    A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set.
   </Card>
   <Card title="Duplicate page titles: the site-wide uniqueness check" icon="triangle-exclamation" href="/rules/core/title-unique">
     Two or more pages sharing a title after case and whitespace are normalised. squirrel groups them and lists every URL.
