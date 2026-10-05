@@ -6,6 +6,7 @@ export {
   schemaCollectionFromJSON,
 } from "./collection";
 export { parseSchemas } from "./parser";
+export { validateSchemas } from "./validator";
 export { extractAuthorFromSchema } from "./author";
 export type { AuthorInfo } from "./author";
 

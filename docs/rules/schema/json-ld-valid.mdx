@@ -15,11 +15,18 @@ The rule reads the page's parsed JSON-LD and emits exactly one check:
 
 - `json-ld`, at info status with the message `No JSON-LD structured data found`, when the page's parsed JSON-LD is empty.
 - `json-ld`, at info status with the message `JSON-LD detected but schema metadata unavailable`, when a block was found but the parser could not produce validation metadata for it.
-- `json-ld-valid`, failing when the parser marked the JSON-LD invalid, when any block failed to parse, or when at least one validation issue was recorded. The message is `Invalid JSON-LD syntax` if there is a parse error and `Schema.org validation errors detected` otherwise. Items list the parse errors verbatim, then one entry per validation issue labelled `<type> missing <property>` and carrying the property path.
+- `json-ld-valid`, failing when any block failed to parse or the page's JSON-LD has at least one validation issue. The message is `Invalid JSON-LD syntax` if there is a parse error and `Schema.org validation errors detected` otherwise. Items list the parse errors verbatim, then one entry per validation issue carrying the property path, labelled `<type> missing <property>` for a missing property and `<type> has an invalid <property>` for a value of the wrong shape.
 - `json-ld-types`, warning with the message `JSON-LD present but no @type found`, when the JSON-LD parsed cleanly but declares no type.
 - `json-ld`, passing with the message `Valid JSON-LD with N type(s)` and one item per type name.
 
-A parse error anywhere in the page's JSON-LD takes priority over a validation issue, so a page with both reports only `Invalid JSON-LD syntax`. The severity is warning, and the check status is `fail`, so the finding appears at warning weight in the score.
+A parse error anywhere in the page's JSON-LD takes priority over a validation issue for the message, so a page with both reads `Invalid JSON-LD syntax` and still lists its validation issues as items. The validation runs at audit time, so a page reused from the crawl cache is checked by the current release, not by the one that first fetched it. The severity is warning, and the check status is `fail`, so the finding appears at warning weight in the score.
+
+### What the validator accepts
+
+The validator follows the schema.org range of each property it checks:
+
+- `image` (on `Article`, `Product`, `LocalBusiness` and `Recipe`) and `Organization.logo` take a URL, an `ImageObject` with a `url` or `contentUrl`, an `{"@id": ...}` reference, or an array of these. Anything else, such as a number, an object of another `@type`, or an `ImageObject` with no URL, is invalid.
+- A nested node with an `@id`, such as `"publisher": {"@id": "https://example.com/#organization"}`, is checked together with every other node that describes the same `@id` inside the page's typed JSON-LD: in the same `@graph`, another `@graph`, or another script block. A property given by any of them counts. This is how Yoast and `@unhead/schema-org` (Nuxt) link their nodes. A bare reference to an `@id` that no node on the page describes is checked as written, so `publisher.name` is still reported missing.
 
 ## How to fix it
 

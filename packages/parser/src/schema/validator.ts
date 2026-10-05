@@ -10,6 +10,9 @@ type PropertyType =
   | "array"
   | "object"
   | "stringOrArray"
+  // schema.org range `ImageObject | URL` (image, logo): a URL string, an
+  // ImageObject (inline or an `{"@id"}` reference), or an array of either.
+  | "urlOrImage"
   | "objectOrArray";
 
 interface PropertyRule {
@@ -36,7 +39,7 @@ const TYPE_RULES: Record<string, SchemaRule> = {
     required: ["headline", "image", "datePublished", "author", "publisher"],
     properties: {
       headline: { type: "string" },
-      image: { type: "stringOrArray" },
+      image: { type: "urlOrImage" },
       datePublished: { type: "string" },
       author: { type: "objectOrArray", required: ["name"] },
       publisher: { type: "object", required: ["name", "logo"] },
@@ -46,7 +49,7 @@ const TYPE_RULES: Record<string, SchemaRule> = {
     required: ["name", "image", "offers"],
     properties: {
       name: { type: "string" },
-      image: { type: "stringOrArray" },
+      image: { type: "urlOrImage" },
       offers: {
         type: "objectOrArray",
         required: ["price", "priceCurrency", "availability"],
@@ -58,7 +61,7 @@ const TYPE_RULES: Record<string, SchemaRule> = {
     properties: {
       name: { type: "string" },
       url: { type: "url" },
-      logo: { type: "stringOrArray" },
+      logo: { type: "urlOrImage" },
     },
   },
   LocalBusiness: {
@@ -67,7 +70,7 @@ const TYPE_RULES: Record<string, SchemaRule> = {
       name: { type: "string" },
       url: { type: "url" },
       address: { type: "object" },
-      image: { type: "stringOrArray" },
+      image: { type: "urlOrImage" },
     },
   },
   WebSite: {
@@ -123,7 +126,7 @@ const TYPE_RULES: Record<string, SchemaRule> = {
     required: ["name", "image", "recipeIngredient", "recipeInstructions"],
     properties: {
       name: { type: "string" },
-      image: { type: "stringOrArray" },
+      image: { type: "urlOrImage" },
       recipeIngredient: { type: "array" },
       recipeInstructions: { type: "array" },
     },
@@ -135,6 +138,83 @@ function isMissing(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length === 0;
   if (Array.isArray(value)) return value.length === 0;
   return false;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Every description of an entity on the page, keyed by its `@id`: what a bare
+ * `{"@id"}` reference points at. JSON-LD lets one entity be described in
+ * several places, so all of them are kept.
+ */
+type NodeIndex = Map<string, Record<string, unknown>[]>;
+
+/**
+ * Index every node inside the page's typed schemas that describes an entity
+ * under an `@id`, at any depth. A node that is itself only a reference (`@id`,
+ * optionally `@type`) describes nothing and is skipped. Iterative so a deeply
+ * nested document cannot overflow the stack.
+ */
+function indexNodes(schemas: ParsedSchema[]): NodeIndex {
+  const index: NodeIndex = new Map();
+  const stack: unknown[] = [...schemas];
+  while (stack.length > 0) {
+    const value = stack.pop();
+    if (Array.isArray(value)) {
+      for (const item of value) stack.push(item);
+      continue;
+    }
+    if (!isPlainObject(value)) continue;
+    const id = value["@id"];
+    if (typeof id === "string" && !isBareReference(value)) {
+      const descriptions = index.get(id);
+      if (descriptions) descriptions.push(value);
+      else index.set(id, [value]);
+    }
+    for (const key in value) stack.push(value[key]);
+  }
+  return index;
+}
+
+/** schema.org `ImageObject` and its subtypes. */
+const IMAGE_OBJECT_TYPES = new Set(["ImageObject", "Barcode", "ImageObjectSnapshot"]);
+
+/** `ImageObject` from `ImageObject`, `schema:ImageObject` or `https://schema.org/ImageObject`. */
+function bareTypeName(type: string): string {
+  return type.replace(/^(?:https?:\/\/(?:www\.)?schema\.org\/|schema:)/, "");
+}
+
+/**
+ * A value in the range `ImageObject | URL`: a URL string, a reference to a node
+ * (`{"@id"}`), or an image object that carries its URL. An object typed as
+ * something other than an image, or an image with nothing to fetch, is not.
+ */
+function isUrlOrImage(value: unknown): boolean {
+  if (typeof value === "string") return true;
+  if (!isPlainObject(value)) return false;
+  const type = value["@type"];
+  const types: unknown[] = Array.isArray(type) ? type : type === undefined ? [] : [type];
+  const isImage = (t: unknown) => typeof t === "string" && IMAGE_OBJECT_TYPES.has(bareTypeName(t));
+  if (types.length > 0 && !types.some(isImage)) return false;
+  return (
+    typeof value["@id"] === "string" || !isMissing(value.url) || !isMissing(value.contentUrl)
+  );
+}
+
+/**
+ * A bare JSON-LD reference: an object with an `@id` and nothing else but an
+ * optional `@type`. Generators that emit a page as one `@graph` (Yoast,
+ * `@unhead/schema-org`) link nodes this way, e.g.
+ * `"publisher": {"@id": "https://example.com/#identity"}`.
+ */
+function isBareReference(value: Record<string, unknown>): boolean {
+  if (typeof value["@id"] !== "string") return false;
+  for (const key of Object.keys(value)) {
+    if (key !== "@id" && key !== "@type") return false;
+  }
+  return true;
 }
 
 function isUrl(value: string): boolean {
@@ -151,6 +231,7 @@ function validatePropertyType(
   prop: string,
   value: unknown,
   rule: PropertyRule,
+  nodes: NodeIndex,
   addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void,
 ): void {
   if (isMissing(value)) {
@@ -197,6 +278,11 @@ function validatePropertyType(
         addTypeError("a string or array of strings");
       }
       break;
+    case "urlOrImage":
+      if (Array.isArray(value) ? !value.every(isUrlOrImage) : !isUrlOrImage(value)) {
+        addTypeError("a URL, an ImageObject, or an array of either");
+      }
+      break;
     case "objectOrArray":
       if (
         typeof value !== "object" ||
@@ -211,10 +297,15 @@ function validatePropertyType(
   if (!rule.required) return;
 
   const checkObject = (obj: unknown) => {
-    if (!obj || typeof obj !== "object") return;
+    if (!isPlainObject(obj)) return;
+    // A node with an `@id` is checked together with every other description of
+    // that id on the page: a field given by any of them is present. A bare
+    // reference that names no node on the page is checked as written, so its
+    // missing fields still report.
+    const id = obj["@id"];
+    const targets = typeof id === "string" ? [obj, ...(nodes.get(id) ?? [])] : [obj];
     for (const key of rule.required ?? []) {
-      const val = (obj as Record<string, unknown>)[key];
-      if (isMissing(val)) {
+      if (targets.every((target) => isMissing(target[key]))) {
         addIssue({
           property: `${prop}.${key}`,
           message: `Validation: ${typeName}.${prop}.${key} is required`,
@@ -290,7 +381,7 @@ function validateContext(
   }
 }
 
-function validateSchema(schema: ParsedSchema): SchemaValidationIssue[] {
+function validateSchema(schema: ParsedSchema, nodes: NodeIndex): SchemaValidationIssue[] {
   const issues: SchemaValidationIssue[] = [];
 
   const baseTypeRaw =
@@ -336,13 +427,18 @@ function validateSchema(schema: ParsedSchema): SchemaValidationIssue[] {
 
     for (const [prop, rule] of Object.entries(rules.properties ?? {})) {
       const value = (schema as Record<string, unknown>)[prop];
-      validatePropertyType(typeName, prop, value, rule, addIssue);
+      validatePropertyType(typeName, prop, value, rule, nodes, addIssue);
     }
   }
 
   return issues;
 }
 
+/**
+ * Validate every schema on a page. References (`{"@id": …}`) resolve against
+ * all of the page's JSON-LD, across `@graph`s and separate script blocks.
+ */
 export function validateSchemas(schemas: ParsedSchema[]): SchemaValidationIssue[] {
-  return schemas.flatMap((schema) => validateSchema(schema));
+  const nodes = indexNodes(schemas);
+  return schemas.flatMap((schema) => validateSchema(schema, nodes));
 }

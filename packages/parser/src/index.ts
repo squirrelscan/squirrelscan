@@ -39,6 +39,7 @@ export {
 
 export {
   parseSchemas,
+  validateSchemas,
   extractAuthorFromSchema,
   EMPTY_SCHEMA_COLLECTION,
   schemaCollectionFromJSON,
