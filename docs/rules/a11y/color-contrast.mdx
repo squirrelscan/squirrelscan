@@ -1,6 +1,6 @@
 ---
 title: "Color contrast: the 4.5:1 rule and how to check it"
-description: "Light gray text on white fails WCAG AA. squirrel flags low-contrast inline styles, CSS colors and known low-contrast utility classes."
+description: "Light gray text on white fails WCAG AA. squirrel measures the contrast of text whose color and background are both set inline, and reports pairs under 4.5:1."
 ---
 
 ## What color contrast is
@@ -11,14 +11,18 @@ The ratio is a property of the rendered pixels, so it depends on the stylesheet,
 
 ## What squirrel checks
 
-One check, `color-contrast`, at severity warning. It runs four passes over what the HTML makes visible, and applies the 4.5:1 threshold to everything it measures. The 3:1 large-text allowance is not applied, so a large heading at 3.5:1 is still reported.
+One check, `color-contrast`, at severity warning. It reports an element only when it has measured the element's contrast ratio and the ratio is under 4.5:1. The 3:1 large-text allowance is not applied, so a large heading at 3.5:1 is still reported.
 
-- Inline styles: any element whose `style` sets both `color` and `background` or `background-color` to a hex value, an `rgb()`/`rgba()` value or one of 32 named colors. squirrel computes the WCAG ratio and reports anything under 4.5:1 as `span: #999 on #fff (2.85:1)`. `transparent` is treated as white.
-- Class names: elements whose `class` matches a known low-contrast pattern. That covers Tailwind-style `text-gray-3xx` and `text-gray-4xx` and the slate, zinc, neutral and stone equivalents, Bootstrap's `text-muted` and `text-secondary`, the generic `text-light`, `text-subtle`, `text-disabled` and `text-placeholder`, and `opacity-2x`/`opacity-3x`.
-- `<style>` blocks: any rule that declares a `color` and contains a known-light value anywhere inside it. That covers `#ccc`, `#ddd`, `#eee`, `#999`, `#aaa`, `#bbb`, `#c0c0c0`, `#d3d3d3`, `#dcdcdc` and an `rgb()` whose first channel falls between 180 and 229. The match is over the whole rule, so `.x { color: #000; background: #ccc }` is reported even though the light value is the background. Capped at five findings.
-- Raw source: four separate patterns over the whole HTML, each counted on its own. `color: #ccc`, `#ddd`, `#eee`, `#999`, `#aaa` or `#bbb` and `color: lightgray`, `lightgrey` or `silver` are both counted as `Light gray text: N instance(s)`; `color: white` or `color: #fff` as `White text (verify background): N instance(s)`; and a `color:` set to a three-digit hex drawn from `d`, `e` and `f`, such as `#eef`, as `Very light text color: N instance(s)`.
+A pair is measured when the element's own `style` attribute settles on both a `color` and an opaque background color, and the element has text. Within the attribute the last declaration of a property wins, and an `!important` one beats later ones without it. The background color comes from `background-color`, or from a `background` shorthand whose whole value is one color; any other shorthand, and a `background-image` other than `none`, leaves the background unresolved. A color counts when its whole value is a hex value (`#rgb`, `#rrggbb`, or a 4- or 8-digit hex whose alpha is fully opaque), an `rgb()`/`rgba()` value with three comma-separated channels of 0 to 255 and, if present, an alpha of 1 or 100%, or one of 31 named colors. squirrel computes the WCAG ratio and reports anything under 4.5:1 as `span: #999 on #fff (2.85:1)`.
 
-Findings are deduplicated, and the check reports `N potential color contrast issue(s)` with up to ten items. With nothing found it passes as `No obvious contrast issues detected`, and on a page with no styled elements at all it returns info with `Limited contrast analysis available`.
+Everything else is left unresolved, and an unresolved pair is not a finding. axe-core treats it the same way, as "incomplete" rather than a violation. That covers:
+
+- colors set in a stylesheet, whether external or in a `<style>` block, or inherited from an ancestor;
+- class names, including Tailwind's `text-gray-300` and Bootstrap's `text-muted`. A class says nothing about the surface the text lands on;
+- `transparent`, any alpha below 1, `inherit`, `currentcolor`, `var()` and other syntax, because the color behind the text or of the text is not in the value. This holds when such a value is the winning declaration, even if an earlier one in the same attribute could be measured;
+- a background that may layer an image or a gradient, because there is no single color behind the text.
+
+Findings are deduplicated, and the check reports `N color contrast issue(s) below 4.5:1` with up to ten items and the count of measured pairs. With nothing under the threshold it passes as `No obvious contrast issues detected` whenever the page has any element with a `style` or `class` attribute, and on a page with neither it returns info with `Limited contrast analysis available`.
 
 ## How to fix it
 
@@ -30,7 +34,7 @@ Findings are deduplicated, and the check reports `N potential color contrast iss
 
 Darken the foreground or lighten the background until the pair clears 4.5:1, and check the pair, not the color alone.
 
-White text is the usual false positive. `color: white` is reported without knowing the background, so a dark theme trips it on every heading. The class-name pass has the same problem in reverse: a utility class named for a color says nothing about the surface it lands on.
+A pass covers only the pairs squirrel could measure. Most text takes its colors from stylesheets, so check the rendered page with browser DevTools or a contrast checker as well.
 
 | | |
 |---|---|
@@ -81,7 +85,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Accessibility section of the report. The first ten deduplicated findings are listed, and inline color pairs carry their computed ratio. Local audits are free.
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The first ten deduplicated findings are listed, each with its computed ratio. Local audits are free.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

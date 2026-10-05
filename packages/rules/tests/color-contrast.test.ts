@@ -1,23 +1,21 @@
-// a11y/color-contrast — the <style> scan must stay linear in the CSS it reads.
+// a11y/color-contrast reports only contrast it measured (#465).
 //
-// The rule used to pull color-declaring rule blocks out of each <style> with
-// LEGACY_RULE_RE below, which is quadratic in the length of a brace-free run: a
-// chat widget's 428KB <style> of base64 @font-face data took 76s on one page.
-// extractColorRules finds the same matches in linear time; the old regex stays
-// here as the oracle for ordinary CSS, where it is fast.
+// The rule used to warn on class names (`text-gray-300`), on light colors in
+// <style> blocks and on raw `color:` text in the HTML, none of which says what
+// the text sits on: `text-gray-300` on a near-black hero is above 12:1. Now an
+// element is reported only when its text color and an opaque background are
+// both set inline and the computed ratio is under 4.5:1. A pair it cannot
+// resolve is not a violation (axe calls it "incomplete").
+//
+// It must also stay linear in what it reads: the <style> scan it no longer has
+// once took 76s on a 428KB block of base64 fonts (#2378).
 
 import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { colorContrastRule, extractColorRules } from "../src/a11y/color-contrast";
-import type { RuleContext } from "../src/types";
-
-const LEGACY_RULE_RE = /[^{}]+\{[^{}]*color\s*:[^;]+;[^{}]*\}/gi;
-
-function legacyRules(css: string): string[] {
-  return css.match(LEGACY_RULE_RE) ?? [];
-}
+import { colorContrastRule } from "../src/a11y/color-contrast";
+import type { CheckResult, RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
   const url = "https://example.com/";
@@ -28,158 +26,168 @@ function ctx(html: string): RuleContext {
   } as unknown as RuleContext;
 }
 
-function pageWithStyle(css: string): string {
-  return `<!DOCTYPE html><html><head><title>t</title><style>${css}</style></head><body><p>Some text</p></body></html>`;
+function page({ head = "", body = "" }: { head?: string; body?: string }): string {
+  return `<!DOCTYPE html><html lang="en"><head><title>t</title>${head}</head><body><main><h1>Page</h1>${body}</main></body></html>`;
 }
 
-/** Seeded generator: same seed, same sequence (no Math.random in tests). */
-function rng(seed: number): (n: number) => number {
-  let s = seed >>> 0;
-  return (n) => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return (s >>> 8) % n;
-  };
+function run(html: string): CheckResult {
+  return runCtx(ctx(html));
 }
 
-/** `len` characters of base64 alphabet, the shape of an embedded font. */
-function base64Run(len: number, seed: number): string {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  const next = rng(seed);
-  const out: string[] = [];
-  for (let i = 0; i < len; i++) out.push(alphabet[next(64)]!);
-  return out.join("");
+function runCtx(context: RuleContext): CheckResult {
+  const result = colorContrastRule.run(context);
+  if (result instanceof Promise) throw new Error("color-contrast is async");
+  expect(result.checks).toHaveLength(1);
+  return result.checks[0]!;
 }
 
-/** About `bytes` of `@font-face` blocks with base64 `src`, like a chat widget ships. */
-function fontFaceCss(bytes: number): string {
-  return [0.7, 0.1, 0.1, 0.05, 0.05]
-    .map(
-      (share, i) =>
-        `@font-face{font-family:"Widget${i}";src:url(data:font/woff2;base64,${base64Run(Math.floor(share * bytes), i + 1)}) format("woff2");font-weight:${400 + i * 100};font-style:normal;font-display:swap}`
-    )
-    .join("\n");
+/** Milliseconds the rule itself takes, parsing excluded. */
+function timeRule(html: string): number {
+  const context = ctx(html);
+  const start = performance.now();
+  runCtx(context);
+  return performance.now() - start;
 }
 
-const ORDINARY_CSS: Record<string, string> = {
-  "one rule": ".muted{color:#ccc;}",
-  "spaced and multi-line": ".muted {\n  color: #999;\n  margin: 0;\n}\n.b { padding: 0; }",
-  "minified sheet": "body{margin:0;color:#333;font:16px/1.5 sans-serif}a{color:#06c;}a:hover{color:#ddd;text-decoration:underline}.x{display:none}",
-  "last declaration without a semicolon": ".a{color:#ccc}.b{margin:0;}",
-  "background-color counts as color": ".hero{background-color:#eee;padding:2rem;}",
-  "upper case and space before the colon": ".a{COLOR :#aaa;}",
-  "nested in @media": "@media (max-width:600px){.x{color:#bbb;}.y{margin:0}}",
-  "commented-out declaration": "/* .old{color:#ccc;} */.new{color:#111;}",
-  "empty value": ".a{color:;}.b{color:red;}",
-  "rgb value": ".a{color:rgb(200, 200, 200);}",
-  "font-face before a color rule": "@font-face{font-family:x;src:url(data:font/woff2;base64,d09GMgABAAAAA)}.t{color:#eee;}",
-  "unclosed rule": ".a{color:#ccc;",
-  "no braces at all": "color:#ccc;",
-  "stray braces": "}}{{.a{color:#ccc;}}{",
-  empty: "",
-};
+describe("guesses are not reported", () => {
+  test("the #465 repro: text-gray-300 on a dark background from an external stylesheet", () => {
+    const check = run(
+      page({
+        head: `<link rel="stylesheet" href="s.css">`,
+        body: `<section class="hero"><p class="text-gray-300">Gray 300 text on a near-black background</p></section>`,
+      })
+    );
+    expect(check.status).toBe("pass");
+    expect(check.items).toBeUndefined();
+  });
 
-describe("extractColorRules matches the legacy regex", () => {
-  for (const [name, css] of Object.entries(ORDINARY_CSS)) {
-    test(name, () => {
-      expect(extractColorRules(css)).toEqual(legacyRules(css));
+  test.each([
+    ["Tailwind gray utility", `<p class="text-gray-400">x</p>`],
+    ["Bootstrap muted", `<p class="text-muted">x</p>`],
+    ["opacity utility", `<p class="opacity-30">x</p>`],
+    ["light color in a <style> block", `<style>.muted{color:#ccc;}</style><p class="muted">x</p>`],
+    ["white text in a <style> block", `<style>h2{color:#fff}</style><h2>x</h2>`],
+    ["light text color alone, inline", `<p style="color:#ddd">x</p>`],
+    ["background alone, inline", `<p style="background:#fff">x</p>`],
+  ])("%s", (_label, body) => {
+    const check = run(page({ body }));
+    expect(check.status).not.toBe("warn");
+    expect(check.items).toBeUndefined();
+  });
+});
+
+describe("measured pairs below 4.5:1 are reported", () => {
+  test("gray on white, both inline", () => {
+    const check = run(page({ body: `<span style="color:#999;background:#fff">Low</span>` }));
+    expect(check.status).toBe("warn");
+    expect(check.message).toBe("1 color contrast issue(s) below 4.5:1");
+    expect(check.items).toEqual([{ id: "span: #999 on #fff (2.85:1)" }]);
+    expect(check.details?.measuredPairs).toBe(1);
+  });
+
+  test.each([
+    ["named colors", "color: silver; background-color: white", "p: silver on white (1.82:1)"],
+    ["rgb()", "color: rgb(150, 150, 150); background: rgb(255,255,255)", "p: rgb(150, 150, 150) on rgb(255,255,255) (2.96:1)"],
+    ["opaque rgba()", "color: rgba(150,150,150,1); background: #fff", "p: rgba(150,150,150,1) on #fff (2.96:1)"],
+    ["opaque 8-digit hex", "color: #999999ff; background: #ffffff", "p: #999999ff on #ffffff (2.85:1)"],
+    ["!important", "color: #999 !important; background: #fff", "p: #999 on #fff (2.85:1)"],
+    ["! important with a space", "color: #999 ! important; background: #fff", "p: #999 on #fff (2.85:1)"],
+    ["the last declaration wins", "color:#111;color:#ccc;background:#000;background:#fff", "p: #ccc on #fff (1.61:1)"],
+    ["!important beats a later declaration", "color:#ccc !important;color:#111;background:#fff", "p: #ccc on #fff (1.61:1)"],
+    ["an unrelated url() elsewhere in the style", "color:#ccc;background:#fff;cursor:url(x.cur),auto", "p: #ccc on #fff (1.61:1)"],
+    ["background-image: none", "color:#ccc;background-color:#fff;background-image:none", "p: #ccc on #fff (1.61:1)"],
+    ["a one-color shorthand after an image", "color:#ccc;background-image:url(x.png);background:#fff", "p: #ccc on #fff (1.61:1)"],
+  ])("%s", (_label, style, id) => {
+    const check = run(page({ body: `<p style="${style}">Text</p>` }));
+    expect(check.items).toEqual([{ id }]);
+  });
+
+  test.each([
+    ["a quoted string", `color:#111;background:#fff;--note:';color:#ccc;'`],
+    ["a comment", "color:#111;background:#fff/*;color:#ccc;*/"],
+    ["parentheses", "color:#111;background:#fff;--x:calc(1px;color:#ccc)"],
+  ])("a ; inside %s does not end a declaration", (_label, style) => {
+    const check = run(page({ body: `<p style="${style}">Dark</p>` }));
+    expect(check.status).toBe("pass");
+    expect(check.details?.measuredPairs).toBe(1);
+  });
+
+  test("a superseded low-contrast color is not reported", () => {
+    const check = run(page({ body: `<p style="color:#ccc;color:#111;background:#fff">Dark</p>` }));
+    expect(check.status).toBe("pass");
+    expect(check.details?.measuredPairs).toBe(1);
+  });
+
+  test("a passing pair is measured and passes", () => {
+    const check = run(page({ body: `<p style="color:#111;background:#fff">Dark</p>` }));
+    expect(check.status).toBe("pass");
+    expect(check.details?.measuredPairs).toBe(1);
+  });
+});
+
+describe("pairs that cannot be resolved from the markup are not reported", () => {
+  test.each([
+    ["transparent background", "color:#ccc;background:transparent"],
+    ["semi-transparent rgba text", "color:rgba(0,0,0,.2);background:#fff"],
+    ["semi-transparent rgba background", "color:#ccc;background-color:rgba(255,255,255,0.5)"],
+    ["alpha as a percentage", "color:#ccc;background:rgba(255,255,255,50%)"],
+    ["semi-transparent 8-digit hex", "color:#cccccc80;background:#fff"],
+    ["semi-transparent 4-digit hex", "color:#ccc8;background:#fff"],
+    ["background image", "color:#ccc;background:#fff url(hero.jpg)"],
+    ["background shorthand beyond one color", "color:#ccc;background:#fff no-repeat"],
+    ["image-set() in the shorthand", `color:#ccc;background:#fff image-set('x.png' 1x)`],
+    ["an image shorthand under a later background-color", "color:#ccc;background:url(x.png);background-color:#fff"],
+    ["a later unresolvable background", "color:#ccc;background:#fff;background:var(--surface)"],
+    ["trailing junk after !important", "color:#ccc;background:#fff !important junk"],
+    ["over-long hex", "color:#ccc;background-color:#ffffffff0"],
+    ["a color split by a comment", "color:#111;color:#c/**/cc;background:#fff"],
+    ["gradient", "color:#ccc;background:linear-gradient(#fff, #eee)"],
+    ["separate background-image", "color:#ccc;background-color:#fff;background-image:url(x.png)"],
+    ["inherit", "color:inherit;background:#fff"],
+    ["currentcolor", "color:#ccc;background:currentcolor"],
+    ["a name that is an Object property", "color:constructor;background:#fff"],
+    ["malformed hex", "color:#99;background:#fff"],
+    ["out-of-range rgb", "color:rgb(300,300,300);background:#fff"],
+  ])("%s", (_label, style) => {
+    const check = run(page({ body: `<p style="${style}">Text</p>` }));
+    expect(check.status).toBe("pass");
+    expect(check.details?.measuredPairs).toBe(0);
+  });
+
+  test("an element with no text has nothing to contrast", () => {
+    const check = run(page({ body: `<div style="color:#eee;background:#fff"></div>` }));
+    expect(check.status).toBe("pass");
+  });
+});
+
+describe("output when there is nothing to measure", () => {
+  test("a page with no styled or classed elements returns info", () => {
+    const result = colorContrastRule.run(
+      ctx(`<!DOCTYPE html><html><head><title>t</title></head><body><p>x</p></body></html>`)
+    );
+    if (result instanceof Promise) throw new Error("async");
+    expect(result.checks[0]?.status).toBe("info");
+  });
+});
+
+describe("linear in what it reads", () => {
+  test("a 500KB <style> of base64 font data costs nothing", () => {
+    const base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".repeat(8000);
+    const html = page({
+      head: `<style>@font-face{font-family:W;src:url(data:font/woff2;base64,${base64}) format("woff2")}.muted{color:#ccc;}</style>`,
     });
-  }
-
-  test("on 20,000 random CSS-like strings", () => {
-    const tokens = [
-      "a", ".b ", "a{", ".c {", " ", "\n", "{", "}", ";", ":", "{}", "}{", ";;",
-      "color", "COLOR", "color :", "color:", "color:#ccc", "background-color: red",
-      "#ccc", "rgb(200,", "@media", "(", ")", "x",
-    ];
-    const next = rng(2378);
-    let matched = 0;
-    for (let i = 0; i < 20_000; i++) {
-      let css = "";
-      const len = next(40);
-      for (let j = 0; j < len; j++) css += tokens[next(tokens.length)];
-      const expected = legacyRules(css);
-      matched += expected.length;
-      expect(extractColorRules(css)).toEqual(expected);
-    }
-    // The corpus has to exercise the matching paths, not just the misses.
-    expect(matched).toBeGreaterThan(1_000);
-  });
-});
-
-describe("a11y/color-contrast — findings on ordinary CSS", () => {
-  test("a light gray rule in a <style> block is reported", () => {
-    const { checks } = colorContrastRule.run(ctx(pageWithStyle(".muted{color:#ccc;}")));
-    expect(checks[0]?.status).toBe("warn");
-    expect(checks[0]?.items?.map((i) => i.id)).toContain(
-      'CSS rule ".muted...": light gray text color'
-    );
-    expect(checks[0]?.details?.cssIssues).toBe(1);
+    expect(timeRule(html)).toBeLessThan(500);
   });
 
-  test("a rule whose last color declaration has no semicolon is still reported", () => {
-    const { checks } = colorContrastRule.run(
-      ctx(pageWithStyle(".faint{color:#ddd}.b{margin:0;}"))
-    );
-    expect(checks[0]?.items?.map((i) => i.id)).toContain(
-      'CSS rule ".faint...": light gray text color'
-    );
-  });
-
-  test("dark text colors produce no CSS findings", () => {
-    const { checks } = colorContrastRule.run(
-      ctx(pageWithStyle("body{color:#111;}a{color:#003366;}"))
-    );
-    expect(checks.every((c) => !c.details?.cssIssues)).toBe(true);
-  });
-});
-
-describe("a11y/color-contrast — linear in the size of the CSS", () => {
-  test("a 500KB <style> of base64 @font-face data finishes well under a second", () => {
-    const css = `${fontFaceCss(500 * 1024)}\n.muted{color:#ccc;}`;
-    expect(css.length).toBeGreaterThan(500 * 1024);
-    const page = ctx(pageWithStyle(css));
-
-    const start = performance.now();
-    const { checks } = colorContrastRule.run(page);
-    const elapsed = performance.now() - start;
-
-    // The legacy regex took over a minute on this block; linear takes a few ms.
-    // The bound is generous so a loaded CI runner cannot flake it.
-    expect(elapsed).toBeLessThan(500);
-    // And the scan still reaches the rule after the fonts.
-    expect(checks[0]?.items?.map((i) => i.id)).toContain(
-      'CSS rule ".muted...": light gray text color'
-    );
-  });
-
-  test("a 300KB brace-free run is scanned in linear time", () => {
-    const run = base64Run(300 * 1024, 7);
-    for (const css of [run, `{${run}}`, `a{${run}`, `.a{color:${run}}`]) {
-      const start = performance.now();
-      expect(extractColorRules(css)).toEqual([]);
-      expect(performance.now() - start).toBeLessThan(500);
-    }
-  });
-
-  test("many rules whose values all run to the same far semicolon", () => {
-    // Every `color:` here has no ";" in its own block, so `[^;]+` runs on to
-    // the one ";" at the very end, and each block asks where that is. Without
-    // the remembered scan that is one 900KB+ walk per block: seconds.
-    const css = (n: number) => `${"a{color:}".repeat(n)}${"x".repeat(n * 9)};{`;
-    expect(extractColorRules(css(50))).toEqual(legacyRules(css(50)));
-
-    const start = performance.now();
-    expect(extractColorRules(css(100_000))).toEqual([]);
-    expect(performance.now() - start).toBeLessThan(500);
-  });
-
-  test("one block with thousands of color declarations", () => {
-    const css = (n: number) => `.a{${"color:x ".repeat(n)}}b{;}`;
-    expect(extractColorRules(css(50))).toEqual(legacyRules(css(50)));
-
-    const big = css(30_000);
-    const start = performance.now();
-    expect(extractColorRules(big)).toEqual([big]);
-    expect(performance.now() - start).toBeLessThan(500);
+  test.each([
+    ["a long alpha value", (n: number) => `color:rgba(1,2,3,${"1".repeat(n)}x;background:#fff`],
+    ["a long whitespace run after color", (n: number) => `color${" ".repeat(n)}x;background:#fff`],
+    ["many empty declarations", (n: number) => `${";".repeat(n)}color:#999;background:#fff`],
+    ["many unclosed comments", (n: number) => `color:#999;background:#fff${"/*".repeat(n / 2)}`],
+    ["many open parentheses", (n: number) => `color:#999;background:#fff;--x:${"(".repeat(n)}`],
+    ["many quotes", (n: number) => `color:#999;background:#fff;--x:${"'".repeat(n)}`],
+  ])("an inline style with %s", (_label, style) => {
+    // 200KB: the quadratic form of the alpha pattern takes seconds here.
+    expect(timeRule(page({ body: `<p style="${style(200_000)}">Text</p>` }))).toBeLessThan(500);
   });
 });
