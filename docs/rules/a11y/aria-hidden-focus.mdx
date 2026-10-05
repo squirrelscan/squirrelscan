@@ -11,11 +11,22 @@ The two states have to agree. Either the region is available, in which case it s
 
 ## What squirrel checks
 
-Two checks, at rule severity error. The rule walks every `[aria-hidden="true"]` element and tests the element itself first. A focusable container is reported and its descendants are not examined; otherwise every descendant is tested. Focusable means matching `a[href]`, `button:not([disabled])`, `input:not([disabled]):not([type="hidden"])`, `select:not([disabled])`, `textarea:not([disabled])`, `[contenteditable="true"]`, `audio[controls]`, `video[controls]` or `details > summary`, or carrying any `tabindex` other than `-1`. The `tabindex` lookup is case-insensitive, so React's `tabIndex` in server-rendered markup is caught.
+Two checks, at rule severity error. The rule walks every `[aria-hidden="true"]` element and tests the element itself first. A focusable container is reported and its descendants are not examined; otherwise every descendant is tested.
 
 - `aria-hidden-focus` fails with `N focusable element(s) inside aria-hidden`. Items read `a#archive`, or `div (self is focusable)` when the hidden container is itself focusable. Up to ten are listed with a count of the rest.
 - `aria-hidden-focus-honeypot` warns with `N focusable element(s) inside aria-hidden appear to be an anti-spam honeypot`, carrying the value `Add tabindex="-1" (and autocomplete="off") to remove the honeypot from the tab order`. An element qualifies only when all three hold: it is an `<input>`, its `id` or `name` contains `hp`, `honeypot` or `trap` as a hyphen- or underscore-delimited token, and it sits inside a `<form>`. Requiring all three keeps a genuine bug on an unrelated hidden control from being quietly downgraded.
 - With nothing focusable found, the check passes as `No focusable elements inside aria-hidden regions`, or returns info with `No aria-hidden elements found`.
+
+### What counts as focusable
+
+Focusable means reachable with the Tab key. The test follows axe-core's rule of the same name as far as static HTML allows:
+
+- A `tabindex` of 0 or more makes an element focusable, and a negative one (`-1`) takes it out of the tab order. An unparseable value is ignored.
+- Without a `tabindex`, an element is focusable when it matches `a[href]`, `button`, `input`, `select`, `textarea`, `[contenteditable="true"]`, `audio[controls]`, `video[controls]` or `details > summary`.
+- A `button`, `input`, `select` or `textarea` with `disabled` is never focusable, and neither is `<input type="hidden">`.
+- Nothing inside an `inert` element is focusable, and neither is anything inside a `hidden` element (except `hidden="until-found"`). That covers `inert` or `hidden` on the `aria-hidden` container itself, on an ancestor of it, or on a wrapper inside it.
+
+Attribute lookups are case-insensitive, so React's `tabIndex` in server-rendered markup is read.
 
 ## How to fix it
 
@@ -25,9 +36,15 @@ Two checks, at rule severity error. The rule walks every `[aria-hidden="true"]` 
 </div>
 ```
 
-Either drop `aria-hidden` from the container or set `tabindex="-1"` on every focusable descendant.
+Either drop `aria-hidden` from the container, add `inert` to it, or set `tabindex="-1"` on every focusable descendant. `inert` is the shortest fix for a region that should be skipped entirely, such as a honeypot block or an off-screen menu, because it takes the whole subtree out of focus at once:
 
-Where the region is meant to be invisible as well, `display: none` or the `hidden` attribute is the better fix. Neither leaves the element focusable, so the two states cannot drift apart again.
+```html
+<div aria-hidden="true" inert>
+  <input name="hp" autocomplete="off">
+</div>
+```
+
+Where the region is meant to be invisible as well, `display: none` or the `hidden` attribute is the better fix. Neither leaves the element focusable, so the two states cannot drift apart again. squirrel reads the `hidden` attribute but not CSS, so a region hidden only by a stylesheet rule or an inline `style` is still reported; `hidden` or `inert` in the markup clears it.
 
 | | |
 |---|---|
