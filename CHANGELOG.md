@@ -15,6 +15,12 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Changed
+
+- Pages kept out of search are no longer graded on how they would look in search results. On a page whose robots meta tag or `X-Robots-Tag` header says `noindex`, `core/meta-title`, `core/meta-description` and `core/h1` record a skipped check instead of a finding, and `core/title-unique`, `content/duplicate-title`, `content/duplicate-description` and `links/orphan-pages` leave the page out. Scores can rise for sites with noindex pages such as thank-you pages, internal search or account pages, because those findings no longer count. Accessibility, security, performance and broken-link rules still check every page. When the homepage itself is noindex, as on a staging site or a Vercel, Netlify or Cloudflare Pages preview deployment, nothing is skipped, so a pre-launch audit still checks titles, descriptions and headings everywhere. The [rules reference](https://docs.squirrelscan.com/rules#pages-kept-out-of-search) has the details. Thanks to @deniskern for the report (#457).
+
 ## v0.0.103 — 2026-10-05
 
 Two rule fixes from community bug reports: fewer false accessibility warnings on honeypot and hidden fields, and noindex set by a response header now shows up in the report.
