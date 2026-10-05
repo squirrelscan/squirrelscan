@@ -15,6 +15,15 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## v0.0.103 — 2026-10-05
+
+Two rule fixes from community bug reports: fewer false accessibility warnings on honeypot and hidden fields, and noindex set by a response header now shows up in the report.
+
+### Fixed
+
+- `a11y/aria-hidden-focus` no longer reports elements a keyboard user cannot reach. Inside an `aria-hidden` region, an element with `tabindex="-1"`, a disabled form control, a hidden input, and anything under an `inert` or `hidden` element now count as not focusable, matching axe-core. Honeypot spam fields from form builders were the usual false positive, on every page that had the form. A link or button you can still Tab to inside `aria-hidden` is reported as before. Thanks to @deniskern for the report (#456).
+- `core/robots-meta` now reports `noindex` and `nofollow` sent in the `X-Robots-Tag` response header, including the crawler-scoped form (`X-Robots-Tag: googlebot: noindex`). Before, a page kept out of search only by the header appeared nowhere in the report. Each message now names its source, so a directive set by a CDN or server config is easy to tell from one in the page source; existing robots meta tag messages end with "via robots meta tag". Thanks to @deniskern for the report (#457).
+
 ## v0.0.102 — 2026-10-03
 
 The spend line after a signed-in audit now counts the same pages your report shows as audited.
