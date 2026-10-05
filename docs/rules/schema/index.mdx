@@ -5,7 +5,7 @@ description: "Structured data and rich snippet eligibility"
 
 Structured Data rules work at two scales. Per-page rules read the JSON-LD a page carries and name the exact property each schema.org type is missing; markup that will not parse is reported before anything else, since nothing downstream can read it.
 
-The rest read the [entity map](/entity-map), the whole site's JSON-LD collapsed into one graph. That is where the expensive failures live: sixty valid `Organization` blocks with nothing to say they are one organization pass every per-page check and still leave a search engine with sixty companies. Thirteen rules cover identity, agreement and reachability across the crawl, and [fixing structured data identity](/entity-map/fixing) has the change to make in each generator.
+The rest read the [entity map](/guides/entity-map), the whole site's JSON-LD collapsed into one graph. That is where the expensive failures live: sixty valid `Organization` blocks with nothing to say they are one organization pass every per-page check and still leave a search engine with sixty companies. Thirteen rules cover identity, agreement and reachability across the crawl, and [fixing structured data identity](/guides/entity-map/fixing) has the change to make in each generator.
 
 See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 

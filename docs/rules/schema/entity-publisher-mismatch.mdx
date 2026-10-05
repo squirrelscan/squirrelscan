@@ -13,7 +13,7 @@ The outlier is almost always the mistake, and the reference counts tell you whic
 
 ## What squirrel checks
 
-The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-publisher-mismatch`.
+The rule runs once per crawl, reads the [entity map](/guides/entity-map) rather than the pages, and emits a single check named `entity-publisher-mismatch`.
 
 - Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
 - Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
@@ -39,7 +39,7 @@ Give it an `@id` and reference that id from every `Article`, `BlogPosting` and `
 { "@type": "Article", "publisher": { "@id": "https://example.com/#organization" } }
 ```
 
-Referencing rather than inlining is what stops this recurring: an inline publisher block is a new copy each time, and each copy can drift. Find the template or plugin that emits the outlier and point it at the same id. See [fixing structured data identity](/entity-map/fixing).
+Referencing rather than inlining is what stops this recurring: an inline publisher block is a new copy each time, and each copy can drift. Find the template or plugin that emits the outlier and point it at the same id. See [fixing structured data identity](/guides/entity-map/fixing).
 
 | | |
 |---|---|

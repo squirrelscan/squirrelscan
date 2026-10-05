@@ -22,7 +22,7 @@
 import type { CheckItem, CheckResult, EntityMap, EntityMapNode } from "../types";
 
 /** Where every rule's fix text points. */
-export const ENTITY_FIX_DOCS = "https://docs.squirrelscan.com/entity-map/fixing";
+export const ENTITY_FIX_DOCS = "https://docs.squirrelscan.com/guides/entity-map/fixing";
 
 /**
  * Items listed on one finding before it is truncated.

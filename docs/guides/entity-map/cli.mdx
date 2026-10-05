@@ -1,5 +1,7 @@
 ---
 title: "The entity map on your machine"
+sidebarTitle: "On your machine"
+icon: "terminal"
 description: "Where the map appears in every report format, how to query it with squirrel entities, and how it is stored."
 ---
 
@@ -16,7 +18,7 @@ Every format carries the map, and each one carries as much of it as that format 
 | `html` | An interactive graph. Drag to pan, wheel to zoom, hover to highlight an entity's neighbours, click for detail. Dangling targets are drawn hollow. The complete map is embedded as JSON to drive it. |
 | `markdown` | An Entities section: a summary metrics table, the 25 largest entities, then conflicts, dangling references and entities without an `@id`. |
 | `text` | The summary line and the widest-reach entities, one per line. |
-| `json` | The whole map, unmodified, under `entities`. This is the same document [`format`](/entity-map/format) describes. |
+| `json` | The whole map, unmodified, under `entities`. This is the same document [`format`](/guides/entity-map/format) describes. |
 | `llm` | An `<entities>` block with the summary as attributes, the top entities, and the conflicts. Sized for a context window rather than for completeness. |
 | `xml` | Every node and conflict as elements, with the summary on the wrapper. Node properties, page URLs and the page index are not included. |
 
@@ -99,7 +101,7 @@ A map loaded from the local store carries a complete page index, and the filter 
 Every filter applies to every format, so `-f dot --type Organization` exports the organizations subgraph rather than the whole thing filtered afterwards.
 
 <Note>
-The `jsonld` export gives every entity an `@id`, inventing one for the entities the site left anonymous, because a `@graph` member with no identifier is not much use in a validator. Do not read that export back as evidence that a site's entities are identified. [The format page](/entity-map/format#the-json-ld-export) has the detail.
+The `jsonld` export gives every entity an `@id`, inventing one for the entities the site left anonymous, because a `@graph` member with no identifier is not much use in a validator. Do not read that export back as evidence that a site's entities are identified. [The format page](/guides/entity-map/format#the-json-ld-export) has the detail.
 </Note>
 
 ## Comparing two audits
@@ -116,7 +118,7 @@ With no arguments it compares the latest against the previous audit **of the sam
 
 The output separates what changed from what was not looked at. An entity absent from the newer audit is only **removed** when every page that declared it was crawled again; anything else is **not crawled again**. A smaller crawl therefore never reads as a site that deleted its structured data.
 
-An entity that gained or lost an `@id` is matched across the key change and reported once, with a **coverage** column saying whether the newer audit both revisited the pages that were wrong and found the replacement there. [The format page](/entity-map/format#the-change-set) explains why both halves are required.
+An entity that gained or lost an `@id` is matched across the key change and reported once, with a **coverage** column saying whether the newer audit both revisited the pages that were wrong and found the replacement there. [The format page](/guides/entity-map/format#the-change-set) explains why both halves are required.
 
 <Note>
 An audit that stored no entities is never picked automatically as the older side. Zero entities is indistinguishable from an audit that predates the entity map, and reading the second as the first would report every entity the site has today as brand new. Name both sides when you know which it was.
@@ -151,9 +153,9 @@ ORDER BY page_count DESC;
 
 ## References
 
-- [`squirrel entities`](/cli/entities) — the command reference with worked output
-- [The entity map](/entity-map) — what it is and how to read it
-- [The entity map format](/entity-map/format) — the documents this produces
-- [The entity map in the cloud](/entity-map/cloud) — the same map, hosted
-- [The entity map for agents](/entity-map/mcp) — the MCP tools over the same data
-- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator
+- [`squirrel entities`](/cli/entities): the command reference with worked output
+- [The entity map](/guides/entity-map): what it is and how to read it
+- [The entity map format](/guides/entity-map/format): the documents this produces
+- [The entity map in the cloud](/guides/entity-map/cloud): the same map, hosted
+- [The entity map for agents](/guides/entity-map/mcp): the MCP tools over the same data
+- [Fixing structured data identity](/guides/entity-map/fixing): the change to make in each generator

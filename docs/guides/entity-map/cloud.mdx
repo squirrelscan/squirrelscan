@@ -1,5 +1,7 @@
 ---
 title: "The entity map in the cloud"
+sidebarTitle: "In the cloud"
+icon: "cloud"
 description: "The dashboard Entities page, its filters and exports, and the API that serves the same map."
 ---
 
@@ -61,7 +63,7 @@ The rows are grouped, worst first:
 | Lost a stable `@id` | It is now identified by name and type alone. |
 | New conflicts | An entity started carrying disagreeing values for a property across pages. |
 | No longer seen | It was in the older audit and is not in the newer one. |
-| Gained a stable `@id` | The fix the [identity guide](/entity-map/fixing) describes, landing. |
+| Gained a stable `@id` | The fix the [identity guide](/guides/entity-map/fixing) describes, landing. |
 | Conflicts no longer reported | It was conflicting and is not now. |
 | Added | New in the newer audit. |
 | Occurrence changes | Declared on more or fewer pages than before. |
@@ -73,7 +75,7 @@ The hosted comparison is answered from stored snapshot summaries, which carry a 
 
 That is why the headings say "No longer seen" rather than "Removed", and "Conflicts no longer reported" rather than "Resolved". Where the newer audit crawled fewer pages than the older one, the page says so and gives both counts, because that is positive evidence for the second reading.
 
-`squirrel entities --diff` does not have this limitation: it reads the uncapped local maps, which keep their page index, so it can separate `removed` from `notCrawled` and prove a fix. See [the entity map on your machine](/entity-map/cli).
+`squirrel entities --diff` does not have this limitation: it reads the uncapped local maps, which keep their page index, so it can separate `removed` from `notCrawled` and prove a fix. See [the entity map on your machine](/guides/entity-map/cli).
 </Warning>
 
 <Note>
@@ -86,7 +88,7 @@ A site with one audit shows the series and an explanation instead of a change li
 
 ### If a site has no structured data
 
-The page says so and links to [Fixing structured data identity](/entity-map/fixing) rather than showing an empty graph. A site with no JSON-LD and an audit that stored no map look identical from the outside, and only one of them is worth acting on.
+The page says so and links to [Fixing structured data identity](/guides/entity-map/fixing) rather than showing an empty graph. A site with no JSON-LD and an audit that stored no map look identical from the outside, and only one of them is worth acting on.
 
 ## The API
 
@@ -114,7 +116,7 @@ GET /v1/reports/{id}/entities
 GET /v1/reports/{id}/entities?exclude_type=WebPage&exclude_type=BreadcrumbList
 ```
 
-The JSON response is the [map document](/entity-map/format) plus a `meta` object:
+The JSON response is the [map document](/guides/entity-map/format) plus a `meta` object:
 
 ```json
 {
@@ -248,9 +250,9 @@ The dashboard's export menu offers the same formats as the API. Anything the hos
 
 ## References
 
-- [The entity map](/entity-map) — what it is and how to read it
-- [The entity map format](/entity-map/format) — the documents these endpoints return
-- [The entity map on your machine](/entity-map/cli) — the same map locally
-- [The entity map for agents](/entity-map/mcp) — the MCP tools over the same data
-- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator
-- [API reference](/api) — authentication and the rest of the surface
+- [The entity map](/guides/entity-map): what it is and how to read it
+- [The entity map format](/guides/entity-map/format): the documents these endpoints return
+- [The entity map on your machine](/guides/entity-map/cli): the same map locally
+- [The entity map for agents](/guides/entity-map/mcp): the MCP tools over the same data
+- [Fixing structured data identity](/guides/entity-map/fixing): the change to make in each generator
+- [API reference](/api): authentication and the rest of the surface

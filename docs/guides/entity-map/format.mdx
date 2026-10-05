@@ -1,5 +1,7 @@
 ---
 title: "The entity map format"
+sidebarTitle: "Format reference"
+icon: "braces"
 description: "The version 1 JSON document, the JSON-LD export and the change set, with a real sample of each."
 ---
 
@@ -30,7 +32,7 @@ Entity names, `@id`s, types and property values are declared by the audited site
 
 `format` and `version` are the discriminator. Check both before reading the rest: `version` is bumped whenever a change would make an already-stored document invalid, and stored documents exist in the wild.
 
-### truncated
+### `truncated`
 
 Absent from the document `squirrel entities -f json` writes, which always carries the whole crawl. Present on the two copies that travel: the map published to the cloud, and the map inlined into an HTML report for the interactive viewer. Both are bounded, because a 5,000-page site declaring four entities per page is 20,001 nodes and 15MB of JSON.
 
@@ -47,9 +49,9 @@ Absent from the document `squirrel entities -f json` writes, which always carrie
 
 What survives is a sample chosen to look like the site rather than the top of one list. Entities declared on more than one page go first: the Organization, the WebSite, the Brand every product points at. The rest of the budget is split evenly between the types that are left, so a 5,000-product catalogue cannot crowd out its own Offers, and within a type the better-connected entity wins. Entities that describe a single page, such as a per-page BreadcrumbList or WebPage, are kept last and capped at a tenth of the copy, since there is one of them per page and a graph hides them by default. Ranking on declaration count alone is what this replaced: on a store that declares its entities per page every entity occurs exactly once, so the copy became whichever type sorted first, either a pile of breadcrumbs when the theme gives its per-page entities no `@id`, or an alphabetical slice of the catalogue when it does. Both left whole types out.
 
-`summary` is never recomputed, so a truncated copy still reports the site's real `nodeCount`, `edgeCount` and `pagesTotal`. Read totals from `summary` rather than from the length of `nodes` — on a large site those are different numbers, which is the whole reason this field exists. For the complete graph, run `squirrel entities -f json` locally.
+`summary` is never recomputed, so a truncated copy still reports the site's real `nodeCount`, `edgeCount` and `pagesTotal`. Read totals from `summary` rather than from the length of `nodes`: on a large site those are different numbers, which is the whole reason this field exists. For the complete graph, run `squirrel entities -f json` locally.
 
-### summary
+### `summary`
 
 Every field describes the audit, not a sample. From an audit of docs.squirrelscan.com:
 
@@ -84,7 +86,7 @@ Every field describes the audit, not a sample. From an audit of docs.squirrelsca
 Three counters, `pageLocalCount`, `nodesWithoutIdCount` and `conflictCount`, were added after version 1 shipped. A document written before them omits them. Readers recompute them from the nodes and say so; a recomputed counter counts the **stored** nodes, and a published map is capped, so treat it as a floor rather than a site total.
 </Note>
 
-### nodes
+### `nodes`
 
 One entity, collapsed across every page that declares it.
 
@@ -134,7 +136,7 @@ The `@id` is **resolved against the page it was declared on**. A relative `#orga
 
 `properties` keeps nine consistency-relevant properties and nothing else: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address`, `description`. Objects are flattened to one display string, and only `image` and `sameAs` stay arrays. A `Product`'s `sku` is not here; the page's own JSON-LD still has it.
 
-### conflicts
+### `conflicts`
 
 Populated when two declarations of one entity disagree on a kept property, or on `@type`.
 
@@ -156,7 +158,7 @@ At least two entries, sorted by value, each capped at 10 pages. Conflict detecti
 The sample maps on this page have no conflicts and no dangling references, which is what a well-formed site looks like. The shapes above and below are from the schema rather than from those files.
 </Note>
 
-### edges
+### `edges`
 
 One typed reference between two entities.
 
@@ -190,7 +192,7 @@ That last row is why a `sameAs` listing five social profiles does not produce fi
 
 A property that is neither a followed predicate nor one of the nine the map keeps is **discarded** when the map is built. A `Product`'s `sku` is not stored anywhere in this document; the page's own JSON-LD still has it.
 
-### pages
+### `pages`
 
 One row per successfully crawled page, including pages that declared nothing. 2xx only and keyed by the final URL, so a redirect is one row under its destination and a 404's markup is not part of the graph at all.
 
@@ -274,7 +276,7 @@ Three things to know before you trust it as a picture of the site.
 
 Every list is sorted by a stable key, so two runs over the same pair produce identical bytes apart from `generatedAt`.
 
-### removed versus notCrawled
+### `removed` versus `notCrawled`
 
 The distinction the whole document is built around. Two audits of a site rarely cover the same pages, and a naive set difference reports every entity on a page that simply was not visited as removed, which reads as "the site deleted its structured data".
 
@@ -282,7 +284,7 @@ An entity is **`removed`** only when every page that declared it was crawled aga
 
 The same rule governs `resolvedConflicts` and `resolvedDangling`. A conflict needs two declarations to exist, so seeing one of them again tells you nothing.
 
-### gainedId and lostId
+### `gainedId` and `lostId`
 
 An entity that gains an `@id` **changes key**, because the key is the `@id` when there is one. Reported as one transition rather than as an addition plus a removal:
 
@@ -303,7 +305,7 @@ Matching is on the sorted type set plus the normalized name, one-to-one. An ambi
 
 A missing entry is not proof of failure. The match needs the type and name unchanged, so changing the `@id` and the name in one edit appears as a removal plus an addition.
 
-### occurrenceDeltas
+### `occurrenceDeltas`
 
 ```json
 {
@@ -318,11 +320,11 @@ A missing entry is not proof of failure. The match needs the type and name uncha
 
 Reported only for entities present in both maps under the same key, and only when `|delta|` reaches the threshold, which is 1 by default. Raise it on a site that publishes constantly, where a site-wide entity moves by one on every audit.
 
-### summaryDelta
+### `summaryDelta`
 
 Every numeric summary metric as `{ before, after, delta }`, keyed by the summary's own field names. `countsByType` is excluded, being a map rather than a number.
 
-### pagesOnlyInOlder and pagesOnlyInNewer
+### `pagesOnlyInOlder` and `pagesOnlyInNewer`
 
 The pages each audit saw and the other did not, sorted. This is the evidence behind `notCrawled`: if you are checking whether a fix landed and `notCrawled` is non-empty, these say which pages to re-audit.
 
@@ -330,8 +332,8 @@ Both lists are a 25-entry sample, with `morePagesOnlyInOlder` and `morePagesOnly
 
 ## References
 
-- [The entity map](/entity-map) — what it is and how to read it
-- [`squirrel entities`](/entity-map/cli) — producing these documents locally
-- [The entity map in the cloud](/entity-map/cloud) — the dashboard and the API
-- [The entity map for agents](/entity-map/mcp) — the MCP tools over the same data
-- [Fixing structured data identity](/entity-map/fixing) — the change to make in each generator
+- [The entity map](/guides/entity-map): what it is and how to read it
+- [The entity map on your machine](/guides/entity-map/cli): producing these documents locally
+- [The entity map in the cloud](/guides/entity-map/cloud): the dashboard and the API
+- [The entity map for agents](/guides/entity-map/mcp): the MCP tools over the same data
+- [Fixing structured data identity](/guides/entity-map/fixing): the change to make in each generator

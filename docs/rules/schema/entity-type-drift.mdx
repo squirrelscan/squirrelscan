@@ -13,7 +13,7 @@ One type set, on every declaration.
 
 ## What squirrel checks
 
-The rule runs once per crawl, reads the [entity map](/entity-map) rather than the pages, and emits a single check named `entity-type-drift`.
+The rule runs once per crawl, reads the [entity map](/guides/entity-map) rather than the pages, and emits a single check named `entity-type-drift`.
 
 - Skipped with the message `No entity map was built for this audit` and the reason `entity-map-unavailable` when the run produced no map. This is not the same as a site with no structured data, and the rule refuses to conflate them: passing here would assert it had checked something it never looked at.
 - Reports at info with the message `This site declares no JSON-LD entities on any crawled page` when the map exists and is empty.
@@ -38,7 +38,7 @@ Decide what the entity is and say it the same way everywhere. If it is a local b
 }
 ```
 
-The properties can still vary by page, and usually should: put the address and hours where they belong. It is the type array that has to be constant. See [fixing structured data identity](/entity-map/fixing).
+The properties can still vary by page, and usually should: put the address and hours where they belong. It is the type array that has to be constant. See [fixing structured data identity](/guides/entity-map/fixing).
 
 | | |
 |---|---|
