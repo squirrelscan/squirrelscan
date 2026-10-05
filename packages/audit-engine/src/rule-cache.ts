@@ -34,8 +34,8 @@
 //  4. **The run context** — {@link computeRunContextHash}: the engine build (the
 //     CLI's release version, because the `@squirrelscan/rules` package version
 //     never moves), the enabled page rules IN ORDER with their resolved options,
-//     the Stage-0 site metadata, the prefetched cloud results, and the three
-//     `SiteData` fields page rules actually read.
+//     the Stage-0 site metadata, the prefetched cloud results, and the four
+//     `SiteData` fields the page-rule pass actually reads.
 //
 // WHAT IS GATED OUT RATHER THAN APPROXIMATED. Two run-level inputs cannot be
 // reduced to a hash, so their presence turns the cache OFF for the whole run
@@ -47,9 +47,10 @@
 //    of the verdicts, so a feed that changed overnight would replay yesterday's
 //    answer under an unchanged key. There is no cheap exact identity available, so
 //    an intel-enabled run does not replay.
-//  - **A `SiteData` field no page rule reads today.** The three that ARE read
-//    (`baseUrl`, `scripts`, `resourceSizes`) are hashed, and within the last two
-//    only the ENTRY fields rules read — see {@link PAGE_RULE_SCRIPT_FIELDS} and
+//  - **A `SiteData` field no page rule reads today.** The four that ARE read
+//    (`baseUrl`, `scripts`, `resourceSizes`, and `siteIndexable`, which the
+//    runner's noindex gate reads, pub#457) are hashed, and within `scripts` and
+//    `resourceSizes` only the ENTRY fields rules read — see {@link PAGE_RULE_SCRIPT_FIELDS} and
 //    {@link PAGE_RULE_RESOURCE_FIELDS}. Hashing whole entries looked safer and was
 //    not: `cacheReason` is null on a cold run and set on a warm one, so it made
 //    the run context differ between exactly the two runs meant to match, and the
@@ -83,12 +84,18 @@ export const RULE_CACHE_FORMAT = "prc-1";
  * Derived by inspection (`content/dev-leakage` reads `baseUrl`;
  * `integrity/kit-signature`, `performance/js-libraries`, `performance/source-maps`
  * and `performance/unminified-js` read `scripts`; `performance/unminified-css`
- * reads `resourceSizes`) and held there by `page-rule-site-context.test.ts`, which
+ * reads `resourceSizes`; the runner's noindex gate reads `siteIndexable`, pub#457)
+ * and held there by `page-rule-site-context.test.ts`, which
  * fails on any other key being read. Widening this list is safe; forgetting to
  * widen it when a rule starts reading another field is what the test exists to
  * catch, because the cost of that mistake is a stale verdict, not a crash.
  */
-export const PAGE_RULE_SITE_FIELDS = ["baseUrl", "scripts", "resourceSizes"] as const;
+export const PAGE_RULE_SITE_FIELDS = [
+  "baseUrl",
+  "scripts",
+  "resourceSizes",
+  "siteIndexable",
+] as const;
 
 /**
  * The fields of a `ctx.site.scripts` entry page rules read.
@@ -144,6 +151,11 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
   const resourceSizes = siteData.resourceSizes;
   return {
     baseUrl: siteData.baseUrl,
+    // A homepage (or entry page) that turns noindex, or back, flips the noindex
+    // gate on every other page without changing any of them, so it has to move
+    // the key. Tri-state: undefined skips nothing, like false, but is kept
+    // distinct so the key says exactly what the run saw.
+    siteIndexable: siteData.siteIndexable ?? null,
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
     resourceSizes: resourceSizes
       ? {
@@ -349,6 +361,7 @@ export async function computeRunContextHash(
         ["engineVersion", input.engineVersion],
         ["pageRules", input.pageRules.map((r) => [r.id, r.options])],
         ["baseUrl", projection.baseUrl],
+        ["siteIndexable", projection.siteIndexable],
         ["scripts", projection.scripts],
         ["resourceSizes", projection.resourceSizes],
         ["siteMetadata", input.siteMetadata ?? null],

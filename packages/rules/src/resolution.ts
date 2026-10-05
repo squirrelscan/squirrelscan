@@ -14,6 +14,9 @@ import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
+/** The runner's noindex gate (pub#457): a skip that is a "does not apply" verdict. */
+const NOT_APPLICABLE_SKIP_REASON = "noindex";
+
 /**
  * Build the resolution signal from a report's pre-sample rule results + the
  * crawled page URLs (`report.pages[].url`, which publish drops).
@@ -25,6 +28,14 @@ import { normalizePageUrl } from "@squirrelscan/utils/url";
  * pass/warn/fail. Genuine site-scope checks (no pageUrl, not aggregated) never
  * become per-page findings, so they emit nothing; `skipped` checks didn't
  * evaluate, so they emit nothing either.
+ *
+ * One skip is a verdict rather than a gap: the runner's noindex gate
+ * (`skipReason: "noindex"`, pub#457) decided that NOTHING the rule reports applies
+ * to that page. Its page counts as evaluated clean for every key of that rule that
+ * this run emits, so a finding carried from before the page went noindex resolves
+ * instead of being carried forever. If the run emits no key for the rule at all
+ * (every page skipped), there is nothing to attach it to and the prior carries,
+ * which is the safe direction.
  *
  * Every bound degrades safely server-side: a hash set clipped by the fold's
  * page cap or this builder's own budget is listed in `truncated` (absence
@@ -55,6 +66,10 @@ export function buildResolutionSignal(
   // stays in, and the collision instead makes the *other* page carry too —
   // over-carry, never a wrong resolve.
   const evaluated = new Map<string, Set<string>>();
+  // Rule id per emitted key, and the pages each rule's noindex gate skipped
+  // (normalized URL), merged into `evaluated` once every key is known.
+  const keyRule = new Map<string, string>();
+  const notApplicable = new Map<string, Set<string>>();
   // (#2063) Hashed on the QUERY-PRESERVING page identity, the same key the merge
   // stores findings under. A consumer on an older release hashed these
   // query-blind; it recognizes both spellings (see merge-core's resolutionHashes),
@@ -84,6 +99,26 @@ export function buildResolutionSignal(
 
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
     for (const check of rule.checks) {
+      if (check.status === "skipped" && check.skipReason === NOT_APPLICABLE_SKIP_REASON) {
+        // A fold can turn these into one aggregate with pages[]. The runner gives
+        // the skip its own `details.foldKey`, so an aggregate is trusted only when
+        // it carries that key (every constituent was a noindex skip, not a mix
+        // with another gate's skip). A clipped list only leaves the clipped pages
+        // unevaluated (carry), never wrongly clean.
+        const homogeneous = check.details?.foldKey === NOT_APPLICABLE_SKIP_REASON;
+        const skippedUrls = check.pageUrl
+          ? [check.pageUrl]
+          : homogeneous
+            ? (check.pages ?? [])
+            : [];
+        let set = notApplicable.get(ruleId);
+        if (!set) {
+          set = new Set<string>();
+          notApplicable.set(ruleId, set);
+        }
+        for (const url of skippedUrls) set.add(normalized(url));
+        continue;
+      }
       if (check.status !== "pass" && check.status !== "warn" && check.status !== "fail") continue;
       // (#2063) A carried/unrendered check is a replay of an earlier observation,
       // not something this run evaluated. It can only mislead here — the pages it
@@ -107,6 +142,7 @@ export function buildResolutionSignal(
         set = new Set<string>();
         failing.set(key, set);
         evaluated.set(key, new Set<string>());
+        keyRule.set(key, ruleId);
       }
       // Positive evaluation evidence. A page-scope rule can `skipped` one page
       // (perf/ttfb with no timing data) while passing another, and a rule can
@@ -158,6 +194,12 @@ export function buildResolutionSignal(
       truncated.add(key);
     }
     totalHashes += set.size;
+  }
+
+  // Noindex-gated pages are clean for every key of their rule (see the header).
+  for (const [key, ev] of evaluated) {
+    const skipped = notApplicable.get(keyRule.get(key)!);
+    if (skipped) for (const url of skipped) ev.add(url);
   }
 
   const crawledUrls = crawledPageUrls.slice(0, limits.maxCrawledUrls);

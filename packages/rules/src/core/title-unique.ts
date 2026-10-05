@@ -3,6 +3,8 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
 
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+
 const SKIP_CHECK: CheckResult = {
   name: "title-unique",
   status: "skipped",
@@ -61,8 +63,9 @@ function buildCheck(
 
 // Streaming path (#1022): build the normalizedTitle→urls map from page_features
 // scalars via the async cursor, in normalized_url order (== the legacy
-// site.pages order), re-deriving the key exactly as the legacy path does.
-async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
+// site.pages order), re-deriving the key exactly as the legacy path does. Noindex
+// pages are left out of both paths (pub#457): their titles never meet in search.
+async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
   const checks: CheckResult[] = [];
   if (siteQuery.pageCount() < 2) {
     checks.push(SKIP_CHECK);
@@ -71,6 +74,7 @@ async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
 
   const titleMap = new Map<string, string[]>();
   for await (const row of siteQuery.pagesMatching(() => true)) {
+    if (skipNoindex && row.robotsNoindex) continue;
     const title = row.title?.trim() || "";
     if (!title) continue;
 
@@ -100,7 +104,7 @@ export const titleUniqueRule: Rule = {
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     if (ctx.siteQuery) {
-      return runViaSiteQuery(ctx.siteQuery);
+      return runViaSiteQuery(ctx.siteQuery, skipsNoindexPages(ctx.site));
     }
 
     const checks: CheckResult[] = [];
@@ -114,6 +118,7 @@ export const titleUniqueRule: Rule = {
     const titleMap = new Map<string, string[]>();
 
     for (const page of ctx.site.pages) {
+      if (excludesNoindexPage(ctx.site, page.parsed, page.headers)) continue;
       const title = page.parsed.meta.title?.trim() || "";
       if (!title) continue;
 

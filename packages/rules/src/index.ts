@@ -18,6 +18,15 @@ export {
   ruleApplies,
 } from "./applicability";
 export { setRequestAsync, setLlmCall } from "./tools";
+// Which pages count as noindex, and the homepage exception, shared by the runner
+// gate, the site rules and audit-engine's SiteData assembly (pub#457).
+export {
+  isSiteIndexable,
+  noindexSource,
+  skipsNoindexPages,
+  type NoindexSource,
+  type SiteIndexablePage,
+} from "./shared/noindex";
 // Page-time extractor for the social/asset-divergence page_features columns —
 // audit-engine's extractPageFeatures calls the SAME code the rule's legacy path
 // does, so the stored scalars and the re-derived ones can never diverge (#1371).

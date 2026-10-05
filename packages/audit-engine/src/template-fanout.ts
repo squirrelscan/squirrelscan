@@ -182,12 +182,13 @@ export interface TemplateFanout {
  * so a rule disabled by config never enters the cache and the per-page path costs
  * a `Set.has` rather than a `meta` read.
  *
- * `skipOnSoft404` DISQUALIFIES a rule here, whatever it declares. That gate is
- * decided per page, so the two declarations contradict each other, and the runner's
- * gate ordering only protects the recipient: a soft-404 member takes its own skip
- * instead of a sibling's real verdict, but a soft-404 REPRESENTATIVE would
- * otherwise cache its skip and hand it to healthy members. No built-in rule
- * declares both and `template-verdict-page-independence.test.ts` keeps it that way,
+ * `skipOnSoft404` and `skipOnNoindex` (pub#457) DISQUALIFY a rule here, whatever
+ * it declares. Each gate is decided per page, so it contradicts a template verdict,
+ * and the runner's gate ordering only protects the recipient: a soft-404 or noindex
+ * member takes its own skip instead of a sibling's real verdict, but such a
+ * REPRESENTATIVE would otherwise cache its skip and hand it to healthy members. No
+ * built-in rule declares either with a template scope, and
+ * `template-verdict-page-independence.test.ts` keeps it that way,
  * but a plugin registering one through `additionalNamespaces` reaches this at
  * runtime, where a named test cannot.
  */
@@ -199,7 +200,9 @@ export function createTemplateFanout(
   const fannable = new Set(
     runner
       .getEnabledRules()
-      .filter((r) => mayFanOutAcrossTemplate(r.meta) && !r.meta.skipOnSoft404)
+      .filter(
+        (r) => mayFanOutAcrossTemplate(r.meta) && !r.meta.skipOnSoft404 && !r.meta.skipOnNoindex,
+      )
       .map((r) => r.meta.id),
   );
 

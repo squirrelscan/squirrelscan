@@ -21,6 +21,8 @@ Pages with no title are skipped rather than grouped together, so a site where fi
 
 The normalisation here is stricter than [content/duplicate-title](/rules/content/duplicate-title), which lowercases but does not collapse whitespace. Two titles differing only by a double space are duplicates to this rule and distinct to that one.
 
+Pages kept out of the search index are left out of the grouping. A page whose `<meta name="robots">` tag or `X-Robots-Tag` header contains `noindex` (a header scoped to one crawler, such as `googlebot: noindex`, counts too) is not counted, because its title never competes with the others in search results. Pages are left out only on a site that is itself being indexed, judged by its homepage, or by the page the audit started from when the homepage was not fetched. When that page is noindex, as on a staging site or a preview deployment (Vercel, Netlify and Cloudflare Pages previews send `X-Robots-Tag: noindex` by default), every page is counted: the whole host is out of search and the audit is most likely checking it before launch. When neither page was fetched, every page is counted as well. See [pages kept out of search](/rules#pages-kept-out-of-search) for the full list of rules that do this.
+
 ## How to fix it
 
 Give the template a title that varies with the page, and a distinct one for paginated pages:

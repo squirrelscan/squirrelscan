@@ -19,6 +19,8 @@ export const metaTitleRule: Rule = {
     category: "core",
     scope: "page",
     verdictScope: "page",
+    // Search-result presentation only: skipped on noindex pages (pub#457).
+    skipOnNoindex: true,
     severity: "error",
     weight: 8,
     optionsSchema,
