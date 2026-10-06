@@ -480,8 +480,7 @@ enable = [
   "core/*",
   "security/*",
   "links/broken-links"
-]
-disable = ["*"]  # Only enable specific critical rules
+]  # Only these run: enable replaces the default ["*"]
 
 [external_links]
 enabled = false  # Speed priority
@@ -681,8 +680,7 @@ enable = [
   "core/meta-title",
   "core/meta-description",
   "images/alt-text"
-]
-disable = ["*"]  # Only accessibility rules
+]  # Only these run: enable replaces the default ["*"]
 
 [external_links]
 enabled = false
@@ -714,12 +712,9 @@ delay_ms = 100
 
 [rules]
 enable = [
-  "performance/*",
-  "images/*",
-  "core/preconnect",
-  "core/preload"
-]
-disable = ["*"]
+  "perf/*",
+  "images/*"
+]  # Only these run: enable replaces the default ["*"]
 
 [external_links]
 enabled = false
@@ -760,8 +755,7 @@ enable = [
   "security/*",
   "crawl/robots-txt",
   "links/https-downgrade"
-]
-disable = ["*"]
+]  # Only these run: enable replaces the default ["*"]
 
 [external_links]
 enabled = true  # Check HTTPS external links

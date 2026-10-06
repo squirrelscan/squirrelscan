@@ -64,8 +64,9 @@ disable = ["perf/*"]
 ```toml squirrel.toml
 [rules]
 enable = ["perf/critical-request-chains"]
-disable = ["*"]
 ```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
 ## Related rules
 

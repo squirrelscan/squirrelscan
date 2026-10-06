@@ -67,8 +67,11 @@ disable = ["schema/*"]
 ```toml squirrel.toml
 [rules]
 enable = ["schema/entity-conflicts"]
-disable = ["*"]
 ```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+For one run without editing the config: `squirrel audit https://example.com --rule-include schema/entity-conflicts`.
 
 ## Related rules
 
