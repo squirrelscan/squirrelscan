@@ -19,14 +19,19 @@ The rule reads the page's parsed JSON-LD and emits exactly one check:
 - `json-ld-types`, warning with the message `JSON-LD present but no @type found`, when the JSON-LD parsed cleanly but declares no type.
 - `json-ld`, passing with the message `Valid JSON-LD with N type(s)` and one item per type name.
 
-A parse error anywhere in the page's JSON-LD takes priority over a validation issue for the message, so a page with both reads `Invalid JSON-LD syntax` and still lists its validation issues as items. The validation runs at audit time, so a page reused from the crawl cache is checked by the current release, not by the one that first fetched it. The severity is warning, and the check status is `fail`, so the finding appears at warning weight in the score.
+A parse error anywhere in the page's JSON-LD takes priority over a validation issue for the message, so a page with both reads `Invalid JSON-LD syntax` and still lists its validation issues as items. The validation runs at audit time, so a page reused from the crawl cache is checked by the current release, not by the one that first fetched it. The one exception is the untyped top-level nodes described below: a page an older release parsed did not keep them, so a reference to one resolves once the page is fetched again or the audit runs with `--refresh`. The severity is warning, and the check status is `fail`, so the finding appears at warning weight in the score.
 
 ### What the validator accepts
 
 The validator follows the schema.org range of each property it checks:
 
 - `image` (on `Article`, `Product`, `LocalBusiness` and `Recipe`) and `Organization.logo` take a URL, an `ImageObject` with a `url` or `contentUrl`, an `{"@id": ...}` reference, or an array of these. Anything else, such as a number, an object of another `@type`, or an `ImageObject` with no URL, is invalid.
-- A nested node with an `@id`, such as `"publisher": {"@id": "https://example.com/#organization"}`, is checked together with every other node that describes the same `@id` inside the page's typed JSON-LD: in the same `@graph`, another `@graph`, or another script block. A property given by any of them counts. This is how Yoast and `@unhead/schema-org` (Nuxt) link their nodes. A bare reference to an `@id` that no node on the page describes is checked as written, so `publisher.name` is still reported missing.
+- A nested node with an `@id`, such as `"publisher": {"@id": "https://example.com/#organization"}`, is checked together with every other node that describes the same `@id` on the page: in the same `@graph`, another `@graph`, or another script block, including a top-level node that has an `@id` but no `@type`. A property given by any of them counts. This is how Yoast and `@unhead/schema-org` (Nuxt) link their nodes. A bare reference to an `@id` that no node on the page describes is checked as written, so `publisher.name` is still reported missing.
+- In JSON-LD any property may hold one value or a list. `Recipe.recipeIngredient` takes a string or a list of strings, `Recipe.recipeInstructions` takes text, an object such as a `HowToStep` or `HowToSection`, or a list of either, and `FAQPage.mainEntity` and `BreadcrumbList.itemListElement` take one entry or a list.
+- Each `Product.offers` entry needs `price`, `priceCurrency` and `availability`. An `AggregateOffer` needs `lowPrice` and `priceCurrency` instead.
+- `Article.publisher` is optional, as in Google's Article documentation. A publisher that is given needs a `name` and nothing else, so a `Person` publisher with no `logo` passes.
+- Each `BreadcrumbList` entry needs `position`, `name` and `item`, except the last crumb, which may leave out `item` as Google allows. The last crumb is the one with the highest `position`, or the one written last when no entry has a position. A crumb given as an `{"@id"}` reference takes its fields from the node it names, and a `name` given on the crumb's `item` node counts.
+- Each `FAQPage` question needs `name` and `acceptedAnswer`.
 
 ## How to fix it
 

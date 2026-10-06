@@ -13,12 +13,27 @@ type PropertyType =
   // schema.org range `ImageObject | URL` (image, logo): a URL string, an
   // ImageObject (inline or an `{"@id"}` reference), or an array of either.
   | "urlOrImage"
-  | "objectOrArray";
+  | "objectOrArray"
+  // Free text or structured steps, one or many: recipeInstructions takes a
+  // string, a HowToStep / HowToSection, or an array of either.
+  | "textOrObjects";
 
 interface PropertyRule {
   type: PropertyType;
+  /** Fields each object in the value must carry (any description of its `@id` counts). */
   required?: string[];
-  item?: PropertyRule;
+  /**
+   * `required` for an object whose `@type` is listed, instead of the default.
+   * An AggregateOffer carries `lowPrice` where an Offer carries `price`.
+   */
+  requiredByType?: Record<string, string[]>;
+  /**
+   * Fields the LAST entry of a list may leave out. Google's breadcrumb rules
+   * exempt the final crumb, the current page, from `item`.
+   */
+  lastMayOmit?: string[];
+  /** Other places a required field may be given, keyed by field. */
+  alsoAt?: Record<string, (obj: Record<string, unknown>, nodes: NodeIndex) => boolean>;
 }
 
 interface SchemaRule {
@@ -36,13 +51,16 @@ const TYPE_ALIASES: Record<string, string> = {
 
 const TYPE_RULES: Record<string, SchemaRule> = {
   Article: {
-    required: ["headline", "image", "datePublished", "author", "publisher"],
+    required: ["headline", "image", "datePublished", "author"],
     properties: {
       headline: { type: "string" },
       image: { type: "urlOrImage" },
       datePublished: { type: "string" },
       author: { type: "objectOrArray", required: ["name"] },
-      publisher: { type: "object", required: ["name", "logo"] },
+      // Not required: Google's Article documentation lists no required
+      // properties and does not recommend `publisher`, and a Person publisher
+      // has no logo at all. When one is given it must still be named.
+      publisher: { type: "objectOrArray", required: ["name"] },
     },
   },
   Product: {
@@ -53,6 +71,7 @@ const TYPE_RULES: Record<string, SchemaRule> = {
       offers: {
         type: "objectOrArray",
         required: ["price", "priceCurrency", "availability"],
+        requiredByType: { AggregateOffer: ["lowPrice", "priceCurrency"] },
       },
     },
   },
@@ -90,19 +109,24 @@ const TYPE_RULES: Record<string, SchemaRule> = {
   BreadcrumbList: {
     required: ["itemListElement"],
     properties: {
+      // One ListItem or a list of them: in JSON-LD any property may hold a
+      // single value.
       itemListElement: {
-        type: "array",
-        item: { type: "object", required: ["position", "name", "item"] },
+        type: "objectOrArray",
+        required: ["position", "name", "item"],
+        lastMayOmit: ["item"],
+        // The older pattern names the crumb on its `item` node instead.
+        alsoAt: {
+          name: (crumb, nodes) =>
+            describe(crumb.item, nodes).some((node) => !isMissing(node.name)),
+        },
       },
     },
   },
   FAQPage: {
     required: ["mainEntity"],
     properties: {
-      mainEntity: {
-        type: "array",
-        item: { type: "object", required: ["name", "acceptedAnswer"] },
-      },
+      mainEntity: { type: "objectOrArray", required: ["name", "acceptedAnswer"] },
     },
   },
   VideoObject: {
@@ -127,8 +151,8 @@ const TYPE_RULES: Record<string, SchemaRule> = {
     properties: {
       name: { type: "string" },
       image: { type: "urlOrImage" },
-      recipeIngredient: { type: "array" },
-      recipeInstructions: { type: "array" },
+      recipeIngredient: { type: "stringOrArray" },
+      recipeInstructions: { type: "textOrObjects" },
     },
   },
 };
@@ -151,13 +175,20 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 type NodeIndex = Map<string, Record<string, unknown>[]>;
 
+/** A value and every other description of its `@id` on the page; none for a non-object. */
+function describe(value: unknown, nodes: NodeIndex): Record<string, unknown>[] {
+  if (!isPlainObject(value)) return [];
+  const id = value["@id"];
+  return typeof id === "string" ? [value, ...(nodes.get(id) ?? [])] : [value];
+}
+
 /**
  * Index every node inside the page's typed schemas that describes an entity
  * under an `@id`, at any depth. A node that is itself only a reference (`@id`,
  * optionally `@type`) describes nothing and is skipped. Iterative so a deeply
  * nested document cannot overflow the stack.
  */
-function indexNodes(schemas: ParsedSchema[]): NodeIndex {
+function indexNodes(schemas: readonly Record<string, unknown>[]): NodeIndex {
   const index: NodeIndex = new Map();
   const stack: unknown[] = [...schemas];
   while (stack.length > 0) {
@@ -292,20 +323,32 @@ function validatePropertyType(
         addTypeError("an object or array of objects");
       }
       break;
+    case "textOrObjects": {
+      const one = (v: unknown) => typeof v === "string" || isPlainObject(v);
+      if (Array.isArray(value) ? !value.every(one) : !one(value)) {
+        addTypeError("text, an object, or an array of either");
+      }
+      break;
+    }
   }
 
   if (!rule.required) return;
 
-  const checkObject = (obj: unknown) => {
+  const checkObject = (obj: unknown, isLast: boolean) => {
     if (!isPlainObject(obj)) return;
     // A node with an `@id` is checked together with every other description of
     // that id on the page: a field given by any of them is present. A bare
     // reference that names no node on the page is checked as written, so its
     // missing fields still report.
-    const id = obj["@id"];
-    const targets = typeof id === "string" ? [obj, ...(nodes.get(id) ?? [])] : [obj];
-    for (const key of rule.required ?? []) {
-      if (targets.every((target) => isMissing(target[key]))) {
+    const targets = describe(obj, nodes);
+    for (const key of requiredFor(rule, targets)) {
+      if (isLast && rule.lastMayOmit?.includes(key)) continue;
+      const elsewhere = rule.alsoAt?.[key];
+      if (
+        targets.every(
+          (target) => isMissing(target[key]) && !(elsewhere && elsewhere(target, nodes)),
+        )
+      ) {
         addIssue({
           property: `${prop}.${key}`,
           message: `Validation: ${typeName}.${prop}.${key} is required`,
@@ -316,23 +359,64 @@ function validatePropertyType(
     }
   };
 
-  if (rule.type === "object") {
-    checkObject(value);
-  } else if (rule.type === "objectOrArray") {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        checkObject(item);
-      }
-    } else {
-      checkObject(value);
-    }
-  } else if (rule.type === "array" && rule.item?.type === "object") {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        checkObject(item);
+  if (Array.isArray(value)) {
+    const last = rule.lastMayOmit ? lastEntries(value, nodes) : undefined;
+    for (const item of value) checkObject(item, last?.has(item) ?? false);
+  } else {
+    // A single value is a list of one, so it is also the last entry.
+    checkObject(value, true);
+  }
+}
+
+/** The required list that applies to an object, by any `@type` its descriptions give. */
+function requiredFor(rule: PropertyRule, targets: Record<string, unknown>[]): string[] {
+  const byType = rule.requiredByType;
+  if (byType) {
+    for (const target of targets) {
+      const type = target["@type"];
+      for (const t of Array.isArray(type) ? type : [type]) {
+        if (typeof t !== "string") continue;
+        // Own keys only: a `@type` of "constructor" must not find Object's.
+        const name = bareTypeName(t);
+        if (Object.hasOwn(byType, name)) return byType[name]!;
       }
     }
   }
+  return rule.required ?? [];
+}
+
+/** A numeric `position`, from the entry or any description of its `@id`. */
+function positionOf(entry: unknown, nodes: NodeIndex): number | undefined {
+  for (const node of describe(entry, nodes)) {
+    const raw = node.position;
+    // Numbers and numeric strings only: coercing an object can run its code.
+    const position =
+      typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+    if (Number.isFinite(position)) return position;
+  }
+  return undefined;
+}
+
+/**
+ * The entries that count as the last of a list. `position` orders a
+ * BreadcrumbList, so when any entry carries one the last is the entry (or
+ * entries) with the highest; only a list with no positions at all falls back to
+ * the order it is written in.
+ */
+function lastEntries(list: unknown[], nodes: NodeIndex): Set<unknown> {
+  const last = new Set<unknown>();
+  let topPosition = -Infinity;
+  for (const entry of list) {
+    const position = positionOf(entry, nodes);
+    if (position === undefined) continue;
+    if (position > topPosition) {
+      topPosition = position;
+      last.clear();
+    }
+    if (position === topPosition) last.add(entry);
+  }
+  if (last.size === 0 && list.length > 0) last.add(list[list.length - 1]);
+  return last;
 }
 
 function normalizeTypes(schema: ParsedSchema): string[] {
@@ -436,9 +520,15 @@ function validateSchema(schema: ParsedSchema, nodes: NodeIndex): SchemaValidatio
 
 /**
  * Validate every schema on a page. References (`{"@id": …}`) resolve against
- * all of the page's JSON-LD, across `@graph`s and separate script blocks.
+ * all of the page's JSON-LD, across `@graph`s and separate script blocks,
+ * including the untyped top-level nodes the parser keeps beside the schemas.
  */
-export function validateSchemas(schemas: ParsedSchema[]): SchemaValidationIssue[] {
-  const nodes = indexNodes(schemas);
+export function validateSchemas(
+  schemas: ParsedSchema[],
+  untypedNodes: readonly Record<string, unknown>[] = [],
+): SchemaValidationIssue[] {
+  // Untyped top-level nodes are not schemas to validate, but a reference may
+  // point at one: `{"@id": "#p", "name": "…"}` in a `@graph` still describes #p.
+  const nodes = indexNodes([...schemas, ...untypedNodes]);
   return schemas.flatMap((schema) => validateSchema(schema, nodes));
 }
