@@ -84,6 +84,9 @@ export const labelContentNameMismatchRule: Rule = {
         details: {
           issue:
             "Voice control users may not be able to activate these controls",
+          ...(mismatches.length > 10
+            ? { additional: mismatches.length - 10 }
+            : {}),
         },
       });
     } else if (elementsWithAriaLabel.length > 0) {

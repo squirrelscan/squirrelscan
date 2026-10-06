@@ -13,7 +13,7 @@ A muted, looping, autoplaying `<video>` behaves like an animated GIF for a reade
 
 The rule runs on every crawled page and emits one or two checks:
 
-- `animated-gifs`: warns with the message `N GIF image(s) found - consider video format`, listing up to ten filenames. It is replaced by `animated-content`, passing with `No GIF animations found`, when there are none.
+- `animated-gifs`: warns with the message `N GIF image(s) found - consider video format`, listing up to ten filenames with a count of the rest. It is replaced by `animated-content`, passing with `No GIF animations found`, when there are none.
 - `video-codecs`: emitted only when at least one `<video>` qualifies, at info status with the message `N video(s) could use modern codecs`, listing up to five filenames.
 
 A GIF is found by URL rather than by content: an `<img src>` whose lowercased value ends in `.gif` or contains `.gif?`, or a `<picture> <source>` whose `srcset` contains `.gif` or whose `type` is exactly `image/gif`. The rule does not fetch the file, so it cannot tell an animated GIF from a static one and both are reported.

@@ -79,6 +79,7 @@ export const animatedContentRule: Rule = {
         details: {
           suggestion: "Convert to MP4/WebM with <video autoplay loop muted>",
           estimatedSavings: "50-90% smaller file sizes",
+          ...(gifImages.length > 10 ? { additional: gifImages.length - 10 } : {}),
         },
       });
     } else {

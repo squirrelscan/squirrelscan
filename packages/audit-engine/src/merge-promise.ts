@@ -27,6 +27,8 @@ import {
   computeMerge,
   createMergeSession,
   flattenChecks,
+  itemListComplete,
+  pageCheckKey,
   type FlatFinding,
   type MergedFinding,
   type MergedState,
@@ -197,6 +199,8 @@ export interface MergeFindingsPromiseInput {
   sampledCheckPages?: Map<string, Set<string>>;
   /** (#1185) Pre-indexed publish resolution signal — see {@link ComputeMergeInput.resolution}. */
   resolution?: MergeResolutionInput;
+  /** (pub#474) Complete item lists — see {@link ComputeMergeInput.completeItemChecks}. */
+  completeItemChecks?: Set<string>;
   /**
    * (#1873) Prior OPEN findings, already loaded by the caller — skips the
    * `store.getFindings(siteKey, ["open"])` read. The complete-store finalize uses
@@ -432,6 +436,20 @@ export async function runCloudSmartAudits(
    * shell to speak of.
    */
   let shellResults: CloudSmartAuditsInput["ruleResults"] | undefined;
+  /**
+   * (pub#474) Sampled branch only: `${ruleId}|${checkName}` of every folded
+   * aggregate this run published. A per-page check rebuilt from one holds only
+   * what the aggregate attributed to the page (its items and each item's
+   * `sourcePages` are capped, the remainder is pinned to the first page), and a
+   * page clipped from its sampled `pages` has none of it, even when a sibling
+   * check of the same name (another `foldKey`) still lists items there. So no
+   * page's list for that name is provably complete. Replays are left out: an
+   * aggregate folds one provenance only, so a replayed one names pages this run
+   * did not crawl.
+   */
+  const aggregatedChecks = new Set<string>();
+  /** (pub#474) Rules whose published check array was cut (`checksTruncated`). */
+  const rulesWithDroppedChecks = new Set<string>();
   if (completeStore) {
     // (#2063) IDENTITY CONTRACT. Complete mode is the one place where a page's
     // ABSENCE from the fresh set authorizes a resolve, and the fresh set was keyed
@@ -509,15 +527,23 @@ export async function runCloudSmartAudits(
     freshResults = new Map<string, RuleRunResult>();
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       const checks: CheckResult[] = [];
-      for (const c of r.checks.flatMap(unfoldAggregateCheck)) {
-        if (isReplayedCheck(c)) {
-          replayedChecksDropped += 1;
-          for (const u of attributedPages(c)) replayedUrls.add(u);
-          continue;
+      for (const original of r.checks) {
+        if (original.details?.aggregated === true && !isReplayedCheck(original)) {
+          aggregatedChecks.add(`${ruleId}|${original.name}`);
         }
-        checks.push(c);
+        for (const c of unfoldAggregateCheck(original)) {
+          if (isReplayedCheck(c)) {
+            replayedChecksDropped += 1;
+            for (const u of attributedPages(c)) replayedUrls.add(u);
+            continue;
+          }
+          checks.push(c);
+        }
       }
       freshResults.set(ruleId, { meta: r.meta, checks });
+      if (r.checks.some((c) => typeof c.details?.checksTruncated === "number")) {
+        rulesWithDroppedChecks.add(ruleId);
+      }
     }
     // Crawled this run = every page that produced a FRESH check (page-scope checks
     // carry a pageUrl) ∪ every page in pageStatuses, minus the removed ones.
@@ -568,6 +594,11 @@ export async function runCloudSmartAudits(
   // the prior OPEN findings the caller passed — which EXCLUDE this run's ingest —
   // as the only rows needing a resolve/carry/stale decision.
   const freshFindings: FlatFinding[] = [];
+  // (pub#474) Which (page, check) item lists are complete, so the merge can
+  // resolve an item a still-failing page no longer lists. A key is complete only
+  // when EVERY fail/warn check under it is: a rule may emit one name twice on a
+  // page, and the locators are their union.
+  const itemListCompleteness = new Map<string, boolean>();
   if (!completeStore) {
     for (const [ruleId, r] of freshResults) {
       const byUrl = new Map<string, CheckResult[]>();
@@ -582,11 +613,26 @@ export async function runCloudSmartAudits(
         }
         arr.push(c);
       }
+      const ruleComplete = !rulesWithDroppedChecks.has(ruleId);
       for (const [u, checks] of byUrl) {
         freshFindings.push(...flattenChecks(u, ruleId, checks));
+        for (const c of checks) {
+          if (c.status !== "fail" && c.status !== "warn") continue;
+          const key = pageCheckKey(u, ruleId, c.name);
+          const complete =
+            ruleComplete &&
+            !aggregatedChecks.has(`${ruleId}|${c.name}`) &&
+            itemListComplete(ruleId, c);
+          itemListCompleteness.set(key, (itemListCompleteness.get(key) ?? true) && complete);
+        }
       }
     }
   }
+  const completeItemChecks = new Set<string>();
+  for (const [key, complete] of itemListCompleteness) {
+    if (complete) completeItemChecks.add(key);
+  }
+  itemListCompleteness.clear();
 
   // (#1185) Index the unsampled resolution signal for the merge. The signal's
   // crawled set feeds ONLY the resolve decision inside computeMerge — it is
@@ -638,6 +684,7 @@ export async function runCloudSmartAudits(
       now,
       sampledCheckPages,
       resolution,
+      completeItemChecks,
     },
     {
       persist: (record) => onPersist(record),

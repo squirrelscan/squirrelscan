@@ -338,6 +338,7 @@ function buildVisibilityCheck(
       ratingValue: primary.ratingValue,
       ratingCount: primary.ratingCount,
       reason: "no-visible-rating",
+      ...itemsOverflow(entities),
     },
     items: toItems(entities),
   };
@@ -427,6 +428,7 @@ function buildSubjectCheck(entities: RatedEntity[], kind: IneligiblePageKind): C
       ratingValue: primary.ratingValue,
       ratingCount: primary.ratingCount,
       reason: "entity-not-page-subject",
+      ...itemsOverflow(offenders),
     },
     items: toItems(offenders),
   };
@@ -492,6 +494,11 @@ function describeRating(entity: RatedEntity): string {
   if (!entity.ratingValue) return "AggregateRating";
   const count = entity.ratingCount ? ` from ${entity.ratingCount} reviews` : "";
   return `AggregateRating ${entity.ratingValue}${count}`;
+}
+
+/** The entities {@link toItems} leaves out, recorded so the list is not read as complete. */
+function itemsOverflow(entities: RatedEntity[]): { additional?: number } {
+  return entities.length > MAX_ITEMS ? { additional: entities.length - MAX_ITEMS } : {};
 }
 
 function toItems(entities: RatedEntity[]): CheckItem[] {

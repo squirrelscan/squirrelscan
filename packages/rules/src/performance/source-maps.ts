@@ -384,6 +384,7 @@ export const sourceMapsRule: Rule = {
         items: inlineSourceMaps.slice(0, 3).map((id) => ({ id })),
         details: {
           note: "Inline source maps increase bundle size and expose code",
+          ...(inlineSourceMaps.length > 3 ? { additional: inlineSourceMaps.length - 3 } : {}),
         },
       });
     }

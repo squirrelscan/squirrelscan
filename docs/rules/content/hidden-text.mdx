@@ -20,6 +20,8 @@ The rule runs on every crawled page and emits a single check named `hidden-text`
 
 Each item names the element's selector and the techniques that hid it, and carries the character count, link count and a markup snippet. Hidden links are the stronger spam signal, which is why they alone escalate the finding to a failure.
 
+The walk stops after 20,000 elements, and stylesheets are read up to 400,000 characters or 4,000 rules. The finding's details carry `scanTruncated`, which is true when either budget cut the scan short, because what lies past it was never inspected.
+
 An element is exempt before any technique is considered when it carries a known screen-reader-only class such as `sr-only`, `visually-hidden` or `screen-reader-text`, or one you add through `a11y_classes`, and when it is marked as intentionally hidden UI through `aria-hidden`, the `hidden` attribute, or a role such as `tabpanel` or `dialog`. An element must hold at least `min_hidden_chars` characters to be reported. Severity for the rule is warning, weight 6.
 
 ## How to fix it
