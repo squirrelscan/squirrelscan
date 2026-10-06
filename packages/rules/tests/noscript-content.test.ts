@@ -55,6 +55,7 @@ import { thirdPartyCookiesRule } from "../src/security/third-party-cookies";
 import type { Rule, RuleContext } from "../src/types";
 
 const URL = "https://example.com/";
+const AVATAR = "https://example.com/avatar.jpg";
 
 interface Snippet {
   head?: string;
@@ -69,7 +70,16 @@ function ctx(html: string): RuleContext {
   return {
     page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, URL),
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      scripts: [],
+      // A measured file far heavier than a 64x64 image needs, so
+      // images/responsive-size has evidence to report the live copy.
+      resourceSizes: { css: [], images: [{ url: AVATAR, sizeBytes: 400_000 }] },
+    },
     options: {},
   } as unknown as RuleContext;
 }
@@ -111,7 +121,7 @@ const CASES: Array<[Rule, Snippet]> = [
   [imageRedundantAltRule, { body: `<img src="/logo.png" alt="Image of the company logo">` }],
   [altTextRule, { body: `<img height="1" width="1" src="https://www.facebook.com/tr?id=1&ev=PageView&noscript=1">` }],
   [dimensionsRule, { body: HERO }],
-  [responsiveSizeRule, { body: `<img height="1" width="1" src="https://www.facebook.com/tr?id=1&ev=PageView&noscript=1">` }],
+  [responsiveSizeRule, { body: `<img src="${AVATAR}" width="64" height="64" alt="Avatar">` }],
   [aspectMismatchRule, { body: `<img src="/hero.jpg" width="800" height="600" style="width: 400px; height: 400px">` }],
   [filenameQualityRule, { body: HERO }],
   [lazyLoadingRule, { body: IMAGES }],

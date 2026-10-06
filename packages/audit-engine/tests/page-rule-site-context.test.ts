@@ -120,7 +120,26 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
               resourceFieldReads,
             ),
           ],
-          images: [],
+          images: [
+            recordFields(
+              {
+                url: "http://synthetic.test/photo.jpg",
+                status: 200,
+                error: null,
+                contentType: "image/jpeg",
+                sizeBytes: 400_000,
+                sourcePages: ["http://synthetic.test/"],
+                cacheControl: "public, max-age=3600",
+                cacheReason: null,
+                contentEncoding: null,
+                transferBytes: 400_000,
+                etag: null,
+                lastModified: null,
+                vary: null,
+              },
+              resourceFieldReads,
+            ),
+          ],
         },
         scripts: [
           recordFields(
