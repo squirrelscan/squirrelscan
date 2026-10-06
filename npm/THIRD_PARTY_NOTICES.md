@@ -110,7 +110,7 @@ runtime dependency closure of `apps/cli`.
 | `path-to-regexp@8.4.2` | MIT | [source](https://github.com/pillarjs/path-to-regexp) |
 | `picocolors@1.1.1` | ISC | [source](https://github.com/alexeyraspopov/picocolors) |
 | `pkce-challenge@5.0.1` | MIT | [source](https://github.com/crouchcd/pkce-challenge) |
-| `proxy-addr@2.0.7` | MIT | [source](https://github.com/jshttp/proxy-addr) |
+| `proxy-addr@2.0.8` | MIT | [source](https://github.com/jshttp/proxy-addr) |
 | `pure-rand@6.1.0` | MIT | [source](https://github.com/dubzzz/pure-rand) |
 | `qs@6.16.0` | BSD-3-Clause | [source](https://github.com/ljharb/qs) |
 | `range-parser@1.3.0` | MIT | [source](https://github.com/jshttp/range-parser) |
@@ -133,7 +133,7 @@ runtime dependency closure of `apps/cli`.
 | `side-channel-map@1.0.1` | MIT | [source](https://github.com/ljharb/side-channel-map) |
 | `side-channel-weakmap@1.0.2` | MIT | [source](https://github.com/ljharb/side-channel-weakmap) |
 | `side-channel@1.1.1` | MIT | [source](https://github.com/ljharb/side-channel) |
-| `smol-toml@1.8.0` | BSD-3-Clause | [source](github:squirrelchat/smol-toml) |
+| `smol-toml@1.9.0` | BSD-3-Clause | [source](github:squirrelchat/smol-toml) |
 | `statuses@2.0.2` | MIT | [source](https://github.com/jshttp/statuses) |
 | `strnum@2.4.1` | MIT | [source](https://github.com/NaturalIntelligence/strnum) |
 | `tinycolor2@1.6.0` | MIT | [source](https://github.com/bgrins/TinyColor) |
@@ -212,7 +212,7 @@ Packages: `ip-address@10.7.2`
 
 ### LICENSE (036546fdfb34)
 
-Packages: `smol-toml@1.8.0`
+Packages: `smol-toml@1.9.0`
 
     Copyright (c) Squirrel Chat et al., All rights reserved.
 
@@ -1265,7 +1265,7 @@ Packages: `iconv-lite@0.7.3`
 
 ### LICENSE (49fa72ab1de5)
 
-Packages: `etag@1.8.1`, `proxy-addr@2.0.7`
+Packages: `etag@1.8.1`, `proxy-addr@2.0.8`
 
     (The MIT License)
 

@@ -175,10 +175,11 @@ export function setConfigValue(
   // Set the value (supports dot notation for nested keys)
   // Note: writing back with stringifyTOML will lose any comments/formatting
   const keys = key.split(".");
-  // `config` comes from parseTOML and inherits Object.prototype, so descending
-  // into a `__proto__`/`constructor`/`prototype` segment hands back the shared
-  // prototype and the final write lands on every object in the process. No
-  // config key is named any of these, so reject rather than silently skip.
+  // parseTOML returns null-prototype tables, but the `{}` tables created below
+  // inherit Object.prototype, so descending into a `__proto__`/`constructor`/
+  // `prototype` segment of one hands back the shared prototype and the final
+  // write lands on every object in the process. No config key is named any of
+  // these, so reject rather than silently skip.
   const unsafeSegment = keys.find((segment) => isUnsafeObjectKey(segment));
   if (unsafeSegment) {
     return err(

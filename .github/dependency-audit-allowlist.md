@@ -28,3 +28,36 @@ tracked separately rather than bundled into a security fix.
 
 Remove this exception when those packages ship a patched `brace-expansion`, or when
 the override bump is done deliberately.
+
+## GHSA-hp3w-g68c-fv3c
+
+`sprintf-js` DoS via unbounded precision specifiers. The affected range is
+`<=1.1.3`, and `1.1.3` is the newest release: there is no patched version to move
+to.
+
+The tree resolves one copy, `1.0.3`, through `gray-matter` > `js-yaml@3` >
+`argparse@1`, and `gray-matter` is installed only by `tangly` in the docs
+workspace. `bun audit` also prints an
+`eslint-plugin-github` > `@eslint/eslintrc` path, but that `js-yaml` resolves to
+`4.x`, which uses `argparse@2` and does not depend on `sprintf-js`. Within
+`js-yaml@3` only its own `bin/js-yaml.js` command loads `argparse`, so the
+library calls `gray-matter` makes never load `sprintf-js`, and nothing in the
+compiled `squirrel` binary does either.
+
+Remove this exception when `sprintf-js` ships a fix or `gray-matter` moves off
+`js-yaml@3`.
+
+## GHSA-238p-pmpm-9mq7
+
+KaTeX trust-restriction bypass that needs an existing prototype pollution. The
+fix is `0.18.2`; the tree resolves `0.16.47`, and every consumer (`tangly`,
+`@tanglydocs/theme-ui`, `rehype-katex`, `micromark-extension-math`, `mermaid`)
+asks for `^0.16`. All of them are docs-workspace only, and nothing in the
+compiled `squirrel` binary loads KaTeX.
+
+Forcing `0.18` through an override crosses two breaking releases (`0.17` changed
+the internal `defineFunction` API and `0.18` prefixed KaTeX's CSS classes), which
+the docs theme's KaTeX styles and the plugins above were not built against. The
+docs render only our own math, so there is no untrusted input to bypass.
+
+Remove this exception when every consumer above accepts KaTeX `0.18`.
