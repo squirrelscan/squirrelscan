@@ -15,11 +15,21 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
-## [Unreleased]
+## v0.0.104 — 2026-10-06
+
+Pages kept out of search stop counting against title, description and heading checks, and four fixes from community bug reports cut false positives in structured data, image and accessibility checks.
 
 ### Changed
 
 - Pages kept out of search are no longer graded on how they would look in search results. On a page whose robots meta tag or `X-Robots-Tag` header says `noindex`, `core/meta-title`, `core/meta-description` and `core/h1` record a skipped check instead of a finding, and `core/title-unique`, `content/duplicate-title`, `content/duplicate-description` and `links/orphan-pages` leave the page out. Scores can rise for sites with noindex pages such as thank-you pages, internal search or account pages, because those findings no longer count. Accessibility, security, performance and broken-link rules still check every page. When the homepage itself is noindex, as on a staging site or a Vercel, Netlify or Cloudflare Pages preview deployment, nothing is skipped, so a pre-launch audit still checks titles, descriptions and headings everywhere. The [rules reference](https://docs.squirrelscan.com/rules#pages-kept-out-of-search) has the details. Thanks to @deniskern for the report (#457).
+
+### Fixed
+
+- `schema/json-ld-valid` accepts an `ImageObject` (or an `{"@id"}` reference) for `image` and `logo`, and resolves `@id` references across the page's JSON-LD, so `@unhead/schema-org` (Nuxt) pages validate clean. Validation errors are no longer repeated under "Invalid JSON-LD syntax", and a page reused from the crawl cache is validated again instead of replaying the previous release's results. Thanks to @deniskern for the report (#463).
+- `images/responsive-size` reports a small image only when its measured file is heavier than its displayed size needs, instead of flagging every thumbnail without `srcset`. Thanks to @deniskern for the report (#464).
+- `a11y/color-contrast` reports only contrast it measured: an inline text and background color pair under 4.5:1. Guesses from class names and stylesheets, such as `text-gray-300`, are no longer findings. Thanks to @deniskern for the report (#465).
+- `a11y/aria-dialog-name` identifies an unnamed dialog with no id by its classes and start tag (`dialog.newsletter-popup`) instead of a bare `dialog`. Thanks to @deniskern for the report (#462).
+- Entity map findings link to the entity map guide at its new home, https://docs.squirrelscan.com/guides/entity-map/fixing.
 
 ## v0.0.103 — 2026-10-05
 
