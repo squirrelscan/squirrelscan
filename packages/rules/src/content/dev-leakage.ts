@@ -10,6 +10,8 @@ import { getDomain } from "tldts";
 
 import type { Element } from "linkedom";
 
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { getRenderedProseText } from "./text-content";
 
@@ -702,11 +704,24 @@ export const devLeakageRule: Rule = {
     }
 
     if (hits.length === 0) {
-      checks.push({
-        name,
-        status: "pass",
-        message: "No development, private or preview hosts referenced",
-      });
+      // Nothing in the part scanned is not "nothing on the page" once a cap cut
+      // the scan short: a pass would resolve a prior finding that sits past the
+      // cap and is still there (pub#501).
+      checks.push(
+        scanTruncated
+          ? {
+              name,
+              status: "skipped",
+              message: "Page too large to scan in full; no development hosts in the part scanned",
+              skipReason: SCAN_TRUNCATED_SKIP_REASON,
+              details: { scanTruncated: true, foldKey: SCAN_TRUNCATED_SKIP_REASON },
+            }
+          : {
+              name,
+              status: "pass",
+              message: "No development, private or preview hosts referenced",
+            },
+      );
       return { checks };
     }
 

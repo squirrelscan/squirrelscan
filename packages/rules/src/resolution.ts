@@ -11,7 +11,11 @@
 
 import type { CheckResult, ResolutionSignal } from "@squirrelscan/core-contracts";
 import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import {
+  resolutionCheckKey,
+  resolutionUrlHash,
+  SCAN_TRUNCATED_SKIP_REASON,
+} from "@squirrelscan/core-contracts/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 /** The runner's noindex gate (pub#457): a skip that is a "does not apply" verdict. */
@@ -34,8 +38,14 @@ const NOT_APPLICABLE_SKIP_REASON = "noindex";
  * to that page. Its page counts as evaluated clean for every key of that rule that
  * this run emits, so a finding carried from before the page went noindex resolves
  * instead of being carried forever. If the run emits no key for the rule at all
- * (every page skipped), there is nothing to attach it to and the prior carries,
- * which is the safe direction.
+ * (every page skipped), there is nothing to attach it to: the key is absent, and
+ * the merge falls back to its pre-signal behaviour, which resolves a prior on a
+ * crawled page (here the outcome the verdict wanted anyway).
+ *
+ * Another is a gap rather than a verdict: `skipReason: "scan-truncated"` (pub#501)
+ * means the rule stopped at a work cap before it had seen the whole page. That page
+ * is not evaluated, and its key is emitted even when no other page evaluated the
+ * check, so the page lands in `notEvaluated` and its prior findings carry.
  *
  * Every bound degrades safely server-side: a hash set clipped by the fold's
  * page cap or this builder's own budget is listed in `truncated` (absence
@@ -117,6 +127,20 @@ export function buildResolutionSignal(
           notApplicable.set(ruleId, set);
         }
         for (const url of skippedUrls) set.add(normalized(url));
+        continue;
+      }
+      if (check.status === "skipped" && check.skipReason === SCAN_TRUNCATED_SKIP_REASON) {
+        // (pub#501) The opposite kind of skip: a GAP. The rule stopped at a work
+        // cap with nothing found so far, so the page is not evaluated. That needs
+        // the key to exist: with no other page evaluating the check, an absent key
+        // falls back to resolving every prior on a crawled page. Registering it
+        // with no evaluated page puts this page in `notEvaluated`, which carries.
+        const key = resolutionCheckKey(ruleId, check.name);
+        if (!failing.has(key) && failing.size < limits.maxChecks) {
+          failing.set(key, new Set<string>());
+          evaluated.set(key, new Set<string>());
+          keyRule.set(key, ruleId);
+        }
         continue;
       }
       if (check.status !== "pass" && check.status !== "warn" && check.status !== "fail") continue;

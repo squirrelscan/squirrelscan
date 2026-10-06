@@ -11,6 +11,8 @@ import { z } from "zod";
 
 import type { Document, Element } from "linkedom";
 
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { getTextExcludingScripts } from "./text-content";
 
@@ -1269,11 +1271,24 @@ export const hiddenTextRule: Rule = {
     }
 
     if (findings.length === 0) {
-      checks.push({
-        name: "hidden-text",
-        status: "pass",
-        message: "No hidden text or links detected",
-      });
+      // Nothing in the part scanned is not "nothing on the page" once a budget cut
+      // the scan short: a pass would resolve a prior finding that sits past the
+      // cap and is still there (pub#501).
+      checks.push(
+        scanTruncated
+          ? {
+              name: "hidden-text",
+              status: "skipped",
+              message: "Page too large to scan in full; no hidden text in the part scanned",
+              skipReason: SCAN_TRUNCATED_SKIP_REASON,
+              details: { scanTruncated: true, foldKey: SCAN_TRUNCATED_SKIP_REASON },
+            }
+          : {
+              name: "hidden-text",
+              status: "pass",
+              message: "No hidden text or links detected",
+            },
+      );
       return { checks };
     }
 

@@ -55,6 +55,17 @@ export interface ResolutionSignal {
   truncated?: string[];
 }
 
+/**
+ * `skipReason` of a page check whose rule stopped at a work cap before it had
+ * looked at the whole page and found nothing in the part it did look at
+ * (pub#501): `content/hidden-text`, `content/dev-leakage`. A pass there would be
+ * evaluation evidence and resolve a prior finding that may sit past the cap, so
+ * the rule skips instead, and the signal lists the page as not evaluated. Also
+ * the skip's `details.foldKey`, so a fold keeps it apart from the rule's other
+ * skips.
+ */
+export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
+
 /** Signal map key — same `ruleId|checkName` shape the merge core keys on. */
 export function resolutionCheckKey(ruleId: string, checkName: string): string {
   return `${ruleId}|${checkName}`;
