@@ -30,7 +30,7 @@ The model's feedback is carried as the check value, truncated to 200 characters.
 
 Read the feedback and the page together. The score on its own does not tell you what to change, and a model's opinion of prose is worth exactly as much as your agreement with the reasons it gives.
 
-Enable this on a section you suspect rather than site-wide. It costs one model call per page.
+It costs one model call per page, so it suits a section you suspect rather than a whole site.
 
 | | |
 |---|---|
@@ -59,11 +59,7 @@ disable = ["content/*"]
 
 ### Enable only this rule
 
-```toml squirrel.toml
-[rules]
-enable = ["content/quality"]
-disable = ["*"]
-```
+This rule cannot be turned on in this release. Its metadata sets `disabled: true`, and the rule loader drops it before any `enable`, `disable` or `[rule_options]` setting is read, so no configuration runs it.
 
 ## Related rules
 
