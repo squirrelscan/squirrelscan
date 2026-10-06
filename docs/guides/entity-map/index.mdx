@@ -7,6 +7,12 @@ description: "Every audit collapses your site's JSON-LD into one graph, so you c
 
 The entity map is the structured data on your whole site, collapsed into one graph. Every squirrelscan audit builds it, on your machine and in the cloud, with nothing to turn on. It answers a question no per-page validator can: does your site declare one organization, one website and one author, or a fresh copy of each on every page?
 
+<Frame caption="An example map on the dashboard's Entities page, for northwind.example, a fictional coffee roaster. The website, the journal, both authors, both products and two of the three articles all point at one Organization by its stable @id. The other Northwind Roasters is the same company declared on two pages without an @id: it has no links, and nothing ties it to the first. The red ring is the third article's publisher, an @id that no crawled page declares.">
+
+![The dashboard's Entities page for northwind.example. Summary cards read 33 entities, 9 types declared, 1 page without entities, a 97% stable @id share, 0 conflicts and 1 dangling reference. Below them, a graph of the 11 entities left after hiding 22 page-local ones, in which the Northwind Roasters organization is directly linked to the Northwind website, The Northwind Journal, two people, two products and two of three articles. A second Northwind Roasters node sits on its own with no links, and the third article, "Brewing guide: the V60", has a red line to a hollow red ring labelled https://northwind.example/#org.](/images/entity-map/example-entity-map.webp)
+
+</Frame>
+
 ## Why it matters
 
 Structured data validators check one page at a time. That is the wrong unit for most of what goes wrong with it.
@@ -60,6 +66,63 @@ The map itself is informational and never changes the health score. What is wron
 ## The rules
 
 Thirteen site-wide rules read the map and report what is wrong with it, from identity failures down to tidiness. They are listed under [Structured Data](/rules/schema), and every one of them links back to [fixing structured data identity](/guides/entity-map/fixing), which has the change to make in each generator.
+
+## Monitor with squirrelscan, fix with an agent
+
+Identity is not something you fix once. A new template, a plugin update or a block pasted into one page can declare the organization again, and the map drifts back. Every audit rebuilds the map and, by default, `squirrel entities --diff` compares a site's latest two audits that stored at least one entity, while in the cloud [scheduled audits](/cloud/scheduled-audits) feed the [history on the Entities page](/guides/entity-map/cloud#history). The fix is mechanical but spread across templates, which suits a coding agent: the [entity MCP tools](/guides/entity-map/mcp) give it the map, each finding with its fix and the change between two audits, and re-auditing the same pages shows whether the finding cleared.
+
+Here is that loop on a local copy of northwind.example, the site in the map above, served at `http://localhost:4321`. The prompt:
+
+```text
+Audit http://localhost:4321 with squirrelscan and fix the organization
+that is declared without an @id. Then re-audit and show me the entity diff.
+```
+
+The audit reports the pasted block on two pages:
+
+```text
+schema/entity-identity Entity Identity (error)
+  ✗ entity-identity: 1 entity is declared on several pages with no @id
+    → Northwind Roasters (Organization)
+      from /contact/
+      from /wholesale/
+```
+
+The fix is one line in that block, on both pages:
+
+```diff
+ {
+   "@context": "https://schema.org",
+   "@type": "Organization",
++  "@id": "https://northwind.example/#organization",
+   "name": "Northwind Roasters",
+```
+
+Then `squirrel audit http://localhost:4321 --refresh` and `squirrel entities --diff`, excerpted:
+
+```markdown
+## Removed (1)
+
+| Type | Name | @id | Occurrences |
+| --- | --- | --- | ---: |
+| Organization | Northwind Roasters | _none_ | 2 |
+
+## Occurrence changes (1)
+
+| Type | Name | Before | After | Change |
+| --- | --- | ---: | ---: | ---: |
+| Organization | Northwind Roasters | 9 | 11 | +2 |
+
+## Summary changes (3)
+
+| Metric | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| nodeCount | 33 | 32 | -1 |
+| nodesWithoutIdCount | 1 | 0 | -1 |
+| stableIdShare | 0.970 | 1 | +0.03 |
+```
+
+Both pages that carried the anonymous organization were crawled again, so its removal is real rather than a coverage gap. The identified organization is now declared on 11 pages instead of 9, and `schema/entity-identity` no longer fires. The dangling `#org` publisher is still there: that is the next finding to hand over.
 
 ## Where to next
 
