@@ -136,6 +136,10 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
                 etag: null,
                 lastModified: null,
                 vary: null,
+                // Read from the header by the image pool (#470).
+                naturalWidth: 1200,
+                naturalHeight: 1200,
+                animated: false,
               },
               resourceFieldReads,
             ),
@@ -204,4 +208,86 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
       await run(storage.close());
     }
   }, 120_000);
+
+  // The synthetic site has no images, so the test above never sees
+  // images/responsive-size read an image entry. This one runs every page rule
+  // over a gallery page whose thumbnails take both of that rule's paths: the
+  // pixel test (natural size read from the header, #470) and the byte budget.
+  test("no page rule reads an image entry field outside PAGE_RULE_RESOURCE_FIELDS", async () => {
+    const runner = createRunner(getGoldenBaselineConfig());
+    const reads = new Set<string>();
+    const recordFields = <T extends object>(entry: T): T =>
+      new Proxy(entry, {
+        get(target, key, receiver) {
+          if (typeof key === "string") reads.add(key);
+          return Reflect.get(target, key, receiver);
+        },
+      });
+    const entry = (path: string, header: { naturalWidth: number | null; naturalHeight: number | null; animated: boolean | null }) =>
+      recordFields({
+        url: `http://synthetic.test/${path}`,
+        status: 206,
+        error: null,
+        contentType: "image/jpeg",
+        sizeBytes: 400_000,
+        sourcePages: ["http://synthetic.test/gallery"],
+        cacheControl: "public, max-age=3600",
+        cacheReason: null,
+        contentEncoding: null,
+        transferBytes: 400_000,
+        etag: null,
+        lastModified: null,
+        vary: null,
+        ...header,
+      });
+    const siteData: SiteData = {
+      baseUrl: "http://synthetic.test",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      llmsTxt: null,
+      markdownResponse: null,
+      wellKnown: null,
+      agentAccess: null,
+      rsl: null,
+      externalLinks: [],
+      resourceSizes: {
+        css: [],
+        images: [
+          entry("pixels.jpg", { naturalWidth: 1200, naturalHeight: 1200, animated: false }),
+          entry("bytes.jpg", { naturalWidth: null, naturalHeight: null, animated: null }),
+        ],
+      },
+      scripts: [],
+      pdfSizes: [],
+      sitemapUrlStatuses: [],
+      cloakingProbes: [],
+      crawlLimits: { pagesCrawled: 1, maxPages: 100 },
+    };
+    const html =
+      `<!doctype html><html lang="en"><head><title>Gallery</title></head><body><main><h1>Gallery</h1>` +
+      `<img src="/pixels.jpg" width="64" height="64" alt="a"><img src="/bytes.jpg" width="64" height="64" alt="b">` +
+      `</main></body></html>`;
+    const result = await runner.runPageRules(
+      {
+        url: "http://synthetic.test/gallery",
+        html,
+        statusCode: 200,
+        loadTime: 10,
+        headers: { "content-type": "text/html" },
+      },
+      siteData
+    );
+    // Not vacuous: the rule took both paths, and read the header fields to do it.
+    const findings = result.ruleResults.get("images/responsive-size")?.checks ?? [];
+    expect(findings.find((c) => c.name === "images-possibly-oversized")?.items?.map((i) => i.id)).toEqual([
+      "pixels.jpg (64x64, no srcset)",
+      "bytes.jpg (64x64, no srcset)",
+    ]);
+    expect([...reads]).toEqual(expect.arrayContaining(["naturalWidth", "naturalHeight", "animated"]));
+    const undeclared = [...reads].filter(
+      (key) => !(PAGE_RULE_RESOURCE_FIELDS as readonly string[]).includes(key),
+    );
+    expect(undeclared).toEqual([]);
+  });
 });

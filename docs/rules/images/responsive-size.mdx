@@ -1,6 +1,6 @@
 ---
 title: "Thumbnails without srcset: small images serving large files"
-description: "A 60 by 60 avatar that loads a 2000 pixel photo wastes almost all of it. squirrel flags small images whose measured file is heavier than their displayed size needs."
+description: "A 60 by 60 avatar that loads a 2000 pixel photo wastes almost all of it. squirrel reads each image's real pixel size and flags small images that serve far more pixels than they display."
 ---
 
 ## What the size mismatch is
@@ -13,19 +13,25 @@ The clearest case is a thumbnail: an avatar, a product grid tile, a logo in a li
 
 The rule runs on every crawled page over every `img[src]` that has both `width` and `height` attributes as parseable non-zero numbers. Images without those attributes, or with a percentage, are not examined. The declared attributes stand in for the displayed size; CSS that resizes the image is not read.
 
-An image is a candidate when its declared width and height are both at or below `max_thumbnail_dimension` and it has no `srcset` and no `<picture>` ancestor. A candidate is reported only on evidence that its file is oversized, and the evidence is the file's byte size from the resource check squirrel runs before the rules. squirrel never downloads an image to read its pixel dimensions.
+An image is a candidate when its declared width and height are both at or below `max_thumbnail_dimension` and it has no `srcset` and no `<picture>` ancestor. A candidate is reported only on evidence that its file is oversized. The evidence comes from the resource check squirrel runs before the rules. For each image on the site's own domain and its subdomains it sends one request for the first 32 KB, and stops reading there even when the server ignores the range and sends the whole file. That gives the file's byte size and, read from the image header, its natural width and height and whether it is animated. PNG (including APNG), JPEG, GIF, WebP and AVIF headers are read. A few servers need more: one that rejects the range gets a second request without it, and one that ignores the range and sends no length is asked with a `HEAD`, then read to the end if that gives no length either.
 
-The test is a byte budget: the size of an uncompressed 8-bit bitmap with 4 bytes a pixel for the displayed box at 2x density, so `128 x 128 x 4` = 64 KB for a 64x64 image. A compressed still image with that many pixels is smaller than the raw bitmap, so a file over the budget is heavier than the box needs. It has more pixels than a 2x screen draws there, or it carries extra bit depth or metadata. The excess must be at least 4 KB, the savings threshold Lighthouse's `uses-responsive-images` audit applies.
+### The pixel test
 
-Because the rule weighs the file rather than measuring its pixels, it misses an oversized image that compresses well, such as a 1200 pixel JPEG of 20 KB shown at 64x64. It can also report an animated WebP or PNG shown at its natural size, since animation frames add bytes the way extra pixels do.
+When the natural size is known, the test is the one Lighthouse's `uses-responsive-images` audit applies. A screen at 2x density draws `(width x 2) x (height x 2)` pixels in the displayed box, so `128 x 128` for a 64x64 image. The share of the file's natural pixels beyond that is wasted, and the wasted bytes are that share of the file's size. A 1200x1200 JPEG of 20 KB shown at 64x64 draws 16,384 of its 1,440,000 pixels, so about 19.8 KB of the 20 KB is waste. The image is reported when the waste is at least 4 KB, Lighthouse's savings threshold.
+
+A file with no more pixels than the 2x box draws, such as a 128x128 file shown at 64x64, wastes nothing and is never reported, however heavy it is. That includes an animated GIF, WebP, PNG or AVIF shown at its natural size, whose frames add bytes but no pixels. An animated image shown smaller than its frames is reported like any other.
+
+### The byte budget, when the size is unknown
+
+Some images have no natural size to read: SVG and ICO files, a JPEG whose frame header sits past the first 32 KB behind a large EXIF or ICC block, and an image whose header could not be read. For those the test is a byte budget: the size of an uncompressed 8-bit bitmap with 4 bytes a pixel for the displayed box at 2x density, so `128 x 128 x 4` = 64 KB for a 64x64 image. A compressed still image with that many pixels is smaller than the raw bitmap, so a file over the budget is heavier than the box needs. The excess must be at least 4 KB. The budget weighs the file rather than its pixels, so it misses an oversized image that compresses well. SVG, ICO and GIF files (by the extension of the URL's path, in any case) and any image the header marked as animated are not judged by the budget: vector and icon files do not scale by pixel count, and animation frames multiply a file's bytes.
 
 - Skipped when there is no parsed document. Message: `No document available`.
 - Info when the page has no images. Message: `No images found on page`.
-- `images-possibly-oversized` warns for candidates whose measured file exceeds the budget by 4 KB or more. The measured file is the one the parser records for the image: `data-src`, `data-original` or `data-lazy-src` when present, otherwise `src`. Message: `6 small image(s) serve files larger than their displayed size needs`. It lists up to ten as `avatar.jpg (64x64, 390.6 KB, no srcset)`, with the URL, the byte size and the budget, and gives the count of the rest. Severity warning, weight 5.
+- `images-possibly-oversized` warns for candidates that fail the pixel test or, without a natural size, the byte budget. The measured file is the one the parser records for the image: `data-src`, `data-original` or `data-lazy-src` when present, otherwise `src`. Message: `{count} small image(s) serve files larger than their displayed size needs`. It lists up to ten and gives the count of the rest. An image measured in pixels reads `{file} ({natural width}x{natural height} shown at {width}x{height}, {size}, no srcset)` and carries the URL, the byte size, the natural size and the wasted bytes. One judged by the budget reads `{file} ({width}x{height}, {size}, no srcset)` and carries the URL, the byte size and the budget. Severity warning, weight 5.
 - `responsive-size` passes when images with dimensions were examined and none was reported. Message: `Image sizes appear appropriate`.
 - `responsive-size` reports info when no image yielded two dimensions that parse as non-zero integers. An absent attribute reaches this branch, and so does `width="0"` or `height="invalid"`. Message: `No images with explicit dimensions to check`.
 
-A candidate with no measured size is not reported. That covers images on another host (the resource check measures only the site's own domain and its subdomains), and images the check skipped or could not measure. SVG, ICO and GIF files (by the extension of the URL's path, in any case) and `data:` sources are skipped. Vector and icon files do not scale by pixel count, and a GIF's animation frames multiply its bytes.
+A candidate with no measured size is not reported. That covers images on another host, which the resource check does not fetch, and images the check skipped or could not measure. `data:` sources are skipped.
 
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
 
@@ -38,7 +44,7 @@ Elements inside `<noscript>` are skipped: a browser with scripting enabled reads
 
 Generate a thumbnail variant and reference it, or hand the resize to an image CDN with a width parameter. Two candidates are enough for a fixed-size thumbnail: one for standard displays and one for high-density ones.
 
-A still 8-bit thumbnail served at its natural size, or at twice it for high-density screens, stays under the budget unless it carries heavy metadata, with or without `srcset`.
+A thumbnail served at its natural size, or at twice it for high-density screens, passes the pixel test with or without `srcset`.
 
 | | |
 |---|---|
@@ -102,7 +108,7 @@ Images findings ship in every audit next to the SEO, performance and agent exper
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Images section of the report. Every small image whose file is heavier than its displayed size needs is listed with its declared size and file size. Local audits are free.
+Run `squirrel audit https://example.com` and open the Images section of the report. Every small image whose file is heavier than its displayed size needs is listed with its declared size, its file size and, when squirrel could read it, its natural size. Local audits are free.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

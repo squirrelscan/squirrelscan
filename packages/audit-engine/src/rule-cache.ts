@@ -118,14 +118,23 @@ export const PAGE_RULE_SCRIPT_FIELDS = [
 
 /**
  * The fields of a `ctx.site.resourceSizes` entry page rules read
- * (`performance/unminified-css` reads url + size; nothing page-scoped reads more).
+ * (`performance/unminified-css` reads url + size; `images/responsive-size` reads
+ * url + size and the natural size and animation read from the image's header,
+ * #470; nothing page-scoped reads more).
  *
  * `cacheReason` is the field that forced this: "cache-hit reason if reused from a
  * prior crawl; null on a real fetch". It is null on every cold run and set on
  * every warm one, so hashing the whole entry made the run context differ between
- * exactly the two runs that are supposed to match.
+ * exactly the two runs that are supposed to match. The header fields do not have
+ * that problem: a cache hit carries the prior record's values unchanged.
  */
-export const PAGE_RULE_RESOURCE_FIELDS = ["url", "sizeBytes"] as const;
+export const PAGE_RULE_RESOURCE_FIELDS = [
+  "url",
+  "sizeBytes",
+  "naturalWidth",
+  "naturalHeight",
+  "animated",
+] as const;
 
 /** Keep only `fields`, in a fixed order, from each entry of `entries`. */
 function projectEntries(

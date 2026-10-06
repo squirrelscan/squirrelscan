@@ -305,6 +305,11 @@ export interface ResourceSizeData {
   vary?: string | null;
   /** Cache-hit reason if reused from a prior crawl; null on a real fetch. (#107) */
   cacheReason?: import("@squirrelscan/core-contracts").CacheHitReason | null;
+  /** Natural pixel size from the image's header; null when unknown. (#470) */
+  naturalWidth?: number | null;
+  naturalHeight?: number | null;
+  /** APNG, animated GIF/WebP or AVIF sequence; null when not settled. (#470) */
+  animated?: boolean | null;
 }
 
 export interface ScriptContentData {

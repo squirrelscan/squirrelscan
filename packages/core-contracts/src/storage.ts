@@ -524,6 +524,14 @@ export interface ResourceSizeRecord {
    * full transfer this run; null/absent on a real (miss) fetch. (#107)
    */
   cacheReason?: CacheHitReason | null;
+  /**
+   * Natural pixel size and animation from the image's header (#470), carried
+   * on a cache hit like the rest of the record. Null when unknown, and on
+   * every CSS row and every row written before migration 32.
+   */
+  naturalWidth?: number | null;
+  naturalHeight?: number | null;
+  animated?: boolean | null;
 }
 
 export interface SitemapUrlStatusRecord {

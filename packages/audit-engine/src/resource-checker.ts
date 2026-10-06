@@ -1,5 +1,7 @@
 // Resource size checker for CSS/images/sub-resources.
-// Uses HEAD with Range/GET fallback to determine size and status, captures
+// Uses HEAD with Range/GET fallback to determine size and status (the image
+// pool sends one ranged GET instead and reads each image's natural size from
+// its first bytes, #470), captures
 // compression + caching metadata (#107), and — given prior-crawl records —
 // reuses fresh sub-resources without a full transfer using the SAME browser-like
 // freshness logic as the page hot-path (calculateFreshness from @crawler), or a
@@ -18,6 +20,7 @@ import { isCompressibleContentType } from "@squirrelscan/utils/headers";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
+import { parseImageHeader, type ImageHeaderInfo } from "./image-header";
 
 export interface ResourceCheckResult {
   url: string;
@@ -59,6 +62,15 @@ export interface ResourceCheckResult {
    * report a live URL as 4xx.
    */
   rateLimited?: boolean;
+  /**
+   * Natural pixel size and animation read from the image's first bytes (#470).
+   * Null when the pool does not read headers, the bytes were not a PNG, GIF,
+   * WebP, AVIF or JPEG header the parser reads to its dimensions, or the read
+   * failed. `animated` is also null when the bytes read do not settle it.
+   */
+  naturalWidth: number | null;
+  naturalHeight: number | null;
+  animated: boolean | null;
 }
 
 export interface ResourceCheckerOptions {
@@ -98,6 +110,14 @@ export interface ResourceCheckerOptions {
    * the cheap HEAD path. Default off.
    */
   verifyCompression?: boolean;
+  /**
+   * #470: read each image's natural pixel size from its first
+   * `RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES`. The HEAD is replaced by ONE
+   * ranged GET, so the request count stays flat, and the body is read only up
+   * to that cap, the rest cancelled, when a server ignores Range and sends the
+   * whole file. Only the image pool sets it. Default off.
+   */
+  readImageHeader?: boolean;
 }
 
 const DEFAULT_OPTIONS: ResourceCheckerOptions = {
@@ -166,6 +186,166 @@ export function varyForbidsReuse(vary: string | null | undefined): boolean {
   return fields.some((f) => f !== "accept-encoding");
 }
 
+// The raster types the header parser reads to a size (#470).
+const HEADER_IMAGE_TYPES = [
+  "image/png",
+  "image/apng",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+];
+
+/**
+ * #470: a prior image record with no natural size, for a type the header
+ * parser reads. A record written before the probe existed looks like this, and
+ * reusing it (an origin-fresh hit or a 304) would carry the gap forward for as
+ * long as the file is unchanged, so the image is probed again instead. SVG, ICO
+ * and unlabelled files never get a size, and keep their cheap reuse.
+ */
+function priorLacksImageHeader(prior: CachedResourceRecord | undefined): boolean {
+  if (!prior || prior.naturalWidth != null) return false;
+  const type = prior.contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
+  return HEADER_IMAGE_TYPES.includes(type);
+}
+
+interface CappedBody {
+  /** The first `cap` bytes, or fewer when the body was shorter or the read failed. */
+  head: Uint8Array;
+  /** Bytes received in all, past the cap too when `measureRest` asked for that. */
+  received: number;
+  /** The body ended, so `received` is its whole length. */
+  complete: boolean;
+}
+
+/**
+ * #470: keep a response's first `cap` bytes and stop the rest, so a server
+ * that ignores Range cannot turn one header read into a whole-file download.
+ * With `measureRest` the remainder is counted and dropped instead, which is
+ * how {@link measureUnrangedSize} learns a size no header gives. A read that
+ * fails part way, the check's own timeout included, keeps what arrived.
+ *
+ * Stopping takes `abort`, the request's own AbortController. Cancelling the
+ * body stream is not enough: Bun's fetch keeps draining a cancelled body off
+ * the socket (measured on 1.3.14: the server sent all of a 1 MB file after
+ * the reader cancelled at 32 KiB), where an abort closes the connection.
+ */
+async function readCappedBody(
+  response: Response,
+  cap: number,
+  measureRest: boolean,
+  abort: () => void
+): Promise<CappedBody> {
+  const reader = response.body?.getReader();
+  if (!reader) return { head: new Uint8Array(0), received: 0, complete: true };
+  const chunks: Uint8Array[] = [];
+  let kept = 0;
+  let received = 0;
+  let complete = false;
+  try {
+    for (;;) {
+      if (!measureRest && received >= cap) break;
+      const { done, value } = await reader.read();
+      if (done) {
+        complete = true;
+        break;
+      }
+      if (!value) continue;
+      received += value.byteLength;
+      if (kept < cap) {
+        const slice = value.subarray(0, cap - kept);
+        chunks.push(slice);
+        kept += slice.byteLength;
+      }
+    }
+  } catch {
+    // Keep what arrived; the headers already gave the status and size.
+  }
+  if (!complete) {
+    abort();
+    reader.cancel().catch(() => {});
+  }
+  const head = new Uint8Array(kept);
+  let offset = 0;
+  for (const chunk of chunks) {
+    head.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { head, received, complete };
+}
+
+/**
+ * #470: the size of a file whose ranged GET came back as a 200 with no
+ * Content-Length and ran past the header cap: found the way this module always
+ * has, a HEAD and then a counted read of the whole body, so the header read
+ * never costs a measurement. On its own deadline, because the first request's
+ * controller was aborted to stop that transfer. Rare: it takes a server that
+ * both ignores Range and sends images chunked.
+ */
+async function measureUnrangedSize(
+  url: string,
+  options: ResourceCheckerOptions
+): Promise<number | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+  const headers = { "User-Agent": options.userAgent, Accept: "*/*", ...options.customHeaders };
+  try {
+    try {
+      const { response } = await safeRedirectFetch(url, {
+        method: "HEAD",
+        headers,
+        signal: controller.signal,
+      });
+      const length =
+        response.status < 400 ? parseHeaderInt(response.headers.get("content-length")) : null;
+      if (length !== null) return length;
+    } catch {
+      // Fall through to the counted read, as the HEAD path above does.
+    }
+    const { response } = await safeRedirectFetch(url, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    const declared = parseHeaderInt(response.headers.get("content-length"));
+    if (!response.ok || declared !== null) {
+      controller.abort();
+      return response.ok ? declared : null;
+    }
+    const body = await readCappedBody(response, 0, true, () => controller.abort());
+    return body.complete ? body.received : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * #470: a controller for ONE request, aborted with the check's own deadline.
+ * Aborting is the only way to stop a Bun fetch's transfer (see
+ * {@link readCappedBody}), and the image pool discards bodies it does not
+ * want this way, so each of its requests needs a controller of its own: one
+ * shared controller would take the next request down with the discarded one.
+ */
+function requestController(deadline: AbortController): AbortController {
+  const request = new AbortController();
+  if (deadline.signal.aborted) request.abort();
+  else deadline.signal.addEventListener("abort", () => request.abort(), { once: true });
+  return request;
+}
+
+/** The parser is total by test; a header it still cannot read costs the size, never the check. */
+function readHeaderInfo(head: Uint8Array): ImageHeaderInfo | null {
+  try {
+    return parseImageHeader(head);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Try to reuse a sub-resource from the prior crawl WITHOUT a network request,
  * honoring origin freshness (Cache-Control max-age/Expires/immutable) via the
@@ -211,6 +391,9 @@ function tryOriginFreshReuse(
     lastModified: prior.lastModified ?? null,
     vary: prior.vary ?? null,
     cacheReason: reason,
+    naturalWidth: prior.naturalWidth ?? null,
+    naturalHeight: prior.naturalHeight ?? null,
+    animated: prior.animated ?? null,
   };
 }
 
@@ -219,7 +402,11 @@ async function checkSingleResourceAsync(
   options: ResourceCheckerOptions,
   retryCount = 0
 ): Promise<ResourceCheckResult> {
-  const prior = options.priorByUrl?.get(url);
+  const readHeader = options.readImageHeader === true;
+  const known = options.priorByUrl?.get(url);
+  // #470: a prior image with no natural size is probed again rather than
+  // reused, or a record from before the probe would never gain one.
+  const prior = readHeader && priorLacksImageHeader(known) ? undefined : known;
 
   // 1. Origin-fresh reuse — no request at all (the biggest saving).
   const fresh = tryOriginFreshReuse(prior, options.maxStalenessSeconds);
@@ -246,6 +433,9 @@ async function checkSingleResourceAsync(
     lastModified: null,
     vary: null,
     cacheReason: null,
+    naturalWidth: null,
+    naturalHeight: null,
+    animated: null,
   };
 
   // 2. Conditional-GET revalidation when only a validator is available: a 304
@@ -274,117 +464,127 @@ async function checkSingleResourceAsync(
   });
 
   try {
-    try {
-      // #1395: follow redirects manually so per hop the http/https scheme
-      // allowlist applies and secret customHeaders are stripped on a cross-origin
-      // redirect (native redirect:"follow" replays them to the redirect target).
-      const { response: headResponse, finalUrl: headFinalUrl } = await safeRedirectFetch(url, {
-        method: "HEAD",
-        headers: {
-          "User-Agent": options.userAgent,
-          Accept: "*/*",
-          ...options.customHeaders,
-          ...conditional,
-        },
-        signal: controller.signal,
-      });
+    // #470: the image pool skips the HEAD. Its ranged GET below answers the
+    // size from Content-Range AND carries the header bytes, in one request.
+    if (!readHeader) {
+      try {
+        // #1395: follow redirects manually so per hop the http/https scheme
+        // allowlist applies and secret customHeaders are stripped on a cross-origin
+        // redirect (native redirect:"follow" replays them to the redirect target).
+        const { response: headResponse, finalUrl: headFinalUrl } = await safeRedirectFetch(url, {
+          method: "HEAD",
+          headers: {
+            "User-Agent": options.userAgent,
+            Accept: "*/*",
+            ...options.customHeaders,
+            ...conditional,
+          },
+          signal: controller.signal,
+        });
 
-      defaultResult.rateLimited =
-        isRateLimitedResponse(headResponse.status, headResponse.headers.get("retry-after")) ||
-        undefined;
+        defaultResult.rateLimited =
+          isRateLimitedResponse(headResponse.status, headResponse.headers.get("retry-after")) ||
+          undefined;
 
-      // 304 Not Modified → reuse prior body size (validator hit).
-      if (headResponse.status === 304 && prior && prior.status != null) {
-        clearTimeout(timeoutId);
+        // 304 Not Modified → reuse prior body size (validator hit).
+        if (headResponse.status === 304 && prior && prior.status != null) {
+          clearTimeout(timeoutId);
+          const meta = extractMeta(headResponse);
+          return {
+            ...defaultResult,
+            status: prior.status,
+            contentType: prior.contentType,
+            sizeBytes: prior.sizeBytes,
+            contentEncoding: prior.contentEncoding ?? null,
+            transferBytes: 0,
+            cacheControl: meta.cacheControl ?? prior.cacheControl ?? null,
+            etag: meta.etag ?? prior.etag ?? null,
+            lastModified: meta.lastModified ?? prior.lastModified ?? null,
+            vary: meta.vary ?? prior.vary ?? null,
+            cacheReason: "304",
+            naturalWidth: prior.naturalWidth ?? null,
+            naturalHeight: prior.naturalHeight ?? null,
+            animated: prior.animated ?? null,
+          };
+        }
+
         const meta = extractMeta(headResponse);
-        return {
-          ...defaultResult,
-          status: prior.status,
-          contentType: prior.contentType,
-          sizeBytes: prior.sizeBytes,
-          contentEncoding: prior.contentEncoding ?? null,
-          transferBytes: 0,
-          cacheControl: meta.cacheControl ?? prior.cacheControl ?? null,
-          etag: meta.etag ?? prior.etag ?? null,
-          lastModified: meta.lastModified ?? prior.lastModified ?? null,
-          vary: meta.vary ?? prior.vary ?? null,
-          cacheReason: "304",
-        };
+        const sizeBytes = parseHeaderInt(
+          headResponse.headers.get("content-length")
+        );
+
+        if (
+          options.validateContentType &&
+          !validateContentType(meta.contentType, options.expectedContentTypePrefix)
+        ) {
+          clearTimeout(timeoutId);
+          return {
+            ...defaultResult,
+            status: headResponse.status,
+            contentType: meta.contentType,
+            contentEncoding: meta.contentEncoding,
+            cacheControl: meta.cacheControl,
+            etag: meta.etag,
+            lastModified: meta.lastModified,
+            vary: meta.vary,
+            error: "invalid content-type",
+          };
+        }
+
+        // #9: a HEAD carries no body, so a server whose compression runs as a
+        // body filter (nginx's gzip module is the common one) answers it with NO
+        // Content-Encoding and the UNCOMPRESSED Content-Length — indistinguishable
+        // from a genuinely uncompressed asset. Absence of the header on a bodiless
+        // response is not evidence of absence, so when this pool's findings depend
+        // on the answer we decline the HEAD shortcut for compressible text that
+        // looks uncompressed and fall through to the GET below. A HEAD that DOES
+        // name a coding is positive evidence and still takes the shortcut, as does
+        // any asset whose type gains nothing from compression.
+        const headEncodingIsTrustworthy =
+          !options.verifyCompression ||
+          meta.contentEncoding !== null ||
+          !isCompressibleContentType(meta.contentType);
+
+        if (headResponse.status < 400 && sizeBytes !== null && headEncodingIsTrustworthy) {
+          clearTimeout(timeoutId);
+          return {
+            ...defaultResult,
+            status: headResponse.status,
+            contentType: meta.contentType,
+            sizeBytes,
+            // transferBytes = the encoded body Content-Length (what a real GET
+            // would transfer over the wire). The HEAD itself sends no body, but
+            // this records the body size for a MISS so bandwidth metrics are
+            // comparable across HEAD/GET; cache HITS set it to 0.
+            transferBytes: sizeBytes,
+            contentEncoding: meta.contentEncoding,
+            cacheControl: meta.cacheControl,
+            etag: meta.etag,
+            lastModified: meta.lastModified,
+            vary: meta.vary,
+            redirectTarget: headFinalUrl !== url ? headFinalUrl : null,
+          };
+        }
+      } catch {
+        // HEAD failed; fall through to GET
       }
-
-      const meta = extractMeta(headResponse);
-      const sizeBytes = parseHeaderInt(
-        headResponse.headers.get("content-length")
-      );
-
-      if (
-        options.validateContentType &&
-        !validateContentType(meta.contentType, options.expectedContentTypePrefix)
-      ) {
-        clearTimeout(timeoutId);
-        return {
-          ...defaultResult,
-          status: headResponse.status,
-          contentType: meta.contentType,
-          contentEncoding: meta.contentEncoding,
-          cacheControl: meta.cacheControl,
-          etag: meta.etag,
-          lastModified: meta.lastModified,
-          vary: meta.vary,
-          error: "invalid content-type",
-        };
-      }
-
-      // #9: a HEAD carries no body, so a server whose compression runs as a
-      // body filter (nginx's gzip module is the common one) answers it with NO
-      // Content-Encoding and the UNCOMPRESSED Content-Length — indistinguishable
-      // from a genuinely uncompressed asset. Absence of the header on a bodiless
-      // response is not evidence of absence, so when this pool's findings depend
-      // on the answer we decline the HEAD shortcut for compressible text that
-      // looks uncompressed and fall through to the GET below. A HEAD that DOES
-      // name a coding is positive evidence and still takes the shortcut, as does
-      // any asset whose type gains nothing from compression.
-      const headEncodingIsTrustworthy =
-        !options.verifyCompression ||
-        meta.contentEncoding !== null ||
-        !isCompressibleContentType(meta.contentType);
-
-      if (headResponse.status < 400 && sizeBytes !== null && headEncodingIsTrustworthy) {
-        clearTimeout(timeoutId);
-        return {
-          ...defaultResult,
-          status: headResponse.status,
-          contentType: meta.contentType,
-          sizeBytes,
-          // transferBytes = the encoded body Content-Length (what a real GET
-          // would transfer over the wire). The HEAD itself sends no body, but
-          // this records the body size for a MISS so bandwidth metrics are
-          // comparable across HEAD/GET; cache HITS set it to 0.
-          transferBytes: sizeBytes,
-          contentEncoding: meta.contentEncoding,
-          cacheControl: meta.cacheControl,
-          etag: meta.etag,
-          lastModified: meta.lastModified,
-          vary: meta.vary,
-          redirectTarget: headFinalUrl !== url ? headFinalUrl : null,
-        };
-      }
-    } catch {
-      // HEAD failed; fall through to GET
     }
 
     // #1395: manual redirects — scheme allowlist + strip secret customHeaders on
     // cross-origin redirects (see the HEAD path above).
+    let getController = readHeader ? requestController(controller) : controller;
     let { response: getResponse, finalUrl: getFinalUrl } = await safeRedirectFetch(url, {
       method: "GET",
       headers: {
         "User-Agent": options.userAgent,
         Accept: "*/*",
-        Range: "bytes=0-0",
+        Range: readHeader
+          ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
+          : "bytes=0-0",
         ...options.customHeaders,
         ...conditional,
       },
-      signal: controller.signal,
+      signal: getController.signal,
     });
 
     // Servers that reject Range answer 416 (Range Not Satisfiable). That is a
@@ -393,8 +593,11 @@ async function checkSingleResourceAsync(
     // keep the Range optimization for servers that honor it).
     if (getResponse.status === 416) {
       // Discard the rejected response body so the connection can be reused
-      // instead of stalling the pool while the 416 body lingers unread.
-      getResponse.body?.cancel();
+      // instead of stalling the pool while the 416 body lingers unread. The
+      // image pool aborts it instead, which also stops the transfer (#470).
+      if (readHeader) getController.abort();
+      getResponse.body?.cancel().catch(() => {});
+      getController = readHeader ? requestController(controller) : controller;
       ({ response: getResponse, finalUrl: getFinalUrl } = await safeRedirectFetch(url, {
         method: "GET",
         headers: {
@@ -403,7 +606,7 @@ async function checkSingleResourceAsync(
           ...options.customHeaders,
           ...conditional,
         },
-        signal: controller.signal,
+        signal: getController.signal,
       }));
     }
 
@@ -427,6 +630,9 @@ async function checkSingleResourceAsync(
         lastModified: meta.lastModified ?? prior.lastModified ?? null,
         vary: meta.vary ?? prior.vary ?? null,
         cacheReason: "304",
+        naturalWidth: prior.naturalWidth ?? null,
+        naturalHeight: prior.naturalHeight ?? null,
+        animated: prior.animated ?? null,
       };
     }
 
@@ -460,6 +666,9 @@ async function checkSingleResourceAsync(
       // and every other field survive; only the encoding degrades to unknown,
       // which the rule reads as "stay silent".
       resolvedEncoding = undefined;
+      // Only its headers are wanted, so the image pool aborts it once they
+      // arrive: a cancel alone lets the whole file download (#470).
+      const confirmController = readHeader ? requestController(controller) : controller;
       try {
         const { response: confirmResponse } = await safeRedirectFetch(url, {
           method: "GET",
@@ -468,9 +677,10 @@ async function checkSingleResourceAsync(
             Accept: "*/*",
             ...options.customHeaders,
           },
-          signal: controller.signal,
+          signal: confirmController.signal,
         });
-        confirmResponse.body?.cancel();
+        if (readHeader) confirmController.abort();
+        confirmResponse.body?.cancel().catch(() => {});
         if (confirmResponse.status < 400) {
           resolvedEncoding = normalizeEncoding(
             confirmResponse.headers.get("content-encoding")
@@ -497,6 +707,48 @@ async function checkSingleResourceAsync(
         lastModified: meta.lastModified,
         vary: meta.vary,
         error: "invalid content-type",
+      };
+    }
+
+    if (readHeader) {
+      // #470: a 206's Content-Length is the slice, never the file, so only its
+      // Content-Range can give the size. Any other status means Range was not
+      // applied, and Content-Length is the whole body.
+      const ranged = getResponse.status === 206;
+      let sizeBytes = ranged ? sizeFromRange : sizeFromLength;
+      let header: ImageHeaderInfo | null = null;
+      if (getResponse.ok) {
+        const cap = RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES;
+        const body = await readCappedBody(getResponse, cap, false, () => getController.abort());
+        header = readHeaderInfo(body.head);
+        if (sizeBytes === null && !ranged) {
+          // A 200 that ended inside the cap was read whole. One that ran past
+          // it is measured the old way; one cut short by the deadline is not.
+          if (body.complete) sizeBytes = body.received;
+          else if (body.received >= cap) sizeBytes = await measureUnrangedSize(url, options);
+        }
+      } else {
+        // An error page is not wanted at all; abort so it cannot stream on.
+        getController.abort();
+        getResponse.body?.cancel().catch(() => {});
+      }
+      clearTimeout(timeoutId);
+      return {
+        ...defaultResult,
+        status: getResponse.status,
+        contentType: meta.contentType,
+        sizeBytes,
+        // What a full GET of the file would transfer, as for the HEAD path.
+        transferBytes: sizeBytes,
+        contentEncoding: resolvedEncoding,
+        cacheControl: meta.cacheControl,
+        etag: meta.etag,
+        lastModified: meta.lastModified,
+        vary: meta.vary,
+        redirectTarget: getFinalUrl !== url ? getFinalUrl : null,
+        naturalWidth: header?.width ?? null,
+        naturalHeight: header?.height ?? null,
+        animated: header?.animated ?? null,
       };
     }
 
@@ -576,6 +828,9 @@ function checkSingleResource(
         lastModified: null,
         vary: null,
         cacheReason: null,
+        naturalWidth: null,
+        naturalHeight: null,
+        animated: null,
       } satisfies ResourceCheckResult;
     }
     const startedAt = Date.now();

@@ -72,7 +72,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 31;
+export const SCHEMA_VERSION = 32;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -474,6 +474,18 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE entity_edges ADD COLUMN pages TEXT`,
     `ALTER TABLE entity_edges ADD COLUMN more_pages INTEGER`,
   ],
+  // Version 32: an image's natural pixel size and animation, read from its
+  // first bytes by the image pool (squirrelscan/squirrelscan#470) so
+  // images/responsive-size can measure oversizing in pixels. ADDITIVE and
+  // nullable: a row written before this reads as "size unknown", which the
+  // rule answers with its byte budget, and the resource check probes that
+  // image again instead of reusing the row. `animated` is 0/1/NULL. Local
+  // sqlite only.
+  32: [
+    `ALTER TABLE resource_sizes ADD COLUMN natural_width INTEGER`,
+    `ALTER TABLE resource_sizes ADD COLUMN natural_height INTEGER`,
+    `ALTER TABLE resource_sizes ADD COLUMN animated INTEGER`,
+  ],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -590,6 +602,15 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
 const ENTITY_EDGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "pages", type: "TEXT" },
   { name: "more_pages", type: "INTEGER" },
+];
+
+// Same guard for `resource_sizes` (#470). Migration 32 added the three header
+// columns and `saveResourceSizes` writes them, so a DB stamped past 32 without
+// them would throw on every resource write, after the rules had run.
+const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "natural_width", type: "INTEGER" },
+  { name: "natural_height", type: "INTEGER" },
+  { name: "animated", type: "INTEGER" },
 ];
 
 const SCHEMA = `
@@ -892,6 +913,9 @@ CREATE TABLE IF NOT EXISTS resource_sizes (
   last_modified TEXT,
   vary TEXT,
   cache_reason TEXT,
+  natural_width INTEGER,
+  natural_height INTEGER,
+  animated INTEGER,
   PRIMARY KEY (crawl_id, type, url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -1308,6 +1332,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
     this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
     this.reconcileColumns("entity_edges", ENTITY_EDGES_ALTER_COLUMNS);
+    this.reconcileColumns("resource_sizes", RESOURCE_SIZES_ALTER_COLUMNS);
     this.indexesAfterMigrations();
   }
 
@@ -1358,7 +1383,8 @@ export class SQLiteStorage implements CrawlStorage {
       | "links"
       | "sitemap_url_statuses"
       | "crawls"
-      | "entity_edges",
+      | "entity_edges"
+      | "resource_sizes",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -1575,6 +1601,9 @@ export class SQLiteStorage implements CrawlStorage {
       lastModified: (row.last_modified as string | null) ?? null,
       vary: (row.vary as string | null) ?? null,
       cacheReason,
+      naturalWidth: (row.natural_width as number | null) ?? null,
+      naturalHeight: (row.natural_height as number | null) ?? null,
+      animated: row.animated == null ? null : row.animated === 1,
     };
   }
 
@@ -3262,8 +3291,9 @@ export class SQLiteStorage implements CrawlStorage {
         const stmt = db.prepare(`
           INSERT OR REPLACE INTO resource_sizes (
             crawl_id, type, url, status, error, content_type, size_bytes, source_pages,
-            content_encoding, transfer_bytes, cache_control, etag, last_modified, vary, cache_reason
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            content_encoding, transfer_bytes, cache_control, etag, last_modified, vary, cache_reason,
+            natural_width, natural_height, animated
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const transaction = db.transaction(() => {
           for (const record of records) {
@@ -3282,7 +3312,10 @@ export class SQLiteStorage implements CrawlStorage {
               record.etag ?? null,
               record.lastModified ?? null,
               record.vary ?? null,
-              record.cacheReason ?? null
+              record.cacheReason ?? null,
+              record.naturalWidth ?? null,
+              record.naturalHeight ?? null,
+              record.animated == null ? null : record.animated ? 1 : 0
             );
           }
         });

@@ -8,13 +8,22 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
-// The evidence is the file's byte size, from the pre-rules resource check;
-// natural dimensions are never fetched. A raw 8-bit RGBA bitmap is 4 bytes a
-// pixel and a compressed still image of the same pixel count is smaller, so a
-// file heavier than the raw bitmap of the displayed box at 2x density is
-// heavier than that box needs: more pixels, or extra bit depth or metadata.
-// Animation frames are the one cause that is not waste, and GIF, the common
-// animated format, is skipped.
+// The evidence comes from the pre-rules resource check, which records each
+// same-site image's byte size and, read from its first bytes, its natural
+// pixel size (#470).
+//
+// With a natural size the test is Lighthouse's uses-responsive-images: the
+// share of the file's pixels a 2x screen never draws in the displayed box,
+// applied to its bytes, is the waste. An image shown at or below twice its
+// natural size wastes nothing, animated or not.
+//
+// Without one (an SVG, a JPEG whose frame header sits past the bytes read, a
+// failed read) the test falls back to a byte budget. A raw 8-bit RGBA bitmap
+// is 4 bytes a pixel and a compressed still image of the same pixel count is
+// smaller, so a file heavier than the raw bitmap of the displayed box at 2x
+// density is heavier than that box needs: more pixels, or extra bit depth or
+// metadata. Animation frames are the one cause that is not waste, so an image
+// known to be animated, and any GIF, is skipped there.
 const BYTES_PER_PIXEL = 4;
 const DEVICE_PIXEL_RATIO = 2;
 // Lighthouse's uses-responsive-images ignores savings under 4 KiB.
@@ -26,9 +35,16 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-// One url -> bytes index per resource list, not per page: the list is
+interface MeasuredImage {
+  bytes: number;
+  /** Natural pixel size, when both sides were read from the header. */
+  natural: { width: number; height: number } | null;
+  animated: boolean | null;
+}
+
+// One url -> measurement index per resource list, not per page: the list is
 // site-wide and every page's run reads the same array.
-const byteIndexes = new WeakMap<ResourceSizeData[], Map<string, number>>();
+const measurementIndexes = new WeakMap<ResourceSizeData[], Map<string, MeasuredImage>>();
 
 interface ImgLike {
   getAttribute(name: string): string | null;
@@ -88,15 +104,26 @@ function recordedImageUrls(
   return urls;
 }
 
-function imageBytesIndex(images: ResourceSizeData[]): Map<string, number> {
-  let index = byteIndexes.get(images);
+function isPixelCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function imageMeasurementIndex(images: ResourceSizeData[]): Map<string, MeasuredImage> {
+  let index = measurementIndexes.get(images);
   if (!index) {
     index = new Map();
     for (const image of images) {
       const bytes = image.sizeBytes;
-      if (typeof bytes === "number" && bytes > 0) index.set(image.url, bytes);
+      if (typeof bytes !== "number" || bytes <= 0) continue;
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
+      index.set(image.url, {
+        bytes,
+        natural: isPixelCount(width) && isPixelCount(height) ? { width, height } : null,
+        animated: image.animated ?? null,
+      });
     }
-    byteIndexes.set(images, index);
+    measurementIndexes.set(images, index);
   }
   return index;
 }
@@ -153,7 +180,7 @@ export const responsiveSizeRule: Rule = {
     const oversizedImages: Array<{ id: string; label: string; meta: Record<string, unknown> }> =
       [];
     let imagesWithSizeInfo = 0;
-    const imageBytes = imageBytesIndex(ctx.site?.resourceSizes?.images ?? []);
+    const measurements = imageMeasurementIndex(ctx.site?.resourceSizes?.images ?? []);
     const recordedUrls = recordedImageUrls(
       querySelectorAllOutsideNoscript(doc, "img"),
       ctx.parsed.images ?? [],
@@ -196,11 +223,46 @@ export const responsiveSizeRule: Rule = {
       } catch {
         continue;
       }
-      // SVG and ICO do not scale by pixel count, and a GIF's frames multiply its
-      // bytes, so their size says nothing about their pixel dimensions.
+      if (resolved.protocol === "data:") continue;
+
+      // No measured size (third-party host, check skipped or failed): no
+      // evidence either way, so the image is not reported.
+      const measured = measurements.get(url);
+      if (measured === undefined) continue;
+      const { bytes, natural } = measured;
+
+      const filename = src.split("/").pop()?.split("?")[0] || src;
+      const id = `${filename} (${displayWidth}x${displayHeight}, no srcset)`;
+      const usedPixels =
+        displayWidth * DEVICE_PIXEL_RATIO * displayHeight * DEVICE_PIXEL_RATIO;
+
+      if (natural) {
+        // Pixels a 2x screen never draws in the box, as a share of the file.
+        const naturalPixels = natural.width * natural.height;
+        if (usedPixels >= naturalPixels) continue;
+        const wastedBytes = Math.round(bytes * (1 - usedPixels / naturalPixels));
+        if (wastedBytes < MIN_SAVINGS_BYTES) continue;
+        oversizedImages.push({
+          id,
+          label: `${filename} (${natural.width}x${natural.height} shown at ${displayWidth}x${displayHeight}, ${formatBytes(bytes)}, no srcset)`,
+          meta: {
+            url,
+            sizeBytes: bytes,
+            naturalWidth: natural.width,
+            naturalHeight: natural.height,
+            wastedBytes,
+          },
+        });
+        continue;
+      }
+
+      // Byte budget. SVG and ICO do not scale by pixel count, and animation
+      // frames multiply a file's bytes, so for those the size says nothing
+      // about the pixel dimensions. GIF is the common animated format, and
+      // goes by extension when its header was not read.
       const path = resolved.pathname.toLowerCase();
       if (
-        resolved.protocol === "data:" ||
+        measured.animated === true ||
         path.endsWith(".svg") ||
         path.endsWith(".ico") ||
         path.endsWith(".gif")
@@ -208,19 +270,11 @@ export const responsiveSizeRule: Rule = {
         continue;
       }
 
-      // No measured size (third-party host, check skipped or failed): no
-      // evidence either way, so the image is not reported.
-      const bytes = imageBytes.get(url);
-      if (bytes === undefined) continue;
-
-      const filename = src.split("/").pop()?.split("?")[0] || src;
-
-      const budgetBytes =
-        displayWidth * DEVICE_PIXEL_RATIO * displayHeight * DEVICE_PIXEL_RATIO * BYTES_PER_PIXEL;
+      const budgetBytes = usedPixels * BYTES_PER_PIXEL;
       if (bytes - budgetBytes < MIN_SAVINGS_BYTES) continue;
 
       oversizedImages.push({
-        id: `${filename} (${displayWidth}x${displayHeight}, no srcset)`,
+        id,
         label: `${filename} (${displayWidth}x${displayHeight}, ${formatBytes(bytes)}, no srcset)`,
         meta: { url, sizeBytes: bytes, budgetBytes },
       });
